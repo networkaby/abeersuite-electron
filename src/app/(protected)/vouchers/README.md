@@ -90,4 +90,4 @@ vouchers/
 ## Related
 
 - **Registers (lists):** `/office/accountancy/vouchers-registers/*` — see `VouchersRegistersNav.tsx` and `docs/modules/` for module docs.
-- **Navigation config:** `src/utils/constants.ts` (POS, inventory, finance menus).
+- **Navigation config:** `src/shared/lib/constants/nav.ts` (sidebar) and `quickActions.ts` (Quick Actions bar, POS rail).

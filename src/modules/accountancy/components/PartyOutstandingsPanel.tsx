@@ -20,7 +20,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { CheckCircle2, HandCoins, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { formatDateCompact } from "@/shared/lib/format/formatDate";
 import { extractApiError } from "@/shared/lib/api";
 import { BUCKET_COLORS, BUCKET_KEYS, BUCKET_LABELS } from "@/modules/accountancy/lib/ageing";

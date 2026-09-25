@@ -15,7 +15,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";

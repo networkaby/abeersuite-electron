@@ -3,7 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare } from "lucide-react";
 import UserAvatar from "@/shared/components/UserAvatar";
-import { PRIORITY_META } from "@/utils/constants";
+import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import { INQUIRY_LABEL, OUTCOME_LABEL, helpCustomerName, helpTitle, type HelpDto, type HelpPriority } from "../lib/types";
 
 /** Left-edge accent per priority — quick visual scan down a column. */

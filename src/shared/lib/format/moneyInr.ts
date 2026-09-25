@@ -70,16 +70,23 @@ export function formatInr(rupees: number, decimals: 0 | 2 = 2): string {
 }
 
 /**
+ * Plain 2dp amount with en-US grouping, no ₹ sign (e.g. 1234567.5 → "1,234,567.50").
+ * The figure style of the accountancy, BI and POS screens.
+ */
+export function fmt(n: number) {
+    return new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+}
+
+/**
  * A signed ledger `closing` (positive = balance sits on the account's own
  * "normal" side, per `aggregateClosingAsOf`) → tally-style "1,234.00 Dr/Cr".
- * Matches the legacy `fmt()` grouping (@/utils/constants) used across the
- * account-ledger screens — kept en-US so figures line up identically there.
+ * Same grouping as `fmt()` above, so figures line up identically on the
+ * account-ledger screens.
  */
 export function formatDrCr(balance: number, normalBalance: "DEBIT" | "CREDIT" | null): string {
     if (balance === 0) return "0.00";
     const sign = balance < 0
         ? (normalBalance === "DEBIT" ? "Cr" : "Dr")
         : (normalBalance === "DEBIT" ? "Dr" : "Cr");
-    const abs = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(balance));
-    return `${abs} ${sign}`;
+    return `${fmt(Math.abs(balance))} ${sign}`;
 }

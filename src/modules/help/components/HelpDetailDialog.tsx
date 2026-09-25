@@ -17,7 +17,7 @@ import {
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { PRIORITY_META } from "@/utils/constants";
+import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import { Pencil, Trash2, ArrowRightLeft, Wrench, Network, Loader2, RotateCcw } from "lucide-react";
 import {
     CLOSE_OUTCOMES, INQUIRY_LABEL, OUTCOME_LABEL, helpCustomerName, helpTitle,

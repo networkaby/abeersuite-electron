@@ -9,7 +9,7 @@ import { sidebarChildPermissionId } from "@/shared/lib/auth/sidebarModules";
 // Dashboard has no `sidebarKey` — it's the module index (dashboardHref in
 // MODULE_SECTIONS), not a child link, so it carries no ui:sidebar:* id of its
 // own and shows to anyone who can open the module at all. Orders/Products/
-// Masters mirror the real MODULE_SECTIONS children in utils/constants.ts —
+// Masters mirror the real MODULE_SECTIONS children in constants/nav.ts —
 // same slugs, so their permission ids line up with the ones the left sidebar
 // already checks.
 const tabs = [

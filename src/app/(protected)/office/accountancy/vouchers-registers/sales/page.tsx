@@ -1,6 +1,6 @@
 "use client";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import {
     InvVoucherList,
     type InvVoucherListRow,

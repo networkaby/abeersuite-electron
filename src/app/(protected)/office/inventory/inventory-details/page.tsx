@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
 import { cn } from "@/shared/lib/format/utils";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";

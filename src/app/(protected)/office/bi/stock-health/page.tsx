@@ -9,7 +9,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { useBiQuery } from "@/modules/bi/hooks/useBiQuery";
 import { fmtQty, fmtDate } from "@/modules/bi/lib/format";
 import {

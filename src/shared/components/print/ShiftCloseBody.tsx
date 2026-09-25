@@ -11,7 +11,7 @@
  */
 
 import React from "react";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 
 export interface ShiftCloseBodyData {
     shiftId: number;

@@ -33,7 +33,7 @@ export function PartyDetailHeader({
     socialHref,
     chips,
 }: {
-    /** Module key from utils/constants.ts — decides the hue. */
+    /** Module key from constants/nav.ts — decides the hue. */
     module?: string;
     name: string;
     phone?: string | null;

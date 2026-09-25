@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { extractApiError } from "@/shared/lib/api";
 import { resolveMachineIdentity, matchesThisMachine } from "@/shared/lib/counter/identity";
 import { applyCounterIdRanges } from "@/modules/pos/lib/counterIdRanges";

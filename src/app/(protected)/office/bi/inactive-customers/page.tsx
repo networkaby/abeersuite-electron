@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { useBiQuery } from "@/modules/bi/hooks/useBiQuery";
 import { fmtDate } from "@/modules/bi/lib/format";
 import { type BranchOption } from "@/modules/bi/components/BiFilterBar";

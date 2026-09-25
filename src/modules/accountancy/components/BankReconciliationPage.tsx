@@ -25,7 +25,7 @@ import { toast } from "sonner";
 import { CheckCircle2, ChevronDown, ChevronUp, Link2, Loader2, Lock, RefreshCw, Sparkles, Trash2, Unlink, Upload, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { clampNumber, parseDigitsInput } from "@/shared/lib/format";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { cn } from "@/shared/lib/format/utils";

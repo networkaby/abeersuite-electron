@@ -17,7 +17,7 @@ import {
     Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
     BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
 import { useEscape } from "@/shared/hooks";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";

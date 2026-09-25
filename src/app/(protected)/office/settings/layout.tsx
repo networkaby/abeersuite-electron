@@ -2,7 +2,7 @@ import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 
 // Slug → human label for breadcrumb segments. Keeps multi-word and acronym
 // slugs (workers, qr-display-settings, …) from being naively title-cased.
-// Mirrors the labels in SETTINGS_NAV (utils/constants.ts).
+// Mirrors the labels in SETTINGS_NAV (constants/nav.ts).
 const SETTINGS_CRUMB_LABELS: Record<string, string> = {
     "org-defaults": "Org Defaults",
     ecommerce: "E-Commerce",

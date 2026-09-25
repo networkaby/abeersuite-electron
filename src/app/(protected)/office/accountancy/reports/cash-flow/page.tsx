@@ -8,7 +8,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";

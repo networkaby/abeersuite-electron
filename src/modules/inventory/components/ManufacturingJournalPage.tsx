@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { ProductScanInput, type ScannedProduct } from "@/modules/inventory/components/ProductScanInput";
 import { BomPicker, type BomPickerPayload } from "@/modules/inventory/components/BomPicker";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";

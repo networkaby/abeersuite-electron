@@ -22,7 +22,7 @@ import {
     Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { extractApiError } from "@/shared/lib/api";
 import { resolveMachineIdentity } from "@/shared/lib/counter/identity";
 import { applyCounterIdRanges } from "@/modules/pos/lib/counterIdRanges";

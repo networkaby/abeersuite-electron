@@ -7,7 +7,7 @@
  * balance is Cr). A negative balance flips the side label.
  */
 
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { availableBalance } from "@/modules/accountancy/lib/facilityLimit";
 
 export type BalanceShaped = {

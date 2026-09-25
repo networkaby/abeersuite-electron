@@ -27,7 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { getOrgDefaults } from "@/shared/lib/orgDefaults";
 import { extractApiError } from "@/shared/lib/api";
 import { parseDigitsInput, parseDecimalInput } from "@/shared/lib/format";

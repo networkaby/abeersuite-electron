@@ -1,15 +1,10 @@
 import { Badge } from "@/components/ui/badge";
-import {
-    INVOICE_STATUS_COLORS,
-    JOURNAL_STATUS_COLORS,
-    GL_TYPE_COLORS,
-    type GlAccountType,
-} from "@/utils/constants";
+import { INVOICE_STATUS_COLORS, JOURNAL_STATUS_COLORS, GL_TYPE_COLORS, type GlAccountType } from "@/shared/lib/constants/badges";
 
 /**
  * Coloured status pill. Pass a `kind` (`"invoice" | "journal" | "glType"`) and a
  * `value` (the status string / GL type); the badge resolves the right Tailwind
- * class set from `src/utils/constants.ts`.
+ * class set from `src/shared/lib/constants/badges.ts`.
  *
  *   <StatusBadge kind="invoice" value={invoice.status} />
  *   <StatusBadge kind="journal" value={je.status} />

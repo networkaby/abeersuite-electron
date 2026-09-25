@@ -21,7 +21,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { CHANNEL_LABEL, POS_PAY_CHANNELS, channelNeedsVpa } from "@/modules/pos/lib/counterTenders";
 import type { PosPayChannel } from "@/generated/prisma/client";

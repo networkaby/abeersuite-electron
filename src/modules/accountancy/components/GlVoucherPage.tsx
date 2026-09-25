@@ -24,7 +24,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
+import { JOURNAL_STATUS_COLORS } from "@/shared/lib/constants/badges";
 import { parseAmount, isAmountChars } from "@/utils/numberInput";
 import { ACCOUNT_GROUPS, PAYMENT_INSTRUMENTS, type PaymentInstrument } from "@/shared/lib/constants/accounting";
 import { extractApiError } from "@/shared/lib/api";

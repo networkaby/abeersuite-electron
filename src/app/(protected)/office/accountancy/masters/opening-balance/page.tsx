@@ -28,7 +28,7 @@ import { InvProductCombobox } from "@/modules/inventory/components/InvProductCom
 import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
 import { useProductCatalog, loadProductCatalog } from "@/shared/hooks";
 import { productMatchesSearch } from "@/shared/lib/inventory";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { parseRupeesToPaise } from "@/shared/lib/format";
 
 type AccountRow = {

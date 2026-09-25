@@ -1,5 +1,6 @@
-import type { ModuleChild, ModuleSection, ModuleCreateAction, ButtonBarAction } from "./constants";
-import { VOUCHER_CREATE_PERMISSION_BY_ACTION } from "./constants";
+import type { ModuleChild, ModuleSection, ModuleCreateAction } from "@/shared/lib/constants/nav";
+import type { ButtonBarAction } from "@/shared/lib/constants/quickActions";
+import { VOUCHER_CREATE_PERMISSION_BY_ACTION } from "@/shared/lib/constants/quickActions";
 import { crudSatisfied } from "@/shared/lib/auth/crudLadder";
 
 // Shared module/action visibility gate — used by the Sidebar (which modules to

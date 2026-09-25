@@ -1,4 +1,4 @@
-import { MODULE_SECTIONS } from "./constants";
+import { MODULE_SECTIONS } from "@/shared/lib/constants/nav";
 
 /// Pages that belong to a module by COLOUR but are not sidebar sections.
 ///

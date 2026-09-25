@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import axios from "axios";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { getActiveModule } from "@/utils/active-module";
 import { moduleColor } from "@/shared/lib/format/moduleTheme";
 import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";

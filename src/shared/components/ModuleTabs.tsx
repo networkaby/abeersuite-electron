@@ -12,7 +12,7 @@ import { cn } from "@/shared/lib/format/utils";
 import { Button } from "@/components/ui/button";
 
 export function ModuleTabs<T extends string>({ module, tabs, active, onChange, className }: {
-    /** Module key from utils/constants.ts — decides the hue. */
+    /** Module key from constants/nav.ts — decides the hue. */
     module: string;
     tabs: readonly T[];
     active: T;

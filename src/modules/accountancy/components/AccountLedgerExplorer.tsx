@@ -25,7 +25,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { formatDrCr } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";

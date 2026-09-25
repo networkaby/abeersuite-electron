@@ -33,7 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { extractApiError } from "@/shared/lib/api";
 import { round2 } from "@/shared/lib/format/moneyInr";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { planLinks, reconcilePicks, sumPicks, EPS, type LinkableDoc } from "@/modules/accountancy/lib/billLinkPlan";
 
 /** Money that already moved cannot be settled by creating more money — it needs

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";

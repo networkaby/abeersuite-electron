@@ -10,7 +10,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { MODULE_SECTIONS, type ModuleCreateAction } from "@/utils/constants";
+import { MODULE_SECTIONS, type ModuleCreateAction } from "@/shared/lib/constants/nav";
 import { moduleColor, moduleIconStyle, moduleTint } from "@/shared/lib/format/moduleTheme";
 import { canViewModule, canDoCreateAction } from "@/utils/module-access";
 import { useQuickTicketStore } from "@/store/quickTicketStore";

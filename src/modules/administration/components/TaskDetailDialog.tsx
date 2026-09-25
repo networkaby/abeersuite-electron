@@ -14,7 +14,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import UserAvatar from "@/shared/components/UserAvatar";
-import { PRIORITY_META } from "@/utils/constants";
+import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import { formatDate, formatDateTime } from "@/shared/lib/format";
 import type { TaskDetailDto, TaskDto, TaskStage } from "../lib/types";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";

@@ -28,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { extractApiError } from "@/shared/lib/api";
 import { round2 } from "@/shared/lib/format/moneyInr";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 
 type Row = {
     universalVoucherId?: number;

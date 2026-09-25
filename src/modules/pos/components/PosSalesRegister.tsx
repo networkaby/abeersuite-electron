@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { todayIso } from "@/shared/lib/format";
 import { ActiveShiftBar, type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
 import { fetchCurrentShift } from "@/modules/pos/lib/currentShift";

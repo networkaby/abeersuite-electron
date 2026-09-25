@@ -7,7 +7,7 @@ import { timeAgo } from "@/shared/lib/format/timeAgo";
 import { getRepairPipeline } from "@/modules/repairing/lib/repairPipeline";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { WORKFLOW_STATUS } from "@/shared/lib/constants/workflow";
-import { PRIORITY_META } from "@/utils/constants";
+import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 import LiveRefresh from "@/shared/components/LiveRefresh";
 

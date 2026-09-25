@@ -15,7 +15,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { fmtPeriodDate } from "@/modules/accountancy/lib/period";

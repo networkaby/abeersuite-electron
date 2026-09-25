@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Users, ChartArea, Box, ArrowLeftRight, ClipboardList, Network, Layers, PackageCheck, Building2, Percent, ShoppingCart, Truck, Tag, Clock, Receipt, Grid2x2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { useBiQuery } from "@/modules/bi/hooks/useBiQuery";

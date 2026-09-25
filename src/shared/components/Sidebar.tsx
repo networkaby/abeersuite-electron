@@ -41,14 +41,7 @@ const surfaceModule = (href: string): string | undefined =>
 import UserAvatar from "@/shared/components/UserAvatar";
 import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkContextMenu";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
-import {
-    WORKSPACE_NAV,
-    MODULE_SECTIONS,
-    ADMIN_NAV,
-    SETTINGS_NAV,
-    type ModuleChild,
-    type NavItem,
-} from "@/utils/constants";
+import { WORKSPACE_NAV, MODULE_SECTIONS, ADMIN_NAV, SETTINGS_NAV, type ModuleChild, type NavItem } from "@/shared/lib/constants/nav";
 import { canViewModuleChild } from "@/utils/module-access";
 import { sidebarLinkPermissionIdForLabel } from "@/shared/lib/auth/sidebarModules";
 import { useIsDesktopApp } from "@/shared/lib/bridge";

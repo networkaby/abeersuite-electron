@@ -30,7 +30,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { WARRANTY_SCOPE_OPTIONS } from "@/utils/constants";
+import { WARRANTY_SCOPE_OPTIONS } from "@/shared/lib/constants/badges";
 import { badgeColor } from "@/shared/lib/format/entityColor";
 import { ColorPicker, randomColor } from "@/shared/components/ColorPicker";
 import { ACTION_TYPES } from "@/modules/repairing/lib/actionTypes";

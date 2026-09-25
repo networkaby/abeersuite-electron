@@ -9,7 +9,7 @@ import {
     ChevronRight, ChevronDown, Plus, Loader2, ArrowRight, Pencil, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { CreateLedgerDialog } from "@/modules/accountancy/components/CreateLedgerDialog";
 import { EditLedgerDialog, type EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
 import { flattenGroups } from "@/modules/accountancy/lib/groupOptions";

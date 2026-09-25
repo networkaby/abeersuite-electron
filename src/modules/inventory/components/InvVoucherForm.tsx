@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { InvProductPicker } from "@/modules/inventory/components/InvProductPicker";
 import { http } from "@/shared/lib/http";
 import { BranchRequired } from "@/shared/components/BranchRequired";

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/shared/lib/format/utils";
-import { ADMIN_NAV } from "@/utils/constants";
+import { ADMIN_NAV } from "@/shared/lib/constants/nav";
 import { sidebarLinkPermissionIdForLabel } from "@/shared/lib/auth/sidebarModules";
 
 type Props = { permissions: string[] };

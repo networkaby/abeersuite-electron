@@ -16,7 +16,7 @@
 // any icon" — a chain with a piece missing says "not joined up" without a word.
 
 import { Link2, Unlink2 } from "lucide-react";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";
 
 export function ToLinkChip({ toLink, compact = false, className }: {

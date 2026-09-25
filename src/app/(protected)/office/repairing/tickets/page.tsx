@@ -13,7 +13,7 @@ import { NAV_SURFACE } from "@/shared/lib/nav/navSurfaces";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 import { useTicketsDelta, type TicketRow } from "@/shared/hooks/useTicketsDelta";
 import WarrantyBadge from "@/modules/repairing/components/WarrantyBadge";
-import { PRIORITY_META } from "@/utils/constants";
+import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";

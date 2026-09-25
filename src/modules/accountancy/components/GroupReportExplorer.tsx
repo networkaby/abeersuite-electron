@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";
 import { groupColor } from "@/shared/lib/format/groupColor";
 import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";

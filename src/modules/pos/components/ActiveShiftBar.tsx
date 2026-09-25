@@ -12,7 +12,7 @@ import { useState, useCallback, type ReactNode } from "react";
 import axios from "axios";
 import { Clock, Monitor, Lock, ArrowRightLeft, RefreshCw, Users, X, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { CashDropDialog } from "@/modules/pos/components/CashDropDialog";
 import { ShiftCloseDialog } from "@/modules/pos/components/ShiftCloseDialog";
 import { extractApiError } from "@/shared/lib/api";

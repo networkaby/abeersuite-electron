@@ -16,7 +16,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { usePartySearch } from "@/shared/hooks/usePartySearch";
-import { PRIORITY_META } from "@/utils/constants";
+import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import { INQUIRY_TYPES, type HelpDetailDto, type HelpInquiryType, type HelpPriority, type HelpPositionOption } from "../lib/types";
 
 const PRIORITIES: HelpPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];

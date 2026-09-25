@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { Loader2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";

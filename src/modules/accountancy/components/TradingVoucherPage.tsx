@@ -73,7 +73,7 @@ import { isMoneyGroupName } from "@/modules/accountancy/lib/moneyAccount";
 import { extractApiError, creditLimitDetailOf } from "@/shared/lib/api";
 import { parseDecimalInput, round2, todayIso, gridRowClass } from "@/shared/lib/format";
 import { useActiveRow } from "@/shared/hooks/useActiveRow";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { BillLinkDialog } from "@/modules/accountancy/components/BillLinkDialog";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";

@@ -19,7 +19,7 @@ import {
     Select, SelectContent, SelectGroup, SelectItem, SelectLabel,
     SelectSeparator, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { useDayBook } from "@/modules/accountancy/hooks/useDayBook";
 import { useRegisterFilters, type DatePreset } from "@/modules/accountancy/hooks/useRegisterFilters";
 import { NON_REGULAR_KINDS } from "@/modules/accountancy/lib/voucherKinds";

@@ -23,7 +23,7 @@ import {
     PartySearchAndCreate,
     type PickedParty,
 } from "@/shared/components/PartySearchAndCreate";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { extractApiError } from "@/shared/lib/api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────

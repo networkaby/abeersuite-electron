@@ -27,7 +27,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { WARRANTY_SCOPE_OPTIONS } from "@/utils/constants";
+import { WARRANTY_SCOPE_OPTIONS } from "@/shared/lib/constants/badges";
 import { ColorPicker, randomColor } from "@/shared/components/ColorPicker";
 import { badgeColor } from "@/shared/lib/format/entityColor";
 import {

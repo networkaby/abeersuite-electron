@@ -25,7 +25,8 @@ import { Input } from "@/components/ui/input";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
+import { JOURNAL_STATUS_COLORS } from "@/shared/lib/constants/badges";
 import { parseAmount, isAmountChars } from "@/utils/numberInput";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { extractApiError } from "@/shared/lib/api";

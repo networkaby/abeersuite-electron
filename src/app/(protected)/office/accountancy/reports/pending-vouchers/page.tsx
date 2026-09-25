@@ -23,7 +23,7 @@ import {
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 

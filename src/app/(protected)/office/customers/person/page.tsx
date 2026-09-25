@@ -19,7 +19,7 @@ import { PartySortToggle } from "@/modules/customer/components/PartySortToggle";
 import { PartyInactiveToggle } from "@/modules/customer/components/PartyInactiveToggle";
 import { useDebouncedValue, usePartyBrowseList, useRealtimeTopics, type BrowseListRow } from "@/shared/hooks";
 import type { Party } from "@/shared/lib/parties";
-import { PRIORITY_META } from "@/utils/constants";
+import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { phoneError, emailError } from "@/shared/components/PartySearchAndCreate";

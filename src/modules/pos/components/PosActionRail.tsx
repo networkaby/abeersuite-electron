@@ -5,13 +5,13 @@
 // (full height, beside the customer panel).
 //
 // ► To add / remove / reorder buttons, edit POS_RAIL_ACTIONS in
-//   src/utils/constants.ts (alongside the sidebar nav). This component only
+//   src/shared/lib/constants/quickActions.ts. This component only
 //   wires the handlers keyed by each action's `key` (e.g. rcv/exp).
 
 import { Fragment } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { POS_RAIL_ACTIONS, type PosRailAccessKey } from "@/utils/constants";
+import { POS_RAIL_ACTIONS, type PosRailAccessKey } from "@/shared/lib/constants/quickActions";
 
 // Same pastel hue language as the header (PosTopBar's `tint`) — colored icon +
 // label with a soft hover wash, dark-mode paired. Keyed by the `tint` field each

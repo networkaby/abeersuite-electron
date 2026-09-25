@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { usePartySearch } from "@/shared/hooks/usePartySearch";
 import { TallyDateTimeInput } from "@/shared/components/TallyDateTimeInput";
-import { PRIORITY_META } from "@/utils/constants";
+import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import type { DealDetailDto, DealPriority, DealPositionOption } from "../lib/types";
 
 const PRIORITIES: DealPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];

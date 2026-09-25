@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { formatDateCompact } from "@/shared/lib/format/formatDate";
 import { BUCKET_COLORS, BUCKET_KEYS, BUCKET_LABELS } from "@/modules/accountancy/lib/ageing";
 import { BillLinkDialog, clearBillLinkCache, type SettleRequest } from "@/modules/accountancy/components/BillLinkDialog";

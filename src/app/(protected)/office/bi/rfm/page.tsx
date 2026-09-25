@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { useBiQuery } from "@/modules/bi/hooks/useBiQuery";
 import { fmtDate } from "@/modules/bi/lib/format";

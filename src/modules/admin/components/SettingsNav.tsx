@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/shared/lib/format/utils";
-import { SETTINGS_NAV } from "@/utils/constants";
+import { SETTINGS_NAV } from "@/shared/lib/constants/nav";
 
 type Props = { permissions: string[] };
 

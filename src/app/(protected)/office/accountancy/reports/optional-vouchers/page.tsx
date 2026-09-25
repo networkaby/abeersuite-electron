@@ -20,7 +20,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
+import { JOURNAL_STATUS_COLORS } from "@/shared/lib/constants/badges";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";

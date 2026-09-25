@@ -19,7 +19,7 @@ import { timeAgo } from "@/shared/lib/format/timeAgo";
 import { badgeColor } from "@/shared/lib/format/entityColor";
 import Link from "next/link";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
-import { PRIORITY_META } from "@/utils/constants";
+import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import TicketEscalation from "@/modules/repairing/components/TicketEscalation";
 import StatusNav from "@/modules/repairing/components/StatusNav";
 import AddNoteModal from "@/modules/repairing/components/AddNoteModal";

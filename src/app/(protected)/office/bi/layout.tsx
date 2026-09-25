@@ -3,7 +3,7 @@ import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 // Slug → human label for breadcrumb segments. BI is full of acronym routes, and
 // PathBreadcrumb's fallback title-caser would render them wrong — "Abc", "Fsn",
 // "Rfm", "Gst Purchase Planning". Mirrors the labels in MODULE_SECTIONS' `bi`
-// children (utils/constants.ts), which is the breadcrumb's source of truth per
+// children (constants/nav.ts), which is the breadcrumb's source of truth per
 // the sidebar-follows-not-route rule quoted in accountancy/reports/layout.tsx.
 //
 // Six of these read shorter than the page's own <h1> ("Bill Profit" vs

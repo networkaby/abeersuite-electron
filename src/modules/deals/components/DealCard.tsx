@@ -3,7 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, CalendarClock } from "lucide-react";
 import UserAvatar from "@/shared/components/UserAvatar";
-import { PRIORITY_META } from "@/utils/constants";
+import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { formatDate } from "@/shared/lib/format";
 import { useNow } from "@/shared/hooks";

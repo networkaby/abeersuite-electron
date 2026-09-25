@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { extractApiError } from "@/shared/lib/api";
 import { formatDate, formatRupeesFromPaise } from "@/shared/lib/format";
 import { useDeleteWithConfirm, usePositionPicker } from "@/shared/hooks";
-import { PRIORITY_META } from "@/utils/constants";
+import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import RecurringTaskFormDialog from "./RecurringTaskFormDialog";
 import type { TaskRecurrenceDto } from "../lib/types";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";

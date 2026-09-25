@@ -14,7 +14,7 @@ import {
 import { sidebarChildPermissionId } from "@/shared/lib/auth/sidebarModules";
 import { POS_VOUCHER_MATRIX, POS_ACTIONS } from "@/shared/lib/auth/posVoucherMatrix";
 import type { LucideIcon } from "lucide-react";
-import { BUTTON_BAR_ACTIONS } from "@/utils/constants";
+import { BUTTON_BAR_ACTIONS } from "@/shared/lib/constants/quickActions";
 import { createActionPermission } from "@/utils/module-access";
 
 // Column tint per voucher action for the GL voucher matrix.

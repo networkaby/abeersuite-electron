@@ -1,6 +1,6 @@
 "use client";
 
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 
 // Validated categorical palette (dataviz reference instance, slots 1–2; both
 // modes pass CVD + contrast checks against white / #1a1a19 surfaces).

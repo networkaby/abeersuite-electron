@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { extractApiError } from "@/shared/lib/api";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { round2 } from "@/shared/lib/format/moneyInr";

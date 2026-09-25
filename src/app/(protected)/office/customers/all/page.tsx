@@ -26,7 +26,7 @@ import { formatDate } from "@/shared/lib/format/formatDate";
 import { cn } from "@/shared/lib/format/utils";
 import { DEFAULT_PARTY_SORT, sortParties, type PartySort } from "@/modules/customer/lib/partySort";
 import { PartySortToggle } from "@/modules/customer/components/PartySortToggle";
-import { PRIORITY_META } from "@/utils/constants";
+import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import type { Ticket, CustomerDevice } from "@/modules/customer/lib/customerTypes";
 import CustomerEmptyState from "@/modules/customer/components/CustomerEmptyState";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";

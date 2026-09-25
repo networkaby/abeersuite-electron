@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { useDayBook } from "@/modules/accountancy/hooks/useDayBook";
 import { presetRange } from "@/modules/accountancy/hooks/useRegisterFilters";
 import { VoucherRegisterTable } from "@/modules/accountancy/components/VoucherRegisterTable";

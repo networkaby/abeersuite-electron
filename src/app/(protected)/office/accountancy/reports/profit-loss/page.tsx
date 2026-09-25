@@ -9,7 +9,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { indianFiscalYearStart, fmtPeriodDate } from "@/modules/accountancy/lib/period";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { groupReportUrl } from "@/modules/accountancy/lib/groupReportUrl";

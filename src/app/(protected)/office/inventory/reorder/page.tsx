@@ -63,7 +63,7 @@ import { useTableSort, useEscape } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api";
 import { gridRowClass } from "@/shared/lib/format";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { productMatchesSearch } from "@/shared/lib/inventory";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 

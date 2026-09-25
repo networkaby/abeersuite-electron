@@ -29,7 +29,7 @@ import type { CSSProperties } from "react";
 // 3. NEVER A DATA SURFACE. No table-cell background, badge fill or chart
 //    series. The module hue goes on the surface BEHIND data, never on the data.
 
-/// Keys match ModuleSection.key in utils/constants.ts.
+/// Keys match ModuleSection.key in constants/nav.ts.
 ///
 /// `orders` has no pages — nothing in MODULE_SECTIONS carries that key — but it
 /// is live as an ACTION colour (the Sales/Purchase Order buttons in the create

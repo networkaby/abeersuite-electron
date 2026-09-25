@@ -17,7 +17,7 @@ import {
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { COLOR_OPTIONS } from "@/utils/constants";
+import { COLOR_OPTIONS } from "@/shared/lib/constants/badges";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 interface Pipeline {

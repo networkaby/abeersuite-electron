@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { fmt, GL_TYPE_COLORS, GL_TYPE_ORDER, type GlAccountType } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
+import { GL_TYPE_COLORS, GL_TYPE_ORDER, type GlAccountType } from "@/shared/lib/constants/badges";
 import { CreateGlAccountDialog } from "@/modules/accountancy/components/CreateGlAccountDialog";
 import type { GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";

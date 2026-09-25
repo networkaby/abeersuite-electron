@@ -10,7 +10,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/shared/lib/format/utils";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import type { DatePreset } from "@/modules/accountancy/hooks/useRegisterFilters";
 
 const STATUS_OPTS = ["DRAFT", "POSTED", "CANCELLED"] as const;

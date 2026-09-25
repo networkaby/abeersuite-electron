@@ -17,7 +17,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { TallyDateTimeInput } from "@/shared/components/TallyDateTimeInput";
-import { PRIORITY_META } from "@/utils/constants";
+import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import type { TaskPriority, TaskPositionOption, TaskRecurrenceDto, RecurrenceUnit } from "../lib/types";
 
 const PRIORITIES: TaskPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];

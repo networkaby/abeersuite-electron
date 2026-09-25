@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { fmt } from "@/utils/constants";
+import { fmt } from "@/shared/lib/format/moneyInr";
 import { parseAmount, isAmountChars, parseSignedAmount, isSignedAmountChars } from "@/utils/numberInput";
 import { useBiQuery } from "@/modules/bi/hooks/useBiQuery";
 import { KpiCard } from "@/modules/bi/components/KpiCard";

@@ -1,4 +1,4 @@
-import { WORKSPACE_NAV, MODULE_SECTIONS, ADMIN_NAV, SETTINGS_NAV } from "@/utils/constants";
+import { WORKSPACE_NAV, MODULE_SECTIONS, ADMIN_NAV, SETTINGS_NAV } from "@/shared/lib/constants/nav";
 
 /**
  * Sidebar visibility matrix — the single source of truth for who sees what in the
