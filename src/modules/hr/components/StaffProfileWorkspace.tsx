@@ -28,6 +28,7 @@ import type { StaffDetail } from "../lib/staffTypes";
 import StaffJobTab from "./StaffJobTab";
 import StaffSeatsCard from "./StaffSeatsCard";
 import StaffAccessTab from "./StaffAccessTab";
+import StaffRoleFields from "./StaffRoleFields";
 import StaffPersonalForm from "./StaffPersonalForm";
 import StaffPayTab from "./StaffPayTab";
 import StaffMoneyTab from "./StaffMoneyTab";
@@ -77,6 +78,7 @@ export default function StaffProfileWorkspace({ userId, canEdit, canEditUsers, c
                         {tab === "job" && (
                             <div className="space-y-6">
                                 <StaffJobTab url={url} detail={data} canEdit={canEdit} onChanged={reload} />
+                                <StaffRoleFields detail={data} canEdit={canEditUsers} onChanged={reload} />
                                 <StaffSeatsCard detail={data} canEdit={canEditPositions} onChanged={reload} />
                             </div>
                         )}
