@@ -36,6 +36,14 @@ export function isStaffMailAddress(email: string): boolean {
     return email.toLowerCase().endsWith(`@${STAFF_MAIL_DOMAIN}`);
 }
 
+/** A refusal from Cloudflare itself — its message is safe and useful to show the person. */
+export class CloudflareError extends Error {
+    constructor(readonly reason: string, detail: string) {
+        super(detail);
+        this.name = "CloudflareError";
+    }
+}
+
 type CfEnvelope<T> = {
     success: boolean;
     errors?: { code: number; message: string }[];
@@ -57,7 +65,8 @@ async function cf<T>(path: string, init?: RequestInit): Promise<CfEnvelope<T>> {
     if (!res.ok || !body?.success) {
         // Vendor detail goes to logs, never to the person.
         const detail = body?.errors?.map(e => `${e.code} ${e.message}`).join("; ") ?? String(res.status);
-        throw new Error(`Cloudflare ${init?.method ?? "GET"} ${path} failed: ${detail}`);
+        const reason = body?.errors?.map(e => e.message).join("; ") || `HTTP ${res.status}`;
+        throw new CloudflareError(reason, `Cloudflare ${init?.method ?? "GET"} ${path} failed: ${detail}`);
     }
     return body;
 }

@@ -12,6 +12,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import {
+    CloudflareError,
     getForwarding,
     isForwardingConfigured,
     isStaffMailAddress,
@@ -70,6 +71,10 @@ export async function PUT(req: Request) {
     try {
         return NextResponse.json({ address: email, ...await setForwarding(email, data.forwardTo) });
     } catch (e) {
+        if (e instanceof CloudflareError) {
+            console.error(e.message);
+            return NextResponse.json({ error: `Cloudflare refused: ${e.reason}` }, { status: 502 });
+        }
         return handleApiError(e, "Could not save your forwarding");
     }
 }
