@@ -314,7 +314,7 @@ export function ShiftCloseDialog({
                                 <Loader2 className="animate-spin text-muted-foreground" size={24} />
                             </div>
                         ) : (
-                            <div className="flex-1 overflow-y-auto space-y-3 py-1 pr-1">
+                            <div className="flex-1 overflow-y-auto space-y-3 py-1 pr-1 [zoom:1.2]">
                                 <div className="grid gap-3 grid-cols-1 lg:grid-cols-3">
                                     {/* ── Column 1: Denomination counter + Notes ── */}
                                     <div className="space-y-2">
@@ -451,6 +451,23 @@ export function ShiftCloseDialog({
                                         <CollectionsCard s={detail} />
                                     </div>
                                 </div>{/* ── end three-column grid ── */}
+
+                                {/* The one figure the cashier acts on — cash to carry out now. */}
+                                {mode === "vault" && (
+                                    <p className="text-center pt-6">
+                                        {declaredNum <= 0 ? (
+                                            <span className="text-lg text-muted-foreground">Count the drawer to see the hand-over amount</span>
+                                        ) : handOverNow > 0 ? (
+                                            <span className="text-3xl font-bold text-amber-700 dark:text-amber-300">
+                                                Hand over <span className="font-mono">₹{fmt(handOverNow)}</span> to vault / manager
+                                            </span>
+                                        ) : (
+                                            <span className="text-xl font-semibold text-muted-foreground">
+                                                Nothing to hand over — ₹{fmt(carryOverNum)} stays in counter
+                                            </span>
+                                        )}
+                                    </p>
+                                )}
                             </div>
                         )}
 
