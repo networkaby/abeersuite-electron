@@ -25,6 +25,7 @@ import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { fmt, JOURNAL_STATUS_COLORS } from "@/utils/constants";
 import { StatusBadge } from "@/shared/components/StatusBadge";
+import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkContextMenu";
 import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
 import { referenceHref } from "@/modules/accountancy/lib/voucherUrls";
 import { SettlementChip } from "@/modules/accountancy/components/SettlementChip";
@@ -148,6 +149,8 @@ export function VoucherRegisterTable({
     // Which voucher's bill-wise popup is open, and on whose ledger it is measured.
     const [linkRow, setLinkRow] = useState<{ uvId: number; accountId: number; party: string | null } | null>(null);
     const [expanded,  setExpanded]  = useState<Set<string>>(new Set());
+    // Right-click on Voucher No / Party offers "Open in new window", like the sidebar.
+    const { menu: linkMenu, close: closeLinkMenu, onContainerContextMenu } = useLinkContextMenu();
     const [lineCache, setLineCache] = useState<Map<string, Line[] | "loading" | "error">>(new Map());
 
     const fetchLines = (r: VoucherRegisterRow) => {
@@ -195,7 +198,7 @@ export function VoucherRegisterTable({
         + (hideActions ? 0 : 1);
 
     return (
-        <div className="overflow-hidden rounded-lg border border-border bg-card shadow">
+        <div className="overflow-hidden rounded-lg border border-border bg-card shadow" onContextMenu={onContainerContextMenu}>
             <table className="w-full text-sm">
                 {/* Tinted head only. Every row below keeps its own colours —
                     accentBySource says which register a row came from, and that
@@ -528,6 +531,7 @@ export function VoucherRegisterTable({
                     }}
                 />
             )}
+            <LinkContextMenu menu={linkMenu} onClose={closeLinkMenu} />
         </div>
     );
 }
