@@ -3,7 +3,6 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import { paiseToRupees } from "@/shared/lib/format/moneyInr";
-import { excludingSuperAdmin } from "@/shared/lib/users/staffSelect";
 import { parseSalaryLines } from "./salaryLines";
 import { commissionForPeriod, commissionLine } from "./commission";
 import { nonPayableDays } from "./attendancePayable";
@@ -159,7 +158,6 @@ export async function buildPayrollCandidates(
     toIso: string,
 ): Promise<PayrollCandidate[]> {
     const users = await db.user.findMany({
-        where: excludingSuperAdmin(),
         orderBy: { name: "asc" },
         select: {
             id: true,

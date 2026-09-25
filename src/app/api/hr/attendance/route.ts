@@ -6,7 +6,6 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { attendanceMarkSchema } from "@/shared/lib/schemas/hrAttendanceSchema";
 import { businessTodayIso, toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import { monthBounds } from "@/modules/hr/lib/attendanceCalendar";
-import { excludingSuperAdmin } from "@/shared/lib/users/staffSelect";
 import { dutyHoursFor, dutyMinutesFor } from "@/shared/lib/hr/dutyTime";
 import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import type { RegisterPayload, RegisterPerson, HolidayDto } from "@/modules/hr/lib/attendanceTypes";
@@ -42,7 +41,6 @@ export async function GET(req: Request) {
         const [seasonal, users, marks, leaves, holidays] = await Promise.all([
             loadSeasonalHours(),
             prisma.user.findMany({
-                where: excludingSuperAdmin(),
                 orderBy: { name: "asc" },
                 select: {
                     id: true, name: true, avatarUrl: true, role: true,

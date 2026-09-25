@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
-import { excludingSuperAdmin } from "@/shared/lib/users/staffSelect";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
 import { monthBounds } from "@/modules/hr/lib/attendanceCalendar";
@@ -30,7 +29,6 @@ export async function GET(req: Request) {
 
         const [users, heads] = await Promise.all([
             prisma.user.findMany({
-                where: excludingSuperAdmin(),
                 orderBy: { name: "asc" },
                 select: {
                     id: true, name: true, avatarUrl: true,
