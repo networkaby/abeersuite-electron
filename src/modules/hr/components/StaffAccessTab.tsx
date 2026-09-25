@@ -4,9 +4,8 @@
 //
 // Roles and their permissions are DEFINED in Administration. Nothing here
 // creates or edits one: this tab only chooses which existing role the person
-// holds, who they report to, and edits or deletes their login. The login card
-// opens the same `UserForm` and deletes through the same helper as Admin →
-// Users, and every write goes through the same `/api/users/[id]` — so the two
+// holds, who they report to, and edits their login. The login card opens the
+// same `UserForm` as Admin → Users, and every write goes through the same `/api/users/[id]` — so the two
 // pages can never disagree, and a change on either shows on both (`settings`).
 //
 // "Data scope" (Own/Team/Department/…) used to be editable here too. It's
@@ -17,14 +16,13 @@
 import { useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { KeyRound, Pencil, ShieldCheck, Trash2 } from "lucide-react";
+import { KeyRound, Pencil, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/shared/components/Field";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
 import UserForm from "@/shared/components/UserForm";
 import { useApiResource } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
-import { confirmAndDeleteUser } from "@/shared/lib/users/deleteUserLogin";
 import type { StaffDetail, StaffRow } from "../lib/staffTypes";
 
 interface RoleRow {
@@ -33,14 +31,11 @@ interface RoleRow {
     department?: { id: string; name: string } | null;
 }
 
-export default function StaffAccessTab({ detail, canEdit, canDelete, onChanged, onDeleted }: {
+export default function StaffAccessTab({ detail, canEdit, onChanged }: {
     detail: StaffDetail;
     /** users:edit — without it the tab is read-only, never hidden. */
     canEdit: boolean;
-    /** users:delete, and not the signed-in person's own login. */
-    canDelete: boolean;
     onChanged: () => void;
-    onDeleted: () => void;
 }) {
     const { user } = detail;
     const { data: roles } = useApiResource<RoleRow[]>("/api/roles");
@@ -92,10 +87,6 @@ export default function StaffAccessTab({ detail, canEdit, canDelete, onChanged, 
         }
     };
 
-    const deleteLogin = async () => {
-        if (await confirmAndDeleteUser(user)) onDeleted();
-    };
-
     return (
         <div className="max-w-2xl space-y-6">
             <p className="flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
@@ -118,7 +109,7 @@ export default function StaffAccessTab({ detail, canEdit, canDelete, onChanged, 
                     <dt className="text-muted-foreground">Sign-in email</dt>
                     <dd className="break-all">{user.email}</dd>
                 </dl>
-                {(canEdit || canDelete) && (
+                {canEdit && (
                     <div className="mt-3 flex flex-wrap gap-2">
                         {canEdit && (
                             <Button
@@ -128,11 +119,6 @@ export default function StaffAccessTab({ detail, canEdit, canDelete, onChanged, 
                                 onClick={() => setEditingLogin({ id: user.id, name: user.name, email: user.email })}
                             >
                                 <Pencil size={14} /> Edit login
-                            </Button>
-                        )}
-                        {canDelete && (
-                            <Button type="button" size="sm" variant="destructive" onClick={deleteLogin}>
-                                <Trash2 size={14} /> Delete login
                             </Button>
                         )}
                     </div>

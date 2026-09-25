@@ -35,17 +35,13 @@ import StaffProfileWorkspace from "./StaffProfileWorkspace";
 
 type Status = "active" | "left" | "all";
 
-export default function StaffExplorer({ selfId, canEdit, canCreateUsers, canEditUsers, canDeleteUsers, canEditPositions }: {
-    /** The signed-in person — their own login cannot be deleted. */
-    selfId: number | null;
+export default function StaffExplorer({ canEdit, canCreateUsers, canEditUsers, canEditPositions }: {
     /** hr:staff:edit — the HR record itself. */
     canEdit: boolean;
     /** users:create — adding a person (the rule POST /api/users enforces). */
     canCreateUsers: boolean;
     /** users:edit — the login (name, email, password), role and manager on the Access tab. */
     canEditUsers: boolean;
-    /** users:delete — deleting a login from the Access tab. */
-    canDeleteUsers: boolean;
     /** positions:edit — appointing to and vacating a seat. */
     canEditPositions: boolean;
 }) {
@@ -249,12 +245,9 @@ export default function StaffExplorer({ selfId, canEdit, canCreateUsers, canEdit
                         <StaffProfileWorkspace
                             key={selectedId}
                             userId={selectedId}
-                            selfId={selfId}
                             canEdit={canEdit}
                             canEditUsers={canEditUsers}
-                            canDeleteUsers={canDeleteUsers}
                             canEditPositions={canEditPositions}
-                            onDeleted={() => { select(null); reload(); }}
                         />
                         </>
                     ) : (
