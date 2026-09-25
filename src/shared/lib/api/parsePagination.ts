@@ -2,11 +2,11 @@
  * Pagination helpers — pulls `limit` / `take` and `page` (or `cursor`) out of `URLSearchParams`,
  * clamps to safe bounds, and returns ready-to-use values for Prisma `take` / `skip`.
  *
- * Default limit is `DEFAULT_PAGE_SIZE` (50). Hard upper bound is `MAX_PAGE_SIZE` (200).
+ * Default limit is `DEFAULT_PAGE_SIZE`, hard upper bound `MAX_PAGE_SIZE` — both in
+ * `shared/lib/constants/paging.ts`.
  */
 
-export const DEFAULT_PAGE_SIZE = 50;
-export const MAX_PAGE_SIZE = 200;
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@/shared/lib/constants/paging";
 
 type SP = URLSearchParams | { get(key: string): string | null };
 

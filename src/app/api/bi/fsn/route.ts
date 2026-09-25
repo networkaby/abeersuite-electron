@@ -7,11 +7,9 @@ import { r2 } from "@/modules/bi/lib/marginEngine";
 import { valueStockBatch, VALUATION_METHODS, type ValuationMethod } from "@/modules/inventory/lib/valuation";
 import { loadLiveStockMap } from "@/modules/inventory/lib/liveStock";
 import { withApiError } from "@/shared/lib/api";
+import { FAST_MIN_TURNOVER } from "@/shared/lib/constants/inventory";
 
 export const maxDuration = 60;
-
-/** Qty turnover (out ÷ avg stock) at/above this = Fast mover. */
-export const FAST_MIN_TURNOVER = 3;
 
 export type FsnClass = "FAST" | "SLOW" | "NON_MOVING";
 

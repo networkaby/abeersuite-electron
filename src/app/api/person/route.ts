@@ -9,7 +9,8 @@ import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 import { loadPartyUnallocated } from "@/modules/accountancy/lib/billLink";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { phoneEmailSchema, gstSchema } from "@/shared/lib/schemas/commonSchemas";
-import { afterCursor, BROWSE_PAGE_SIZE, NAME_ORDER, nextBrowseCursor, parseBrowseCursor } from "@/shared/lib/parties/browsePage";
+import { afterCursor, NAME_ORDER, nextBrowseCursor, parseBrowseCursor } from "@/shared/lib/parties/browsePage";
+import { BROWSE_PAGE_SIZE } from "@/shared/lib/constants/paging";
 import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
 

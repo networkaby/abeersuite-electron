@@ -1,10 +1,11 @@
 /**
  * Duty time — how the day's working hours are measured and graded.
  *
- * Every number the rule depends on is here, and nowhere else, because these are
- * the owner's to change and they must not be hunted for across files. Changing
- * one here changes the auto-logout, the register, the payroll factor and the
- * words on screen together.
+ * The numbers the rule depends on — duty hours, grace, the full/half-day shares
+ * and the idle limit — are the owner's to change, so they live with the other
+ * settings in `shared/lib/constants/hr.ts` and `constants/session.ts`. Changing
+ * one there changes the auto-logout, the register, the payroll factor and the
+ * words on screen together. This file holds the rules that read them.
  *
  * The model, in the owner's words (2026-09-22): a person signs in, works, and if
  * they leave the counter the idle timer runs out and signs them out — and THAT
@@ -20,48 +21,11 @@
  */
 
 import { parseHhMm } from "./hhmm";
-import { DEFAULT_DUTY_END, DEFAULT_DUTY_START, seasonalStartFor, type SeasonalHours, type ShopDate } from "./seasonalHours";
-
-/**
- * No click, no keypress, no touch for this long → signed out, and the stretch is
- * not counted.
- *
- * 45 minutes is a judgement, and the trade is real in both directions. Shorter and
- * a cashier standing at a quiet counter on a slow afternoon gets logged out while
- * genuinely at work, and docked for it. Longer and a real absence is paid. 45 is
- * above any plausible gap between customers and below a tea break, and the person
- * is warned before it fires (see IDLE_WARNING_MS) so it never arrives as a shock.
- */
-/**
- * Is duty time counted for people who are NOT on a counter PC?
- *
- * The activity pulse is mounted for every signed-in staff member, so the moment
- * this is true an office hand working on the website starts accruing a measured,
- * auto-graded day — and that day reaches payroll. Switching that on for everyone
- * at once, on a feature that has not yet run for a single real day, is a large
- * change to make silently.
- *
- * So it starts FALSE: tills only, where the shifts give a second independent
- * record to check the minutes against. Turn it on once a counter has been watched
- * for a day and the numbers look right — it is this one constant, nothing else.
- */
-export const TRACK_OFF_COUNTER = false;
-
-export const DEFAULT_IDLE_LIMIT_MINUTES = 45;
-
-/** The default as milliseconds, for anyone with no personal limit set. */
-export const IDLE_LIMIT_MS = DEFAULT_IDLE_LIMIT_MINUTES * 60 * 1000;
-
-/**
- * The longest a personal limit may be, in minutes.
- *
- * The session itself ends after SESSION_IDLE_MAX_AGE_MS (6 hours) no matter what
- * — that backstop exists for a machine with the app shut, where no client-side
- * timer is running at all. A personal limit above it would be a promise this code
- * cannot keep: the session would go first and the person would be signed out
- * earlier than their own setting said. So it is capped, and the cap is honest.
- */
-export const MAX_IDLE_LIMIT_MINUTES = 6 * 60;
+import { seasonalStartFor, type SeasonalHours, type ShopDate } from "./seasonalHours";
+import {
+    DEFAULT_DUTY_END, DEFAULT_DUTY_MINUTES, DEFAULT_DUTY_START, FULL_DAY_FRACTION, HALF_DAY_FRACTION, LATE_GRACE_MINUTES,
+} from "@/shared/lib/constants/hr";
+import { DEFAULT_IDLE_LIMIT_MINUTES, IDLE_LIMIT_MS, MAX_IDLE_LIMIT_MINUTES } from "@/shared/lib/constants/session";
 
 /**
  * How long THIS person may be away before they are signed out — and before the
@@ -83,38 +47,6 @@ export function idleLimitMinutesFor(profileIdleLimitMinutes: number | null | und
 export function idleLimitMsFor(profileIdleLimitMinutes: number | null | undefined): number {
     return idleLimitMinutesFor(profileIdleLimitMinutes) * 60 * 1000;
 }
-
-/** Warn this long before the axe, with a way to stay signed in. */
-export const IDLE_WARNING_MS = 2 * 60 * 1000;
-
-/**
- * A full day's duty when nobody has set one for the person.
- *
- * Nine hours, read off the shop's own shifts rather than picked as a round number:
- * the closed shifts on live run 8h50m to 10h47m, clustered around nine and a half.
- * Per-person duty (StaffProfile.dutyMinutes) overrides it — an office hand and a
- * counter hand do not owe the same day.
- */
-export const DEFAULT_DUTY_MINUTES = 9 * 60;
-
-/**
- * The shop's own hours — defined in `seasonalHours.ts` and re-exported here.
- *
- * They moved there when the opening time became seasonal: the fallback curve has
- * to be built from them at load time, and this module imports that one, so a
- * definition here would close a cycle. Re-exported so every caller still reads
- * them off dutyTime, which is where the owner's numbers have always lived.
- */
-export { DEFAULT_DUTY_START, DEFAULT_DUTY_END } from "./seasonalHours";
-
-/**
- * Arriving within this of the start is not late.
- *
- * Not indulgence — precision. A clock that calls 10:31 late makes the whole
- * column noise, and a column of noise gets ignored, which is worse than not
- * having it. Fifteen minutes marks the people who are actually late.
- */
-export const LATE_GRACE_MINUTES = 15;
 
 /** Clock-time parsing lives in `hhmm.ts`; re-exported so callers find it here. */
 export { parseHhMm, formatHhMm } from "./hhmm";
@@ -149,11 +81,6 @@ export function dutyHoursFor(
             : seasonal?.end ?? DEFAULT_DUTY_END,
     };
 }
-
-/** At or above this share of duty, the day is full. */
-export const FULL_DAY_FRACTION = 0.75;
-/** At or above this share (but under full), the day is half. */
-export const HALF_DAY_FRACTION = 0.40;
 
 /**
  * The person's duty for one day, in minutes.

@@ -5,7 +5,8 @@ import axios from "axios";
 import { toast } from "sonner";
 import { browseParties, type Party, type PartyType } from "@/shared/lib/parties";
 import { usePartyList } from "@/shared/hooks/usePartySearch";
-import { BROWSE_PAGE_SIZE, type BrowseCursor } from "@/shared/lib/parties/browsePage";
+import type { BrowseCursor } from "@/shared/lib/parties/browsePage";
+import { BROWSE_PAGE_SIZE } from "@/shared/lib/constants/paging";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import type { PartySort } from "@/modules/customer/lib/partySort";
 

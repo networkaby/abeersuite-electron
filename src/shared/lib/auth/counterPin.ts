@@ -25,15 +25,7 @@
 
 import type { PrismaClient } from "@/generated/prisma/client";
 import { readCounterSetup } from "@/shared/lib/counter/releaseGuard";
-
-/** Type the password again this long after last typing it here. */
-export const PIN_PASSWORD_MAX_AGE_MS = 10 * 24 * 60 * 60 * 1000;
-
-/** ...or this long after the last sign-in of any kind here, whichever bites first. */
-export const PIN_IDLE_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
-
-/** Six digits. Long enough that a bcrypt hash off a stolen replica is not worth the electricity. */
-export const PIN_LENGTH = 6;
+import { PIN_IDLE_MAX_AGE_MS, PIN_PASSWORD_MAX_AGE_MS } from "@/shared/lib/constants/session";
 
 /**
  * Which counter is this server running inside — or null for "not a counter".

@@ -8,7 +8,8 @@ import { positionScopeLabel } from "@/shared/lib/org/positionScope";
 import { pinClocksExpired, stampCounterPinLogin, thisCounterId } from "@/shared/lib/auth/counterPin";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 import { stampAttendanceIn } from "@/shared/lib/hr/attendanceStamp";
-import { DEFAULT_IDLE_LIMIT_MINUTES, idleLimitMinutesFor } from "@/shared/lib/hr/dutyTime";
+import { idleLimitMinutesFor } from "@/shared/lib/hr/dutyTime";
+import { DEFAULT_IDLE_LIMIT_MINUTES } from "@/shared/lib/constants/session";
 
 /** One seat a person holds: what they are called, and where it sits. */
 export type StaffSeat = { title: string; scope: string };

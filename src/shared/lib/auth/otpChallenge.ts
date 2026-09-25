@@ -25,13 +25,10 @@ import "server-only";
  */
 
 import { createHmac, randomInt, timingSafeEqual } from "crypto";
+import { OTP_CODE_TTL_MS, OTP_MAX_ATTEMPTS, OTP_TICKET_TTL_MS } from "@/shared/lib/constants/session";
 
 export const OTP_COOKIE = "portal_otp";
 export const TICKET_COOKIE = "portal_otp_ticket";
-
-const CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes to read the code and type it
-const TICKET_TTL_MS = 5 * 60 * 1000; // 5 minutes to finish sign-in / onboarding
-export const MAX_ATTEMPTS = 5; // wrong guesses before the code dies
 
 export type OtpChannel = "mobile" | "email";
 
@@ -65,7 +62,7 @@ export function generateOtpCode(): string {
 
 /** `channel|identity|expiry|attempts|codeHash|sig` */
 export function packPendingOtp(channel: OtpChannel, identity: string, code: string): string {
-    const expiry = Date.now() + CODE_TTL_MS;
+    const expiry = Date.now() + OTP_CODE_TTL_MS;
     const codeHash = sign(`${channel}:${identity}:${code}`);
     const body = [channel, identity, String(expiry), "0", codeHash].join("|");
     return `${body}|${sign(body)}`;
@@ -119,7 +116,7 @@ export function checkOtpCode(rawCookie: string | undefined, code: string): OtpCh
     const pending = parsePendingOtp(rawCookie);
     if (!pending) return { ok: false, reason: "tampered" };
     if (Date.now() > pending.expiry) return { ok: false, reason: "expired" };
-    if (pending.attempts >= MAX_ATTEMPTS) return { ok: false, reason: "exhausted" };
+    if (pending.attempts >= OTP_MAX_ATTEMPTS) return { ok: false, reason: "exhausted" };
     if (!safeEqual(pending.codeHash, sign(`${pending.channel}:${pending.identity}:${code}`))) {
         return { ok: false, reason: "mismatch", pending };
     }
@@ -130,7 +127,7 @@ export function checkOtpCode(rawCookie: string | undefined, code: string): OtpCh
 
 /** `channel|identity|expiry|sig` — proof this browser verified this identity. */
 export function packTicket(channel: OtpChannel, identity: string): string {
-    const expiry = Date.now() + TICKET_TTL_MS;
+    const expiry = Date.now() + OTP_TICKET_TTL_MS;
     const body = [channel, identity, String(expiry)].join("|");
     return `${body}|${sign(body)}`;
 }

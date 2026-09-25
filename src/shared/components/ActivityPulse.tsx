@@ -7,7 +7,8 @@ import { toast } from "sonner";
 import { signOut } from "next-auth/react";
 import { markDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
 import { captureMyDay } from "@/shared/lib/hr/myDay";
-import { IDLE_WARNING_MS, idleLimitMsFor } from "@/shared/lib/hr/dutyTime";
+import { idleLimitMsFor } from "@/shared/lib/hr/dutyTime";
+import { IDLE_WARNING_MS } from "@/shared/lib/constants/session";
 
 /**
  * Two jobs, one listener: keep the day's worked minutes honest, and sign out a

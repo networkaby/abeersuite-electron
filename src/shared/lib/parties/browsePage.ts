@@ -14,9 +14,6 @@
  * module is simply not involved on that path.
  */
 
-/** Rows per page. Matches the "grow on scroll" panel's page size. */
-export const BROWSE_PAGE_SIZE = 50;
-
 export type BrowseCursor = { name: string; id: number };
 
 /** Read `cursorName`/`cursorId` off the request, or null for a first page. */

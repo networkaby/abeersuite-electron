@@ -24,7 +24,8 @@
 
 import type { PrismaClient } from "@/generated/prisma/client";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
-import { IDLE_LIMIT_MS, creditableMinutes } from "@/shared/lib/hr/dutyTime";
+import { creditableMinutes } from "@/shared/lib/hr/dutyTime";
+import { IDLE_LIMIT_MS } from "@/shared/lib/constants/session";
 import { closeOpenSpan, openSpanOnArrival, recordSpanBeat } from "@/shared/lib/hr/attendanceSpans";
 
 /**

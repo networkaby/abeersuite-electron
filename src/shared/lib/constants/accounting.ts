@@ -69,6 +69,10 @@ export type PaymentInstrument = (typeof PAYMENT_INSTRUMENTS)[number]["value"];
 
 export const PAYMENT_INSTRUMENT_VALUES = PAYMENT_INSTRUMENTS.map((i) => i.value) as [PaymentInstrument, ...PaymentInstrument[]];
 
+/** Days a bill is given before it counts as due, when neither the bill nor the
+ *  party's credit period says otherwise. Drives the ageing buckets and Auto-Link. */
+export const DEFAULT_DUE_DAYS = 30;
+
 /** "UPI (4532…)" / "Cheque (483920)" / "Cash" — for print and lists; "" when nothing captured. */
 export function paymentInstrumentText(method?: string | null, reference?: string | null): string {
     const label = PAYMENT_INSTRUMENTS.find((i) => i.value === method)?.label ?? "";

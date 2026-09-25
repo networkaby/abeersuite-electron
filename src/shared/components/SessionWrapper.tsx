@@ -9,7 +9,7 @@ import { attachChangePublisher } from "@/shared/lib/realtime/appChannel";
 import { OFFLINE_READ_ONLY, offlineReason } from "@/shared/lib/prisma/offlineError";
 import { toast } from "sonner";
 import { wasDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
-import { SESSION_IDLE_LABEL } from "@/shared/lib/auth/sessionAge";
+import { SESSION_IDLE_LABEL } from "@/shared/lib/constants/session";
 import ActivityPulse from "@/shared/components/ActivityPulse";
 
 // Staff-only wrapper (mounted by every (protected) layout, never the portal).

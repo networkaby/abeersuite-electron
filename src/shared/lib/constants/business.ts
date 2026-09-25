@@ -10,7 +10,8 @@
  *
  * Used ONLY to answer "what is today?" for records the user did not date
  * themselves — see `businessTodayIso()` / `businessToday()` in
- * `src/shared/lib/format/formatDate.ts`. A date the user types is already a
+ * `src/shared/lib/format/formatDate.ts` — and to read the shop's office hours
+ * as civil times (`hr/seasonalHours.ts`). A date the user types is already a
  * plain calendar date and never passes through here.
  */
 export const BUSINESS_TIME_ZONE = "Asia/Kolkata";

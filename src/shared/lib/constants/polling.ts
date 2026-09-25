@@ -155,3 +155,13 @@ export const COUNTER_STATUS_POLL_MS = 10_000;   // 10 seconds
  * insurance against all three of those somehow failing to fire.
  */
 export const COUNTER_STATUS_IDLE_POLL_MS = 86_400_000;   // 24 hours
+
+/**
+ * The staleness floor under every live screen — how long a VISIBLE screen may go
+ * without re-reading when no change signal arrives (see `realtime/settledReader.ts`).
+ * Five minutes is chosen against the cost rule (AGENTS.md §7): long enough that an
+ * idle office screen is nearly free, short enough that a missed signal is a
+ * nuisance rather than a wrong decision. A screen that IS hearing signals never
+ * pays it — every read pushes the deadline out.
+ */
+export const SCREEN_HEARTBEAT_MS = 5 * 60 * 1000;   // 5 minutes

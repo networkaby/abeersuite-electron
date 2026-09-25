@@ -4,7 +4,8 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { stampActivity } from "@/shared/lib/hr/attendanceStamp";
 import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
-import { TRACK_OFF_COUNTER, idleLimitMsFor } from "@/shared/lib/hr/dutyTime";
+import { idleLimitMsFor } from "@/shared/lib/hr/dutyTime";
+import { TRACK_OFF_COUNTER } from "@/shared/lib/constants/hr";
 
 /**
  * POST /api/hr/activity — "somebody is still here".

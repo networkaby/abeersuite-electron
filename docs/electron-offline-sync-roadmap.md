@@ -269,7 +269,7 @@ and reconcile run regardless), it only makes things happen sooner.
    **Underneath all of it, a heartbeat.** Everything above is event-driven, and an event
    can fail to arrive — the channel dropped and reconnected, the leader tab's timers were
    throttled. Since 2026-09-19 `createSettledReader` re-reads on its own every
-   `HEARTBEAT_MS` (5 minutes, ±20% jitter so a page's several subscribers do not wake
+   `SCREEN_HEARTBEAT_MS` in `constants/polling.ts` (5 minutes, ±20% jitter so a page's several subscribers do not wake
    together). It is a floor, not the mechanism: a signal still reads in 600 ms, a hidden
    window still costs nothing, and any read pushes the deadline out, so a screen kept
    fresh by signals never fires it. The replica has a verify sweep for exactly this

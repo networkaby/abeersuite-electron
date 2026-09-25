@@ -27,6 +27,7 @@
 // ₹15,999.90.
 
 import type { SalaryLine, SalaryLineKind } from "./salaryLines";
+import { DEFAULT_PAY_DAYS } from "@/shared/lib/constants/hr";
 
 export interface ProrateRevision {
     /** Inclusive first day this structure applies. */
@@ -85,15 +86,6 @@ function utc(iso: string): number {
 function isoOf(ms: number): string {
     return new Date(ms).toISOString().slice(0, 10);
 }
-
-/**
- * The government month: how many days a monthly salary is taken to buy.
- *
- * Every divisor in HR comes through here — payroll, the hourly rate behind
- * overtime, and the per-day figure the salary dialog shows — so the number
- * cannot drift apart between the sheet and the screen.
- */
-export const DEFAULT_PAY_DAYS = 26;
 
 /** A stored `payDays` made safe: a missing or silly value falls back to 26. */
 export function payDaysOf(v: number | null | undefined): number {

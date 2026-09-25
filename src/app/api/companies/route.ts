@@ -10,7 +10,8 @@ import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/grou
 import { phoneEmailSchema, gstSchema } from "@/shared/lib/schemas/commonSchemas";
 import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
-import { afterCursor, BROWSE_PAGE_SIZE, NAME_ORDER, nextBrowseCursor, parseBrowseCursor } from "@/shared/lib/parties/browsePage";
+import { afterCursor, NAME_ORDER, nextBrowseCursor, parseBrowseCursor } from "@/shared/lib/parties/browsePage";
+import { BROWSE_PAGE_SIZE } from "@/shared/lib/constants/paging";
 
 const createSchema = phoneEmailSchema.merge(gstSchema).extend({
     name: z.string().trim().min(1, "Company name is required"),

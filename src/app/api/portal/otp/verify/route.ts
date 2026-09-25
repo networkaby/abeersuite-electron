@@ -4,12 +4,12 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import {
     bumpAttempts,
     checkOtpCode,
-    MAX_ATTEMPTS,
     OTP_COOKIE,
     otpCookieOptions,
     packTicket,
     TICKET_COOKIE,
 } from "@/shared/lib/auth/otpChallenge";
+import { OTP_MAX_ATTEMPTS } from "@/shared/lib/constants/session";
 
 /**
  * Check a typed code (SMS or email) against the pending cookie.
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
 
         // Wrong code → spend one attempt and keep the cookie alive.
         if (result.reason === "mismatch" && result.pending) {
-            const left = MAX_ATTEMPTS - (result.pending.attempts + 1);
+            const left = OTP_MAX_ATTEMPTS - (result.pending.attempts + 1);
             const res = NextResponse.json(
                 {
                     error:

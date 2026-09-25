@@ -16,7 +16,8 @@ import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { todayIso } from "@/shared/lib/format/formatDate";
 import { formatRupeesFromPaise, paiseToRupees, parseRupeesToPaise } from "@/shared/lib/format/moneyInr";
 import { DEFAULT_SALARY_LINES, salaryTotals, type SalaryLine } from "../lib/salaryLines";
-import PayDaysField, { DEFAULT_PAY_DAYS } from "./PayDaysField";
+import PayDaysField from "./PayDaysField";
+import { DEFAULT_PAY_DAYS } from "@/shared/lib/constants/hr";
 import type { StaffSalaryDto } from "../lib/staffTypes";
 
 type Draft = { name: string; kind: SalaryLine["kind"]; amount: string };

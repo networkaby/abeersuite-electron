@@ -5,12 +5,10 @@
 // half (`billLink.ts`) re-exports these, so server callers need only one import.
 
 import { round2 } from "@/shared/lib/format/moneyInr";
+import { DEFAULT_DUE_DAYS } from "@/shared/lib/constants/accounting";
 
 /** Money smaller than this is treated as nothing (paisa rounding noise). */
 export const EPS = 0.005;
-
-/** Days a bill is given before it counts as due, when the bill itself says nothing. */
-export const DEFAULT_DUE_DAYS = 30;
 
 /** +1 = they owe us (receivable) · −1 = we owe them (payable) · 0 = no party leg. */
 export type LinkSide = 1 | -1 | 0;

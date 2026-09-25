@@ -4,8 +4,7 @@ import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { authorizeStaffCredentials } from "@/shared/lib/auth/authorizeStaff";
 import { authorizePortalCredentials } from "@/shared/lib/auth/authorizePortal";
 import { IS_PUBLIC } from "@/shared/lib/appMode";
-import { SESSION_IDLE_MAX_AGE_MS } from "@/shared/lib/auth/sessionAge";
-import { DEFAULT_IDLE_LIMIT_MINUTES } from "@/shared/lib/hr/dutyTime";
+import { DEFAULT_IDLE_LIMIT_MINUTES, SESSION_IDLE_MAX_AGE_MS } from "@/shared/lib/constants/session";
 
 /**
  * One session-cookie NAME on every deployment, office and counters alike.

@@ -10,6 +10,8 @@
 // Going over a quota does NOT block — the apply box warns, HR still decides, and the
 // days beyond the quota are treated as unpaid.
 
+import { LEAVE_YEAR_START_MONTH } from "@/shared/lib/constants/hr";
+
 export interface LeaveTypeDefault {
     code: string;
     name: string;
@@ -28,12 +30,6 @@ export const LEAVE_TYPE_DEFAULTS: LeaveTypeDefault[] = [
     { code: "EARNED", name: "Earned", paid: true,  yearlyQuota: null, noticeDays: 3, sortOrder: 3 },
     { code: "UNPAID", name: "Unpaid", paid: false, yearlyQuota: null, noticeDays: 3, sortOrder: 4 },
 ];
-
-/**
- * The leave year runs 1 April → 31 March, the same year the books keep. A quota
- * is spent inside one of these, and 1 April starts everyone at nothing taken.
- */
-export const LEAVE_YEAR_START_MONTH = 4;
 
 /** The leave year an ISO date falls in, as its two bounding dates. */
 export function leaveYearOf(iso: string): { from: string; to: string; label: string } {

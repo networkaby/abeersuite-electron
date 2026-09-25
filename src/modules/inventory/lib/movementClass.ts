@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { valueStockBatch } from "@/modules/inventory/lib/valuation";
+import { REORDER_HISTORY_DAYS, REORDER_LADDER } from "@/shared/lib/constants/inventory";
 
 /**
  * Movement classification engine — the single "house lens" consumed by the
@@ -45,21 +46,8 @@ import { valueStockBatch } from "@/modules/inventory/lib/valuation";
 
 export type MovementClass = "NEW" | "REGULAR" | "SLOW" | "NON_MOVING" | "DEAD";
 
-// ─── TUNABLE KNOBS — edit these to change behaviour ──────────────────────────
-// The promotion ladder (organic sale days within the slow-band window needed to
-// climb). Falling needs no ladder — recency alone demotes. These are code-owned
-// behavioural constants, deliberately NOT DB settings: they define how the
-// engine reasons, not per-shop config. Change the numbers here to retune.
-export const REORDER_LADDER = {
-    /** ≥ this many organic sale days → promote to SLOW (amber checkpoint). */
-    toSlowDays: 2,
-    /** ≥ this many organic sale days → promote to REGULAR (buy math resumes). */
-    toRegularDays: 4,
-} as const;
-
-/** Widest history the classifier reads — beyond this everything is DEAD anyway. */
-export const REORDER_HISTORY_DAYS = 365;
-// ─────────────────────────────────────────────────────────────────────────────
+// The tuning knobs (REORDER_LADDER, REORDER_HISTORY_DAYS) are in
+// shared/lib/constants/inventory.ts.
 
 export interface MovementBands {
     slowAfterDays: number;

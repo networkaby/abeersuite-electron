@@ -32,9 +32,8 @@
  */
 
 import { formatHhMm, parseHhMm } from "./hhmm";
-
-/** The shop clock. Office hours are civil times in this zone, never UTC. */
-export const SHOP_TIME_ZONE = "Asia/Kolkata";
+import { BUSINESS_TIME_ZONE } from "@/shared/lib/constants/business";
+import { DEFAULT_DUTY_END, DEFAULT_DUTY_START } from "@/shared/lib/constants/hr";
 
 /**
  * Day-of-year of the December solstice — the cosine's peak, i.e. the latest opening.
@@ -63,23 +62,6 @@ export interface SeasonalHours {
     /** Closing time, the same all year. "HH:MM". */
     end: string;
 }
-
-/**
- * The shop's own hours, as "HH:MM" in shop time — when duty starts and ends.
- *
- * Two jobs: they say who is LATE, and they give the length of a full day when
- * nobody has typed one. Defaults read off the real shifts on live, which open
- * 10:30–12:20 and close 20:30–22:18. Per person on StaffProfile; per season on
- * OrgDefaults.
- *
- * These live here rather than in dutyTime.ts — where they were until seasonal
- * hours arrived — because the fallback below has to be built from them at load
- * time, and dutyTime importing this module means this one cannot import back
- * without a cycle. `dutyTime.ts` re-exports them, so callers still find them where
- * they always have, and there is still exactly one definition.
- */
-export const DEFAULT_DUTY_START = "10:30";
-export const DEFAULT_DUTY_END = "20:30";
 
 /**
  * What the shop runs on when nothing has been configured.
@@ -117,7 +99,7 @@ const WEEKDAY_INDEX: Record<string, number> = {
  * is about the shop's day. The same reasoning as `lateMinutes` converting before it
  * compares.
  */
-export function shopDateOf(at: Date = new Date(), timeZone = SHOP_TIME_ZONE): ShopDate {
+export function shopDateOf(at: Date = new Date(), timeZone = BUSINESS_TIME_ZONE): ShopDate {
     const parts = new Intl.DateTimeFormat("en-GB", {
         timeZone, year: "numeric", month: "2-digit", day: "2-digit", weekday: "short",
     }).formatToParts(at);

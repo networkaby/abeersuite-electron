@@ -11,10 +11,8 @@
 import { Field } from "@/shared/components/Field";
 import { NumericInput } from "@/shared/components/NumericInput";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
-import { DEFAULT_DUTY_MINUTES } from "@/shared/lib/hr/dutyTime";
-import { DEFAULT_PAY_DAYS, payDaysOf, perDayPaise, perHourPaise } from "../lib/payrollProrate";
-
-export { DEFAULT_PAY_DAYS };
+import { DEFAULT_DUTY_MINUTES, DEFAULT_PAY_DAYS } from "@/shared/lib/constants/hr";
+import { payDaysOf, perDayPaise, perHourPaise } from "../lib/payrollProrate";
 
 /** "₹615.38 a day · ₹68.38 an hour on a 9h duty" — empty until there is a gross. */
 export function payRateHint(grossPaise: number, payDays: number, dutyMinutes: number | null | undefined): string {

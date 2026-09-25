@@ -29,7 +29,8 @@ import { formatRupeesFromPaise, parseRupeesToPaise } from "@/shared/lib/format/m
 import { positionScopeLabel } from "@/shared/lib/org/positionScope";
 import { EMPLOYMENT_TYPES, EMPLOYMENT_TYPE_LABELS, type EmploymentType } from "@/shared/lib/schemas/hrSchema";
 import { DEFAULT_SALARY_LINES, salaryTotals, type SalaryLine } from "../lib/salaryLines";
-import PayDaysField, { DEFAULT_PAY_DAYS } from "./PayDaysField";
+import PayDaysField from "./PayDaysField";
+import { DEFAULT_PAY_DAYS } from "@/shared/lib/constants/hr";
 import type { StaffDetail } from "../lib/staffTypes";
 
 interface PositionRow {

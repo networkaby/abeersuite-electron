@@ -13,7 +13,7 @@
  *    down the whole time. A remembered "owed" flag gets that wrong exactly when
  *    the gap held no signal, so the read on return is not conditional on one.
  *  • A SLOW HEARTBEAT UNDERNEATH, so a screen is never stale for longer than
- *    HEARTBEAT_MS no matter what happened to the signal. Everything above is
+ *    SCREEN_HEARTBEAT_MS no matter what happened to the signal. Everything above is
  *    event-driven, and an event can simply not arrive — the Supabase channel
  *    dropped and reconnected, the leader tab's timers were throttled, a write
  *    took a path whose topics nobody mapped. The replica has a verify sweep for
@@ -26,17 +26,10 @@
  * reads every time the user comes back to the window.
  */
 
+import { SCREEN_HEARTBEAT_MS } from "@/shared/lib/constants/polling";
+
 /** Long enough to swallow a multi-request save, short enough to feel instant. */
 export const SETTLE_MS = 600;
-
-/**
- * The staleness floor — how long a VISIBLE screen may go without re-reading when
- * no signal arrives. Five minutes is chosen against the cost rule (AGENTS.md §7):
- * it is long enough that an idle office screen is nearly free, short enough that
- * a missed signal is a nuisance rather than a wrong decision. A screen that IS
- * hearing signals never pays it — every read pushes the deadline out.
- */
-export const HEARTBEAT_MS = 5 * 60 * 1000;
 
 /**
  * ±20% spread on the heartbeat. A busy screen mounts several subscribers at once
@@ -58,7 +51,7 @@ export type SettledReader = {
 export function createSettledReader(
     fn: () => void,
     settleMs: number = SETTLE_MS,
-    heartbeatMs: number = HEARTBEAT_MS,
+    heartbeatMs: number = SCREEN_HEARTBEAT_MS,
 ): SettledReader {
     if (typeof document === "undefined") return { schedule: () => {}, dispose: () => {} };
 

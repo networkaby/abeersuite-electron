@@ -44,7 +44,7 @@ import { EPS, dueDateOf, sideOf, type LinkableDoc } from "./billLinkPlan";
 
 // The pure planning half lives in `billLinkPlan.ts` (no Prisma, so the popup can
 // import it). Re-exported here so server callers have one place to import from.
-export { planLinks, autoLinkOrder, dueDateOf, sumPicks, sideOf, EPS, DEFAULT_DUE_DAYS } from "./billLinkPlan";
+export { planLinks, autoLinkOrder, dueDateOf, sumPicks, sideOf, EPS } from "./billLinkPlan";
 export type { LinkSide, LinkableDoc, BillPicks } from "./billLinkPlan";
 
 /**
