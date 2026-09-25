@@ -39,18 +39,14 @@
  * of these vouchers loses that edit to the newer renumbered row (last write wins).
  */
 
-import * as dotenv from "dotenv";
-dotenv.config({ path: ".env" });
-
-import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { Pool, type PoolClient } from "pg";
+import type { PoolClient } from "pg";
+import { finish, openTarget } from "./liveTarget";
 import { assembleReference, type SeriesShape } from "@/modules/accountancy/lib/voucherRef";
 import { openVyb } from "./openVyb";
 
 const VYAPAR_BACKUP = "D:/AbeerSuite/11-09-2026_05.55.41_Network_Service_VypBackup.vyb";
-const BACKUP_DIR = "D:/AbeerSuite/live-backups";
 /** Last day in Vyapar. A voucher of ours dated on or before it continues Vyapar's series. */
 const VYAPAR_LAST_DAY = "2026-09-10";
 /** Every voucher created before this is the import batch (it ran 11 Sep, 20:35–20:38). */
@@ -80,18 +76,6 @@ interface Row {
 }
 
 interface Change { id: number; type: string; date: string; from: string | null; to: string | null; why: string }
-
-function arg(name: string): string | undefined {
-    const i = process.argv.indexOf(name);
-    return i >= 0 ? process.argv[i + 1] : undefined;
-}
-
-function newestBackupAgeMinutes(): number | null {
-    if (!existsSync(BACKUP_DIR)) return null;
-    const files = readdirSync(BACKUP_DIR).filter((f) => f.endsWith(".dump"));
-    if (!files.length) return null;
-    return (Date.now() - Math.max(...files.map((f) => statSync(join(BACKUP_DIR, f)).mtimeMs))) / 60_000;
-}
 
 /** Highest numeric reference per Vyapar txn_type in the backup the import came from. */
 function vyaparMaxima(): Map<number, number> {
@@ -246,25 +230,12 @@ async function apply(db: PoolClient, changes: Change[], seriesRows: Array<{ kind
 }
 
 async function main(): Promise<void> {
-    const go = process.argv.includes("--apply");
-    const rollback = process.argv.includes("--rollback");
-    const url = arg("--db") ?? process.env.DIRECT_URL ?? "";
-    if (!url) throw new Error("No database: pass --db <url> or set DIRECT_URL");
-    const isLive = /supabase/.test(url);
-    const u = new URL(url.replace(/[?&](sslmode|pgbouncer)=[^&]*/g, ""));
-    console.log(`\nTarget: ${u.hostname}${u.pathname}${isLive ? "  (LIVE)" : ""}`);
-    console.log(`Mode:   ${go ? (rollback ? "apply, then ROLL BACK" : "APPLY") : "plan only"}\n`);
-
-    if (go && !rollback && isLive) {
-        const age = newestBackupAgeMinutes();
-        if (age == null || age > 60) throw new Error("No live backup from the last hour — run `pnpm vyapar:backup-live` first.");
-    }
-
-    const pool = new Pool({ connectionString: u.toString(), ssl: isLive ? { rejectUnauthorized: false } : undefined });
-    const db = await pool.connect();
+    const t = await openTarget();
+    const { db } = t;
+    let ok = false;
+    let summary = "";
     try {
-        await db.query("begin");
-        const { changes, seriesRows } = await plan(db, go && !rollback);
+        const { changes, seriesRows } = await plan(db, t.keeps);
 
         const byWhy = new Map<string, Change[]>();
         for (const c of changes) {
@@ -279,38 +250,25 @@ async function main(): Promise<void> {
         console.log(`\n${changes.length} voucher(s) to renumber.`);
         console.log("Next numbers after the run:");
         for (const s of seriesRows.filter((r) => r.nextSeq > 0)) console.log(`    ${s.kind.padEnd(16)} counter ${String(s.counterNumber).padEnd(3)} nextSeq ${s.nextSeq}`);
+        summary = `${changes.length} voucher(s)`;
 
-        if (!go) {
-            await db.query("rollback");
-            console.log("\nPlan only — nothing written. Add --apply to write.");
-            return;
+        if (t.go) {
+            await apply(db, changes, seriesRows);
+
+            // Read back: every change landed, and no number of ours is issued twice.
+            const ids = changes.map((c) => c.id);
+            const back = (await db.query<{ id: number; voucherNo: string | null }>(`select id, "voucherNo" from "UniversalVoucher" where id = any($1)`, [ids])).rows;
+            const want = new Map(changes.map((c) => [c.id, c.to]));
+            const wrong = back.filter((r) => want.get(r.id) !== r.voucherNo);
+            if (wrong.length) throw new Error(`${wrong.length} voucher(s) did not take their new number, e.g. #${wrong[0].id}`);
+            const dup = await db.query(`
+                select "voucherNo", count(*)::int n from "UniversalVoucher"
+                where "voucherNo" ~ '^[A-Z]+-[0-9]+-[0-9]{2}$' group by 1 having count(*) > 1 limit 5`);
+            if (dup.rows.length) throw new Error(`Duplicate numbers after the run: ${dup.rows.map((r) => `${r.voucherNo}×${r.n}`).join(", ")}`);
         }
-        await apply(db, changes, seriesRows);
-
-        // Read back: every change landed, and no number of ours is issued twice.
-        const ids = changes.map((c) => c.id);
-        const back = (await db.query<{ id: number; voucherNo: string | null }>(`select id, "voucherNo" from "UniversalVoucher" where id = any($1)`, [ids])).rows;
-        const want = new Map(changes.map((c) => [c.id, c.to]));
-        const wrong = back.filter((r) => want.get(r.id) !== r.voucherNo);
-        if (wrong.length) throw new Error(`${wrong.length} voucher(s) did not take their new number, e.g. #${wrong[0].id}`);
-        const dup = await db.query(`
-            select "voucherNo", count(*)::int n from "UniversalVoucher"
-            where "voucherNo" ~ '^[A-Z]+-[0-9]+-[0-9]{2}$' group by 1 having count(*) > 1 limit 5`);
-        if (dup.rows.length) throw new Error(`Duplicate numbers after the run: ${dup.rows.map((r) => `${r.voucherNo}×${r.n}`).join(", ")}`);
-
-        if (rollback) {
-            await db.query("rollback");
-            console.log(`\nWrote and verified ${changes.length} voucher(s), then ROLLED BACK — nothing kept.`);
-        } else {
-            await db.query("commit");
-            console.log(`\nDone — ${changes.length} voucher(s) renumbered and verified.`);
-        }
-    } catch (e) {
-        await db.query("rollback").catch(() => {});
-        throw e;
+        ok = true;
     } finally {
-        db.release();
-        await pool.end();
+        await finish(t, ok, summary);
     }
 }
 

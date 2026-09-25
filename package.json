@@ -85,6 +85,7 @@
     "vyapar:backfill-details": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/backfill-details.ts",
     "vyapar:renumber": "tsx --tsconfig scripts/vyapar/tsconfig.json scripts/vyapar/renumber-own-vouchers.ts",
     "vyapar:backup-live": "tsx scripts/vyapar/backup-live.ts",
+    "pos:renumber-shifts": "tsx scripts/renumber-shifts.ts",
     "seed:check-docs": "tsx scripts/check-doc-sync.ts",
     "seed:fix-docs": "tsx scripts/check-doc-sync.ts --fix",
     "check:nav-icons": "tsx scripts/check-nav-icons.ts",
