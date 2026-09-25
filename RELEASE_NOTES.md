@@ -1,51 +1,33 @@
-# v1.8.0 [urgent]
+# v1.8.1 [urgent]
 
-Every counter should take this update. It brings the full HR side of the shop — duty time, leave, pay rules, salary slips and commission — plus fixes for parties, costing and roles. **This version changes the database.** Update every counter first; the office site is switched over right after, and a counter left on the old version pauses its sync until it updates.
+Every counter should take this update today. It changes how a cashier hands the drawer to the next person — the whole drawer now moves in one step at the counter's sign-in screen — and it fixes counters that stopped syncing after the last database change. **This version changes the database** (the cashier handover record). The office side already has the change, so a counter still on v1.8.0 may have paused its sync; installing this version brings it back.
 
-## Duty time and attendance
+## Cashier handover
 
-- The working day is now measured, not assumed: a staff member's duty is counted up to their last keypress, and idle time is left out.
-- Each person can have their own office hours and their own idle limit. The register shows who came in late.
-- Shop hours follow the season — summer and winter opening times — and at sign-out the till tells the counter hand when to come back.
-- A counter hand can see their own day at sign-out, and the day card breaks the day into every stretch they were active.
-- Till days that were missing an arrival time have been repaired, and a till day can no longer be marked present without one.
+- **Hand over the whole drawer.** The cashier going off duty counts the drawer (notes and coins) and signs out — no need to pick the next cashier or keep a float aside.
+- **The next cashier sees it at sign-in.** Before the app opens, the counter shows whose drawer is waiting, the expected cash and every payment method collected. **Accept** takes the drawer and goes to POS; **Reject** signs out again.
+- A cashier who simply signs out without counting leaves the shift open, and whoever signs in next can review and take it over.
+- **Hand over** is now its own button beside the shift pill in the POS top bar. **Close shift** is only for closing the day into the vault, and its screen is larger with a clear "hand over to vault" line.
 
-## Leave
+## Counter sign-in screen
 
-- Leave types are now master data, each with a quota you can set. The quota warns when a leave is asked for, shows when it is decided, and cuts pay when it is exceeded.
-- A leave must be asked for with the required notice (sick leave excepted), and the date box will not accept a date the notice rule forbids.
-- Absence without leave is recorded and charged.
+- One tidy till card: next duty day and time up top, today's duty below it, then the drawer with the cash figure to check and every payment method the counter takes — even on a quiet day with nothing collected.
+- The cards now sit level with the sign-in box instead of squeezing the showcase.
+- The day's status reads plainly: **Duty joined** when the cashier worked but stayed under half a day, **Absent** when they did not come.
+- Sign-in on a counter is quicker — the checks now run side by side.
 
-## Pay rules and salary slips
+## Bill numbers
 
-- A new Pay Rules screen: a salary buys 26 days, a day off worked is paid in hours, and a late day can be cut in time or as a percentage in slabs.
-- The salary slip prints — a summary of the month with the accounted hours shown in days; the day-by-day detail moves to My Info.
-- Whether the slip shows attendance and commission can be set in the print template.
-- A payroll run whose journal was deleted no longer looks posted, and can be thrown away.
-- Holidays can belong to one branch.
+- A bill takes its number from the counter it was raised at, whether the counter is working offline, online or through the office.
+- The office resetting or rolling a counter's numbers into a new year is no longer undone by the counter's next sync.
+- Shift difference journals and gift-card vouchers now get a number like every other voucher.
 
-## Targets and commission
+## Shifts
 
-- Set commission heads once — who they are for, a flat rate or a slab ladder — then give a person their own rate where needed.
-- Targets the app cannot count can be entered by hand.
-- Commission is worked out for the month and paid on the payslip.
+- A shift can be deleted as soon as no bill, receipt, expense or cash drop is on it — POS sales included. The screen names what is blocking it. Deleting a shift also removes the handover it gave or received.
 
-## Staff pages
+## Fixes
 
-- My Info: a staff member's own page, opened with one tick.
-- The staff directory opens like the cash book and each row says where the person stands.
-
-## Sign-in
-
-- A session now ends overnight, so each morning starts with the PIN, and a session that ends tells you why.
-
-## Parties, accounts and costing
-
-- A converted or merged party still opens from every old voucher, and keeps its ledger when saved again.
-- Every group drill-in now lands on Group Report.
-- No more bill-link popup after saving a voucher.
-- The costing voucher picker shows the real item count, has a "last N days" filter, and no longer spills out of its popup.
-
-## Roles
-
-- A permission you tick on the Role page is always saved; the department basket is for display only, and the page now says so.
+- Counters no longer halt with "schema drift" after the handover change — their local copy now accepts the new optional fields.
+- When any window of the app goes back to sign-in, every other window it opened (such as a POS tab) closes too, so no one is left looking at a signed-out cashier's open shift.
+- Worked time in HR now counts correctly for tills that are online through the office — it was showing 0m.
