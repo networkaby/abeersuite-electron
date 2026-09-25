@@ -317,7 +317,7 @@ export const POS_RAIL_ACTIONS: PosRailAction[] = [
 export const WORKSPACE_NAV: NavItem[] = [
     { label: "Inbox", href: "/office/message/inbox", icon: Inbox, permission: null },
     { label: "Work Flow", href: "/office/work-flow-inbox", icon: Workflow, permission: null },
-    { label: "POS Register", href: "/vouchers/pos", icon: ScanBarcode, permission: "pos:shift:open" },
+    { label: "POS Register", sidebarKey: "pos", href: "/vouchers/pos", icon: Store, permission: "pos:shift:open" },
     // { label: "Search SLno", href: "/office/core/search-slno", icon: Search, permission: null },
 
 ];
