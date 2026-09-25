@@ -4,10 +4,10 @@
 //
 // Roles and their permissions are DEFINED in Administration. Nothing here
 // creates or edits one: this tab only chooses which existing role the person
-// holds, who they report to, and (when they are locked out) sets a new
-// password. Every write goes through the same `PUT /api/users/[id]` the
-// Admin → Users screen uses, so the two can never disagree about what a role
-// change means.
+// holds, who they report to, and edits or deletes their login. The login card
+// opens the same `UserForm` and deletes through the same helper as Admin →
+// Users, and every write goes through the same `/api/users/[id]` — so the two
+// pages can never disagree, and a change on either shows on both (`settings`).
 //
 // "Data scope" (Own/Team/Department/…) used to be editable here too. It's
 // hidden for now — the `scope` column and session plumbing still exist, but
@@ -17,13 +17,14 @@
 import { useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { KeyRound, ShieldCheck } from "lucide-react";
+import { KeyRound, Pencil, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Field } from "@/shared/components/Field";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
+import UserForm from "@/shared/components/UserForm";
 import { useApiResource } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
+import { confirmAndDeleteUser } from "@/shared/lib/users/deleteUserLogin";
 import type { StaffDetail, StaffRow } from "../lib/staffTypes";
 
 interface RoleRow {
@@ -32,18 +33,24 @@ interface RoleRow {
     department?: { id: string; name: string } | null;
 }
 
-export default function StaffAccessTab({ detail, canEdit, onChanged }: {
+export default function StaffAccessTab({ detail, canEdit, canDelete, onChanged, onDeleted }: {
     detail: StaffDetail;
     /** users:edit — without it the tab is read-only, never hidden. */
     canEdit: boolean;
+    /** users:delete, and not the signed-in person's own login. */
+    canDelete: boolean;
     onChanged: () => void;
+    onDeleted: () => void;
 }) {
     const { user } = detail;
     const { data: roles } = useApiResource<RoleRow[]>("/api/roles");
     const { data: staff } = useApiResource<StaffRow[]>("/api/hr/staff");
 
     const [saving, setSaving] = useState(false);
-    const [password, setPassword] = useState("");
+    // A copy taken when the dialog opens: the profile re-reads on every
+    // `settings` announcement, and a fresh `user` object would reset the form
+    // under whatever is being typed.
+    const [editingLogin, setEditingLogin] = useState<{ id: number; name: string; email: string } | null>(null);
 
     const roleOptions = useMemo(
         () => (roles ?? []).map((r) => ({
@@ -63,8 +70,8 @@ export default function StaffAccessTab({ detail, canEdit, onChanged }: {
     );
 
     /**
-     * One write path. `PUT /api/users/[id]` wants the identity fields on every
-     * call, so they ride along unchanged — this tab never edits a name or email.
+     * Role / manager writes. `PUT /api/users/[id]` wants the identity fields on
+     * every call, so they ride along unchanged — the login card edits those.
      */
     const put = async (patch: Record<string, unknown>, done: string) => {
         setSaving(true);
@@ -85,13 +92,8 @@ export default function StaffAccessTab({ detail, canEdit, onChanged }: {
         }
     };
 
-    const resetPassword = async () => {
-        if (password.length < 6) {
-            toast.error("A password must be at least 6 characters");
-            return;
-        }
-        await put({ password }, `New password set for ${user.name.split(" ")[0]}`);
-        setPassword("");
+    const deleteLogin = async () => {
+        if (await confirmAndDeleteUser(user)) onDeleted();
     };
 
     return (
@@ -103,6 +105,46 @@ export default function StaffAccessTab({ detail, canEdit, onChanged }: {
                     which existing role this person holds.
                 </span>
             </p>
+
+            <div className="rounded-lg border border-border p-4">
+                <p className="flex items-center gap-2 text-sm font-medium"><KeyRound size={14} /> Login</p>
+                <p className="mb-3 text-xs text-muted-foreground">
+                    How they sign in. Setting a new password signs them out everywhere. The same login shows on
+                    Admin → Users — a change on either page shows on both.
+                </p>
+                <dl className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-[8rem_1fr]">
+                    <dt className="text-muted-foreground">Name</dt>
+                    <dd className="font-medium">{user.name}</dd>
+                    <dt className="text-muted-foreground">Sign-in email</dt>
+                    <dd className="break-all">{user.email}</dd>
+                </dl>
+                {(canEdit || canDelete) && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                        {canEdit && (
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setEditingLogin({ id: user.id, name: user.name, email: user.email })}
+                            >
+                                <Pencil size={14} /> Edit login
+                            </Button>
+                        )}
+                        {canDelete && (
+                            <Button type="button" size="sm" variant="destructive" onClick={deleteLogin}>
+                                <Trash2 size={14} /> Delete login
+                            </Button>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {editingLogin && (
+                <UserForm
+                    user={editingLogin}
+                    onClose={() => { setEditingLogin(null); onChanged(); }}
+                />
+            )}
 
             <fieldset disabled={!canEdit || saving} className="grid gap-4 border-0 p-0 sm:grid-cols-2">
                 <Field label="Role" hint="Decides what they may do.">
@@ -131,32 +173,7 @@ export default function StaffAccessTab({ detail, canEdit, onChanged }: {
                         />
                     )}
                 </Field>
-
-                <Field label="Sign-in email" hint="Changed on their own profile page.">
-                    {(id) => <Input id={id} value={user.email} readOnly className="h-9 text-sm" />}
-                </Field>
             </fieldset>
-
-            <div className="rounded-lg border border-border p-4">
-                <p className="flex items-center gap-2 text-sm font-medium"><KeyRound size={14} /> Set a new password</p>
-                <p className="mb-3 text-xs text-muted-foreground">
-                    For someone locked out. They are signed out everywhere and must use the new password.
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                    <Input
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="At least 6 characters"
-                        aria-label="New password"
-                        disabled={!canEdit || saving}
-                        className="h-9 w-64 text-sm"
-                    />
-                    <Button type="button" size="sm" onClick={resetPassword} disabled={!canEdit || saving || password.length < 6}>
-                        Set password
-                    </Button>
-                </div>
-            </div>
         </div>
     );
 }

@@ -8,6 +8,7 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { revokeUserSessions } from "@/shared/lib/auth/revokeSessions";
 
 const PROFILE_SELECT = {
     id:          true,
@@ -208,6 +209,12 @@ export async function PUT(
         }
 
         const user = await prisma.user.update({ where: { id: userId }, data: updateData, select: PUT_SELECT });
+        // Someone else set their password or changed their role: sign them out
+        // everywhere, so the old password stops working and the new role's
+        // grants arrive on their next click. Your own edits never sign you out.
+        if (!isSelf && (updateData.password || updateData.role !== undefined)) {
+            await revokeUserSessions(userId);
+        }
         return NextResponse.json(shapeUser(user));
     } catch (e) {
         return handleApiError(e, "Failed to update user");
@@ -220,16 +227,18 @@ export async function DELETE(
 ) {
     const { user: caller, response } = await requireAuth();
     if (response) return response;
-    // Deleting a user needs users:delete (or the users:manage umbrella / bypass).
-    if (!caller.permissions.includes(PERMISSIONS.USERS_DELETE)
-        && !caller.permissions.includes(PERMISSIONS.USERS_EDIT)
-        && !caller.permissions.includes(PERMISSIONS.ADMIN_BYPASS)) {
+    // Deleting a user needs users:delete itself (bypass passes) — the edit rung
+    // below it is not enough.
+    if (!hasPermissionWithScope(caller.permissions, PERMISSIONS.USERS_DELETE)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     try {
         const { id } = await params;
         const userId = Number(id);
         if (Number.isNaN(userId)) return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
+        if (caller.id === userId) {
+            return NextResponse.json({ error: "You cannot delete your own login" }, { status: 400 });
+        }
 
         // Tickets + logs no longer hold a User FK (ownership is a createdBy snapshot,
         // log author is JSON). The surviving User FKs are the ticket participant links.

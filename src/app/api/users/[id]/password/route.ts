@@ -7,6 +7,7 @@ import { z } from "zod";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { revokeUserSessions } from "@/shared/lib/auth/revokeSessions";
 
 const schema = z.object({
     password: z.string().min(6, "Password must be at least 6 characters"),
@@ -33,6 +34,9 @@ export async function PATCH(
     try {
         const hashed = await bcrypt.hash(data.password, 10);
         await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
+        // An admin reset someone else's password — the old one must stop working
+        // on every device now, not at their next sign-in.
+        if (!isSelf) await revokeUserSessions(userId);
         return NextResponse.json({ success: true });
     } catch (e) {
         return handleApiError(e, "Failed to update password");

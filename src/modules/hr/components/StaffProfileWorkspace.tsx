@@ -37,14 +37,20 @@ import AppointStaffDialog from "./AppointStaffDialog";
 const TABS = ["job", "access", "personal", "pay", "money", "identity"] as const;
 type Tab = (typeof TABS)[number];
 
-export default function StaffProfileWorkspace({ userId, canEdit, canEditUsers, canEditPositions }: {
+export default function StaffProfileWorkspace({ userId, selfId, canEdit, canEditUsers, canDeleteUsers, canEditPositions, onDeleted }: {
     userId: number;
+    /** The signed-in person — their own login cannot be deleted. */
+    selfId: number | null;
     /** hr:staff:edit — the HR record itself. */
     canEdit: boolean;
-    /** users:edit — the role, scope, manager and password on the Access tab. */
+    /** users:edit — the login, role and manager on the Access tab. */
     canEditUsers: boolean;
+    /** users:delete — deleting the login from the Access tab. */
+    canDeleteUsers: boolean;
     /** positions:edit — appointing to and vacating a seat. */
     canEditPositions: boolean;
+    /** The login was deleted from the Access tab — the explorer goes back to the list. */
+    onDeleted: () => void;
 }) {
     const url = `/api/hr/staff/${userId}`;
     const { data, loading, error, reload } = useApiResource<StaffDetail>(url);
@@ -80,7 +86,15 @@ export default function StaffProfileWorkspace({ userId, canEdit, canEditUsers, c
                                 <StaffSeatsCard detail={data} canEdit={canEditPositions} onChanged={reload} />
                             </div>
                         )}
-                        {tab === "access" && <StaffAccessTab detail={data} canEdit={canEditUsers} onChanged={reload} />}
+                        {tab === "access" && (
+                            <StaffAccessTab
+                                detail={data}
+                                canEdit={canEditUsers}
+                                canDelete={canDeleteUsers && selfId !== userId}
+                                onChanged={reload}
+                                onDeleted={onDeleted}
+                            />
+                        )}
                         {/* The same form the person sees on their own profile page —
                             HR puts the first copy on file, they keep it current. */}
                         {tab === "personal" && <StaffPersonalForm userId={userId} canEdit={canEdit} />}

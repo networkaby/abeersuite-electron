@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { randomBytes, timingSafeEqual } from "crypto";
 import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist";
 import { isLoginBlocked, recordLoginFailure, clearLoginFailures } from "@/shared/lib/auth/loginRateLimit";
-import { crudDependentsOnRevoke, normalizeCrudGrants } from "@/shared/lib/auth/crudLadder";
+import { applyPermissionOverrides, normalizeCrudGrants } from "@/shared/lib/auth/crudLadder";
 import { positionScopeLabel } from "@/shared/lib/org/positionScope";
 import { pinClocksExpired, stampCounterPinLogin, thisCounterId } from "@/shared/lib/auth/counterPin";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
@@ -216,18 +216,8 @@ async function buildStaffAuthUser(prisma: PrismaClient, user: StaffUserRow): Pro
         },
         select: { permissionId: true, type: true },
     });
-    for (const o of overrides) {
-        if (o.type === "GRANT") effective.add(o.permissionId);
-    }
-
-    // Explicit DENY wins last. Denying a rung also drops the highers that imply
-    // it — otherwise check-time implication (hasPermissionWithScope) would
-    // resurrect the denied action through the surviving higher grant.
-    for (const o of overrides) {
-        if (o.type === "GRANT") continue;
-        effective.delete(o.permissionId);
-        for (const higher of crudDependentsOnRevoke(o.permissionId)) effective.delete(higher);
-    }
+    // GRANT adds, DENY wins last (and takes the higher rungs with it).
+    applyPermissionOverrides(effective, overrides);
 
     // CRUD ladder: carry only the HIGHEST rung per resource — lowers are implied
     // at check time — so the session/JWT stays small even where legacy role

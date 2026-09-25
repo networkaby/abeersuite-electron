@@ -19,12 +19,13 @@ import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 const STAFF_DOMAIN = COMPANY_DETAILS.staffMailDomain;
 
-// Identity-only user creation.
+// Identity-only add / edit of a staff login — name, email, password. The one
+// dialog behind both Admin → Users and HR → Staff Directory (Add staff, and the
+// Access tab's Edit login), so the two pages can never save a person differently.
 //
-// Job title, reporting hierarchy, role, branch, and department all flow from
-// Position appointments — see /office/admin/positions. Permission punishments
-// / rewards are layered on top via the per-user PermissionsModal (shield icon
-// in the users table).
+// Job title, reporting line, role, branch and department all flow from the seat
+// (Position) they are appointed to — the Appoint button on their HR profile.
+// One-off extra permissions sit on Admin → Users' shield button.
 
 // A new account's address is always `name@<staff domain>`, so the form asks only for
 // the name part — nothing to mistype. Editing keeps the full box: older accounts may
@@ -78,7 +79,7 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
                 onSaved?.(saved);
             } else {
                 const { data: saved } = await axios.post<{ id: number; name: string; email: string }>("/api/users", payload);
-                toast.success("User created — assign a Post to grant access");
+                toast.success(`${saved.name} added — appoint them to a seat to give access`);
                 onSaved?.(saved);
             }
             onClose();
@@ -95,8 +96,8 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
                     <DialogTitle>{user ? "Edit User" : "Add User"}</DialogTitle>
                     <DialogDescription>
                         {user
-                            ? "Update this user's identity. Role, branch, department, and reporting line all come from Post appointments."
-                            : "Create a staff account. Once created, appoint them to a Post to grant access."}
+                            ? "Name, sign-in email and password. Role, branch, department and reporting line come from their seat."
+                            : "Create a staff login. Once created, appoint them to a seat to give access."}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -147,10 +148,10 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
                         <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-300">
                             <Info size={14} className="shrink-0 mt-0.5" />
                             <p>
-                                New users start with no operational access. After saving, open{" "}
-                                <span className="font-medium">Posts</span> and appoint them to a
-                                position — that assigns their job title, branch, department, and
-                                reporting line all at once.
+                                New staff start with no access. After saving, use{" "}
+                                <span className="font-medium">Appoint</span> on their HR profile
+                                (HR &amp; People → Staff Directory) — it gives their seat, branch,
+                                department and joining date all at once.
                             </p>
                         </div>
                     )}

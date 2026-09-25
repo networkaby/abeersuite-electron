@@ -10,8 +10,9 @@
 // toggles, reads — has no ladder and is left untouched.
 //
 // Single source consumed by: hasPermissionWithScope (check-time implication,
-// shared by server routes + client pages), authorizeStaff (normalize the JWT),
-// the Role editor (expand on load / normalize on save), and canDoPosVoucher.
+// shared by server routes + client pages), authorizeStaff (overrides + normalize
+// the JWT), the per-person permissions screen (same overrides), the Role editor
+// (expand on load / normalize on save), and canDoPosVoucher.
 
 const RESOURCE_ORDER = ["create", "edit", "delete"] as const;
 const VOUCHER_ORDER = ["create", "post", "cancel", "delete"] as const;
@@ -69,6 +70,29 @@ export function normalizeCrudGrants(ids: Iterable<string>): Set<string> {
         if (crudDependentsOnRevoke(id).some((higher) => set.has(higher))) set.delete(id);
     }
     return set;
+}
+
+/**
+ * Layer one person's overrides on top of their role grants — in place, and the
+ * set is returned for chaining. GRANT adds; an explicit DENY wins last, and
+ * denying a rung also drops the highers that imply it, otherwise check-time
+ * implication would resurrect the denied action through the surviving higher
+ * grant. Shared by sign-in (authorizeStaff) and the per-person permissions
+ * screen, so the screen can never show a different answer than the session.
+ */
+export function applyPermissionOverrides(
+    grants: Set<string>,
+    overrides: readonly { permissionId: string; type: "GRANT" | "DENY" }[],
+): Set<string> {
+    for (const o of overrides) {
+        if (o.type === "GRANT") grants.add(o.permissionId);
+    }
+    for (const o of overrides) {
+        if (o.type === "GRANT") continue;
+        grants.delete(o.permissionId);
+        for (const higher of crudDependentsOnRevoke(o.permissionId)) grants.delete(higher);
+    }
+    return grants;
 }
 
 /** Add lowers implied by each id — for DISPLAY (Role editor load), never storage. */

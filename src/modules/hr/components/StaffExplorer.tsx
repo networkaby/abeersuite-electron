@@ -14,7 +14,7 @@
 // the same person. It is the only address for one person's HR profile —
 // every "HR profile" link elsewhere points here.
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Contact, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -35,11 +35,17 @@ import StaffProfileWorkspace from "./StaffProfileWorkspace";
 
 type Status = "active" | "left" | "all";
 
-export default function StaffExplorer({ canEdit, canEditUsers, canEditPositions }: {
-    /** hr:staff:edit — the HR record itself, and adding a person. */
+export default function StaffExplorer({ selfId, canEdit, canCreateUsers, canEditUsers, canDeleteUsers, canEditPositions }: {
+    /** The signed-in person — their own login cannot be deleted. */
+    selfId: number | null;
+    /** hr:staff:edit — the HR record itself. */
     canEdit: boolean;
-    /** users:edit — the role, scope, manager and password on the Access tab. */
+    /** users:create — adding a person (the rule POST /api/users enforces). */
+    canCreateUsers: boolean;
+    /** users:edit — the login (name, email, password), role and manager on the Access tab. */
     canEditUsers: boolean;
+    /** users:delete — deleting a login from the Access tab. */
+    canDeleteUsers: boolean;
     /** positions:edit — appointing to and vacating a seat. */
     canEditPositions: boolean;
 }) {
@@ -68,6 +74,18 @@ export default function StaffExplorer({ canEdit, canEditUsers, canEditPositions 
         const qs = next.toString();
         router.replace(qs ? `/office/hr/staff?${qs}` : "/office/hr/staff", { scroll: false });
     }, [router, searchParams]);
+
+    // Deleted from Admin → Users (or another tab): the open person was in the
+    // last list and is not in this one, so go back to the directory instead of
+    // leaving a profile that can only say "not found". Someone just added is in
+    // neither list yet, so a fresh Add is never thrown out.
+    const prevRows = useRef<StaffRow[] | undefined>(undefined);
+    useEffect(() => {
+        const before = prevRows.current;
+        prevRows.current = data;
+        if (!data || !before || !selectedId) return;
+        if (before.some((r) => r.id === selectedId) && !data.some((r) => r.id === selectedId)) select(null);
+    }, [data, selectedId, select]);
 
     // Filter options come from the rows themselves — no second fetch for a
     // handful of branches and departments.
@@ -122,7 +140,7 @@ export default function StaffExplorer({ canEdit, canEditUsers, canEditPositions 
                     search={q}
                     onSearchChange={setQ}
                     searchPlaceholder="Search name, email, phone, staff ID, seat"
-                    onAdd={canEdit ? () => setShowForm(true) : undefined}
+                    onAdd={canCreateUsers ? () => setShowForm(true) : undefined}
                     addLabel="Add staff"
                     onTitleClick={selectedId ? () => select(null) : undefined}
                     isEmpty={filtered.length === 0}
@@ -231,9 +249,12 @@ export default function StaffExplorer({ canEdit, canEditUsers, canEditPositions 
                         <StaffProfileWorkspace
                             key={selectedId}
                             userId={selectedId}
+                            selfId={selfId}
                             canEdit={canEdit}
                             canEditUsers={canEditUsers}
+                            canDeleteUsers={canDeleteUsers}
                             canEditPositions={canEditPositions}
+                            onDeleted={() => { select(null); reload(); }}
                         />
                         </>
                     ) : (
