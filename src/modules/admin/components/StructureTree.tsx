@@ -11,7 +11,7 @@ import UserAvatar from "@/shared/components/UserAvatar";
 function HolderRow({ user }: { user: PositionNode["holders"][number]["user"] }) {
     return (
         <Link
-            href={`/office/social/users/${user.id}`}
+            href={`/office/user/${user.id}`}
             className="flex items-center gap-1.5 rounded px-1.5 py-0.5 hover:bg-muted transition-colors"
         >
             <UserAvatar avatarUrl={user.avatarUrl} name={user.name} role={user.role} sizePx={20} className="border border-card" />

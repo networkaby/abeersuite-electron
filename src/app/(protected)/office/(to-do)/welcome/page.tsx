@@ -44,7 +44,7 @@ export default async function WelcomePage() {
             <div className="flex gap-2">
                 {user?.id && (
                     <Link
-                        href={`/office/social/users/${user.id}`}
+                        href={`/office/user/${user.id}`}
                         className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-sm hover:bg-accent"
                     >
                         <UserCircle2 size={14} />

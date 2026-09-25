@@ -38,7 +38,11 @@ interface LedgerReport {
     rows: LedgerRow[];
 }
 
-export default function StaffMoneyTab({ detail }: { detail: StaffDetail }) {
+export default function StaffMoneyTab({ detail, canPay = true }: {
+    detail: StaffDetail;
+    /** Whether "Pay salary / advance" is offered — the Employee Portal hides it from a person without the payroll grant. */
+    canPay?: boolean;
+}) {
     const ledger = detail.ledger;
     const { data, loading, error, reload } = useApiResource<LedgerReport>(ledger ? `/api/accountancy/reports/ledger/${ledger.id}` : null);
     useRealtimeTopics(["ledger"], reload, !!ledger);
@@ -68,11 +72,13 @@ export default function StaffMoneyTab({ detail }: { detail: StaffDetail }) {
                     </p>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                    <Button asChild size="sm">
-                        <Link href={`/vouchers/payments/new?partyAccountId=${ledger.id}`}>
-                            <HandCoins size={14} /> Pay salary / advance
-                        </Link>
-                    </Button>
+                    {canPay && (
+                        <Button asChild size="sm">
+                            <Link href={`/vouchers/payments/new?partyAccountId=${ledger.id}`}>
+                                <HandCoins size={14} /> Pay salary / advance
+                            </Link>
+                        </Button>
+                    )}
                     <Button asChild size="sm" variant="outline">
                         <Link href={`/office/accountancy/masters/ledgers/${ledger.id}`}>
                             <BookOpen size={14} /> Open the ledger

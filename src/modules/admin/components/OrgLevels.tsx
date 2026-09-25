@@ -211,7 +211,7 @@ export default function OrgLevels({ structure }: { structure: OrgStructure }) {
                                 title={p.title + (p.holders.length > 1 ? ` (+${p.holders.length - 1})` : "")}
                                 accent="l1"
                                 vacant={p.holders.length === 0}
-                                href={p.holders[0] ? `/office/social/users/${p.holders[0].user.id}` : undefined}
+                                href={p.holders[0] ? `/office/user/${p.holders[0].user.id}` : undefined}
                                 delay={i * 80}
                             />
                         ))
@@ -272,7 +272,7 @@ export default function OrgLevels({ structure }: { structure: OrgStructure }) {
                                     title={holder ? position.title : context}
                                     accent="l4"
                                     vacant={!holder}
-                                    href={holder ? `/office/social/users/${holder.user.id}` : undefined}
+                                    href={holder ? `/office/user/${holder.user.id}` : undefined}
                                     delay={900 + i * 70}
                                 />
                             );

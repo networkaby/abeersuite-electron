@@ -318,7 +318,7 @@ function DetailPanel({ post, pinned, onUnpin }: { post: PositionNode | null; pin
                             {post.holders.map(h => (
                                 <Link
                                     key={h.user.id}
-                                    href={`/office/social/users/${h.user.id}`}
+                                    href={`/office/user/${h.user.id}`}
                                     className="flex items-center gap-2 p-1.5 rounded hover:bg-muted transition-colors"
                                 >
                                     <HolderAvatar user={h.user} size={28} />

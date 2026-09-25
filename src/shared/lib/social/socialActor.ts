@@ -70,7 +70,7 @@ export async function resolveSocialActors(
     for (const u of users) {
         map.set(socialKey("USER", u.id), {
             kind: "USER", id: u.id, name: u.name, avatarUrl: u.avatarUrl,
-            href: `/office/social/users/${u.id}`,
+            href: `/office/user/${u.id}`,
             role: u.role,
             roleBadge: u.userRole ? { label: u.userRole.label, color: u.userRole.color } : null,
             isCustomer: false,

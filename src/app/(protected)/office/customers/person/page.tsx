@@ -446,7 +446,7 @@ export default function CustomersPage() {
                                 address={detail.address}
                                 email={detail.email}
                                 createdAt={detail.createdAt}
-                                socialHref={`/office/social/users/${detail.id}`}
+                                socialHref={`/office/user/${detail.id}`}
                                 chips={[
                                     { key: "devices", icon: <Smartphone size={11} />, text: `${detail.devices.length} device${detail.devices.length !== 1 ? "s" : ""}` },
                                     { key: "companies", icon: <Building2 size={11} />, text: `${detail.companies.length} compan${detail.companies.length !== 1 ? "ies" : "y"}` },

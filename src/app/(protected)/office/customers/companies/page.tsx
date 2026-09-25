@@ -425,7 +425,7 @@ export default function CompaniesPage() {
                                 email={detail.email}
                                 extra={detail.companyReg ? <span className="text-xs text-muted-foreground">Reg: {detail.companyReg}</span> : null}
                                 createdAt={detail.createdAt}
-                                socialHref={`/office/social/users/${detail.id}`}
+                                socialHref={`/office/user/${detail.id}`}
                                 chips={[
                                     { key: "contacts", icon: <User size={11} />, text: `${detail.customers.length} contact${detail.customers.length !== 1 ? "s" : ""}` },
                                     { key: "devices", icon: <Smartphone size={11} />, text: `${detail.devices.length} device${detail.devices.length !== 1 ? "s" : ""}` },

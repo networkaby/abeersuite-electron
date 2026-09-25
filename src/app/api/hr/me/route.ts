@@ -9,6 +9,9 @@ import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import { monthOvertimeFor } from "@/modules/hr/lib/monthlyOvertime";
 import { nonPayableDays } from "@/modules/hr/lib/attendancePayable";
 import { LEAVE_INCLUDE, toLeaveDto } from "@/modules/hr/lib/leaveServer";
+import { loadHoursBreakup } from "@/modules/hr/lib/attendanceHoursServer";
+import { payRuleLines } from "@/modules/hr/lib/payRulesApply";
+import { parseSalaryLines } from "@/modules/hr/lib/salaryLines";
 import { leaveBalancesFor } from "@/modules/hr/lib/leaveBalance";
 import type { MyHrPayload } from "@/modules/hr/lib/myHrTypes";
 import { COMMISSION_USER_SELECT, appliedHeadsFor, entriesByUser, loadHeads, monthFor, roleLabelOf, salesByUser } from "@/modules/hr/lib/commissionServer";
@@ -54,14 +57,27 @@ export async function GET(req: Request) {
         // running month stops at today, because the rest of it is not worked yet.
         const upto = to < today ? to : today;
 
-        const [seasonal, me, marks, leaveDaysRows, holidays, myLeaves, overtime, leaveBalance, sales, heads, myEntries] = await Promise.all([
+        const [seasonal, me, marks, leaveDaysRows, holidays, myLeaves, overtime, leaveBalance, sales, heads, myEntries, breakup] = await Promise.all([
             loadSeasonalHours(),
             prisma.user.findUnique({
                 where: { id: userId },
                 select: {
                     id: true, name: true, avatarUrl: true,
                     ...COMMISSION_USER_SELECT,
-                    staffProfile: { select: { ...COMMISSION_USER_SELECT.staffProfile.select, joinedOn: true, leftOn: true, dutyMinutes: true, dutyStart: true, dutyEnd: true, staffCode: true } },
+                    staffProfile: {
+                        select: {
+                            ...COMMISSION_USER_SELECT.staffProfile.select,
+                            joinedOn: true, leftOn: true, dutyMinutes: true, dutyStart: true, dutyEnd: true, staffCode: true,
+                            // The structure in force, for the penalties estimate — the
+                            // latest revision on or before the day being read to.
+                            salaries: {
+                                where: { effectiveFrom: { lte: dayOf(upto) } },
+                                orderBy: { effectiveFrom: "desc" },
+                                take: 1,
+                                select: { linesJson: true, payDays: true },
+                            },
+                        },
+                    },
                     ...USER_BRANCHES_SELECT,
                 },
             }),
@@ -93,6 +109,9 @@ export async function GET(req: Request) {
             salesByUser(prisma, [userId], from, to),
             loadHeads(prisma),
             entriesByUser(prisma, [userId], from, to),
+            // The month's netting — the same read payroll makes — so the
+            // penalties estimate is payroll's own arithmetic, a month early.
+            upto >= from ? loadHoursBreakup(userId, from, upto) : null,
         ]);
         if (!me) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
@@ -138,6 +157,23 @@ export async function GET(req: Request) {
         let notPayable = 0;
         for (const v of cut.values()) notPayable += 1 - v;
 
+        // Penalties & extras: what the pay rules would make of this month's
+        // attendance, worked off the salary structure in force. Owner,
+        // 2026-09-26: the person should see his "penalty" without waiting for
+        // the slip. No structure, or no Basic to work from → say why, not zero.
+        const salary = me.staffProfile?.salaries[0] ?? null;
+        const salaryLines = salary ? parseSalaryLines(salary.linesJson) : [];
+        const effect: MyHrPayload["effect"] = !salary
+            ? { lines: null, counts: breakup?.effect ?? null, rules: breakup?.rules ?? null, reason: "No salary structure is on file for you yet." }
+            : !breakup
+                ? { lines: null, counts: null, rules: null, reason: "The month has not started." }
+                : {
+                    lines: payRuleLines(breakup.effect, breakup.rules, salaryLines, salary.payDays, person.dutyMinutes),
+                    counts: breakup.effect,
+                    rules: breakup.rules,
+                    reason: salaryLines.some((l) => l.kind === "EARNING" && l.amountPaise > 0) ? null : "Your salary structure has no earning to work the rules off.",
+                };
+
         const payload: MyHrPayload = {
             month, from, to, today,
             person,
@@ -152,6 +188,7 @@ export async function GET(req: Request) {
             isCurrentMonth: month === today.slice(0, 7),
             leaveBalance,
             lostDays: Math.round(notPayable * 2) / 2,
+            effect,
             // Only the heads that reach ME — globally on, for my role, not off for
             // me — the very list the board shows under my row.
             commission: monthFor(

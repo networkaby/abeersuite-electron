@@ -137,7 +137,7 @@ function PostCard({ post, dim, focused, onClick }: { post: PositionNode; dim: bo
                             {post.holders.slice(0, 2).map(h => (
                                 <Link
                                     key={h.user.id}
-                                    href={`/office/social/users/${h.user.id}`}
+                                    href={`/office/user/${h.user.id}`}
                                     onClick={(e) => e.stopPropagation()}
                                     className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-muted transition-colors"
                                     title={h.user.name}
@@ -478,7 +478,7 @@ export default function OrgHierarchy({ structure }: { structure: OrgStructure })
                                                         {p.holders.slice(0, 2).map(h => (
                                                             <Link
                                                                 key={h.user.id}
-                                                                href={`/office/social/users/${h.user.id}`}
+                                                                href={`/office/user/${h.user.id}`}
                                                                 onClick={(e) => e.stopPropagation()}
                                                                 className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-white/10 transition-colors"
                                                                 title={h.user.name}

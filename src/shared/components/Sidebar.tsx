@@ -541,7 +541,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                 S
                             </div>
                             {user?.name && (
-                                <Link href={user.id ? `/office/social/users/${user.id}` : "/office/admin/users"}>
+                                <Link href="/office/me">
                                     <UserAvatar
                                         avatarUrl={liveAvatar !== undefined ? liveAvatar : user.avatarUrl}
                                         name={user.name}
@@ -575,7 +575,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                 </div>
                             </div>
                             <Link
-                                href={user?.id ? `/office/social/users/${user.id}` : "/office/admin/users"}
+                                href="/office/me"
                                 className="group flex items-center gap-2.5 rounded-lg px-1 py-1 -mx-1 transition-colors hover:bg-muted"
                             >
                                 <UserAvatar

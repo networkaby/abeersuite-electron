@@ -44,7 +44,7 @@ function OrgNodeWrapper({
             {/* Card */}
             <div className="relative" ref={isHighlighted ? highlightRef : undefined}>
                 <Link
-                    href={`/office/social/users/${node.id}`}
+                    href={`/office/user/${node.id}`}
                     className={[
                         "group flex flex-col items-center gap-1.5 border-2 bg-card px-4 py-3 shadow-sm transition-all hover:shadow-md w-44 text-center",
                         isHighlighted

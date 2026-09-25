@@ -355,7 +355,7 @@ export default function UsersPage() {
                                 <TableRow key={u.id}>
                                     <TableCell className="text-muted-foreground">{u.id}</TableCell>
                                     <TableCell>
-                                        <Link href={`/office/social/users/${u.id}`} className="flex items-center gap-2.5 group">
+                                        <Link href={`/office/user/${u.id}`} className="flex items-center gap-2.5 group">
                                             <UserAvatar avatarUrl={u.avatarUrl} name={u.name} role={u.role} sizePx={32} className="shrink-0" />
                                             <div>
                                                 <div className="font-medium group-hover:text-primary transition-colors">{u.name}</div>

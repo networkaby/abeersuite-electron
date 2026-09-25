@@ -507,7 +507,7 @@ export default function AllCustomersPage() {
                                 address={personDetail.address}
                                 email={personDetail.email}
                                 createdAt={personDetail.createdAt}
-                                socialHref={`/office/social/users/${personDetail.id}`}
+                                socialHref={`/office/user/${personDetail.id}`}
                                 chips={[
                                     { key: "devices", icon: <Smartphone size={11} />, text: `${personDetail.devices.length} device${personDetail.devices.length !== 1 ? "s" : ""}` },
                                     { key: "companies", icon: <Building2 size={11} />, text: `${personDetail.companies.length} compan${personDetail.companies.length !== 1 ? "ies" : "y"}` },
@@ -674,7 +674,7 @@ export default function AllCustomersPage() {
                                 email={companyDetail.email}
                                 extra={companyDetail.companyReg ? <span className="text-xs text-muted-foreground">Reg: {companyDetail.companyReg}</span> : null}
                                 createdAt={companyDetail.createdAt}
-                                socialHref={`/office/social/users/${companyDetail.id}`}
+                                socialHref={`/office/user/${companyDetail.id}`}
                                 chips={[
                                     { key: "contacts", icon: <User size={11} />, text: `${companyDetail.customers.length} contact${companyDetail.customers.length !== 1 ? "s" : ""}` },
                                     { key: "devices", icon: <Smartphone size={11} />, text: `${companyDetail.devices.length} device${companyDetail.devices.length !== 1 ? "s" : ""}` },

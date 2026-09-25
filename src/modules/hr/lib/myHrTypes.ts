@@ -8,6 +8,21 @@ import type { MonthOvertime } from "@/shared/lib/hr/myDay";
 import type { HolidayDto, LeaveRequestDto, RegisterPerson } from "./attendanceTypes";
 import type { LeaveBalancePayload } from "./leaveTypes";
 import type { CommissionMonth } from "./commissionTypes";
+import type { SalaryLine } from "./salaryLines";
+import type { AttendanceEffect, PayRules } from "@/shared/lib/hr/payRules";
+
+/**
+ * Penalties & extras — what the pay rules make of the month so far, in rupees,
+ * worked off the salary structure in force. `payRuleLines` is the very function
+ * payroll runs, so this estimate and the slip cannot disagree. `lines` is null
+ * when there is nothing to work it off, and `reason` says why.
+ */
+export interface MyHrEffect {
+    lines: SalaryLine[] | null;
+    counts: AttendanceEffect | null;
+    rules: PayRules | null;
+    reason: string | null;
+}
 
 export interface MyHrPayload {
     /** The month being shown, YYYY-MM. */
@@ -30,4 +45,6 @@ export interface MyHrPayload {
     leaveBalance: LeaveBalancePayload;
     /** My target and what my own sales have earned this month. */
     commission: CommissionMonth;
+    /** Penalties and extras the month has earned so far — an estimate until payroll runs. */
+    effect: MyHrEffect;
 }

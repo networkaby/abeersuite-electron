@@ -215,7 +215,7 @@ function PosCard({ position, accent, compact = false, canManage = false, onConte
     );
 
     return holder ? (
-        <Link href={`/office/social/users/${holder.user.id}`} className="block" onContextMenu={handleContext}>
+        <Link href={`/office/user/${holder.user.id}`} className="block" onContextMenu={handleContext}>
             {cardInner}
         </Link>
     ) : cardInner;
@@ -694,7 +694,7 @@ export default function OrgRegions({
             items.push({
                 label: `Open ${h.user.name}'s profile`,
                 icon: <Users size={12} />,
-                onClick: () => { window.location.href = `/office/social/users/${h.user.id}`; },
+                onClick: () => { window.location.href = `/office/user/${h.user.id}`; },
             });
         }
 

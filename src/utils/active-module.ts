@@ -26,7 +26,8 @@ const THEME_ONLY_PREFIXES: ReadonlyArray<readonly [string, string]> = [
     // slate instead of borrowing a module's hue and claiming to be it.
     ["/office/message", "workspace"],
     ["/office/work-flow-inbox", "workspace"],
-    ["/office/social", "workspace"],
+    ["/office/me", "workspace"],
+    ["/office/user", "workspace"],
     ["/office/core", "workspace"],
     ["/office/welcome", "workspace"],
 

@@ -649,7 +649,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         children: [
             // First on purpose: it is the one link a plain staff member is given,
             // and /office/hr lands on the first page the person actually holds.
-            { label: "My Info", icon: UserRound, href: "/office/hr/me", sidebarKey: "me" },
+            { label: "My Portal", icon: UserRound, href: "/office/me", sidebarKey: "me" },
             { label: "Staff Directory", icon: Contact, href: "/office/hr/staff", sidebarKey: "staff" },
             { label: "Attendance", icon: CalendarCheck, href: "/office/hr/attendance", sidebarKey: "attendance" },
             // The register says what the month came to; this one says why — a

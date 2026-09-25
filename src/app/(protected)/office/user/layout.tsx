@@ -6,7 +6,7 @@ import { EscapeBack } from "@/shared/components/EscapeBack";
 //
 // Note this area is a FREE ROUTE (shared/lib/auth/freeRoutes.ts) — reachable by
 // a user with no operational position — so it must stay ungated.
-export default function SocialLayout({ children }: { children: React.ReactNode }) {
+export default function UserAreaLayout({ children }: { children: React.ReactNode }) {
     return (
         <>
             <EscapeBack />
