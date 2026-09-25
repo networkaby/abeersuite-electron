@@ -108,6 +108,12 @@ function makeIdempotent(sql: string): string {
  * quote, so it is never mistaken for a column; a future table that broke this
  * regularity would just get no backfills generated for its odd line, not corrupt
  * SQL, because the per-line regex below only ever matches the shape it expects.
+ *
+ * Every optional column also gets an `ALTER COLUMN ... DROP NOT NULL`. Neither the
+ * `CREATE TABLE` nor the `ADD COLUMN` above can relax a column the replica already
+ * holds as required, so a migration that made one optional (whole-drawer handover,
+ * 2026-09-24: `pos_handovers.toUserId`) left every upgraded counter halted on
+ * schema drift. Dropping NOT NULL from an already-optional column is a no-op.
  */
 function addColumnBackfills(sql: string): string {
     return sql.replace(
@@ -118,6 +124,9 @@ function addColumnBackfills(sql: string): string {
                 const col = /^ {4}"([A-Za-z0-9_]+)" (.+),$/.exec(line);
                 if (!col) continue; // the CONSTRAINT line, or a blank separator line
                 alters.push(`ALTER TABLE "${table}" ADD COLUMN IF NOT EXISTS "${col[1]}" ${col[2]};`);
+                if (!/\bNOT NULL\b/.test(col[2])) {
+                    alters.push(`ALTER TABLE "${table}" ALTER COLUMN "${col[1]}" DROP NOT NULL;`);
+                }
             }
             return alters.length ? `${block}\n${alters.join("\n")}` : block;
         },
