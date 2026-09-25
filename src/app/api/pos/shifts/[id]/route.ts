@@ -15,6 +15,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { sumPaise, listShiftMovements } from "@/modules/pos/lib/shiftMath";
 import { buildShiftSummary } from "@/modules/pos/lib/shiftSummary";
 import { parseHandoverDenominations } from "@/modules/pos/lib/handoverDenominations";
+import { shiftDeleteBlockers } from "@/modules/pos/lib/shiftManage";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     // Any signed-in staff may ASK; access is decided per-shift below. The shift's
@@ -80,9 +81,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
         // Receipts taken and expenditures paid on this shift, straight off the
         // vouchers (digital receipts never touch the till, so cash sales can read
-        // ₹0 while the shift still carries them). The detail page uses the counts
-        // to know whether the shift can be deleted.
-        const movements = await listShiftMovements(prisma, shift.id);
+        // ₹0 while the shift still carries them). Alongside, the delete guard the
+        // delete route runs, so the detail page shows exactly what blocks it.
+        const [movements, deleteBlockers] = await Promise.all([
+            listShiftMovements(prisma, shift.id),
+            shiftDeleteBlockers(prisma, { ...shift, dropCount: shift.drops.length }),
+        ]);
         const expendituresPaise = sumPaise(movements.expenditures);
 
         // The drawer — expected cash, till movement, per-method collections.
@@ -115,6 +119,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             drops: shift.drops.map((d) => ({ ...d, amountPaise: d.amountPaise.toString() })),
             expenditures: movements.expenditures.map((e) => ({ ...e, amountPaise: e.amountPaise.toString() })),
             _count: { receipts: movements.receipts.length },
+            // Why the shift cannot be deleted — empty when it can.
+            deleteBlockers,
             handover: shift.handover ? {
                 ...shift.handover,
                 declaredByAPaise:  shift.handover.declaredByAPaise?.toString() ?? null,

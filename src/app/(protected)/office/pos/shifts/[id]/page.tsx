@@ -102,6 +102,7 @@ type ShiftDetail = {
     drops: { id: number; amountPaise: string; droppedAt: string; notes: string | null; droppedBy: { id: number; name: string } }[];
     expenditures: { id: number }[];
     _count: { receipts: number };
+    deleteBlockers?: string[];
     movementBreakdown?: MovementBreakdown;
     collectionsBreakdown?: CollectionsBreakdown;
     tenderBreakdown?: TenderRow[];
@@ -195,13 +196,8 @@ export default function ShiftDetailPage() {
         window.open(`/receipt/shift/${shift.id}?autoprint=1`, "_blank", "noopener");
     };
 
-    // What stops a delete — mirrors the delete route's own refusal.
-    const attached = [
-        shift._count.receipts > 0            ? `${shift._count.receipts} receipt(s)`         : null,
-        shift.drops.length > 0               ? `${shift.drops.length} cash drop(s)`          : null,
-        shift.expenditures.length > 0        ? `${shift.expenditures.length} expenditure(s)` : null,
-        Number(shift.tillMovementPaise) !== 0 ? "till movement"                              : null,
-    ].filter((x): x is string => x !== null);
+    // What stops a delete — the server's own guard, read with the shift.
+    const deleteBlockers = shift.deleteBlockers ?? [];
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -241,7 +237,7 @@ export default function ShiftDetailPage() {
                         <Printer size={13} className="mr-1" /> Print
                     </Button>
 
-                    {canManage && !isHandover && (
+                    {canManage && (
                         <>
                             {isClosed && (
                                 <Button variant="outline" size="sm" onClick={() => { setReason(""); setAsking("reopen"); }}>
@@ -253,13 +249,13 @@ export default function ShiftDetailPage() {
                                     <RotateCcw size={13} className="mr-1" /> Close shift
                                 </Button>
                             )}
-                            {attached.length === 0 ? (
+                            {deleteBlockers.length === 0 ? (
                                 <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10" onClick={() => { setReason(""); setAsking("delete"); }}>
                                     <Trash2 size={13} className="mr-1" /> Delete shift
                                 </Button>
                             ) : (
                                 <span className="text-xs text-muted-foreground italic">
-                                    Cannot delete: {attached.join(", ")}.
+                                    Cannot delete: {deleteBlockers.join("; ")}.
                                 </span>
                             )}
                         </>
@@ -274,7 +270,7 @@ export default function ShiftDetailPage() {
                         <DialogTitle>{asking === "delete" ? "Delete this shift?" : "Reopen this shift?"}</DialogTitle>
                         <DialogDescription>
                             {asking === "delete"
-                                ? "Only a shift with no sales, drops or expenditures can be deleted. Its opening and closing vouchers are cancelled."
+                                ? "Only a shift with no vouchers or drops on it can be deleted. Its own opening, closing and variance vouchers are cancelled, and its cashier handover is removed with it."
                                 : "The shift goes back to Open and its closing Contra and variance entry are held as drafts, keeping their voucher numbers. Close it again with the correct count and those same vouchers are rewritten — no cancelled entries pile up in the register."}
                         </DialogDescription>
                     </DialogHeader>
