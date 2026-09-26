@@ -12,7 +12,7 @@ import { auditSnapshot } from "@/modules/accountancy/lib/voucherLifecycle";
 import type { PostVoucherInput } from "@/modules/accountancy/lib/postInvVoucher";
 import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
-import { GlBuildError, tenderCoverageComplaint } from "@/modules/accountancy/lib/postInvVoucher";
+import { GlBuildError, tenderCoverageComplaint, tenderPaisaDrift } from "@/modules/accountancy/lib/postInvVoucher";
 import { Prisma } from "@/generated/prisma/client";
 import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/accountancy/partySnapshot";
 import { resolvePartyAccountId } from "@/shared/lib/parties/partyLinkServer";
@@ -356,10 +356,24 @@ export async function PATCH(req: Request, { params }: Params) {
     // case the existing ones stand — and a voucher whose goods moved but whose
     // money did not is exactly the state that used to be saved in silence. Same
     // rule as POST, same function, checked before anything is written.
-    const effectiveTotal = totals?.totalAmount ?? Number(existing.totalAmount);
     const effectiveTenders = tenders !== undefined
         ? tenders
         : readSettlement(existing.settlementJson).tenders;
+    // A paisa between the total and the payment rows is rounding — it goes on
+    // the voucher's own Round Off, exactly as POST does (see tenderPaisaDrift).
+    const drift = tenderPaisaDrift(effectiveTenders, totals?.totalAmount ?? Number(existing.totalAmount));
+    const roundOffToSave = drift !== 0
+        ? round2((roundOff ?? Number(existing.roundOff)) + drift)
+        : roundOff;
+    if (drift !== 0) {
+        const base = totals ?? {
+            subtotal:    Number(existing.subtotal),
+            taxAmount:   Number(existing.taxAmount),
+            totalAmount: Number(existing.totalAmount),
+        };
+        totals = { ...base, totalAmount: round2(base.totalAmount + drift) };
+    }
+    const effectiveTotal = totals?.totalAmount ?? Number(existing.totalAmount);
     const tenderComplaint = tenderCoverageComplaint(effectiveTenders, effectiveTotal);
     if (tenderComplaint) return NextResponse.json({ error: tenderComplaint }, { status: 400 });
 
@@ -460,7 +474,7 @@ export async function PATCH(req: Request, { params }: Params) {
                     ...(destinationBranchId !== undefined ? { destinationBranchId: destinationBranchId ?? null } : {}),
                     ...(showPrices       !== undefined ? { showPrices }                              : {}),
                     ...(shippingAmt      !== undefined ? { shippingAmt }     : {}),
-                    ...(roundOff         !== undefined ? { roundOff }        : {}),
+                    ...(roundOffToSave   !== undefined ? { roundOff: roundOffToSave } : {}),
                     ...(discountPct      !== undefined ? { discountPct }     : {}),
                     // Clamped to the bill when the lines were recomputed, so an
                     // over-discount can't drive totalAmount negative.

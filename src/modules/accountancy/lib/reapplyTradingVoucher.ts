@@ -16,7 +16,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { saleToSpec, type TradingStockLine } from "./voucherMappers";
 import { GlBuildError, type PostVoucherInput } from "./postInvVoucher";
 import { recomputeAccountBalances } from "./aggregateLedger";
-import { glLineRow } from "./transactionEngine";
+import { assertGlBalanced, glLineRow } from "./transactionEngine";
 import { recordStockMovement, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 
 export async function reapplyTradingVoucherInPlace(
@@ -64,6 +64,7 @@ export async function reapplyTradingVoucherInPlace(
             select: { accountId: true },
         })).map((l) => l.accountId);
 
+        assertGlBalanced(spec.glLines);
         await tx.voucherGlLine.deleteMany({ where: { universalVoucherId: journalEntryId } });
         // `glLineRow` — the SAME mapper the posting engine writes through. This
         // used to be a hand-written copy of five fields, which meant an edit threw

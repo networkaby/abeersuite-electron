@@ -20,7 +20,7 @@
 // and are being subsumed by `enginePost` as callers migrate (see plan Phase 3).
 
 import type { Prisma, VoucherType, VoucherGlRole, PaymentMethod } from "@/generated/prisma/client";
-import { balanceDelta, nextRefFromSeries, toNumber } from "./balance";
+import { balanceDelta, glGapPaise, nextRefFromSeries, toNumber, type LineForBalance } from "./balance";
 import { GlBuildError } from "./postInvVoucher";
 import { round2 } from "@/shared/lib/format";
 import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "./groupNature";
@@ -81,6 +81,23 @@ export function glLineRow(l: EngineGlLine, idx: number, branchId: string | null)
         method:      l.method ?? null,      // tender channel
         reference:   l.reference ?? null,   // tender ref
     };
+}
+
+/**
+ * The books' last line of defence: a set of GL legs that does not level to the
+ * paisa never reaches `VoucherGlLine`. Every writer of GL lines calls this —
+ * the posting engine, a draft's lines, a trading voucher's in-place edit — so no
+ * screen, route or future caller can leave the Trial Balance a paisa out.
+ * Throws inside the caller's transaction, so nothing of the voucher is written.
+ */
+export function assertGlBalanced(lines: LineForBalance[]): void {
+    const gap = glGapPaise(lines);
+    if (gap !== 0) {
+        throw new GlBuildError(
+            `This voucher does not balance — debits and credits differ by ₹${(Math.abs(gap) / 100).toFixed(2)}. ` +
+            "Nothing was saved.",
+        );
+    }
 }
 
 /** A stock movement for the engine's stock arm (re-export of the stock helper's shape). */
@@ -165,6 +182,7 @@ export async function engineGlArm(
     },
 ): Promise<{ journalEntryId: number; universalVoucherId: number }> {
     const { date, description, lines, userId, branchId, postedAt } = args;
+    assertGlBalanced(lines);
 
     // Resolve each ledger's normal side for the balance delta. Use the caller's
     // pre-loaded `account` when present; batch-load the rest. Null-normalBalance
@@ -668,6 +686,7 @@ export async function engineCreateVoucher(
     tx: Prisma.TransactionClient,
     spec: CreateGlVoucherSpec,
 ): Promise<CreatedVoucher> {
+    assertGlBalanced(spec.lines);
     const totalAmount = round2(spec.lines
         .filter((l) => l.type === "DEBIT")
         .reduce((s, l) => s + l.amount, 0));

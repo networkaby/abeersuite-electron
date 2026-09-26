@@ -17,7 +17,7 @@ import { requireWritableBranchId, requireBranchAccess, BranchAccessError } from 
 import { branchAccessResponse } from "@/shared/lib/api/branchAccessResponse";
 import { auth } from "@/auth";
 import { handleApiError } from "@/shared/lib/api";
-import { GlBuildError, tenderCoverageComplaint } from "@/modules/accountancy/lib/postInvVoucher";
+import { GlBuildError, tenderCoverageComplaint, tenderPaisaDrift } from "@/modules/accountancy/lib/postInvVoucher";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { resolveBuyerStateCode } from "@/shared/lib/gst/resolveBuyerState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
@@ -510,13 +510,19 @@ export async function POST(req: NextRequest) {
     // Clamped to the line subtotal so an over-typed discount can't drive
     // totalAmount negative.
     const billDiscIncl = round2(Math.min(overallDiscount, lineSubtotal));
-    const { subtotal, taxAmount, totalAmount } = calcVoucherTotals(
+    const totals = calcVoucherTotals(
         computedLines,
         Number(shippingAmt),
         billDiscIncl,
         Number(roundOff),
         chargesNet,
     );
+    // A paisa between this total and the form's payment rows is rounding — it
+    // goes on the voucher's own Round Off, so invoice, payment and ledger agree.
+    const drift = tenderPaisaDrift(tenders, totals.totalAmount);
+    const savedRoundOff = round2(Number(roundOff) + drift);
+    const { subtotal, taxAmount } = totals;
+    const totalAmount = round2(totals.totalAmount + drift);
 
     // The payment rows must add up to the total — the same rule the edit route
     // applies, from the same function, so the two can never drift apart again.
@@ -625,7 +631,7 @@ export async function POST(req: NextRequest) {
                 bomId:           isManufacturingJournal && bomId ? bomId : null,
                 destinationBranchId: isBranchTransfer ? destinationBranchId ?? null : null,
                 shippingAmt,
-                roundOff,
+                roundOff: savedRoundOff,
                 discountPct: discountPct != null ? Number(discountPct) : null,
                 // Tax-INCLUSIVE, as typed (clamped to the bill) — subtracted
                 // from the bottom line: totalAmount = subtotal − discountAmt + …
@@ -731,7 +737,7 @@ export async function POST(req: NextRequest) {
                     subtotal,
                     taxAmount,
                     shippingAmt:         Number(shippingAmt),
-                    roundOff:            Number(roundOff),
+                    roundOff:            savedRoundOff,
                     totalAmount,
                     discountAmt:         billDiscIncl > 0 ? billDiscIncl : null,
                     universalVoucher: {

@@ -28,7 +28,8 @@
 import type { Prisma, PrismaClient, VoucherGlRole, PaymentMethod } from "@/generated/prisma/client";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
-import { toNumber } from "./balance";
+import { glGapPaise, toNumber } from "./balance";
+import { round2 } from "@/shared/lib/format/moneyInr";
 import { computeGstSplit } from "@/shared/lib/gst/computeGstSplit";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 
@@ -249,11 +250,37 @@ export function tenderCoverageComplaint(
     totalAmount: number,
 ): string | null {
     if (tenders.length === 0) return null;
+    if (tenderGapPaise(tenders, totalAmount) === 0) return null;
     const sum = tenders.reduce((s, t) => s + Number(t.amount), 0);
-    // A rupee's worth of rounding is the operator's, not an error.
-    if (Math.abs(sum - totalAmount) <= 0.01) return null;
     return `The payment rows come to ₹${sum.toFixed(2)} but the voucher total is ₹${totalAmount.toFixed(2)}. `
         + "Adjust them so they add up — the unpaid part goes on the party's own account.";
+}
+
+/** Payment rows minus voucher total, in whole paise. */
+function tenderGapPaise(tenders: { amount: number | string }[], totalAmount: number): number {
+    const paid = tenders.reduce((s, t) => s + Math.round(round2(Number(t.amount)) * 100), 0);
+    return paid - Math.round(round2(totalAmount) * 100);
+}
+
+/**
+ * The server re-derives a voucher's total from its lines; the form priced the
+ * payment rows with its own arithmetic, and the two can land one paisa apart.
+ * SV-930802-26 was saved as total ₹1,600.01 against ₹1,600.00 paid, and its
+ * ledger entry came out a paisa out of level.
+ *
+ * That paisa is rounding, and rounding has a home: the voucher's Round Off.
+ * Returns the amount (−0.01, 0 or +0.01) to add to BOTH `roundOff` and
+ * `totalAmount` before saving, so the invoice total equals what was paid and
+ * the GL builder finds a voucher that levels. A wider gap returns 0 and is left
+ * for `tenderCoverageComplaint` to refuse — that is a real mismatch.
+ */
+export function tenderPaisaDrift(
+    tenders: { amount: number | string }[],
+    totalAmount: number,
+): number {
+    if (tenders.length === 0) return 0;
+    const gap = tenderGapPaise(tenders, totalAmount);
+    return Math.abs(gap) === 1 ? gap / 100 : 0;
 }
 
 /** A refusal the caller should show to the user as-is — not a server fault.
@@ -611,19 +638,52 @@ export async function buildInvVoucherGlLines(
         }
     }
 
-    // G4: stamp each leg's ordinal position so the spine reconstructs the form
-    // (role = section, seq = order within the document).
-    lines.forEach((l, i) => { l.seq = i; });
-
-    // Sanity: check balance
-    const debSum = lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + l.amount, 0);
-    const credSum = lines.filter((l) => l.type === "CREDIT").reduce((s, l) => s + l.amount, 0);
-    if (Math.abs(debSum - credSum) > 0.01) {
+    // ── Balance, to the paisa ─────────────────────────────────────────────
+    // Each leg is stored at 2dp, so judge it at 2dp. The tax split and the
+    // goods figure are rounded on their own, and together they can come to a
+    // paisa over or under what was actually paid (SV-930802-26: ₹1,600 paid,
+    // legs of ₹1,600.01). That paisa goes to Round Off — the ledger this is
+    // exactly what for — instead of being written unbalanced. Anything wider
+    // is a real mismatch and the voucher is refused.
+    for (const l of lines) l.amount = round2(l.amount);
+    let gap = glGapPaise(lines);   // Dr − Cr
+    if (Math.abs(gap) === 1) {
+        const side: "DEBIT" | "CREDIT" = gap > 0 ? "CREDIT" : "DEBIT";
+        roundOffLedger ??= pickLedger(ledgers, NAMES.ROUND_OFF);
+        const target = roundOffLedger
+            ? lines.find((l) => l.role === "ROUNDOFF")
+            : lines.find((l) => l.role === "BODY");
+        if (target) {
+            // Signed on `side`, so a round-off already running the other way shrinks.
+            const signed = round2((target.type === side ? target.amount : -target.amount) + 0.01);
+            target.type   = signed >= 0 ? side : (side === "DEBIT" ? "CREDIT" : "DEBIT");
+            target.amount = Math.abs(signed);
+        } else if (roundOffLedger) {
+            lines.push({
+                accountId:   roundOffLedger.id,
+                type:        side,
+                amount:      0.01,
+                description: "Round Off",
+                role:        "ROUNDOFF",
+            });
+        }
+        const kept = lines.filter((l) => l.amount !== 0);
+        lines.length = 0;
+        lines.push(...kept);
+        gap = glGapPaise(lines);
+    }
+    if (gap !== 0) {
+        const debSum  = lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + l.amount, 0);
+        const credSum = lines.filter((l) => l.type === "CREDIT").reduce((s, l) => s + l.amount, 0);
         return { skip: true, reason: "refused", notes: [
             ...notes,
             `the payment rows come to ₹${debSum.toFixed(2)} but the voucher comes to ₹${credSum.toFixed(2)}`,
         ] };
     }
+
+    // G4: stamp each leg's ordinal position so the spine reconstructs the form
+    // (role = section, seq = order within the document).
+    lines.forEach((l, i) => { l.seq = i; });
 
     return { skip: false, lines, notes, ledgers: [
         bodyLedger, roundOffLedger, shippingLedger, discountLedger,

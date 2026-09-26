@@ -150,14 +150,25 @@ export async function applyLineBalances(
     }
 }
 
-/** True when sum(debits) === sum(credits) within a rounding tolerance. */
-export function isBalanced(lines: LineForBalance[]): boolean {
-    let net = 0;
+/**
+ * Debits minus credits, in whole paise, judged on each line AS STORED — rounded
+ * to 2dp one line at a time, exactly as `glLineRow` writes it. A raw float sum
+ * can call a voucher level while its rounded legs land a paisa apart, and a
+ * paisa off in one voucher is "Difference in opening balances ₹0.01" on every
+ * Balance Sheet after it (SV-930802-26, 17 Sep 2026).
+ */
+export function glGapPaise(lines: LineForBalance[]): number {
+    let paise = 0;
     for (const l of lines) {
-        const amt = toNumber(l.amount);
-        net += l.type === "DEBIT" ? amt : -amt;
+        const p = Math.round(round2(toNumber(l.amount)) * 100);
+        paise += l.type === "DEBIT" ? p : -p;
     }
-    return Math.abs(net) < 0.005;
+    return paise;
+}
+
+/** True when the stored debits equal the stored credits to the paisa. */
+export function isBalanced(lines: LineForBalance[]): boolean {
+    return glGapPaise(lines) === 0;
 }
 
 /** Compute closing balance for an account from a set of lines. */
