@@ -145,7 +145,6 @@ import {
     Upload,
     UserCog,
     UserMinus,
-    UserRound,
     Users,
     UsersRound,
     Voicemail,
@@ -575,9 +574,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         dashboardHref: "/office/hr",
         pathPrefixes: ["/office/hr"],
         children: [
-            // First on purpose: it is the one link a plain staff member is given,
-            // and /office/hr lands on the first page the person actually holds.
-            { label: "My Portal", icon: UserRound, href: "/office/me", sidebarKey: "me" },
+            // No "My Portal" link: the name and photo at the top of the sidebar open
+            // /office/me for everyone, so a second door here only repeated it.
             { label: "Staff Directory", icon: Contact, href: "/office/hr/staff", sidebarKey: "staff" },
             { label: "Attendance", icon: CalendarCheck, href: "/office/hr/attendance", sidebarKey: "attendance" },
             // The register says what the month came to; this one says why — a
