@@ -22,7 +22,6 @@ import type { UserProfile } from "./profileTypes";
 
 const editSchema = z.object({
     name: z.string().min(1, "Name is required"),
-    email: z.string().email("Invalid email"),
     title: z.string().optional(),
     bio: z.string().max(500, "Max 500 characters").optional(),
     phone: z.string().optional(),
@@ -49,7 +48,6 @@ export default function EditProfileTab({ profile, onSaved }: { profile: UserProf
         resolver: zodResolver(editSchema),
         defaultValues: {
             name: profile.name,
-            email: profile.email,
             title: profile.title ?? "",
             bio: profile.bio ?? "",
             phone: profile.phone ?? "",
@@ -89,7 +87,8 @@ export default function EditProfileTab({ profile, onSaved }: { profile: UserProf
         setSaving(true);
         try {
             const res = await axios.put<UserProfile>(`/api/users/${profile.id}`, {
-                name: data.name, email: data.email, title: data.title || null,
+                // The sign-in email is changed on Security, beside its forward — sent unchanged here.
+                name: data.name, email: profile.email, title: data.title || null,
                 bio: data.bio || null, phone: data.phone || null, birthday: data.birthday || null,
                 linkedIn: data.linkedIn || null, twitter: data.twitter || null,
                 instagram: data.instagram || null, facebook: data.facebook || null,
@@ -175,12 +174,7 @@ export default function EditProfileTab({ profile, onSaved }: { profile: UserProf
                         <Input {...register("name")} />
                         {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
                     </div>
-                    <div className="space-y-1.5">
-                        <Label>Email</Label>
-                        <Input {...register("email")} />
-                        {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
-                    </div>
-                    <div className="space-y-1.5">
+                    <div className="sm:col-span-2 space-y-1.5">
                         <Label>Job Title <span className="text-muted-foreground font-normal">(optional)</span></Label>
                         <Input {...register("title")} placeholder="e.g. Senior Technician" />
                     </div>
