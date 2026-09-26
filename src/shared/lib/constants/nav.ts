@@ -11,6 +11,9 @@
 import type { LucideIcon } from "lucide-react";
 import {
     Activity,
+    ArrowDownUp,
+    Globe,
+    WalletCards,
     AlertTriangle,
     ArrowDownLeft,
     ArrowDownRight,
@@ -431,7 +434,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "FSN & Dead Stock", icon: Snowflake, href: "/office/bi/fsn" },
             { label: "Stock Health", icon: HeartPulse, href: "/office/bi/stock-health" },
             { label: "Stock Turnover", icon: TrendingUp, href: "/office/bi/stock-turnover" },
-            { label: "Movement Register", icon: Activity, href: "/office/bi/movement-register" },
+            { label: "Movement Register", icon: ArrowDownUp, href: "/office/bi/movement-register" },
             { label: "Sales Trend", icon: ChartLine, href: "/office/bi/sales-trend" },
             { label: "Branch Comparison", icon: GitCompare, href: "/office/bi/branch-comparison" },
             { label: "Discount Impact", icon: TicketPercent, href: "/office/bi/discount-impact" },
@@ -582,7 +585,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Employee Activity", icon: Activity, href: "/office/hr/activity", sidebarKey: "activity" },
             { label: "Leave", icon: Palmtree, href: "/office/hr/leave", sidebarKey: "leave" },
             { label: "Calendar & Hours", icon: CalendarOff, href: "/office/hr/holidays", sidebarKey: "holidays" },
-            { label: "Pay Rules", icon: BadgeIndianRupee, href: "/office/hr/pay-rules", sidebarKey: "payRules" },
+            { label: "Pay Rules", icon: WalletCards, href: "/office/hr/pay-rules", sidebarKey: "payRules" },
             { label: "Targets & Commission", icon: Goal, href: "/office/hr/commission", sidebarKey: "commission" },
             { label: "Payroll", icon: WalletMinimal, href: "/office/hr/payroll", sidebarKey: "payroll" },
         ],
@@ -718,7 +721,7 @@ export const ADMIN_NAV: SettingsNavItem[] = [
 
 export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Org Defaults", href: "/office/settings/org-defaults", icon: Settings, permission: "settings:manage" },
-    { label: "E-Commerce", href: "/office/settings/ecommerce", icon: Store, permission: "settings:manage" },
+    { label: "E-Commerce", href: "/office/settings/ecommerce", icon: Globe, permission: "settings:manage" },
     { label: "Payment Methods", href: "/office/settings/payment-methods", icon: CreditCard, permission: "settings:manage" },
     { label: "Couriers", href: "/office/settings/couriers", icon: Bike, permission: "settings:manage" },
     { label: "Standard Courier", href: "/office/settings/standard-courier", icon: BadgeCheck, permission: "settings:manage" },
