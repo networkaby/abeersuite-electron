@@ -81,10 +81,11 @@ export default function SecurityTab({ profileId, isSelf }: { profileId: number; 
 /** Where a staff address forwards — Cloudflare Email Routing. Until it is set, the
  *  catch-all takes the mail, so "Forgot password" codes reach the office, not the person. */
 function ForwardEmailCard({ userId, isSelf }: { userId: number; isSelf: boolean }) {
-    const { state, unavailable, forwardTo, setForwardTo, busy, load, save, status } = useForwardEmail(userId);
+    const { state, unavailable, forwardTo, setForwardTo, handle, setHandle, busy, load, save, status } = useForwardEmail(userId);
+    const domain = state?.address.split("@")[1];
 
     return (
-        <form onSubmit={e => { e.preventDefault(); void save(); }} className="rounded-lg border border-border bg-card p-5 space-y-4">
+        <form onSubmit={e => { e.preventDefault(); void save(true); }} className="rounded-lg border border-border bg-card p-5 space-y-4">
             <div className="flex items-center gap-2 mb-1">
                 <Mail size={14} className="text-muted-foreground" />
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Forward Email</h3>
@@ -94,18 +95,25 @@ function ForwardEmailCard({ userId, isSelf }: { userId: number; isSelf: boolean 
             ) : (
                 <>
                     <p className="text-xs text-muted-foreground">
-                        Mail to <span className="font-medium text-foreground">{state?.address ?? (isSelf ? "your staff address" : "this staff address")}</span> goes
-                        to this inbox — needed for Forgot password.
+                        Company mail goes to the personal inbox — needed for Forgot password.
+                        The company email is also {isSelf ? "your" : "their"} sign-in ID.
                     </p>
                     <div className="space-y-1.5">
-                        <Label>Personal email</Label>
+                        <Label>Company email</Label>
+                        <div className="flex items-center gap-1.5">
+                            <Input value={handle} onChange={e => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ""))} placeholder="name" disabled={!state} />
+                            <span className="shrink-0 text-sm text-muted-foreground">@{domain ?? "…"}</span>
+                        </div>
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label>Forward to</Label>
                         <Input type="email" autoComplete="email" value={forwardTo} onChange={e => setForwardTo(e.target.value)} placeholder="you@gmail.com" />
                     </div>
                     <div className="flex items-center justify-between gap-2 pt-1">
                         <button type="button" className="text-xs text-muted-foreground underline" onClick={() => void load()}>
                             {state ? status : "Loading…"}
                         </button>
-                        <Button type="submit" disabled={busy || !state || !forwardTo.trim()}>{busy ? "Saving…" : "Save"}</Button>
+                        <Button type="submit" disabled={busy || !state || !forwardTo.trim() || !handle}>{busy ? "Saving…" : "Save"}</Button>
                     </div>
                 </>
             )}

@@ -25,6 +25,10 @@ import {
 
 const schema = z.object({
     forwardTo: z.string().trim().toLowerCase().email("Enter a valid email address"),
+    /** The part before the @ — a new one renames the sign-in address too. */
+    handle: z.string().trim().toLowerCase()
+        .regex(/^[a-z0-9](?:[a-z0-9._-]{0,38}[a-z0-9])?$/, "Handle: letters, numbers, dot, dash or underscore")
+        .optional(),
 });
 
 type Params = { params: Promise<{ id: string }> };
@@ -81,8 +85,19 @@ export async function PUT(req: Request, { params }: Params) {
         return NextResponse.json({ error: `Use a personal email, not an @${STAFF_MAIL_DOMAIN} one.` }, { status: 400 });
     }
 
+    const address = data.handle ? `${data.handle}@${STAFF_MAIL_DOMAIN}` : email;
+    const renamed = address !== email.toLowerCase();
+    if (renamed) {
+        const taken = await prisma.user.findFirst({ where: { email: { equals: address, mode: "insensitive" } }, select: { id: true } });
+        if (taken) return NextResponse.json({ error: `${address} is already taken` }, { status: 409 });
+    }
+
     try {
-        return NextResponse.json({ address: email, ...await setForwarding(email, data.forwardTo) });
+        // Forward first: a Cloudflare refusal must leave the login untouched, not
+        // renamed to an address that goes nowhere. The old rule is handed over.
+        const status = await setForwarding(address, data.forwardTo, renamed ? email : undefined);
+        if (renamed) await prisma.user.update({ where: { id: Number((await params).id) }, data: { email: address } });
+        return NextResponse.json({ address, ...status });
     } catch (e) {
         return failed(e, "Could not save the forwarding");
     }
