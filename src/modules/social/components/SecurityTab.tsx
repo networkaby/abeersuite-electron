@@ -45,7 +45,8 @@ export default function SecurityTab({ profileId, isSelf }: { profileId: number; 
     };
 
     return (
-        <div className="max-w-sm">
+        <div className="flex flex-wrap items-start gap-4 [&>*]:w-full [&>*]:sm:w-80">
+            {isSelf && <CounterPinCard />}
             <form onSubmit={handleSubmit(onSubmit)} className="rounded-lg border border-border bg-card p-5 space-y-4">
                 <div className="flex items-center gap-2 mb-1">
                     <Lock size={14} className="text-muted-foreground" />
@@ -73,7 +74,6 @@ export default function SecurityTab({ profileId, isSelf }: { profileId: number; 
                 </div>
             </form>
             <ForwardEmailCard userId={profileId} isSelf={isSelf} />
-            {isSelf && <CounterPinCard />}
         </div>
     );
 }
@@ -84,7 +84,7 @@ function ForwardEmailCard({ userId, isSelf }: { userId: number; isSelf: boolean 
     const { state, unavailable, forwardTo, setForwardTo, busy, load, save, status } = useForwardEmail(userId);
 
     return (
-        <form onSubmit={e => { e.preventDefault(); void save(); }} className="mt-4 rounded-lg border border-border bg-card p-5 space-y-4">
+        <form onSubmit={e => { e.preventDefault(); void save(); }} className="rounded-lg border border-border bg-card p-5 space-y-4">
             <div className="flex items-center gap-2 mb-1">
                 <Mail size={14} className="text-muted-foreground" />
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Forward Email</h3>
@@ -149,7 +149,7 @@ function CounterPinCard() {
     };
 
     return (
-        <form onSubmit={save} className="mt-4 rounded-lg border border-border bg-card p-5 space-y-4">
+        <form onSubmit={save} className="rounded-lg border border-border bg-card p-5 space-y-4">
             <div className="flex items-center gap-2 mb-1">
                 <Lock size={14} className="text-muted-foreground" />
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Counter PIN</h3>
