@@ -11,7 +11,7 @@ type Props = { permissions: string[] };
 /**
  * Ordered groups — logical sections separated by a vertical divider.
  * Slugs reference SETTINGS_NAV entries so labels/icons/permissions stay
- * in one place (constants.ts).
+ * in one place (constants/nav.ts).
  */
 const GROUP_SLUGS: string[][] = [
     ["org-defaults", "year-ending"],           // org config

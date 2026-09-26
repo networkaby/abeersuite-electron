@@ -15,7 +15,7 @@ import { POS_RAIL_ACTIONS, type PosRailAccessKey } from "@/shared/lib/constants/
 
 // Same pastel hue language as the header (PosTopBar's `tint`) — colored icon +
 // label with a soft hover wash, dark-mode paired. Keyed by the `tint` field each
-// rail action declares in constants.ts.
+// rail action declares in constants/quickActions.ts.
 const tint = {
     emerald: "text-emerald-700 hover:bg-emerald-100/60 dark:text-emerald-300 dark:hover:bg-emerald-950/30",
     amber:   "text-amber-700 hover:bg-amber-100/60 dark:text-amber-300 dark:hover:bg-amber-950/30",

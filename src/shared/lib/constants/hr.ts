@@ -1,9 +1,13 @@
 /**
- * HR rules — the shop's defaults for duty time, lateness and the pay month.
+ * HR rules — the shop's numbers for duty time, lateness and the pay month.
  *
- * Every one of these is only the fallback: a person's own StaffProfile value, or
- * the shop's OrgDefaults / Pay Rules on screen, wins when it is set. Changing one
- * here changes the register, payroll and the words on screen together.
+ * Two kinds live here:
+ *   • FALLBACKS — duty start / end, the full-day length and the pay days. A
+ *     person's own StaffProfile value, or the shop's seasonal hours on screen,
+ *     wins when it is set; these answer only when nothing is.
+ *   • THE LIVE VALUE — TRACK_OFF_COUNTER, the full / half-day shares and the leave
+ *     year have no screen. What is written here is what everyone gets.
+ * Late grace is both: see LATE_GRACE_MINUTES.
  *
  * The idle sign-out (which also stops the duty clock) is in `session.ts`.
  */
@@ -50,6 +54,11 @@ export const DEFAULT_DUTY_MINUTES = 9 * 60;
  * Not indulgence — precision. A clock that calls 10:31 late makes the whole
  * column noise, and a column of noise gets ignored, which is worse than not
  * having it. Fifteen minutes marks the people who are actually late.
+ *
+ * Also the default for the grace on HR → Pay Rules (DEFAULT_PAY_RULES). Once the
+ * shop saves its own grace there, payroll and the hours breakup use that saved
+ * number, while the Attendance register and the till's "My Day" still read this
+ * one — so keep the two the same until the register reads Pay Rules too.
  */
 export const LATE_GRACE_MINUTES = 15;
 

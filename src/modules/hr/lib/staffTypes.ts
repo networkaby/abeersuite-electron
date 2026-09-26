@@ -13,7 +13,7 @@ export interface StaffProfileDto {
     leftReason: string | null;
     employmentType: string;
     weeklyOff: number[];
-    /** A full day's duty in minutes; null = the org default (dutyTime.ts). */
+    /** A full day's duty in minutes; null = the org default (constants/hr.ts). */
     dutyMinutes: number | null;
     /** Office hours "HH:MM" in shop time; null = the shop default. */
     dutyStart: string | null;

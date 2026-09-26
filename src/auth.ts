@@ -29,7 +29,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     /**
      * A session ends overnight, so every morning starts with the PIN screen.
      *
-     * Three clocks, and each one has its own job. The two in counterPin.ts govern
+     * Three clocks, and each one has its own job — all three in constants/session.ts.
+     * The two PIN clocks (enforced in counterPin.ts) govern
      * how long the PIN itself may stand in for a password — 10 days of regular use,
      * or 3 days idle. This one governs something else entirely: how long you stay
      * signed in WITHOUT signing in. Left at Auth.js's default it was 30 days and

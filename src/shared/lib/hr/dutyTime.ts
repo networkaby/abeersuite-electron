@@ -26,6 +26,7 @@ import {
     DEFAULT_DUTY_END, DEFAULT_DUTY_MINUTES, DEFAULT_DUTY_START, FULL_DAY_FRACTION, HALF_DAY_FRACTION, LATE_GRACE_MINUTES,
 } from "@/shared/lib/constants/hr";
 import { DEFAULT_IDLE_LIMIT_MINUTES, IDLE_LIMIT_MS, MAX_IDLE_LIMIT_MINUTES } from "@/shared/lib/constants/session";
+import { BUSINESS_TIME_ZONE } from "@/shared/lib/constants/business";
 
 /**
  * How long THIS person may be away before they are signed out — and before the
@@ -114,7 +115,7 @@ export function dutyMinutesFor(
 export function lateMinutes(
     firstInAt: Date | string | null,
     startHhMm: string,
-    timeZone = "Asia/Kolkata",
+    timeZone = BUSINESS_TIME_ZONE,
     /* The shop's own grace, once it has one. LATE_GRACE_MINUTES is only the
        fallback for a caller that has not read the pay rules — see
        shared/lib/hr/payRules.ts, `lateGraceMinutes`. */
@@ -147,7 +148,7 @@ export function lateMinutes(
 export function earlyMinutes(
     lastOutAt: Date | string | null,
     endHhMm: string,
-    timeZone = "Asia/Kolkata",
+    timeZone = BUSINESS_TIME_ZONE,
 ): number | null {
     if (!lastOutAt) return null;
     const at = typeof lastOutAt === "string" ? new Date(lastOutAt) : lastOutAt;

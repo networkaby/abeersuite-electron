@@ -66,7 +66,7 @@ const MODULE_VAR: Record<string, string> = {
 };
 
 /// The module's colour as a CSS value. Unknown/absent key → the theme primary,
-/// so a new module added to constants.ts still renders sensibly before it gets
+/// so a new module added to MODULE_SECTIONS (constants/nav.ts) still renders sensibly before it gets
 /// its own hue.
 export function moduleColor(key?: string | null): string {
     const v = key ? MODULE_VAR[key] : undefined;

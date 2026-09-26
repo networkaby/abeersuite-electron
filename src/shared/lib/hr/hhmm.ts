@@ -1,8 +1,8 @@
 /**
  * "HH:MM" ↔ minutes past midnight.
  *
- * Its own leaf module for one structural reason: `dutyTime.ts` owns the shop's
- * numbers and `seasonalHours.ts` owns the curve, and each needs to read a clock
+ * Its own leaf module for one structural reason: `dutyTime.ts` owns the duty
+ * rules and `seasonalHours.ts` owns the curve, and each needs to read a clock
  * time. With the pair living in either of them the two would import each other,
  * and a cycle here is not academic — both modules build constants at load time, so
  * whichever evaluated second would read the other's exports in the temporal dead

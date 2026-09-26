@@ -22,6 +22,8 @@
  *      before the leave day"
  */
 
+import { LATE_GRACE_MINUTES } from "@/shared/lib/constants/hr";
+
 /**
  * How a charged late day is punished.
  *
@@ -96,7 +98,7 @@ export const DEFAULT_PAY_RULES: PayRules = {
     holidayRate: 2,
     absentPenaltyDays: 1,
     leaveNoticeDays: 3,
-    lateGraceMinutes: 15,
+    lateGraceMinutes: LATE_GRACE_MINUTES,
     lateFreeDays: 2,
     latePenaltyStyle: "timesLate",
     latePenaltyDays: 1,

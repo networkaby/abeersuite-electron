@@ -37,18 +37,18 @@ model StaffProfile {
   /// attendance phase reads it; nothing in phase 1 does.
   weeklyOff      Int[]     @default([0])
   /// A full day's duty for THIS person, in minutes. Null = the org default
-  /// (shared/lib/hr/dutyTime.ts). A part-timer on a four-hour duty who works all
+  /// (shared/lib/constants/hr.ts). A part-timer on a four-hour duty who works all
   /// four has done a full day, which a fixed hour rule would call a half.
   dutyMinutes    Int?
   /// Office hours for THIS person, "HH:MM" in shop time. They say who is late,
   /// and their length IS the duty day unless dutyMinutes above overrides it (for
-  /// an unpaid break). Null = the shop's default, shared/lib/hr/dutyTime.ts.
+  /// an unpaid break). Null = the shop's default, shared/lib/constants/hr.ts.
   dutyStart      String? @db.VarChar(5)
   dutyEnd        String? @db.VarChar(5)
   /// Minutes away from the app before this person is signed out — and before the
   /// gap stops counting as duty. Null = the default (45). A counter manager needs
   /// a short one, a technician a long one; one number cannot serve both. Capped
-  /// at the session backstop, shared/lib/hr/dutyTime.ts.
+  /// at the session backstop, shared/lib/constants/session.ts.
   idleLimitMinutes Int?
 
   // Personal / KYC — edited on the person's own profile page (self or admin).

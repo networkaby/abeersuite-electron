@@ -71,7 +71,7 @@ export type ButtonBarAction = {
 // ─── POS action rail ────────────────────────────────────────────────────────
 // The narrow vertical button rail pinned to the far-right edge of the POS screen
 // (Rcv / Exp / Help / Ticket / Enquiry). Edit POS_RAIL_ACTIONS to add / remove /
-// reorder buttons — same as the sidebar nav below.
+// reorder buttons — same way as the sidebar lists in nav.ts.
 //   - kind "action" → runs a wired handler (keyed by `key`; e.g. rcv/exp).
 //   - kind "soon"   → placeholder that toasts "<label> — coming soon".
 //   - `divider: true` draws a separator line above that button.

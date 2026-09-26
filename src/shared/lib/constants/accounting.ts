@@ -69,8 +69,10 @@ export type PaymentInstrument = (typeof PAYMENT_INSTRUMENTS)[number]["value"];
 
 export const PAYMENT_INSTRUMENT_VALUES = PAYMENT_INSTRUMENTS.map((i) => i.value) as [PaymentInstrument, ...PaymentInstrument[]];
 
-/** Days a bill is given before it counts as due, when neither the bill nor the
- *  party's credit period says otherwise. Drives the ageing buckets and Auto-Link. */
+/** Days a bill is given before it falls due when the bill carries no credit period
+ *  of its own (VoucherDetail.creditPeriodDays — the voucher form pre-fills that from
+ *  Org Defaults' sale / purchase credit period). Sets each bill's due date, and so
+ *  the Auto-Link order. The ageing buckets count from the bill date and do not read it. */
 export const DEFAULT_DUE_DAYS = 30;
 
 /** "UPI (4532…)" / "Cheque (483920)" / "Cash" — for print and lists; "" when nothing captured. */
