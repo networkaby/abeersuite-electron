@@ -4,7 +4,6 @@
 
 - **Repeat the request back point-to-point**, explain understanding + plan, then **wait for approval before editing**.
 - Explain in non-tech words. Simple Indian English, project vocabulary.
-- `/lab` holds incomplete modules under construction.
 - Anything coming from Supabase/DB must be cached to save reading cost.
 
 **Workflow:** Understand → Repeat back → Explain plan → Wait for approval → Edit → Check impact → Update seeds/docs → Validate.

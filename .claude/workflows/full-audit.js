@@ -22,7 +22,6 @@ Project rules live in AGENTS.md - read it. Also read docs/seeds.md. Key hard rul
 - Never use getToken(); no TypeScript 'any'; match Prisma relation names exactly.
 - Never surface raw GL-... JournalEntry refs to normal users.
 - Hard-delete of a voucher must physically purge the linked JournalEntry (journalEntryId is a soft pointer, no cascade).
-- /lab is an incomplete module under construction - do not report it.
 - Repairing module RBAC is intentionally stripped (requireAuth only, TODO(rbac)/TODO(notify) markers). KNOWN interim state, not a finding.
 - PROJECT_BRAIN.md is the only status doc; docs/*.md are narrative.
 You may use Read, Grep, Glob, and Bash to investigate. Be concrete: cite file:line. Do NOT report style nits or the known interim states above.

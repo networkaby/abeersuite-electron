@@ -102,7 +102,7 @@ async function enrichProducts(products: ProductRow[], barcodeBands: ReturnType<t
             // The response already carries `effectiveSalePricePaise` (selected +
             // spread above) — POS reads that column name directly. We ALSO expose
             // it under the legacy `pricePaise` alias for the not-yet-renamed
-            // Sale-voucher / lab / home / inventory pickers.
+            // Sale-voucher / home / inventory pickers.
             pricePaise: p.effectiveSalePricePaise,
             taxRate: r?.gstRate ?? null,
             hsnCode: r?.hsnCode ?? null,

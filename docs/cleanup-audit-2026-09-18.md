@@ -141,7 +141,9 @@ party name chip.
 
 ### A5 · Lab back-office page — 3 dead links (parked area, low priority)
 
-`src/app/(protected)/lab/back/page.tsx` links to `/office/message`, `/office/admin`, `/office/roadmap`.
+> **Settled 2026-09-27:** `/lab` deleted.
+
+`src/app/(protected)/lab/back/page.tsx` (deleted 2026-09-27) links to `/office/message`, `/office/admin`, `/office/roadmap`.
 None has a `page.tsx` (`/office/roadmap` does not exist at all).
 
 **Verify:**
@@ -365,7 +367,7 @@ Note `PassRejectModal` is imported **only** by `TicketCard`, which is itself dea
 | `src/shared/components/DataPageHeader.tsx` | 35 | |
 | `src/store/referenceStore.ts` | 28 | named only inside comments |
 | `src/shared/hooks/useBridgePresent.ts` | 25 | |
-| `src/shared/lib/auth/freeRoutes.ts` | 21 | **see E4 — read before deleting** |
+| `src/shared/lib/auth/freeRoutes.ts` | 21 | **see E4 — read before deleting** (deleted 2026-09-27) |
 | `src/shared/lib/constants/index.ts` | 7 | empty barrel, everyone imports deep paths |
 | `src/shared/lib/schemas/index.ts` | 5 | same |
 | `src/modules/customer/lib/initials.ts` | 3 | **duplicate** — live one is `src/shared/lib/format/initials.ts` |
@@ -390,7 +392,9 @@ right now. My graph folded the renamed files back in, but a second look after re
 
 ### E4 · Orphan that is really a missing gate — do not just delete
 
-`src/shared/lib/auth/freeRoutes.ts` (21 lines). Its own comment says it is
+> **Settled 2026-09-27:** owner confirmed dropping the gate was intended; `freeRoutes.ts` and `/office/welcome` deleted.
+
+`src/shared/lib/auth/freeRoutes.ts` (21 lines, deleted 2026-09-27). Its own comment says it is
 *"Used by `src/app/(protected)/office/layout.tsx` to redirect position-less users to `/office/welcome`"*.
 
 **That layout no longer imports it.** So staff with no operational position are not being routed to the

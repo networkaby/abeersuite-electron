@@ -7,8 +7,8 @@ import EmployeePortal from "@/modules/hr/components/portal/EmployeePortal";
 // /office/me — the Employee Portal. The one page every staff member has about
 // themselves: work, leave, pay, their own details, and the social wall last.
 //
-// No permission tick and none is missing: it is a FREE ROUTE (freeRoutes.ts),
-// it shows the signed-in person's own record and offers no action on anybody
+// No permission tick and none is missing: it is open to every signed-in staff
+// member, it shows the signed-in person's own record and offers no action on anybody
 // else. The id goes down only so the two per-person routes (staff record,
 // profile) are asked about the session user — never about a colleague.
 export default async function Page() {

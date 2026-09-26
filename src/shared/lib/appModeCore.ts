@@ -54,7 +54,7 @@ export function parseAppMode(raw: string | undefined): AppMode {
 
 export interface AppModeFlags {
     mode: AppMode;
-    /** Staff/office UI (office, vouchers, lab) is present in this build. */
+    /** Staff/office UI (office, vouchers) is present in this build. */
     hasOfficeRoutes: boolean;
     /** Shop storefront + customer portal is present in this build. */
     hasPublicRoutes: boolean;

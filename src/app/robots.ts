@@ -25,7 +25,6 @@ const PRIVATE_PATHS = [
     "/office",
     "/staff",
     "/vouchers",
-    "/lab",
     "/api",
     "/portal",
     "/receipt",

@@ -211,7 +211,6 @@ const MODULE_SOURCES: Record<string, string[]> = {
     "customer-portal": ["src/modules/external", "src/app/(external)", "src/app/api/portal", "src/app/api/shop"],
     home: ["src/modules/home", "src/app/(protected)/office/page.tsx", "src/app/api/quick-log"],
     inventory: ["src/modules/inventory", "src/app/(protected)/office/inventory", "src/app/api/inventory"],
-    lab: ["src/modules/lab", "src/app/(protected)/lab"],
     messaging: ["src/modules/message", "src/app/(protected)/office/message", "src/app/api/inbox"],
     people: ["src/modules/customer", "src/app/(protected)/office/customers", "src/app/api/people", "src/app/api/companies"],
     permissions: ["src/shared/lib/constants/permissions.ts", "src/shared/lib/auth"],

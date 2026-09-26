@@ -4,8 +4,8 @@ import { EscapeBack } from "@/shared/components/EscapeBack";
 // carry `escapeBack`, hence the standalone hook component. The page binds no
 // Escape handler itself.
 //
-// Note this area is a FREE ROUTE (shared/lib/auth/freeRoutes.ts) — reachable by
-// a user with no operational position — so it must stay ungated.
+// Note this area needs no permission — reachable by a user with no operational
+// position — so it must stay ungated.
 export default function UserAreaLayout({ children }: { children: React.ReactNode }) {
     return (
         <>
