@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { useForwardEmail } from "@/shared/hooks/useForwardEmail";
 
 const securitySchema = z.object({
+    currentPassword: z.string(),
     password: z.string().min(6, "Min 6 characters"),
     confirmPassword: z.string(),
 }).refine(d => d.password === d.confirmPassword, { message: "Passwords do not match", path: ["confirmPassword"] });
@@ -25,13 +26,17 @@ export default function SecurityTab({ profileId, isSelf }: { profileId: number; 
     const [saving, setSaving] = useState(false);
     const { register, handleSubmit, reset, formState: { errors } } = useForm<SecurityForm>({
         resolver: zodResolver(securitySchema),
-        defaultValues: { password: "", confirmPassword: "" },
+        defaultValues: { currentPassword: "", password: "", confirmPassword: "" },
     });
 
     const onSubmit = async (data: SecurityForm) => {
+        if (isSelf && !data.currentPassword) { toast.error("Enter your current password"); return; }
         setSaving(true);
         try {
-            await axios.patch(`/api/users/${profileId}/password`, { password: data.password });
+            await axios.patch(`/api/users/${profileId}/password`, {
+                password: data.password,
+                ...(isSelf && { currentPassword: data.currentPassword }),
+            });
             toast.success("Password changed successfully");
             reset();
         } catch (e) {
@@ -47,6 +52,12 @@ export default function SecurityTab({ profileId, isSelf }: { profileId: number; 
                     <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Change Password</h3>
                 </div>
                 <p className="text-xs text-muted-foreground">Choose a strong password of at least 6 characters.</p>
+                {isSelf && (
+                    <div className="space-y-1.5">
+                        <Label>Current Password</Label>
+                        <Input {...register("currentPassword")} type="password" autoComplete="current-password" placeholder="Your password now" />
+                    </div>
+                )}
                 <div className="space-y-1.5">
                     <Label>New Password</Label>
                     <Input {...register("password")} type="password" placeholder="Min 6 characters" />
