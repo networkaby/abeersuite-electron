@@ -1,17 +1,33 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 
 /** Where the menu sits and which page it would open. */
 export interface LinkMenuState { x: number; y: number; href: string; }
 
 /**
- * Right-click menu for a navigation link — used by the Quick Actions bar and
- * the sidebar, so both behave the same way.
+ * Right-click menu for a navigation link — used by the Quick Actions bar, the
+ * sidebar, the registers and the SL Search dialog, so all behave the same way.
  */
 export function LinkContextMenu({ menu, onClose }: { menu: LinkMenuState | null; onClose: () => void }) {
     const closeRef = useRef(onClose);
     useEffect(() => { closeRef.current = onClose; }, [onClose]);
+    const boxRef = useRef<HTMLDivElement>(null);
+
+    // `position: fixed` is relative to the viewport — unless an ancestor has a
+    // transform, as a centred dialog does; then it is relative to that ancestor
+    // and the menu lands off the pointer. Measure where it actually sat and pull
+    // it back. Reads the offset from the current style, so re-running is safe.
+    useLayoutEffect(() => {
+        const el = boxRef.current;
+        if (!menu || !el) return;
+        const want = { x: Math.min(menu.x, window.innerWidth - 200), y: Math.min(menu.y, window.innerHeight - 60) };
+        const r = el.getBoundingClientRect();
+        const originX = r.left - parseFloat(el.style.left || "0");
+        const originY = r.top - parseFloat(el.style.top || "0");
+        el.style.left = `${want.x - originX}px`;
+        el.style.top = `${want.y - originY}px`;
+    }, [menu]);
 
     useEffect(() => {
         if (!menu) return;
@@ -37,6 +53,7 @@ export function LinkContextMenu({ menu, onClose }: { menu: LinkMenuState | null;
 
     return (
         <div
+            ref={boxRef}
             data-link-ctx-menu
             className="fixed z-50 min-w-45 rounded-md border border-border bg-popover text-popover-foreground shadow-lg py-1"
             style={{ left: x, top: y }}

@@ -1,12 +1,15 @@
 // The SL Search contract — shared by GET /api/search-slno and SlSearchDialog.
 // Pure module: no server or React imports, so both sides can use it.
 
+import type { PartyLinkFields } from "@/shared/lib/parties/partyLink";
+
 /** Shorter than this matches half the book (a "12" is in every other SL no),
  *  and every search is a scan of the line-note column. */
 export const SL_SEARCH_MIN_CHARS = 4;
 
-/** One voucher line whose note carries the SL no. */
-export type SlSearchBill = {
+/** One voucher line whose note carries the SL no. `partyKind` / `partyEntityId`
+ *  open the party's profile (`partyProfileHref`); both null for a walk-in. */
+export type SlSearchBill = PartyLinkFields & {
     lineId: number;
     /** VoucherDetail id — what `editFormUrl` opens. Null only on a detail-less spine. */
     detailId: number | null;
@@ -23,8 +26,9 @@ export type SlSearchBill = {
     quantity: number;
 };
 
-/** A repair or help-desk ticket that mentions the SL no. */
-export type SlSearchTicket = {
+/** A repair or help-desk ticket that mentions the SL no. The party link fields
+ *  open the ticket's customer; both null for an unregistered walk-in. */
+export type SlSearchTicket = PartyLinkFields & {
     id: number;
     kind: "repair" | "help";
     status: { label: string; color: string };

@@ -14,7 +14,7 @@
  * scanner ends with Enter anyway, and each search is a scan of the line notes.
  */
 
-import { useState, type FormEvent } from "react";
+import { useState, type ComponentProps, type FormEvent } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { Loader2, ReceiptText, ScanSearch, Search, Wrench } from "lucide-react";
@@ -23,7 +23,9 @@ import { extractApiError } from "@/shared/lib/api";
 import { formatDate, parseIsoDateOnly, toDateOnly } from "@/shared/lib/format/formatDate";
 import { voucherTypeLabel } from "@/shared/lib/format/voucherTypeLabel";
 import { editFormUrl } from "@/modules/inventory/lib/voucherFormUrls";
-import { SL_SEARCH_MIN_CHARS, type SlSearchResult } from "@/shared/lib/search/slSearch";
+import { partyProfileHref } from "@/shared/lib/parties/partyLink";
+import { SL_SEARCH_MIN_CHARS, type SlSearchResult, type SlSearchTicket } from "@/shared/lib/search/slSearch";
+import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkContextMenu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +65,26 @@ function Highlight({ text, term }: { text: string; term: string }) {
     );
 }
 
+/** A result link. A plain click opens it here and closes the dialog; a ctrl /
+ *  shift / middle click leaves the dialog up behind the new tab. */
+function RowLink({ onNavigate, onClick, className = "hover:underline", ...rest }: ComponentProps<typeof Link> & {
+    onNavigate: () => void;
+}) {
+    return (
+        <Link
+            {...rest}
+            className={className}
+            onClick={(e) => {
+                onClick?.(e);
+                if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) onNavigate();
+            }}
+        />
+    );
+}
+
+const ticketHref = (t: SlSearchTicket) =>
+    t.kind === "repair" ? `/office/repairing/tickets/${t.id}` : "/office/help";
+
 export default function SlSearchDialog() {
     const { open, setOpen } = useSlSearchStore();
     // Kept across close / reopen: staff often step away to fetch the bill and
@@ -100,11 +122,17 @@ export default function SlSearchDialog() {
         }
     }
 
-    const close = () => setOpen(false);
-    const empty = result && result.bills.length === 0 && result.tickets.length === 0;
+    // Right-click on any link below → "Open in new window", the same menu the
+    // sidebar and Quick Actions bar show (the desktop app has no browser menu).
+    const { menu, close: closeMenu, onContainerContextMenu } = useLinkContextMenu();
+    const onOpenChange = (next: boolean) => {
+        if (!next) closeMenu();
+        setOpen(next);
+    };
+    const close = () => onOpenChange(false);
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-3xl gap-0 p-0 sm:max-w-3xl">
                 <DialogHeader className="border-b border-border px-6 py-5 pr-12">
                     <DialogTitle className="flex items-center gap-2">
@@ -136,101 +164,129 @@ export default function SlSearchDialog() {
                     </Button>
                 </form>
 
-                <div className="max-h-[60vh] space-y-5 overflow-y-auto px-6 py-4">
+                <div className="max-h-[60vh] space-y-5 overflow-y-auto px-6 py-4" onContextMenu={onContainerContextMenu}>
                     {q.length > 0 && tooShort && !result && (
                         <p className="text-xs text-muted-foreground">Enter at least {SL_SEARCH_MIN_CHARS} characters of the SL no.</p>
                     )}
 
                     {error && <p className="text-sm text-destructive">{error}</p>}
 
-                    {empty && !loading && (
-                        <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                            <p className="font-medium text-foreground">Nothing carries &ldquo;{searched}&rdquo;.</p>
-                            <p className="mt-1 text-xs">
-                                A bill has an SL no only when it was typed in the line note at billing, and a ticket only when staff wrote it down.
-                            </p>
-                        </div>
-                    )}
-
-                    {result && result.bills.length > 0 && (
+                    {/* Both groups show after every search — an empty Tickets group
+                        still tells staff the tickets were checked, not skipped. */}
+                    {result && (
                         <section>
                             <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                 <ReceiptText size={13} /> Bills <Badge variant="outline">{result.bills.length}</Badge>
                             </h3>
-                            <div className="divide-y divide-border rounded-md border border-border">
-                                {result.bills.map((b) => {
-                                    const href = b.detailId != null ? editFormUrl(b.type, b.detailId) : null;
-                                    return (
-                                        <div key={b.lineId} className="flex items-start gap-3 px-3 py-2.5 text-sm">
-                                            <div className="min-w-0 flex-1 space-y-0.5">
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <Badge variant="secondary">{voucherTypeLabel(b.type)}</Badge>
-                                                    <span className="font-medium">{b.voucherNo ?? "—"}</span>
-                                                    <span className="text-xs text-muted-foreground">
-                                                        {formatDate(parseIsoDateOnly(b.date))} · {sinceLabel(b.date)}
-                                                    </span>
+                            {result.bills.length === 0 ? (
+                                <p className="rounded-md border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
+                                    No bill carries &ldquo;{searched}&rdquo;. A bill has an SL no only when it was typed in the line note at billing.
+                                </p>
+                            ) : (
+                                <div className="divide-y divide-border rounded-md border border-border">
+                                    {result.bills.map((b) => {
+                                        const href = b.detailId != null ? editFormUrl(b.type, b.detailId) : null;
+                                        const partyHref = partyProfileHref(b.partyKind, b.partyEntityId);
+                                        return (
+                                            <div key={b.lineId} className="flex items-start gap-3 px-3 py-2.5 text-sm">
+                                                <div className="min-w-0 flex-1 space-y-0.5">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <Badge variant="secondary">{voucherTypeLabel(b.type)}</Badge>
+                                                        {href ? (
+                                                            <RowLink href={href} onNavigate={close} className="font-medium text-primary hover:underline">
+                                                                {b.voucherNo ?? "—"}
+                                                            </RowLink>
+                                                        ) : (
+                                                            <span className="font-medium">{b.voucherNo ?? "—"}</span>
+                                                        )}
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {formatDate(parseIsoDateOnly(b.date))} · {sinceLabel(b.date)}
+                                                        </span>
+                                                    </div>
+                                                    <p className="truncate">
+                                                        {partyHref ? (
+                                                            <RowLink href={partyHref} onNavigate={close} className="text-primary hover:underline">
+                                                                {b.partyName ?? "Open party"}
+                                                            </RowLink>
+                                                        ) : (
+                                                            b.partyName ?? "No party on bill"
+                                                        )}
+                                                        {b.partyPhone && <span className="text-muted-foreground"> · {b.partyPhone}</span>}
+                                                    </p>
+                                                    <p className="truncate text-xs text-muted-foreground">
+                                                        {b.productName} × {b.quantity} · <span className="font-mono"><Highlight text={b.note} term={searched} /></span>
+                                                    </p>
                                                 </div>
-                                                <p className="truncate">
-                                                    {b.partyName ?? "No party on bill"}
-                                                    {b.partyPhone && <span className="text-muted-foreground"> · {b.partyPhone}</span>}
-                                                </p>
-                                                <p className="truncate text-xs text-muted-foreground">
-                                                    {b.productName} × {b.quantity} · <span className="font-mono"><Highlight text={b.note} term={searched} /></span>
-                                                </p>
+                                                {href && (
+                                                    <Button asChild size="sm" variant="outline" className="shrink-0">
+                                                        <RowLink href={href} onNavigate={close} className="">Open</RowLink>
+                                                    </Button>
+                                                )}
                                             </div>
-                                            {href && (
-                                                <Button asChild size="sm" variant="outline" className="shrink-0">
-                                                    <Link href={href} onClick={close}>Open</Link>
-                                                </Button>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </section>
                     )}
 
-                    {result && result.tickets.length > 0 && (
+                    {result && (
                         <section>
                             <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                 <Wrench size={13} /> Tickets <Badge variant="outline">{result.tickets.length}</Badge>
                             </h3>
-                            <div className="divide-y divide-border rounded-md border border-border">
-                                {result.tickets.map((t) => (
-                                    <div key={t.id} className="flex items-start gap-3 px-3 py-2.5 text-sm">
-                                        <div className="min-w-0 flex-1 space-y-0.5">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <span className="font-medium">#{t.id}</span>
-                                                <Badge className={t.status.color}>{t.status.label}</Badge>
-                                                <span className="text-xs text-muted-foreground">
-                                                    {t.kind === "repair" ? "Repair" : "Help desk"} · {formatDate(t.createdAt)}
-                                                </span>
+                            {result.tickets.length === 0 ? (
+                                <p className="rounded-md border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
+                                    No repair or help ticket mentions &ldquo;{searched}&rdquo;. A ticket carries an SL no only when staff wrote it in the ticket.
+                                </p>
+                            ) : (
+                                <div className="divide-y divide-border rounded-md border border-border">
+                                    {result.tickets.map((t) => {
+                                        const partyHref = partyProfileHref(t.partyKind, t.partyEntityId);
+                                        return (
+                                            <div key={t.id} className="flex items-start gap-3 px-3 py-2.5 text-sm">
+                                                <div className="min-w-0 flex-1 space-y-0.5">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <RowLink href={ticketHref(t)} onNavigate={close} className="font-medium text-primary hover:underline">
+                                                            #{t.id}
+                                                        </RowLink>
+                                                        <Badge className={t.status.color}>{t.status.label}</Badge>
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {t.kind === "repair" ? "Repair" : "Help desk"} · {formatDate(t.createdAt)}
+                                                        </span>
+                                                    </div>
+                                                    <p className="truncate">
+                                                        {partyHref ? (
+                                                            <RowLink href={partyHref} onNavigate={close} className="text-primary hover:underline">
+                                                                {t.customerName ?? "Open customer"}
+                                                            </RowLink>
+                                                        ) : (
+                                                            t.customerName ?? "Unknown customer"
+                                                        )}
+                                                        {t.customerPhone && <span className="text-muted-foreground"> · {t.customerPhone}</span>}
+                                                        {t.device && <span className="text-muted-foreground"> · {t.device}</span>}
+                                                    </p>
+                                                    {t.matchedField && t.matchedText && (
+                                                        <p className="truncate text-xs text-muted-foreground">
+                                                            {t.matchedField}: <Highlight text={t.matchedText} term={searched} />
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <Button asChild size="sm" variant="outline" className="shrink-0">
+                                                    <RowLink href={ticketHref(t)} onNavigate={close} className="">Open</RowLink>
+                                                </Button>
                                             </div>
-                                            <p className="truncate">
-                                                {t.customerName ?? "Unknown customer"}
-                                                {t.customerPhone && <span className="text-muted-foreground"> · {t.customerPhone}</span>}
-                                                {t.device && <span className="text-muted-foreground"> · {t.device}</span>}
-                                            </p>
-                                            {t.matchedField && t.matchedText && (
-                                                <p className="truncate text-xs text-muted-foreground">
-                                                    {t.matchedField}: <Highlight text={t.matchedText} term={searched} />
-                                                </p>
-                                            )}
-                                        </div>
-                                        <Button asChild size="sm" variant="outline" className="shrink-0">
-                                            <Link
-                                                href={t.kind === "repair" ? `/office/repairing/tickets/${t.id}` : "/office/help"}
-                                                onClick={close}
-                                            >
-                                                Open
-                                            </Link>
-                                        </Button>
-                                    </div>
-                                ))}
-                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </section>
                     )}
                 </div>
+
+                {/* Inside the dialog, not beside it: anything outside the content
+                    counts as "click outside", which would close the dialog first. */}
+                <LinkContextMenu menu={menu} onClose={closeMenu} />
             </DialogContent>
         </Dialog>
     );

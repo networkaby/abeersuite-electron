@@ -21,10 +21,20 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { readPartyName, readPartyPhone } from "@/shared/lib/accountancy/partySnapshot";
+import { NO_PARTY_LINK, partyLinkFields, type PartyLinkFields } from "@/shared/lib/parties/partyLink";
+import { resolvePartyLinks } from "@/shared/lib/parties/partyLinkServer";
 import { SL_SEARCH_MIN_CHARS, type SlSearchResult } from "@/shared/lib/search/slSearch";
 
 const BILL_LIMIT = 50;
 const TICKET_LIMIT = 20;
+
+/** A ledger Account's party profile. The Account is the LIVE link — a merge or a
+ *  conversion moves it onto the surviving record — so no forwarding walk is needed. */
+function accountPartyLink(a: { personId: number | null; companyId: number | null } | null | undefined): PartyLinkFields {
+    if (a?.personId != null) return { partyKind: "person", partyEntityId: a.personId };
+    if (a?.companyId != null) return { partyKind: "company", partyEntityId: a.companyId };
+    return NO_PARTY_LINK;
+}
 
 /** The note part of a line description. The POS saves `"<sku> — <name> · <note>"`
  *  (PosScreen), so matching the whole string would also hit a SKU or a word in the
@@ -102,7 +112,7 @@ export async function GET(req: Request) {
                             device: {
                                 select: {
                                     brand: true, model: true, problem: true,
-                                    account: { select: { name: true } },
+                                    account: { select: { name: true, personId: true, companyId: true } },
                                 },
                             },
                         },
@@ -110,6 +120,7 @@ export async function GET(req: Request) {
                     help: {
                         select: {
                             subject: true, contactName: true, phone: true,
+                            personId: true, companyId: true,
                             person: { select: { name: true } },
                             company: { select: { name: true } },
                         },
@@ -123,24 +134,37 @@ export async function GET(req: Request) {
             .filter((l) => l.note.toLowerCase().includes(needle))
             .slice(0, BILL_LIMIT);
 
-        // Ledger name is the fallback when the bill froze no party snapshot.
+        // The bill's party ledger: its name is the fallback when the bill froze no
+        // party snapshot, and its person / company is the profile the name opens.
         const acctIds = [...new Set(billLines.map((l) => l.universalVoucher.partyAccountId).filter((x): x is number => x != null))];
-        const acctName = new Map(
-            (acctIds.length === 0 ? [] : await prisma.account.findMany({ where: { id: { in: acctIds } }, select: { id: true, name: true } }))
-                .map((a) => [a.id, a.name]),
+        const acctById = new Map(
+            (acctIds.length === 0 ? [] : await prisma.account.findMany({
+                where: { id: { in: acctIds } },
+                select: { id: true, name: true, personId: true, companyId: true },
+            })).map((a) => [a.id, a]),
         );
+
+        // A help ticket stores the party id it was raised against, which a later
+        // merge or conversion leaves behind — follow the forwarding note.
+        const helpRef = (h: { personId: number | null; companyId: number | null } | null) => ({
+            partyId: h?.personId ?? h?.companyId ?? null,
+            partyType: h?.personId != null ? "customer" : h?.companyId != null ? "company" : null,
+        });
+        const helpLinks = await resolvePartyLinks(prisma, tickets.map((t) => helpRef(t.help)));
 
         const result: SlSearchResult = {
             bills: billLines.map((l) => {
                 const uv = l.universalVoucher;
                 const partyJson = uv.voucherDetail?.partyJson;
+                const acct = uv.partyAccountId != null ? acctById.get(uv.partyAccountId) : undefined;
                 return {
+                    ...accountPartyLink(acct),
                     lineId: l.id,
                     detailId: uv.voucherDetail?.id ?? null,
                     type: uv.type,
                     voucherNo: uv.voucherNo,
                     date: uv.date.toISOString().slice(0, 10), // @db.Date — a calendar date, no time
-                    partyName: readPartyName(partyJson) ?? (uv.partyAccountId != null ? acctName.get(uv.partyAccountId) ?? null : null),
+                    partyName: readPartyName(partyJson) ?? acct?.name ?? null,
                     partyPhone: readPartyPhone(partyJson),
                     productName: l.product.name,
                     note: l.note,
@@ -163,6 +187,7 @@ export async function GET(req: Request) {
                 ];
                 const hit = fields.find(([, v]) => v?.toLowerCase().includes(needle));
                 return {
+                    ...(r ? accountPartyLink(r.device.account) : partyLinkFields(helpLinks.for(helpRef(h)))),
                     id: t.id,
                     kind: r ? "repair" : "help",
                     status: t.ticketStatus,
