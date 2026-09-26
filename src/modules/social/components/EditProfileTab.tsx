@@ -19,10 +19,10 @@ import UserAvatar from "@/shared/components/UserAvatar";
 import { imageLoaderFor } from "@/shared/lib/cloudinaryImage";
 import { uploadImageToCloudinary as uploadToCloudinary } from "@/shared/lib/uploadToCloudinary";
 import type { UserProfile } from "./profileTypes";
+import { STAFF_PHONE_HINT } from "@/shared/lib/schemas/commonSchemas";
 
 const editSchema = z.object({
     name: z.string().min(1, "Name is required"),
-    title: z.string().optional(),
     bio: z.string().max(500, "Max 500 characters").optional(),
     phone: z.string().optional(),
     birthday: z.string().optional(),
@@ -48,7 +48,6 @@ export default function EditProfileTab({ profile, onSaved }: { profile: UserProf
         resolver: zodResolver(editSchema),
         defaultValues: {
             name: profile.name,
-            title: profile.title ?? "",
             bio: profile.bio ?? "",
             phone: profile.phone ?? "",
             birthday: profile.birthday ? profile.birthday.slice(0, 10) : "",
@@ -87,8 +86,8 @@ export default function EditProfileTab({ profile, onSaved }: { profile: UserProf
         setSaving(true);
         try {
             const res = await axios.put<UserProfile>(`/api/users/${profile.id}`, {
-                // The sign-in email is changed on Security, beside its forward — sent unchanged here.
-                name: data.name, email: profile.email, title: data.title || null,
+                // No email (Security owns it) and no job title (the HR seat owns it).
+                name: data.name,
                 bio: data.bio || null, phone: data.phone || null, birthday: data.birthday || null,
                 linkedIn: data.linkedIn || null, twitter: data.twitter || null,
                 instagram: data.instagram || null, facebook: data.facebook || null,
@@ -175,10 +174,6 @@ export default function EditProfileTab({ profile, onSaved }: { profile: UserProf
                         {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
                     </div>
                     <div className="sm:col-span-2 space-y-1.5">
-                        <Label>Job Title <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                        <Input {...register("title")} placeholder="e.g. Senior Technician" />
-                    </div>
-                    <div className="sm:col-span-2 space-y-1.5">
                         <Label>Bio <span className="text-muted-foreground font-normal">(optional)</span></Label>
                         <Textarea {...register("bio")} placeholder="A short intro about yourself…" rows={3} />
                         <p className="text-[11px] text-muted-foreground text-right">{bioValue.length}/500</p>
@@ -193,7 +188,7 @@ export default function EditProfileTab({ profile, onSaved }: { profile: UserProf
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                         <Label>Phone <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                        <Input {...register("phone")} placeholder="+880-xxx-xxx-xxxx" />
+                        <Input {...register("phone")} inputMode="tel" placeholder={STAFF_PHONE_HINT} />
                     </div>
                     <div className="space-y-1.5">
                         <Label>Birthday <span className="text-muted-foreground font-normal">(optional)</span></Label>

@@ -25,6 +25,8 @@ export interface UserProfile {
     userRole: { id: string; label: string; color: string; rank: number; permissions: { permission: Permission }[] } | null;
     manager: StaffCard | null;
     reports: StaffCard[];
+    /** Their HR seats — the first one's title is their job title. */
+    positions: { id: string; title: string }[];
     departments: { id: string; name: string }[];
     branches: { id: string; name: string }[];
 }
@@ -63,6 +65,11 @@ const COVER_GRADIENT: Record<string, string> = {
     R4: "linear-gradient(135deg,#c2410c 0%,#f97316 100%)",
     R5: "linear-gradient(135deg,#be185d 0%,#ec4899 100%)",
 };
+
+/** The job title everyone sees: the HR seat's, then an old self-typed one for a
+ *  person with no seat yet. Staff no longer type it themselves. */
+export const jobTitleOf = (u: { title: string | null; positions?: { title: string }[] }) =>
+    u.positions?.[0]?.title || u.title?.trim() || null;
 
 export function coverBg(role: string | null) {
     return COVER_GRADIENT[role ?? ""] ?? "linear-gradient(135deg,#334155 0%,#64748b 100%)";

@@ -14,9 +14,8 @@ export type StaffIdCardSource = Pick<StaffDetail, "user" | "profile">;
 export function toStaffIdCardData({ user, profile }: StaffIdCardSource): StaffIdCardData {
     return {
         name: user.name,
-        // The person's own title first; their seat is the fallback, because a
-        // new joiner often holds a position before anyone types a title.
-        designation: user.title?.trim() || user.positions[0]?.title || null,
+        // The HR seat decides; an old self-typed title only for someone with no seat.
+        designation: user.positions[0]?.title || user.title?.trim() || null,
         photoUrl: user.avatarUrl,
         staffCode: profile?.staffCode ?? null,
         joinedOn: profile?.joinedOn ? formatDate(profile.joinedOn) : null,

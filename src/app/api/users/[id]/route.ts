@@ -9,6 +9,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { revokeUserSessions } from "@/shared/lib/auth/revokeSessions";
+import { staffPhoneSchema } from "@/shared/lib/schemas/commonSchemas";
 import { isStaffMailAddress, STAFF_MAIL_DOMAIN, syncStaffForwarding } from "@/shared/lib/email/cloudflareRouting";
 
 const PROFILE_SELECT = {
@@ -84,13 +85,16 @@ function shapeUser<T extends { userPositions: { position: { id: string; title: s
 
 const userUpdateSchema = z.object({
     // personal (self or admin)
-    name:          z.string().trim().min(1, "Name is required"),
-    email:         z.string().trim().email("Valid email is required"),
-    title:         z.string().trim().optional().nullable(),
+    // Every field optional: a screen sends only what it edits, so it can never put
+    // back a stale copy of something another screen just changed.
+    name:          z.string().trim().min(1, "Name is required").optional(),
+    // The sign-in email — admin only here. You rename your own on Security, where
+    // the Cloudflare forward moves with it (/api/users/[id]/forward-email).
+    email:         z.string().trim().email("Valid email is required").optional(),
     password:      z.string().min(6).optional().or(z.literal("")),
     avatarUrl:     z.string().url().optional().nullable(),
     coverUrl:      z.string().url().optional().nullable(),
-    phone:         z.string().trim().optional().nullable(),
+    phone:         staffPhoneSchema,
     birthday:      z.string().optional().nullable(),
     bio:           z.string().trim().max(500).optional().nullable(),
     linkedIn:      z.string().trim().optional().nullable(),
@@ -164,6 +168,9 @@ export async function PUT(
         if (error) return error;
         const body = data;
 
+        if (body.email !== undefined && !isAdmin) {
+            return NextResponse.json({ error: "Change your sign-in email on Security" }, { status: 403 });
+        }
         if (body.email !== undefined && !isStaffEmailDomainAllowed(body.email)) {
             return NextResponse.json(
                 { error: "Email domain is not allowed for staff accounts" },
@@ -196,7 +203,6 @@ export async function PUT(
             name:  body.name,
             email: body.email,
         };
-        if (body.title     !== undefined) updateData.title     = body.title;
         if (body.avatarUrl !== undefined) updateData.avatarUrl = body.avatarUrl;
         if (body.coverUrl  !== undefined) updateData.coverUrl  = body.coverUrl;
         if (body.phone     !== undefined) updateData.phone     = body.phone;
@@ -226,7 +232,7 @@ export async function PUT(
             await revokeUserSessions(userId);
         }
         // After the save — a Cloudflare refusal must not undo it.
-        const forwardingError = await syncStaffForwarding(body.email, body.forwardTo, before?.email);
+        const forwardingError = await syncStaffForwarding(user.email, body.forwardTo, before?.email);
         return NextResponse.json({ ...shapeUser(user), forwardingError });
     } catch (e) {
         return handleApiError(e, "Failed to update user");

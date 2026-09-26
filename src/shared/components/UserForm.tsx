@@ -13,31 +13,28 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { FieldError } from "@/shared/components/FieldError";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 const STAFF_DOMAIN = COMPANY_DETAILS.staffMailDomain;
 const DEFAULT_FORWARD = COMPANY_DETAILS.staffMailDefaultForward;
-const isCompanyAddress = (email: string) => email.toLowerCase().endsWith(`@${STAFF_DOMAIN}`);
 
 // Identity-only add / edit of a staff login — name, email, password. The one
-// dialog behind both Admin → Users and HR → Staff Directory (Add staff, and the
-// Access tab's Edit login), so the two pages can never save a person differently.
+// dialog behind Admin → Users and HR → Staff Directory's Add staff. Editing keeps
+// the sign-in email read-only: it is renamed on HR → Access (admin) or the person's
+// own Security tab, both of which move the Cloudflare forward with it.
 //
 // Job title, reporting line, role, branch and department all flow from the seat
 // (Position) they are appointed to — the Appoint button on their HR profile.
 // One-off extra permissions sit on Admin → Users' shield button.
 
-// A company address is `name@<staff domain>`, so the form asks only for the name part
-// — nothing to mistype. An older login on another domain keeps its full box until the
-// admin presses "Give company email". Where that address's mail goes (Cloudflare Email
-// Routing) is not asked here: a new login forwards to the office default, a switched
-// one to its old inbox, and a renamed one carries its forward along. Changing it
-// afterwards is the Staff Directory Login card's Forward to row.
+// A new company address is `name@<staff domain>`, so the form asks only for the name
+// part — nothing to mistype — and forwards it to the office default. Changing where
+// it goes afterwards is the Staff Directory Login card's Forward to row.
 const schema = z.object({
     name:     z.string().min(1, "Name is required"),
-    email:    z.string().trim().min(1, "Email is required"),
+    email:    z.string().trim(),
     password: z.string().optional(),
 });
 
@@ -56,41 +53,25 @@ interface Props {
 }
 
 export default function UserForm({ user, onClose, onSaved }: Props) {
-    const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } =
+    const { register, handleSubmit, reset, formState: { errors, isSubmitting } } =
         useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { name: "", email: "", password: "" } });
 
-    const [company, setCompany] = useState(!user || isCompanyAddress(user.email));
-    /** Sent only when there is something to set — new login, or a switch to a company address. */
-    const [forwardTo, setForwardTo] = useState(user ? "" : DEFAULT_FORWARD);
-
     useEffect(() => {
-        if (user) {
-            reset({ name: user.name, email: isCompanyAddress(user.email) ? user.email.split("@")[0] : user.email, password: "" });
-        }
+        if (user) reset({ name: user.name, email: "", password: "" });
     }, [user, reset]);
 
-    /** An older login on another domain: switch to a company address, and keep its
-     *  mail flowing to the inbox it used before. */
-    const giveCompanyEmail = () => {
-        if (!user) return;
-        setCompany(true);
-        setValue("email", user.email.split("@")[0].toLowerCase());
-        setForwardTo(user.email.toLowerCase());
-    };
-
     const onSubmit = async (data: FormData) => {
-        const email = company ? `${data.email.toLowerCase()}@${STAFF_DOMAIN}` : data.email;
-        if (!z.string().email().safeParse(email).success) {
-            toast.error(company ? "Use letters, digits, dots or dashes before the @" : "Invalid email");
+        const email = `${data.email.toLowerCase()}@${STAFF_DOMAIN}`;
+        if (!user && !z.string().email().safeParse(email).success) {
+            toast.error("Use letters, digits, dots or dashes before the @");
             return;
         }
         try {
-            const payload = {
-                name:  data.name,
-                email,
-                ...(data.password ? { password: data.password } : {}),
-                ...(company && forwardTo ? { forwardTo } : {}),
-            };
+            // Editing sends only name and a new password — never the email, never a
+            // stale copy of it over a rename made elsewhere.
+            const payload = user
+                ? { name: data.name, ...(data.password ? { password: data.password } : {}) }
+                : { name: data.name, email, password: data.password, forwardTo: DEFAULT_FORWARD };
             type Saved = { id: number; name: string; email: string; forwardingError?: string | null };
             const { data: saved } = user
                 ? await axios.put<Saved>(`/api/users/${user.id}`, payload)
@@ -112,7 +93,7 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
                     <DialogTitle>{user ? "Edit User" : "Add User"}</DialogTitle>
                     <DialogDescription>
                         {user
-                            ? "Name, sign-in email and password. Role, branch, department and reporting line come from their seat."
+                            ? "Name and password. Role, branch, department and reporting line come from their seat."
                             : "Create a staff login. Once created, appoint them to a seat to give access."}
                     </DialogDescription>
                 </DialogHeader>
@@ -126,7 +107,12 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
                         </div>
                         <div className="space-y-1.5">
                             <Label>Email</Label>
-                            {company ? (
+                            {user ? (
+                                <>
+                                    <p className="text-sm">{user.email}</p>
+                                    <p className="text-xs text-muted-foreground">Renamed on HR &amp; People → Staff Directory → Access.</p>
+                                </>
+                            ) : (
                                 <div className="flex items-center rounded-md border border-input focus-within:ring-2 focus-within:ring-ring">
                                     <Input
                                         {...register("email", { setValueAs: (v: string) => v.replace(/@.*$/, "").trim() })}
@@ -136,13 +122,6 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
                                     />
                                     <span className="pr-3 text-sm text-muted-foreground">@{STAFF_DOMAIN}</span>
                                 </div>
-                            ) : (
-                                <>
-                                    <Input {...register("email")} autoComplete="off" />
-                                    <button type="button" className="text-xs text-primary underline" onClick={giveCompanyEmail}>
-                                        Give company email (@{STAFF_DOMAIN})
-                                    </button>
-                                </>
                             )}
                             <FieldError message={errors.email?.message} />
                         </div>

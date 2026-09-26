@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import UserAvatar from "@/shared/components/UserAvatar";
 import { formatDate } from "@/shared/lib/format/formatDate";
-import { coverBg, type UserProfile } from "./profileTypes";
+import { coverBg, jobTitleOf, type UserProfile } from "./profileTypes";
 
 export default function ProfileHeader({
     profile, isSelf, subtitle, onWriteOnWall, onEditProfile, primaryAction,
@@ -56,8 +56,8 @@ export default function ProfileHeader({
                                         <span className="text-[10px] bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 font-medium rounded">You</span>
                                     )}
                                 </div>
-                                {(subtitle || profile.title) && (
-                                    <p className="text-sm text-white/80 mt-0.5">{[profile.title, subtitle].filter(Boolean).join(" · ")}</p>
+                                {(subtitle || jobTitleOf(profile)) && (
+                                    <p className="text-sm text-white/80 mt-0.5">{[jobTitleOf(profile), subtitle].filter(Boolean).join(" · ")}</p>
                                 )}
                                 <div className="flex flex-wrap gap-1 mt-1.5">
                                     {profile.departments.map(d => (

@@ -23,6 +23,7 @@ import {
     type PartyBankFields,
 } from "@/shared/lib/parties/partyBank";
 import type { StaffDetail, StaffProfileDto } from "../lib/staffTypes";
+import { STAFF_PHONE_HINT } from "@/shared/lib/schemas/commonSchemas";
 
 type TextKey = "fatherName" | "address" | "bloodGroup" | "emergencyName" | "emergencyPhone" | "aadhaarLast4" | "panNumber" | "uanNumber" | "esiNumber" | "notes";
 
@@ -31,7 +32,7 @@ const TEXT_FIELDS: { key: TextKey; label: string; placeholder?: string; hint?: s
     { key: "bloodGroup",     label: "Blood group", placeholder: "O+" },
     { key: "address",        label: "Address", wide: true, multiline: true },
     { key: "emergencyName",  label: "Emergency contact — name" },
-    { key: "emergencyPhone", label: "Emergency contact — phone", placeholder: "10 digits" },
+    { key: "emergencyPhone", label: "Emergency contact — phone", placeholder: STAFF_PHONE_HINT },
     { key: "aadhaarLast4",   label: "Aadhaar — last 4 digits", placeholder: "1234", hint: "Only the last four digits are kept." },
     { key: "panNumber",      label: "PAN", placeholder: "ABCDE1234F" },
     { key: "uanNumber",      label: "UAN (PF)", placeholder: "12 digits" },

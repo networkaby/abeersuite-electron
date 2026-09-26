@@ -71,4 +71,17 @@ export const nameIsActiveSchema = z.object({
  * OrgDefaults. One definition so a time that is valid on the staff page cannot be
  * rejected on the settings page, or the other way round.
  */
+/**
+ * A staff member's own or emergency mobile — a 10-digit Indian number. Spaces,
+ * dashes and a +91 / 0 prefix are forgiven and stripped; blank clears it (null).
+ * One rule for the Profile phone and the Personal tab's emergency phone, so the
+ * two numbers the ID card prints are always the same shape.
+ */
+export const STAFF_PHONE_HINT = "98765 43210";
+export const staffPhoneSchema = z.string().trim()
+    .transform(v => v.replace(/[\s-]/g, "").replace(/^(\+?91|0)(?=\d{10}$)/, ""))
+    .refine(v => v === "" || /^[6-9]\d{9}$/.test(v), "A 10-digit mobile number, like 98765 43210")
+    .transform(v => v || null)
+    .nullable().optional();
+
 export const hhMmSchema = z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "A time looks like 10:30");

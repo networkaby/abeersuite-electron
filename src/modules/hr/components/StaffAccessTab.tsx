@@ -91,9 +91,11 @@ function LoginSection({ user, canEdit, onChanged }: { user: LoginUser; canEdit: 
         if (!name.trim()) { toast.error("Name is required"); return; }
         setBusy(true);
         try {
+            // Only what changed — an untouched email must not be re-sent over a rename
+            // the person made on their own Security tab since this page opened.
             const { data } = await axios.put<{ forwardingError?: string | null }>(`/api/users/${user.id}`, {
-                name: name.trim(),
-                email,
+                ...(name.trim() !== user.name && { name: name.trim() }),
+                ...(email !== user.email && { email }),
                 ...(company && forwardTo ? { forwardTo } : {}),
             });
             toast.success("Login saved");
@@ -196,7 +198,7 @@ function PasswordSection({ user, canEdit, onChanged }: { user: LoginUser; canEdi
         if (password.length < 6) { toast.error("Password must be at least 6 characters"); return; }
         setBusy(true);
         try {
-            await axios.put(`/api/users/${user.id}`, { name: user.name, email: user.email, password });
+            await axios.put(`/api/users/${user.id}`, { password });
             setPassword("");
             toast.success("Password set — they are signed out everywhere");
             onChanged();

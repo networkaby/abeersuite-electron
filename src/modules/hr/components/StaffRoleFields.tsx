@@ -52,17 +52,12 @@ export default function StaffRoleFields({ detail, canEdit, onChanged }: {
         [staff, user.id],
     );
 
-    /** `PUT /api/users/[id]` wants the identity fields on every call, so they ride along unchanged. */
+    /** Only the role or manager — never a loaded copy of their name or phone, which
+     *  would put back whatever they changed on their Profile since this page opened. */
     const put = async (patch: Record<string, unknown>, done: string) => {
         setSaving(true);
         try {
-            await axios.put(`/api/users/${user.id}`, {
-                name:  user.name,
-                email: user.email,
-                title: user.title,
-                phone: user.phone,
-                ...patch,
-            });
+            await axios.put(`/api/users/${user.id}`, patch);
             toast.success(done);
             onChanged();
         } catch (e) {

@@ -6,7 +6,7 @@
 
 import { z } from "zod";
 import { partyBankSchema } from "./partyBankSchema";
-import { hhMmSchema } from "./commonSchemas";
+import { hhMmSchema, staffPhoneSchema } from "./commonSchemas";
 import { COMMISSION_KINDS } from "../hr/commissionScheme";
 
 export const EMPLOYMENT_TYPES = ["FULL_TIME", "PART_TIME", "HELPER", "CONTRACT"] as const;
@@ -58,7 +58,7 @@ export const staffProfilePatchSchema = z.object({
     address:          optText(500),
     bloodGroup:       optText(8),
     emergencyName:    optText(120),
-    emergencyPhone:   optText(20),
+    emergencyPhone:   staffPhoneSchema,
     aadhaarLast4:     z.string().trim().regex(/^\d{4}$/, "The last 4 digits of the Aadhaar number").nullable().optional()
         .or(z.literal("").transform(() => null)),
     panNumber:        z.string().trim().toUpperCase().regex(/^[A-Z]{5}\d{4}[A-Z]$/, "A PAN looks like ABCDE1234F").nullable().optional()
