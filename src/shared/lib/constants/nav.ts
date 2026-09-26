@@ -116,6 +116,7 @@ import {
     Ruler,
     Scale,
     ScanBarcode,
+    ScanSearch,
     ScrollText,
     Settings,
     ShieldAlert,
@@ -160,9 +161,8 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type NavItem = {
+type NavItemBase = {
     label: string;
-    href: string;
     icon: LucideIcon;
     /**
      * Stable slug for the sidebar-visibility permission id
@@ -172,8 +172,22 @@ export type NavItem = {
      */
     sidebarKey?: string;
     permission?: string | null;
-    children?: NavItem[];
 };
+
+export type NavLinkItem = NavItemBase & {
+    href: string;
+    action?: never;
+    children?: NavLinkItem[];
+};
+
+/** Opens an office-wide dialog instead of navigating (Sidebar's Workspace block). */
+export type NavActionItem = NavItemBase & {
+    action: "sl-search";
+    href?: never;
+    children?: never;
+};
+
+export type NavItem = NavLinkItem | NavActionItem;
 
 export type ModuleChild = {
     label: string;
@@ -252,8 +266,9 @@ export const WORKSPACE_NAV: NavItem[] = [
     { label: "Inbox", href: "/office/message/inbox", icon: Inbox, permission: null },
     { label: "Work Flow", href: "/office/work-flow-inbox", icon: Workflow, permission: null },
     { label: "POS Register", sidebarKey: "pos", href: "/vouchers/pos", icon: Store, permission: "pos:shift:open" },
-    // { label: "Search SLno", href: "/office/core/search-slno", icon: Search, permission: null },
-
+    // A dialog, not a page — a walk-in with no bill is answered from wherever the
+    // staff member already is. See SlSearchDialog.
+    { label: "SL Search", action: "sl-search", icon: ScanSearch, permission: null },
 ];
 
 export const MODULE_SECTIONS: ModuleSection[] = [

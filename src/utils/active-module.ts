@@ -20,14 +20,13 @@ const THEME_ONLY_PREFIXES: ReadonlyArray<readonly [string, string]> = [
     ["/office/settings", "settings"],
     ["/office/admin", "administration"],
 
-    // The office shell: the home dashboard, the Workspace inboxes, a colleague's profile and the serial
-    // lookup. None of them is a business module, so they share one low-chroma
+    // The office shell: the home dashboard, the Workspace inboxes and a colleague's
+    // profile. None of them is a business module, so they share one low-chroma
     // slate instead of borrowing a module's hue and claiming to be it.
     ["/office/message", "workspace"],
     ["/office/work-flow-inbox", "workspace"],
     ["/office/me", "workspace"],
     ["/office/user", "workspace"],
-    ["/office/core", "workspace"],
 
     // Catch-all, and it MUST stay last: "/office" prefix-matches every office
     // page. It is safe only because MODULE_SECTIONS is consulted first and

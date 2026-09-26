@@ -239,6 +239,9 @@ Expect no output. (The only mention anywhere is a breadcrumb *label* at
 **Deliberately parked — I left these alone:** `(to-do)/welcome` and `(to-do)/core/search-slno` sit in a
 `(to-do)` route group, same idea as `/lab`. Their nav entry is commented at `src/shared/lib/constants/nav.ts`.
 
+> **Settled 2026-09-27:** both gone — welcome with `/lab`; the serial page replaced by the Workspace
+> **SL Search** dialog (`SlSearchDialog`, same `/api/search-slno`), taking the whole `(to-do)` group with it.
+
 **Also unreferenced, but on purpose — do NOT delete:**
 `/office/accountancy/vouchers/[id]` and `/office/accountancy/journal-entries/[id]` are compatibility
 redirect shims for stale bookmarks and stored notification links. Read them, they are ~15 lines each and

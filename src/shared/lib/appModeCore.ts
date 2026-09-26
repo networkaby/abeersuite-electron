@@ -135,7 +135,7 @@ export const PUBLIC_ONLY_API_SEGMENTS = new Set(["shop", "portal", "legal"]);
  * this list adjusted from whatever `next build` reports missing.
  */
 export const COUNTER_OFFICE_MODULE_STRIP = [
-    "(to-do)", "accountancy", "admin", "administration", "bi", "crm", "customer-retention",
+    "accountancy", "admin", "administration", "bi", "crm", "customer-retention",
     "customers", "ecommerce", "help", "inventory", "pricing-strategy", "repairing", "social",
     "work-flow-inbox",
 ].map((m) => `office/${m}`);

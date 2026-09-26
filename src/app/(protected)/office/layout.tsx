@@ -5,6 +5,7 @@ import Sidebar from "@/shared/components/Sidebar";
 import { Toaster } from "sonner";
 import SessionWrapper from "@/shared/components/SessionWrapper";
 import QuickTicketButton from "@/shared/components/QuickTicketButton";
+import SlSearchDialog from "@/shared/components/SlSearchDialog";
 import ButtonBar from "@/shared/components/ButtonBar";
 import ModuleSurface from "@/shared/components/ModuleSurface";
 import GlobalInboxListener from "@/modules/message/components/GlobalInboxListener";
@@ -66,6 +67,7 @@ export default async function ProtectedLayout({
                 </div>{/* end flex row */}
                 <Toaster richColors />
                 <QuickTicketButton />
+                <SlSearchDialog />
                 <GlobalInboxListener currentUserId={userId} />
                 <CallFollowUpPopup />
             </div>

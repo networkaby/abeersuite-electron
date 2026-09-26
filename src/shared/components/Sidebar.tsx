@@ -41,7 +41,8 @@ const surfaceModule = (href: string): string | undefined =>
 import UserAvatar from "@/shared/components/UserAvatar";
 import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkContextMenu";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
-import { WORKSPACE_NAV, MODULE_SECTIONS, ADMIN_NAV, SETTINGS_NAV, type ModuleChild, type NavItem } from "@/shared/lib/constants/nav";
+import { useSlSearchStore } from "@/store/slSearchStore";
+import { WORKSPACE_NAV, MODULE_SECTIONS, ADMIN_NAV, SETTINGS_NAV, type ModuleChild, type NavLinkItem } from "@/shared/lib/constants/nav";
 import { canViewModuleChild } from "@/utils/module-access";
 import { sidebarLinkPermissionIdForLabel } from "@/shared/lib/auth/sidebarModules";
 import { useIsDesktopApp } from "@/shared/lib/bridge";
@@ -101,6 +102,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const permissions = user?.permissions ?? [];
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
+    const openSlSearch = useSlSearchStore((s) => s.setOpen);
 
     // Live counts, so someone working in another module sees new arrivals without
     // refreshing. ONE poll feeds every badge here and in NotificationBell; chat
@@ -461,10 +463,10 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
         (item) => (!item.desktopOnly || inDesktopApp) && (isAdmin || hasSidebarLink("settings", item.label))
     );
 
-    const canViewNavItem = (item: NavItem) =>
+    const canViewNavItem = (item: NavLinkItem) =>
         item.permission === null || !item.permission || isAdmin || permissions.includes(item.permission);
 
-    const isWorkspaceChildActive = (childHref: string, siblings: NavItem[]) => {
+    const isWorkspaceChildActive = (childHref: string, siblings: NavLinkItem[]) => {
         if (!pathname.startsWith(childHref)) return false;
         // Prevent broad routes like "/office/customers" from also matching "/office/customers/all".
         const hasMoreSpecificSiblingMatch = siblings.some(
@@ -614,6 +616,28 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                     yes/no (ui:sidebar:workspace:*); untick hides it. Admin always sees all. */}
                                 {WORKSPACE_NAV.filter((item) => isAdmin || hasSidebarLink("workspace", item.label)).map((item) => {
                                     const Icon = item.icon;
+
+                                    // An action item opens a dialog in place — it is never
+                                    // "active", so it always wears the resting link look.
+                                    if (item.action === "sl-search") {
+                                        return (
+                                            <button
+                                                key={item.label}
+                                                type="button"
+                                                onClick={() => openSlSearch(true)}
+                                                className={[
+                                                    "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                                    "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                                    collapsed ? "justify-center px-2" : "",
+                                                ].join(" ")}
+                                                title={collapsed ? item.label : ""}
+                                            >
+                                                <Icon size={17} className="shrink-0" style={moduleIconStyle()} />
+                                                {!collapsed && <span className="min-w-0 truncate">{item.label}</span>}
+                                            </button>
+                                        );
+                                    }
+
                                     const hasChildren = !!item.children?.length;
                                     const visibleChildren = item.children?.filter(canViewNavItem) ?? [];
                                     const isOpen = workspaceOpen[item.label.toLowerCase()] ?? false;
