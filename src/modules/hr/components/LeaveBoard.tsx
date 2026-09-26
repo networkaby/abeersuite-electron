@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Check, Palmtree, Plus, X } from "lucide-react";
+import { Check, Palmtree, Plus, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -88,6 +88,23 @@ export default function LeaveBoard({ canEdit, selfId }: { canEdit: boolean; self
         }
     };
 
+    const remove = async (r: LeaveRequestDto) => {
+        const ok = await confirmAction({
+            title: `Delete ${r.userName}'s leave?`,
+            body: `${formatDate(r.fromDate)} to ${formatDate(r.toDate)} — ${r.days} day${r.days === 1 ? "" : "s"}, ${LEAVE_KIND_LABELS[r.kind].toLowerCase()}. It is removed for good${r.status === "APPROVED" ? ", and those days come back off the register" : ""}.`,
+            confirmLabel: "Delete",
+            destructive: true,
+        });
+        if (!ok) return;
+        try {
+            await axios.delete(`/api/hr/leave/${r.id}`);
+            toast.success("Leave deleted");
+            reload();
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not delete the request"));
+        }
+    };
+
     return (
         <ScrollArea className="h-full" type="always">
             <div className="px-6 pt-3 pb-6">
@@ -138,6 +155,9 @@ export default function LeaveBoard({ canEdit, selfId }: { canEdit: boolean; self
                                                 {(r.status === "PENDING" && r.userId === selfId && !canEdit) || (canEdit && r.status === "APPROVED") ? (
                                                     <Button type="button" size="sm" variant="ghost" onClick={() => void decide(r, "CANCELLED")}>Cancel</Button>
                                                 ) : null}
+                                                {(canEdit || (r.status === "PENDING" && r.userId === selfId)) && (
+                                                    <Button type="button" size="icon-sm" variant="ghost" className="text-destructive hover:text-destructive" aria-label="Delete" title="Delete" onClick={() => void remove(r)}><Trash2 size={14} /></Button>
+                                                )}
                                             </div>
                                         </TableCell>
                                     </TableRow>

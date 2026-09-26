@@ -58,3 +58,13 @@ export async function applyLeaveDecision(
     }
     return row;
 }
+
+/** Remove a request outright. An approved one first takes its LEAVE days back off
+ *  the register — the same undo Cancel does — so nothing is left pointing at it. */
+export async function deleteLeaveRequest(tx: Prisma.TransactionClient, id: number): Promise<void> {
+    const before = await tx.leaveRequest.findUniqueOrThrow({ where: { id }, select: { userId: true, status: true } });
+    if (before.status === "APPROVED") {
+        await tx.attendanceDay.deleteMany({ where: { userId: before.userId, status: "LEAVE", note: leaveTag(id) } });
+    }
+    await tx.leaveRequest.delete({ where: { id } });
+}

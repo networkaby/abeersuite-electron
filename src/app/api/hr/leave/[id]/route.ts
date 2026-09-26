@@ -5,7 +5,7 @@ import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { leaveDecisionSchema } from "@/shared/lib/schemas/hrAttendanceSchema";
-import { LEAVE_INCLUDE, toLeaveDto, applyLeaveDecision } from "@/modules/hr/lib/leaveServer";
+import { LEAVE_INCLUDE, toLeaveDto, applyLeaveDecision, deleteLeaveRequest } from "@/modules/hr/lib/leaveServer";
 
 // PATCH /api/hr/leave/[id] { status: APPROVED | REJECTED | CANCELLED, decisionNote? }
 //
@@ -35,6 +35,27 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         return NextResponse.json(toLeaveDto(row));
     } catch (e) {
         return handleApiError(e, "Failed to update the leave request");
+    }
+}
+
+// DELETE /api/hr/leave/[id] — HR (hr:leave:approve) may delete any request; the
+// requester only their own while it is still pending, the same line as Cancel.
+export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
+    const { user, response } = await requireAuth();
+    if (response) return response;
+    const id = Number((await params).id);
+    if (!Number.isInteger(id) || id <= 0) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    try {
+        const current = await prisma.leaveRequest.findUnique({ where: { id }, select: { userId: true, status: true } });
+        if (!current) return NextResponse.json({ error: "Leave request not found" }, { status: 404 });
+        const canApprove = hasPermissionWithScope(user.permissions, PERMISSIONS.HR_LEAVE_APPROVE);
+        if (!canApprove && !(current.userId === user.id && current.status === "PENDING")) {
+            return NextResponse.json({ error: "Only HR can delete this leave request" }, { status: 403 });
+        }
+        await prisma.$transaction((tx) => deleteLeaveRequest(tx, id));
+        return NextResponse.json({ success: true });
+    } catch (e) {
+        return handleApiError(e, "Failed to delete the leave request");
     }
 }
 
