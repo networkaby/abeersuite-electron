@@ -157,7 +157,7 @@ Expect: no `page.tsx` in the first two, "No such file or directory" for the thir
 
 ### A6 · Main sidebar is CLEAN — no action
 
-All **128** hrefs in `src/utils/constants.ts` resolve to a real page. Also clean: `masters-nav.ts` (both),
+All **128** hrefs in `src/shared/lib/constants/nav.ts` resolve to a real page. Also clean: `masters-nav.ts` (both),
 `WorkflowTabsNav.tsx`, `AdminTabsNav.tsx`. I mention it so you know the audit actually reached them.
 
 ---
@@ -202,7 +202,7 @@ git log --oneline --all | grep -i "TicketSubStatus"
 |---|---|---|---|
 | `/office/inventory/configuration` | 9 lines | Scaffold — renders the literal text `ConfigurationPage` | delete |
 | `/office/accountancy/dashboard` | 8 lines | "Dashboard coming soon." stub | delete |
-| `/office/accountancy/orders-estimates` | real page | Working; sidebar entry is **commented out** at `src/utils/constants.ts:406` | your call — surface or delete |
+| `/office/accountancy/orders-estimates` | real page | Working; sidebar entry is **commented out** at `src/shared/lib/constants/nav.ts:348` | your call — surface or delete |
 | `/office/accountancy/reports/optional-vouchers` | real report | Missing from the reports index **and** the sidebar | your call — surface or delete |
 
 **Verify the two stubs by reading them — they are tiny:**
@@ -221,7 +221,7 @@ Expect no output.
 ```bash
 grep -rn "orders-estimates" src --include=*.ts --include=*.tsx | grep -v "useRegisterFilters"
 ```
-Expect one hit, `src/utils/constants.ts:406`, starting with `//`.
+Expect one hit, `src/shared/lib/constants/nav.ts:348`, starting with `//`.
 
 **Verify optional-vouchers has no entry point.** The reports index lists 13 reports:
 ```bash
@@ -229,13 +229,13 @@ grep -n "href:" "src/app/(protected)/office/accountancy/reports/page.tsx"
 ```
 `optional-vouchers` is not among them. And the sidebar:
 ```bash
-grep -n "optional-vouchers" src/utils/constants.ts
+grep -n "optional-vouchers" src/shared/lib/constants/nav.ts
 ```
 Expect no output. (The only mention anywhere is a breadcrumb *label* at
 `src/app/(protected)/office/accountancy/reports/layout.tsx:43` — a label, not a link.)
 
 **Deliberately parked — I left these alone:** `(to-do)/welcome` and `(to-do)/core/search-slno` sit in a
-`(to-do)` route group, same idea as `/lab`. Their nav entry is commented at `src/utils/constants.ts:311`.
+`(to-do)` route group, same idea as `/lab`. Their nav entry is commented at `src/shared/lib/constants/nav.ts`.
 
 **Also unreferenced, but on purpose — do NOT delete:**
 `/office/accountancy/vouchers/[id]` and `/office/accountancy/journal-entries/[id]` are compatibility

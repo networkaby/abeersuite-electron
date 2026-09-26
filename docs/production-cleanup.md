@@ -105,7 +105,7 @@ they are reachable only by typing the URL. Either is fine — being neither is w
 - `office/accountancy/dashboard` — accountancy overview
 - `office/inventory/configuration` — inventory master config (likely belongs under Settings)
 
-**Do:** for each, add it to `src/utils/constants.ts` nav or delete the route.
+**Do:** for each, add it to `src/shared/lib/constants/nav.ts` nav or delete the route.
 
 ## Not clean-up, but verify on the day
 
