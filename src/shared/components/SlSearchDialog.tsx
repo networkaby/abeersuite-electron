@@ -10,11 +10,12 @@
  * carries it (with the party frozen on that bill, and how long ago it was sold —
  * the warranty question) and every repair / help ticket that mentions it.
  *
- * The search runs on Enter / the Search button, not per keystroke: a barcode
- * scanner ends with Enter anyway, and each search is a scan of the line notes.
+ * The search runs by itself once typing pauses, and at once on Enter — which is
+ * how a barcode scanner ends every scan. After an Enter search the SL no is left
+ * selected, so the next scan replaces it instead of sticking onto its end.
  */
 
-import { useState, type ComponentProps, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentProps, type FormEvent } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { Loader2, ReceiptText, ScanSearch, Search, Wrench } from "lucide-react";
@@ -39,6 +40,9 @@ import {
 
 /** A repeat of the same SL no inside this window is answered from memory. */
 const CACHE_FRESH_MS = 60_000;
+/** How long typing must pause before the search runs on its own. Each search is
+ *  a scan of the line notes, so not on every keystroke. */
+const AUTO_SEARCH_MS = 400;
 const cache = new Map<string, { at: number; result: SlSearchResult }>();
 
 /** "today" / "yesterday" / "412 days ago" — the warranty question, answered. */
@@ -98,28 +102,55 @@ export default function SlSearchDialog() {
     const q = query.trim();
     const tooShort = q.length < SL_SEARCH_MIN_CHARS;
 
-    async function runSearch(e?: FormEvent) {
-        e?.preventDefault();
-        if (tooShort || loading) return;
-        const key = q.toLowerCase();
+    const inputRef = useRef<HTMLInputElement>(null);
+    // Only the newest search may paint: an older, slower answer arriving after a
+    // newer one must not replace it.
+    const latest = useRef(0);
+    const autoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+    const search = useCallback(async (term: string, opts: { select?: boolean } = {}) => {
+        if (term.length < SL_SEARCH_MIN_CHARS) return;
+        const mine = ++latest.current;
+        const key = term.toLowerCase();
         const hit = cache.get(key);
         setError(null);
-        setSearched(q);
-        if (hit) {
-            setResult(hit.result);
-            if (Date.now() - hit.at < CACHE_FRESH_MS) return;
-        }
-        setLoading(true);
-        try {
-            const { data } = await axios.get<SlSearchResult>("/api/search-slno", { params: { q } });
-            cache.set(key, { at: Date.now(), result: data });
-            setResult(data);
-        } catch (err) {
-            setError(extractApiError(err, "SL search failed"));
-            if (!hit) setResult(null);
-        } finally {
+        setSearched(term);
+        if (hit) setResult(hit.result);
+        if (hit && Date.now() - hit.at < CACHE_FRESH_MS) {
             setLoading(false);
+        } else {
+            setLoading(true);
+            try {
+                const { data } = await axios.get<SlSearchResult>("/api/search-slno", { params: { q: term } });
+                cache.set(key, { at: Date.now(), result: data });
+                if (mine === latest.current) setResult(data);
+            } catch (err) {
+                if (mine === latest.current) {
+                    setError(extractApiError(err, "SL search failed"));
+                    if (!hit) setResult(null);
+                }
+            } finally {
+                if (mine === latest.current) setLoading(false);
+            }
         }
+        if (opts.select && mine === latest.current) inputRef.current?.select();
+    }, []);
+
+    // Search by itself once typing pauses. Deliberately NOT selecting the text
+    // afterwards: someone reading a long SL no off a unit pauses mid-number, and
+    // a selected box would make their next key wipe what they had typed.
+    useEffect(() => {
+        if (!open || q.length < SL_SEARCH_MIN_CHARS) return;
+        autoTimer.current = setTimeout(() => { void search(q); }, AUTO_SEARCH_MS);
+        return () => clearTimeout(autoTimer.current);
+    }, [open, q, search]);
+
+    /** Enter (a scanner's last key) or the button: search now, then select the SL
+     *  no so the next scan replaces it. */
+    function runSearch(e?: FormEvent) {
+        e?.preventDefault();
+        clearTimeout(autoTimer.current);
+        void search(q, { select: true });
     }
 
     // Right-click on any link below → "Open in new window", the same menu the
@@ -148,9 +179,13 @@ export default function SlSearchDialog() {
                     <div className="relative flex-1">
                         <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                         <Input
+                            ref={inputRef}
                             type="text"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
+                            // Reopening the dialog (or tabbing back) lands on the last SL
+                            // no already selected — a fresh scan simply replaces it.
+                            onFocus={(e) => e.currentTarget.select()}
                             placeholder="Type or scan SL no…"
                             className="pl-8 font-mono"
                             autoFocus
@@ -158,7 +193,7 @@ export default function SlSearchDialog() {
                             spellCheck={false}
                         />
                     </div>
-                    <Button type="submit" disabled={tooShort || loading} className="gap-1.5">
+                    <Button type="submit" disabled={tooShort} className="gap-1.5">
                         {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
                         Search
                     </Button>
