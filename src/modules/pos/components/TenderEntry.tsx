@@ -12,10 +12,9 @@
 import React from "react";
 import { Banknote, Check, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-    TenderSplitInput, seedTenderSplit, type TenderSplit, type TenderAccount,
+    TenderSplitInput, TenderAmountInput, seedTenderSplit, type TenderSplit, type TenderAccount,
 } from "@/modules/pos/components/TenderSplitInput";
 import { formatInr } from "@/shared/lib/format";
 
@@ -77,25 +76,23 @@ export function TenderEntry({
                         </button>
                     )}
                 </Label>
-                <Input
+                <TenderAmountInput
                     ref={cashTenderedRef}
-                    value={pay.cashTendered || ""}
+                    amount={pay.cashTendered}
+                    onAmount={(cashTendered) => setPay((s) => ({ ...s, cashTendered }))}
                     data-tender-field
                     data-tender-amount
-                    onChange={(e) => setPay((s) => ({ ...s, cashTendered: Number(e.target.value) || 0 }))}
                     onKeyDown={onEnter}
                     placeholder="₹ tendered"
-                    inputMode="decimal"
                     className="text-right"
                 />
                 <Label className="flex items-center gap-1 text-[10px] text-muted-foreground">return</Label>
-                <Input
-                    value={pay.cashReturn || ""}
+                <TenderAmountInput
+                    amount={pay.cashReturn}
+                    onAmount={(cashReturn) => setPay((s) => ({ ...s, cashReturn }))}
                     data-tender-field
-                    onChange={(e) => setPay((s) => ({ ...s, cashReturn: Number(e.target.value) || 0 }))}
                     onKeyDown={onEnter}
                     placeholder="₹ change back"
-                    inputMode="decimal"
                     className="text-right"
                 />
             </div>

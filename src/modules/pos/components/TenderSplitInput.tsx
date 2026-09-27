@@ -13,6 +13,33 @@ import { Input } from "@/components/ui/input";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { parseDecimalInput } from "@/shared/lib/format";
+
+/// Rupee box for a tender row. Binds a number but shows what the cashier typed,
+/// so "32." and "32.50" survive the trip through Number(). A change from outside
+/// — ✓ / "/" fill, F10, a reset — no longer matches the typed number and
+/// replaces the text, even while the box has focus (why not NumericInput,
+/// which holds its draft until blur).
+export function TenderAmountInput({ amount, onAmount, ...rest }: Omit<React.ComponentProps<typeof Input>, "value" | "onChange" | "type"> & {
+    amount: number;
+    onAmount: (amount: number) => void;
+}) {
+    const [draft, setDraft] = React.useState(amount ? String(amount) : "");
+    if ((Number(draft) || 0) !== amount) setDraft(amount ? String(amount) : "");
+    return (
+        <Input
+            inputMode="decimal"
+            {...rest}
+            type="text"
+            value={draft}
+            onChange={(e) => {
+                const next = parseDecimalInput(e.target.value);
+                setDraft(next);
+                onAmount(Number(next) || 0);
+            }}
+        />
+    );
+}
 
 export type TenderSplit = { id: string; paymentAccountId: number | null; amount: number; reference: string };
 export type TenderAccount = { id: number; channel: string; label: string; vpa: string | null; defaultVisible?: boolean };
@@ -95,16 +122,15 @@ export function TenderSplitInput({
                                     <Check size={11} strokeWidth={2.5} />
                                 </button>
                             )}
-                            <Input
-                                value={s.amount || ""}
+                            <TenderAmountInput
+                                amount={s.amount}
+                                onAmount={(amount) => patch(s.id, { amount })}
                                 data-tender-field
                                 data-tender-amount
                                 data-tender-split={s.id}
-                                onChange={(ev) => patch(s.id, { amount: Number(ev.target.value) || 0 })}
                                 onKeyDown={onEnter}
                                 placeholder="₹ amount"
                                 className="text-right"
-                                inputMode="decimal"
                             />
                         </div>
                         {canShare ? (

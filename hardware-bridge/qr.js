@@ -387,7 +387,10 @@ async function renderWelcomeFallback(companyName) {
     return svgToRgb(svg);
 }
 
-// ── Serial send (queued — only one open at a time) ────────────────────────────
+// ── Serial send (one picture per open; the pipeline in start() serialises) ────
+
+// Longest we wait for Windows to hand the COM port back after a picture.
+const CLOSE_WAIT_MS = 2000;
 
 function sendToDq11Once(comPort, baud, bytes) {
     return new Promise((resolve, reject) => {
@@ -395,7 +398,17 @@ function sendToDq11Once(comPort, baud, bytes) {
             const { SerialPort } = require("serialport");
             const port = new SerialPort({ path: comPort, baudRate: baud });
             let settled = false;
-            const finish = (err) => { if (settled) return; settled = true; try { port.close(); } catch {} err ? reject(err) : resolve(); };
+            // Settle only once the port has really closed. The next picture opens the
+            // same COM port straight away, and Windows refuses a port still held open.
+            const finish = (err) => {
+                if (settled) return;
+                settled = true;
+                let done = false;
+                const settle = () => { if (done) return; done = true; err ? reject(err) : resolve(); };
+                if (!port.isOpen) return settle();
+                setTimeout(settle, CLOSE_WAIT_MS);
+                try { port.close(settle); } catch { settle(); }
+            };
             port.on("open", () => {
                 port.write(bytes, (err) => {
                     if (err) return finish(err);
@@ -429,17 +442,55 @@ function listComPorts() {
 // ── start() — boots the QR display Express app ───────────────────────────────
 
 function start({ getConfig, setConfig }) {
-    // ── Display pipeline (queued so concurrent calls serialize) ───────────────
+    // ── Display pipeline ──────────────────────────────────────────────────────
+    //
+    // One picture takes ~3.3 s to go out (307,200 bytes at 921,600 baud), so a cashier
+    // typing a UPI amount asks for pictures faster than the display can take them.
+    // Latest wins: while one picture is going out only the newest waiting one is kept,
+    // and each one it replaces settles `false` without ever being sent.
+    //
+    // A POS screen (`repeat`) goes out a second time once nothing newer is waiting. On
+    // the counter the last picture of a burst did not show until another was sent after
+    // it — a ₹32 QR stayed on ₹3 until the next digit — so the repeat is what lands it.
+    // The idle slideshow skips it: a late advert is invisible.
 
-    let sendChain = Promise.resolve();
+    let waiting = null;   // { bytes, repeat, resolve, reject } — the newest unsent picture
+    let sending = false;
 
-    async function display(rgbBuffer) {
+    /** Resolves true once the picture has gone out, false if a newer one replaced it. */
+    async function display(rgbBuffer, { repeat = false } = {}) {
         const cfg = getConfig();
         if (!cfg.comPort) throw new Error("comPort not configured. Edit config.json or POST /config.");
         const bytes = rgb888BufferToDq11Bytes(rgbBuffer);
-        const job   = sendChain.then(() => sendToDq11Once(cfg.comPort, cfg.baudRate || 921600, bytes));
-        sendChain   = job.catch(() => {});
-        return job;
+        return new Promise((resolve, reject) => {
+            if (waiting) waiting.resolve(false);
+            waiting = { bytes, repeat, resolve, reject };
+            if (!sending) void pump();
+        });
+    }
+
+    async function pump() {
+        sending = true;
+        while (waiting) {
+            const job = waiting;
+            waiting = null;
+            const cfg = getConfig();
+            try {
+                await sendToDq11Once(cfg.comPort, cfg.baudRate || 921600, job.bytes);
+            } catch (e) {
+                job.reject(e);
+                continue;
+            }
+            job.resolve(true);
+            if (job.repeat && !waiting) {
+                waiting = {
+                    bytes: job.bytes, repeat: false,
+                    resolve: () => {},
+                    reject: (e) => console.error("[qr] repeat send failed:", e.message),
+                };
+            }
+        }
+        sending = false;
     }
 
     // ── Idle slideshow ────────────────────────────────────────────────────────
@@ -448,6 +499,9 @@ function start({ getConfig, setConfig }) {
     let idleIndex   = 0;
     let idleFiles   = [];
     let resumeTimer = null;
+    // Bumped by every start/stop. A tick still sending when a POS screen arrived must not
+    // schedule the next advert — that painted the slideshow over a cart or UPI QR.
+    let idleRun     = 0;
 
     function loadIdleFiles() {
         const cfg = getConfig();
@@ -464,11 +518,13 @@ function start({ getConfig, setConfig }) {
     }
 
     function stopIdle() {
+        idleRun++;
         if (idleTimer)   { clearTimeout(idleTimer);   idleTimer   = null; }
         if (resumeTimer) { clearTimeout(resumeTimer); resumeTimer = null; }
     }
 
-    async function tickIdle() {
+    async function tickIdle(run) {
+        if (run !== idleRun) return;
         const cfg = getConfig();
         const interval = Math.max(1000, Number(cfg.idleIntervalMs) || 5000);
 
@@ -488,14 +544,15 @@ function start({ getConfig, setConfig }) {
         } catch (e) {
             console.error("[qr:idle] failed to show", path.basename(file), "—", e.message);
         }
-        idleTimer = setTimeout(tickIdle, interval);
+        if (run !== idleRun) return;
+        idleTimer = setTimeout(() => tickIdle(run), interval);
     }
 
     function startIdle() {
         stopIdle();
         idleFiles = loadIdleFiles();
         idleIndex = 0;
-        tickIdle();
+        tickIdle(idleRun);
     }
 
     function scheduleResumeIdle(ms) {
@@ -505,8 +562,9 @@ function start({ getConfig, setConfig }) {
 
     async function showActive(rgbBuffer, { resumeIdleInMs } = {}) {
         stopIdle();
-        await display(rgbBuffer);
-        if (resumeIdleInMs && resumeIdleInMs > 0) scheduleResumeIdle(resumeIdleInMs);
+        const shown = await display(rgbBuffer, { repeat: true });
+        // A thank-you replaced by the next customer's cart must not bring the slideshow back.
+        if (shown && resumeIdleInMs && resumeIdleInMs > 0) scheduleResumeIdle(resumeIdleInMs);
     }
 
     // ── Commands ─────────────────────────────────────────────────────────────
@@ -607,7 +665,7 @@ function start({ getConfig, setConfig }) {
 
         "clear": async () => {
             stopIdle();
-            await display(await renderBlank());
+            await display(await renderBlank(), { repeat: true });
             return { ok: true };
         },
     };

@@ -43,6 +43,9 @@ export type PosCustomerDisplayParams = {
     hoverPreview: ProductOption | null;
 };
 
+const FRAME_SETTLE_MS = 250;
+const UPI_SETTLE_MS = 1000;
+
 // Single source of truth for what the customer-facing DQ11 shows. Priority:
 //   1. thank-you (held by displayHold after a successful sale)
 //   2. UPI QR — checkout open and UPI amount entered
@@ -52,8 +55,9 @@ export type PosCustomerDisplayParams = {
 //   6. customer welcome — customer picked, cart empty
 //   7. idle slideshow — nothing else
 // Debounced — the DQ11 takes ~3s to transmit a frame at 921600 baud, so
-// rapid keystrokes (typing/clearing UPI amount) would queue stale frames.
-// Wait 250ms after the last state change before pushing.
+// rapid keystrokes would queue stale frames. Wait FRAME_SETTLE_MS after the
+// last state change before pushing, and UPI_SETTLE_MS for the pay QR: a QR
+// sent mid-typing is scannable (₹3 on screen while the cashier types ₹32).
 // Fire-and-forget; relay-down never blocks POS.
 export function usePosCustomerDisplay({
     displayHold, checkoutOpen, upiEntered, upiVpa, upiPayeeName,
@@ -65,8 +69,9 @@ export function usePosCustomerDisplay({
     useEffect(() => {
         if (displayHold === "thankyou") return;
 
+        const showUpi = checkoutOpen && upiEntered > 0;
         const timer = setTimeout(() => {
-            if (checkoutOpen && upiEntered > 0) {
+            if (showUpi) {
                 // VPA + payee come from the active counter (per-counter identity),
                 // not a relay-side default. If the counter's UPI account has no VPA
                 // set, the QR can't render a payee — fix it under Settings → Counters.
@@ -146,7 +151,7 @@ export function usePosCustomerDisplay({
             } else {
                 void qrDisplay.idle();
             }
-        }, 250);
+        }, showUpi ? UPI_SETTLE_MS : FRAME_SETTLE_MS);
 
         return () => clearTimeout(timer);
         // Dependency list kept identical to the original inline effect (some values
