@@ -313,7 +313,9 @@ export default function QuickTicketButton() {
                                 <Textarea
                                     {...ticketForm.register("problem")}
                                     rows={3}
-                                    placeholder="Describe the issue..."
+                                    // SL Search finds a ticket by the SL no written here — there
+                                    // is no separate serial box on a repair ticket.
+                                    placeholder="Describe the issue — include the SL no if the unit has one"
                                     className={invalidFieldClass(Boolean(ticketForm.formState.errors.problem))}
                                 />
                                 <FieldError message={ticketForm.formState.errors.problem?.message} />

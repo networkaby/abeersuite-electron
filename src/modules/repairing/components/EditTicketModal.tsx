@@ -108,7 +108,7 @@ export default function EditTicketModal({ ticketId, initial, onClose, onSaved }:
                     </div>
 
                     <Field label="Problem Description" required>
-                        <Textarea value={form.problem} onChange={(e) => set("problem", e.target.value)} rows={3} placeholder="Describe the issue..." />
+                        <Textarea value={form.problem} onChange={(e) => set("problem", e.target.value)} rows={3} placeholder="Describe the issue — include the SL no if the unit has one" />
                     </Field>
 
                     <Field label="Accessories Received">
