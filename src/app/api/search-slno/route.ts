@@ -6,8 +6,10 @@
  *
  *   bills   — every POSTED voucher line whose NOTE carries the SL no. There is no
  *             serial column: the SL no lives in the line note, which the POS
- *             forces for products marked "Must fill line note". All voucher types
- *             come back, so the unit's whole story shows (purchase → sale → return).
+ *             forces for products marked "Must fill line note". Every voucher type
+ *             comes back, so the unit's whole story shows (GRN / purchase → sale /
+ *             challan → return) — the supplier side only to a role holding
+ *             "Show suppliers" (`customers:view:creditors`).
  *   tickets — repair and help-desk tickets that mention it (warranty ref, service
  *             centre ref, accessories, device model / problem, title, notes,
  *             help subject). `accessInfo` (device PIN / pattern) is never searched.
@@ -18,7 +20,9 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requireAuth } from "@/shared/lib/auth/permissions";
+import { hasPermission, requireAuth } from "@/shared/lib/auth/permissions";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { PER_KIND } from "@/modules/accountancy/lib/tradingVoucherKinds";
 import { handleApiError } from "@/shared/lib/api";
 import { readPartyName, readPartyPhone } from "@/shared/lib/accountancy/partySnapshot";
 import { NO_PARTY_LINK, partyLinkFields, type PartyLinkFields } from "@/shared/lib/parties/partyLink";
@@ -27,6 +31,14 @@ import { SL_SEARCH_MIN_CHARS, type SlSearchResult } from "@/shared/lib/search/sl
 
 const BILL_LIMIT = 50;
 const TICKET_LIMIT = 20;
+
+/** Supplier-side documents — purchase, purchase return / order, GRN, rejection
+ *  out: every trading kind whose party is a Sundry Creditor. Shown only to a
+ *  role holding "Show suppliers", the same tick that hides suppliers from the
+ *  Contacts lists and party pickers. */
+const SUPPLIER_SIDE_TYPES = Object.entries(PER_KIND)
+    .filter(([, kind]) => kind.party === "Sundry Creditors")
+    .map(([type]) => type);
 
 /** A ledger Account's party profile. The Account is the LIVE link — a merge or a
  *  conversion moves it onto the surviving record — so no forwarding walk is needed. */
@@ -46,8 +58,9 @@ function lineNote(description: string, sku: string): string {
 }
 
 export async function GET(req: Request) {
-    const { response } = await requireAuth();
+    const { user, response } = await requireAuth();
     if (response) return response;
+    const seesSuppliers = hasPermission(user, PERMISSIONS.CUSTOMERS_VIEW_CREDITORS);
 
     try {
         const q = new URL(req.url).searchParams.get("q")?.trim() ?? "";
@@ -61,7 +74,12 @@ export async function GET(req: Request) {
             prisma.voucherInventoryLine.findMany({
                 where: {
                     description: has,
-                    universalVoucher: { status: "POSTED", deletedAt: null },
+                    universalVoucher: {
+                        status: "POSTED",
+                        deletedAt: null,
+                        // Filtered in the query, not after it, so the page still fills.
+                        ...(seesSuppliers ? {} : { type: { notIn: SUPPLIER_SIDE_TYPES } }),
+                    },
                 },
                 orderBy: [{ universalVoucher: { date: "desc" } }, { id: "desc" }],
                 // Over-fetch: a POS line can match on its SKU / name prefix and be
