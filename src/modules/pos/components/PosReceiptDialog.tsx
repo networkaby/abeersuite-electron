@@ -10,6 +10,11 @@
 // come from CheckoutDialog. Posts a RECEIPT voucher (one Dr per tender / Cr party
 // AR) — cash legs fall in the shift window for the close drawer; non-cash legs
 // hit their own bank ledger.
+//
+// Once a party is picked, its ledger balance shows under the name (Due / Advance),
+// with what it becomes after the amount being typed — so the cashier knows whether
+// this clears the dues, part-pays them or leaves an advance. Read fresh on every
+// pick, never cached: this is the figure money is being taken against.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
@@ -30,6 +35,35 @@ import { CheckoutDialog } from "@/modules/pos/components/CheckoutDialog";
 import { PaymentLinkDialog } from "@/modules/pos/components/PaymentLinkDialog";
 import { extractApiError } from "@/shared/lib/api";
 import { formatInr } from "@/shared/lib/format";
+import { cn } from "@/shared/lib/format/utils";
+
+// Party balance, signed on the Dr side: > 0 the party owes us, < 0 an advance.
+type Due = number | "loading" | "error";
+
+function DueAmount({ due }: { due: number }) {
+    if (Math.abs(due) < 0.005) return <span className="text-muted-foreground">No balance</span>;
+    return (
+        <span className={cn("font-medium", due > 0 ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400")}>
+            {due > 0 ? "Due" : "Advance"} <span className="font-mono">{formatInr(Math.abs(due))}</span>
+        </span>
+    );
+}
+
+function PartyDueLine({ due, receiving }: { due: Due; receiving: number }) {
+    if (due === "loading") return <p className="text-xs text-muted-foreground">Balance ···</p>;
+    if (due === "error")   return <p className="text-xs text-muted-foreground">Balance unavailable</p>;
+    return (
+        <p className="text-xs">
+            <DueAmount due={due} />
+            {receiving > 0 && (
+                <>
+                    <span className="text-muted-foreground"> · After this receipt: </span>
+                    <DueAmount due={due - receiving} />
+                </>
+            )}
+        </p>
+    );
+}
 
 export function PosReceiptDialog({
     open, onOpenChange, shiftId, paymentAccounts = [], onDone,
@@ -47,6 +81,9 @@ export function PosReceiptDialog({
     const [submitting, setSubmitting] = useState(false);
     const [shareOpen, setShareOpen]   = useState(false);
     const [shareVpa, setShareVpa]     = useState<string | null>(null);
+    const [due, setDue]       = useState<Due>("loading");
+    // Bumped on every pick, so a slow reply for an earlier party is dropped.
+    const dueReq = useRef(0);
     const partyRef = useRef<PartySearchAndCreateHandle>(null);
     const cashTenderedRef = useRef<HTMLInputElement>(null);
 
@@ -73,6 +110,11 @@ export function PosReceiptDialog({
     const onPicked = (p: PickedParty) => {
         if (p.accountId == null) { toast.error(`${p.name} has no ledger account yet`); return; }
         setParty({ accountId: p.accountId, name: p.name });
+        const req = ++dueReq.current;
+        setDue("loading");
+        axios.get<{ due: number }>(`/api/pos/party-balance/${p.accountId}`)
+            .then(({ data }) => { if (req === dueReq.current) setDue(data.due); })
+            .catch(() => { if (req === dueReq.current) setDue("error"); });
     };
 
     const submit = async (printAfter = false) => {
@@ -122,9 +164,12 @@ export function PosReceiptDialog({
                     <div className="space-y-1.5">
                         <Label>Party</Label>
                         {party ? (
-                            <div className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
-                                <span className="font-medium">{party.name}</span>
-                                <Button variant="ghost" size="sm" className="h-7 text-muted-foreground" onClick={() => { setParty(null); setTimeout(() => partyRef.current?.focus(), 0); }}>
+                            <div className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm">
+                                <div className="min-w-0 space-y-0.5">
+                                    <p className="truncate font-medium">{party.name}</p>
+                                    <PartyDueLine due={due} receiving={total} />
+                                </div>
+                                <Button variant="ghost" size="sm" className="h-7 shrink-0 text-muted-foreground" onClick={() => { setParty(null); setTimeout(() => partyRef.current?.focus(), 0); }}>
                                     <X size={13} /> Change
                                 </Button>
                             </div>

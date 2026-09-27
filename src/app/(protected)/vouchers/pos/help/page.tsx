@@ -102,7 +102,7 @@ export default function PosHelpPage() {
 
             <Section icon={<HandCoins size={16} className="text-primary" />} title="Rail buttons (right edge)">
                 <ul className="list-disc space-y-1 pl-5">
-                    <li><span className="font-medium text-foreground">Rcv</span> — collect a payment into the counter’s till (posts a receipt).</li>
+                    <li><span className="font-medium text-foreground">Rcv</span> — collect a payment into the counter’s till (posts a receipt). Picking the party shows what they owe (Due) or hold with us (Advance), and what it becomes after this receipt.</li>
                     <li><span className="font-medium text-foreground">Exp</span> — record counter spending (tea, sundry…).</li>
                     <li><span className="font-medium text-foreground">Ticket / Enquiry</span> — log a repair job or a customer question.</li>
                     <li><span className="font-medium text-foreground">Task / Deal / Lead</span> — internal to-do, sales opportunity, or a new lead contact.</li>
