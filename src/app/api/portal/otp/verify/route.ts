@@ -9,7 +9,6 @@ import {
     packTicket,
     TICKET_COOKIE,
 } from "@/shared/lib/auth/otpChallenge";
-import { OTP_MAX_ATTEMPTS } from "@/shared/lib/constants/session";
 
 /**
  * Check a typed code (SMS or email) against the pending cookie.
@@ -20,6 +19,9 @@ import { OTP_MAX_ATTEMPTS } from "@/shared/lib/constants/session";
  *
  * The ticket is also returned in the body so the client seam can pass it to
  * `signIn()` unchanged; the cookie is the copy the server verifies.
+ *
+ * Wrong codes are counted on the server too, per mobile/email (inside
+ * `checkOtpCode`): a replayed cookie still runs out after 5 in 15 minutes.
  */
 
 const bodySchema = z.object({
@@ -31,7 +33,7 @@ export async function POST(req: NextRequest) {
         const { data, error } = await validateRequest(req, bodySchema);
         if (error) return error;
 
-        const result = checkOtpCode(req.cookies.get(OTP_COOKIE)?.value, data.code);
+        const result = checkOtpCode(req.cookies.get(OTP_COOKIE)?.value, data.code, "portal-otp-code");
 
         if (result.ok) {
             const ticket = packTicket(result.channel, result.identity);
@@ -41,15 +43,24 @@ export async function POST(req: NextRequest) {
             return res;
         }
 
+        // Server budget spent: refused whatever was typed, and the cookie is left
+        // alone — a new code would be refused just the same until the window slides.
+        if (result.reason === "blocked") {
+            return NextResponse.json(
+                { error: "Too many attempts. Please wait a few minutes and try again." },
+                { status: 429 }
+            );
+        }
+
         // Wrong code → spend one attempt and keep the cookie alive.
-        if (result.reason === "mismatch" && result.pending) {
-            const left = OTP_MAX_ATTEMPTS - (result.pending.attempts + 1);
+        if (result.reason === "mismatch") {
+            const left = result.triesLeft;
             const res = NextResponse.json(
                 {
                     error:
                         left > 0
                             ? `That code did not match. ${left} ${left === 1 ? "try" : "tries"} left.`
-                            : "Too many wrong codes. Please request a new one.",
+                            : "Too many wrong codes. Please wait a few minutes, then request a new one.",
                 },
                 { status: 400 }
             );

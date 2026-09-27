@@ -33,9 +33,14 @@ function prune(key: string, now: number): number[] {
  * lock somebody out of the password they still need.
  */
 export function isLoginBlocked(identifier: string, maxFailures = MAX_FAILURES): boolean {
+    return loginTriesLeft(identifier, maxFailures) <= 0;
+}
+
+/** Failed attempts this identifier may still make inside the window. */
+export function loginTriesLeft(identifier: string, maxFailures = MAX_FAILURES): number {
     const key = identifier.trim().toLowerCase();
-    if (!key) return false;
-    return prune(key, Date.now()).length >= maxFailures;
+    if (!key) return maxFailures;
+    return Math.max(0, maxFailures - prune(key, Date.now()).length);
 }
 
 /** Record one failed attempt for this identifier. */

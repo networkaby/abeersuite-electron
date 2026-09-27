@@ -10,9 +10,9 @@
  * Only an address that could sign in with the new password gets a code: a staff-domain
  * User not marked as left — the same two checks `authorizeStaffCredentials` makes.
  *
- * Wrong codes are counted on the server as well, per address. The count inside the
- * cookie only binds an honest browser: a script can replay the first cookie (0 tries)
- * forever and guess its way through the million codes.
+ * Wrong codes are counted on the server as well, per address (inside `checkOtpCode`).
+ * The count inside the cookie only binds an honest browser: a script can replay the
+ * first cookie (0 tries) forever and guess its way through the million codes.
  *
  * Reuses the portal's signed-cookie OTP (otpChallenge.ts) under its own cookie name,
  * so a portal code in flight and a staff reset never step on each other. The mail goes
@@ -101,13 +101,10 @@ async function reset(email: string, code: string, password: string | undefined) 
     if (!password) return NextResponse.json({ error: "Enter a new password" }, { status: 400 });
 
     const raw = (await cookies()).get(COOKIE)?.value;
-    const check = checkOtpCode(raw, code);
-    // Keyed on the address the code was SENT to (from the signed cookie), never the
-    // typed one, which the caller can change on every try. Once blocked, even a right
-    // code is refused, so the answer never tells a guesser they got there.
-    const sentTo = check.ok ? check.identity : check.pending?.identity;
-    const guessKey = sentTo ? `staff-reset-code:${sentTo}` : null;
-    if (guessKey && isLoginBlocked(guessKey)) {
+    // Counts wrong codes per address the code was SENT to (the signed cookie), never
+    // the typed one, which the caller can change on every try.
+    const check = checkOtpCode(raw, code, "staff-reset-code");
+    if (!check.ok && check.reason === "blocked") {
         return NextResponse.json({ error: TOO_MANY }, { status: 429 });
     }
     if (!check.ok) {
@@ -117,10 +114,7 @@ async function reset(email: string, code: string, password: string | undefined) 
                 : check.reason === "exhausted" ? "Too many wrong tries. Send a new code."
                 : "Send a code first.",
         }, { status: 400 });
-        if (check.reason === "mismatch" && check.pending) {
-            if (guessKey) recordLoginFailure(guessKey);
-            res.cookies.set(COOKIE, bumpAttempts(check.pending), otpCookieOptions);
-        }
+        if (check.reason === "mismatch") res.cookies.set(COOKIE, bumpAttempts(check.pending), otpCookieOptions);
         return res;
     }
     // The code was for the address typed with it, not whatever is in the box now.
@@ -134,7 +128,6 @@ async function reset(email: string, code: string, password: string | undefined) 
     if (done.count === 0) return NextResponse.json({ error: "That code is not right." }, { status: 400 });
 
     clearLoginFailures(email);
-    if (guessKey) clearLoginFailures(guessKey);
     const res = NextResponse.json({ ok: true });
     res.cookies.delete(COOKIE);
     return res;

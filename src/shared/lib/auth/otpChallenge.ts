@@ -22,10 +22,17 @@ import "server-only";
  *
  * The channel is bound into both cookies, so a ticket earned by verifying a
  * mobile number can never be replayed as an email identity, or vice versa.
+ *
+ * The one piece of server state: wrong codes are also counted in memory, per
+ * identity (`loginRateLimit`). The tries count inside the cookie only binds an
+ * honest browser — a script can replay the first cookie (0 tries) forever and
+ * guess its way through the million codes. `checkOtpCode` does the counting
+ * itself, so no caller can forget it.
  */
 
 import { createHmac, randomInt, timingSafeEqual } from "crypto";
 import { OTP_CODE_TTL_MS, OTP_MAX_ATTEMPTS, OTP_TICKET_TTL_MS } from "@/shared/lib/constants/session";
+import { clearLoginFailures, loginTriesLeft, recordLoginFailure } from "@/shared/lib/auth/loginRateLimit";
 
 export const OTP_COOKIE = "portal_otp";
 export const TICKET_COOKIE = "portal_otp_ticket";
@@ -104,22 +111,36 @@ export function bumpAttempts(pending: PendingOtp): string {
 
 export type OtpCheck =
     | { ok: true; channel: OtpChannel; identity: string }
-    | {
-          ok: false;
-          reason: "missing" | "tampered" | "expired" | "exhausted" | "mismatch";
-          pending?: PendingOtp;
-      };
+    /** `triesLeft`: the smaller of the cookie's budget and the server's. */
+    | { ok: false; reason: "mismatch"; pending: PendingOtp; triesLeft: number }
+    | { ok: false; reason: "missing" | "tampered" | "blocked" | "expired" | "exhausted" };
 
-/** Check a typed code against the pending cookie. */
-export function checkOtpCode(rawCookie: string | undefined, code: string): OtpCheck {
+/**
+ * Check a typed code against the pending cookie, counting wrong codes on the
+ * server under `scope` (one name per route, e.g. "portal-otp-code"), so two
+ * routes never share a budget.
+ *
+ * The key is the identity the code was SENT to, out of the signed cookie —
+ * never anything typed. Once "blocked", even a right code is refused, so the
+ * answer never tells a guesser they got there.
+ */
+export function checkOtpCode(rawCookie: string | undefined, code: string, scope: string): OtpCheck {
     if (!rawCookie) return { ok: false, reason: "missing" };
     const pending = parsePendingOtp(rawCookie);
     if (!pending) return { ok: false, reason: "tampered" };
+    const guessKey = `${scope}:${pending.channel}:${pending.identity}`;
+    if (loginTriesLeft(guessKey, OTP_MAX_ATTEMPTS) <= 0) return { ok: false, reason: "blocked" };
     if (Date.now() > pending.expiry) return { ok: false, reason: "expired" };
     if (pending.attempts >= OTP_MAX_ATTEMPTS) return { ok: false, reason: "exhausted" };
     if (!safeEqual(pending.codeHash, sign(`${pending.channel}:${pending.identity}:${code}`))) {
-        return { ok: false, reason: "mismatch", pending };
+        recordLoginFailure(guessKey);
+        const triesLeft = Math.min(
+            OTP_MAX_ATTEMPTS - (pending.attempts + 1),
+            loginTriesLeft(guessKey, OTP_MAX_ATTEMPTS)
+        );
+        return { ok: false, reason: "mismatch", pending, triesLeft };
     }
+    clearLoginFailures(guessKey);
     return { ok: true, channel: pending.channel, identity: pending.identity };
 }
 
