@@ -32,6 +32,7 @@ import {
     RotateCcw,
     RotateCw,
     ScanBarcode,
+    ScanSearch,
     ScrollText,
     ShoppingCart,
     SquareCheckBig,
@@ -106,6 +107,9 @@ export const POS_RAIL_ACTIONS: PosRailAction[] = [
     { key: "task", label: "Task", icon: SquareCheckBig, kind: "action", tint: "violet", title: "Add an internal work item to the board" },
     { key: "deal", label: "Deal", icon: Handshake, kind: "action", tint: "cyan", title: "Create a sales deal on the CRM pipeline — log the opportunity at the counter" },
     { key: "lead", label: "Lead", icon: UserRoundPlus, kind: "action", tint: "teal", title: "Capture a new lead — create a contact (person) on the fly" },
+    // Same dialog as the office sidebar's Workspace → SL Search; on the POS its
+    // links open in a new tab so the cashier never leaves a bill half made.
+    { key: "sl-search", label: "SL Search", icon: ScanSearch, kind: "action", tint: "amber", title: "Find a sale or ticket from the SL no on the unit — no bill, name or phone needed" },
 
     // "?" — counter help, PINNED to the very bottom of the rail (PosActionRail
     // renders this key separately, below the other buttons). Opens the POS help

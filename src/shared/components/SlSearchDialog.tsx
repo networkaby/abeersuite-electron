@@ -5,7 +5,8 @@
  * and phone they bought it under".
  *
  * Opened from the sidebar's Workspace → SL Search (useSlSearchStore) and mounted
- * once in the office layout, so it works from any office page. Staff type or scan
+ * once in the office layout, so it works from any office page; the POS mounts its
+ * own copy for the action rail's SL Search button (`linksInNewTab`). Staff type or scan
  * the SL no printed on the unit; the dialog shows every bill whose line note
  * carries it (with the party frozen on that bill, and how long ago it was sold —
  * the warranty question) and every repair / help ticket that mentions it.
@@ -70,17 +71,20 @@ function Highlight({ text, term }: { text: string; term: string }) {
 }
 
 /** A result link. A plain click opens it here and closes the dialog; a ctrl /
- *  shift / middle click leaves the dialog up behind the new tab. */
-function RowLink({ onNavigate, onClick, className = "hover:underline", ...rest }: ComponentProps<typeof Link> & {
+ *  shift / middle click leaves the dialog up behind the new tab. With `newTab`
+ *  (the POS) every click opens a new tab and the dialog stays. */
+function RowLink({ onNavigate, newTab, onClick, className = "hover:underline", ...rest }: ComponentProps<typeof Link> & {
     onNavigate: () => void;
+    newTab?: boolean;
 }) {
     return (
         <Link
             {...rest}
+            {...(newTab ? { target: "_blank", rel: "noopener" } : {})}
             className={className}
             onClick={(e) => {
                 onClick?.(e);
-                if (e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) onNavigate();
+                if (!newTab && e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) onNavigate();
             }}
         />
     );
@@ -89,7 +93,11 @@ function RowLink({ onNavigate, onClick, className = "hover:underline", ...rest }
 const ticketHref = (t: SlSearchTicket) =>
     t.kind === "repair" ? `/office/repairing/tickets/${t.id}` : "/office/help";
 
-export default function SlSearchDialog() {
+/**
+ * `linksInNewTab` — for the POS: a plain click would take the cashier off the
+ * till mid-bill, so every link opens a new tab and the dialog stays up.
+ */
+export default function SlSearchDialog({ linksInNewTab = false }: { linksInNewTab?: boolean }) {
     const { open, setOpen } = useSlSearchStore();
     // Kept across close / reopen: staff often step away to fetch the bill and
     // come back to the same answer.
@@ -161,6 +169,8 @@ export default function SlSearchDialog() {
         setOpen(next);
     };
     const close = () => onOpenChange(false);
+    /** Spread onto every result link. */
+    const nav = { onNavigate: close, newTab: linksInNewTab };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -228,7 +238,7 @@ export default function SlSearchDialog() {
                                                     <div className="flex flex-wrap items-center gap-2">
                                                         <Badge variant="secondary">{voucherTypeLabel(b.type)}</Badge>
                                                         {href ? (
-                                                            <RowLink href={href} onNavigate={close} className="font-medium text-primary hover:underline">
+                                                            <RowLink href={href} {...nav} className="font-medium text-primary hover:underline">
                                                                 {b.voucherNo ?? "—"}
                                                             </RowLink>
                                                         ) : (
@@ -240,7 +250,7 @@ export default function SlSearchDialog() {
                                                     </div>
                                                     <p className="truncate">
                                                         {partyHref ? (
-                                                            <RowLink href={partyHref} onNavigate={close} className="text-primary hover:underline">
+                                                            <RowLink href={partyHref} {...nav} className="text-primary hover:underline">
                                                                 {b.partyName ?? "Open party"}
                                                             </RowLink>
                                                         ) : (
@@ -254,7 +264,7 @@ export default function SlSearchDialog() {
                                                 </div>
                                                 {href && (
                                                     <Button asChild size="sm" variant="outline" className="shrink-0">
-                                                        <RowLink href={href} onNavigate={close} className="">Open</RowLink>
+                                                        <RowLink href={href} {...nav} className="">Open</RowLink>
                                                     </Button>
                                                 )}
                                             </div>
@@ -282,7 +292,7 @@ export default function SlSearchDialog() {
                                             <div key={t.id} className="flex items-start gap-3 px-3 py-2.5 text-sm">
                                                 <div className="min-w-0 flex-1 space-y-0.5">
                                                     <div className="flex flex-wrap items-center gap-2">
-                                                        <RowLink href={ticketHref(t)} onNavigate={close} className="font-medium text-primary hover:underline">
+                                                        <RowLink href={ticketHref(t)} {...nav} className="font-medium text-primary hover:underline">
                                                             #{t.id}
                                                         </RowLink>
                                                         <Badge className={t.status.color}>{t.status.label}</Badge>
@@ -292,7 +302,7 @@ export default function SlSearchDialog() {
                                                     </div>
                                                     <p className="truncate">
                                                         {partyHref ? (
-                                                            <RowLink href={partyHref} onNavigate={close} className="text-primary hover:underline">
+                                                            <RowLink href={partyHref} {...nav} className="text-primary hover:underline">
                                                                 {t.customerName ?? "Open customer"}
                                                             </RowLink>
                                                         ) : (
@@ -308,7 +318,7 @@ export default function SlSearchDialog() {
                                                     )}
                                                 </div>
                                                 <Button asChild size="sm" variant="outline" className="shrink-0">
-                                                    <RowLink href={ticketHref(t)} onNavigate={close} className="">Open</RowLink>
+                                                    <RowLink href={ticketHref(t)} {...nav} className="">Open</RowLink>
                                                 </Button>
                                             </div>
                                         );

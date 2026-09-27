@@ -36,6 +36,7 @@ export type PosActionRailProps = {
     onTask: () => void;
     onDeal: () => void;
     onLead: () => void;
+    onSlSearch: () => void;
     onChat: () => void;
     canExp?: boolean;
     canRcv?: boolean;
@@ -43,8 +44,8 @@ export type PosActionRailProps = {
     chatUnread?: number;
 };
 
-export function PosActionRail({ onExp, onRcv, onHelp, onTicket, onEnquiry, onTask, onDeal, onLead, onChat, canExp = true, canRcv = true, chatUnread = 0 }: PosActionRailProps) {
-    const handlers: Record<string, () => void> = { rcv: onRcv, exp: onExp, help: onHelp, ticket: onTicket, enquiry: onEnquiry, task: onTask, deal: onDeal, lead: onLead, chat: onChat };
+export function PosActionRail({ onExp, onRcv, onHelp, onTicket, onEnquiry, onTask, onDeal, onLead, onSlSearch, onChat, canExp = true, canRcv = true, chatUnread = 0 }: PosActionRailProps) {
+    const handlers: Record<string, () => void> = { rcv: onRcv, exp: onExp, help: onHelp, ticket: onTicket, enquiry: onEnquiry, task: onTask, deal: onDeal, lead: onLead, "sl-search": onSlSearch, chat: onChat };
     const flags: Record<PosRailAccessKey, boolean> = { canRcv, canExp };
     const badges: Record<string, number> = { chat: chatUnread };
     // The help ("?") action is pinned to the BOTTOM of the rail, apart from the

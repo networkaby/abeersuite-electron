@@ -38,8 +38,10 @@ import QuickTicketButton from "@/shared/components/QuickTicketButton";
 import HelpQuickForm from "@/modules/help/components/HelpQuickForm";
 import { DealFormDialog } from "@/modules/deals/components";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
+import SlSearchDialog from "@/shared/components/SlSearchDialog";
 import { TaskFormDialog } from "@/modules/administration/components";
 import { useQuickTicketStore } from "@/store/quickTicketStore";
+import { useSlSearchStore } from "@/store/slSearchStore";
 
 // Stable empty references for when the explorer is closed — avoid new refs each render.
 const EMPTY_PRODUCTS: never[] = [];
@@ -671,6 +673,7 @@ export function PosScreenShell({
                 onTask={() => setTaskOpen(true)}
                 onDeal={() => setDealOpen(true)}
                 onLead={() => setLeadOpen(true)}
+                onSlSearch={() => useSlSearchStore.getState().setOpen(true)}
                 onChat={() => setChatOpen(true)}
                 canExp={b.posAccess.canExp}
                 canRcv={b.posAccess.canRcv}
@@ -695,6 +698,10 @@ export function PosScreenShell({
             {/* Lead dialog (opened from the rail's Lead button) — capture a new
                 contact on the fly, same quick-entry form the call log uses. */}
             <CreatePersonDialog open={leadOpen} onOpenChange={setLeadOpen} />
+
+            {/* SL Search (opened from the rail's SL Search button) — the office
+                dialog, but every link opens in a new tab so the till keeps its bill. */}
+            <SlSearchDialog linksInNewTab />
 
             {/* Upsell & Cross-sell drawer — opens left over the cart from the
             customer panel trigger. Live qualification offers + one-tap add-ons. */}
