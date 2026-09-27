@@ -20,7 +20,9 @@
  * the chain rather than letting later rows overtake the one that is stuck.
  *
  * Stopping on failure is only safe because of the dead-letter in `outbox.ts`: without
- * it, one unpushable row would halt the counter's sync forever.
+ * it, one unpushable row would halt the counter's sync forever. Only a REFUSAL moves a
+ * row toward it. An outage stops every row alike and says nothing about this one, so it
+ * costs no attempt — otherwise two hours offline dead-letters perfectly good work.
  */
 
 import type { Prisma } from "@/generated/prisma/client";
@@ -30,6 +32,7 @@ import type { OutboxRecord } from "./outbox";
 import { NEVER_PUSH_MODELS } from "./neverPush";
 import { emptyTouches, noteTouches, rebuildTotalsAfterPush } from "./rebuildTotals";
 import { CLOUD_RANGE_END } from "@/shared/lib/counter/idRange";
+import { isConnectionFailure } from "./connectionError";
 
 /**
  * Tables a counter has no business pushing. The list lives in `neverPush.ts` because
@@ -385,8 +388,13 @@ function withZonedDates(
 export interface PushOutcome {
     /** Ids applied (or deliberately discarded as superseded), in order. */
     pushedIds: number[];
-    /** The row that stopped the run, if any. Everything after it is untouched. */
-    failure: { id: number; error: string; permanent: boolean } | null;
+    /**
+     * The row that stopped the run, if any. Everything after it is untouched.
+     *
+     * `unreachable` means Supabase was never reached — the row did nothing wrong, so it
+     * must not spend any of its attempts on the outage (see `markOutboxUnreachable`).
+     */
+    failure: { id: number; error: string; permanent: boolean; unreachable: boolean } | null;
 }
 
 /**
@@ -534,11 +542,16 @@ export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcom
             pushedIds.push(rec.id);
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            console.error(`[SyncPush] mutation ${rec.id} on ${rec.table_name} failed:`, message);
+            const permanent = err instanceof PermanentPushError;
+            const unreachable = !permanent && isConnectionFailure(err);
+            // Offline is the normal case for a till and repeats every pass until the line
+            // comes back — one short line, not Prisma's multi-line report each time.
+            if (unreachable) console.warn(`[SyncPush] Supabase unreachable — mutation ${rec.id} on ${rec.table_name} waits.`);
+            else console.error(`[SyncPush] mutation ${rec.id} on ${rec.table_name} failed:`, message);
             await rebuildTotalsAfterPush(touches);
             return {
                 pushedIds,
-                failure: { id: rec.id, error: message, permanent: err instanceof PermanentPushError },
+                failure: { id: rec.id, error: message, permanent, unreachable },
             };
         }
     }

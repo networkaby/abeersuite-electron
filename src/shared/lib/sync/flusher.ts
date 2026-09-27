@@ -35,7 +35,10 @@
  * interval. The interval itself stays as the safety net for the reconnect gap.
  */
 
-import { getPendingOutbox, markOutboxPushed, markOutboxFailure, rejectAllPending } from "./outbox";
+import {
+    getPendingOutbox, markOutboxPushed, markOutboxFailure, markOutboxUnreachable,
+    rejectAllPending, requeueUnreachableDeadLetters,
+} from "./outbox";
 import { pushMutations } from "./push";
 import { isThisPcReleased } from "@/shared/lib/counter/releaseGuard";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
@@ -95,8 +98,10 @@ export function getPushHealth(): { cloudReachable: boolean; lastFlushAt: string 
  * One pass. Returns the number of mutations retired.
  *
  * The batch stops at the first failure (see push.ts on ordering), so a run can retire
- * fewer rows than it fetched. The stuck row is backed off and eventually dead-lettered,
- * which is what lets the queue behind it move.
+ * fewer rows than it fetched. A REFUSED row is backed off and eventually dead-lettered,
+ * which is what lets the queue behind it move. A row that failed only because Supabase
+ * was unreachable keeps its place and spends no attempt: it is retried on the next pass,
+ * for as long as the outage lasts.
  *
  * Re-entrant by design: a call that lands mid-flush does not run a second pass in
  * parallel (two passes would push the same rows), it queues exactly one more.
@@ -128,14 +133,15 @@ export async function flushOnce(localUrl: string): Promise<number> {
         const { pushedIds, failure } = await pushMutations(pending);
 
         if (pushedIds.length > 0) await markOutboxPushed(localUrl, pushedIds);
-        if (failure) {
+        if (failure?.unreachable) {
+            await markOutboxUnreachable(localUrl, failure.id, failure.error);
+        } else if (failure) {
             await markOutboxFailure(localUrl, failure.id, failure.error, failure.permanent);
         }
 
         // A push that got a real answer from Supabase — success or a rejection it
-        // generated — proves the connection. Only a transport failure means offline,
-        // and a permanent rejection is emphatically not one.
-        cloudReachable = pushedIds.length > 0 || Boolean(failure?.permanent);
+        // generated — proves the connection. Only a transport failure means offline.
+        cloudReachable = pushedIds.length > 0 || !failure?.unreachable;
         lastFlushAt = Date.now();
 
         if (pushedIds.length > 0) {
@@ -227,6 +233,17 @@ export function startOutboxFlusher(localUrl: string): void {
     timer.unref?.();
 
     startListener(localUrl);
+
+    // Rows an older build dead-lettered for nothing worse than an outage. Once per
+    // start is enough: this build never creates another one.
+    void requeueUnreachableDeadLetters(localUrl).then(({ requeued, superseded }) => {
+        if (requeued === 0 && superseded === 0) return;
+        console.log(
+            `[OutboxFlusher] re-queued ${requeued} row(s) dead-lettered by an outage` +
+            (superseded > 0 ? `; retired ${superseded} superseded by a later save.` : "."),
+        );
+        void flushOnce(localUrl);
+    });
 }
 
 export function stopOutboxFlusher(): void {

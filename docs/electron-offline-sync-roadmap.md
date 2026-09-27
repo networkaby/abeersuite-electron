@@ -301,7 +301,9 @@ and reconcile run regardless), it only makes things happen sooner.
 ### 4.3 Offline resilience
 
 - **Durable outbox** drained in `_outbox.id` order on reconnect, stopping at the first
-  failure; a stuck row backs off and is dead-lettered so the queue behind it moves.
+  failure; a REFUSED row backs off and is dead-lettered so the queue behind it moves.
+  A row that only failed to reach Supabase spends no attempt and keeps its place, and
+  the flusher re-queues outage dead letters left by older builds when it starts.
 - **Interval catch-up** every 10 minutes (worker) and 60 s (flusher) as safety nets for
   writes that emitted no signal — scripts, seeds, a restore.
 - **Collision-free IDs** — per-counter autoincrement ranges applied at setup

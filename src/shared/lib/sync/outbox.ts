@@ -12,6 +12,7 @@
 
 import { parsePayloadExact } from "./payload";
 import { SYNC_REGISTRY } from "./syncRegistry.generated";
+import { isConnectionFailure } from "./connectionError";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { Client: PgClient } = require("pg") as typeof import("pg");
@@ -121,7 +122,8 @@ export async function getPendingOutbox(localUrl: string, limit = 50): Promise<Ou
  * count that never fell.
  *
  * A permanent failure (unknown table, no such delegate) skips the backoff entirely;
- * retrying it ten times could not change the answer.
+ * retrying it ten times could not change the answer. A failure to reach Supabase at all
+ * never comes here — see `markOutboxUnreachable`.
  */
 export async function markOutboxFailure(
     localUrl: string,
@@ -149,6 +151,91 @@ export async function markOutboxFailure(
         );
     } catch (err) {
         console.error("[Outbox] Failed to record push failure:", err);
+    } finally {
+        await client.end().catch(() => { });
+    }
+}
+
+/**
+ * Records a push that never reached Supabase: keep the reason, spend no attempt.
+ *
+ * An outage stops every row alike and says nothing about this one. Counting it toward
+ * MAX_PUSH_ATTEMPTS is how two hours offline dead-lettered a perfectly good save — and
+ * a dead letter is never retried, so the red badge outlived the outage by as long as
+ * nobody noticed it.
+ *
+ * No backoff either. `getPendingOutbox` skips a row that is backing off, so the rows
+ * behind it would overtake it the moment the line returned, breaking the id order
+ * push.ts depends on. The flush interval and the next commit notification are the retry.
+ */
+export async function markOutboxUnreachable(localUrl: string, id: number, error: string): Promise<void> {
+    const client = new PgClient({ connectionString: localUrl, connectionTimeoutMillis: 5000 });
+    try {
+        await client.connect();
+        await client.query(
+            `UPDATE "_outbox" SET error = $2, next_attempt_at = NULL WHERE id = $1`,
+            [id, error],
+        );
+    } catch (err) {
+        console.error("[Outbox] Failed to record an unreachable push:", err);
+    } finally {
+        await client.end().catch(() => { });
+    }
+}
+
+/**
+ * Re-queues every row that was dead-lettered only because Supabase could not be
+ * reached — what happened to outage failures before `markOutboxUnreachable` existed.
+ * Nothing retries a dead letter, so without this those rows (sales billed offline
+ * included) would never reach the books, however long the line has been back.
+ *
+ * A row with a LATER capture of the same record is retired as superseded instead. Every
+ * capture is a complete row image, so the later one already carries the record's state;
+ * replaying the older image after it would wind back a model with no `updatedAt` for
+ * push.ts to arbitrate by. Retired the way push.ts retires a superseded replay: counted
+ * as done, nothing sent.
+ *
+ * Runs once when the flusher starts. Idempotent — a second run finds nothing.
+ */
+export async function requeueUnreachableDeadLetters(
+    localUrl: string,
+): Promise<{ requeued: number; superseded: number }> {
+    const client = new PgClient({ connectionString: localUrl, connectionTimeoutMillis: 5000 });
+    try {
+        await client.connect();
+        const res = await client.query<{ id: number; error: string | null; superseded: boolean }>(
+            `SELECT o.id, o.error,
+                    EXISTS (SELECT 1 FROM "_outbox" l
+                             WHERE l.table_name = o.table_name
+                               AND l.row_pk = o.row_pk
+                               AND l.id > o.id) AS superseded
+               FROM "_outbox" o
+              WHERE o.pushed_at IS NULL AND o.dead_lettered_at IS NOT NULL`,
+        );
+        const stranded = res.rows.filter((r) => r.error != null && isConnectionFailure(r.error));
+        const retire = stranded.filter((r) => r.superseded).map((r) => r.id);
+        const requeue = stranded.filter((r) => !r.superseded).map((r) => r.id);
+        if (retire.length > 0) {
+            await client.query(
+                `UPDATE "_outbox"
+                    SET pushed_at = now(), dead_lettered_at = NULL,
+                        error = 'superseded by a later save of the same row; not sent'
+                  WHERE id = ANY($1::int[])`,
+                [retire],
+            );
+        }
+        if (requeue.length > 0) {
+            await client.query(
+                `UPDATE "_outbox"
+                    SET dead_lettered_at = NULL, attempts = 0, next_attempt_at = NULL
+                  WHERE id = ANY($1::int[])`,
+                [requeue],
+            );
+        }
+        return { requeued: requeue.length, superseded: retire.length };
+    } catch (err) {
+        console.error("[Outbox] Failed to re-queue outage dead letters:", err);
+        return { requeued: 0, superseded: 0 };
     } finally {
         await client.end().catch(() => { });
     }

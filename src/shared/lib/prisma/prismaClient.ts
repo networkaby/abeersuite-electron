@@ -3,6 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { OfflineWriteBlockedError } from "./offlineError";
 import { noteDeleted } from "@/shared/lib/realtime/deleteAnnounce";
+import { isConnectionFailure } from "@/shared/lib/sync/connectionError";
 import {
     getMode,
     maybeReprobe,
@@ -84,13 +85,6 @@ export const READ_OPS = new Set([
     "findFirst", "findFirstOrThrow", "findUnique", "findUniqueOrThrow",
     "findMany", "count", "aggregate", "groupBy",
 ]);
-
-function isTransientConnError(e: unknown): boolean {
-    const msg = e instanceof Error ? e.message : String(e ?? "");
-    // P1001 "Can't reach database server" fires when the network is down — a
-    // counter PC going offline hits this before any TCP-level error appears.
-    return /Connection terminated|connection timeout|Closed the connection|server closed the connection|ECONNRESET|ETIMEDOUT|Can't reach database/i.test(msg);
-}
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -209,7 +203,7 @@ function wrapLive(redirect: ReadRedirect): PrismaClient {
                             else if (operation === "deleteMany" && (out as { count?: number } | null)?.count) noteDeleted(model);
                             return out;
                         } catch (e) {
-                            if (localClient && isTransientConnError(e)) reportLiveDown();
+                            if (localClient && isConnectionFailure(e)) reportLiveDown();
                             throw e;
                         }
                     }
@@ -256,7 +250,7 @@ function wrapLive(redirect: ReadRedirect): PrismaClient {
                             return out;
                         } catch (e) {
                             lastErr = e;
-                            if (!isTransientConnError(e)) throw e;
+                            if (!isConnectionFailure(e)) throw e;
                             if (localClient) {
                                 reportLiveDown();
                                 // Same reasoning as the outage case above: live having just
@@ -463,7 +457,7 @@ function createLocal(): PrismaClient {
                                 return out;
                             }
                         } catch (e) {
-                            if (isTransientConnError(e)) reportLiveDown();
+                            if (isConnectionFailure(e)) reportLiveDown();
                             console.warn("[prismaClient] live read failed, using the replica:", e);
                         }
                     }
