@@ -1,6 +1,6 @@
 ---
 name: publish
-description: Put an already-built, already-tested AbeerSuite setup on GitHub — write RELEASE_NOTES.md, ask before pushing, tag the current commit and upload the installer to every release repo. Use when the owner says "publish", "publish it", "put this build up", "upload the release", or has already run `pnpm electron:dist` and installed the setup. For the full ceremony from `dev` — merge, bump, build, smoke test, level `dev` — use the `release` skill instead.
+description: Put an already-built, already-tested AbeerSuite setup on GitHub — write RELEASE_NOTES.md, ask before pushing, tag the current commit and upload the installer to every release repo. Use when the owner says "publish", "publish it", "put this build up", "upload the release", or has already run `pnpm electron:dist` and installed the setup. For the full ceremony from `dev` — merge, bump, build, level `dev` — use the `release` skill instead.
 ---
 
 # Publish a build
@@ -20,7 +20,7 @@ Sources of truth: `AGENTS.md` §9 and `docs/commands.md` §0 (the convention) an
 | Starts from | `dev`, merged into `main` | **whatever commit is checked out** — branch, tag, or detached HEAD |
 | Version bump | the skill does it | **the owner** did it |
 | Build | the skill runs `pnpm electron:release` | **the owner** ran `pnpm electron:dist` — rebuilt here only if the pack does not qualify |
-| Smoke test | the skill stops and asks | already done, unless a rebuild happened here |
+| Smoke test | none — the owner tested before saying "release" | already done, unless a rebuild happened here |
 | Pushing | saying "release" is the authorisation | **asks first**, one gate, every push listed |
 | `dev` levelled after | yes | no |
 

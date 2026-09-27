@@ -126,13 +126,9 @@ One command owns all of this — never do any part of it by hand:
 - `git push origin HEAD --tags` — `main` **and** the tag to `origin`.
 - **Publishes a GitHub release.** A normal version goes to **every** `GITHUB_UPDATE_REPO_N`, each with its own `GH_TOKEN_N` — one `electron-builder --publish always --prepackaged` run per repo, carrying the installer, the blockmap, `latest.yml` and the notes. A version with a `-` in it goes to **repo 2 only**, marked a prerelease; the script says which it is doing before it starts, so read that line.
 
-**Between pack and publish, ask the owner to join hand for the smoke test.** You cannot do this one:
-
-> Please run `dist-app/win-unpacked/AbeerSuite.exe` and confirm login, one local read, and one sync round trip.
-
-Best done on a **clean Windows profile or a VM** — no repo, no pnpm store, no PostgreSQL
-installed. Every packaging blocker so far came from the packaged environment differing
-from the dev tree, so a pass on a dev machine proves less than it looks.
+**No smoke-test pause.** The owner tests before saying "release", so let
+`pnpm electron:release` run straight from pack to publish. The `verify:package` gate is
+the only check between them.
 
 ### 7. Push the tag to `production` too
 
@@ -218,7 +214,6 @@ Handing a step back is **not** stopping the release: do everything either side o
 | Ask for | When |
 | --- | --- |
 | **The notes and the tier** | Always, before step 4. Show the drafted `RELEASE_NOTES.md`. |
-| **The smoke test** | Always, after the pack succeeds. You cannot run the packaged exe meaningfully. |
 | **The variant** | Always, at preflight — `APP_MODE`, `LANDING_PAGE`. |
 | **The `d_office` push** | Always, at step 9. `d_office` ending level is not optional; only the timing of the push is. Show what it carries and wait for a yes. |
 | **A push they would rather run** | Whenever they say so — offer the exact command instead of running it. |
