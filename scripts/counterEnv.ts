@@ -35,8 +35,10 @@
  *     connection string has no reason to sit on a shop PC.
  *   - `SUPER_ADMIN_PASSWORD` — a full-authority login in plaintext; the escape hatch is
  *     for recovering a broken machine by hand, not for every counter.
- *   - Payments, Cloudinary, Firebase, Meta WA, Resend, Sentry — no counter surface uses
- *     them, and each one is a credential that cannot be un-shipped once installed.
+ *   - Payments, Firebase, Meta WA, Resend, Sentry — no counter surface uses them, and
+ *     each one is a credential that cannot be un-shipped once installed.
+ *   - Cloudinary on the `counter` variant — see `COUNTER_ENV_CLOUDINARY_KEYS`: only the
+ *     `office` build uploads images.
  */
 
 import * as fs from "fs";
@@ -120,13 +122,31 @@ export const COUNTER_ENV_BACKUP_KEYS: readonly string[] = [
 ];
 
 /**
+ * Image-upload keys — `GET /api/upload-signature` signs every upload with them
+ * (`src/shared/lib/cloudinary.ts`): product photos (Add and From URL) and staff avatars.
+ *
+ * That route is a read, so `WRITE_MODE=v_live` never relays it — it runs on this PC,
+ * and without these keys it answers "Cloudinary not configured". Granted to `office`
+ * on the owner's call (2026-09-27), over relaying the signature to the office. The cost:
+ * whoever holds an office installer can upload to and delete from the Cloudinary
+ * account. The `counter` variant has no upload screen, so it keeps going without.
+ */
+export const COUNTER_ENV_CLOUDINARY_KEYS: readonly string[] = [
+    "NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME",
+    "CLOUDINARY_API_KEY",
+    "CLOUDINARY_API_SECRET",
+];
+
+/**
  * Which keys `generate-counter-env.ts` copies, per desktop variant. `full`/`public`
  * are Vercel modes in practice — if a desktop build is ever made with one of them
  * (allowed, just unusual — see `electron-build.ts`), it gets the same minimal set as
- * `counter`: withholding backup keys by default is the safer failure mode.
+ * `counter`: withholding backup and upload keys by default is the safer failure mode.
  */
 export function counterEnvCopiedFor(mode: AppMode): readonly string[] {
-    return mode === "office" ? [...COUNTER_ENV_COPIED, ...COUNTER_ENV_BACKUP_KEYS] : COUNTER_ENV_COPIED;
+    return mode === "office"
+        ? [...COUNTER_ENV_COPIED, ...COUNTER_ENV_BACKUP_KEYS, ...COUNTER_ENV_CLOUDINARY_KEYS]
+        : COUNTER_ENV_COPIED;
 }
 
 /**
