@@ -37,6 +37,8 @@ const EXCLUDED_OFFICE_ROUTES = new Set([
     // the SHOP's weekly off is a shop fact, while a person's own weekly off lives
     // on StaffProfile and never reaches this route.
     "src/app/api/office-hours/next/route.ts",
+    // Staff forgot-password: nobody is signed in yet by definition; sends and code guesses are throttled per address.
+    "src/app/api/staff/password-reset/route.ts",
 ]);
 
 const GUARD_PATTERNS = [

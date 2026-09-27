@@ -3,8 +3,16 @@
  *
  * Public by design. Two POST bodies on one route:
  *   { email }                    → mail a code (always answers the same, so it never
- *                                  says whether an address has an account)
+ *                                  says whether an address has an account — the mail
+ *                                  goes out after the response, so not by timing either)
  *   { email, code, password }    → check the code, set the password
+ *
+ * Only an address that could sign in with the new password gets a code: a staff-domain
+ * User not marked as left — the same two checks `authorizeStaffCredentials` makes.
+ *
+ * Wrong codes are counted on the server as well, per address. The count inside the
+ * cookie only binds an honest browser: a script can replay the first cookie (0 tries)
+ * forever and guess its way through the million codes.
  *
  * Reuses the portal's signed-cookie OTP (otpChallenge.ts) under its own cookie name,
  * so a portal code in flight and a staff reset never step on each other. The mail goes
@@ -15,7 +23,7 @@
  * out everywhere.
  */
 
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
@@ -29,10 +37,13 @@ import {
     packPendingOtp,
 } from "@/shared/lib/auth/otpChallenge";
 import { clearLoginFailures, isLoginBlocked, recordLoginFailure } from "@/shared/lib/auth/loginRateLimit";
+import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist";
 import { isEmailConfigured, sendEmail } from "@/shared/lib/email/sendEmail";
+import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 const COOKIE = "staff_reset_otp";
+const TOO_MANY = "Too many attempts. Please wait a few minutes.";
 
 const schema = z.object({
     email: z.string().trim().toLowerCase().email("Enter your staff email"),
@@ -53,7 +64,7 @@ export async function POST(req: Request) {
 async function send(email: string) {
     const key = `staff-reset-send:${email}`;
     if (isLoginBlocked(key)) {
-        return NextResponse.json({ error: "Too many attempts. Please wait a few minutes." }, { status: 429 });
+        return NextResponse.json({ error: TOO_MANY }, { status: 429 });
     }
     recordLoginFailure(key);
     if (!isEmailConfigured()) {
@@ -61,9 +72,13 @@ async function send(email: string) {
     }
 
     const code = generateOtpCode();
-    const user = await prismaAuthoritative.user.findUnique({ where: { email }, select: { id: true } });
-    if (user) {
-        await sendEmail({
+    const user = isStaffEmailDomainAllowed(email)
+        ? await prismaAuthoritative.user.findUnique({ where: { email }, select: { staffProfile: { select: { leftOn: true } } } })
+        : null;
+    if (user && !staffHasLeft(user.staffProfile)) {
+        // After the response: a real address must answer as fast as a made-up one, and
+        // a failed send must not turn into an error only a real address can produce.
+        after(() => sendEmail({
             to: email,
             subject: `${code} is your ${COMPANY_DETAILS.brandName} password reset code`,
             text: [
@@ -74,7 +89,7 @@ async function send(email: string) {
                 "",
                 COMPANY_DETAILS.brandName,
             ].join("\n"),
-        });
+        }).catch((e: unknown) => console.error("[staff password reset] code mail failed", e)));
     }
     // Same answer and same cookie whether or not the account exists.
     const res = NextResponse.json({ ok: true });
@@ -87,6 +102,14 @@ async function reset(email: string, code: string, password: string | undefined) 
 
     const raw = (await cookies()).get(COOKIE)?.value;
     const check = checkOtpCode(raw, code);
+    // Keyed on the address the code was SENT to (from the signed cookie), never the
+    // typed one, which the caller can change on every try. Once blocked, even a right
+    // code is refused, so the answer never tells a guesser they got there.
+    const sentTo = check.ok ? check.identity : check.pending?.identity;
+    const guessKey = sentTo ? `staff-reset-code:${sentTo}` : null;
+    if (guessKey && isLoginBlocked(guessKey)) {
+        return NextResponse.json({ error: TOO_MANY }, { status: 429 });
+    }
     if (!check.ok) {
         const res = NextResponse.json({
             error: check.reason === "mismatch" ? "That code is not right."
@@ -94,7 +117,10 @@ async function reset(email: string, code: string, password: string | undefined) 
                 : check.reason === "exhausted" ? "Too many wrong tries. Send a new code."
                 : "Send a code first.",
         }, { status: 400 });
-        if (check.reason === "mismatch" && check.pending) res.cookies.set(COOKIE, bumpAttempts(check.pending), otpCookieOptions);
+        if (check.reason === "mismatch" && check.pending) {
+            if (guessKey) recordLoginFailure(guessKey);
+            res.cookies.set(COOKIE, bumpAttempts(check.pending), otpCookieOptions);
+        }
         return res;
     }
     // The code was for the address typed with it, not whatever is in the box now.
@@ -108,6 +134,7 @@ async function reset(email: string, code: string, password: string | undefined) 
     if (done.count === 0) return NextResponse.json({ error: "That code is not right." }, { status: 400 });
 
     clearLoginFailures(email);
+    if (guessKey) clearLoginFailures(guessKey);
     const res = NextResponse.json({ ok: true });
     res.cookies.delete(COOKIE);
     return res;
