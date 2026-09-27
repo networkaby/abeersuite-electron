@@ -1,29 +1,17 @@
-# v1.8.3
+# v1.8.4
 
-A quiet update. The main addition is **SL Search** — find a sale or repair ticket from a unit's serial number alone — on both the office and the POS. It also tidies up staff profiles and security settings. Counters can take it at their next safe moment — nothing changes in the database, and billing works exactly as before.
+A quiet update for every counter and the office app. It fixes a stuck "Sync error" badge after an internet drop, shows the party's balance while taking a receipt, and fixes photo upload in the office app. No database change — install whenever convenient.
 
-## SL Search (new)
+## Sync
+- When the internet drops, saves waiting on the counter are no longer given up on. Earlier, a long outage could leave a red "Sync error" badge that stayed even after the line came back. Now those saves simply wait and go up once the connection returns.
+- Counters that already show such a stuck error clear it themselves after this update.
 
-- A customer brings a unit back with no bill and cannot remember the name or phone they bought it under? Type or scan the **SL no** and AbeerSuite finds the bill it was sold on — party, date, days since sale and product — plus any repair or help ticket that mentions it.
-- In the office: **Sidebar → Workspace → SL Search**. On the POS: the new **SL Search** button on the right-side rail, just under **Lead**.
-- Search starts by itself as you type, and at once when a scanner finishes. After a scan the number stays selected, so the next scan simply replaces it.
-- Bill no, ticket # and party name are clickable. Right-click opens them in a new window. On the POS they always open in a new tab, so a half-made bill is never lost.
-- Purchase, GRN and other supplier-side documents show only to staff who are allowed to see suppliers.
-- Admins can show or hide it per role from the Role page.
+## Billing (POS)
+- The **Rcv** (receipt) dialog now shows the party's current balance, and what the balance will become after this receipt.
+- The customer display's UPI QR now shows the amount just typed, not the previous one.
 
-## Repair tickets
+## Office app
+- Photo upload (products, staff, etc.) now works inside the desktop office app.
 
-- The **Problem** box now reminds staff to include the unit's SL no, so SL Search can find the ticket later.
-
-## Staff profile and security
-
-- Changing your own password now asks for your current password first.
-- Staff can pick their own company email handle, right beside the forwarding setting.
-- The Security tab shows the counter PIN first, with the cards side by side.
-- Each staff detail now has one home, so different screens can no longer overwrite each other. Job title comes from the HR seat; staff and emergency phone numbers follow one 10-digit rule.
-- The sign-in email is changed only from Security (your own) or HR Access (admins). The extra Email box on the profile is gone.
-
-## HR
-
-- A leave request can now be deleted from the Leave board — HR can delete any, staff only their own pending ones. Deleting an approved leave gives the days back.
-- The duplicate **My Portal** link is gone from the HR menu — clicking your name in the sidebar opens it.
+## Sign-in safety
+- Wrong codes on customer sign-in and staff password reset are now counted on the server, so nobody can keep guessing a code.
