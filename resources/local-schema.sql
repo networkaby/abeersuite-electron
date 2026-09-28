@@ -629,10 +629,6 @@ CREATE TABLE IF NOT EXISTS "Person" (
     "gstRegType" "GstRegType",
     "shippingStateCode" TEXT,
     "bankJson" JSONB,
-    "convertedToCompanyId" INTEGER,
-    "convertedAt" TIMESTAMP(3),
-    "mergedIntoPersonId" INTEGER,
-    "mergedAt" TIMESTAMP(3),
 
     CONSTRAINT "Person_pkey" PRIMARY KEY ("id")
 );
@@ -667,14 +663,6 @@ ALTER TABLE "Person" ADD COLUMN IF NOT EXISTS "shippingStateCode" TEXT;
 ALTER TABLE "Person" ALTER COLUMN "shippingStateCode" DROP NOT NULL;
 ALTER TABLE "Person" ADD COLUMN IF NOT EXISTS "bankJson" JSONB;
 ALTER TABLE "Person" ALTER COLUMN "bankJson" DROP NOT NULL;
-ALTER TABLE "Person" ADD COLUMN IF NOT EXISTS "convertedToCompanyId" INTEGER;
-ALTER TABLE "Person" ALTER COLUMN "convertedToCompanyId" DROP NOT NULL;
-ALTER TABLE "Person" ADD COLUMN IF NOT EXISTS "convertedAt" TIMESTAMP(3);
-ALTER TABLE "Person" ALTER COLUMN "convertedAt" DROP NOT NULL;
-ALTER TABLE "Person" ADD COLUMN IF NOT EXISTS "mergedIntoPersonId" INTEGER;
-ALTER TABLE "Person" ALTER COLUMN "mergedIntoPersonId" DROP NOT NULL;
-ALTER TABLE "Person" ADD COLUMN IF NOT EXISTS "mergedAt" TIMESTAMP(3);
-ALTER TABLE "Person" ALTER COLUMN "mergedAt" DROP NOT NULL;
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "Company" (
@@ -699,10 +687,6 @@ CREATE TABLE IF NOT EXISTS "Company" (
     "bankJson" JSONB,
     "financialYearFrom" DATE,
     "booksBeginningFrom" DATE,
-    "convertedToPersonId" INTEGER,
-    "convertedAt" TIMESTAMP(3),
-    "mergedIntoCompanyId" INTEGER,
-    "mergedAt" TIMESTAMP(3),
 
     CONSTRAINT "Company_pkey" PRIMARY KEY ("id")
 );
@@ -740,14 +724,6 @@ ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "financialYearFrom" DATE;
 ALTER TABLE "Company" ALTER COLUMN "financialYearFrom" DROP NOT NULL;
 ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "booksBeginningFrom" DATE;
 ALTER TABLE "Company" ALTER COLUMN "booksBeginningFrom" DROP NOT NULL;
-ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "convertedToPersonId" INTEGER;
-ALTER TABLE "Company" ALTER COLUMN "convertedToPersonId" DROP NOT NULL;
-ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "convertedAt" TIMESTAMP(3);
-ALTER TABLE "Company" ALTER COLUMN "convertedAt" DROP NOT NULL;
-ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "mergedIntoCompanyId" INTEGER;
-ALTER TABLE "Company" ALTER COLUMN "mergedIntoCompanyId" DROP NOT NULL;
-ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "mergedAt" TIMESTAMP(3);
-ALTER TABLE "Company" ALTER COLUMN "mergedAt" DROP NOT NULL;
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "CustomerGroup" (
@@ -5498,20 +5474,6 @@ END $$;
 
 -- AddForeignKey
 DO $$ BEGIN
-    ALTER TABLE "Person" ADD CONSTRAINT "Person_convertedToCompanyId_fkey" FOREIGN KEY ("convertedToCompanyId") REFERENCES "Company"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-EXCEPTION
-    WHEN duplicate_object THEN NULL;
-END $$;
-
--- AddForeignKey
-DO $$ BEGIN
-    ALTER TABLE "Person" ADD CONSTRAINT "Person_mergedIntoPersonId_fkey" FOREIGN KEY ("mergedIntoPersonId") REFERENCES "Person"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-EXCEPTION
-    WHEN duplicate_object THEN NULL;
-END $$;
-
--- AddForeignKey
-DO $$ BEGIN
     ALTER TABLE "Company" ADD CONSTRAINT "Company_customerGroupId_fkey" FOREIGN KEY ("customerGroupId") REFERENCES "CustomerGroup"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
@@ -5520,20 +5482,6 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "Company" ADD CONSTRAINT "Company_ownerPositionId_fkey" FOREIGN KEY ("ownerPositionId") REFERENCES "Position"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-EXCEPTION
-    WHEN duplicate_object THEN NULL;
-END $$;
-
--- AddForeignKey
-DO $$ BEGIN
-    ALTER TABLE "Company" ADD CONSTRAINT "Company_convertedToPersonId_fkey" FOREIGN KEY ("convertedToPersonId") REFERENCES "Person"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-EXCEPTION
-    WHEN duplicate_object THEN NULL;
-END $$;
-
--- AddForeignKey
-DO $$ BEGIN
-    ALTER TABLE "Company" ADD CONSTRAINT "Company_mergedIntoCompanyId_fkey" FOREIGN KEY ("mergedIntoCompanyId") REFERENCES "Company"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;

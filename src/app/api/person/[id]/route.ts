@@ -82,16 +82,6 @@ export async function GET(
     if (!person) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    // A converted or merged row has no Account any more — it lives on under
-    // the survivor. Say where, so an old link or bookmark can hop across
-    // instead of a blank panel.
-    if (person.convertedToCompanyId != null) {
-        return NextResponse.json({ error: "Moved", movedTo: { kind: "company", id: person.convertedToCompanyId } }, { status: 404 });
-    }
-    if (person.mergedIntoPersonId != null) {
-        return NextResponse.json({ error: "Moved", movedTo: { kind: "person", id: person.mergedIntoPersonId } }, { status: 404 });
-    }
-
     return NextResponse.json({
         ...person,
         // Backward-compat scalar accessors from the primary contact rows.
@@ -143,22 +133,6 @@ export async function PUT(
     if (body.isActive !== undefined) {
         const { response: permResponse } = await requireAnyPermission(PERMISSIONS.CUSTOMERS_DELETE);
         if (permResponse) return permResponse;
-
-        if (body.isActive) {
-            // A merge/convert tombstone recovers only via Customer Tools Trash
-            // (hard-delete-permitted), never a plain reactivate — its data already
-            // moved to the winning row.
-            const existing = await prisma.person.findUnique({
-                where: { id: Number(id) },
-                select: { mergedIntoPersonId: true, convertedToCompanyId: true },
-            });
-            if (existing?.mergedIntoPersonId || existing?.convertedToCompanyId) {
-                return NextResponse.json(
-                    { error: "This person was merged or converted — recover it from Customer Tools Trash instead" },
-                    { status: 409 },
-                );
-            }
-        }
     }
 
     // GSTIN ↔ state-code guard runs only when the caller sent a GST field —

@@ -8,10 +8,9 @@
  * values are "customer" (a Person) and "company" (a Company). So the table is
  * always known from the row itself and never has to be looked up.
  *
- * What the row cannot tell you is whether that record is still the live one.
- * A conversion or a merge leaves the old id in place and forwards it (see
- * `resolvePartyLinks` in ./partyLinkServer), and that is the one question worth
- * a query.
+ * The stored id always names a live row: a Person ↔ Company conversion and a
+ * duplicate merge both re-point the stored id at the surviving record before
+ * deleting the old one (see `convertParty.ts`).
  */
 
 /** Which table the party's live record sits in. */
@@ -27,7 +26,7 @@ export type PartyRef = {
 /** A party reference resolved to the record that is live today. */
 export type ResolvedPartyLink = {
     kind: PartyLinkKind;
-    /** Id of the LIVE record — differs from the stored partyId after a conversion or merge. */
+    /** Id of the party's record — the stored partyId. */
     entityId: number;
     /** The party's ledger Account. Only filled when the caller asked for it. */
     accountId: number | null;

@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, User, Building2, Smartphone, Eye, ArrowRight } from "lucide-react";
+import { ArrowLeft, User, Building2, Smartphone, Eye } from "lucide-react";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { auth } from "@/auth";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -54,45 +54,10 @@ export default async function PersonProfileView({ personId, backHref = "/office/
                     },
                 },
             },
-            convertedToCompany: { select: { id: true, name: true } },
         },
     });
 
-    if (!person) notFound();
-    // Tombstone — soft-deleted via the Person → Company converter.
-    // Show the banner and stop; the live data lives on the new company row.
-    if (!person.isActive && person.convertedToCompanyId != null && person.convertedToCompany) {
-        return (
-            <div>
-                <div className="flex items-center gap-3 mb-6">
-                    <Link href={backHref} className="text-muted-foreground hover:text-foreground">
-                        <ArrowLeft size={20} />
-                    </Link>
-                    <div className="flex items-center gap-3">
-                        <User size={22} className="text-muted-foreground" />
-                        <div>
-                            <h1 className="text-2xl font-bold text-muted-foreground line-through">{person.name}</h1>
-                            <p className="text-muted-foreground text-sm">Customer #{person.id} (converted)</p>
-                        </div>
-                    </div>
-                </div>
-                <div className="rounded-lg border border-amber-400 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-                    This person was converted to a company
-                    {person.convertedAt ? ` on ${formatDate(person.convertedAt.toISOString())}` : ""}.
-                    The live record is now{" "}
-                    <Link
-                        href={`/office/customers/companies/${person.convertedToCompany.id}`}
-                        className="inline-flex items-center gap-1 font-medium underline"
-                    >
-                        Company #{person.convertedToCompany.id} — {person.convertedToCompany.name}
-                        <ArrowRight size={14} />
-                    </Link>
-                    .
-                </div>
-            </div>
-        );
-    }
-    if (!person.isActive) notFound();
+    if (!person || !person.isActive) notFound();
 
     return (
         <div>

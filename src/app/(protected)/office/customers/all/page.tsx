@@ -208,17 +208,6 @@ export default function AllCustomersPage() {
         }
 
         let cancelled = false;
-        // The id names a party since converted or merged away: the API says
-        // where it lives now, and we open that instead of a blank panel. Old
-        // vouchers, bookmarks and shared links all still carry the old id.
-        const followMoved = (err: unknown): boolean => {
-            const movedTo = axios.isAxiosError(err)
-                ? (err.response?.data as { movedTo?: { kind: "person" | "company"; id: number } } | undefined)?.movedTo
-                : undefined;
-            if (!movedTo) return false;
-            setSelected({ kind: movedTo.kind, id: movedTo.id });
-            return true;
-        };
         queueMicrotask(() => {
             if (cancelled) return;
             setDetailLoading(true);
@@ -235,7 +224,7 @@ export default function AllCustomersPage() {
                         setCompanyDetail(null);
                         setPersonTab("transactions");
                     })
-                    .catch((err) => { if (cancelled) return; if (!followMoved(err)) { setPersonDetail(null); setCompanyDetail(null); } })
+                    .catch(() => { if (cancelled) return; setPersonDetail(null); setCompanyDetail(null); })
                     .finally(finishLoading);
                 return;
             }
@@ -248,7 +237,7 @@ export default function AllCustomersPage() {
                     setPersonDetail(null);
                     setCompanyTab("transactions");
                 })
-                .catch((err) => { if (cancelled) return; if (!followMoved(err)) { setCompanyDetail(null); setPersonDetail(null); } })
+                .catch(() => { if (cancelled) return; setCompanyDetail(null); setPersonDetail(null); })
                 .finally(finishLoading);
         });
 

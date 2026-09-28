@@ -49,7 +49,7 @@ export async function deleteOrDeactivatePerson(id: number): Promise<DeletePartyR
         return { outcome: "deleted" };
     } catch (e) {
         // Referenced by something else with no cascade (a Deal/Order/Help ticket,
-        // portal credential, social profile/connection, merge/convert back-link) —
+        // portal credential, social profile/connection) —
         // fall back to the same safe deactivation as the "has transactions" path.
         if (e && typeof e === "object" && "code" in e && e.code === "P2003") {
             await prisma.person.update({ where: { id }, data: { isActive: false } });

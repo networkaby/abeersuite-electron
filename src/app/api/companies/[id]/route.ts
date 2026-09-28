@@ -80,13 +80,6 @@ export async function GET(
     if (!company) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    // Converted / merged away — see the same check on /api/person/[id].
-    if (company.convertedToPersonId != null) {
-        return NextResponse.json({ error: "Moved", movedTo: { kind: "person", id: company.convertedToPersonId } }, { status: 404 });
-    }
-    if (company.mergedIntoCompanyId != null) {
-        return NextResponse.json({ error: "Moved", movedTo: { kind: "company", id: company.mergedIntoCompanyId } }, { status: 404 });
-    }
 
     const contacts = await getCompanyContacts(companyId);
     // Backward-compat shape: expose `customers` (linked persons) and primary phone/email scalars.
@@ -146,22 +139,6 @@ export async function PUT(
     if (body.isActive !== undefined) {
         const { response: permResponse } = await requireAnyPermission(PERMISSIONS.CUSTOMERS_DELETE);
         if (permResponse) return permResponse;
-
-        if (body.isActive) {
-            // A merge/convert tombstone recovers only via Customer Tools Trash
-            // (hard-delete-permitted), never a plain reactivate — its data already
-            // moved to the winning row.
-            const existing = await prisma.company.findUnique({
-                where: { id: Number(id) },
-                select: { mergedIntoCompanyId: true, convertedToPersonId: true },
-            });
-            if (existing?.mergedIntoCompanyId || existing?.convertedToPersonId) {
-                return NextResponse.json(
-                    { error: "This company was merged or converted — recover it from Customer Tools Trash instead" },
-                    { status: 409 },
-                );
-            }
-        }
     }
 
     let gstinPatch: Partial<{ gstin: string | null; gstStateCode: string | null; gstRegType: "REGULAR" | "COMPOSITION" | "SEZ" | "UNREGISTERED" | null }> | null = null;

@@ -89,23 +89,11 @@ model Person {
   phones              Phone[]
   emails              Email[]
 
-  // Set when this row was soft-deleted via the Person↔Company converter
-  // (see /office/settings/customer-tools). Pure audit trail — admins can
-  // later hard-delete from the Trash view; on hard-delete the back-link
-  // from the active partner simply dangles (no onDelete).
-  convertedToCompanyId Int?
-  convertedToCompany   Company?  @relation("PersonConvertedTo", fields: [convertedToCompanyId], references: [id])
-  convertedAt          DateTime?
-  convertedFromCompany Company[] @relation("CompanyConvertedTo")
-
-  // Set when this row was soft-deleted via the Merge tool. The merged-into row
-  // is the winner; this Person row is the loser whose ledger/contacts/links
-  // were re-pointed onto the winner. Same Trash + hard-delete surface as the
-  // converter tombstones — see /office/settings/customer-tools.
-  mergedIntoPersonId Int?
-  mergedIntoPerson   Person?   @relation("PersonMergedInto", fields: [mergedIntoPersonId], references: [id])
-  mergedFromPerson   Person[]  @relation("PersonMergedInto")
-  mergedAt           DateTime?
+  // Neither the Person↔Company converter nor the duplicate merge (both at
+  // /office/settings/customer-tools) leaves a trace here: the Account, contacts,
+  // tickets, CRM notes and bill references move to the surviving row inside one
+  // transaction and this row is deleted outright. The ledger history lives on
+  // the Account, which is why nothing needs keeping.
 
   // Delta sync asks "any person touched since <ts>?" on every party-replica
   // open. Without this the common answer (none) costs a full table scan,
@@ -159,18 +147,6 @@ model Company {
   owner       Position?       @relation("CompanyOwnerPosition", fields: [ownerPositionId], references: [id])
   phones      Phone[]
   emails      Email[]
-
-  // Mirror of Person.convertedToCompanyId — see comment there.
-  convertedToPersonId Int?
-  convertedToPerson   Person?   @relation("CompanyConvertedTo", fields: [convertedToPersonId], references: [id])
-  convertedAt         DateTime?
-  convertedFromPerson Person[]  @relation("PersonConvertedTo")
-
-  // Mirror of Person.mergedIntoPersonId — same merge-tool semantics.
-  mergedIntoCompanyId Int?
-  mergedIntoCompany   Company?  @relation("CompanyMergedInto", fields: [mergedIntoCompanyId], references: [id])
-  mergedFromCompany   Company[] @relation("CompanyMergedInto")
-  mergedAt            DateTime?
 
   /// See Person's @@index([updatedAt]) — same reason.
   @@index([updatedAt])

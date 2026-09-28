@@ -63,15 +63,7 @@ export async function GET(req: Request) {
         const persons = await prisma.person.findMany({
             where: {
                 AND: [
-                    // "Show inactive" surfaces plain deactivated parties only — merge/convert
-                    // tombstones stay exclusively in the Customer Tools Trash, their own
-                    // recovery path (hard-delete, not reactivate-in-place).
-                    includeInactive
-                        ? { OR: [
-                            { isActive: true },
-                            { isActive: false, mergedIntoPersonId: null, convertedToCompanyId: null },
-                        ] }
-                        : { isActive: true },
+                    ...(includeInactive ? [] : [{ isActive: true }]),
                     // Exclude only Sundry Creditors; debtors and un-grouped stay in.
                     ...(hideCreditors
                         ? [{ NOT: { account: { is: { group: { is: { name: ACCOUNT_GROUPS.SUNDRY_CREDITORS } } } } } }]

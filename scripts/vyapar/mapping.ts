@@ -83,8 +83,6 @@ export async function buildMaps(
         left join "Person"  p on p.id = a."personId"
         left join "Company" c on c.id = a."companyId"
         where (a."personId" is not null or a."companyId" is not null)
-          and (p.id is null or (p."mergedIntoPersonId" is null and p."convertedToCompanyId" is null))
-          and (c.id is null or (c."mergedIntoCompanyId" is null and c."convertedToPersonId" is null))
     `)).rows) {
         const ref: PartyRef = { accountId: r.account_id, name: r.name };
         for (const ph of (r.phones ?? []) as string[]) {

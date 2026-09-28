@@ -79,12 +79,10 @@ async function main(): Promise<void> {
           select 'person'::text kind, p.id, p.name, p."createdAt" created, a.id account_id,
                  coalesce(a."openingBalance", 0) opening, a."openingBalanceType" otype, coalesce(a.balance, 0) bal
           from "Person" p left join "Account" a on a."personId" = p.id
-          where p."mergedIntoPersonId" is null and p."convertedToCompanyId" is null
           union all
           select 'company', c.id, c.name, c."createdAt", a.id,
                  coalesce(a."openingBalance", 0), a."openingBalanceType", coalesce(a.balance, 0)
-          from "Company" c left join "Account" a on a."companyId" = c.id
-          where c."mergedIntoCompanyId" is null and c."convertedToPersonId" is null)
+          from "Company" c left join "Account" a on a."companyId" = c.id)
         select party.*,
           coalesce((select array_agg(ph.phone) from "Phone" ph
                     where (party.kind='person' and ph."personId"=party.id)
@@ -99,9 +97,9 @@ async function main(): Promise<void> {
         from party
         where lower(trim(party.name)) in (
           select lower(trim(n)) from (
-            select name n from "Person" where "mergedIntoPersonId" is null and "convertedToCompanyId" is null
+            select name n from "Person"
             union all
-            select name from "Company" where "mergedIntoCompanyId" is null and "convertedToPersonId" is null) x
+            select name from "Company") x
           group by 1 having count(*) > 1)
         order by lower(trim(party.name)), party.id
     `)).rows.map((r): Row => ({

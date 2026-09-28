@@ -80,7 +80,10 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
     [/^\/api\/shop\/(delivery-updates|shipway-updates)/, ["tickets", "ledger"]],
 
     // ── Customers ────────────────────────────────────────────────────────────
-    [/^\/api\/(person|companies|contacts|customer-tools|customer-tiers|customer-tier-periods|customer-quality|crm)/, ["parties"]],
+    [/^\/api\/(person|companies|contacts|customer-tiers|customer-tier-periods|customer-quality|crm)/, ["parties"]],
+    // A convert or merge re-points the party's bills, tickets and CRM notes as
+    // well as the party rows, so every screen showing those follows it too.
+    [/^\/api\/customer-tools/,                      ["parties", "ledger", "tickets"]],
 
     // ── Desk clutter ─────────────────────────────────────────────────────────
     [/^\/api\/(admin-tasks|admin-task-recurrences|quick-notes|quick-log|notifications|wall-posts)/, ["tasks"]],

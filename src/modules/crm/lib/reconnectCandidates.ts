@@ -109,14 +109,14 @@ export async function findReconnectCandidates(filter: ReconnectFilterInput): Pro
         ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { phones: { some: { phone: { contains: q } } } }] }
         : undefined;
     const personWhere: Prisma.PersonWhereInput = {
-        isActive: true, mergedIntoPersonId: null, convertedToCompanyId: null,
+        isActive: true,
         ...(stage ? { lifecycleStage: stage } : {}),
         ...(groupId ? { customerGroupId: groupId } : {}),
         ...(ownerPositionId ? { ownerPositionId } : {}),
         ...(qPerson ?? {}),
     };
     const companyWhere: Prisma.CompanyWhereInput = {
-        isActive: true, mergedIntoCompanyId: null, convertedToPersonId: null,
+        isActive: true,
         ...(stage ? { lifecycleStage: stage } : {}),
         ...(groupId ? { customerGroupId: groupId } : {}),
         ...(ownerPositionId ? { ownerPositionId } : {}),
