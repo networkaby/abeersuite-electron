@@ -2,7 +2,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
 import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
-import { projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
+import { libpqUrl, projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability, COUNTER_ONLY_MESSAGE } from "@/shared/lib/backup/availability";
 
 export const runtime = "nodejs";
@@ -47,12 +47,11 @@ export async function POST(req: Request) {
     // a workflow INPUT, and GitHub echoes inputs in full in the job's env group.
     // Secrets are masked; inputs are not. So every run below prints the password.
     //
-    // DIRECT_URL first, and it matters: DATABASE_URL is the pgBouncer pool
-    // (:6543/?pgbouncer=true). "pgbouncer" is a Prisma-only query param — libpq
-    // rejects any URI param it does not know, so pg_dump exits immediately with
-    // "invalid URI query parameter" and the run uploads a 0-byte dump.
-    const dbUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL)?.trim();
-    if (!dbUrl || (!dbUrl.startsWith("postgres://") && !dbUrl.startsWith("postgresql://"))) {
+    // DIRECT_URL first. The desktop app has none (counterEnv.ts withholds it), so it
+    // sends the live DATABASE_URL — the pgBouncer pool, cleaned of Prisma's
+    // `pgbouncer=true` by libpqUrl, exactly as "Back up to this PC" does.
+    const dbUrl = libpqUrl(process.env.DIRECT_URL) ?? libpqUrl(process.env.DATABASE_URL);
+    if (!dbUrl) {
         return Response.json(
             { error: "Active database URL is missing or invalid in server environment." },
             { status: 500 },

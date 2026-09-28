@@ -34,3 +34,39 @@ export function projectRefFromDbUrl(raw: string | undefined | null): string {
     const dot = user.indexOf(".");
     return dot === -1 ? "" : user.slice(dot + 1);
 }
+
+/** Parameters libpq understands. Everything else in the URL is Prisma's and is dropped. */
+const LIBPQ_PARAMS = new Set([
+    "sslmode",
+    "sslrootcert",
+    "sslcert",
+    "sslkey",
+    "connect_timeout",
+    "application_name",
+    "target_session_attrs",
+    "options",
+]);
+
+/**
+ * The URL as `pg_dump` will accept it, or `null` when it is not a Postgres URL.
+ *
+ * libpq rejects any URI parameter it does not know, and `DATABASE_URL` carries Prisma's
+ * `?pgbouncer=true` — handed over as is, `pg_dump` exits at once with "invalid URI query
+ * parameter". That is what the desktop app sends, since it has no `DIRECT_URL`.
+ *
+ * Twin of `stripPrismaParams` in `electron/backupManager.ts`, which "Back up to this PC"
+ * uses: the Electron build cannot import from `src/`, so the two are kept in step by hand.
+ */
+export function libpqUrl(raw: string | undefined | null): string | null {
+    const url = raw?.trim();
+    if (!url || (!url.startsWith("postgres://") && !url.startsWith("postgresql://"))) return null;
+
+    // The query starts after the LAST "@": a password may itself contain "?" or "@".
+    const q = url.indexOf("?", url.lastIndexOf("@") + 1);
+    if (q === -1) return url;
+    const kept = url
+        .slice(q + 1)
+        .split("&")
+        .filter((pair) => pair && LIBPQ_PARAMS.has(pair.split("=")[0].toLowerCase()));
+    return kept.length > 0 ? `${url.slice(0, q)}?${kept.join("&")}` : url.slice(0, q);
+}

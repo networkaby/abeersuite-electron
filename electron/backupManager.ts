@@ -98,8 +98,10 @@ const LIBPQ_PARAMS = new Set([
     "options",
 ]);
 
+/** Twin of `libpqUrl` in `src/shared/lib/backup/dbUrl.ts` (the Dropbox backup) — keep in step. */
 function stripPrismaParams(url: string): string {
-    const q = url.indexOf("?");
+    // The query starts after the LAST "@": a password may itself contain "?" or "@".
+    const q = url.indexOf("?", url.lastIndexOf("@") + 1);
     if (q === -1) return url;
 
     const kept = url

@@ -1,6 +1,6 @@
 import { triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
 import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
-import { projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
+import { libpqUrl, projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability } from "@/shared/lib/backup/availability";
 
 export const runtime = "nodejs";
@@ -42,12 +42,10 @@ export async function GET(req: Request) {
     // then dumps whatever the DIRECT_DATABASE_URL repo secret points at and names the
     // file there, and the password stops appearing in the run log.
     //
-    // DIRECT_URL first, and it matters: DATABASE_URL is the pgBouncer pool
-    // (:6543/?pgbouncer=true). "pgbouncer" is a Prisma-only query param — libpq
-    // rejects any URI param it does not know, so pg_dump exits immediately with
-    // "invalid URI query parameter" and the run uploads a 0-byte dump.
-    const dbUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL)?.trim();
-    if (!dbUrl || (!dbUrl.startsWith("postgres://") && !dbUrl.startsWith("postgresql://"))) {
+    // DIRECT_URL first; without it, the live DATABASE_URL cleaned of Prisma's
+    // `pgbouncer=true` by libpqUrl — the same fallback as the settings route.
+    const dbUrl = libpqUrl(process.env.DIRECT_URL) ?? libpqUrl(process.env.DATABASE_URL);
+    if (!dbUrl) {
         return Response.json(
             { error: "Active database URL is missing or invalid in server environment." },
             { status: 500 },
