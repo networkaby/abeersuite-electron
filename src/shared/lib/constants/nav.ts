@@ -92,6 +92,7 @@ import {
     LifeBuoy,
     ListTree,
     MapPin,
+    Megaphone,
     Milestone,
     MonitorCog,
     MonitorSmartphone,
@@ -572,6 +573,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Products", icon: Box, href: "/office/ecommerce/products" },
             { label: "Masters", icon: LayoutGrid, href: "/office/ecommerce/masters" },
             { label: "Customize Home", icon: LayoutTemplate, href: "/office/ecommerce/home" },
+            { label: "Ads", icon: Megaphone, href: "/office/ecommerce/ads" },
         ],
     },
 

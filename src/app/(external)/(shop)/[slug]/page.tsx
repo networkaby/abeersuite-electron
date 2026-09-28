@@ -13,6 +13,7 @@ import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
 import { invProductDb } from "@/shared/types/inventoryTypes";
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import ShopCatalogClient from "@/modules/external/shop/ShopCatalogClient";
+import { loadShopAdContext } from "@/shared/lib/shop/adContext";
 import { ChevronRight } from "lucide-react";
 
 /**
@@ -65,9 +66,15 @@ export async function generateMetadata({
     };
 }
 
-export default async function BrandPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function BrandPage({
+    params,
+    searchParams,
+}: {
+    params: Promise<{ slug: string }>;
+    searchParams: Promise<{ adPreview?: string }>;
+}) {
     const { slug } = await params;
-    const data = await loadBrandWithProducts(slug);
+    const [data, adContext] = await Promise.all([loadBrandWithProducts(slug), loadShopAdContext(await searchParams)]);
     if (!data) notFound();
     const { brand, products } = data;
 
@@ -115,6 +122,7 @@ export default async function BrandPage({ params }: { params: Promise<{ slug: st
                     allCategories={allCategories}
                     initialQuery=""
                     initialCategory="all"
+                    adContext={adContext}
                 />
             )}
         </main>

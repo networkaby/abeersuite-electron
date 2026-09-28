@@ -24,7 +24,8 @@ import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
  * axis. See PROJECT_BRAIN.
  */
 
-const DEFAULT_LIMIT = 12;
+/** How many "More like this" cards a product page shows. */
+export const SIMILAR_PRODUCTS_LIMIT = 12;
 
 /** groupId → its ancestor chain, nearest first: [parent, grandparent, …]. */
 async function loadAncestors(groupId: number): Promise<number[]> {
@@ -64,7 +65,7 @@ async function loadSubtree(rootId: number): Promise<number[]> {
 
 export async function loadSimilarProducts(
     product: { id: number; groupId: number | null },
-    limit = DEFAULT_LIMIT
+    limit = SIMILAR_PRODUCTS_LIMIT
 ): Promise<ShopProductPublic[]> {
     if (product.groupId == null) return [];
 

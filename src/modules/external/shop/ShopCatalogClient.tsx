@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,14 @@ import { cn } from "@/shared/lib/format/utils";
 // Leaf import, NOT the inventory barrel — the barrel re-exports the Dexie
 // catalogue, and none of that belongs in a public storefront bundle.
 import { productMatchesSearch } from "@/shared/lib/inventory/productSearch";
-import { Suspense } from "react";
+import AdUnit from "./ads/AdUnit";
+import {
+    AdPicker,
+    CATALOG_BETWEEN_EVERY,
+    adColumnSpan,
+    type ResolvedAd,
+    type ShopAdContext,
+} from "@/shared/lib/shop/ads";
 
 type SortKey = "featured" | "price-asc" | "price-desc" | "name" | "rating";
 
@@ -263,12 +270,15 @@ function ShopCatalogInner({
     initialQuery,
     initialCategory,
     title = "Catalog",
+    adContext,
 }: {
     products: ShopProductPublic[];
     allCategories: string[];
     initialQuery: string;
     initialCategory: string;
     title?: string;
+    /** The ad pool and visit seed — absent means no ads on this render. */
+    adContext?: ShopAdContext;
 }) {
     const router = useRouter();
     const [q, setQ] = useState(initialQuery);
@@ -414,6 +424,49 @@ function ShopCatalogInner({
         }
         return map;
     }, [visible]);
+
+    // One picker per render, walked in reading order: the top strip, then
+    // every group's row gap and the strip after each third group, then the
+    // sidebar. Row gaps are worked out for the 3-column (xl) and 2-column (sm)
+    // grids separately — a group of four leaves two boxes at xl and none at
+    // sm — and rendered as two sets the CSS switches between, so a shared tile
+    // appears once at either width. Phone width has one column: no gaps.
+    const adPlan = useMemo(() => {
+        if (!adContext) return null;
+        const picker = new AdPicker(adContext.ads, {
+            todayIso: adContext.todayIso,
+            products,
+            onPageProductIds: visible.map((p) => p.id),
+            seed: adContext.adSeed,
+            showPlaceholders: adContext.adPreview,
+        });
+        const top = picker.pick("catalogTop");
+        const mobileTop = picker.pick("catalogMobileTop");
+        const groups = new Map<string, { xl: ResolvedAd[]; sm: ResolvedAd[] }>();
+        const between = new Map<string, ResolvedAd>();
+        let index = 0;
+        for (const [category, items] of grouped) {
+            index += 1;
+            if (viewMode === "grid") {
+                const gapXl = (3 - (items.length % 3)) % 3;
+                const gapSm = items.length % 2;
+                const xl = picker.fillGap(gapXl, category);
+                let sm: ResolvedAd[] = [];
+                if (gapSm === 1) {
+                    const tile = xl.find((a) => a.size === "tile");
+                    sm = tile ? [tile] : picker.fillGap(1, category);
+                }
+                groups.set(category, { xl, sm });
+            }
+            if (index % CATALOG_BETWEEN_EVERY === 0 && index < grouped.size) {
+                const strip = picker.pick("catalogBetween");
+                if (strip) between.set(category, strip);
+            }
+        }
+        const sidebarRect = picker.pick("sidebarRect");
+        const sidebarTall = picker.pick("sidebarTall");
+        return { top, mobileTop, groups, between, sidebarRect, sidebarTall };
+    }, [adContext, products, visible, grouped, viewMode]);
 
     // Keep the shareable URL in step with the search box and a single-category
     // pick (the server page reads only `q` and `category`).
@@ -595,6 +648,8 @@ function ShopCatalogInner({
                         ) : null}
                     </div>
                     {panel}
+                    {adPlan?.sidebarRect ? <AdUnit ad={adPlan.sidebarRect} className="mt-4" /> : null}
+                    {adPlan?.sidebarTall ? <AdUnit ad={adPlan.sidebarTall} className="mt-4" /> : null}
                 </aside>
 
                 {/* Mobile bottom sheet */}
@@ -637,6 +692,8 @@ function ShopCatalogInner({
                 ) : null}
 
                 <div className="min-w-0 flex-1 space-y-8">
+                    {adPlan?.top ? <AdUnit ad={adPlan.top} className="hidden sm:flex" /> : null}
+                    {adPlan?.mobileTop ? <AdUnit ad={adPlan.mobileTop} className="sm:hidden" /> : null}
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <h2 className="text-xl font-bold tracking-tight sm:text-2xl">{title}</h2>
@@ -731,8 +788,8 @@ function ShopCatalogInner({
                         </div>
                     ) : (
                         Array.from(grouped.entries()).map(([category, items]) => (
+                            <Fragment key={category}>
                             <section
-                                key={category}
                                 id={`cat-${encodeURIComponent(category)}`}
                                 className="scroll-mt-24 space-y-4"
                             >
@@ -757,9 +814,30 @@ function ShopCatalogInner({
                                                 <ProductCard product={p} className="min-h-0 flex-1" />
                                             </li>
                                         ))}
+                                        {adPlan?.groups.get(category)?.xl.map((ad) => (
+                                            <li
+                                                key={`ad-xl-${ad.key}`}
+                                                className={cn(
+                                                    "hidden min-h-0 h-full flex-col xl:flex",
+                                                    adColumnSpan(ad.size) === 2 && "xl:col-span-2"
+                                                )}
+                                            >
+                                                <AdUnit ad={ad} className="min-h-0 flex-1" />
+                                            </li>
+                                        ))}
+                                        {adPlan?.groups.get(category)?.sm.map((ad) => (
+                                            <li
+                                                key={`ad-sm-${ad.key}`}
+                                                className="hidden min-h-0 h-full flex-col sm:flex xl:hidden"
+                                            >
+                                                <AdUnit ad={ad} className="min-h-0 flex-1" />
+                                            </li>
+                                        ))}
                                     </ul>
                                 )}
                             </section>
+                            {adPlan?.between.get(category) ? <AdUnit ad={adPlan.between.get(category)!} /> : null}
+                            </Fragment>
                         ))
                     )}
 
@@ -788,6 +866,7 @@ export default function ShopCatalogClient(props: {
     initialQuery: string;
     initialCategory: string;
     title?: string;
+    adContext?: ShopAdContext;
 }) {
     return (
         <Suspense

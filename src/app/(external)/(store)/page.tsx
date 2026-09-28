@@ -18,6 +18,8 @@ import {
     type HomeSectionInstance,
 } from "@/shared/lib/shop/homeLayout";
 import { loadHomeLayout } from "@/shared/lib/shop/loadHomeLayout";
+import { loadShopAdContext } from "@/shared/lib/shop/adContext";
+import type { ShopAdContext } from "@/shared/lib/shop/ads";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
 import HeroCarousel from "@/modules/external/store/HeroCarousel";
 import TrustStrip from "@/modules/external/store/TrustStrip";
@@ -70,6 +72,8 @@ type PageData = {
     allCategories: string[];
     query: string;
     initialCategory: string;
+    /** The catalog section fills its row gaps from this, like /shop. */
+    adContext: ShopAdContext;
 };
 
 /**
@@ -139,6 +143,7 @@ function renderSection(inst: HomeSectionInstance, data: PageData, todayIso: stri
                     initialQuery={data.query}
                     initialCategory={data.initialCategory}
                     title={content.title}
+                    adContext={data.adContext}
                 />
             );
         // Not wired up yet — addable/schedulable in Customize Home, but the
@@ -158,17 +163,18 @@ function renderSection(inst: HomeSectionInstance, data: PageData, todayIso: stri
 export default async function StoreHomePage({
     searchParams,
 }: {
-    searchParams: Promise<{ q?: string; category?: string }>;
+    searchParams: Promise<{ q?: string; category?: string; adPreview?: string }>;
 }) {
     const sp = await searchParams;
     const initialCategory = sp.category && sp.category !== "" ? sp.category : "all";
 
-    const [bands, rules, policy, groupIndex, instances] = await Promise.all([
+    const [bands, rules, policy, groupIndex, instances, adContext] = await Promise.all([
         loadBarcodeBands(),
         loadShopPublishRules(),
         loadShopStockPolicy(),
         loadShopGroupIndex(),
         loadHomeLayout(),
+        loadShopAdContext(sp),
     ]);
     const rows = await invProductDb(prisma).findMany({
         where: { isListedInShop: true, isActive: true },
@@ -203,6 +209,7 @@ export default async function StoreHomePage({
         allCategories,
         query: sp.q ?? "",
         initialCategory,
+        adContext,
     };
 
     const todayIso = businessTodayIso();

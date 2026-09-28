@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 600" width="300" height="600" role="img" aria-label="Half page ad placeholder 300 by 600">
+  <defs><pattern id="g" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#cbd5e1" stroke-width="1"/></pattern></defs>
+  <rect width="300" height="600" fill="#f1f5f9"/>
+  <rect width="300" height="600" fill="url(#g)"/>
+  <rect x="4" y="4" width="292" height="592" fill="none" stroke="#94a3b8" stroke-width="3" stroke-dasharray="12 8" rx="12"/>
+  <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="Inter, Arial, sans-serif" font-weight="700" font-size="33" fill="#334155" dy="-14">Half page</text>
+  <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="Inter, Arial, sans-serif" font-size="23" fill="#64748b" dy="26">300 × 600 · ad space</text>
+</svg>

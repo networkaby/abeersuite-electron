@@ -14,7 +14,10 @@ import ProductGallery from "@/modules/external/shop/ProductGallery";
 import ProductPurchasePanel from "@/modules/external/shop/ProductPurchasePanel";
 import ProductDetailTabs from "@/modules/external/shop/ProductDetailTabs";
 import ProductRail from "@/modules/external/shop/ProductRail";
-import { loadSimilarProducts } from "@/shared/lib/shop/similarProducts";
+import AdUnit from "@/modules/external/shop/ads/AdUnit";
+import { loadSimilarProducts, SIMILAR_PRODUCTS_LIMIT } from "@/shared/lib/shop/similarProducts";
+import { loadShopAdContext } from "@/shared/lib/shop/adContext";
+import { AdPicker } from "@/shared/lib/shop/ads";
 import { ChevronRight } from "lucide-react";
 import JsonLd from "@/shared/components/JsonLd";
 import { buildProductLd } from "@/shared/lib/seo/jsonLd";
@@ -113,10 +116,11 @@ export default async function ShopProductPage({
     searchParams,
 }: {
     params: Promise<{ handle: string }>;
-    searchParams: Promise<{ preview?: string }>;
+    searchParams: Promise<{ preview?: string; adPreview?: string }>;
 }) {
     const { handle } = await params;
-    const preview = await isStaffPreview(await searchParams);
+    const sp = await searchParams;
+    const preview = await isStaffPreview(sp);
     const product = await loadProduct(handle, preview);
     if (!product) notFound();
 
@@ -125,7 +129,21 @@ export default async function ShopProductPage({
     // which pooled every mouse, keyboard, cabinet and monitor together (all root
     // at "IT Products") and fetched them unbounded — now that the catalogue is
     // actually classified that is 80+ cards on a single product page.
-    const similar = await loadSimilarProducts({ id: product.id, groupId: product.groupId });
+    // A few rows past the rail's limit are loaded on purpose: they are what a
+    // product ad on this page may pick from, since everything in the rail is
+    // already on the page and an ad never repeats a visible product.
+    const [similarPool, adContext] = await Promise.all([
+        loadSimilarProducts({ id: product.id, groupId: product.groupId }, SIMILAR_PRODUCTS_LIMIT + 4),
+        loadShopAdContext(sp),
+    ]);
+    const similar = similarPool.slice(0, SIMILAR_PRODUCTS_LIMIT);
+    const pageAd = new AdPicker(adContext.ads, {
+        todayIso: adContext.todayIso,
+        products: similarPool,
+        onPageProductIds: [product.id, ...similar.map((p) => p.id)],
+        seed: adContext.adSeed,
+        showPlaceholders: adContext.adPreview,
+    }).pick("productPage");
 
     const canonicalPath = productPath(product);
 
@@ -181,6 +199,8 @@ export default async function ShopProductPage({
             </div>
 
             <ProductDetailTabs product={product} />
+
+            {pageAd ? <AdUnit ad={pageAd} className="mt-12" /> : null}
 
             <ProductRail
                 className="mt-20 border-t border-border/80 pt-12"

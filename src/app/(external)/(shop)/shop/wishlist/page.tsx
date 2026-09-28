@@ -6,6 +6,10 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import ProductCard from "@/modules/external/shop/ProductCard";
+import AdUnit from "@/modules/external/shop/ads/AdUnit";
+import { useShopAdContext } from "@/modules/external/shop/ads/useShopAdContext";
+import { AdPicker, adColumnSpan, type ResolvedAd } from "@/shared/lib/shop/ads";
+import { cn } from "@/shared/lib/format/utils";
 import { useShopWishlistStore } from "@/store/external/shopWishlistStore";
 import { Heart } from "lucide-react";
 
@@ -13,6 +17,7 @@ export default function ShopWishlistPage() {
     const ids = useShopWishlistStore((s) => s.productIds);
     const clearWish = useShopWishlistStore((s) => s.clear);
     const [products, setProducts] = useState<ShopProductPublic[]>([]);
+    const adContext = useShopAdContext();
 
     useEffect(() => {
         axios
@@ -22,6 +27,27 @@ export default function ShopWishlistPage() {
     }, []);
 
     const list = useMemo(() => products.filter((p) => ids.includes(p.id)), [products, ids]);
+
+    // Same row-gap rule as the catalog grid, for one group: worked out for the
+    // 3-column (xl) and 2-column (sm) widths and rendered as two CSS-switched
+    // sets. The wishlist mixes categories, so only untargeted ads qualify.
+    const adFill = useMemo(() => {
+        if (!adContext || list.length === 0) return null;
+        const picker = new AdPicker(adContext.ads, {
+            todayIso: adContext.todayIso,
+            products,
+            onPageProductIds: list.map((p) => p.id),
+            seed: adContext.adSeed,
+            showPlaceholders: adContext.adPreview,
+        });
+        const xl = picker.fillGap((3 - (list.length % 3)) % 3, "", "wishlistFill");
+        let sm: ResolvedAd[] = [];
+        if (list.length % 2 === 1) {
+            const tile = xl.find((a) => a.size === "tile");
+            sm = tile ? [tile] : picker.fillGap(1, "", "wishlistFill");
+        }
+        return { xl, sm };
+    }, [adContext, products, list]);
 
     return (
         <main className="mx-auto max-w-6xl px-4 py-12">
@@ -54,6 +80,19 @@ export default function ShopWishlistPage() {
                     {list.map((p) => (
                         <li key={p.id} className="flex min-h-0 h-full flex-col">
                             <ProductCard product={p} className="min-h-0 flex-1" />
+                        </li>
+                    ))}
+                    {adFill?.xl.map((ad) => (
+                        <li
+                            key={`ad-xl-${ad.key}`}
+                            className={cn("hidden min-h-0 h-full flex-col xl:flex", adColumnSpan(ad.size) === 2 && "xl:col-span-2")}
+                        >
+                            <AdUnit ad={ad} className="min-h-0 flex-1" />
+                        </li>
+                    ))}
+                    {adFill?.sm.map((ad) => (
+                        <li key={`ad-sm-${ad.key}`} className="hidden min-h-0 h-full flex-col sm:flex xl:hidden">
+                            <AdUnit ad={ad} className="min-h-0 flex-1" />
                         </li>
                     ))}
                 </ul>

@@ -3163,6 +3163,7 @@ CREATE TABLE IF NOT EXISTS "OrgDefaults" (
     "shopOutOfStockPolicy" "ShopOutOfStockPolicy" NOT NULL DEFAULT 'NOTIFY',
     "posEstimateShowDiscountsJson" JSONB,
     "storefrontHomeJson" JSONB,
+    "storefrontAdsJson" JSONB,
     "labelTemplateJson" JSONB,
     "hrPayRulesJson" JSONB,
     "dutySummerStart" VARCHAR(5) NOT NULL DEFAULT '10:30',
@@ -3205,6 +3206,8 @@ ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "posEstimateShowDiscountsJson
 ALTER TABLE "OrgDefaults" ALTER COLUMN "posEstimateShowDiscountsJson" DROP NOT NULL;
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "storefrontHomeJson" JSONB;
 ALTER TABLE "OrgDefaults" ALTER COLUMN "storefrontHomeJson" DROP NOT NULL;
+ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "storefrontAdsJson" JSONB;
+ALTER TABLE "OrgDefaults" ALTER COLUMN "storefrontAdsJson" DROP NOT NULL;
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "labelTemplateJson" JSONB;
 ALTER TABLE "OrgDefaults" ALTER COLUMN "labelTemplateJson" DROP NOT NULL;
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "hrPayRulesJson" JSONB;

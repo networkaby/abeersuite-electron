@@ -13,6 +13,9 @@ import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { productPath } from "@/shared/lib/shop/productPublic";
 import { Input } from "@/components/ui/input";
 import { Truck, Shield, CreditCard } from "lucide-react";
+import AdUnit from "@/modules/external/shop/ads/AdUnit";
+import { useShopAdContext } from "@/modules/external/shop/ads/useShopAdContext";
+import { AdPicker } from "@/shared/lib/shop/ads";
 
 type TierPreview = {
     tierPct: number;
@@ -34,6 +37,19 @@ type TierPreview = {
 export default function ShopCartPage() {
     const { lines, setQty, remove, clear } = useShopCartStore();
     const [products, setProducts] = useState<ShopProductPublic[]>([]);
+    const adContext = useShopAdContext();
+    // One rectangle under the order summary. A product ad never repeats
+    // something already in the cart.
+    const summaryAd = useMemo(() => {
+        if (!adContext || lines.length === 0) return null;
+        return new AdPicker(adContext.ads, {
+            todayIso: adContext.todayIso,
+            products,
+            onPageProductIds: lines.map((l) => l.productId),
+            seed: adContext.adSeed,
+            showPlaceholders: adContext.adPreview,
+        }).pick("cart");
+    }, [adContext, products, lines]);
     // Level (spend-tier) discount preview — logged-in customers only. The
     // server owns the number (/api/shop/tier-preview, same helper the order
     // route freezes at checkout); guests silently see plain prices.
@@ -180,7 +196,8 @@ export default function ShopCartPage() {
                         </Button>
                     </div>
 
-                    <Card className="lg:sticky lg:top-24 border-border/80 shadow-md">
+                    <div className="space-y-4 lg:sticky lg:top-24">
+                    <Card className="border-border/80 shadow-md">
                         <CardHeader>
                             <CardTitle className="text-lg">Order summary</CardTitle>
                         </CardHeader>
@@ -261,6 +278,8 @@ export default function ShopCartPage() {
                             </ul>
                         </CardFooter>
                     </Card>
+                    {summaryAd ? <AdUnit ad={summaryAd} /> : null}
+                    </div>
                 </div>
             )}
         </main>

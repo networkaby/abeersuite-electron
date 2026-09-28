@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 100" width="320" height="100" role="img" aria-label="Mobile banner ad placeholder 320 by 100">
+  <defs><pattern id="g" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#cbd5e1" stroke-width="1"/></pattern></defs>
+  <rect width="320" height="100" fill="#f1f5f9"/>
+  <rect width="320" height="100" fill="url(#g)"/>
+  <rect x="4" y="4" width="312" height="92" fill="none" stroke="#94a3b8" stroke-width="3" stroke-dasharray="12 8" rx="12"/>
+  <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="Inter, Arial, sans-serif" font-weight="700" font-size="14" fill="#334155" dy="-6">Mobile banner</text>
+  <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="Inter, Arial, sans-serif" font-size="10" fill="#64748b" dy="11">320 × 100 · ad space</text>
+</svg>

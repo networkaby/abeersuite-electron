@@ -227,6 +227,14 @@ model OrgDefaults {
   // Admin-chosen, so bootstrap-seed leaves it untouched (survives reseed).
   storefrontHomeJson Json?
 
+  // Storefront ad inventory (Ecommerce → Ads) — the pool of house ads the shop
+  // fills its ad spots from (grid gaps, billboards, sidebar, cart, product page).
+  // null = the code default (placeholder ads, switched off). Shape: ShopAd[]
+  // (id, name, kind static|product, sizes, schedule, priority, image/link or
+  // product rule) — see src/shared/lib/shop/ads.ts. Admin-chosen, so
+  // bootstrap-seed leaves it untouched (survives reseed).
+  storefrontAdsJson Json?
+
   // Barcode-label template (Pricing Strategy → Print labels, settings bar above
   // the search box). Barcode labels are the documented EXCEPTION to the voucher
   // print-template surface — they are designed and saved here, not there. null =
