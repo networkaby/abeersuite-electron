@@ -141,6 +141,11 @@ export const PERMISSIONS = {
     // point in one click, so it keeps a key of its own.
     PRICING_STRATEGY_RESET: "pricing:strategy:reset",
 
+    // E-Commerce → Customize Home — the page itself rides the sidebar link.
+    // Permanent fallback sections (priority -1) stay locked; this key shows the
+    // Unlock button that opens one for editing, and lets a section become one.
+    ECOMMERCE_FALLBACK_UNLOCK: "ecommerce:fallback:unlock",
+
     // POS — shift / till / handover lifecycle
     POS_SHIFT_OPEN: "pos:shift:open",
     POS_SHIFT_CLOSE: "pos:shift:close",

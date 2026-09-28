@@ -124,6 +124,12 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     // a job, so it keeps its own tick.
     { id: "pricing:strategy:reset", label: "Reset all strategy points", module: "inventory", description: "Clear every strategy point at once on the Pricing Strategy → Strategies page." },
 
+    // ecommerce — Customize Home needs no key of its own: holding the link is the
+    // permission. The one guard is the permanent FALLBACK sections (priority -1):
+    // they are what the storefront shows whenever nothing else is scheduled, so
+    // they stay locked unless the role holds this.
+    { id: "ecommerce:fallback:unlock", label: "Unlock fallback sections", module: "ecommerce", description: "Show the Unlock button on E-Commerce → Customize Home, to edit, move, switch off or delete a permanent fallback section, or to make a section a new fallback." },
+
     // inventory — per-kind voucher gates (inventory:voucher:<action>:<kind>). Every
     // voucher kind is independent (Sale ≠ Purchase). Generated from the matrix so
     // the kind↔permission mapping never drifts. Single source: voucherMatrix.ts.

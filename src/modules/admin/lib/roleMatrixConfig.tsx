@@ -646,6 +646,12 @@ export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, ExtraToggle | ExtraToggle
         id: "pricing:strategy:reset",
         label: "Can reset all points",
     },
+    // Customize Home — editing the page is the page tick's own work. The locked
+    // permanent fallback sections are the one guard.
+    [sidebarChildPermissionId("e-commerce", "customize-home")]: {
+        id: "ecommerce:fallback:unlock",
+        label: "Can unlock fallback",
+    },
     // Retention pages are plain create/edit/delete matrices (no extra toggle) —
     // changing the discount / balance is part of "Edit", not a separate control.
 };

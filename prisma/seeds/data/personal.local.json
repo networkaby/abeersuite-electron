@@ -8970,6 +8970,10 @@
     },
     {
       "roleId": "R1",
+      "permissionId": "ecommerce:fallback:unlock"
+    },
+    {
+      "roleId": "R1",
       "permissionId": "products:delete"
     },
     {

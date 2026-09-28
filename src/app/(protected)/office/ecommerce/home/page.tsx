@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import Link from "next/link";
-import { ChevronDown, ChevronUp, Copy, ExternalLink, Trash2, Plus, Maximize2 } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { ChevronDown, ChevronUp, Copy, ExternalLink, Trash2, Plus, Maximize2, Lock, LockOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -36,6 +37,9 @@ import BannerSlidesEditor from "@/modules/ecommerce/components/homeEditor/Banner
 import TrustItemsEditor from "@/modules/ecommerce/components/homeEditor/TrustItemsEditor";
 import HeadingEditor from "@/modules/ecommerce/components/homeEditor/HeadingEditor";
 import { getWithRetry } from "@/shared/lib/http/getWithRetry";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 // Per-type placeholder text for "heading" kind instances — the text a blank
 // field falls back to, i.e. what the component's own hardcoded default says.
@@ -261,7 +265,6 @@ function SectionRow({
                         size="icon"
                         className="size-7"
                         onClick={onDuplicate}
-                        disabled={locked}
                         aria-label={`Duplicate ${inst.label}`}
                         title="Duplicate"
                     >
@@ -350,8 +353,10 @@ function SectionRow({
                     {fallback ? (
                         <p className="text-xs text-muted-foreground">
                             This is the permanent fallback for section No. {inst.sectionNo} — it renders whenever
-                            nothing else in that slot is currently scheduled, regardless of any date range. Fallback
-                            sections are locked and shown for reference only.
+                            nothing else in that slot is currently scheduled, regardless of any date range.{" "}
+                            {locked
+                                ? "It is locked so it isn't changed by mistake — Duplicate it to start a new version, or Unlock it next to Full size (needs the Unlock fallback permission)."
+                                : "Unlocked — it locks again when you save or pick another section."}
                         </p>
                     ) : (
                         <div className="grid grid-cols-2 gap-2 sm:w-64">
@@ -453,6 +458,14 @@ export default function CustomizeHomePage() {
     const [previewData, setPreviewData] = useState<PreviewData>({ products: [], brands: [] });
     const [fullSize, setFullSize] = useState(false);
     const [fallbackGroupOpen, setFallbackGroupOpen] = useState(false);
+    // The one fallback opened for editing, if any. The Unlock button sits next
+    // to Full size (never on a row, so a stray click can't flip it) and only for
+    // a role holding the permission; it acts on the selected section and locks
+    // again on save or when another section is picked.
+    const [unlockedId, setUnlockedId] = useState<string | null>(null);
+    const { data: session } = useSession();
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canUnlock = hasPermissionWithScope(permissions, PERMISSIONS.ECOMMERCE_FALLBACK_UNLOCK);
 
     const load = useCallback(async () => {
         setLoadError(false);
@@ -502,6 +515,12 @@ export default function CustomizeHomePage() {
     // ambiguous (resolveGroup would just pick whichever array order won),
     // so it's blocked outright rather than left to silently depend on that.
     const setPriority = (id: string, next: number) => {
+        // Making a fallback needs the same key as changing one — without it the
+        // row would drop into the locked group with no way back out.
+        if (next === -1 && !canUnlock) {
+            toast.error("Only a role with the Unlock fallback permission can make a fallback.");
+            return;
+        }
         const inst = instances.find((i) => i.id === id);
         const clash = inst && instances.some(
             (i) => i.id !== id && i.sectionNo === inst.sectionNo && i.priority === next
@@ -515,6 +534,8 @@ export default function CustomizeHomePage() {
             return;
         }
         updateInstance(id, { priority: next });
+        // Keep a freshly made fallback open — it is still being edited.
+        if (next === -1) setUnlockedId(id);
     };
 
     // Same guard, the other direction: moving an instance into a section
@@ -544,32 +565,50 @@ export default function CustomizeHomePage() {
     };
 
     const duplicateInstance = (id: string) => {
-        setInstances((prev) => {
-            const src = prev.find((i) => i.id === id);
-            if (!src) return prev;
-            // A copy can't share both sectionNo and priority with its source
-            // (that's now blocked as an ambiguous tie) — a fallback (-1) only
-            // ever gets one slot per sectionNo, so it needs a whole new
-            // sectionNo; anything else just needs the next free priority in
-            // the same slot.
-            let sectionNo = src.sectionNo;
-            let priority = src.priority;
-            if (src.priority === -1) {
-                sectionNo = Math.max(...prev.map((i) => i.sectionNo)) + 10;
-                priority = 0;
-            } else {
-                const used = new Set(prev.filter((i) => i.sectionNo === sectionNo).map((i) => i.priority));
-                while (used.has(priority)) priority += 1;
-            }
-            const clone: HomeSectionInstance = {
-                ...src,
-                id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                label: `${src.label} (copy)`,
-                sectionNo,
-                priority,
-            };
-            return [...prev, clone];
+        const src = instances.find((i) => i.id === id);
+        if (!src) return;
+        // A copy stays in its source's slot and can't share both sectionNo and
+        // priority with anything there (blocked as an ambiguous tie), so it takes
+        // the next free priority. A fallback's copy is an ordinary section
+        // (priority from 0, the fallback's ignored dates dropped) and starts
+        // switched off: with no dates it would otherwise win its slot every day,
+        // so copying alone never changes the storefront.
+        const fromFallback = isFallbackInstance(src);
+        let priority = fromFallback ? 0 : src.priority;
+        const used = new Set(instances.filter((i) => i.sectionNo === src.sectionNo).map((i) => i.priority));
+        while (used.has(priority)) priority += 1;
+        const clone: HomeSectionInstance = {
+            ...src,
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            label: `${src.label} (copy)`,
+            priority,
+            ...(fromFallback ? { enabled: false, startAt: undefined, endAt: undefined } : {}),
+        };
+        setInstances((prev) => [...prev, clone]);
+        if (fromFallback) toast.success("Copy added above, switched off — edit it, then switch it on.");
+    };
+
+    // Selecting a different section locks any fallback left open.
+    const selectSection = (id: string) => {
+        setSelectedId(id);
+        setUnlockedId((cur) => (cur === id ? cur : null));
+    };
+
+    const toggleUnlock = async (inst: HomeSectionInstance) => {
+        if (unlockedId === inst.id) {
+            setUnlockedId(null);
+            return;
+        }
+        const ok = await confirmAction({
+            title: `Unlock "${inst.label}"?`,
+            body: `This is the permanent fallback for section No. ${inst.sectionNo} — the storefront shows it whenever nothing else in that slot is scheduled. Nothing changes on the storefront until you press Save layout.`,
+            confirmLabel: "Unlock",
+            destructive: false,
         });
+        if (!ok) return;
+        setUnlockedId(inst.id);
+        setFallbackGroupOpen(true);
+        setExpanded((prev) => new Set(prev).add(inst.id));
     };
 
     const addSection = () => {
@@ -594,6 +633,7 @@ export default function CustomizeHomePage() {
         try {
             const { data } = await axios.put<{ layout: HomeSectionInstance[] }>("/api/ecommerce/home-layout", instances);
             setInstances(data.layout);
+            setUnlockedId(null);
             toast.success("Home page layout saved");
         } catch {
             toast.error("Failed to save layout");
@@ -691,7 +731,7 @@ export default function CustomizeHomePage() {
                                         renders={winnerIds.has(inst.id)}
                                         isSelected={selectedId === inst.id}
                                         isOpen={expanded.has(inst.id)}
-                                        onSelect={() => setSelectedId(inst.id)}
+                                        onSelect={() => selectSection(inst.id)}
                                         onDuplicate={() => duplicateInstance(inst.id)}
                                         onRemove={() => removeInstance(inst.id)}
                                         onUpdate={(patch) => updateInstance(inst.id, patch)}
@@ -711,7 +751,7 @@ export default function CustomizeHomePage() {
                                         <span className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                                             Fallback sections
                                             <span className="ml-2 normal-case tracking-normal text-muted-foreground/70">
-                                                (locked · reference only)
+                                                {canUnlock ? "(locked · select one, then Unlock next to Full size)" : "(locked)"}
                                             </span>
                                         </span>
                                         {fallbackGroupOpen ? (
@@ -735,8 +775,8 @@ export default function CustomizeHomePage() {
                                                         renders={winnerIds.has(inst.id)}
                                                         isSelected={selectedId === inst.id}
                                                         isOpen={expanded.has(inst.id)}
-                                                        locked
-                                                        onSelect={() => setSelectedId(inst.id)}
+                                                        locked={inst.id !== unlockedId}
+                                                        onSelect={() => selectSection(inst.id)}
                                                         onDuplicate={() => duplicateInstance(inst.id)}
                                                         onRemove={() => removeInstance(inst.id)}
                                                         onUpdate={(patch) => updateInstance(inst.id, patch)}
@@ -764,15 +804,35 @@ export default function CustomizeHomePage() {
                         <p className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
                             Live preview
                         </p>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={!selected}
-                            onClick={() => setFullSize(true)}
-                        >
-                            <Maximize2 className="mr-1.5 size-3.5" aria-hidden /> Full size
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            {canUnlock && selected && isFallbackInstance(selected) ? (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => void toggleUnlock(selected)}
+                                >
+                                    {unlockedId === selected.id ? (
+                                        <>
+                                            <Lock className="mr-1.5 size-3.5" aria-hidden /> Lock
+                                        </>
+                                    ) : (
+                                        <>
+                                            <LockOpen className="mr-1.5 size-3.5" aria-hidden /> Unlock
+                                        </>
+                                    )}
+                                </Button>
+                            ) : null}
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={!selected}
+                                onClick={() => setFullSize(true)}
+                            >
+                                <Maximize2 className="mr-1.5 size-3.5" aria-hidden /> Full size
+                            </Button>
+                        </div>
                     </div>
 
                     {selected ? (
