@@ -394,7 +394,9 @@ office means the request runs here with `live`'s existing outage fallback. Three
    error passes straight through — except a gateway `502`–`504` with no JSON body, which
    is answered as uncertain too, and a bare `401` (the cookie did not decode at the
    office), which pauses the relay for 60 s and runs locally; a `SESSION_REVOKED` `401`
-   passes through and signs the cashier out.
+   passes through and signs the cashier out — after a targeted pull of `User` (rule 2's
+   mechanism, [`replicaPull.ts`](../src/shared/lib/counter/replicaPull.ts)), so the
+   replica agrees the session is dead and the login page does not send them back in.
 2. **Hold the response until the replica has the rows.** On an office 2xx the relay asks
    the worker for a targeted pull over Postgres NOTIFY (`sync-engine/lib/localSignal.js`)
    and waits, bounded at 3 s, for `sync_relay_done`. Screens then refetch from a replica

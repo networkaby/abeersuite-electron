@@ -15,11 +15,43 @@ import { signOut } from "next-auth/react";
  */
 let deliberate = false;
 
-/** Call immediately before any `signOut()` that the person asked for. */
-export function markDeliberateSignOut(): void { deliberate = true; }
+/**
+ * Other windows of the app share the cookie, so a sign-out here ends them too — and
+ * next-auth tells them only THAT it happened, never why. Without a word of our own
+ * each one would announce "signed out after 6 hours with nothing happening" to the
+ * person who had just clicked Sign out. The word goes out before `signOut()` makes its
+ * request, so it lands ahead of next-auth's own broadcast, which waits for the reply.
+ */
+const SIGN_OUT_CHANNEL = "abeer-sign-out";
 
-/** True when the session that just ended was ended on purpose. */
-export function wasDeliberateSignOut(): boolean { return deliberate; }
+/** A word from another window explains only the session end that follows it. */
+const HEARD_FRESH_MS = 10_000;
+let heard: { at: number; revoked: boolean } | null = null;
+const heardFresh = () => heard !== null && Date.now() - heard.at < HEARD_FRESH_MS;
+
+/** Call immediately before any `signOut()` that the person asked for — or, with
+ *  `revoked`, one ending a session the server refused (its notice is on screen). */
+export function markDeliberateSignOut(revoked = false): void {
+    deliberate = true;
+    try {
+        const channel = new BroadcastChannel(SIGN_OUT_CHANNEL);
+        channel.postMessage(revoked ? "revoked" : "signed-out");
+        channel.close();
+    } catch { /* no BroadcastChannel: the other windows fall back to the idle notice */ }
+}
+
+/** True when the session that just ended was ended on purpose, here or in another window. */
+export function wasDeliberateSignOut(): boolean { return deliberate || heardFresh(); }
+
+/** True when another window has just ended the session because the server revoked it —
+ *  this window should say so too rather than jump to the login page in silence. */
+export function heardRevokedSignOut(): boolean { return heardFresh() && heard!.revoked; }
+
+if (typeof window !== "undefined" && typeof BroadcastChannel !== "undefined") {
+    new BroadcastChannel(SIGN_OUT_CHANNEL).onmessage = (e: MessageEvent) => {
+        heard = { at: Date.now(), revoked: e.data === "revoked" };
+    };
+}
 
 /**
  * Sign out and land on `path` of the SAME host the user is already on.

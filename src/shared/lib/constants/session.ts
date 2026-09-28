@@ -31,6 +31,17 @@ export const SESSION_IDLE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 /** The same span in words, for the line shown to whoever was just signed out. */
 export const SESSION_IDLE_LABEL = `${SESSION_IDLE_MAX_AGE_MS / (60 * 60 * 1000)} hours`;
 
+/**
+ * What a person is told when their login was ended from elsewhere (`SESSION_REVOKED`).
+ * Named for both causes because the server cannot tell which one it was: an admin
+ * changed their role, position or permissions, or they signed out on another device —
+ * a sign-out ends every login of that person. Saying "an admin" to somebody who just
+ * signed out of the office website sent them looking for an admin who did nothing.
+ * The API answer and the browser's notice share it, so the two can never disagree.
+ */
+export const SESSION_REVOKED_MESSAGE =
+    "You were signed out — your access changed, or you signed out on another device. Please sign in again.";
+
 // ─── Idle sign-out ───────────────────────────────────────────────────────────
 
 /**

@@ -4,6 +4,7 @@ import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { authorizeStaffCredentials } from "@/shared/lib/auth/authorizeStaff";
 import { authorizePortalCredentials } from "@/shared/lib/auth/authorizePortal";
 import { IS_PUBLIC } from "@/shared/lib/appMode";
+import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { DEFAULT_IDLE_LIMIT_MINUTES, SESSION_IDLE_MAX_AGE_MS } from "@/shared/lib/constants/session";
 
 /**
@@ -216,10 +217,37 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         async signOut(message) {
             const token = "token" in message ? message.token : null;
             const id = token?.id;
-            if (id && token?.kind !== "customer") {
-                await prismaAuthoritative.user
-                    .update({ where: { id: Number(id) }, data: { tokensValidFrom: new Date() } })
-                    .catch(() => { /* best-effort — don't block sign-out on a DB hiccup */ });
+            if (!id || token?.kind === "customer") return;
+            const loginAt = typeof token.loginAt === "number" ? token.loginAt : 0;
+            let stamped: number;
+            try {
+                ({ count: stamped } = await prismaAuthoritative.user.updateMany({
+                    where: {
+                        id: Number(id),
+                        // Only a login that is still valid ends the others — the mirror
+                        // of the jwt check above. Signing out of one that was already
+                        // revoked (the browser does exactly that on SESSION_REVOKED)
+                        // would otherwise stamp "now" and throw the person out of the
+                        // fresh login they had just made on another device. A token
+                        // with no loginAt predates the check and stamps as before.
+                        ...(loginAt ? { OR: [{ tokensValidFrom: null }, { tokensValidFrom: { lte: new Date(loginAt) } }] } : {}),
+                    },
+                    data: { tokensValidFrom: new Date() },
+                }));
+            } catch {
+                return; // best-effort — don't block sign-out on a DB hiccup, or offline
+            }
+            // The stamp went to Supabase, but a counter checks sign-ins against its
+            // replica, which would go on accepting this very token until the worker
+            // next pulls `User`. A page request already in flight when Sign out
+            // cleared the cookie puts a renewed one back (`updateAge: 0`), and that
+            // cookie would open the app again. Pulled now, it is refused here too.
+            // Nothing stamped means the session was already dead in Supabase — the
+            // relay pulled `User` when the office said so — so there is nothing new
+            // to fetch, and the revoked-session sign-out is not held for it.
+            if (IS_COUNTER_PC && stamped > 0) {
+                const { pullAndWait } = await import("@/shared/lib/counter/replicaPull");
+                await pullAndWait(["User"]);
             }
         },
     },

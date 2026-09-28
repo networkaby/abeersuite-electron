@@ -40,7 +40,14 @@
  * the models the path touched (Postgres NOTIFY — see sync-engine/lib/localSignal.js)
  * and holds the response until the worker reports the rows applied. Bounded, so a
  * stuck worker costs a few seconds and never a save; and timing out is safe, because
- * the browser's own change signal makes the worker pull moments later anyway.
+ * the browser's own change signal makes the worker pull moments later anyway. The
+ * pull itself lives in `replicaPull.ts`, shared with the sign-out event.
+ *
+ * The same pull runs when the office answers `SESSION_REVOKED`: the office judged the
+ * session against Supabase, this machine judges its pages against the replica, and
+ * until the replica has the new `User.tokensValidFrom` the two disagree — the login
+ * page would send the cashier straight back into the app, and the next save would
+ * throw them out again, round and round.
  *
  * ── What is deliberately NOT relayed ─────────────────────────────────────────
  * Reads (they are the egress win). Every other write IS relayed, whatever segment it
@@ -58,16 +65,12 @@
 
 import * as http from "node:http";
 import * as https from "node:https";
-import { randomUUID } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { WRITE_API_URL } from "@/shared/lib/prisma/counterMode";
 import { isThisPcReleased, isThisPcWithoutCounter, readCounterSetup } from "@/shared/lib/counter/releaseGuard";
 import { modelsForTopics, topicsForApiPath } from "@/shared/lib/realtime/topics";
-import { DONE_CHANNEL, PULL_CHANNEL, RELAY_ACTIVE, RELAY_HEADER, contentLengthOf, decideRelay } from "./relayPolicy";
-import { connectionErrorText } from "@/shared/lib/sync/connectionError";
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { Client: PgClient, Pool: PgPool } = require("pg") as typeof import("pg");
+import { RELAY_ACTIVE, RELAY_HEADER, contentLengthOf, decideRelay } from "./relayPolicy";
+import { pullAndWait } from "./replicaPull";
 
 // ── Tuning ───────────────────────────────────────────────────────────────────
 
@@ -82,10 +85,6 @@ const BREAKER_MS = 15_000;
  *  a secret or cookie-name mismatch is a configuration fault that a retry per bill
  *  cannot fix, and each attempt would otherwise bounce the cashier to the login page. */
 const AUTH_BREAKER_MS = 60_000;
-/** How long to hold a successful response for the worker's "rows applied". */
-const PULL_WAIT_MS = 3_000;
-/** Wait before re-opening a dropped LISTEN connection. */
-const LISTEN_RETRY_MS = 5_000;
 
 const UNCERTAIN_MESSAGE =
     "The office did not confirm this save. It may already be saved — check before entering it again.";
@@ -194,107 +193,6 @@ function toResponse(reply: OfficeReply): NextResponse {
     return new NextResponse(bytes, { status: reply.status, headers });
 }
 
-// ── Read-your-write: ask the worker to pull, wait for "applied" ──────────────
-
-type Waiter = () => void;
-const waiters = new Map<string, Waiter>();
-let listener: InstanceType<typeof PgClient> | null = null;
-let listenerReady = false;
-let listenRetry: NodeJS.Timeout | null = null;
-let notifier: InstanceType<typeof PgPool> | null = null;
-
-/** Same shape as the flusher's listener: one dedicated client, reconnect with a
- *  backoff, never throws. Idempotent. */
-function startListener(localUrl: string): void {
-    if (listener) return;
-    const client = new PgClient({ connectionString: localUrl, connectionTimeoutMillis: 5_000 });
-    listener = client;
-
-    const dropAndRetry = (why: string) => {
-        if (listener !== client) return;
-        listener = null;
-        listenerReady = false;
-        client.end().catch(() => { });
-        console.warn(`[writeRelay] sync listener ${why}; reconnecting in ${LISTEN_RETRY_MS / 1000}s.`);
-        listenRetry = setTimeout(() => {
-            listenRetry = null;
-            startListener(localUrl);
-        }, LISTEN_RETRY_MS);
-        listenRetry.unref?.();
-    };
-
-    client.on("notification", (msg) => {
-        if (msg.channel !== DONE_CHANNEL || !msg.payload) return;
-        let ids: unknown;
-        try {
-            ids = (JSON.parse(msg.payload) as { ids?: unknown }).ids;
-        } catch {
-            return;
-        }
-        if (!Array.isArray(ids)) return;
-        for (const id of ids) {
-            if (typeof id === "string") waiters.get(id)?.();
-        }
-    });
-    client.on("error", (err) => dropAndRetry(`error: ${connectionErrorText(err)}`));
-    client.on("end", () => dropAndRetry("connection closed"));
-    client.connect()
-        .then(() => client.query(`LISTEN ${DONE_CHANNEL}`))
-        .then(() => {
-            listenerReady = true;
-            console.log(`[writeRelay] listening on ${DONE_CHANNEL}.`);
-        })
-        .catch((err: unknown) => dropAndRetry(`could not connect: ${connectionErrorText(err)}`));
-}
-
-function getNotifier(localUrl: string): InstanceType<typeof PgPool> {
-    if (!notifier) {
-        notifier = new PgPool({ connectionString: localUrl, max: 1, connectionTimeoutMillis: 5_000 });
-        // A pool without an error listener turns an idle client's error into a crash.
-        notifier.on("error", (err) => console.warn(`[writeRelay] notifier: ${err.message}`));
-    }
-    return notifier;
-}
-
-/**
- * Ask the worker to pull `models` and wait, bounded, for it to say they are applied.
- * Resolves — never rejects — because nothing here may fail a save that the office has
- * already committed. Without a replica (no `LOCAL_DATABASE_URL`) it is a no-op.
- */
-async function pullAndWait(models: string[]): Promise<void> {
-    const localUrl = process.env.LOCAL_DATABASE_URL;
-    if (!localUrl || models.length === 0) return;
-    startListener(localUrl);
-
-    const id = randomUUID();
-    const applied = new Promise<void>((resolve) => {
-        const timer = setTimeout(() => {
-            waiters.delete(id);
-            resolve();
-        }, PULL_WAIT_MS);
-        waiters.set(id, () => {
-            clearTimeout(timer);
-            waiters.delete(id);
-            resolve();
-        });
-    });
-
-    try {
-        await getNotifier(localUrl).query("SELECT pg_notify($1, $2)", [PULL_CHANNEL, JSON.stringify({ id, models })]);
-    } catch (err) {
-        console.warn(`[writeRelay] could not ask the worker to pull: ${err instanceof Error ? err.message : String(err)}`);
-        waiters.get(id)?.();
-        return;
-    }
-    // The answer can only arrive on a live listener; without one the wait would just
-    // be the full timeout for nothing.
-    if (!listenerReady) {
-        waiters.get(id)?.();
-        return;
-    }
-    await applied;
-}
-
 // ── Entry point ──────────────────────────────────────────────────────────────
 
 let breakerUntil = 0;
@@ -371,6 +269,12 @@ export async function relayWrite(req: NextRequest): Promise<Response | null> {
         console.error(`[writeRelay] office could not read this till's session cookie (401) on ${req.method} ${pathname} — check AUTH_SECRET and a stray per-machine .env; relay paused ${AUTH_BREAKER_MS / 1000}s.`);
         return null;
     }
+    if (reply.status === 401) {
+        // Revoked. Bring the new `User.tokensValidFrom` into the replica BEFORE the
+        // browser hears it, so the login page it is about to open agrees with the
+        // office instead of sending the cashier straight back into the app.
+        await pullAndWait(["User"]);
+    }
     if (reply.status >= 502 && reply.status <= 504 && !bodyIsJson(reply)) {
         // Not the app's answer: Vercel's gateway (or a proxy between) speaking for a
         // function it cut off, which may have committed before it was cut. Same class
@@ -396,8 +300,3 @@ export async function relayWrite(req: NextRequest): Promise<Response | null> {
     }
     return toResponse(reply);
 }
-
-// Open the "rows applied" line as soon as this module loads on a relaying counter, so
-// the first save after boot is held for its pull like every later one — a listener
-// started lazily by that first save could not have answered it.
-if (RELAY_ACTIVE && process.env.LOCAL_DATABASE_URL) startListener(process.env.LOCAL_DATABASE_URL);

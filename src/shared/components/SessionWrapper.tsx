@@ -1,6 +1,6 @@
 "use client";
 
-import { SessionProvider, useSession } from "next-auth/react";
+import { SessionProvider, signOut, useSession } from "next-auth/react";
 import type { Session } from "next-auth";
 import { useEffect, useRef } from "react";
 import axios from "axios";
@@ -8,8 +8,8 @@ import { stampRequestContext } from "@/shared/lib/http";
 import { attachChangePublisher } from "@/shared/lib/realtime/appChannel";
 import { OFFLINE_READ_ONLY, offlineReason } from "@/shared/lib/prisma/offlineError";
 import { toast } from "sonner";
-import { wasDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
-import { SESSION_IDLE_LABEL } from "@/shared/lib/constants/session";
+import { heardRevokedSignOut, markDeliberateSignOut, wasDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
+import { SESSION_IDLE_LABEL, SESSION_REVOKED_MESSAGE } from "@/shared/lib/constants/session";
 import ActivityPulse from "@/shared/components/ActivityPulse";
 
 // Staff-only wrapper (mounted by every (protected) layout, never the portal).
@@ -32,14 +32,38 @@ let redirecting = false;
 const REVOKED_NOTICE_MS = 2_500;
 /** Same, for a session that simply went cold. */
 const DEAD_NOTICE_MS = 2_500;
+/** The most a revoked session's sign-out may hold the screen once its notice is
+ *  read. It is one database write, but offline that write waits out its connect
+ *  timeout, and the login page is the right place to be either way. */
+const DROP_COOKIE_WAIT_MS = 4_000;
 
-function goLogin(afterMs = 0) {
+/**
+ * `dropCookie` is for a session the server has REVOKED. Such a cookie still opens
+ * pages wherever the check runs against an older copy of the user row — a counter's
+ * replica before its pull lands — so the login page would send the person straight
+ * back into the app, where the next save throws them out again. Clearing it here
+ * ends that loop whatever the replica says. The sign-out event skips its "end every
+ * other login" stamp for a session that is already dead (src/auth.ts), so this cannot
+ * sign the person out of a fresh login on another device. (A fresh login made in
+ * another window of this same browser during the notice shares this cookie, and goes
+ * with it — a 2.5-second window, accepted.)
+ */
+function goLogin(afterMs = 0, dropCookie = false) {
     if (redirecting || typeof window === "undefined") return;
     if (window.location.pathname.startsWith("/staff/login")) return;
     redirecting = true;
     const back = window.location.pathname + window.location.search;
     const go = () => window.location.assign(`/staff/login?callbackUrl=${encodeURIComponent(back)}`);
-    if (afterMs > 0) setTimeout(go, afterMs); else go();
+    const leave = dropCookie
+        ? () => {
+            markDeliberateSignOut(true);   // other windows repeat the reason, not the idle one
+            void Promise.race([
+                signOut({ redirect: false }).catch(() => undefined),
+                new Promise((resolve) => setTimeout(resolve, DROP_COOKIE_WAIT_MS)),
+            ]).finally(go);
+        }
+        : go;
+    if (afterMs > 0) setTimeout(leave, afterMs); else leave();
 }
 
 function SessionGuard() {
@@ -57,6 +81,10 @@ function SessionGuard() {
             if (!wasDeliberateSignOut() && !redirecting) {
                 toast.error(`Signed out after ${SESSION_IDLE_LABEL} with nothing happening — please sign in again.`, { duration: DEAD_NOTICE_MS });
                 goLogin(DEAD_NOTICE_MS);
+            } else if (heardRevokedSignOut() && !redirecting) {
+                // Another window was refused and signed out; this one says why too.
+                toast.error(SESSION_REVOKED_MESSAGE, { duration: REVOKED_NOTICE_MS });
+                goLogin(REVOKED_NOTICE_MS);
             } else {
                 goLogin();
             }
@@ -76,9 +104,9 @@ function SessionGuard() {
                     // still happens either way; the pause only buys time to read it.
                     const revoked = (err?.response?.data as { code?: string } | undefined)?.code === "SESSION_REVOKED";
                     if (revoked && !redirecting) {
-                        toast.error("Your access was updated by an admin — please sign in again.", { duration: REVOKED_NOTICE_MS });
+                        toast.error(SESSION_REVOKED_MESSAGE, { duration: REVOKED_NOTICE_MS });
                     }
-                    goLogin(revoked ? REVOKED_NOTICE_MS : 0);
+                    goLogin(revoked ? REVOKED_NOTICE_MS : 0, revoked);
                 }
                 // Bare `axios` does not inherit the `http` instance's interceptors,
                 // so without this a save refused for being offline would surface as a

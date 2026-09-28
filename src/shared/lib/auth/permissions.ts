@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { hasPermissionWithScope, hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { idleLimitMinutesFor } from "@/shared/lib/hr/dutyTime";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { SESSION_REVOKED_MESSAGE } from "@/shared/lib/constants/session";
 import { requiredVoucherPermission, type VoucherAction } from "@/shared/lib/auth/voucherMatrix";
 import { canDoPosVoucher, type PosAction } from "@/shared/lib/auth/posVoucherMatrix";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
@@ -142,7 +143,7 @@ export async function requireAuth(opts: { allowReleased?: boolean } = {}): Promi
             return {
                 user: null,
                 response: NextResponse.json(
-                    { error: "Your access was updated. Please sign in again.", code: "SESSION_REVOKED" },
+                    { error: SESSION_REVOKED_MESSAGE, code: "SESSION_REVOKED" },
                     { status: 401 },
                 ),
             };
