@@ -143,7 +143,7 @@ export const PERMISSIONS = {
 
     // E-Commerce → Customize Home — the page itself rides the sidebar link.
     // Permanent fallback sections (priority -1) stay locked; this key shows the
-    // Unlock button that opens one for editing, and lets a section become one.
+    // Unlock button that opens them all for editing at once.
     ECOMMERCE_FALLBACK_UNLOCK: "ecommerce:fallback:unlock",
 
     // POS — shift / till / handover lifecycle

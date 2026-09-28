@@ -128,7 +128,7 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     // permission. The one guard is the permanent FALLBACK sections (priority -1):
     // they are what the storefront shows whenever nothing else is scheduled, so
     // they stay locked unless the role holds this.
-    { id: "ecommerce:fallback:unlock", label: "Unlock fallback sections", module: "ecommerce", description: "Show the Unlock button on E-Commerce → Customize Home, to edit, move, switch off or delete a permanent fallback section, or to make a section a new fallback." },
+    { id: "ecommerce:fallback:unlock", label: "Unlock fallback sections", module: "ecommerce", description: "Show the Unlock button on E-Commerce → Customize Home, which opens every permanent fallback section at once to edit, move, switch off or delete, and to make a section a new fallback." },
 
     // inventory — per-kind voucher gates (inventory:voucher:<action>:<kind>). Every
     // voucher kind is independent (Sale ≠ Purchase). Generated from the matrix so

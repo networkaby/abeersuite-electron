@@ -355,8 +355,8 @@ function SectionRow({
                             This is the permanent fallback for section No. {inst.sectionNo} — it renders whenever
                             nothing else in that slot is currently scheduled, regardless of any date range.{" "}
                             {locked
-                                ? "It is locked so it isn't changed by mistake — Duplicate it to start a new version, or Unlock it next to Full size (needs the Unlock fallback permission)."
-                                : "Unlocked — it locks again when you save or pick another section."}
+                                ? "It is locked so it isn't changed by mistake — Duplicate it to start a new version, or Unlock the fallbacks next to Full size (needs the Unlock fallback permission)."
+                                : "Unlocked — every fallback locks again when you press Lock or Save layout."}
                         </p>
                     ) : (
                         <div className="grid grid-cols-2 gap-2 sm:w-64">
@@ -458,11 +458,10 @@ export default function CustomizeHomePage() {
     const [previewData, setPreviewData] = useState<PreviewData>({ products: [], brands: [] });
     const [fullSize, setFullSize] = useState(false);
     const [fallbackGroupOpen, setFallbackGroupOpen] = useState(false);
-    // The one fallback opened for editing, if any. The Unlock button sits next
-    // to Full size (never on a row, so a stray click can't flip it) and only for
-    // a role holding the permission; it acts on the selected section and locks
-    // again on save or when another section is picked.
-    const [unlockedId, setUnlockedId] = useState<string | null>(null);
+    // Every fallback opens and locks together. The Unlock button sits next to
+    // Full size (never on a row, so a stray click can't flip it) and only for a
+    // role holding the permission; they lock again on Lock or Save layout.
+    const [fallbacksUnlocked, setFallbacksUnlocked] = useState(false);
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canUnlock = hasPermissionWithScope(permissions, PERMISSIONS.ECOMMERCE_FALLBACK_UNLOCK);
@@ -515,10 +514,14 @@ export default function CustomizeHomePage() {
     // ambiguous (resolveGroup would just pick whichever array order won),
     // so it's blocked outright rather than left to silently depend on that.
     const setPriority = (id: string, next: number) => {
-        // Making a fallback needs the same key as changing one — without it the
-        // row would drop into the locked group with no way back out.
-        if (next === -1 && !canUnlock) {
-            toast.error("Only a role with the Unlock fallback permission can make a fallback.");
+        // Making a fallback is changing the fallbacks, so it needs them unlocked —
+        // otherwise the row would drop into the locked group with no way back out.
+        if (next === -1 && !fallbacksUnlocked) {
+            toast.error(
+                canUnlock
+                    ? "Unlock the fallbacks first (next to Full size) to make a new one."
+                    : "Only a role with the Unlock fallback permission can make a fallback."
+            );
             return;
         }
         const inst = instances.find((i) => i.id === id);
@@ -534,8 +537,6 @@ export default function CustomizeHomePage() {
             return;
         }
         updateInstance(id, { priority: next });
-        // Keep a freshly made fallback open — it is still being edited.
-        if (next === -1) setUnlockedId(id);
     };
 
     // Same guard, the other direction: moving an instance into a section
@@ -588,27 +589,21 @@ export default function CustomizeHomePage() {
         if (fromFallback) toast.success("Copy added above, switched off — edit it, then switch it on.");
     };
 
-    // Selecting a different section locks any fallback left open.
-    const selectSection = (id: string) => {
-        setSelectedId(id);
-        setUnlockedId((cur) => (cur === id ? cur : null));
-    };
-
-    const toggleUnlock = async (inst: HomeSectionInstance) => {
-        if (unlockedId === inst.id) {
-            setUnlockedId(null);
+    const toggleFallbackLock = async () => {
+        if (fallbacksUnlocked) {
+            setFallbacksUnlocked(false);
             return;
         }
+        const count = instances.filter(isFallbackInstance).length;
         const ok = await confirmAction({
-            title: `Unlock "${inst.label}"?`,
-            body: `This is the permanent fallback for section No. ${inst.sectionNo} — the storefront shows it whenever nothing else in that slot is scheduled. Nothing changes on the storefront until you press Save layout.`,
+            title: `Unlock all ${count} fallback section${count === 1 ? "" : "s"}?`,
+            body: "Fallbacks are what the storefront shows in a slot whenever nothing else there is scheduled. They stay open until you press Lock or Save layout, and nothing changes on the storefront until you save.",
             confirmLabel: "Unlock",
             destructive: false,
         });
         if (!ok) return;
-        setUnlockedId(inst.id);
+        setFallbacksUnlocked(true);
         setFallbackGroupOpen(true);
-        setExpanded((prev) => new Set(prev).add(inst.id));
     };
 
     const addSection = () => {
@@ -633,7 +628,7 @@ export default function CustomizeHomePage() {
         try {
             const { data } = await axios.put<{ layout: HomeSectionInstance[] }>("/api/ecommerce/home-layout", instances);
             setInstances(data.layout);
-            setUnlockedId(null);
+            setFallbacksUnlocked(false);
             toast.success("Home page layout saved");
         } catch {
             toast.error("Failed to save layout");
@@ -731,7 +726,7 @@ export default function CustomizeHomePage() {
                                         renders={winnerIds.has(inst.id)}
                                         isSelected={selectedId === inst.id}
                                         isOpen={expanded.has(inst.id)}
-                                        onSelect={() => selectSection(inst.id)}
+                                        onSelect={() => setSelectedId(inst.id)}
                                         onDuplicate={() => duplicateInstance(inst.id)}
                                         onRemove={() => removeInstance(inst.id)}
                                         onUpdate={(patch) => updateInstance(inst.id, patch)}
@@ -751,7 +746,11 @@ export default function CustomizeHomePage() {
                                         <span className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                                             Fallback sections
                                             <span className="ml-2 normal-case tracking-normal text-muted-foreground/70">
-                                                {canUnlock ? "(locked · select one, then Unlock next to Full size)" : "(locked)"}
+                                                {fallbacksUnlocked
+                                                    ? "(unlocked · Lock next to Full size)"
+                                                    : canUnlock
+                                                      ? "(locked · Unlock next to Full size)"
+                                                      : "(locked)"}
                                             </span>
                                         </span>
                                         {fallbackGroupOpen ? (
@@ -775,8 +774,8 @@ export default function CustomizeHomePage() {
                                                         renders={winnerIds.has(inst.id)}
                                                         isSelected={selectedId === inst.id}
                                                         isOpen={expanded.has(inst.id)}
-                                                        locked={inst.id !== unlockedId}
-                                                        onSelect={() => selectSection(inst.id)}
+                                                        locked={!fallbacksUnlocked}
+                                                        onSelect={() => setSelectedId(inst.id)}
                                                         onDuplicate={() => duplicateInstance(inst.id)}
                                                         onRemove={() => removeInstance(inst.id)}
                                                         onUpdate={(patch) => updateInstance(inst.id, patch)}
@@ -805,14 +804,15 @@ export default function CustomizeHomePage() {
                             Live preview
                         </p>
                         <div className="flex items-center gap-2">
-                            {canUnlock && selected && isFallbackInstance(selected) ? (
+                            {canUnlock && fallbackRows.length > 0 ? (
                                 <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => void toggleUnlock(selected)}
+                                    onClick={() => void toggleFallbackLock()}
+                                    title={fallbacksUnlocked ? "Lock every fallback section" : "Unlock every fallback section"}
                                 >
-                                    {unlockedId === selected.id ? (
+                                    {fallbacksUnlocked ? (
                                         <>
                                             <Lock className="mr-1.5 size-3.5" aria-hidden /> Lock
                                         </>
