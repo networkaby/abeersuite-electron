@@ -12,6 +12,10 @@ import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/grou
  * summing everything dated earlier) keeps a reprint correct no matter when it
  * happens or what was entered in between.
  *
+ * A list of ids treats them as ONE document — a POS bill and the receipt booked
+ * with it at the counter (an overpayment's RV-…) are one visit, and "before"
+ * has to be before both, or it prints the customer's old dues as already paid.
+ *
  * Returns null when the voucher has no party ledger — a walk-in has no account,
  * so there is no balance to print.
  */
@@ -24,9 +28,12 @@ export interface PartyLedgerBalance {
 
 export async function partyBalanceAroundVoucher(
     partyAccountId: number | null | undefined,
-    universalVoucherId: number | null | undefined,
+    universalVoucherId: number | readonly number[] | null | undefined,
 ): Promise<PartyLedgerBalance | null> {
     if (partyAccountId == null) return null;
+    const ownIds = universalVoucherId == null ? []
+        : typeof universalVoucherId === "number" ? [universalVoucherId]
+        : [...new Set(universalVoucherId)];
 
     const acct = await prisma.account.findUnique({
         where:  { id: partyAccountId },
@@ -45,9 +52,9 @@ export async function partyBalanceAroundVoucher(
             where:  { accountId: partyAccountId, universalVoucher: ledgerStatusFilterUv() },
             select: { type: true, amount: true },
         }),
-        universalVoucherId != null
+        ownIds.length > 0
             ? prisma.voucherGlLine.findMany({
-                where:  { accountId: partyAccountId, universalVoucherId },
+                where:  { accountId: partyAccountId, universalVoucherId: { in: ownIds } },
                 select: { type: true, amount: true },
             })
             : Promise.resolve([]),

@@ -310,9 +310,10 @@ async function printFooter(printer, t, reference, tag) {
     printer.cut();
 }
 
-// Tenders received against the bill (one row per tender ledger) + balance due.
-// Mirrors the receipts block of DefaultThermalMiddle.
-function printReceiptsBlock(printer, sample, fmt) {
+// Tenders received against the bill (one row per tender ledger) + balance due,
+// then — opt-in via the template's Party balance toggle — the party's running
+// account. Mirrors ThermalReceiptsBlock in ThermalReceiptPreview.
+function printReceiptsBlock(printer, sample, fmt, t) {
     const receipts = Array.isArray(sample.receipts) ? sample.receipts.filter((r) => Math.abs(Number(r.amount)) > 0.005) : [];
     const due      = Number(sample.balanceDue || 0);
     if (receipts.length === 0 && due <= 0.005) return;
@@ -330,6 +331,21 @@ function printReceiptsBlock(printer, sample, fmt) {
             { text: fmt(due),      align: "RIGHT", width: 0.45 },
         ]);
         printer.bold(false);
+    }
+    if (t && t.showPartyBalance) {
+        if (sample.balanceBefore)
+            printer.tableCustom([
+                { text: "Previous balance",           align: "LEFT",  width: 0.45 },
+                { text: String(sample.balanceBefore), align: "RIGHT", width: 0.55 },
+            ]);
+        if (sample.balanceAfter) {
+            printer.bold(true);
+            printer.tableCustom([
+                { text: "Closing balance",           align: "LEFT",  width: 0.45 },
+                { text: String(sample.balanceAfter), align: "RIGHT", width: 0.55 },
+            ]);
+            printer.bold(false);
+        }
     }
 }
 
@@ -401,7 +417,7 @@ function printMoneyMiddle(printer, sample, t, fmt, formattedDate) {
 // ── POS receipt builder ───────────────────────────────────────────────────────
 
 async function buildPosBuffer(data) {
-    const { invoiceNumber, date, customerName, customerPhone, customerGstin, lines, subtotal, discountPct, discountAmount, tax, total, receipts, balanceDue, branchAddress, grossAtTag, discounts, charges, savings, hsnSummary, taxTotal, template: tpl } = data;
+    const { invoiceNumber, date, customerName, customerPhone, customerGstin, lines, subtotal, discountPct, discountAmount, tax, total, receipts, balanceDue, balanceBefore, balanceAfter, branchAddress, grossAtTag, discounts, charges, savings, hsnSummary, taxTotal, template: tpl } = data;
 
     // Thermal-resolved POS print template (header/address/toggles/terms/footer).
     // Sent by PosScreen (via /api/pos/sale → posTemplate) and by the invoice
@@ -560,8 +576,9 @@ async function buildPosBuffer(data) {
     }
     printer.bold(false);
 
-    // Tenders (one row per ledger) + balance due — same block as the preview.
-    printReceiptsBlock(printer, { receipts, balanceDue }, fmtAmt);
+    // Tenders (one row per ledger) + balance due + party balance — same block
+    // as the preview.
+    printReceiptsBlock(printer, { receipts, balanceDue, balanceBefore, balanceAfter }, fmtAmt, t);
 
     await printFooter(printer, t, invoiceNumber, "pos");
     return printer.getBuffer();
@@ -1125,7 +1142,7 @@ async function buildVoucherBuffer(data) {
         }
     }
     // Tenders received + balance due (reprint shows payments as of now).
-    printReceiptsBlock(printer, sample, fmtAmt);
+    printReceiptsBlock(printer, sample, fmtAmt, t);
     } // end generic Item/Qty invoice middle
 
     // No narration on the counter slip — internal bookkeeping text (the

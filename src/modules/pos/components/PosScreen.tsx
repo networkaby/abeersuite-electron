@@ -24,7 +24,7 @@ import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 import type { PaymentRelayPayload } from "@/modules/accountancy/lib/paymentSlip";
 import { extractApiError } from "@/shared/lib/api";
-import { formatInr, todayIso, toDateOnly } from "@/shared/lib/format";
+import { formatInr, round2, todayIso, toDateOnly } from "@/shared/lib/format";
 import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearchAndCreate";
 
 // Charge rows carry taxAmount through the edit round-trip — POS-service rows
@@ -264,7 +264,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             // leftover = customer advance) so the bank/UPI statement matches 1:1.
 
             const validCharges = b.charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005);
-            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; freeCouponId: number | null; freeCouponCode: string | null; freeItems: { productId: number; freeQty: number; productName: string }[]; posTemplate: VoucherTemplateDefaults; receiptPrint: PaymentRelayPayload | null; surplusCollected: number; arrearCleared: number; advanceCredited: number; receiptVoucherId: number | null; receiptVoucherRef: string | null }>("/api/pos/sale", {
+            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; freeCouponId: number | null; freeCouponCode: string | null; freeItems: { productId: number; freeQty: number; productName: string }[]; posTemplate: VoucherTemplateDefaults; receiptPrint: PaymentRelayPayload | null; surplusCollected: number; arrearCleared: number; advanceCredited: number; receiptVoucherId: number | null; receiptVoucherRef: string | null; partyBalance: { before: string; after: string } | null }>("/api/pos/sale", {
                 accountId: snapshot.account.id,
                 issueDate: today,
                 dueDate: toDateOnly(due),   // local day, same reason as `today`
@@ -392,16 +392,27 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                         tax: b.tax,
                         total: b.total,
                         // Overpayment: the tenders live on the separate Receipt
-                        // voucher (RV-…), so the sale slip shows NO payment lines
-                        // (the sale is settled to the customer account). Exact-pay
-                        // sales print one row per tender ledger, same as the
-                        // preview / reprint (`sample.receipts`).
-                        receipts: b.overpaid > 0 ? [] : [
-                            ...(b.cashNet > 0 ? [{ label: "Cash", amount: b.cashNet }] : []),
-                            ...splits
-                                .filter((s) => s.amount > 0)
-                                .map((s) => ({ label: payAccountById.get(s.paymentAccountId ?? -1)?.label ?? "Payment", amount: s.amount })),
-                        ],
+                        // voucher (RV-…), so the sale slip shows only that
+                        // receipt's link to the bill — the one row the reprint
+                        // prints for it (`billSettlementPrint`). Exact-pay sales
+                        // print one row per tender ledger, same as the preview /
+                        // reprint (`sample.receipts`).
+                        receipts: b.overpaid > 0
+                            ? [{ label: data.receiptVoucherRef ? `Payment adjusted (${data.receiptVoucherRef})` : "Payment adjusted", amount: b.total }]
+                            : [
+                                ...(b.cashNet > 0 ? [{ label: "Cash", amount: b.cashNet }] : []),
+                                ...splits
+                                    .filter((s) => s.amount > 0)
+                                    .map((s) => ({ label: payAccountById.get(s.paymentAccountId ?? -1)?.label ?? "Payment", amount: s.amount })),
+                            ],
+                        // What the counter did not collect rides the customer's
+                        // account — printed as Balance due, same as the reprint.
+                        // An overpaid bill is settled by its RV-…, so owes nothing.
+                        balanceDue: b.overpaid <= 0 && b.onCredit > 0.01 ? round2(b.onCredit) : null,
+                        // Previous / Closing balance — the sale API sends them only
+                        // when the template's Party balance toggle is on.
+                        balanceBefore: data.partyBalance?.before ?? null,
+                        balanceAfter:  data.partyBalance?.after ?? null,
                         // "Today's discount" ladder (additive).
                         grossAtTag: printLadder.barcodeTotal,
                         discounts: printLadder.discounts.map((d) => ({ label: d.label, amount: d.amount })),

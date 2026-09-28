@@ -15,6 +15,7 @@ import { stateNameForCode, isValidStateCode } from "@/shared/lib/gst/indianState
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { round2 } from "@/shared/lib/format";
+import { loadBillSettlementPrint } from "@/modules/accountancy/lib/billSettlementPrint";
 
 // Shared invoice-print body for InvVoucher-shaped sales. Extracted so both
 // the staff print surface (`/receipt/invoice/[id]`, any voucher, full paper/
@@ -83,17 +84,6 @@ export default async function InvoiceReceipt({
     );
     const charges = settlement.charges.map((c) => ({ ...c, account: chargeAcctById.get(c.accountId) ?? null }));
 
-    // Tenders that settled the bill (cash / UPI / card ledgers) — the counter
-    // slip's payment rows. The party's own ledger is not a tender (credit sale /
-    // overpayment settled to the account; the money then lives on the RV-… slip).
-    const partyAcctId = voucher.universalVoucher?.partyAccountId ?? null;
-    const tenderRows  = settlement.tenders.filter((t) => Math.abs(t.amount) > 0.005 && t.accountId !== partyAcctId);
-    const tenderAcctById = new Map(
-        (tenderRows.length === 0 ? [] : await prisma.account.findMany({ where: { id: { in: [...new Set(tenderRows.map((t) => t.accountId))] } }, select: { id: true, name: true } }))
-            .map((a) => [a.id, a.name]),
-    );
-    const receipts = tenderRows.map((t) => ({ label: tenderAcctById.get(t.accountId) ?? "Received", amount: t.amount }));
-
     const owner = voucher.account?.person ?? voucher.account?.company ?? null;
     const partyName  = owner?.name ?? voucher.account?.name ?? readPartyName(voucher.partyJson) ?? "Walk-in";
     const partyPhone = owner?.phones[0]?.phone ?? null;
@@ -109,8 +99,9 @@ export default async function InvoiceReceipt({
         return desc || l.product?.name || "";
     };
 
-    const [template, org, loyaltyConfig, couponConfig, taxByProduct, spendTiers] = await Promise.all([
-        getVoucherTemplate(kind),
+    const templateP = getVoucherTemplate(kind);
+    const [template, org, loyaltyConfig, couponConfig, taxByProduct, spendTiers, paid] = await Promise.all([
+        templateP,
         getOrganisation(),
         prisma.loyaltyConfig.findUnique({ where: { id: 1 }, select: { redeemExpenseAccountId: true } }),
         prisma.couponConfig.findUnique({ where: { id: 1 }, select: { couponExpenseAccountId: true } }),
@@ -120,6 +111,17 @@ export default async function InvoiceReceipt({
         // Spend tiers → resolve the level NAME from the voucher's discount % for
         // the "Level Discount (Name)" row.
         prisma.customerTier.findMany({ where: { enabled: true }, select: { name: true, discountPct: true } }),
+        // Received in · Balance due · Previous / Closing balance — the same
+        // reader as the office Sale print, so a reprint counts a receipt linked
+        // after the sale (or the RV-… of an overpaid bill) as paid. The running
+        // account is read only when either paper prints it, and never for the
+        // walk-in ledger: it pools every walk-in, so its balance is nobody's.
+        templateP.then((t) => loadBillSettlementPrint({
+            uvId:           voucher.universalVoucherId,
+            partyAccountId: voucher.universalVoucher?.partyAccountId ?? null,
+            total:          Number(voucher.totalAmount),
+            partyBalance:   owner != null && (t.showPartyBalance || t.showPartyBalanceThermal),
+        })),
     ]);
     // ?paper= override wins; then ?mode=thermal; otherwise A4.
     const format = resolvePaperFormat(template, paper, mode);
@@ -256,8 +258,9 @@ export default async function InvoiceReceipt({
 
     // NOTE: when this POS sale was overpaid, the money (tenders) + how it was
     // applied (old dues / advance) live on the separate Receipt voucher (RV-…,
-    // printed via /receipt/payment/[id]) — NOT on this invoice. The invoice stays
-    // a clean record of the sale at the bill amount.
+    // printed via /receipt/payment/[id]) — NOT on this invoice. The invoice
+    // only shows that receipt's link as "Payment adjusted (RV-…)", so it does
+    // not read as unpaid.
     const sample: ThermalReceiptSample = {
         reference:  voucherDisplayNo(voucher.universalVoucher?.voucherNo, voucher.universalVoucherId),
         date:       voucher.universalVoucher!.date.toISOString().slice(0, 10),   // 5D-10: date on spine
@@ -285,11 +288,10 @@ export default async function InvoiceReceipt({
         total:     Number(voucher.totalAmount),
         notes:     null,
         taxBreakdown,
-        receipts:   receipts.length ? receipts : null,
-        balanceDue: (() => {
-            const due = round2(Number(voucher.totalAmount) - receipts.reduce((s, r) => s + r.amount, 0));
-            return due > 0.005 ? due : null;
-        })(),
+        receipts:      paid.receipts,
+        balanceDue:    paid.balanceDue,
+        balanceBefore: paid.balanceBefore,
+        balanceAfter:  paid.balanceAfter,
         branchAddress: voucher.universalVoucher?.branch
             ? formatStructuredAddressBlock(voucher.universalVoucher.branch) || null
             : null,
@@ -330,6 +332,8 @@ export default async function InvoiceReceipt({
         branchAddress:  sample.branchAddress ?? null,
         receipts:       sample.receipts ?? null,
         balanceDue:     sample.balanceDue ?? null,
+        balanceBefore:  sample.balanceBefore ?? null,
+        balanceAfter:   sample.balanceAfter ?? null,
         lines: voucher.lines.map((l, i) => {
             const lad = ladder?.lines[i];
             const qty = Number(l.quantity);

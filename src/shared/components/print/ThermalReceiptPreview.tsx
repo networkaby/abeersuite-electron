@@ -167,9 +167,10 @@ export interface ThermalReceiptSample {
     /// Outstanding after `receipts`. null / 0 → the balance line is hidden, so a
     /// fully-paid counter bill never shouts "Balance due Rs. 0.00".
     balanceDue?: number | null;
-    /// Party ledger balance around a money voucher (RECEIPT/PAYMENT slips),
-    /// preformatted with Dr/Cr (e.g. "Rs. 7,315.00 Dr"). Null/absent → hidden
-    /// (walk-in customers have no ledger account).
+    /// Party ledger balance around the voucher — a money slip (RECEIPT/PAYMENT)
+    /// or a bill (SALE/POS, printed under Balance due), preformatted with Dr/Cr
+    /// (e.g. "Rs. 7,315.00 Dr"). Null/absent → hidden (walk-in customers have
+    /// no account of their own). Printed only with the "Party balance" toggle.
     balanceBefore?: string | null;
     balanceAfter?:  string | null;
     /// Bank pay-in slip block (CONTRA cash → bank / cash → cash, or a cash
@@ -390,7 +391,7 @@ function MoneyThermalMiddle({ template, sample }: { template: VoucherTemplateDef
     );
 }
 
-function ThermalReceiptsBlock({ sample }: { sample: ThermalReceiptSample }) {
+function ThermalReceiptsBlock({ template, sample }: { template: VoucherTemplateDefaults; sample: ThermalReceiptSample }) {
     const receipts = (sample.receipts ?? []).filter((r) => Math.abs(r.amount) > 0.005);
     const due      = sample.balanceDue ?? 0;
     if (receipts.length === 0 && due <= 0.005) return null;
@@ -402,6 +403,13 @@ function ThermalReceiptsBlock({ sample }: { sample: ThermalReceiptSample }) {
             ))}
             {due > 0.005 && (
                 <div className="row total"><span>Balance due</span><span>{fmtINR(due)}</span></div>
+            )}
+            {/* The party's running account — opt-in, as on the A4 settlement. */}
+            {template.showPartyBalance && sample.balanceBefore && (
+                <div className="row"><span>Previous balance</span><span>{sample.balanceBefore}</span></div>
+            )}
+            {template.showPartyBalance && sample.balanceAfter && (
+                <div className="row total"><span>Closing balance</span><span>{sample.balanceAfter}</span></div>
             )}
         </>
     );
@@ -526,7 +534,7 @@ function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateD
 
             {/* Tenders received (one row per ledger) + balance due — the counter
                 slip's Cash / UPI / Card rows. A reprint shows payments as of now. */}
-            <ThermalReceiptsBlock sample={sample} />
+            <ThermalReceiptsBlock template={template} sample={sample} />
 
             {/* No narration on the counter slip either — it is internal
                 bookkeeping text, not customer-facing. Per-line item notes still

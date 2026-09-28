@@ -99,6 +99,25 @@ test("POS: tender rows print from `receipts`; Total is title-case; incl. GST sho
     assert.ok(out.includes("You saved"));
 });
 
+test("POS credit bill: balance due always; party balance only with showPartyBalance", async () => {
+    const credit = {
+        receipts: [{ label: "Cash", amount: 500 }],
+        balanceDue: 415,
+        balanceBefore: "Rs. 1,000.00 Dr",
+        balanceAfter: "Rs. 1,415.00 Dr",
+    };
+    const off = text(await buildPosBuffer({ ...posPayload(), ...credit }));
+    assert.ok(off.includes("Balance due"));
+    assert.ok(off.includes("415.00"));
+    assert.ok(!off.includes("Previous balance"));
+    assert.ok(!off.includes("Closing balance"));
+    const on = text(await buildPosBuffer({ ...posPayload({ showPartyBalance: true }), ...credit }));
+    assert.ok(on.includes("Previous balance"));
+    assert.ok(on.includes("Rs. 1,000.00 Dr"));
+    assert.ok(on.includes("Closing balance"));
+    assert.ok(on.includes("Rs. 1,415.00 Dr"));
+});
+
 test("POS: signature only when the template says so", async () => {
     const off = text(await buildPosBuffer(posPayload()));
     assert.ok(!off.includes("Authorised Signatory"));

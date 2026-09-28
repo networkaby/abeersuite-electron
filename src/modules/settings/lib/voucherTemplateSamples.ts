@@ -307,9 +307,11 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
         case "POS":
             // Customer COUNTER RECEIPT — the price-hiding "Counter discount" ladder:
             // per-line MRP/tag + pooled discounts + savings hero + HSN summary.
+            // A named customer part-paying, so the preview shows the settlement:
+            // Received in · Balance due · (Party balance toggle) Previous / Closing.
             return {
                 reference: "POS/26-27/0042", date: today,
-                partyName: "Walk-in", partyPhone: null, partyGstin: null,
+                partyName: "Rahul Das", partyPhone: null, partyGstin: null,
                 lines: [
                     { description: "Logitech B100 USB Mouse", quantity: 2, amount: 700,  mrp: 800,  barcode: 700 },
                     { description: "HP Laptop 14s Charger",   quantity: 1, amount: 1600, mrp: 1800, barcode: 1600 },
@@ -337,6 +339,10 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 hsnSummary: [
                     { hsn: "8471", ratePct: 18, taxable: 1919.49, cgst: 172.76, sgst: 172.75, total: 2265 },
                 ],
+                receipts: [{ label: "Cash", amount: 1315 }],
+                balanceDue: 1000,
+                balanceBefore: "Rs. 2,500.00 Dr",
+                balanceAfter:  "Rs. 3,500.00 Dr",
                 branchAddress: SAMPLE_BRANCH_ADDRESS,
             };
         case "ONLINE_INVOICE":
