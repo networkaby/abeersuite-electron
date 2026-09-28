@@ -10,6 +10,9 @@
 //     tick is refused.
 //   • amount empty → each tick ADDS the bill's open amount to the row (4,000,
 //     then 7,000), and unticking takes it back out.
+// A typed amount brought down below what the ticks place makes the ticks give
+// way — bills only, the last in fill order first (fitPicksToAmount); the credits
+// ticked alongside stay, since bills − credits is what the amount must cover.
 // The ticks are handed up as a plan, so the link popup after posting opens
 // already ticked the same way. The link itself still happens there: a link is
 // only legal between two posted vouchers.
@@ -26,7 +29,7 @@ import { extractApiError } from "@/shared/lib/api";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import {
-    planLinks, autoLinkOrder, OPENING_SCALAR_ID, EPS,
+    planLinks, autoLinkOrder, fitPicksToAmount, OPENING_SCALAR_ID, EPS,
     type LinkableDoc, type BillPicks,
 } from "@/modules/accountancy/lib/billLinkPlan";
 
@@ -84,7 +87,7 @@ function fetchOpenBills(key: string, accountId: number): Promise<OpenBills> {
     return p;
 }
 
-export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onChange }: {
+export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onChange, trimToAmount = true }: {
     /** The party ledger whose open bills are shown. */
     accountId:  number;
     partyName?: string;
@@ -96,6 +99,10 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
     picks:      BillPicks;
     /** New ticks, and the row amount they imply (null = leave the amount alone). */
     onChange:   (picks: BillPicks, amount: number | null) => void;
+    /** Cut the ticks when a typed amount drops below what they place (default).
+     *  Off while the amount is being built up elsewhere and may pass through
+     *  lower figures on the way — a note count — with the ticks fitted later. */
+    trimToAmount?: boolean;
 }) {
     const key = `${accountId}|${side}`;
     // The answer is keyed by the party, so switching party never shows the old
@@ -197,6 +204,20 @@ export function OpenBillsPanel({ accountId, partyName, side, amount, picks, onCh
     // so the ledger's landing figure below counts it: the party is credited with
     // it either way, linked or not.
     const newRef = Math.max(0, round2(amount - netPlaced));
+
+    // A typed amount came down below what the ticks place → the ticks give way.
+    // Never while the ticks set the amount themselves (a net-zero bill + credit
+    // pair leaves it at 0 on purpose), and never before the list is in — until
+    // then there is no telling a bill from a credit.
+    useEffect(() => {
+        if (!trimToAmount || rows === null) return;
+        if (setByTicks != null && Math.abs(amount - setByTicks) <= EPS) return;
+        const fitted = fitPicksToAmount(rows, side, picks, amount);
+        if (fitted !== picks) onChange(fitted, null);
+        // Due only when the amount or what the ticks place moves; picks, rows and
+        // onChange are read fresh from this render.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [trimToAmount, amount, netPlaced, setByTicks, rows === null]);
 
     /** How much of a credit can be spent: never more than it holds, and never
      *  more than the bills on screen are actually absorbing — a credit that pays

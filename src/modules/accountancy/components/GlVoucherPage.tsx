@@ -650,21 +650,6 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     const showSidePanel = showDenomPanels || showOpenBills || showPayDenom;
     const partyRow = partyLedgerId != null ? rows.find((r) => r.accountId === partyLedgerId) : undefined;
     const billPicks: BillPicks = billPickState.partyId === partyLedgerId ? billPickState.picks : {};
-    // The amount was typed below what the ticks place → drop ticks, last first,
-    // until they fit (a tick can never claim money the row does not have).
-    const trimPicksTo = (amt: number) => {
-        const entries = Object.entries(billPicks);
-        let total = entries.reduce((s, [, v]) => s + v, 0);
-        if (total <= amt + 0.005) return;
-        const next: BillPicks = { ...billPicks };
-        for (let i = entries.length - 1; i >= 0 && total > amt + 0.005; i--) {
-            const [id, v] = entries[i];
-            const keep = Math.max(0, round2(v - (total - amt)));
-            total = round2(total - v + keep);
-            if (keep > 0.005) next[Number(id)] = keep; else delete next[Number(id)];
-        }
-        setBillPickState({ partyId: partyLedgerId ?? 0, picks: next });
-    };
     // At least one Transfer-from is cash → this contra moves physical cash, so
     // the denomination option is meaningful (deposit to bank, or cash handover).
     // A bank → cash withdrawal has no cash source and doesn't offer it.
@@ -1408,8 +1393,9 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                                                     title={denomLocked ? "Amount follows the denomination panel" : undefined}
                                                     onChange={(e) => {
                                                         if (isRowAmountChars(e.target.value)) {
+                                                            // The open-bills panel cuts its own ticks if this
+                                                            // drops below them — it can tell a bill from a credit.
                                                             updateRow(row.id, { amount: e.target.value });
-                                                            if (partyRow?.id === row.id) trimPicksTo(Math.max(0, parseRowAmount(e.target.value)));
                                                         }
                                                     }}
                                                     data-amount=""
@@ -1524,6 +1510,9 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                                 side={openBillsSide}
                                 amount={partyRow ? Math.max(0, parseRowAmount(partyRow.amount)) : 0}
                                 picks={billPicks}
+                                // A count climbs note by note — the ticks are fitted
+                                // at Save instead (settleFromPicks maxOwn).
+                                trimToAmount={!payLockedRow}
                                 onChange={(picks, amt) => {
                                     setBillPickState({ partyId: partyLedgerId, picks });
                                     // A counted amount belongs to the notes, not the ticks.
@@ -1545,10 +1534,10 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                                 title={`${topAccount?.name ?? "Cash"} — Denominations`}
                                 denomList={denomList}
                                 value={payDenom}
-                                // Deliberately no trimPicksTo here: the count climbs note
-                                // by note, and trimming on each step would cut ticks made
-                                // first down to the first note. The settle step fits them
-                                // to the count at Save (settleFromPicks maxOwn).
+                                // The open-bills panel does not trim on the count
+                                // (trimToAmount off): it climbs note by note, and trimming on
+                                // each step would cut ticks made first down to the first note.
+                                // The settle step fits them at Save (settleFromPicks maxOwn).
                                 onChange={(updater) => {
                                     const next = updater(payDenom);
                                     setPayDenom(next);

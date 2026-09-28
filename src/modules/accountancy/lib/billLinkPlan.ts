@@ -144,6 +144,47 @@ export function assignSources(
 }
 
 /**
+ * Cut a settlement's ticks down to the amount typed on the voucher.
+ *
+ * The ticks hold BOTH directions: bills this voucher closes (`side`), and credits
+ * already lying with the party — an advance, a return — spent alongside it. What
+ * the voucher itself must cover is bills − credits, so that, never the plain sum,
+ * is what has to fit: ₹11,000 of bills with a ₹1,000 advance fits ₹10,000 exactly.
+ *
+ * Only bills give way, the last in `autoLinkOrder` first — the order Auto fills
+ * them and the settle step links them, so the bill left short is the same one
+ * everywhere. Credits never need cutting: they were at most the bills before,
+ * and the bills only come down to amount + credits. No amount at all clears every
+ * tick — nothing is being paid, so nothing is settled. A tick on no known
+ * document is carried through untouched (reconcilePicks deals with those).
+ * Same object back when nothing needs cutting.
+ */
+export function fitPicksToAmount(
+    docs: LinkableDoc[],
+    side: 1 | -1,
+    picks: BillPicks,
+    amount: number,
+): BillPicks {
+    if (amount <= EPS) return Object.keys(picks).length > 0 ? {} : picks;
+    const bills = autoLinkOrder(docs.filter((d) => d.side === side && picks[d.universalVoucherId] !== undefined));
+    const creditIds = new Set(docs.filter((d) => d.side !== side).map((d) => d.universalVoucherId));
+    const onBills = round2(bills.reduce((s, d) => s + picks[d.universalVoucherId], 0));
+    const onCredits = round2(Object.entries(picks).reduce((s, [id, v]) => s + (creditIds.has(Number(id)) ? v : 0), 0));
+    let excess = round2(onBills - onCredits - amount);
+    if (excess <= EPS) return picks;
+
+    const next: BillPicks = { ...picks };
+    for (let i = bills.length - 1; i >= 0 && excess > EPS; i--) {
+        const id = bills[i].universalVoucherId;
+        const cut = round2(Math.min(next[id], excess));
+        const keep = round2(next[id] - cut);
+        if (keep > EPS) next[id] = keep; else delete next[id];
+        excess = round2(excess - cut);
+    }
+    return next;
+}
+
+/**
  * Cut a set of ticks down to what the bills can still take.
  *
  * Ticks outlive the list they were made against: the side panel's ticks travel
