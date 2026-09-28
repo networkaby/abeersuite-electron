@@ -278,6 +278,8 @@ function describeBlocker(b: Preview["blockers"][number]): string {
         case "alreadyInactive": return "Source is already inactive — reactivate it first.";
         case "noAccount": return "Source has no ledger Account — fix the data layer first.";
         case "openShopOrders": return `${b.count} open shop order(s) — only terminal orders (DELIVERED / REFUNDED / CANCELLED) can carry over.`;
+        // Every kind is named above; this only shows an API newer than this page.
+        default: return (b as { kind: string }).kind;
     }
 }
 
