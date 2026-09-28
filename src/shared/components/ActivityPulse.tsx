@@ -36,6 +36,19 @@ const PULSE_EVERY_MS = 4 * 60 * 1000;
 const ACTIVITY_EVENTS = ["pointerdown", "keydown", "touchstart", "wheel"] as const;
 
 /**
+ * Every window of the app shares one sign-in, so every window must share one idle
+ * clock. Each counts only its own clicks, and without this a tab left untouched for
+ * the idle limit signed the person out of the tab they were working in. A window
+ * with real input tells the others; they move their clock up to it. Only the window
+ * that had the input pulses, so the day is never counted twice.
+ */
+const ACTIVITY_CHANNEL = "abeer-activity";
+/** At most one "still here" per this long — far inside any idle limit. */
+const SHARE_INPUT_EVERY_MS = 15_000;
+
+const IDLE_SIGNED_OUT_MESSAGE = "Signed out — the counter was left idle. Sign in again to carry on.";
+
+/**
  * The last real keypress or click, at module scope so anything outside this
  * component can read it — the Sign out button in the sidebar most of all.
  *
@@ -100,6 +113,10 @@ export default function ActivityPulse() {
         lastInputAtModule = lastInputAt.current;
         priorInputAtModule = lastInputAt.current;
 
+        let channel: BroadcastChannel | null = null;
+        try { channel = new BroadcastChannel(ACTIVITY_CHANNEL); } catch { /* one window's clock, as before */ }
+        let sharedAt = 0;
+
         const onInput = () => {
             priorInputAtModule = lastInputAt.current;   // before this one overwrites it
             lastInputAt.current = Date.now();
@@ -108,8 +125,22 @@ export default function ActivityPulse() {
             // Coming back before the axe falls clears the warning, so the next
             // idle stretch warns again instead of falling silent.
             warned.current = false;
+            if (channel && lastInputAt.current - sharedAt >= SHARE_INPUT_EVERY_MS) {
+                sharedAt = lastInputAt.current;
+                channel.postMessage(sharedAt);
+            }
         };
         for (const e of ACTIVITY_EVENTS) window.addEventListener(e, onInput, { passive: true });
+
+        // Input in another window: the person is here, so this window's idle clock
+        // moves up too. Not `inputSincePulse` — that window pulses for it.
+        if (channel) channel.onmessage = (e: MessageEvent) => {
+            const at = typeof e.data === "number" ? e.data : 0;
+            if (at <= lastInputAt.current) return;
+            lastInputAt.current = at;
+            lastInputAtModule = at;
+            warned.current = false;
+        };
 
         const tick = setInterval(() => {
             const now = Date.now();
@@ -117,8 +148,8 @@ export default function ActivityPulse() {
 
             // ── Idle: warn, then end it ──────────────────────────────────────
             if (idleFor >= idleLimitMs) {
-                markDeliberateSignOut();   // not a dead session — this one is explained here
-                toast.error("Signed out — the counter was left idle. Sign in again to carry on.");
+                markDeliberateSignOut(IDLE_SIGNED_OUT_MESSAGE);   // explained here, and in the other windows
+                toast.error(IDLE_SIGNED_OUT_MESSAGE);
                 // The day's figures, read while the session is still good, so the
                 // login screen can show him what the day came to when he returns.
                 // `lastInputAt` is the whole point on this path: the gap from the last
@@ -151,6 +182,7 @@ export default function ActivityPulse() {
 
         return () => {
             for (const e of ACTIVITY_EVENTS) window.removeEventListener(e, onInput);
+            channel?.close();
             clearInterval(tick);
         };
     }, [idleLimitMs]);

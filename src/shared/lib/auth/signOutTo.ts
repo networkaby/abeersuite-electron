@@ -26,16 +26,20 @@ const SIGN_OUT_CHANNEL = "abeer-sign-out";
 
 /** A word from another window explains only the session end that follows it. */
 const HEARD_FRESH_MS = 10_000;
-let heard: { at: number; revoked: boolean } | null = null;
+let heard: { at: number; notice: string | null } | null = null;
 const heardFresh = () => heard !== null && Date.now() - heard.at < HEARD_FRESH_MS;
 
-/** Call immediately before any `signOut()` that the person asked for — or, with
- *  `revoked`, one ending a session the server refused (its notice is on screen). */
-export function markDeliberateSignOut(revoked = false): void {
+/**
+ * Call immediately before any `signOut()` that the person asked for — or one whose
+ * reason is already on screen here (idle, revoked, counter released). Pass that
+ * reason as `notice`: the other windows show it too, rather than jumping to the
+ * login page in silence. A plain Sign out click passes none; the person knows.
+ */
+export function markDeliberateSignOut(notice: string | null = null): void {
     deliberate = true;
     try {
         const channel = new BroadcastChannel(SIGN_OUT_CHANNEL);
-        channel.postMessage(revoked ? "revoked" : "signed-out");
+        channel.postMessage({ notice });
         channel.close();
     } catch { /* no BroadcastChannel: the other windows fall back to the idle notice */ }
 }
@@ -43,13 +47,13 @@ export function markDeliberateSignOut(revoked = false): void {
 /** True when the session that just ended was ended on purpose, here or in another window. */
 export function wasDeliberateSignOut(): boolean { return deliberate || heardFresh(); }
 
-/** True when another window has just ended the session because the server revoked it —
- *  this window should say so too rather than jump to the login page in silence. */
-export function heardRevokedSignOut(): boolean { return heardFresh() && heard!.revoked; }
+/** The reason another window just gave for ending the session, if it gave one. */
+export function heardSignOutNotice(): string | null { return heardFresh() ? heard!.notice : null; }
 
 if (typeof window !== "undefined" && typeof BroadcastChannel !== "undefined") {
     new BroadcastChannel(SIGN_OUT_CHANNEL).onmessage = (e: MessageEvent) => {
-        heard = { at: Date.now(), revoked: e.data === "revoked" };
+        const notice = (e.data as { notice?: unknown } | null)?.notice;
+        heard = { at: Date.now(), notice: typeof notice === "string" ? notice : null };
     };
 }
 

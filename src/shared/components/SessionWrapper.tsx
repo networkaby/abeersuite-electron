@@ -8,7 +8,7 @@ import { stampRequestContext } from "@/shared/lib/http";
 import { attachChangePublisher } from "@/shared/lib/realtime/appChannel";
 import { OFFLINE_READ_ONLY, offlineReason } from "@/shared/lib/prisma/offlineError";
 import { toast } from "sonner";
-import { heardRevokedSignOut, markDeliberateSignOut, wasDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
+import { heardSignOutNotice, markDeliberateSignOut, wasDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
 import { SESSION_IDLE_LABEL, SESSION_REVOKED_MESSAGE } from "@/shared/lib/constants/session";
 import ActivityPulse from "@/shared/components/ActivityPulse";
 
@@ -56,7 +56,7 @@ function goLogin(afterMs = 0, dropCookie = false) {
     const go = () => window.location.assign(`/staff/login?callbackUrl=${encodeURIComponent(back)}`);
     const leave = dropCookie
         ? () => {
-            markDeliberateSignOut(true);   // other windows repeat the reason, not the idle one
+            markDeliberateSignOut(SESSION_REVOKED_MESSAGE);   // other windows repeat the reason
             void Promise.race([
                 signOut({ redirect: false }).catch(() => undefined),
                 new Promise((resolve) => setTimeout(resolve, DROP_COOKIE_WAIT_MS)),
@@ -81,9 +81,10 @@ function SessionGuard() {
             if (!wasDeliberateSignOut() && !redirecting) {
                 toast.error(`Signed out after ${SESSION_IDLE_LABEL} with nothing happening — please sign in again.`, { duration: DEAD_NOTICE_MS });
                 goLogin(DEAD_NOTICE_MS);
-            } else if (heardRevokedSignOut() && !redirecting) {
-                // Another window was refused and signed out; this one says why too.
-                toast.error(SESSION_REVOKED_MESSAGE, { duration: REVOKED_NOTICE_MS });
+            } else if (heardSignOutNotice() && !redirecting) {
+                // Another window ended it and said why (idle, revoked, released);
+                // this one says so too.
+                toast.error(heardSignOutNotice(), { duration: REVOKED_NOTICE_MS });
                 goLogin(REVOKED_NOTICE_MS);
             } else {
                 goLogin();

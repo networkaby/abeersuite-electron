@@ -89,14 +89,15 @@ export default function CounterReconciler() {
             // Wording matters here: the usual reason is a DEVICE SWAP, not a closure.
             // The counter, its shift and its drawer are untouched — this machine is
             // simply not that counter any more, and must be onboarded again.
+            const released = "This PC no longer holds its counter — an admin released it.";
             toast.error(
-                "This PC no longer holds its counter — an admin released it. " +
+                `${released} ` +
                 "The shift and drawer are unaffected. This PC's local data has been cleared. " +
                 "Sign in again, online, to set this PC up on an available counter.",
                 { duration: 15_000 },
             );
             // The office released this PC — a deliberate end, not a cold session.
-            markDeliberateSignOut();
+            markDeliberateSignOut(released);
             await signOut({ redirect: false });
             // A full load, not router.push: the session cookie is gone and every
             // cached page in memory was rendered for a counter this machine no
