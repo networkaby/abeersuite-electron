@@ -39,6 +39,8 @@
  *     each one is a credential that cannot be un-shipped once installed.
  *   - Cloudinary on the `counter` variant — see `COUNTER_ENV_CLOUDINARY_KEYS`: only the
  *     `office` build uploads images.
+ *   - Cloudflare on the `counter` variant — see `COUNTER_ENV_CLOUDFLARE_KEYS`: only the
+ *     `office` build edits mail forwarding.
  */
 
 import * as fs from "fs";
@@ -138,14 +140,29 @@ export const COUNTER_ENV_CLOUDINARY_KEYS: readonly string[] = [
 ];
 
 /**
+ * Mail-forwarding keys — Me → Security → Forward Email (`src/shared/lib/email/cloudflareRouting.ts`)
+ * reads and sets where a staff address forwards, and renames the handle.
+ *
+ * `GET /api/users/[id]/forward-email` is a read, so `v_live` never relays it — without
+ * these keys the card only says "Mail forwarding is set from the office website."
+ * Granted to `office` on the owner's call (2026-09-28), same as Cloudinary. The cost:
+ * whoever holds an office installer can change the domain's mail routing (not read mail).
+ */
+export const COUNTER_ENV_CLOUDFLARE_KEYS: readonly string[] = [
+    "CLOUDFLARE_API_TOKEN",
+    "CLOUDFLARE_ACCOUNT_ID",
+    "CLOUDFLARE_ZONE_ID",
+];
+
+/**
  * Which keys `generate-counter-env.ts` copies, per desktop variant. `full`/`public`
  * are Vercel modes in practice — if a desktop build is ever made with one of them
  * (allowed, just unusual — see `electron-build.ts`), it gets the same minimal set as
- * `counter`: withholding backup and upload keys by default is the safer failure mode.
+ * `counter`: withholding backup, upload and mail keys by default is the safer failure mode.
  */
 export function counterEnvCopiedFor(mode: AppMode): readonly string[] {
     return mode === "office"
-        ? [...COUNTER_ENV_COPIED, ...COUNTER_ENV_BACKUP_KEYS, ...COUNTER_ENV_CLOUDINARY_KEYS]
+        ? [...COUNTER_ENV_COPIED, ...COUNTER_ENV_BACKUP_KEYS, ...COUNTER_ENV_CLOUDINARY_KEYS, ...COUNTER_ENV_CLOUDFLARE_KEYS]
         : COUNTER_ENV_COPIED;
 }
 
