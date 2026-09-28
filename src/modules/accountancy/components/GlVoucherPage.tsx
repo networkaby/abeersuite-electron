@@ -441,6 +441,18 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [router, onClose]);
     const rootRef = useRef<HTMLDivElement>(null);
+    // The form body's visible height, measured — caps the side column so a long
+    // open-bills list plus the note count scroll inside it instead of running
+    // off the bottom of a pinned column (dialog and full page differ in height).
+    const bodyRef = useRef<HTMLDivElement>(null);
+    const [bodyHeight, setBodyHeight] = useState<number | null>(null);
+    useEffect(() => {
+        const el = bodyRef.current;
+        if (!el) return;
+        const ro = new ResizeObserver(() => setBodyHeight(el.clientHeight));
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
     const isDirtyRef = useRef(false);
     const [closeDialogOpen, setCloseDialogOpen] = useState(false);
     const handleClose = () => {
@@ -620,6 +632,16 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     const depositPayee = payeeIds.length === 1 ? accountById.get(payeeIds[0]) : undefined;
     const partyDeposit = depositPayee?.partyBank === true;
     const showPayDenom = partyDeposit && denomOn;
+    // Count ticked → the payee's row amount IS the count (locked, like a Contra
+    // cash row), net of any other row, so the cash paid equals the notes counted.
+    const payeeRow = partyDeposit ? activeRows.find((r) => r.accountId === depositPayee?.id) : undefined;
+    const payLockedRow = showPayDenom ? payeeRow : undefined;
+    const lockPayeeAmount = (d: RowDenom) => {
+        if (!payeeRow) return;
+        const others = activeRows.filter((r) => r.id !== payeeRow.id).reduce((s, r) => s + parseRowAmount(r.amount), 0);
+        const amt = round2(rowDenomTotal(d) - others);
+        updateRow(payeeRow.id, { amount: amt > 0 ? String(amt) : "" });
+    };
     // Payment / Receipt with ONE party row → its open bills sit beside the form
     // from the moment the party is picked (read-only; the link itself happens in
     // the popup after posting). A Receipt settles receivables, a Payment payables.
@@ -914,7 +936,10 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     // its panel total; turning it OFF frees plain typing (amounts stay put).
     const toggleDenom = (on: boolean) => {
         setDenomOn(on);
-        if (on) {
+        // Payment: the amount follows the count once there is one — ticking with
+        // nothing counted keeps an amount already there as the target to count to.
+        if (on && isPayment && rowDenomTotal(payDenom) > 0) lockPayeeAmount(payDenom);
+        if (on && isContra) {
             for (const r of rows) {
                 const acct = r.accountId ? accountById.get(r.accountId) : undefined;
                 if (!isCashAcct(acct)) continue;
@@ -1075,6 +1100,11 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                             voucherId: created.data.id,
                             side:      openBillsSide,
                             picks:     billPicks,
+                            // Counted payment: ticks could run ahead of the count
+                            // while notes were being counted — link no more than
+                            // was actually paid (the settle step knows a bill from
+                            // a credit; the form does not).
+                            ...(payLockedRow && partyRow ? { maxOwn: Math.max(0, parseRowAmount(partyRow.amount)) } : {}),
                         });
                         if (done) {
                             clearOpenBillsCache();
@@ -1163,7 +1193,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                 space beside the form (one panel per cash Transfer-from row). */}
             {/* Entry boxes sit on the raised (white) surface so they stand off the
                 grey page, and hint text is faded so it never reads as typed data. */}
-            <div className="flex-1 overflow-y-auto px-8 py-6 [&_input]:bg-card [&_select]:bg-card [&_input::placeholder]:text-muted-foreground/55 [&_input:disabled]:bg-muted">
+            <div ref={bodyRef} className="flex-1 overflow-y-auto px-8 py-6 [&_input]:bg-card [&_select]:bg-card [&_input::placeholder]:text-muted-foreground/55 [&_input:disabled]:bg-muted">
                 <div className={`mx-auto flex items-start gap-8 ${showSidePanel ? "max-w-6xl" : "max-w-3xl"}`}>
                 <div className="min-w-0 flex-1 space-y-6">
 
@@ -1280,7 +1310,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                                     const acct = row.accountId ? accountById.get(row.accountId) : undefined;
                                     // Capture on + cash source → the amount comes from
                                     // the side panel, plain typing is off.
-                                    const denomLocked = isContra && denomOn && isCashAcct(acct);
+                                    const denomLocked = (isContra && denomOn && isCashAcct(acct)) || row.id === payLockedRow?.id;
                                     return (
                                         <tr
                                             key={row.id}
@@ -1482,7 +1512,11 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                     or one for the cash paid (Payment into a party's bank); the
                     combined result is what the deposit slip prints. */}
                 {showSidePanel && (
-                    <aside className={`${showOpenBills ? "w-[440px]" : "w-[300px]"} shrink-0 space-y-4 sticky top-0`}>
+                    <aside
+                        className={`${showOpenBills ? "w-[440px]" : "w-[300px]"} shrink-0 space-y-4 sticky top-0 overflow-y-auto`}
+                        // Visible body height minus its py-6 padding (48px).
+                        style={bodyHeight ? { maxHeight: Math.max(240, bodyHeight - 48) } : undefined}
+                    >
                         {showOpenBills && partyLedgerId != null && (
                             <OpenBillsPanel
                                 accountId={partyLedgerId}
@@ -1492,7 +1526,8 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                                 picks={billPicks}
                                 onChange={(picks, amt) => {
                                     setBillPickState({ partyId: partyLedgerId, picks });
-                                    if (amt !== null && partyRow) updateRow(partyRow.id, { amount: amt > 0 ? String(round2(amt)) : "" });
+                                    // A counted amount belongs to the notes, not the ticks.
+                                    if (amt !== null && partyRow && partyRow.id !== payLockedRow?.id) updateRow(partyRow.id, { amount: amt > 0 ? String(round2(amt)) : "" });
                                 }}
                             />
                         )}
@@ -1510,7 +1545,16 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                                 title={`${topAccount?.name ?? "Cash"} — Denominations`}
                                 denomList={denomList}
                                 value={payDenom}
-                                onChange={(updater) => { setPayDenom(updater); isDirtyRef.current = true; }}
+                                // Deliberately no trimPicksTo here: the count climbs note
+                                // by note, and trimming on each step would cut ticks made
+                                // first down to the first note. The settle step fits them
+                                // to the count at Save (settleFromPicks maxOwn).
+                                onChange={(updater) => {
+                                    const next = updater(payDenom);
+                                    setPayDenom(next);
+                                    lockPayeeAmount(next);
+                                    isDirtyRef.current = true;
+                                }}
                                 target={rowsTotal}
                             />
                         )}

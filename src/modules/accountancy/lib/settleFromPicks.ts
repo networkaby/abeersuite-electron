@@ -62,6 +62,11 @@ export async function settleFromPicks(args: {
     voucherId: number;
     side:      1 | -1;
     picks:     BillPicks;
+    /** The voucher's own amount, when the ticks may have run ahead of it — a
+     *  Payment whose amount is a note count, ticked before the count ended.
+     *  Links past it are left off, last bill first; ticked credits are still
+     *  spent in full. Omitted → the ticks are taken as they stand. */
+    maxOwn?:   number;
 }): Promise<SettlementResult | null> {
     const picks: BillPicks = { ...args.picks };
 
@@ -128,8 +133,12 @@ export async function settleFromPicks(args: {
 
     const placed = round2(ordered.reduce((s, t) => s + t.amount, 0));
     const fromCredits = round2(orderedCredits.reduce((s, c) => s + c.amount, 0));
-    // Whatever the credits do not cover, this voucher does.
-    const ownBudget = round2(placed - fromCredits);
+    // Whatever the credits do not cover, this voucher does — never more than
+    // it is worth. assignSources stops when the money runs out, so a capped
+    // budget simply leaves the last bill (in fill order) short.
+    const ownBudget = args.maxOwn != null
+        ? Math.max(0, Math.min(round2(placed - fromCredits), round2(args.maxOwn)))
+        : round2(placed - fromCredits);
 
     const plans = assignSources(
         ordered.map((t) => ({ id: t.id, amount: t.amount })),
@@ -160,5 +169,8 @@ export async function settleFromPicks(args: {
         });
     }
 
-    return { bills: ordered.length, placed, credits: fromCredits, openingBillId };
+    // Read back from the plan, so a capped budget reports what was really linked.
+    const linkedBills = new Set(plans.flatMap((p) => p.links.map((l) => l.universalVoucherId)));
+    const linked = round2(plans.reduce((s, p) => s + p.links.reduce((t, l) => t + l.amount, 0), 0));
+    return { bills: linkedBills.size, placed: linked, credits: fromCredits, openingBillId };
 }
