@@ -195,11 +195,14 @@ export async function markOutboxUnreachable(localUrl: string, id: number, error:
  * push.ts to arbitrate by. Retired the way push.ts retires a superseded replay: counted
  * as done, nothing sent.
  *
- * Runs once when the flusher starts. Idempotent — a second run finds nothing.
+ * Idempotent — a second run finds nothing. Returns null when the local database did
+ * not answer, so the caller knows the sweep has NOT happened and must try again: it
+ * runs as the flusher comes up, which is exactly when a busy replica misses the 5 s
+ * connect timeout.
  */
 export async function requeueUnreachableDeadLetters(
     localUrl: string,
-): Promise<{ requeued: number; superseded: number }> {
+): Promise<{ requeued: number; superseded: number } | null> {
     const client = new PgClient({ connectionString: localUrl, connectionTimeoutMillis: 5000 });
     try {
         await client.connect();
@@ -234,8 +237,8 @@ export async function requeueUnreachableDeadLetters(
         }
         return { requeued: requeue.length, superseded: retire.length };
     } catch (err) {
-        console.error("[Outbox] Failed to re-queue outage dead letters:", err);
-        return { requeued: 0, superseded: 0 };
+        console.warn("[Outbox] Could not re-queue outage dead letters yet; retrying on the next pass:", err);
+        return null;
     } finally {
         await client.end().catch(() => { });
     }

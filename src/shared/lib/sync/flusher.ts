@@ -87,6 +87,14 @@ let queued = false;
 let cloudReachable = true;
 let lastFlushAt: number | null = null;
 
+/**
+ * Whether this process has swept the outage dead letters an older build left behind
+ * (see `requeueUnreachableDeadLetters`). Set only when the sweep actually ran: the
+ * first attempt comes as the app boots, when the replica is at its busiest, and a
+ * one-shot there failed on a real till and left the red badge standing.
+ */
+let strandedSwept = false;
+
 export function getPushHealth(): { cloudReachable: boolean; lastFlushAt: string | null } {
     return {
         cloudReachable,
@@ -113,6 +121,21 @@ export async function flushOnce(localUrl: string): Promise<number> {
     }
     inFlight = true;
     try {
+        // Before the first pass, and every pass until it gets through. It runs inside the
+        // flush so the rows it re-queues are pushed by this very pass, in id order.
+        if (!strandedSwept) {
+            const swept = await requeueUnreachableDeadLetters(localUrl);
+            if (swept) {
+                strandedSwept = true;
+                if (swept.requeued > 0 || swept.superseded > 0) {
+                    console.log(
+                        `[OutboxFlusher] re-queued ${swept.requeued} row(s) dead-lettered by an outage` +
+                        (swept.superseded > 0 ? `; retired ${swept.superseded} superseded by a later save.` : "."),
+                    );
+                }
+            }
+        }
+
         const pending = await getPendingOutbox(localUrl, BATCH_SIZE);
         if (pending.length === 0) return 0;
 
@@ -233,17 +256,6 @@ export function startOutboxFlusher(localUrl: string): void {
     timer.unref?.();
 
     startListener(localUrl);
-
-    // Rows an older build dead-lettered for nothing worse than an outage. Once per
-    // start is enough: this build never creates another one.
-    void requeueUnreachableDeadLetters(localUrl).then(({ requeued, superseded }) => {
-        if (requeued === 0 && superseded === 0) return;
-        console.log(
-            `[OutboxFlusher] re-queued ${requeued} row(s) dead-lettered by an outage` +
-            (superseded > 0 ? `; retired ${superseded} superseded by a later save.` : "."),
-        );
-        void flushOnce(localUrl);
-    });
 }
 
 export function stopOutboxFlusher(): void {
