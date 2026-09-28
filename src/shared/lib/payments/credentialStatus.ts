@@ -19,6 +19,9 @@ export type GatewayCredentialStatus = {
     vars: EnvVarStatus[];
     /** True when every required env var is present (always true when none required). */
     ready: boolean;
+    /** True inside the desktop app, which never carries payment keys (`counterEnv.ts`):
+     *  presence measured there says nothing about the office website, where they live. */
+    checkedOnOffice: boolean;
 };
 
 function statusForNames(names: string[]): EnvVarStatus[] {
@@ -42,6 +45,8 @@ export function credentialStatusFor(
         environment,
         vars,
         ready: vars.every((v) => v.present),
+        // COUNTER_MACHINE_ID is set by electron/main.ts on every desktop run, never on Vercel.
+        checkedOnOffice: Boolean(process.env.COUNTER_MACHINE_ID),
     };
 }
 

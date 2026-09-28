@@ -53,6 +53,8 @@ type CredentialStatus = {
     environment: "TEST" | "LIVE";
     vars: EnvVarStatus[];
     ready: boolean;
+    /** Desktop app: keys live on the office website, not on this PC. */
+    checkedOnOffice: boolean;
 };
 type Gateway = {
     id: number;
@@ -114,6 +116,9 @@ function CredentialBadge({ status }: { status: CredentialStatus }) {
     // MANUAL providers declare no env vars — nothing to detect.
     if (status.vars.length === 0) {
         return <Badge className="bg-muted text-muted-foreground">No keys needed</Badge>;
+    }
+    if (status.checkedOnOffice) {
+        return <Badge className="bg-muted text-muted-foreground">Checked on office website</Badge>;
     }
     return status.ready ? (
         <Badge className="bg-green-100 text-green-700">
@@ -551,7 +556,12 @@ export default function PaymentMethodsSettingsPage() {
                                     <KeyRound className="size-3.5" /> API credentials (
                                     {form.environment === "LIVE" ? "Live" : "Test"})
                                 </div>
-                                {formCredential && formCredential.vars.length > 0 ? (
+                                {formCredential?.checkedOnOffice && formCredential.vars.length > 0 ? (
+                                    <p className="text-muted-foreground text-xs">
+                                        This app does not carry payment keys. Open Payment Methods
+                                        on the office website to see whether they are set.
+                                    </p>
+                                ) : formCredential && formCredential.vars.length > 0 ? (
                                     <ul className="space-y-1">
                                         {formCredential.vars.map((v) => (
                                             <li
