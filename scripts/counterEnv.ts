@@ -162,7 +162,8 @@ export const COUNTER_ENV_CLOUDFLARE_KEYS: readonly string[] = [
  */
 export function counterEnvCopiedFor(mode: AppMode): readonly string[] {
     return mode === "office"
-        ? [...COUNTER_ENV_COPIED, ...COUNTER_ENV_BACKUP_KEYS, ...COUNTER_ENV_CLOUDINARY_KEYS, ...COUNTER_ENV_CLOUDFLARE_KEYS]
+        ? [...COUNTER_ENV_COPIED, ...COUNTER_ENV_BACKUP_KEYS, ...COUNTER_ENV_CLOUDINARY_KEYS,
+        ...COUNTER_ENV_CLOUDFLARE_KEYS, ...COUNTER_ENV_COURIER_KEYS, ...COUNTER_ENV_SUPER_ADMIN_KEYS]
         : COUNTER_ENV_COPIED;
 }
 
@@ -244,3 +245,22 @@ export function parseEnvFile(file: string): Map<string, string> {
     }
     return out;
 }
+
+
+/**
+ * Courier keys — Change courier prices Shiprocket/Shipway through a GET, which v_live
+ * never relays. Office only; the desktop app is private (2026-09-28).
+ * REMOVE before any public desktop release.
+ */
+export const COUNTER_ENV_COURIER_KEYS: readonly string[] = [
+    "SHIPROCKET_EMAIL",
+    "SHIPROCKET_PASSWORD",
+    "SHIPWAY_USERNAME",
+    "SHIPWAY_LICENSE",
+    "SHIPWAY_TOKEN",
+    "SHIPWAY_API_BASE",
+];
+
+/** Lets Permissions show the env super admin as full access. Grants no sign-in without
+ *  SUPER_ADMIN_PASSWORD, which stays withheld. REMOVE before any public desktop release. */
+export const COUNTER_ENV_SUPER_ADMIN_KEYS: readonly string[] = ["SUPER_ADMIN_EMAIL"];
