@@ -1229,6 +1229,16 @@ interface PageSlice {
     fillerRowMm: number;
 }
 
+/** Does the settlement block (Received in · Balance due · party balance) print?
+ *  Only once money has been received or is still owed — a fully-paid bill
+ *  shows no "Balance Rs. 0.00" row. The discount-ladder receipts skip it,
+ *  except POS: a counter bill on credit has to say what is still owed, same
+ *  as a Sale. The Online Invoice ladder keeps it off (owner's call, 2026-09-28). */
+function printsSettlement(sample: ThermalReceiptSample, template: VoucherTemplateDefaults): boolean {
+    if (sample.discounts && template.kind !== "POS") return false;
+    return (sample.receipts?.length ?? 0) > 0 || (sample.balanceDue ?? 0) > 0.005;
+}
+
 /** Default invoice middle — bill-to meta, line items, totals, HSN, amount-in-words. */
 function DefaultA4Middle({ template, sample, page }: A4ChromeProps & { page?: PageSlice }) {
     // The Bill-To / voucher band repeats on every sheet so each one stands
@@ -1580,7 +1590,7 @@ function DefaultA4Middle({ template, sample, page }: A4ChromeProps & { page?: Pa
             {/* 6c — Settlement. Only prints when money has actually been
                  received against the voucher; a fully-paid bill shows no
                  balance row rather than a "Balance Rs. 0.00" line. */}
-            {!sample.discounts && showTails && (receipts.length > 0 || (sample.balanceDue ?? 0) > 0.005) && (
+            {showTails && printsSettlement(sample, template) && (
                 <div className="settle">
                     {/* Left — what was actually tendered. A pure credit sale has
                         nothing here, which is why the block can't be gated on it. */}
@@ -1777,7 +1787,7 @@ function paginateGoods(sample: ThermalReceiptSample, template: VoucherTemplateDe
     // heights, not guessed — on a real invoice ledger+Total came to ≈45mm,
     // words 8mm, settlement 21.2mm.
     const tailMm = 7 /* subtotal gap */ + ledgerRows * 5.3 + 7 /* Total */ + 8 /* words + E&OE */
-        + (sample.receipts?.length ? 21 : 0);
+        + (printsSettlement(sample, template) ? 21 : 0);
     // The tax analysis (rate-wise HSN table + tax in words) is separable: it
     // describes the bill, not the last line, so it can become its own annexure
     // sheet. Measured at 26.5mm for a single HSN row plus 4.4mm of words.

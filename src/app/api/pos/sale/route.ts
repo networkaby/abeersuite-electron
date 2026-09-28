@@ -19,6 +19,7 @@ import { buildPartyJson } from "@/shared/lib/accountancy/partySnapshot";
 import { getOpenSaleBillsForFifo } from "@/modules/accountancy/lib/outstandings";
 import { getThermalTemplate } from "@/shared/lib/print/voucherTemplate";
 import { buildPaymentSlipPrint } from "@/modules/accountancy/lib/paymentSlip";
+import { partyBalanceAroundVoucher } from "@/shared/lib/accountancy/partyLedgerBalance";
 import * as Sentry from "@sentry/nextjs";
 import { validateRequest } from "@/shared/lib/api";
 import { checkCreditLimit, CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
@@ -1158,6 +1159,7 @@ export async function POST(req: Request) {
             return {
                 voucherId: voucher.id,
                 voucherRef: voucherRef,
+                universalVoucherId: spineId,
                 journalEntryId: gl.journalEntryId,
                 shiftId: shift.id,
                 // Surplus outcome — surfaced on the POS success toast + print.
@@ -1258,13 +1260,26 @@ export async function POST(req: Request) {
         // *Thermal* toggles and matches /receipt/invoice/[id]?kind=POS. The
         // overpayment Receipt voucher (RV-…) rides along the same way, built by
         // the same helper as /receipt/payment/[id]. Display-only.
-        const [posTemplate, receiptSlip] = await Promise.all([
-            getThermalTemplate("POS"),
+        const posTemplateP = getThermalTemplate("POS");
+        const [posTemplate, receiptSlip, ledgerBalance] = await Promise.all([
+            posTemplateP,
             result.receiptVoucherId ? buildPaymentSlipPrint(result.receiptVoucherId) : null,
+            // The customer's running account for the slip's Previous / Closing
+            // balance — read only when the template prints it, and never for the
+            // walk-in ledger (it pools every walk-in). The bill and its RV-… are
+            // one visit, exactly as the reprint counts them (billSettlementPrint).
+            isIdentified
+                ? posTemplateP.then((t) => t.showPartyBalance
+                    ? partyBalanceAroundVoucher(customerAccount.id, [result.universalVoucherId, ...(result.receiptVoucherId ? [result.receiptVoucherId] : [])])
+                    : null)
+                : null,
         ]);
         const receiptPrint = receiptSlip?.relayPayload ?? null;
+        const partyBalance = ledgerBalance
+            ? { before: ledgerBalance.format(ledgerBalance.before), after: ledgerBalance.format(ledgerBalance.after) }
+            : null;
         console.log(`[pos-timing] ${result.invoiceNumber}: preTx=${Math.round(_tPreTx - _t0)}ms tx=${Math.round(_tTx - _tPreTx)}ms post=${Math.round(performance.now() - _tTx)}ms total=${Math.round(performance.now() - _t0)}ms (lines=${body.lines.length})`);
-        return NextResponse.json({ ...result, posTemplate, receiptPrint }, { status: 201 });
+        return NextResponse.json({ ...result, posTemplate, receiptPrint, partyBalance }, { status: 201 });
     } catch (err) {
         if (err instanceof CreditLimitError) {
             return NextResponse.json({ error: err.message, code: err.code }, { status: 422 });
