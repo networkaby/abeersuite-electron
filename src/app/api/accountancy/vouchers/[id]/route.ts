@@ -68,8 +68,9 @@ const lineSchema = z.object({
     reference:   z.string().trim().max(60).optional(),
 });
 
-// Contra deposit-slip capture — same shape as the create route; the FINAL
-// combined breakdown stored once on the spine. `null` clears a saved capture.
+// Deposit-slip capture (Contra, or a cash Payment into the party's bank) — same
+// shape as the create route; the FINAL combined breakdown stored once on the
+// spine. `null` clears a saved capture.
 const denomJsonSchema = z.object({
     notes:   z.record(z.string(), z.number().int().min(0)),
     cheques: z.array(z.object({

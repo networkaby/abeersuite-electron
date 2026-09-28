@@ -91,7 +91,15 @@ type LoadedVoucher = {
 // Normalized line for dirty-check comparison.
 // `instrument` = "<method>|<reference>" of the line ("" when none).
 type SnapLine = { accountId: number; type: "DEBIT" | "CREDIT"; amount: number; description: string; instrument: string };
-type Snapshot = { date: string; narration: string; lines: SnapLine[] };
+// `denom` = the deposit-slip capture as a stable key — a Payment's note count
+// never moves its lines, so without it a count-only edit read as "no changes".
+type Snapshot = { date: string; narration: string; lines: SnapLine[]; denom: string };
+const denomKey = (d: DenomJson | null): string => d
+    ? JSON.stringify([
+        Object.entries(d.notes).filter(([, c]) => c > 0).sort(([a], [b]) => Number(a) - Number(b)),
+        d.cheques.map((c) => [c.no, round2(c.amount), c.account ?? ""]),
+    ])
+    : "";
 const instrumentKey = (method?: string | null, reference?: string | null) =>
     method || (reference ?? "").trim() ? `${method ?? ""}|${(reference ?? "").trim()}` : "";
 
@@ -114,6 +122,7 @@ function normalizeLines(lines: { accountId: number; type: "DEBIT" | "CREDIT"; am
 function snapshotsEqual(a: Snapshot, b: Snapshot): boolean {
     if (a.date !== b.date) return false;
     if (a.narration !== b.narration) return false;
+    if (a.denom !== b.denom) return false;
     if (a.lines.length !== b.lines.length) return false;
     for (let i = 0; i < a.lines.length; i++) {
         const x = a.lines[i], y = b.lines[i];
@@ -278,13 +287,16 @@ const FALLBACK_DENOMS = [500, 200, 100, 50, 20, 10, 5, 2, 1];
 const rowDenomTotal = (d: RowDenom): number =>
     Object.entries(d.counts).reduce((s, [den, c]) => s + Number(den) * (parseInt(c || "0", 10) || 0), 0);
 
-/** One cash row's note-counting panel — counts per denomination + running total. */
-function DenomPanel({ title, denomList, value, onChange }: {
+/** One cash row's note-counting panel — counts per denomination + running total.
+ *  `target` (Payment) = the amount the count must reach; shows short / excess. */
+function DenomPanel({ title, denomList, value, onChange, target }: {
     title:     string;
     denomList: number[];
     value:     RowDenom;
     onChange:  (updater: (d: RowDenom) => RowDenom) => void;
+    target?:   number;
 }) {
+    const gap = target == null ? 0 : round2(rowDenomTotal(value) - target);
     return (
         <div className="rounded-md border border-border bg-card p-3 space-y-2 shadow-sm">
             <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">{title}</p>
@@ -319,6 +331,12 @@ function DenomPanel({ title, denomList, value, onChange }: {
                 <span>Total</span>
                 <span className="font-mono tabular-nums">₹ {fmt(rowDenomTotal(value))}</span>
             </div>
+            {target != null && Math.abs(gap) > 0.005 && (
+                <div className="flex justify-between text-xs text-destructive">
+                    <span>{gap < 0 ? "Short of payment" : "More than payment"}</span>
+                    <span className="font-mono tabular-nums">₹ {fmt(Math.abs(gap))}</span>
+                </div>
+            )}
         </div>
     );
 }
@@ -481,6 +499,13 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     // Cheques loaded from a saved voucher, awaiting the accounts list so they can
     // be matched back onto their Transfer-from rows (drawer + amount).
     const [pendingCheques, setPendingCheques] = useState<DenomJson["cheques"] | null>(null);
+    // Payment: one count for the whole cash going into the party's bank (the
+    // Paid-from cash is a single top ledger, not per-row like Contra).
+    const isPayment = kind === "PAYMENT";
+    const [payDenom, setPayDenom] = useState<RowDenom>(emptyRowDenom);
+    // Edit mode: the tick follows what was saved, so reopening an old cash
+    // payment saved without a count doesn't suddenly block its Save.
+    const payDenomSavedRef = useRef(false);
 
     // Payment/Receipt only: "Income/Expenditure" toggle narrows the particulars
     // dropdown to just the relevant P&L ledgers (EXPENSE for Payment, INCOME for
@@ -584,12 +609,23 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
         ? rows.filter((r) => isCashAcct(r.accountId ? accountById.get(r.accountId) : undefined))
         : [];
     const showDenomPanels = cashRows.length > 0;
+    // Payment in cash to ONE party / staff ledger → the cash is deposited into
+    // their own bank. Same rule as the print (partyDepositSlip.ts): Paid from is
+    // Cash-in-Hand and every non-negative row is that one ledger. With an A/C No
+    // on file it prints the Bank Deposit Slip, so the note count is offered;
+    // without one it prints the normal voucher and the form says why.
+    const payeeIds = isPayment && isCashAcct(topAccount)
+        ? [...new Set(activeRows.filter((r) => r.accountId != null && parseRowAmount(r.amount) >= 0).map((r) => r.accountId!))]
+        : [];
+    const depositPayee = payeeIds.length === 1 ? accountById.get(payeeIds[0]) : undefined;
+    const partyDeposit = depositPayee?.partyBank === true;
+    const showPayDenom = partyDeposit && denomOn;
     // Payment / Receipt with ONE party row → its open bills sit beside the form
     // from the moment the party is picked (read-only; the link itself happens in
     // the popup after posting). A Receipt settles receivables, a Payment payables.
     const showOpenBills = isPayRec && !isEditing && partyLedgerId != null;
     const openBillsSide: 1 | -1 = kind === "RECEIPT" ? 1 : -1;
-    const showSidePanel = showDenomPanels || showOpenBills;
+    const showSidePanel = showDenomPanels || showOpenBills || showPayDenom;
     const partyRow = partyLedgerId != null ? rows.find((r) => r.accountId === partyLedgerId) : undefined;
     const billPicks: BillPicks = billPickState.partyId === partyLedgerId ? billPickState.picks : {};
     // The amount was typed below what the ticks place → drop ticks, last first,
@@ -611,7 +647,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     // the denomination option is meaningful (deposit to bank, or cash handover).
     // A bank → cash withdrawal has no cash source and doesn't offer it.
     const hasCashSource = isContra && rows.some((r) => isCashAcct(r.accountId ? accountById.get(r.accountId) : undefined));
-    const showDenomToggle = topIsBank || hasCashSource;
+    const showDenomToggle = topIsBank || hasCashSource || partyDeposit;
 
     // Depositing to a bank with denomination on: a Cash Transfer-from is counted
     // by notes; a BANK Transfer-from is DEFINITELY a cheque (you can't hand
@@ -626,26 +662,34 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
 
     const rowsTotal = activeRows.reduce((s, r) => s + parseRowAmount(r.amount), 0);
     const topTotal  = rowsTotal;  // top side auto-derives from particulars sum
+    // Payment count ticked → the notes must add up to the cash paid (the slip
+    // prints the count, so a mismatch would send the bank the wrong sum).
+    const payDenomMatches = !showPayDenom || Math.abs(rowDenomTotal(payDenom) - rowsTotal) < 0.005;
     const balanced  = rowsTotal > 0
         && activeRows.every((r) => r.accountId !== null && (allowNegativeRows ? parseRowAmount(r.amount) !== 0 : parseRowAmount(r.amount) > 0))
         && !!effectiveTopAccountId
         // top account can't equal any particulars account (would self-balance)
         && activeRows.every((r) => r.accountId !== effectiveTopAccountId)
-        && chequesComplete;
+        && chequesComplete
+        && payDenomMatches;
 
     // Org's note/coin list for the denomination panels (same as shift close).
     useEffect(() => {
-        if (!isContra) return;
+        if (!isContra && !isPayment) return;
         getOrgDefaults()
             .then((od) => setDenomList(od.cashDenominationsJson?.length ? od.cashDenominationsJson : FALLBACK_DENOMS))
             .catch(() => setDenomList(FALLBACK_DENOMS));
-    }, [isContra]);
+    }, [isContra, isPayment]);
 
     // Transfer-to is a bank → denomination capture auto-ticks (user can untick);
-    // switching the destination off a bank unticks it again.
+    // switching the destination off a bank unticks it again. A Payment the same
+    // way, the moment it becomes a cash deposit into the party's bank.
     useEffect(() => {
         if (isContra) setDenomOn(topIsBank);
     }, [isContra, topIsBank]);
+    useEffect(() => {
+        if (isPayment) setDenomOn(partyDeposit && (!isEditing || payDenomSavedRef.current));
+    }, [isPayment, partyDeposit, isEditing]);
 
     useEffect(() => {
         // Skip the next-ref fetch in edit mode — we'll show the loaded reference.
@@ -797,12 +841,21 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                         });
                         setPendingCheques(saved.cheques);
                     }
+                } else if (kind === "PAYMENT") {
+                    // Payment into a party's bank: the one count comes back as is.
+                    const saved = parseDenomJson(v.denomJson);
+                    payDenomSavedRef.current = saved != null;
+                    if (saved) {
+                        setDenomOn(true);
+                        setPayDenom({ counts: Object.fromEntries(Object.entries(saved.notes).map(([k, c]) => [k, String(c)])) });
+                    }
                 }
 
                 // Snapshot original for dirty-check
                 originalSnapshotRef.current = {
                     date:       v.date.slice(0, 10),
                     narration:  (v.narration ?? "").trim(),
+                    denom:      denomKey(parseDenomJson(v.denomJson)),
                     lines:      normalizeLines(v.lines.map((l) => ({
                         accountId:   l.accountId,
                         type:        l.type,
@@ -876,6 +929,17 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     // CHEQUE row (drawer account · cheque no · amount). Null when capture is off
     // or nothing was entered → print falls back to the blank pen-fill slip.
     const buildDenomPayload = (): DenomJson | null => {
+        // Payment: notes only, and only while it is a party deposit with the
+        // box ticked — anything else clears a stale count.
+        if (isPayment) {
+            if (!showPayDenom) return null;
+            const notes: Record<string, number> = {};
+            for (const [den, c] of Object.entries(payDenom.counts)) {
+                const cnt = parseInt(c || "0", 10) || 0;
+                if (cnt > 0) notes[den] = cnt;
+            }
+            return Object.keys(notes).length ? { notes, cheques: [] } : null;
+        }
         if (!isContra || !denomOn) return null;
         const notes: Record<string, number> = {};
         const cheques: { no: string; amount: number; account?: string }[] = [];
@@ -906,6 +970,10 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     const submit = async (postAfterSave: boolean, print = false) => {
         if (!chequesComplete) {
             toast.error("Enter the cheque number for each bank Transfer-from row.");
+            return;
+        }
+        if (!payDenomMatches) {
+            toast.error(`The notes counted (₹ ${fmt(rowDenomTotal(payDenom))}) don't match the payment (₹ ${fmt(rowsTotal)}). Fix the count, or untick Denomination details.`);
             return;
         }
         if (!balanced) {
@@ -939,6 +1007,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
             const current: Snapshot = {
                 date,
                 narration:  narration.trim(),
+                denom:      denomKey(buildDenomPayload()),
                 lines:      normalizeLines(allLines),
             };
             const original = originalSnapshotRef.current;
@@ -955,8 +1024,8 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                     narration: narration.trim() || undefined,
                     ...(partyLedgerId != null ? { partyAccountId: partyLedgerId } : {}),
                     lines:     allLines,
-                    // Contra: null clears a stale capture when the box is unticked.
-                    ...(isContra ? { denomJson: buildDenomPayload() } : {}),
+                    // Contra / Payment: null clears a stale capture when the box is unticked.
+                    ...(isContra || isPayment ? { denomJson: buildDenomPayload() } : {}),
                 });
                 toast.success(`${copy.title} ${loadedVoucher?.reference ?? ""} updated`);
                 if (print) openReceipt(voucherId);
@@ -985,7 +1054,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                     narration: narration.trim() || undefined,
                     ...(partyLedgerId != null ? { partyAccountId: partyLedgerId } : {}),
                     lines:     allLines,
-                    ...(isContra ? { denomJson: buildDenomPayload() } : {}),
+                    ...(isContra || isPayment ? { denomJson: buildDenomPayload() } : {}),
                     ...(postAfterSave ? { post: true } : {}),
                 },
             );
@@ -1038,6 +1107,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
             setBillPickState({ partyId: 0, picks: {} });
             if (isPayRec) focusRowLedger(0);
             setRowDenoms({});
+            setPayDenom(emptyRowDenom());
             setDate(toIsoDate(new Date()));
             isDirtyRef.current = false;
             // Refresh the voucher-number preview so the next entry shows the
@@ -1156,10 +1226,20 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                                             checked={denomOn}
                                             onCheckedChange={(v) => toggleDenom(v === true)}
                                         />
-                                        {topIsBank
+                                        {partyDeposit
+                                            ? `Denomination details — count the cash going into ${depositPayee?.name ?? "the party"}'s bank; unticked prints a blank pen-fill slip`
+                                            : topIsBank
                                             ? "Denomination details — cash amounts locked to the counted total; unticked prints a blank pen-fill slip"
                                             : "Denomination details — count the cash and print a handover slip; unticked keeps a plain voucher"}
                                     </label>
+                                )}
+                                {/* Cash to a party with no A/C No on file — say why
+                                    no deposit slip, and where to fix it. */}
+                                {depositPayee?.partyBank === false && (
+                                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                                        No bank details saved for {depositPayee.name} — this prints as a normal payment voucher.
+                                        Add their A/C No on the Bank tab to print a bank deposit slip.
+                                    </p>
                                 )}
                             </div>
                             {!isPayRec && (
@@ -1398,7 +1478,8 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                     </div>
                 </div>
 
-                {/* Denomination panels — one per cash Transfer-from row; the
+                {/* Denomination panels — one per cash Transfer-from row (Contra)
+                    or one for the cash paid (Payment into a party's bank); the
                     combined result is what the deposit slip prints. */}
                 {showSidePanel && (
                     <aside className={`${showOpenBills ? "w-[440px]" : "w-[300px]"} shrink-0 space-y-4 sticky top-0`}>
@@ -1424,6 +1505,15 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                                 onChange={(updater) => setRowDenom(r.id, updater)}
                             />
                         ))}
+                        {showPayDenom && (
+                            <DenomPanel
+                                title={`${topAccount?.name ?? "Cash"} — Denominations`}
+                                denomList={denomList}
+                                value={payDenom}
+                                onChange={(updater) => { setPayDenom(updater); isDirtyRef.current = true; }}
+                                target={rowsTotal}
+                            />
+                        )}
                     </aside>
                 )}
                 </div>

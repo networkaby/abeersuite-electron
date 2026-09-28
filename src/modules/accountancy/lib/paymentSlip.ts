@@ -7,6 +7,7 @@ import { formatDateTime } from "@/shared/lib/format/formatDate";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
+import { isPartyCashDeposit } from "@/modules/accountancy/lib/partyDepositSlip";
 
 /**
  * Payment slip (RECEIPT / PAYMENT GL voucher) print data — ONE builder shared by
@@ -42,6 +43,9 @@ export async function buildPaymentSlipPrint(voucherId: number): Promise<PaymentS
         include: { lines: { orderBy: [{ type: "asc" }, { id: "asc" }] } },
     });
     if (!spine || (spine.type !== "RECEIPT" && spine.type !== "PAYMENT")) return null;
+    // Cash paid into a party's bank prints as the Bank Deposit Slip, which the
+    // generic builder owns (partyDepositSlip.ts) — null sends every caller there.
+    if (await isPartyCashDeposit(spine)) return null;
 
     const acctIds = [...new Set([...(spine.partyAccountId != null ? [spine.partyAccountId] : []), ...spine.lines.map((l) => l.accountId)])];
     const accounts = await prisma.account.findMany({

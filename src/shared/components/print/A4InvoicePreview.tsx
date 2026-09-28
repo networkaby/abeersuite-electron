@@ -697,7 +697,8 @@ function MoneyReceiptMiddle({ template, sample }: A4ChromeProps) {
     );
 }
 
-/** Bespoke middle for a Cash → Bank CONTRA — a bank pay-in slip. Top portion
+/** Bespoke middle for a Cash → Bank CONTRA, or a cash PAYMENT deposited into
+ *  the party's bank (`slip.paidTo` set) — a bank pay-in slip. Top portion
  *  goes to the bank with the cash (blank denomination boxes filled by pen);
  *  the counterfoil below the cut line is the depositor's copy, which the
  *  teller stamps and signs and hands back as proof of deposit. */
@@ -755,6 +756,7 @@ function DepositSlipMiddle({ sample }: A4ChromeProps) {
                     </>
                 ) : (
                     <>
+                        {slip.paidTo && <div className="brow"><span className="l">Paid to</span><span className="bold">{slip.paidTo}</span></div>}
                         {bankLine && <div className="brow"><span className="l">Bank</span><span className="bold">{bankLine}</span></div>}
                         {slip.accountName && <div className="brow"><span className="l">A/C Name</span><span>{slip.accountName}</span></div>}
                         {slip.accountNo && <div className="brow"><span className="l">A/C No</span><span>{slip.accountNo}</span></div>}
@@ -872,6 +874,13 @@ function DepositSlipMiddle({ sample }: A4ChromeProps) {
                             <span className="t">Depositor&rsquo;s Copy — Bank Acknowledgment</span>
                             <span className="muted">{sample.reference} &middot; {sample.date}</span>
                         </div>
+                        {/* A party deposit is our proof of payment — name who it went to. */}
+                        {slip.paidTo && (
+                            <div className="brow">
+                                <span className="l">Paid to</span>
+                                <span>{slip.paidTo}</span>
+                            </div>
+                        )}
                         {(bankLine || slip.accountNo) && (
                             <div className="brow">
                                 <span className="l">Bank &middot; A/C</span>

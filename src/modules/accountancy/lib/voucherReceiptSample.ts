@@ -14,6 +14,7 @@ import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { parseBankJson } from "@/shared/lib/org/organisationView";
 import { parseDenomJson } from "@/shared/lib/accountancy/denomJson";
+import { buildPartyDepositSlip, loadSlipDenominations } from "@/modules/accountancy/lib/partyDepositSlip";
 import { paymentInstrumentText } from "@/shared/lib/constants/accounting";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { computeGstSplit, gstinDerivedStateCode } from "@/shared/lib/gst/computeGstSplit";
@@ -42,14 +43,6 @@ export interface VoucherReceiptData {
 }
 
 const isoDate = (d: Date): string => d.toISOString().slice(0, 10);
-
-/** Org's configured note/coin list (high → low) for the deposit-slip pen-fill
- *  rows, with a sane India fallback. */
-function resolveDenoms(raw: unknown): number[] {
-    return Array.isArray(raw) && raw.every((d) => typeof d === "number") && raw.length
-        ? (raw as number[])
-        : [500, 200, 100, 50, 20, 10, 5, 2, 1];
-}
 
 /** Resolve a party display name from an Account's linked Person/Company. */
 function partyFromAccount(account: {
@@ -516,11 +509,8 @@ async function buildGlSample(id: number): Promise<VoucherReceiptData> {
             .map((l) => nameById.get(l.accountId) ?? "—").join(", ") || null;
 
         if (bankAcct) {
-            const [org, od] = await Promise.all([
-                getOrganisation(),
-                prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { cashDenominationsJson: true } }),
-            ]);
-            const denominations = resolveDenoms(od?.cashDenominationsJson);
+            const org = getOrganisation();
+            const denominations = await loadSlipDenominations();
             // Bank particulars: the destination ledger's own bankJson wins;
             // any blank field falls back to the org's primary bank details.
             const acctBank = parseBankJson(bankAcct.bankJson);
@@ -538,15 +528,25 @@ async function buildGlSample(id: number): Promise<VoucherReceiptData> {
             };
         } else if (denom) {
             // cash → cash with a captured count → internal handover slip.
-            const od = await prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { cashDenominationsJson: true } });
             sample.depositSlip = {
                 mode:        "handover",
                 bankName: null, branch: null, accountName: null, accountNo: null, ifsc: null, pan: null,
                 fromLedger,
                 toLedger,
-                denominations: resolveDenoms(od?.cashDenominationsJson),
+                denominations: await loadSlipDenominations(),
                 counted:     countedFromDenom,
             };
+        }
+    }
+
+    // PAYMENT in cash to a party with an A/C No on file — the cash goes into the
+    // party's own bank, so it prints the same Bank Deposit Slip with THEIR bank
+    // details (see partyDepositSlip.ts). The slip total is the cash side.
+    if (v.type === "PAYMENT") {
+        const party = await buildPartyDepositSlip(spine);
+        if (party) {
+            sample.depositSlip = party.slip;
+            sample.total = party.amount;
         }
     }
 

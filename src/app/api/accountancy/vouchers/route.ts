@@ -23,8 +23,9 @@ const lineSchema = z.object({
     reference:   z.string().trim().max(60).optional(),
 });
 
-// Contra deposit-slip capture — the FINAL combined breakdown (notes counts +
-// cheque list), stored once on the spine (UniversalVoucher.denomJson).
+// Deposit-slip capture (Contra, or a cash Payment into the party's bank) — the
+// FINAL combined breakdown (notes counts + cheque list), stored once on the
+// spine (UniversalVoucher.denomJson).
 const denomJsonSchema = z.object({
     notes:   z.record(z.string(), z.number().int().min(0)),
     cheques: z.array(z.object({
@@ -196,8 +197,9 @@ export async function POST(req: Request) {
                 branchId,
                 post:           body.post ?? false,
             });
-            // Deposit-slip capture (CONTRA only) — drop empty/zero-only payloads.
-            const denom = body.type === "CONTRA" ? parseDenomJson(body.denomJson) : null;
+            // Deposit-slip capture (CONTRA, and a cash PAYMENT into the party's
+            // bank) — drop empty/zero-only payloads.
+            const denom = body.type === "CONTRA" || body.type === "PAYMENT" ? parseDenomJson(body.denomJson) : null;
             if (denom) {
                 await tx.universalVoucher.update({ where: { id: v.id }, data: { denomJson: denom } });
             }

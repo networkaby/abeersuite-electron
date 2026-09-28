@@ -606,7 +606,8 @@ function printJournalMiddle(printer, sample, fmt, formattedDate) {
     }
 }
 
-// Cash → Bank deposit / cash → cash handover WORKSHEET — bank / ledger block +
+// Cash → Bank deposit (Contra, or a cash Payment into the party's bank — then
+// `paidTo` is set and the bank block is theirs) / cash → cash handover WORKSHEET — bank / ledger block +
 // denomination table (filled when captured, blank pen-fill rows otherwise) +
 // cheque list + total + signature(s). Mirrors DepositThermalMiddle.
 function printDepositMiddle(printer, sample, fmt, formattedDate) {
@@ -634,7 +635,10 @@ function printDepositMiddle(printer, sample, fmt, formattedDate) {
         if (slip.fromLedger) printer.tableCustom([{ text: "From", align: "LEFT", width: 0.35 }, { text: String(slip.fromLedger), align: "RIGHT", width: 0.65 }]);
         if (slip.toLedger)   printer.tableCustom([{ text: "To",   align: "LEFT", width: 0.35 }, { text: String(slip.toLedger),   align: "RIGHT", width: 0.65 }]);
     } else {
+        if (slip.paidTo)     printer.tableCustom([{ text: "Paid to", align: "LEFT", width: 0.3 }, { text: String(slip.paidTo),    align: "RIGHT", width: 0.7 }]);
         if (bankLine)        printer.tableCustom([{ text: "Bank", align: "LEFT", width: 0.3 },  { text: bankLine,                 align: "RIGHT", width: 0.7 }]);
+        if (slip.paidTo && slip.accountName)
+                             printer.tableCustom([{ text: "A/C Name", align: "LEFT", width: 0.3 }, { text: String(slip.accountName), align: "RIGHT", width: 0.7 }]);
         if (slip.accountNo)  printer.tableCustom([{ text: "A/C",  align: "LEFT", width: 0.35 }, { text: String(slip.accountNo),   align: "RIGHT", width: 0.65 }]);
         if (slip.ifsc)       printer.tableCustom([{ text: "IFSC", align: "LEFT", width: 0.35 }, { text: String(slip.ifsc),        align: "RIGHT", width: 0.65 }]);
         if (slip.pan)        printer.tableCustom([{ text: "PAN",  align: "LEFT", width: 0.35 }, { text: String(slip.pan),         align: "RIGHT", width: 0.65 }]);

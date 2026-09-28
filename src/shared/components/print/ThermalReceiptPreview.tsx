@@ -90,11 +90,12 @@ export type ThermalTaxBreakdown =
     | { kind: "INTRA"; cgst: number; sgst: number; placeOfSupplyName: string | null }
     | { kind: "INTER"; igst: number; placeOfSupplyName: string | null };
 
-/// Bank pay-in slip data for a Cash → Bank CONTRA. When present, the A4
-/// renderer swaps the journal table for a deposit slip (bank block, blank
-/// denomination boxes, depositor counterfoil the bank stamps and returns).
-/// Bank fields come from Organisation.bankJson; denominations from
-/// OrgDefaults.cashDenominationsJson.
+/// Bank pay-in slip data for a Cash → Bank CONTRA, or a cash PAYMENT deposited
+/// straight into the party's bank. When present, the A4 renderer swaps the
+/// journal table for a deposit slip (bank block, blank denomination boxes,
+/// depositor counterfoil the bank stamps and returns). Bank fields come from
+/// the bank ledger / Organisation.bankJson (Contra) or the party's own bankJson
+/// (Payment); denominations from OrgDefaults.cashDenominationsJson.
 export interface DepositSlipInfo {
     /// "deposit" = cash → bank (bank block + counterfoil the bank stamps).
     /// "handover" = cash → cash (from/to ledgers + handed-by / received-by sigs,
@@ -107,6 +108,9 @@ export interface DepositSlipInfo {
     ifsc:          string | null;
     /// Depositor's PAN (org PAN) — banks ask for it on large cash deposits.
     pan?:          string | null;
+    /// Cash PAYMENT only: the party the money is paid to. Set → the bank block is
+    /// the PARTY's account, and the slip names them on its face and counterfoil.
+    paidTo?:       string | null;
     /// Credit-side (source) ledger, e.g. "Cash in Hand" — where the cash came from.
     fromLedger:    string | null;
     /// Debit-side (destination) ledger — used in handover mode, e.g. "Vault".
@@ -168,8 +172,9 @@ export interface ThermalReceiptSample {
     /// (walk-in customers have no ledger account).
     balanceBefore?: string | null;
     balanceAfter?:  string | null;
-    /// Bank pay-in slip block (CONTRA cash → bank only). Null/absent → the
-    /// contra keeps the generic journal-style print.
+    /// Bank pay-in slip block (CONTRA cash → bank / cash → cash, or a cash
+    /// PAYMENT into the party's bank). Null/absent → the voucher keeps its
+    /// normal print.
     depositSlip?: DepositSlipInfo | null;
     /// Issuing-branch address block (multi-line). Rendered only when the
     /// template's `showBranchAddress` flag is on and this is non-empty.
@@ -583,7 +588,8 @@ function ThermalFooter({ template, sample }: { template: VoucherTemplateDefaults
 /** Assembles header chrome + (custom or default) middle + footer chrome, so a
  *  bespoke document (repair ticket / shipping slip / payment slip) reuses the
  *  template-driven header + footer and only supplies its own `body`. */
-// Bespoke 80mm middle for a Contra deposit / handover. A thermal print is NOT
+// Bespoke 80mm middle for a deposit (Contra cash → bank, or a cash Payment into
+// the party's bank) / a Contra handover. A thermal print is NOT
 // accepted at the bank counter — it's a WORKSHEET the carrier fills the bank's
 // own pay-in slip from (deposit) or a handover record (cash → cash). Shows the
 // bank/ledger block + the denomination breakdown (filled when captured, blank
@@ -622,7 +628,9 @@ function DepositThermalMiddle({ sample }: { sample: ThermalReceiptSample }) {
                 </>
             ) : (
                 <>
+                    {slip.paidTo    && <div className="row"><span>Paid to</span><span style={{ textAlign: "right" }}>{slip.paidTo}</span></div>}
                     {bankLine       && <div className="row"><span>Bank</span><span style={{ textAlign: "right" }}>{bankLine}</span></div>}
+                    {slip.paidTo && slip.accountName && <div className="row"><span>A/C Name</span><span style={{ textAlign: "right" }}>{slip.accountName}</span></div>}
                     {slip.accountNo && <div className="row"><span>A/C</span><span>{slip.accountNo}</span></div>}
                     {slip.ifsc      && <div className="row"><span>IFSC</span><span>{slip.ifsc}</span></div>}
                     {slip.pan       && <div className="row"><span>PAN</span><span>{slip.pan}</span></div>}

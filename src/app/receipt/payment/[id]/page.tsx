@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import PrintToolbar from "@/shared/components/print/PrintToolbar";
 import ReceiptPreview from "@/shared/components/print/ReceiptPreview";
 import { resolvePaperFormat } from "@/shared/lib/print/voucherTemplate";
@@ -26,7 +26,15 @@ export default async function PaymentReceiptPage({
     const sp = (await searchParams) ?? {};
 
     const slip = await buildPaymentSlipPrint(Number(id));
-    if (!slip) notFound();
+    // null = no such voucher, or a cash Payment into a party's bank — that one
+    // prints as the Bank Deposit Slip on the generic voucher page (which also
+    // answers 404 for a voucher that doesn't exist).
+    if (!slip) {
+        const qs = new URLSearchParams(
+            Object.entries(sp).filter((e): e is [string, string] => typeof e[1] === "string"),
+        ).toString();
+        redirect(`/receipt/voucher/gl/${encodeURIComponent(id)}${qs ? `?${qs}` : ""}`);
+    }
 
     // `?paper=` wins, then `?mode=thermal` (the thermal way in) → 80mm, else A4.
     const format = resolvePaperFormat(slip.template, sp.paper, sp.mode);

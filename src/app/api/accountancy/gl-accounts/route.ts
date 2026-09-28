@@ -7,6 +7,7 @@ import {
 } from "@/modules/accountancy/lib/aggregateLedger";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
+import { canDepositToPartyBank, parsePartyBank } from "@/shared/lib/parties/partyBank";
 
 const createSchema = z.object({
     name: z.string().trim().min(1),
@@ -56,10 +57,12 @@ export async function GET(req: Request) {
                 aliases: { select: { alias: true }, orderBy: { id: "asc" } },
                 // Party ledgers only — lets the voucher combobox search a
                 // Sundry Debtor / Creditor by mobile number, not just name.
+                // bankJson → `partyBank` below.
                 ...(includeParties ? {
-                    person:  { select: { phones: { select: { phone: true, isPrimary: true } } } },
-                    company: { select: { phones: { select: { phone: true, isPrimary: true } } } },
+                    person:  { select: { phones: { select: { phone: true, isPrimary: true } }, bankJson: true } },
+                    company: { select: { phones: { select: { phone: true, isPrimary: true } }, bankJson: true } },
                 } : {}),
+                staffLedgerOf: { select: { bankJson: true } },
             },
         });
         // Truth-path closing from JournalLine (folds in master openings),
@@ -71,19 +74,24 @@ export async function GET(req: Request) {
             // Flatten the party's phones to a plain string[] (primary first) so
             // the client just filters/renders — person & company objects drop out.
             // Aliases flatten the same way — the client only ever wants the strings.
-            const { person, company, aliases, ...rest } = a as typeof a & {
-                person?:  { phones: { phone: string; isPrimary: boolean }[] } | null;
-                company?: { phones: { phone: string; isPrimary: boolean }[] } | null;
+            const { person, company, staffLedgerOf, aliases, ...rest } = a as typeof a & {
+                person?:  { phones: { phone: string; isPrimary: boolean }[]; bankJson: unknown } | null;
+                company?: { phones: { phone: string; isPrimary: boolean }[]; bankJson: unknown } | null;
                 aliases?: { alias: string }[];
             };
             const phones = [...(person?.phones ?? []), ...(company?.phones ?? [])]
                 .sort((x, y) => Number(y.isPrimary) - Number(x.isPrimary))
                 .map((p) => p.phone);
+            // Ledgers of a person, company or staff member only: can a cash
+            // Payment be deposited straight into their bank? One flag, not the
+            // details — the slip reads those at print time (partyDepositSlip.ts).
+            const owner = person ?? company ?? staffLedgerOf ?? null;
             return {
                 ...rest,
                 phones,
                 aliases: (aliases ?? []).map((x) => x.alias),
                 balance: closingMap.get(a.id) ?? 0,
+                ...(owner ? { partyBank: canDepositToPartyBank(parsePartyBank(owner.bankJson)) } : {}),
             };
         });
         return NextResponse.json(accountsWithEffective);

@@ -49,6 +49,10 @@ export interface GlAccount {
     phones?: string[];
     /** Tally-style alternate names — searchable, shown under the name. */
     aliases?: string[];
+    /** Ledgers of a person, company or staff member only: an A/C No is on file,
+     *  so a cash Payment to them prints the party Bank Deposit Slip. Absent on
+     *  every other ledger. */
+    partyBank?: boolean;
     // Carried through so BalanceHint can compute an "Available" figure for
     // Bank OD A/c / Credit Card ledgers — see facilityLimit.ts.
     bankJson?: unknown;

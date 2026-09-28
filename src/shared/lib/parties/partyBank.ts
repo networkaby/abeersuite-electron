@@ -37,6 +37,10 @@ export const PARTY_BANK_KEYS = Object.keys(EMPTY_PARTY_BANK) as (keyof PartyBank
 export const hasPartyBankData = (b: PartyBankFields): boolean =>
     PARTY_BANK_KEYS.some((k) => !!b[k]);
 
+/** Cash can be deposited straight into this account — an A/C No is on file.
+ *  A cash Payment to such a party prints the Bank Deposit Slip (partyDepositSlip.ts). */
+export const canDepositToPartyBank = (b: PartyBankFields): boolean => !!b.accountNumber;
+
 /** Any stored value → a complete, blank-filled bag. Never throws. */
 export function parsePartyBank(v: unknown): PartyBankFields {
     if (v == null || typeof v !== "object" || Array.isArray(v)) return { ...EMPTY_PARTY_BANK };
