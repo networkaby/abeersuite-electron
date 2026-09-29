@@ -643,8 +643,9 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
         updateRow(payeeRow.id, { amount: amt > 0 ? String(amt) : "" });
     };
     // Payment / Receipt with ONE party row → its open bills sit beside the form
-    // from the moment the party is picked (read-only; the link itself happens in
-    // the popup after posting). A Receipt settles receivables, a Payment payables.
+    // from the moment the party is picked; the ticks are linked by
+    // settleFromPicks once the voucher posts. A Receipt settles receivables, a
+    // Payment payables.
     const showOpenBills = isPayRec && !isEditing && partyLedgerId != null;
     const openBillsSide: 1 | -1 = kind === "RECEIPT" ? 1 : -1;
     const showSidePanel = showDenomPanels || showOpenBills || showPayDenom;
@@ -1049,6 +1050,10 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
         }
 
         // ── Create mode: POST (+ optional post) ─────────────────────────────
+        // Bills ticked in the side panel are placed by settleFromPicks after the
+        // save, so the server is told not to auto-link oldest-first before it.
+        const settlesTicks = postAfterSave && partyLedgerId != null
+            && Object.values(billPicks).some((a) => a > EPS);
         setSaving(true);
         try {
             // ONE request: create, and post in the same transaction when asked.
@@ -1066,6 +1071,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                     lines:     allLines,
                     ...(isContra || isPayment ? { denomJson: buildDenomPayload() } : {}),
                     ...(postAfterSave ? { post: true } : {}),
+                    ...(settlesTicks ? { autoLink: false } : {}),
                 },
             );
             const shownNo = created.data.reference ?? `UV-${created.data.id}`;
@@ -1078,7 +1084,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                 // into a bill — so carry it out rather than asking again. A
                 // failure here leaves the voucher posted and unlinked, which is a
                 // state the "Link to bills" button can finish by hand.
-                if (partyLedgerId != null && Object.keys(billPicks).length > 0) {
+                if (settlesTicks && partyLedgerId != null) {
                     try {
                         const done = await settleFromPicks({
                             accountId: partyLedgerId,

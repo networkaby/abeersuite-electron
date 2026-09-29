@@ -47,6 +47,10 @@ const createSchema = z.object({
     // and the voucher existed as a DRAFT in between. Same shape as
     // /api/accountancy/journal-vouchers `postImmediately`.
     post:           z.boolean().optional(),
+    // false = the form links the bills the user ticked itself, straight after
+    // this save — so the server must not link first. Its oldest-first choice
+    // would spend the voucher's room, and the ticks would then be refused.
+    autoLink:       z.boolean().optional(),
 });
 
 // GET /api/accountancy/vouchers?type=CONTRA&status=DRAFT
@@ -206,9 +210,11 @@ export async function POST(req: Request) {
             return v;
         });
 
-        // Settle a posted Receipt / Payment against the party's open bills — the
-        // office form has no bill picker either, and until now every voucher it
-        // saved sat on the party's ledger settling nothing. Deliberately AFTER
+        // Settle a posted Receipt / Payment against the party's open bills when
+        // nobody ticked any — before this, every such voucher sat on the party's
+        // ledger settling nothing. When the form DID tick bills it sends
+        // `autoLink: false` and places them itself (`settleFromPicks`), because
+        // linking here first would leave its ticks no room. Deliberately AFTER
         // the create transaction: a refusal here must cost only the link, and the
         // create runs on Prisma's 5s default while linking wants its own 30s and
         // the party lock. Never throws; the bill-link popup and
@@ -218,7 +224,7 @@ export async function POST(req: Request) {
         // and `assertLinkPlan` refuses one outright, and a link is measured on a
         // party ledger, which `partyAccountId` is the only thing that names.
         let settled: Awaited<ReturnType<typeof autoLinkSettlement>> | null = null;
-        if ((body.post ?? false) && body.partyAccountId != null
+        if ((body.post ?? false) && body.autoLink !== false && body.partyAccountId != null
             && (body.type === "RECEIPT" || body.type === "PAYMENT")) {
             settled = await autoLinkSettlement({
                 voucherId: voucher.id,

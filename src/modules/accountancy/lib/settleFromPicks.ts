@@ -17,9 +17,11 @@
 // Two things are made real before any of that:
 //   • an opening balance still sitting as a bare figure on the master becomes an
 //     actual opening bill, so there is something to link to at all;
-//   • what each pair is ALREADY linked for is read back, because the link API
-//     states the pair's total rather than what to add — which is what makes a
-//     repeat of this whole routine change nothing.
+//   • what each older credit's pair is ALREADY linked for is read back, because
+//     the link API states the pair's total rather than what to add.
+//
+// The form tells the voucher save `autoLink: false` whenever it will come here,
+// so the server's oldest-first auto-link does not spend the voucher first.
 
 import axios from "axios";
 import { round2 } from "@/shared/lib/format/moneyInr";
@@ -150,10 +152,15 @@ export async function settleFromPicks(args: {
     for (const plan of plans) {
         const sourceId = plan.sourceId ?? args.voucherId;
         // What this pair already stands at — the API is told the total it should
-        // end up at, so running this twice lands on the same figure.
-        const here = new Map(
-            (await loadDocs(args.accountId, sourceId)).map((d) => [d.universalVoucherId, d.linkedHere ?? 0]),
-        );
+        // end up at, so an older credit keeps what it had already placed on a
+        // bill. Not for the voucher just posted: it had no links before this
+        // save, so its ticks ARE the totals. Anything already on it came from the
+        // server's own auto-link, and adding the tick on top asked for double.
+        const here = sourceId === args.voucherId
+            ? new Map<number, number>()
+            : new Map(
+                (await loadDocs(args.accountId, sourceId)).map((d) => [d.universalVoucherId, d.linkedHere ?? 0]),
+            );
         const links = plan.links
             .map((l) => ({
                 voucherId: l.universalVoucherId,
