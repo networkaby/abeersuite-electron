@@ -14,9 +14,22 @@
 // the JWT), the per-person permissions screen (same overrides), the Role editor
 // (expand on load / normalize on save), and canDoPosVoucher.
 
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+
 const RESOURCE_ORDER = ["create", "edit", "delete"] as const;
 const VOUCHER_ORDER = ["create", "post", "cancel", "delete"] as const;
 const POS_VOUCHER_ORDER = ["create", "cancel", "delete"] as const;
+
+// The resources that really have a create / edit / delete set: a base with a
+// `:create` permission. A lone yes/no grant that merely ENDS in a rung word
+// (compliance:tax:edit, hr:staff:edit, hr:attendance:edit) is not a ladder —
+// treating it as one invented `compliance:tax:create`, which the Role save then
+// refused as "not seeded".
+const CRUD_BASES = new Set(
+    Object.values(PERMISSIONS)
+        .filter((id) => id.endsWith(":create"))
+        .map((id) => id.slice(0, -":create".length)),
+);
 
 // A resolved ladder: every rung id low→high, plus this id's index in it.
 type Ladder = { ids: string[]; idx: number };
@@ -40,6 +53,7 @@ function parseLadder(id: string): Ladder | null {
     const idx = (RESOURCE_ORDER as readonly string[]).indexOf(id.slice(i + 1));
     if (idx < 0) return null;
     const base = id.slice(0, i);
+    if (!CRUD_BASES.has(base)) return null;
     return { ids: RESOURCE_ORDER.map((a) => `${base}:${a}`), idx };
 }
 

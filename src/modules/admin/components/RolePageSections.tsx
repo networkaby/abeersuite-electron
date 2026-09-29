@@ -557,16 +557,18 @@ export function QuickActionsSection({
                 <div className="flex flex-wrap gap-1.5">
                     {options.map((opt) => {
                         const Icon = opt.icon;
-                        const isOn = selected.has(opt.permission);
-                        const changed = isOn !== original.has(opt.permission);
+                        // A chip that grants several ids (POS + = open + close) is on only
+                        // when all are, and flips them together.
+                        const isOn = opt.ids.every((id) => selected.has(id));
+                        const changed = opt.ids.some((id) => selected.has(id) !== original.has(id));
                         return (
                             <Button
                                 key={opt.permission}
                                 type="button"
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => onTogglePerm(opt.permission)}
-                                title={opt.permission}
+                                onClick={() => opt.ids.forEach((id) => { if (selected.has(id) === isOn) onTogglePerm(id); })}
+                                title={opt.ids.join(" + ")}
                                 className={[
                                     "h-auto items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors",
                                     isOn

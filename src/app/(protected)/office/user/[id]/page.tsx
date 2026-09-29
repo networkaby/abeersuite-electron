@@ -62,7 +62,8 @@ export default function UserProfilePage() {
     const sessionUserId = session?.user ? Number((session.user as { id?: string }).id) : undefined;
     const isSelf = sessionUserId !== undefined && sessionUserId === Number(id);
     const sessionPermissions = (session?.user as { permissions?: string[] })?.permissions ?? [];
-    const isAdmin = sessionPermissions.includes("users:edit") || sessionPermissions.includes("admin:bypass");
+    // On the CRUD ladder — a users:delete grant is also Edit; admin bypass passes.
+    const isAdmin = hasPermissionWithScope(sessionPermissions, PERMISSIONS.USERS_EDIT);
     const canEditHr = hasPermissionWithScope(sessionPermissions, PERMISSIONS.HR_STAFF_EDIT);
     const canOpenHr = hasModuleNavAccess(sessionPermissions, "hr");
 

@@ -36,6 +36,7 @@ import WorkActions from "@/modules/repairing/components/WorkActions";
 import DevOverridePanel from "@/modules/repairing/components/DevOverridePanel";
 import { resolveTicketSource, type WorkArg } from "@/modules/repairing/lib/ticketSources";
 import { useSession } from "next-auth/react";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
@@ -195,8 +196,10 @@ export default function TicketDetailPage() {
     const canDebug = perms.includes(PERMISSIONS.ADMIN_BYPASS) || perms.includes(PERMISSIONS.SETTINGS_MANAGE);
     // Edit-ticket action is gated on tickets:edit (admin bypass passes) — the same
     // grant surfaced by the role page's Tickets CRUD row.
-    const canEditTicket = perms.includes(PERMISSIONS.ADMIN_BYPASS) || perms.includes(PERMISSIONS.TICKETS_EDIT);
-    const canDeleteTicket = perms.includes(PERMISSIONS.ADMIN_BYPASS) || perms.includes(PERMISSIONS.TICKETS_DELETE);
+    // Read on the CRUD ladder — a Delete grant is also Edit (only the top rung is
+    // carried in the session); admin bypass passes.
+    const canEditTicket = hasPermissionWithScope(perms, PERMISSIONS.TICKETS_EDIT);
+    const canDeleteTicket = hasPermissionWithScope(perms, PERMISSIONS.TICKETS_DELETE);
     // Deleting takes the whole ticket and its timeline; the server refuses when a
     // bill or a child ticket is attached and its message comes back in the toast.
     const router = useRouter();

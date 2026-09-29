@@ -56,14 +56,18 @@ export const POS_BLOCK_SHIFT_IDS = POS_OPERATOR_SHIFT_CHIPS.flatMap((c) => c.ids
 // Quick-action options for the role's button bar — every creatable thing (vouchers
 // + Repair + POS), de-duped by the create permission it maps to. Ticking a chip
 // grants that create key to the role, so it appears in the role's Quick Actions.
-export const QUICK_ACTION_OPTIONS: { permission: string; label: string; icon: LucideIcon }[] = (() => {
+// `ids` is everything the chip grants together: "POS +" is pos:shift:open, and a
+// shift that can be opened must be closable, so it takes the same open + close
+// pair as the "Start / End shift" chip — the two chips can never disagree.
+export const QUICK_ACTION_OPTIONS: { permission: string; ids: string[]; label: string; icon: LucideIcon }[] = (() => {
     const seen = new Set<string>();
-    const out: { permission: string; label: string; icon: LucideIcon }[] = [];
+    const out: { permission: string; ids: string[]; label: string; icon: LucideIcon }[] = [];
     for (const a of BUTTON_BAR_ACTIONS) {
         const permission = createActionPermission(a);
         if (!permission || seen.has(permission)) continue;
         seen.add(permission);
-        out.push({ permission, label: a.label.replace(/\s*\+$/, "").trim(), icon: a.icon });
+        const ids = POS_OPERATOR_SHIFT_CHIPS.find((c) => c.ids.includes(permission))?.ids ?? [permission];
+        out.push({ permission, ids, label: a.label.replace(/\s*\+$/, "").trim(), icon: a.icon });
     }
     return out;
 })();
@@ -266,20 +270,6 @@ export const MATRIX_ROWS: {
                 create: "tasks:create",
                 editOwn: "tasks:edit", editBranch: "tasks:edit", editOrg: "tasks:edit",
                 deleteOwn: "tasks:delete", deleteBranch: "tasks:delete", deleteOrg: "tasks:delete",
-            },
-        },
-        // HR & People — the staff record. One write key covers the profile, the
-        // salary revisions and "mark as left"; view rides the HR sidebar link. No
-        // branch radius, so every cell resolves to the same id.
-        {
-            key: "hr-staff",
-            label: "Staff records",
-            module: "hr",
-            cells: {
-                viewOwn: "hr:staff:edit", viewBranch: "hr:staff:edit", viewOrg: "hr:staff:edit",
-                create: "hr:staff:edit",
-                editOwn: "hr:staff:edit", editBranch: "hr:staff:edit", editOrg: "hr:staff:edit",
-                deleteOwn: "hr:staff:edit", deleteBranch: "hr:staff:edit", deleteOrg: "hr:staff:edit",
             },
         },
         {
@@ -654,6 +644,16 @@ export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, ExtraToggle | ExtraToggle
     },
     // Retention pages are plain create/edit/delete matrices (no extra toggle) —
     // changing the discount / balance is part of "Edit", not a separate control.
+    // HR & People — each page opens on its link; these are the write rights on it.
+    // Attendance and the holiday list share one key, so both links carry the box.
+    [sidebarChildPermissionId("hr", "staff")]: { id: "hr:staff:edit", label: "Can edit staff records" },
+    [sidebarChildPermissionId("hr", "attendance")]: { id: "hr:attendance:edit", label: "Can mark attendance & holidays" },
+    [sidebarChildPermissionId("hr", "holidays")]: { id: "hr:attendance:edit", label: "Can mark attendance & holidays" },
+    [sidebarChildPermissionId("hr", "leave")]: { id: "hr:leave:approve", label: "Can approve leave" },
+    [sidebarChildPermissionId("hr", "payroll")]: { id: "hr:payroll:run", label: "Can run payroll" },
+    // Backup & Restore — the page opens on its link; taking a backup or restoring
+    // one is settings:manage (which also allows the repair ticket's dev override).
+    [sidebarChildPermissionId("settings", "backup-restore")]: { id: "settings:manage", label: "Can back up & restore" },
 };
 
 /** The extra toggles for a link, as a list (bare entries normalise to one item). */
