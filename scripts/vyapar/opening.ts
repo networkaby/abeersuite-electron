@@ -49,9 +49,8 @@ dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
 
 import {
-    FY_START, PARTY_EFFECT, STOCK_EFFECT,
-    extractItems, extractParties, normalisePhone, sharedPhoneIds,
-    type VyaparItem, type VyaparParty,
+    FY_START, STOCK_EFFECT,
+    extractItems, extractParties, sharedPhoneIds,
 } from "./extract";
 import { openVyb } from "./openVyb";
 import { Pool } from "pg";

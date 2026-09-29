@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import {
     Loader2, ArrowLeft, ArrowDownUp, Lock, ExternalLink, Monitor, Users,
     RotateCcw, Trash2, Clock, Calendar, TrendingUp, CreditCard, Receipt,
-    ShieldCheck, Calculator, ArrowRightLeft, CheckCircle2, AlertTriangle, User, Printer,
+    Calculator, ArrowRightLeft, CheckCircle2, User, Printer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";

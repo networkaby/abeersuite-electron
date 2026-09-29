@@ -21,7 +21,7 @@ dotenv.config({ path: ".env" });
 import { FY_START, extractItems, extractParties } from "./extract";
 import { buildMaps, type Maps } from "./mapping";
 import { openVyb } from "./openVyb";
-import { ROUNDING_TOLERANCE, SpecError, buildSpec, type Ledgers, type VyaparTxn } from "./voucherSpec";
+import { ROUNDING_TOLERANCE, buildSpec, type Ledgers, type VyaparTxn } from "./voucherSpec";
 import { Pool } from "pg";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";

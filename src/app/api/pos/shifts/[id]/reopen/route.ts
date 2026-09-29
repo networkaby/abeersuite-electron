@@ -38,7 +38,7 @@ import { shiftManageBlock } from "@/modules/pos/lib/shiftManage";
 const schema = z.object({ reason: z.string().trim().min(1, "Reason required").max(500) });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission(PERMISSIONS.POS_SHIFT_FORCE_CLOSE);
+    const { response } = await requirePermission(PERMISSIONS.POS_SHIFT_FORCE_CLOSE);
     if (response) return response;
 
     const { id: idStr } = await params;

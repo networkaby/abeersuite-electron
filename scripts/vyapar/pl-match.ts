@@ -26,7 +26,6 @@ import { FY_START, extractItems, extractParties } from "./extract";
 import { buildMaps } from "./mapping";
 import { openVyb } from "./openVyb";
 import { Pool } from "pg";
-import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 

@@ -89,6 +89,7 @@ async function main(): Promise<void> {
     for (const f of fix) console.log(`  ${String(f.id).padStart(6)}  ${f.name.slice(0, 42).padEnd(44)}${f.was} → ${f.now}`);
     console.log(`\n  ${onlyHere} party account(s) exist only here — new from Vyapar, left alone`);
     console.log(`  ${gone} in the reference and not here — merged duplicates, left alone`);
+    if (unknownGroup) console.log(`  ${unknownGroup} whose group this database does not have — listed above, left alone`);
     if (kindDiff.length) {
         console.log(`\n  ⚠ ${kindDiff.length} person/company difference(s) — NOT touched, that is a conversion, not a field:`);
         for (const k of kindDiff) console.log(`      ${k.id}  ${k.name}  ${k.was} → ${k.now}`);
