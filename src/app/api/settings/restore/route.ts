@@ -41,7 +41,7 @@ export async function POST(req: Request) {
     const targetDbUrl = body.targetDbUrl?.trim();
     if (!targetDbUrl || (!targetDbUrl.startsWith("postgres://") && !targetDbUrl.startsWith("postgresql://"))) {
         return Response.json(
-            { error: "Target Database URL is required and must start with postgresql:// or postgres://" },
+            { error: "Target Database URL (DIRECT URL) is required and must start with postgresql:// or postgres://" },
             { status: 400 },
         );
     }

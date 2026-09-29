@@ -348,18 +348,18 @@ export function BackupRestorePanel() {
 
                 <div className="space-y-1">
                     <Label className="text-xs">
-                        Target Database URL <span className="text-destructive font-semibold">*</span>
+                        Target Database URL (DIRECT URL) <span className="text-destructive font-semibold">*</span>
                     </Label>
                     <Input
                         className="h-9 font-mono text-xs"
                         value={targetDbUrl}
                         onChange={(e) => setTargetDbUrl(e.target.value)}
-                        placeholder="postgresql://postgres:[password]@[host]:5432/postgres"
+                        placeholder="postgresql://postgres.[project-ref]:[password]@[host]:5432/postgres"
                         autoComplete="off"
                         disabled={!canRestore}
                     />
                     <p className="text-[11px] text-muted-foreground">
-                        Mandatory: restore will strictly overwrite this database.
+                        Mandatory: restore will strictly overwrite this database. Paste the DIRECT URL — Supabase → Connect → Session pooler, port 5432 — not the app&apos;s port 6543 <span className="font-mono">?pgbouncer=true</span> URL.
                     </p>
                 </div>
 
