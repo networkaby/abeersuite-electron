@@ -101,6 +101,56 @@ export async function replicaBindsThisPc(
 }
 
 /**
+ * Has the worker ever filled this replica? Asked at boot before an onboarding timeout
+ * resets the counter: an empty replica is an unfinished onboarding, a filled one is a
+ * working counter that could not finish a pull this time. False when unreadable.
+ */
+export async function replicaHasSyncedData(adminUrl: string): Promise<boolean> {
+    const client = new PgClient({ connectionString: adminUrl, connectionTimeoutMillis: 5_000 });
+    try {
+        await client.connect();
+        return await hasSyncedData(client);
+    } catch (err) {
+        console.error("[ReplicaWipe] Could not read the replica's sync state:", err);
+        return false;
+    } finally {
+        await client.end().catch(() => {});
+    }
+}
+
+/**
+ * Which counter does the replica bind to this PC's installation id? Used to rebuild a
+ * damaged counter-setup.json (main.ts recoverCounterSetup).
+ *
+ *   { counterId, counterNumber } — exactly one row carries the id
+ *   "none"                       — no row does, in a replica that has synced: the last
+ *                                  answer the DB gave is that this PC holds no counter
+ *   null                         — cannot tell (unreadable, never filled, or two rows)
+ */
+export async function counterBoundToThisPc(
+    adminUrl: string,
+    deviceId: string,
+): Promise<{ counterId: number; counterNumber: number } | "none" | null> {
+    const client = new PgClient({ connectionString: adminUrl, connectionTimeoutMillis: 5_000 });
+    try {
+        await client.connect();
+        if (!(await hasSyncedData(client))) return null;
+        const { rows } = await client.query<{ id: number; counterNumber: number }>(
+            `SELECT id, "counterNumber" FROM "pos_counters" WHERE "boundDeviceId" = $1 LIMIT 2`,
+            [deviceId],
+        );
+        if (rows.length === 0) return "none";
+        if (rows.length > 1) return null;
+        return { counterId: rows[0].id, counterNumber: rows[0].counterNumber };
+    } catch (err) {
+        console.error("[ReplicaWipe] Could not read this PC's counter from the replica:", err);
+        return null;
+    } finally {
+        await client.end().catch(() => {});
+    }
+}
+
+/**
  * How many local writes this PC has made that Supabase has not accepted yet.
  *
  * Asked before a restore, and only to TELL the operator. `wipeReplica` empties

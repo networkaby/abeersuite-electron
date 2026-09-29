@@ -4,6 +4,8 @@ import * as fs from "fs";
 import { pathToFileURL } from "url";
 import * as crypto from "crypto";
 import * as dotenv from "dotenv";
+import { readJsonState, setAsideCorrupt, writeJsonAtomic, type StateRead } from "./stateFile";
+import { resolveInstallationId } from "./installationId";
 
 // ── File log ─────────────────────────────────────────────────────────────────
 // A fresh log per run (not appended) — this exists to answer "why didn't it boot this
@@ -184,8 +186,7 @@ function ensureAuthSecret(): void {
     if (!secret) {
         secret = crypto.randomBytes(32).toString("base64");
         try {
-            fs.mkdirSync(path.dirname(file), { recursive: true });
-            fs.writeFileSync(file, JSON.stringify({ authSecret: secret }, null, 2), "utf-8");
+            writeJsonAtomic(file, { authSecret: secret });
             console.log(`[main] Generated this machine's session signing key: ${file}`);
         } catch (err) {
             // Not fatal — the app runs. But a fresh secret on every launch signs everyone
@@ -361,7 +362,7 @@ function readAutoStartPreference(): boolean {
 
 function writeAutoStartPreference(enabled: boolean): void {
     try {
-        fs.writeFileSync(autoStartPrefPath(), JSON.stringify({ enabled, updated: new Date().toISOString() }));
+        writeJsonAtomic(autoStartPrefPath(), { enabled, updated: new Date().toISOString() });
     } catch (err) {
         console.warn("[main] Could not save the auto-start preference:", err);
     }
@@ -554,35 +555,11 @@ app.on("second-instance", () => {
 });
 
 // ── Persistent Unique Installation ID ──────────────────────────────────────────
-function getOrCreateInstallationId(): string {
-    const userDataPath = app.getPath("userData");
-    const idFilePath = path.join(userDataPath, "counter-installation-id.json");
-
-    try {
-        if (fs.existsSync(idFilePath)) {
-            const raw = fs.readFileSync(idFilePath, "utf-8");
-            const data = JSON.parse(raw);
-            if (data?.counterId && typeof data.counterId === "string") {
-                return data.counterId;
-            }
-        }
-    } catch {
-        // Fallback to generating a fresh one below
-    }
-
-    const newId = `COUNTER-${crypto.randomUUID()}`;
-    try {
-        if (!fs.existsSync(userDataPath)) {
-            fs.mkdirSync(userDataPath, { recursive: true });
-        }
-        fs.writeFileSync(idFilePath, JSON.stringify({ counterId: newId, createdAt: new Date().toISOString() }, null, 2));
-    } catch (err) {
-        console.error("Failed to persist counter ID:", err);
-    }
-    return newId;
-}
-
-const counterInstallationId = getOrCreateInstallationId();
+// See installationId.ts. Resolved against how counter-setup.json reads, because only a
+// PC that holds no counter may be given a new id. Null only when a PC that holds a
+// counter has lost both copies — every check below then answers "cannot tell".
+const counterInstallationId: string | null =
+    resolveInstallationId(app.getPath("userData"), readCounterSetupState().kind).id;
 
 
 
@@ -625,26 +602,58 @@ let pendingSyncUrl: string | null = null;
  */
 let localAdminUrl: string | null = null;
 
+function parseCounterSetup(raw: unknown): CounterSetup | null {
+    const data = raw as { counterId?: unknown; counterNumber?: unknown } | null;
+    return typeof data?.counterId === "number" && typeof data?.counterNumber === "number"
+        ? { counterId: data.counterId, counterNumber: data.counterNumber }
+        : null;
+}
+
+/** present / absent / corrupt — boot treats each differently (see the replica section). */
+function readCounterSetupState(): StateRead<CounterSetup> {
+    return readJsonState(counterSetupFilePath(), parseCounterSetup);
+}
+
 function readCounterSetup(): CounterSetup | null {
+    const state = readCounterSetupState();
+    return state.kind === "present" ? state.value : null;
+}
+
+/**
+ * counter-setup.json exists but cannot be read — a save cut short by a power cut, or
+ * damage since. Not the same as no file: this PC was a counter a moment ago, and its
+ * replica may hold sales it has not pushed yet.
+ *
+ * The replica can say which counter this is: the pos_counters row that carries this
+ * PC's installation id IS the setup. Exactly one such row → the file is rebuilt and
+ * boot carries on as if nothing happened. No row, in a replica that has synced → the
+ * last answer the DB gave is that this PC holds no counter, the same verdict an intact
+ * file would get from the boot binding check → "released". Anything else (no id, an
+ * unreadable or never-filled replica, two rows) → null: hold, wipe nothing.
+ *
+ * The damaged file is set aside first either way, so nothing else reads it.
+ */
+async function recoverCounterSetup(adminUrl: string, error: string): Promise<CounterSetup | "released" | null> {
+    const aside = setAsideCorrupt(counterSetupFilePath());
+    console.error(`[main] counter-setup.json is damaged (${error})${aside ? ` — kept as ${path.basename(aside)}` : ""}.`);
+    if (!counterInstallationId) return null;
+    const bound = await counterBoundToThisPc(adminUrl, counterInstallationId);
+    if (bound === "none") return "released";
+    if (!bound) return null;
     try {
-        const file = counterSetupFilePath();
-        if (!fs.existsSync(file)) return null;
-        const data = JSON.parse(fs.readFileSync(file, "utf-8"));
-        if (typeof data?.counterId === "number" && typeof data?.counterNumber === "number") {
-            return { counterId: data.counterId, counterNumber: data.counterNumber };
-        }
-        return null;
+        writeJsonAtomic(counterSetupFilePath(), bound);
     } catch (err) {
-        console.error("[main] Could not read counter-setup.json:", err);
-        return null;
+        console.error("[main] Could not rewrite counter-setup.json:", err);
     }
+    console.warn(`[main] counter-setup.json rebuilt from the replica — counter ${bound.counterNumber}.`);
+    return bound;
 }
 
 ipcMain.handle("counter:get-setup", (): CounterSetup | null => readCounterSetup());
 
 ipcMain.handle("counter:save-setup", (_, setup: CounterSetup): boolean => {
     try {
-        fs.writeFileSync(counterSetupFilePath(), JSON.stringify(setup, null, 2));
+        writeJsonAtomic(counterSetupFilePath(), setup);
         // Written LAST in onboarding, after the wizard already started the worker and
         // waited for the replica to fill (counter:start-sync). No-op when it is up.
         if (pendingSyncUrl) startSyncWorker(pendingSyncUrl);
@@ -1107,7 +1116,7 @@ import {
 } from "./backupManager";
 import { provisionLocalDatabase } from "./localDbProvisioner";
 import { startSyncWorker, stopSyncWorker } from "./syncManager";
-import { wipeReplica, replicaBindsThisPc, countPendingOutbox } from "./replicaWipe";
+import { wipeReplica, replicaBindsThisPc, countPendingOutbox, counterBoundToThisPc, replicaHasSyncedData } from "./replicaWipe";
 import { waitForReplicaReady } from "./waitForReplica";
 import { startHardwareBridge, stopHardwareBridge, bridgeSend, bridgeRequest, isBridgeConnected } from "./hardwareBridgeManager";
 import { applyIdRanges } from "./applyIdRanges";
@@ -1184,7 +1193,7 @@ function persistVisitedRoutes(): void {
     if (visitedRoutes.size === 0) return;
     try {
         const routes = Array.from(visitedRoutes).slice(-WARM_ROUTES_MAX);
-        fs.writeFileSync(warmRoutesFilePath(), JSON.stringify({ routes, updatedAt: new Date().toISOString() }));
+        writeJsonAtomic(warmRoutesFilePath(), { routes, updatedAt: new Date().toISOString() });
     } catch (err) {
         console.warn("[main] Could not persist warm-routes.json:", err);
     }
@@ -1285,7 +1294,7 @@ function readRoster(): ShellRosterEntry[] {
 
 function writeRoster(entries: ShellRosterEntry[]): void {
     try {
-        fs.writeFileSync(rosterPath(), JSON.stringify(entries, null, 2), "utf-8");
+        writeJsonAtomic(rosterPath(), entries);
     } catch (err) {
         console.warn("[Shell] Could not save the face roster:", (err as Error).message);
     }
@@ -1462,17 +1471,8 @@ const APP_TITLE = `AbeerSuite ${app.getVersion()}`;
 // synchronously — this only runs at window creation and right after
 // counter-setup.json is rewritten, never on a hot path.
 function currentAppTitle(): string {
-    try {
-        const file = counterSetupFilePath();
-        if (!fs.existsSync(file)) return APP_TITLE;
-        const data = JSON.parse(fs.readFileSync(file, "utf-8"));
-        if (typeof data?.counterNumber === "number") {
-            return `${APP_TITLE} — Counter ${data.counterNumber}`;
-        }
-        return APP_TITLE;
-    } catch {
-        return APP_TITLE;
-    }
+    const setup = readCounterSetup();
+    return setup ? `${APP_TITLE} — Counter ${setup.counterNumber}` : APP_TITLE;
 }
 
 // Builds the full title including sync and connection status
@@ -1794,13 +1794,33 @@ app.whenReady().then(async () => {
                 // kept so the wizard can start the worker the moment a counter is claimed.
                 pendingSyncUrl = replica.syncUrl;
                 localAdminUrl = localDbUrl;
-                const setup = readCounterSetup();
+                const setupState = readCounterSetupState();
+                let setup = setupState.kind === "present" ? setupState.value : null;
+                if (setupState.kind === "corrupt") {
+                    const recovered = await recoverCounterSetup(localDbUrl, setupState.error);
+                    if (recovered === "released") {
+                        await resetCounter("the damaged setup file names no counter this PC holds");
+                    } else if (recovered) {
+                        setup = recovered;
+                    } else {
+                        // Hold: no worker, no wipe. The wizard offers the counter the DB
+                        // still binds to this PC, and saving it writes a clean file.
+                        console.error("[main] Holding: counter-setup.json could not be rebuilt. Nothing was emptied.");
+                        void dialog.showMessageBox({
+                            type: "warning",
+                            title: "Counter setup needs a check",
+                            message: "This counter's setup file was damaged and could not be rebuilt.",
+                            detail: "Nothing on this PC has been deleted. Run counter setup again — it offers the counter this PC is bound to.",
+                        });
+                    }
+                }
                 if (setup) startSyncWorker(replica.syncUrl);
-                else {
+                else if (setupState.kind === "absent") {
                     console.log("[main] No counter claimed yet — sync worker stays down until onboarding completes.");
                     // A PC without a counter holds no business data. A release learned
                     // of at the last run, or an onboarding that never finished, may have
-                    // left the dataset here. No-op on a fresh install.
+                    // left the dataset here. No-op on a fresh install. Only for a file
+                    // that is truly not there — a damaged one is handled above.
                     await wipeReplica(localDbUrl);
                 }
                 // The outbox flusher runs INSIDE the Next server (see src/instrumentation.ts):
@@ -1834,10 +1854,19 @@ app.whenReady().then(async () => {
                     // "error" is schema drift after an upgrade: the replica WAS ready and
                     // holds real data. Keep it — the app shows its update screen — because
                     // an offline PC could never onboard again if it were wiped here.
+                    //
+                    // Only while the replica is still empty, though. One that has synced
+                    // before is a working counter that could not finish a pull this time
+                    // (offline, after an upgrade added a table) — emptying it would throw
+                    // away its unsent sales and leave an offline till unable to onboard.
                     if (wait === "timeout") {
-                        await resetCounter("the replica never finished its first sync");
+                        if (!(await replicaHasSyncedData(localDbUrl))) {
+                            await resetCounter("the replica never finished its first sync");
+                        } else {
+                            console.warn("[main] The replica did not report ready in time, but it holds synced data — keeping it.");
+                        }
                     } else if (wait === "ready") {
-                        const bound = await replicaBindsThisPc(localDbUrl, setup.counterId, [counterInstallationId]);
+                        const bound = await replicaBindsThisPc(localDbUrl, setup.counterId, counterInstallationId ? [counterInstallationId] : []);
                         if (bound === false) await resetCounter(`counter ${setup.counterNumber} no longer carries this PC`);
                     }
                 }
@@ -1868,7 +1897,7 @@ app.whenReady().then(async () => {
     // id to match against pos_counters.boundDeviceId, and where counter-setup.json lives
     // so it can tell "released" from "never set up". Inherited through serverManager's
     // `env: {...process.env}`.
-    process.env.COUNTER_MACHINE_ID = counterInstallationId;
+    if (counterInstallationId) process.env.COUNTER_MACHINE_ID = counterInstallationId;
     process.env.COUNTER_USER_DATA = app.getPath("userData");
 
     sendBootProgress("Starting server…");

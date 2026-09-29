@@ -415,6 +415,32 @@ cookie NAME is pinned in `src/auth.ts` (Auth.js keys the token on secret + name)
 `counter.env` ships the office's `AUTH_SECRET` for this mode only. Anything saved at the
 office, a relayed POS sale included, numbers in the common series (counter 1).
 
+### 4.7 A damaged state file is never read as "no file" (2026-09-30)
+
+Boot decides from `counter-setup.json` whether this PC holds a counter, and "no file"
+empties the replica — `_outbox` with it, by the owner's rule for a PC with no counter.
+A save cut short by a power cut used to read the same way, and a damaged
+`counter-installation-id.json` silently minted a new id, which the binding check then
+answered with a reset. Either one could throw away a till's unsent sales.
+
+- Every userData JSON file is written through `electron/stateFile.ts`
+  (`writeJsonAtomic`: temp file in the same folder → fsync → rename), so a reader sees the
+  old contents or the new, never a mix. Reads say `present`, `absent` (no file) or
+  `corrupt` (exists, unusable).
+- **absent** keeps the owner's rule: wipe. **corrupt** sets the file aside and asks the
+  replica which `pos_counters` row carries this PC's id — one row rebuilds the file; no row
+  in a synced replica is the same "released" an intact file would get; anything else
+  holds (no worker, no wipe, a warning, and the wizard heals it).
+- The installation id (`electron/installationId.ts`) keeps a `.bak` copy and is minted only
+  on a PC whose setup file is absent. Both copies lost on a counter → no id ("lost"): every
+  check already treats that as "cannot tell". Never re-derived from the replica — two tills
+  sharing an id would share an id block.
+- The 5-minute onboarding timeout resets only a replica that never synced; a filled one
+  that could not finish a pull (offline after an upgrade) is kept.
+
+`pnpm check:state-file` proves the read/write rules, the id rules and the Windows lock
+retry in a temp folder.
+
 ## 5. Desktop & hardware capabilities
 
 | | Today | Target |

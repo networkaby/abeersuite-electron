@@ -51,6 +51,7 @@ import { app, BrowserWindow, powerMonitor } from "electron";
 const { autoUpdater } = require("electron-updater") as typeof import("electron-updater");
 import type { UpdateDownloadedEvent, UpdateInfo } from "electron-updater";
 import { beginSwap, isStaging, stageUpdate } from "./stagedUpdate";
+import { writeJsonAtomic } from "./stateFile";
 
 export type UpdateTier = "quiet" | "urgent" | "schema";
 export type UpdatePhase = "idle" | "checking" | "downloading" | "ready" | "installing" | "error";
@@ -397,7 +398,7 @@ function feedLabel(feed: FeedConfig): string {
 /** Same home and mode as sync-config.json: per-user, owner-only, never packaged. */
 function writeFeedConfig(feed: FeedConfig): string {
     const file = path.join(app.getPath("userData"), "update-config.yml");
-    fs.writeFileSync(file, JSON.stringify(feed, null, 2), { encoding: "utf8", mode: 0o600 });
+    writeJsonAtomic(file, feed, { mode: 0o600 });
     return file;
 }
 

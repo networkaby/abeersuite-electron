@@ -43,6 +43,7 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { writeJsonAtomic } from "./stateFile";
 import * as path from "node:path";
 import { app } from "electron";
 
@@ -264,7 +265,7 @@ export async function stageUpdate(installerPath: string, version: string): Promi
         }
 
         const info: StagedInfo = { version, stagedDir: dest, completedAt: Date.now() };
-        fs.writeFileSync(markerFor(version), JSON.stringify(info, null, 2), "utf8");
+        writeJsonAtomic(markerFor(version), info);
         staged = info;
         console.log(
             `[StagedUpdate] ${version} is unpacked and ready (${Math.round((Date.now() - startedAt) / 1000)}s). ` +

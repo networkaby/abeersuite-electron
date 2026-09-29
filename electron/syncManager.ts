@@ -28,6 +28,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { BrowserWindow } from "electron";
+import { writeJsonAtomic } from "./stateFile";
 import { app } from "electron";
 import { noteSchemaDrift } from "./updateManager";
 
@@ -75,7 +76,7 @@ function writeConfig(syncUrl: string): string | null {
 
     const file = configFilePath();
     try {
-        fs.writeFileSync(file, JSON.stringify(config, null, 2), { encoding: "utf8", mode: 0o600 });
+        writeJsonAtomic(file, config, { mode: 0o600 });
         return file;
     } catch (err) {
         console.error("[SyncManager] Could not write the sync worker's config:", err);

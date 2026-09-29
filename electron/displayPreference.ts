@@ -1,6 +1,7 @@
 import { app, BrowserWindow, screen } from "electron";
 import * as path from "path";
 import * as fs from "fs";
+import { writeJsonAtomic } from "./stateFile";
 
 // ── Screen size ──────────────────────────────────────────────────────────────
 // The office screens were laid out on a large monitor. On a counter's 1366-wide
@@ -77,7 +78,7 @@ export function writeDisplayPreference(pref: DisplayPreference): void {
             pref.mode === "fixed"
                 ? { mode: "fixed", factor: clampZoom(pref.factor) }
                 : { mode: "auto" };
-        fs.writeFileSync(prefPath(), JSON.stringify({ ...body, updated: new Date().toISOString() }));
+        writeJsonAtomic(prefPath(), { ...body, updated: new Date().toISOString() });
     } catch (err) {
         console.warn("[main] Could not save the screen size preference:", err);
     }

@@ -29,7 +29,8 @@ export interface ShellRosterEntry {
 
 export interface ElectronAPI {
     isElectron: true;
-    getCounterId: () => Promise<string>;
+    /** Null only when a PC that holds a counter has lost its id file and its copy. */
+    getCounterId: () => Promise<string | null>;
     getPrinters: () => Promise<Array<{ name: string; isDefault: boolean; displayName?: string }>>;
     windowControl: (action: "minimize" | "maximize" | "close" | "toggle-fullscreen") => Promise<void>;
     /**
