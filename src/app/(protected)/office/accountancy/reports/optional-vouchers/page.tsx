@@ -6,7 +6,7 @@
 // vouchers store information and (where applicable) move stock, but do not
 // post to the general ledger. Modelled on Day Book.
 
-import { useEffect, useState, useCallback, useRef, Fragment } from "react";
+import { useEffect, useState, Fragment } from "react";
 import { partyProfileHref, type PartyLinkKind } from "@/shared/lib/parties";
 import { useRouter } from "next/navigation";
 import axios from "axios";
@@ -28,6 +28,7 @@ import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 
 type OptionalType =
     | "SALES_ORDER" | "PURCHASE_ORDER"
@@ -103,11 +104,44 @@ export default function OptionalVouchersPage() {
     const [to, setTo]     = useState(toIsoDate(new Date()));
     const [search, setSearch] = useState("");
     const [typeFilter, setTypeFilter] = useState<TypeFilter>("All");
-    const [page, setPage] = useState(1);
-    const [data, setData] = useState<Data | null>(null);
-    const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
-    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // The request is built from what the boxes show, never from arguments, so no
+    // filter can be dropped on the way. The page belongs to one set of filters:
+    // change any of them and it is page 1 again, without a second fetch.
+    const debouncedSearch = useDebouncedValue(search, 400);
+    const filterKey = `${from}|${to}|${debouncedSearch}|${typeFilter}`;
+    const [paging, setPaging] = useState({ filterKey, page: 1 });
+    const page = paging.filterKey === filterKey ? paging.page : 1;
+    const goPage = (p: number) => setPaging({ filterKey, page: p });
+
+    const params = new URLSearchParams({ from, to, page: String(page), limit: "50" });
+    if (debouncedSearch)       params.set("search", debouncedSearch);
+    if (typeFilter !== "All")  params.set("type",   typeFilter);
+    const query = params.toString();
+
+    // Refresh shows the spinner; a realtime refresh must not blank a report the
+    // user is reading, so it refetches the same view silently.
+    const [refreshCount, setRefreshCount] = useState(0);
+    const [liveCount, setLiveCount] = useState(0);
+    const requestKey = `${query}#${refreshCount}`;
+    const [result, setResult] = useState<{ key: string; data: Data | null } | null>(null);
+    const data = result?.data ?? null;
+    const loading = result?.key !== requestKey;
+
+    useEffect(() => {
+        let cancelled = false;
+        axios.get<Data>(`/api/inventory/vouchers/optional?${query}`)
+            .then((r) => { if (!cancelled) setResult({ key: requestKey, data: r.data }); })
+            .catch(() => {
+                if (cancelled) return;
+                toast.error("Failed to load optional vouchers");
+                setResult((prev) => ({ key: requestKey, data: prev?.data ?? null }));
+            });
+        return () => { cancelled = true; };
+    }, [query, requestKey, liveCount]);
+
+    useRealtimeTopics(["ledger"], () => setLiveCount((n) => n + 1));
 
     // Esc collapses expanded rows; if none expanded, goes back.
     useEffect(() => {
@@ -129,34 +163,6 @@ export default function OptionalVouchersPage() {
         return next;
     });
 
-    const load = useCallback((p: number, q: string, t: TypeFilter, silent = false) => {
-        // A realtime refresh must not blank a report the user is reading.
-        if (!silent) setLoading(true);
-        const params = new URLSearchParams({ from, to, page: String(p), limit: "50" });
-        if (q)            params.set("search", q);
-        if (t !== "All")  params.set("type",   t);
-        axios.get<Data>(`/api/inventory/vouchers/optional?${params}`)
-            .then((r) => setData(r.data))
-            .catch(() => toast.error("Failed to load optional vouchers"))
-            .finally(() => setLoading(false));
-    }, [from, to]);
-
-    const loadFirst = useCallback(() => { setPage(1); load(1, "", "All"); }, [load]);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(loadFirst, [loadFirst]);
-
-    // Refresh the view the user is actually on - page, search and filter kept.
-    // useRealtimeTopics always calls the latest closure, so these stay current.
-    useRealtimeTopics(["ledger"], () => load(page, search, typeFilter, true));
-
-    const handleSearch = (v: string) => {
-        setSearch(v);
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => { setPage(1); load(1, v, typeFilter); }, 400);
-    };
-    const handleType = (t: TypeFilter) => { setTypeFilter(t); setPage(1); load(1, search, t); };
-    const goPage = (p: number) => { setPage(p); load(p, search, typeFilter); };
-
     const totalPages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
 
     return (
@@ -172,7 +178,7 @@ export default function OptionalVouchersPage() {
                 <div className="flex items-end gap-2">
                     <div className="space-y-1"><Label>From</Label><TallyDateInput value={from} onValueChange={setFrom} className="w-auto" /></div>
                     <div className="space-y-1"><Label>To</Label><TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" /></div>
-                    <Button onClick={() => { setPage(1); load(1, search, typeFilter); }}>Refresh</Button>
+                    <Button onClick={() => { goPage(1); setRefreshCount((n) => n + 1); }}>Refresh</Button>
                 </div>
             </div>
 
@@ -181,12 +187,12 @@ export default function OptionalVouchersPage() {
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                     <Input
                         value={search}
-                        onChange={(e) => handleSearch(e.target.value)}
+                        onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search by reference, narration or party…"
                         className="pl-9"
                     />
                 </div>
-                <Select value={typeFilter} onValueChange={(v) => handleType(v as TypeFilter)}>
+                <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as TypeFilter)}>
                     <SelectTrigger className="w-52" aria-label="Filter by voucher type">
                         <SelectValue />
                     </SelectTrigger>
