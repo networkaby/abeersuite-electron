@@ -20,6 +20,7 @@ import { PosScreenShell } from "@/modules/pos/components/PosScreenShell";
 import { usePosBilling, parseAmt } from "@/modules/pos/hooks/usePosBilling";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { bridgeOk, bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
+import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 import type { VoucherBridgePayload } from "@/modules/accountancy/lib/voucherReceiptSample";
@@ -50,15 +51,14 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
     const productSearchRef = useRef<HTMLInputElement>(null);
     const cashTenderedRef = useRef<HTMLInputElement>(null);
 
-    // Ctrl/Cmd+Enter → editing PATCHes directly (no checkout); a new sale opens
-    // the checkout dialog. (`b` and `generateInvoice` are bound by the time the
-    // key handler can fire.)
+    // Ctrl/Cmd+Enter → the checkout dialog: a new sale collects the money there;
+    // an edit takes none, so it opens in "confirm" mode (Update Sale / Update &
+    // Print Sale). (`b` is bound by the time the key handler can fire.)
     const b = usePosBilling({
         onHotkeyConfirm: () => {
-            if (isEdit) void generateInvoice(false);
             // Mirror the disabled Checkout button: silently no-op while a
             // require-note item still has a blank line note.
-            else if (!b.saleNoteMissing) b.openCheckout();
+            if (!b.saleNoteMissing) b.openCheckout();
         },
         partySearchRef,
         productSearchRef,
@@ -174,7 +174,8 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
         // Re-send the original charges + discount/shipping/round-off and OMIT tenders, so
         // the PATCH keeps the loyalty/coupon/gift-card + payment rows and re-posts the GL
         // faithfully. A reduced total over the unchanged payment becomes a customer
-        // account credit. No checkout / loyalty / coupon flow on an edit.
+        // account credit. No tenders / loyalty / coupon flow on an edit; it prints
+        // (like a register reprint) only when asked.
         if (isEdit && editMeta.current) {
             if (cart.length === 0) { toast.error("Cart is empty"); return; }
             if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
@@ -197,6 +198,8 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     // tenders deliberately omitted → preserved; the GL re-post reuses them.
                 });
                 toast.success("Sale updated");
+                b.setCheckoutOpen(false);   // no second Enter while the page navigates away
+                if (printAfter) await printVoucherThermal("inv", editId, "POS");
                 router.push("/office/accountancy/vouchers-registers/sales");
             } catch (e: unknown) {
                 toast.error(extractApiError(e, "Failed to update sale"));
@@ -456,7 +459,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             checkoutSlot={
 
                 <Button
-                    onClick={isEdit ? () => void generateInvoice(false) : () => b.openCheckout()}
+                    onClick={() => b.openCheckout()}
                     disabled={
                         b.cart.length === 0 ||
                         !b.snapshot?.account ||
@@ -511,8 +514,13 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 lockedProviderId={shareProvider}
             />
 
-            {/* ── Checkout dialog — fixed Cash / UPI / Credit rows ──────────────── */}
+            {/* ── Checkout dialog — fixed Cash / UPI / Credit rows; an edit takes no
+                money, so it opens in "confirm" mode (title + the two CTAs). ──── */}
             <CheckoutDialog
+                mode={isEdit ? "confirm" : "sale"}
+                title={isEdit ? `Update Sale · ${formatInr(b.total)}` : undefined}
+                confirmLabel={isEdit ? "Update Sale" : undefined}
+                confirmPrintLabel={isEdit ? "Update & Print Sale" : undefined}
                 open={b.checkoutOpen}
                 onOpenChange={b.setCheckoutOpen}
                 total={b.total}
