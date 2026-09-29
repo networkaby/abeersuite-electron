@@ -875,22 +875,25 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // Fetch the picked party's outstanding balance + address so we can show
     // them in the compact info card. accountId / id come straight off
     // PickedParty; we don't need to refetch the name / phone.
+    //
+    // The balance is summed from the GL by account — the same read as the POS Rcv
+    // dialog and the credit gate, signed "due > 0 = owes us" — so a company reads
+    // the same way as a person. The address comes from the party's own record.
     useEffect(() => {
         if (!party) { setPartySnapshot({ balance: 0, address: null }); return; }
-        if (party.kind !== "customer") {
-            // Companies (B2B) — skip the call for now; could be wired later.
-            setPartySnapshot({ balance: 0, address: null });
-            return;
-        }
         let cancelled = false;
-        axios.get<{ address: string | null; account?: { balance: number | string | null } }>(`/api/person/${party.id}`)
-            .then((r) => {
-                if (cancelled) return;
-                const raw = r.data.account?.balance;
-                const balance = typeof raw === "string" ? parseFloat(raw) : (raw ?? 0);
-                setPartySnapshot({ balance: balance || 0, address: r.data.address ?? null });
-            })
-            .catch(() => { if (!cancelled) setPartySnapshot({ balance: 0, address: null }); });
+        const balanceReq = party.accountId != null
+            ? axios.get<{ due: number }>(`/api/pos/party-balance/${party.accountId}`).then((r) => r.data.due)
+            : Promise.resolve(0);
+        const detailPath = party.kind === "customer" ? `/api/person/${party.id}` : `/api/companies/${party.id}`;
+        const addressReq = axios.get<{ address: string | null }>(detailPath).then((r) => r.data.address ?? null);
+        void Promise.allSettled([balanceReq, addressReq]).then(([balance, address]) => {
+            if (cancelled) return;
+            setPartySnapshot({
+                balance: balance.status === "fulfilled" ? balance.value : 0,
+                address: address.status === "fulfilled" ? address.value : null,
+            });
+        });
         return () => { cancelled = true; };
     }, [party]);
 
