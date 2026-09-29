@@ -1673,6 +1673,10 @@ async function loadApp(baseUrl: string): Promise<void> {
         try {
             console.log(`[Boot] Navigating to ${startUrl} (attempt ${i}/${attempts})...`);
             await mainWindow.loadURL(startUrl);
+            // The shell (`login.html`, off disk) is still in this window's history, right
+            // behind the app. Left there, Back on the first page after sign-in walked out
+            // of the app onto the shell's faces screen while the cashier was signed in.
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.navigationHistory.clear();
             return;
         } catch (err) {
             console.warn(`[Boot] loadURL attempt ${i}/${attempts} failed:`, err);

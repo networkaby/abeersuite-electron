@@ -53,7 +53,10 @@ function goLogin(afterMs = 0, dropCookie = false) {
     if (window.location.pathname.startsWith("/staff/login")) return;
     redirecting = true;
     const back = window.location.pathname + window.location.search;
-    const go = () => window.location.assign(`/staff/login?callbackUrl=${encodeURIComponent(back)}`);
+    // `replace`: sign-in brings them straight back to this page, so keeping it in the
+    // history as well would leave two copies — Back from the reopened page would land
+    // on the stale one instead of the screen they came from.
+    const go = () => window.location.replace(`/staff/login?callbackUrl=${encodeURIComponent(back)}`);
     const leave = dropCookie
         ? () => {
             markDeliberateSignOut(SESSION_REVOKED_MESSAGE);   // other windows repeat the reason

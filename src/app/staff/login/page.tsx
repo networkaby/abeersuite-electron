@@ -211,11 +211,19 @@ function StaffLoginForm() {
      * rule below run exactly the same for both, and both end up with the identical
      * session (see shared/lib/auth/authorizeStaff.ts).
      */
-    /** Into the app — unless another cashier's drawer is waiting on this counter. */
+    /**
+     * Into the app — unless another cashier's drawer is waiting on this counter.
+     *
+     * `replace`, never `push`, on every way out of this page: pushed, the sign-in screen
+     * sat in the window's history right behind the first page, so that page's Back / Esc
+     * (`router.back()` on every voucher) landed on the faces screen while still signed
+     * in. Counter 23, 2026-09-29: locked with a Sales voucher open, back in by PIN, and
+     * the voucher's Back went to the lock screen.
+     */
     const enter = useCallback(async (dest: string, isCounter: boolean) => {
         const t = isCounter ? await fetchCounterTakeover() : null;
         if (t) { setTakeover(t); setLoading(false); return; }
-        router.push(dest);
+        router.replace(dest);
     }, [router]);
 
     const doSignIn = useCallback(async (
@@ -256,7 +264,7 @@ function StaffLoginForm() {
             const dest = callbackUrl.startsWith("/") ? callbackUrl : "/office/work-flow-inbox";
 
             // Wake the two status stores. Both back off to a day-long tick while nobody
-            // is signed in (their endpoints 401), and login navigates with router.push —
+            // is signed in (their endpoints 401), and login navigates with router.replace —
             // the React tree survives, so nothing would otherwise tell them the answer
             // has changed and a counter's badge would stay dark until the next tab focus.
             refreshCounterStatus();
@@ -301,7 +309,7 @@ function StaffLoginForm() {
                 }
                 // Desktop app with no counter: onboarding, online only.
                 if (electron) {
-                    router.push(`/setup/counter?next=${encodeURIComponent(dest)}`);
+                    router.replace(`/setup/counter?next=${encodeURIComponent(dest)}`);
                     return;
                 }
             }
@@ -551,7 +559,7 @@ function StaffLoginForm() {
                     <ShiftTakeoverDialog
                         takeover={takeover}
                         rejectLabel="Reject & sign out"
-                        onAccepted={() => router.push("/vouchers/pos/new")}
+                        onAccepted={() => router.replace("/vouchers/pos/new")}
                         onReject={() => {
                             void signOut({ redirect: false }).then(() => {
                                 setTakeover(null);
