@@ -6,7 +6,7 @@
 // (weekly off, holiday, approved leave, or unmarked).
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { toast } from "sonner";
 import { CalendarCheck, ChevronLeft, ChevronRight } from "lucide-react";
@@ -136,14 +136,14 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                                                 {/* The register answers "what did the month look like".
                                                     The name answers "and why": Employee Activity opens
                                                     on this person, day by day, stretch by stretch. */}
-                                                <Link
+                                                <GatedLink whenLocked="text" textClassName="flex items-center gap-2 text-left"
                                                     href={`/office/hr/activity?user=${p.id}`}
                                                     className="flex items-center gap-2 text-left hover:underline"
                                                     title={`${p.name} — hours, day by day`}
                                                 >
                                                     <UserAvatar avatarUrl={p.avatarUrl} name={p.name} role={p.role} sizePx={22} />
                                                     <span className="whitespace-nowrap font-medium">{p.name}</span>
-                                                </Link>
+                                                </GatedLink>
                                             </td>
                                             {days.map((iso) => {
                                                 const r = readDay(p, iso, mine);

@@ -5,7 +5,7 @@
 // PATCH /api/inventory/product-groups/[id] endpoint.
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { ChevronDown, ChevronRight, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RateCell, HsnCell, TaxabilityCell, type GstRateOpt } from "./InlineTaxCells";
@@ -62,12 +62,12 @@ export function GroupHierarchyTab({ data, canEdit, onSaved }: Props) {
             <div className="rounded-lg border border-dashed bg-muted/30 p-8 text-center">
                 <Layers className="mx-auto size-8 text-muted-foreground" />
                 <p className="mt-2 text-sm text-muted-foreground">No product groups yet.</p>
-                <Link
+                <GatedLink
                     href="/office/inventory/masters/product-groups"
                     className="mt-2 inline-block text-sm text-primary underline"
                 >
                     Create product groups
-                </Link>
+                </GatedLink>
             </div>
         );
     }

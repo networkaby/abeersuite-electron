@@ -12,6 +12,7 @@
 
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import axios from "axios";
 import { toast } from "sonner";
 import { ReceiptIndianRupee } from "lucide-react";
@@ -47,6 +48,11 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
     // "Save Estimate" / "Update Order" — the button, the dialog title and its CTAs.
     const noun = mode === "order" ? "Order" : "Estimate";
     const router = useRouter();
+    // Leaving an edit returns to the office list for this kind — or the POS register,
+    // for a cashier the page lock (pageAccess.ts) keeps out of it.
+    const canOpen = useCanOpenPage();
+    const officeList = mode === "order" ? "/office/ecommerce/orders" : "/office/accountancy/vouchers-registers/estimates";
+    const listHref = canOpen(officeList) ? officeList : "/vouchers/pos";
     // Edit mode: reopen an existing order / estimate in this same screen, hydrate
     // its customer + lines, and PATCH on save instead of creating a new voucher.
     // Both go through the order endpoint — it accepts POS_ESTIMATE too (GL-silent).
@@ -86,7 +92,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                 if (cancelled) return;
                 if (!data.editable) {
                     toast.error("This order can't be edited at its current stage.");
-                    router.push("/office/ecommerce/orders");
+                    router.push(listHref);
                     return;
                 }
                 if (data.accountId != null) await b.fetchSnapshot(data.accountId);
@@ -120,7 +126,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
             } catch (e: unknown) {
                 if (cancelled) return;
                 toast.error(extractApiError(e, `Could not load the ${mode} to edit`));
-                router.push(mode === "order" ? "/office/ecommerce/orders" : "/office/accountancy/vouchers-registers/estimates");
+                router.push(listHref);
             }
         })();
         return () => { cancelled = true; b.resetDraft(); };
@@ -168,7 +174,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                 toast.success(mode === "order" ? "Order updated" : "Estimate updated");
                 b.setCheckoutOpen(false);   // no second Enter while the page navigates away
                 if (printAfter) await printVoucherThermal("inv", editId, printKind);
-                router.push(mode === "order" ? "/office/ecommerce/orders" : "/office/accountancy/vouchers-registers/estimates");
+                router.push(listHref);
             } catch (e: unknown) {
                 toast.error(extractApiError(e, `Failed to update ${mode}`));
             } finally {

@@ -31,6 +31,7 @@
 
 import { type ReactNode, memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
@@ -695,6 +696,8 @@ export default function GeneratePage() {
     const [tab, setTab] = useState<"all" | "selected">("all");
 
     const router = useRouter();
+    // "Go to Print" only for someone who may open Print labels (the page lock).
+    const canOpen = useCanOpenPage();
     const searchParams = useSearchParams();
     // ?view=selected — arriving from the Print labels page to price the queued
     // products. Same shared queue, so the Selected tab already holds them.
@@ -1180,9 +1183,11 @@ export default function GeneratePage() {
                             >
                                 Clear selection
                             </Button>
-                            <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => router.push("/office/pricing-strategy/print-labels")} title="Open Print labels — the same products laid out as labels (you can add more there)">
-                                <Printer className="size-4" /> Go to Print{selectionIds.size > 0 ? ` (${selectionIds.size})` : ""}
-                            </Button>
+                            {canOpen("/office/pricing-strategy/print-labels") && (
+                                <Button type="button" variant="outline" size="sm" className="h-8" onClick={() => router.push("/office/pricing-strategy/print-labels")} title="Open Print labels — the same products laid out as labels (you can add more there)">
+                                    <Printer className="size-4" /> Go to Print{selectionIds.size > 0 ? ` (${selectionIds.size})` : ""}
+                                </Button>
+                            )}
                         </>
                     )}
                     <span className="text-xs text-muted-foreground">

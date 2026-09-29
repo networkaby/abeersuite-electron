@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { Briefcase, Link as LinkIcon, Sparkles, Network, Landmark, Move } from "lucide-react";
-import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { OrgStructure } from "@/shared/types/orgChart";
@@ -64,9 +64,9 @@ export default function OrgChartPage() {
                                         : "Free-form canvas — drag cards around, pan with space-drag, zoom with the wheel."}
                     </p>
                 </div>
-                <Link href="/office/admin/positions" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors">
+                <GatedLink href="/office/admin/positions" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors">
                     <LinkIcon size={11} /> Manage positions
-                </Link>
+                </GatedLink>
             </div>
 
             {/* Tab bar */}
@@ -102,9 +102,9 @@ export default function OrgChartPage() {
                     <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
                         <Briefcase size={36} className="opacity-20" />
                         <p className="text-sm">No positions defined yet.</p>
-                        <Link href="/office/admin/positions" className="text-xs text-primary hover:underline">
+                        <GatedLink href="/office/admin/positions" className="text-xs text-primary hover:underline">
                             Create your first position →
-                        </Link>
+                        </GatedLink>
                     </div>
                 ) : (
                     <StructureTree structure={structure} />

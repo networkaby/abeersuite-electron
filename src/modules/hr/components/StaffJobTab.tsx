@@ -5,7 +5,7 @@
 // the PATCH is partial, so each box is its own write and its own tick.
 
 import { useEffect, useState, type ChangeEvent } from "react";
-import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { toast } from "sonner";
 import { LogOut, Undo2 } from "lucide-react";
@@ -214,12 +214,12 @@ export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
                         <div id={id} className="flex h-9 items-center gap-2 text-sm">
                             {detail.ledger ? (
                                 <>
-                                    <Link
+                                    <GatedLink whenLocked="text" textClassName="font-medium"
                                         href={`/office/accountancy/masters/ledgers/${detail.ledger.id}`}
                                         className="font-medium text-primary underline-offset-2 hover:underline"
                                     >
                                         {detail.ledger.name}
-                                    </Link>
+                                    </GatedLink>
                                     <span className="text-muted-foreground">
                                         — {staffLedgerStanding(detail.ledger.balance, formatInr).sentence}
                                     </span>

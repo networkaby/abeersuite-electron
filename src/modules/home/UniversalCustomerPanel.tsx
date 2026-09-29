@@ -16,6 +16,7 @@
  *     (personId link) so CRM sees full history.
  */
 
+import { GatedLink } from "@/shared/components/GatedLink";
 import { useState, useRef, useEffect, useCallback } from "react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
@@ -344,14 +345,14 @@ function RepairStatusLookup() {
                                             Expected return: {new Date(t.expectedReturn).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                                         </p>
                                     )}
-                                    <a
+                                    <GatedLink
                                         href={`/office/repairing/tickets/${t.id}`}
                                         target="_blank"
                                         rel="noreferrer"
                                         className="text-xs text-primary hover:underline inline-flex items-center gap-1 mt-0.5"
                                     >
                                         Open ticket →
-                                    </a>
+                                    </GatedLink>
                                 </div>
                             )}
                         </div>

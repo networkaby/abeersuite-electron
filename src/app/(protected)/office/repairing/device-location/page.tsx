@@ -1,5 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { Truck, Package } from "lucide-react";
 import { timeAgo } from "@/shared/lib/format/timeAgo";
 import { getRepairPipeline } from "@/modules/repairing/lib/repairPipeline";
@@ -159,9 +159,9 @@ function LocationCard({
                     {items.map((it) => (
                         <li key={it.id} className="px-4 py-3 text-sm">
                             <div className="flex items-center justify-between gap-2">
-                                <Link href={`/office/repairing/tickets/${it.id}`} className="font-semibold text-primary hover:underline">
+                                <GatedLink whenLocked="text" textClassName="font-semibold" href={`/office/repairing/tickets/${it.id}`} className="font-semibold text-primary hover:underline">
                                     #{it.id}
-                                </Link>
+                                </GatedLink>
                                 {showPending ? (
                                     (() => {
                                         const p = pendingLabel(it.at);

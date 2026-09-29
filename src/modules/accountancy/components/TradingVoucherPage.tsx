@@ -33,6 +33,8 @@
 
 import { Fragment, useState, useCallback, useRef, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
+import { NO_ACCESS_HOME } from "@/shared/lib/auth/pageAccess";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { getOrgDefaults } from "@/shared/lib/orgDefaults";
@@ -131,6 +133,10 @@ function pickDefaultTenderAccount(list: GlAccount[], storageKey: string): GlAcco
 function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {}) {
     const copy = PER_KIND[kind];
     const router = useRouter();
+    // Leaving an edit lands on the Item Ledger — or Work Flow, for someone the page
+    // lock (pageAccess.ts) keeps out of it, so the exit never ends on "no access".
+    const canOpen = useCanOpenPage();
+    const itemLedgerOrHome = canOpen("/office/inventory/inventory-details") ? "/office/inventory/inventory-details" : NO_ACCESS_HOME;
     const searchParams = useSearchParams();
     const activeBranchId = useActiveBranchStore((s) => s.activeBranchId);
     // LOCAL calendar day, not the UTC one. `toISOString()` converts the instant
@@ -611,7 +617,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 }
                 if (v.status === "CANCELLED") {
                     toast.error("This voucher is cancelled. Use Duplicate to create a fresh copy.");
-                    router.push("/office/inventory/inventory-details");
+                    router.push(itemLedgerOrHome);
                     return;
                 }
                 setEditingRef(v.reference);
@@ -796,7 +802,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             .catch(() => {
                 if (cancelled) return;
                 toast.error("Failed to load voucher for editing");
-                router.push("/office/inventory/inventory-details");
+                router.push(itemLedgerOrHome);
             })
             .finally(() => { if (!cancelled) setEditLoading(false); });
         return () => { cancelled = true; };
@@ -1478,7 +1484,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             if (isEditing) {
                 // Edit done — leave the form and let the user verify the row
                 // updated wherever they came from.
-                router.push("/office/inventory/inventory-details");
+                router.push(itemLedgerOrHome);
                 return;
             }
 

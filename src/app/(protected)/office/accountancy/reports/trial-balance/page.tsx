@@ -16,6 +16,7 @@ import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/grou
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { groupReportUrl } from "@/modules/accountancy/lib/groupReportUrl";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 
 type GroupTypeStr = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 type Side = "DEBIT" | "CREDIT";
@@ -214,6 +215,9 @@ function deriveSummary(tree: GroupNode[]) {
 
 export default function TrialBalancePage() {
     const router = useRouter();
+    // Drill-downs go only where this person may open (the page lock, pageAccess.ts).
+    const canOpen = useCanOpenPage();
+    const go = (href: string) => { if (canOpen(href)) router.push(href); };
     const fyStart = indianFiscalYearStart();
     const [from, setFrom] = useState(toIsoDate(fyStart));
     const [to, setTo]     = useState(toIsoDate(new Date()));
@@ -290,13 +294,13 @@ export default function TrialBalancePage() {
         // — no Account row sits behind it, so send the reader to the stock
         // summary that produced the figure (same as the Balance Sheet does).
         if (id === -1) {
-            router.push(`/office/inventory/stock-summary?ref=trial-balance&asOf=${to}`);
+            go(`/office/inventory/stock-summary?ref=trial-balance&asOf=${to}`);
             return;
         }
         if (id <= 0) return;
-        router.push(accountLedgerUrl(id, { from, to }));
+        go(accountLedgerUrl(id, { from, to }));
     };
-    const goGroup  = (id: number) => router.push(groupReportUrl(id, { from, to }));
+    const goGroup  = (id: number) => go(groupReportUrl(id, { from, to }));
 
     // Grand-total columns — balanced after folding the opening-difference plug
     // into both Opening and Closing on the deficient side.

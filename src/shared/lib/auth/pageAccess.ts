@@ -67,17 +67,18 @@ const RULES: Rule[] = (() => {
     return [...byKey.values()].sort((a, b) => b.segments - a.segments || Number(b.link) - Number(a.link));
 })();
 
-/** The sidebar ticks that open `pathname` — any one of them will do — or null when
- *  no tick governs the page. */
-export function pageLinkIds(pathname: string): string[] | null {
+/** The sidebar ticks that open `href` — any one of them will do — or null when no
+ *  tick governs the page. A query or hash on the address is ignored. */
+export function pageLinkIds(href: string): string[] | null {
+    const pathname = href.split(/[?#]/)[0].replace(/(.)\/+$/, "$1");
     if (!under(pathname, "/office") || pathname === "/office") return null;
     if (OPEN_TO_ALL.some((p) => under(pathname, p))) return null;
     return RULES.find((r) => under(pathname, r.prefix))?.ids ?? null;
 }
 
 /** May someone holding `permissions` open this page? admin:bypass always may. */
-export function canOpenPage(pathname: string, permissions: readonly string[]): boolean {
-    const ids = pageLinkIds(pathname);
+export function canOpenPage(href: string, permissions: readonly string[]): boolean {
+    const ids = pageLinkIds(href);
     if (ids == null || permissions.includes("admin:bypass")) return true;
     return ids.some((id) => permissions.includes(id));
 }

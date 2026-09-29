@@ -1,5 +1,6 @@
 "use client";
 
+import { GatedLink } from "@/shared/components/GatedLink";
 import { useEffect, useRef } from "react";
 import { RefreshCw, Trash2 } from "lucide-react";
 import { flattenTree, treeLabel, type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
@@ -531,9 +532,9 @@ export function InvProductFormFields({
                                     ) : (
                                         <p className="text-xs text-muted-foreground">
                                             No attributes defined for this category.{" "}
-                                            <a href="/office/inventory/masters/attribute-masters" className="underline" target="_blank" rel="noreferrer">
+                                            <GatedLink href="/office/inventory/masters/attribute-masters" className="underline" target="_blank" rel="noreferrer">
                                                 Manage attribute masters
-                                            </a>
+                                            </GatedLink>
                                         </p>
                                     )}
                                 </>

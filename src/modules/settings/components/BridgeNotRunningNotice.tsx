@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -16,9 +16,9 @@ export function BridgeNotRunningNotice({ device = "bridge" }: { device?: string 
                 Install it (or start it) to use the {device}. Get the installer and setup steps from the Downloads page.
             </p>
             <Button asChild size="sm" variant="outline" className="mt-1 border-amber-300 bg-white">
-                <Link href="/office/settings/downloads">
+                <GatedLink href="/office/settings/downloads">
                     <Download size={14} /> Go to Downloads
-                </Link>
+                </GatedLink>
             </Button>
         </div>
     );

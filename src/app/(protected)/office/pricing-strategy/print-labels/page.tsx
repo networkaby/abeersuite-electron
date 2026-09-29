@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
@@ -41,6 +42,8 @@ export default function PrintLabelsPage() {
 
     // Deep-link: ?fromVoucher=<id> (the GRN/Purchase "Print labels" action).
     const router = useRouter();
+    // The Update-prices jump is offered only to someone who may open that page.
+    const canOpen = useCanOpenPage();
     const searchParams = useSearchParams();
     const fromVoucher = searchParams.get("fromVoucher");
     const fromVoucherId = fromVoucher && /^\d+$/.test(fromVoucher) ? Number(fromVoucher) : null;
@@ -112,7 +115,7 @@ export default function PrintLabelsPage() {
                 onAddProducts={onAddProducts}
                 onRemoveItem={remove}
                 onCopiesChange={(id, n) => setCopies(id, clampCopies(n))}
-                onUpdateBarcode={() => router.push("/office/pricing-strategy/update-print-labels?view=selected")}
+                onUpdateBarcode={canOpen("/office/pricing-strategy/update-print-labels") ? () => router.push("/office/pricing-strategy/update-print-labels?view=selected") : undefined}
                 prefillVoucherId={fromVoucherId}
                 onPrefillConsumed={() => router.replace("/office/pricing-strategy/print-labels", { scroll: false })}
                 pageTitle="Print labels"

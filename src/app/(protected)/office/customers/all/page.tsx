@@ -12,6 +12,7 @@ import {
     User,
 } from "lucide-react";
 import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { Badge } from "@/components/ui/badge";
 import { badgeColor } from "@/shared/lib/format/entityColor";
 import { moduleSelectedStyle, moduleTint } from "@/shared/lib/format/moduleTheme";
@@ -393,7 +394,7 @@ export default function AllCustomersPage() {
                 <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
                     {searchParams.get("from") === "daybook" && (
                         <>
-                            <Link href="/office/accountancy/reports/day-book" className="transition-colors hover:text-foreground">Day Book</Link>
+                            <GatedLink whenLocked="text" href="/office/accountancy/reports/day-book" className="transition-colors hover:text-foreground">Day Book</GatedLink>
                             <span>/</span>
                         </>
                     )}

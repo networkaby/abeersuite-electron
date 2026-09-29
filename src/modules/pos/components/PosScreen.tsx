@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import axios from "axios";
 import { toast } from "sonner";
 import { ReceiptIndianRupee } from "lucide-react";
@@ -34,6 +35,10 @@ type EditMeta = { charges: { accountId: number; description?: string; amount: nu
 
 export default function PosScreen({ editId, fromId }: { editId?: number; fromId?: number }) {
     const router = useRouter();
+    // Leaving an edit returns to the office Sales register — or the POS register, for a
+    // cashier the page lock (pageAccess.ts) keeps out of the office one.
+    const canOpen = useCanOpenPage();
+    const salesListHref = canOpen("/office/accountancy/vouchers-registers/sales") ? "/office/accountancy/vouchers-registers/sales" : "/vouchers/pos";
     // Edit mode: reopen a posted POS sale here (instead of the office form, which
     // drops the POS-specific charge rows → wrong Balance Sheet). We hydrate only the
     // customer + cart; on save we PATCH the lines and RE-SEND the original
@@ -89,7 +94,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 if (cancelled) return;
                 if (data.type !== "POS" || data.deletedAt || data.status === "CANCELLED") {
                     toast.error("This POS sale can't be edited.");
-                    router.push("/office/accountancy/vouchers-registers/sales");
+                    router.push(salesListHref);
                     return;
                 }
                 // Preserve the original charges (incl. server-added loyalty / coupon /
@@ -118,7 +123,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             } catch (e: unknown) {
                 if (cancelled) return;
                 toast.error(extractApiError(e, "Could not load the sale to edit"));
-                router.push("/office/accountancy/vouchers-registers/sales");
+                router.push(salesListHref);
             }
         })();
         return () => { cancelled = true; b.resetDraft(); };
@@ -200,7 +205,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 toast.success("Sale updated");
                 b.setCheckoutOpen(false);   // no second Enter while the page navigates away
                 if (printAfter) await printVoucherThermal("inv", editId, "POS");
-                router.push("/office/accountancy/vouchers-registers/sales");
+                router.push(salesListHref);
             } catch (e: unknown) {
                 toast.error(extractApiError(e, "Failed to update sale"));
             } finally {

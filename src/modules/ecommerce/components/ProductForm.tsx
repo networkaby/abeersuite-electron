@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
@@ -434,13 +434,13 @@ export default function ProductForm({
                 <div className="rounded-md border border-border bg-muted/40 p-3">
                     <div className="flex items-center justify-between gap-3">
                         <Label className="text-muted-foreground">Price &amp; MRP</Label>
-                        <Link
+                        <GatedLink
                             href="/office/pricing-strategy/update-print-labels"
                             className="inline-flex items-center gap-1 text-xs text-primary underline"
                         >
                             Edit in Pricing Strategy
                             <ExternalLink className="size-3" />
-                        </Link>
+                        </GatedLink>
                     </div>
                     <div className="mt-2 grid grid-cols-2 gap-3">
                         <div>
@@ -480,13 +480,13 @@ export default function ProductForm({
                     <div className="grid gap-2">
                         <div className="flex items-center justify-between gap-2">
                             <Label className="text-muted-foreground">Low-stock floor</Label>
-                            <Link
+                            <GatedLink
                                 href="/office/inventory/reorder"
                                 className="inline-flex items-center gap-1 text-xs text-primary underline"
                             >
                                 Reorder
                                 <ExternalLink className="size-3" />
-                            </Link>
+                            </GatedLink>
                         </div>
                         <div className="flex h-9 items-center rounded-md border border-border bg-muted/40 px-3">
                             <span className="text-sm font-semibold tabular-nums">{lowStockThresholdValue}</span>

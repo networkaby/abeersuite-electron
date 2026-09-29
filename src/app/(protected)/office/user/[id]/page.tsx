@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -89,7 +90,7 @@ export default function UserProfilePage() {
         <div className="flex flex-col items-center justify-center py-20 gap-3">
             <p className="text-sm text-muted-foreground">User not found.</p>
             <Button asChild variant="outline" size="sm">
-                <Link href="/office/admin/users"><ArrowLeft size={14} /> Back to Users</Link>
+                <GatedLink href="/office/admin/users"><ArrowLeft size={14} /> Back to Users</GatedLink>
             </Button>
         </div>
     );
@@ -99,7 +100,7 @@ export default function UserProfilePage() {
         <div className="p-4">
             <div className="flex items-center gap-2 mb-4 print:hidden">
                 <Button asChild variant="ghost" size="sm" className="-ml-2 text-muted-foreground">
-                    <Link href="/office/admin/users"><ArrowLeft size={14} /> All Users</Link>
+                    <GatedLink href="/office/admin/users"><ArrowLeft size={14} /> All Users</GatedLink>
                 </Button>
             </div>
 

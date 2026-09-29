@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { auth } from "@/auth";
 import { badgeColor } from "@/shared/lib/format/entityColor";
 import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { Wrench, Inbox, Package, Truck, Zap } from "lucide-react";
 import { timeAgo } from "@/shared/lib/format/timeAgo";
 import { getRepairPipeline } from "@/modules/repairing/lib/repairPipeline";
@@ -131,12 +132,12 @@ export default async function RepairingDashboardPage({
                     <h1 className="text-2xl font-bold mb-1">Repairs</h1>
                     <p className="text-muted-foreground text-sm">Welcome back, {name}</p>
                 </div>
-                <Link
+                <GatedLink
                     href="/office/repairing/tickets"
                     className="rounded-md border border-primary bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
                 >
                     All Tickets
-                </Link>
+                </GatedLink>
             </div>
 
             {/* Stat cards */}
@@ -251,7 +252,7 @@ export default async function RepairingDashboardPage({
                                     ? { chip: "bg-amber-500 text-white", card: "border-l-4 border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20" }
                                     : { chip: "bg-muted text-muted-foreground", card: "border-l-4 border-l-border bg-card" };
                             return (
-                                <Link
+                                <GatedLink whenLocked="text" textClassName={`flex flex-col gap-2 rounded-lg border border-border p-4 shadow ${tier.card}`}
                                     key={t.id}
                                     href={`/office/repairing/tickets/${t.id}`}
                                     className={`flex flex-col gap-2 rounded-lg border border-border p-4 shadow transition-colors hover:border-primary/50 hover:bg-muted/40 ${tier.card}`}
@@ -298,7 +299,7 @@ export default async function RepairingDashboardPage({
                                             <span className="truncate">At {loc.label}</span>
                                         </div>
                                     )}
-                                </Link>
+                                </GatedLink>
                             );
                         })}
                     </div>

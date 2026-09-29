@@ -13,6 +13,8 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
+import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
+import { NO_ACCESS_HOME } from "@/shared/lib/auth/pageAccess";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Plus, Trash2, CheckCircle2, X, Package } from "lucide-react";
@@ -148,6 +150,9 @@ const listPath = "/office/accountancy/vouchers-registers/journal-entries";
 /** `onClose` — hosted in a dialog (Quick Actions click): every close path calls it instead of navigating. */
 export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number; onClose?: () => void } = {}) {
     const router = useRouter();
+    // After a save, back to the register — or Work Flow, for someone the page lock
+    // (pageAccess.ts) keeps out of it.
+    const canOpen = useCanOpenPage();
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canCancel     = hasPermissionWithScope(permissions, "finance:voucher:cancel:journal");
@@ -456,7 +461,7 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
             if (postAfterSave) toast.success(`Journal voucher ${shownNo} saved & posted`);
             else               toast.success(`Journal voucher ${shownNo} saved as draft`);
             if (print) openReceipt(res.data.voucherId);
-            router.push(listPath);
+            router.push(canOpen(listPath) ? listPath : NO_ACCESS_HOME);
         } catch (err: unknown) {
             toast.error(extractApiError(err, "Save failed"));
         } finally {

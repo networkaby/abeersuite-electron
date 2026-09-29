@@ -22,6 +22,7 @@ import React, { useState } from "react";
 import { partyProfileHref } from "@/shared/lib/parties";
 import axios from "axios";
 import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { Loader2 } from "lucide-react";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { JOURNAL_STATUS_COLORS } from "@/shared/lib/constants/badges";
@@ -334,12 +335,12 @@ export function VoucherRegisterTable({
                                     >
                                         {r.party
                                             ? (partyHref
-                                                ? <Link
+                                                ? <GatedLink whenLocked="text"
                                                       href={partyHref}
                                                       className="text-primary hover:underline underline-offset-2"
                                                   >
                                                       {r.party}
-                                                  </Link>
+                                                  </GatedLink>
                                                 : r.party)
                                             : <span className="text-muted-foreground/65">—</span>}
                                     </td>

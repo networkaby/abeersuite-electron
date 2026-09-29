@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -163,13 +163,13 @@ export default function DealDetailDialog({
                                 <div className="text-xs text-muted-foreground">Customer</div>
                                 <div className="mt-1">
                                     {deal.person ? (
-                                        <Link href={`/office/customers/person/${deal.person.id}`} className="inline-flex items-center gap-1 text-primary hover:underline">
+                                        <GatedLink whenLocked="text" href={`/office/customers/person/${deal.person.id}`} className="inline-flex items-center gap-1 text-primary hover:underline">
                                             {deal.person.name} <ExternalLink className="size-3" />
-                                        </Link>
+                                        </GatedLink>
                                     ) : deal.company ? (
-                                        <Link href={`/office/customers/companies/${deal.company.id}`} className="inline-flex items-center gap-1 text-primary hover:underline">
+                                        <GatedLink whenLocked="text" href={`/office/customers/companies/${deal.company.id}`} className="inline-flex items-center gap-1 text-primary hover:underline">
                                             {deal.company.name} <ExternalLink className="size-3" />
-                                        </Link>
+                                        </GatedLink>
                                     ) : (
                                         <span className="text-muted-foreground">{deal.companyName || "Not linked"}</span>
                                     )}

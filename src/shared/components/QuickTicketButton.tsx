@@ -9,6 +9,7 @@ import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
 import { useRouter } from "next/navigation";
+import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import { useSession } from "next-auth/react";
 import { useQuickTicketStore, type Step, type BasicIdentity } from "@/store/quickTicketStore";
 import { extractApiError } from "@/shared/lib/api";
@@ -77,6 +78,7 @@ function invalidFieldClass(hasError?: boolean) {
 
 export default function QuickTicketButton() {
     const router = useRouter();
+    const canOpen = useCanOpenPage();
     const { data: session } = useSession();
     const {
         open, step, identity, billingAccountId,
@@ -183,7 +185,10 @@ export default function QuickTicketButton() {
             toast.success(`Ticket #${res.data.id} created!`);
             closeModal();
             window.open(`/receipt/${res.data.id}`, "_blank");
-            router.push(`/office/repairing/tickets/${res.data.id}`);
+            // Open the new ticket — unless the page lock (pageAccess.ts) keeps this
+            // person out of Repair; the slip above has already opened either way.
+            const ticketHref = `/office/repairing/tickets/${res.data.id}`;
+            if (canOpen(ticketHref)) router.push(ticketHref);
         } catch (err) {
             toast.error(extractApiError(err, "Failed to create ticket"));
         }

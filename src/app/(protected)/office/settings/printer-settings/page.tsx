@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
-import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { Loader2, Wifi, Usb, Monitor, CheckCircle, XCircle, RefreshCw, Printer, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BridgeNotRunningNotice } from "@/modules/settings/components/BridgeNotRunningNotice";
@@ -256,13 +256,13 @@ export default function PrinterSettingsPage() {
                         <Printer size={20} />
                         <h1 className="text-xl font-bold">Thermal Printer</h1>
                     </div>
-                    <Link
+                    <GatedLink
                         href="/office/settings/downloads"
                         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                     >
                         <Download size={13} />
                         Downloads
-                    </Link>
+                    </GatedLink>
                 </div>
 
                 {/* Printer status — the one thing the cashier actually needs: is the
@@ -310,10 +310,10 @@ export default function PrinterSettingsPage() {
                             <code className="bg-amber-100 rounded px-1 font-mono">update.bat</code> in the install folder).
                         </p>
                         <Button asChild size="sm" variant="outline" className="mt-1 border-amber-300 bg-white">
-                            <Link href="/office/settings/downloads">
+                            <GatedLink href="/office/settings/downloads">
                                 <Download size={14} />
                                 Go to Downloads
-                            </Link>
+                            </GatedLink>
                         </Button>
                     </div>
                 )}

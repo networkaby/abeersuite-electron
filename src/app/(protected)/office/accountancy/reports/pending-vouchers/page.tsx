@@ -8,7 +8,7 @@
 import { useEffect, useState, useCallback, useRef, Fragment } from "react";
 import { partyProfileHref, type PartyLinkKind } from "@/shared/lib/parties";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2, ChevronLeft, ChevronRight as ChevronRightIcon, Search, Clock, ArrowRight, Link2, PackageSearch, ChevronDown } from "lucide-react";
@@ -637,7 +637,7 @@ export default function PendingVouchersPage() {
                                                                 {r.partyName == null
                                                                     ? <span className="text-muted-foreground/65">—</span>
                                                                     : partyHref
-                                                                        ? <Link href={partyHref} className="text-primary hover:underline">{r.partyName}</Link>
+                                                                        ? <GatedLink whenLocked="text" href={partyHref} className="text-primary hover:underline">{r.partyName}</GatedLink>
                                                                         : r.partyName}
                                                             </td>
                                                             <td className="px-3 py-2.5 text-muted-foreground truncate max-w-[260px]">{r.description}</td>

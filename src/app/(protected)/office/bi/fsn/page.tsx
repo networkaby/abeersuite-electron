@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
@@ -56,7 +56,7 @@ export default function FsnPage() {
                     <h1 className="text-2xl font-bold text-foreground">FSN & Dead Stock</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
                         Turnover-based (industry standard): Fast (turnover ≥ {data?.fastMinTurnover ?? 3}) / Slow / Non-moving in the period — non-moving with stock on hand is dead stock, its value locked.
-                        For the house recency lens that drives Reorder, see <Link href="/office/bi/stock-health" className="underline hover:text-foreground">Stock Health</Link>.
+                        For the house recency lens that drives Reorder, see <GatedLink whenLocked="text" href="/office/bi/stock-health" className="underline hover:text-foreground">Stock Health</GatedLink>.
                     </p>
                 </div>
                 <BiFilterBar

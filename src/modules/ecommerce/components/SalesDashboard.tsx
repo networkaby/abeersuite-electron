@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
-import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { Button } from "@/components/ui/button";
 
 export type SalesDashboardProps = {
@@ -42,7 +42,7 @@ export default function SalesDashboard({
                     </CardHeader>
                     <CardContent>
                         <Button variant="outline" size="sm" asChild>
-                            <Link href="/office/ecommerce/orders?status=PENDING_PAYMENT">View queue</Link>
+                            <GatedLink href="/office/ecommerce/orders?status=PENDING_PAYMENT">View queue</GatedLink>
                         </Button>
                     </CardContent>
                 </Card>
@@ -67,9 +67,9 @@ export default function SalesDashboard({
                         <ul className="divide-y divide-border rounded-md border border-border">
                             {lowStock.map((p) => (
                                 <li key={p.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                                    <Link href={`/office/ecommerce/products/${p.id}`} className="font-medium hover:text-primary">
+                                    <GatedLink whenLocked="text" textClassName="font-medium" href={`/office/ecommerce/products/${p.id}`} className="font-medium hover:text-primary">
                                         {p.name}
-                                    </Link>
+                                    </GatedLink>
                                     <span className="text-muted-foreground">{p.stock} left</span>
                                 </li>
                             ))}

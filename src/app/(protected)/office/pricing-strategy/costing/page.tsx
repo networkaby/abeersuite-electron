@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
@@ -378,9 +378,9 @@ export default function CostingPage() {
                 <div className="flex flex-none items-center gap-2 rounded-md border border-amber-300 bg-amber-50/60 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
                     <AlertTriangle className="size-4 shrink-0 text-amber-600" aria-hidden />
                     <span>No pool group configured. Pick an account group in</span>
-                    <Link href="/office/settings/org-defaults" className="inline-flex items-center gap-1 font-medium underline">
+                    <GatedLink whenLocked="text" textClassName="inline-flex items-center gap-1 font-medium" href="/office/settings/org-defaults" className="inline-flex items-center gap-1 font-medium underline">
                         <Settings className="size-3.5" /> Settings → Org Defaults
-                    </Link>
+                    </GatedLink>
                     <span>to start allocating courier costs.</span>
                 </div>
             ) : null}

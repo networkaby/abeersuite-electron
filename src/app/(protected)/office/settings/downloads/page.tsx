@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { Download, MonitorDown, Printer, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -107,8 +107,8 @@ export default function DownloadsPage() {
                         <li>Download an installer above and run it on the counter PC.</li>
                         <li>It installs to <code>D:\CombinedBridge</code>, sets up Node, and starts automatically (and on every logon).</li>
                         <li>Configure the hardware in{" "}
-                            <Link href="/office/settings/printer-settings" className="underline">Thermal Printer</Link> and{" "}
-                            <Link href="/office/settings/qr-display-settings" className="underline">QR Display</Link>.
+                            <GatedLink whenLocked="text" href="/office/settings/printer-settings" className="underline">Thermal Printer</GatedLink> and{" "}
+                            <GatedLink whenLocked="text" href="/office/settings/qr-display-settings" className="underline">QR Display</GatedLink>.
                         </li>
                         <li>To update later: double-click <code>update.bat</code> in the install folder, or download &amp; run the installer again.</li>
                     </ol>

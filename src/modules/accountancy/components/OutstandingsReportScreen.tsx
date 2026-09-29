@@ -8,6 +8,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { partyProfileHref } from "@/shared/lib/parties";
 import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2, ChevronRight, HandCoins, Search, X } from "lucide-react";
@@ -306,14 +307,14 @@ export function OutstandingsReportScreen({
                                         <td className="px-3 py-1.5 font-medium text-foreground">
                                             <span className="inline-flex items-center gap-2">
                                                 {partyHrefByAccount.get(p.accountId) ? (
-                                                    <Link
+                                                    <GatedLink whenLocked="text"
                                                         href={partyHrefByAccount.get(p.accountId)!}
                                                         className="text-primary hover:underline"
                                                         title="Open this party in Customers"
                                                         onClick={(e) => e.stopPropagation()}
                                                     >
                                                         {p.accountName}
-                                                    </Link>
+                                                    </GatedLink>
                                                 ) : p.accountName}
                                                 <ToLinkChip toLink={p.toLink} />
                                             </span>
@@ -388,14 +389,14 @@ export function OutstandingsReportScreen({
                                                 onClick={() => setFocus({ accountId: b.accountId, name: b.accountName })}
                                             >
                                                 {partyHrefByAccount.get(b.accountId) ? (
-                                                    <Link
+                                                    <GatedLink whenLocked="text"
                                                         href={partyHrefByAccount.get(b.accountId)!}
                                                         className="text-primary hover:underline"
                                                         title="Open this party in Customers"
                                                         onClick={(e) => e.stopPropagation()}
                                                     >
                                                         {b.accountName}
-                                                    </Link>
+                                                    </GatedLink>
                                                 ) : b.accountName}
                                             </td>
                                             <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground text-xs">{formatDateCompact(b.dueDate)}</td>

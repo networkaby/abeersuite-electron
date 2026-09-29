@@ -23,6 +23,7 @@ import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/grou
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { groupReportUrl } from "@/modules/accountancy/lib/groupReportUrl";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 
 type GroupTypeStr = "ASSET" | "LIABILITY";
 
@@ -200,6 +201,9 @@ function GroupBlock({ node, depth, expanded, toggle, onLedger, onGroup }: {
 
 export default function BalanceSheetPage() {
     const router = useRouter();
+    // Drill-downs go only where this person may open (the page lock, pageAccess.ts).
+    const canOpen = useCanOpenPage();
+    const go = (href: string) => { if (canOpen(href)) router.push(href); };
     const [asOf, setAsOf] = useState(toIsoDate(new Date()));
     const [data, setData] = useState<BalanceSheetData | null>(null);
     const [loading, setLoading] = useState(false);
@@ -242,20 +246,21 @@ export default function BalanceSheetPage() {
     const goLedger = (ledger: LedgerNode) => {
         const { id, personId, companyId } = ledger;
         if (id === -1) {
-            router.push(`/office/inventory/stock-summary?ref=balance-sheet&asOf=${asOf}`);
+            go(`/office/inventory/stock-summary?ref=balance-sheet&asOf=${asOf}`);
             return;
         }
         if (id <= 0) return;
         // Party-linked ledgers (Sundry Debtors/Creditors) open in the customer
-        // module instead of the raw account ledger.
-        if (personId || companyId) {
+        // module instead of the raw account ledger — or the ledger, for someone
+        // without Contacts.
+        if ((personId || companyId) && canOpen(`/office/customers/${id}`)) {
             router.push(`/office/customers/${id}`);
             return;
         }
-        router.push(accountLedgerUrl(id, { asOf }));
+        go(accountLedgerUrl(id, { asOf }));
     };
     const goGroup = (id: number) =>
-        router.push(groupReportUrl(id, { asOf }));
+        go(groupReportUrl(id, { asOf }));
 
     // Compute side totals + auto-balancing "Difference in opening balances".
     //
@@ -348,7 +353,7 @@ export default function BalanceSheetPage() {
                                 {profitOnLiab > 0 && (
                                     <tr
                                         className="cursor-pointer hover:bg-primary/5"
-                                        onClick={() => router.push(`/office/accountancy/reports/profit-loss?from=${data.fyStart}&to=${asOf}&ref=balance-sheet`)}
+                                        onClick={() => go(`/office/accountancy/reports/profit-loss?from=${data.fyStart}&to=${asOf}&ref=balance-sheet`)}
                                     >
                                         <td className="py-1 pl-2">
                                             <span className="font-semibold text-sm text-foreground hover:underline">Profit &amp; Loss A/c</span>
@@ -400,7 +405,7 @@ export default function BalanceSheetPage() {
                                 {lossOnAsset > 0 && (
                                     <tr
                                         className="cursor-pointer hover:bg-primary/5"
-                                        onClick={() => router.push(`/office/accountancy/reports/profit-loss?from=${data.fyStart}&to=${asOf}&ref=balance-sheet`)}
+                                        onClick={() => go(`/office/accountancy/reports/profit-loss?from=${data.fyStart}&to=${asOf}&ref=balance-sheet`)}
                                     >
                                         <td className="py-1 pl-2">
                                             <span className="font-semibold text-sm text-foreground hover:underline">Profit &amp; Loss A/c (loss)</span>
@@ -439,13 +444,15 @@ export default function BalanceSheetPage() {
                     {data.closingStock.diff !== 0 && (
                         <span> · GL posted: <span className="font-mono">{fmt(data.closingStock.postedToGl)}</span></span>
                     )}
-                    <button
-                        type="button"
-                        className="ml-2 underline hover:text-foreground"
-                        onClick={() => router.push(`/office/inventory/stock-summary?ref=balance-sheet&asOf=${asOf}`)}
-                    >
-                        View stock summary →
-                    </button>
+                    {canOpen("/office/inventory/stock-summary") && (
+                        <button
+                            type="button"
+                            className="ml-2 underline hover:text-foreground"
+                            onClick={() => router.push(`/office/inventory/stock-summary?ref=balance-sheet&asOf=${asOf}`)}
+                        >
+                            View stock summary →
+                        </button>
+                    )}
                 </p>
             )}
 

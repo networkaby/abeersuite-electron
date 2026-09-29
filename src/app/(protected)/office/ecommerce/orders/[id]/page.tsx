@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { useParams } from "next/navigation";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { Badge } from "@/components/ui/badge";
@@ -490,9 +491,9 @@ export default function EcommerceOrderDetailPage() {
                                             Ticket #{t.id} · {t.status}
                                         </span>
                                         <Button variant="outline" size="sm" asChild>
-                                            <Link href={`/office/repairing/tickets/${t.id}`}>
+                                            <GatedLink href={`/office/repairing/tickets/${t.id}`}>
                                                 <ExternalLink size={13} /> Open
-                                            </Link>
+                                            </GatedLink>
                                         </Button>
                                     </li>
                                 ))}

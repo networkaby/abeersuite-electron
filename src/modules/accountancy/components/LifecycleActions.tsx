@@ -23,6 +23,8 @@ import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
 import { useRouter } from "next/navigation";
+import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
+import { NO_ACCESS_HOME } from "@/shared/lib/auth/pageAccess";
 import { Loader2, XCircle, Trash2, AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -56,6 +58,9 @@ export function LifecycleActions({
     onChanged:     () => void;
 }) {
     const router = useRouter();
+    // After a removal, back to the register — or Work Flow, for someone the page lock
+    // (pageAccess.ts) keeps out of it.
+    const canOpen = useCanOpenPage();
     const [busy, setBusy] = useState<string | null>(null);
 
     const [showCancel, setShowCancel] = useState(false);
@@ -220,7 +225,7 @@ export function LifecycleActions({
                                 setBusy("hard-delete");
                                 await axios.post(`${apiBasePath}/hard-delete`, { reason: hardDeleteReason });
                                 toast.success(`${label} removed (restorable from the Recycle Bin)`);
-                                router.push(listPath);
+                                router.push(canOpen(listPath) ? listPath : NO_ACCESS_HOME);
                             } catch (err: unknown) {
                                 toast.error(extractApiError(err, "Failed"));
                                 setBusy(null);

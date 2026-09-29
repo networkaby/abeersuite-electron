@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowUpRight, ArrowDownRight, FileText, Hash, Construction, Tags } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { moduleColor, moduleTint } from "@/shared/lib/format/moduleTheme";
+import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 
 const SECTIONS = [
     {
@@ -39,6 +40,8 @@ const SECTIONS = [
 ];
 
 export default function GstHubPage() {
+    // Only the reports this person may open (their Compliance ticks, pageAccess.ts).
+    const canOpen = useCanOpenPage();
     return (
         <ScrollArea className="h-full" type="always">
         <div className="max-w-5xl mx-auto space-y-6 px-6 pt-3 pb-6">
@@ -51,7 +54,7 @@ export default function GstHubPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {SECTIONS.map((s) => {
+                {SECTIONS.filter((s) => canOpen(s.href)).map((s) => {
                     const Icon = s.icon;
                     return (
                         <Link

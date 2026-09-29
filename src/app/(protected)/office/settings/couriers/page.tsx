@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
@@ -282,9 +282,9 @@ export default function CouriersSettingsPage() {
                                     <div className="flex items-center gap-1">
                                         {m.kind === "CUSTOM" ? (
                                             <Button type="button" variant="outline" size="sm" asChild>
-                                                <Link href="/office/settings/standard-courier">
+                                                <GatedLink href="/office/settings/standard-courier">
                                                     <SlidersHorizontal className="size-4" /> Manage
-                                                </Link>
+                                                </GatedLink>
                                             </Button>
                                         ) : null}
                                         <Button type="button" variant="ghost" size="icon" onClick={() => openEdit(m)} aria-label="Edit">
@@ -322,9 +322,9 @@ export default function CouriersSettingsPage() {
                                 ) : (
                                     <span className="flex items-center justify-between gap-2">
                                         Coverage &amp; per-neighbourhood rates are set on the Local courier tab.
-                                        <Link href="/office/settings/standard-courier" className="text-primary underline">
+                                        <GatedLink href="/office/settings/standard-courier" className="text-primary underline">
                                             Open →
-                                        </Link>
+                                        </GatedLink>
                                     </span>
                                 )}
                             </div>
@@ -337,9 +337,9 @@ export default function CouriersSettingsPage() {
                                 ) : (
                                     <span className="flex items-center justify-between gap-2">
                                         Pricing &amp; service levels are set on the Standard Courier page.
-                                        <Link href="/office/settings/standard-courier" className="text-primary underline">
+                                        <GatedLink href="/office/settings/standard-courier" className="text-primary underline">
                                             Open →
-                                        </Link>
+                                        </GatedLink>
                                     </span>
                                 )}
                             </div>

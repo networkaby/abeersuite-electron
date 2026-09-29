@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { toast } from "sonner";
 import { Activity } from "lucide-react";
@@ -74,9 +75,9 @@ export default function ActivityTimelineTab({ profileId }: { profileId: number }
                                     </div>
                                     <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
                                     {item.meta?.ticketId && (
-                                        <Link href={`/office/repairing/tickets/${item.meta.ticketId}`} className="text-xs text-primary hover:underline mt-1 inline-block">
+                                        <GatedLink href={`/office/repairing/tickets/${item.meta.ticketId}`} className="text-xs text-primary hover:underline mt-1 inline-block">
                                             Open ticket #{item.meta.ticketId}
-                                        </Link>
+                                        </GatedLink>
                                     )}
                                     {item.meta?.wallUserId && item.meta.wallUserId !== profileId && (
                                         <Link href={userProfileHref(item.meta.wallUserId)} className="text-xs text-primary hover:underline mt-1 inline-block">

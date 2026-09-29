@@ -7,7 +7,7 @@
 // Data: GET /api/pos/counters/status (see route for the running-cash math).
 
 import { useCallback, useRef, useState } from "react";
-import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -231,7 +231,7 @@ function CounterCardView({ card, canManage, onForceClose }: {
             <div className="flex items-center justify-between gap-2">
                 <div className="truncate">
                     {linkedShiftId != null ? (
-                        <Link href={`/office/pos/shifts/${linkedShiftId}`} className="font-medium hover:underline">{card.counterName}</Link>
+                        <GatedLink whenLocked="text" textClassName="font-medium" href={`/office/pos/shifts/${linkedShiftId}`} className="font-medium hover:underline">{card.counterName}</GatedLink>
                     ) : (
                         <span className="font-medium">{card.counterName}</span>
                     )}

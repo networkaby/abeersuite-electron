@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import axios from "axios";
 import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { useRouter } from "next/navigation";
 import {
     ArrowLeft, Building2,
@@ -509,7 +510,7 @@ export default function CompaniesPage() {
                                                                     <TableCell className="text-right">
                                                                         {latest && (
                                                                             <Button asChild variant="link" size="sm">
-                                                                                <Link href={`/office/repairing/tickets/${latest.id}`}>View</Link>
+                                                                                <GatedLink href={`/office/repairing/tickets/${latest.id}`}>View</GatedLink>
                                                                             </Button>
                                                                         )}
                                                                     </TableCell>

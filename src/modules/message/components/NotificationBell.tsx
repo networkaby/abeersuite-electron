@@ -5,6 +5,7 @@ import { Bell } from "lucide-react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import Link from "next/link";
+import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import { formatDateTime } from "@/shared/lib/format/formatDate";
 import { Button } from "@/components/ui/button";
 import { useNotificationUnread, NAV_COUNTS_CHANGED } from "@/shared/hooks/useNavCounts";
@@ -19,6 +20,9 @@ interface Notification {
 }
 
 export default function NotificationBell() {
+    // A notice about a page the page lock (pageAccess.ts) keeps this person out of
+    // opens the Inbox instead, where the message itself can be read.
+    const canOpen = useCanOpenPage();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
@@ -105,7 +109,7 @@ export default function NotificationBell() {
                             notifications.map((n) => (
                                 <Link
                                     key={n.id}
-                                    href={n.link ?? "/office/message/inbox"}
+                                    href={n.link && canOpen(n.link) ? n.link : "/office/message/inbox"}
                                     onClick={() => { markOneRead(n.id); setOpen(false); }}
                                     className={`block px-4 py-3 hover:bg-muted transition-colors ${n.read ? "opacity-60" : ""}`}
                                 >

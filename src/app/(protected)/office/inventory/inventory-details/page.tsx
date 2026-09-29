@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { partyProfileHref, type PartyLinkKind } from "@/shared/lib/parties";
 import axios from "axios";
 import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
     Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
@@ -469,9 +470,9 @@ export default function InventoryDetailsPage() {
                                                             {tx.partyName == null ? (
                                                                 <span className="text-muted-foreground">—</span>
                                                             ) : partyHref ? (
-                                                                <Link href={partyHref} className="text-primary hover:underline">
+                                                                <GatedLink whenLocked="text" href={partyHref} className="text-primary hover:underline">
                                                                     {tx.partyName}
-                                                                </Link>
+                                                                </GatedLink>
                                                             ) : (
                                                                 <span className="text-muted-foreground">{tx.partyName}</span>
                                                             )}

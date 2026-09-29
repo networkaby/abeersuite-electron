@@ -16,8 +16,9 @@
  * selected, so the next scan replaces it instead of sticking onto its end.
  */
 
-import { useCallback, useEffect, useRef, useState, type ComponentProps, type FormEvent } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useRef, useState, type ComponentProps, type FormEvent, type ReactNode } from "react";
+import type Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { Loader2, ReceiptText, ScanSearch, Search, Wrench } from "lucide-react";
 import { useSlSearchStore } from "@/store/slSearchStore";
@@ -73,20 +74,29 @@ function Highlight({ text, term }: { text: string; term: string }) {
 /** A result link. A plain click opens it here and closes the dialog; a ctrl /
  *  shift / middle click leaves the dialog up behind the new tab. With `newTab`
  *  (the POS) every click opens a new tab and the dialog stays. */
-function RowLink({ onNavigate, newTab, onClick, className = "hover:underline", ...rest }: ComponentProps<typeof Link> & {
+function RowLink({ onNavigate, newTab, onClick, className = "hover:underline", children, ...rest }: ComponentProps<typeof Link> & {
+    href: string;
     onNavigate: () => void;
     newTab?: boolean;
+    children: ReactNode;
 }) {
+    // A page the page lock (pageAccess.ts) keeps this person out of is not offered:
+    // a name stays as plain text, a bare "Open" goes.
+    const plain = className.split(" ").filter((c) => c !== "text-primary" && !c.startsWith("hover:")).join(" ");
     return (
-        <Link
+        <GatedLink
             {...rest}
             {...(newTab ? { target: "_blank", rel: "noopener" } : {})}
             className={className}
+            whenLocked={children === "Open" ? "hide" : "text"}
+            textClassName={plain}
             onClick={(e) => {
                 onClick?.(e);
                 if (!newTab && e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey) onNavigate();
             }}
-        />
+        >
+            {children}
+        </GatedLink>
     );
 }
 

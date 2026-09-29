@@ -14,6 +14,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -53,6 +54,7 @@ type ConfirmAction = "cancel" | "hard-delete" | null;
 
 export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChanged }: Props) {
     const router = useRouter();
+    const canOpen = useCanOpenPage();
     const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
     const [reason, setReason] = useState("");
     const [busy, setBusy] = useState(false);
@@ -72,7 +74,9 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
     // because those are the canonical "goods just arrived, sticker them up"
     // workflows. Extend the allow-list when MJ / SALE_RETURN / etc. become
     // sensible entry points.
-    const canPrintLabels = voucherType === "GRN" || voucherType === "PURCHASE";
+    // …and only for someone who may open Print labels (the page lock).
+    const canPrintLabels = (voucherType === "GRN" || voucherType === "PURCHASE")
+        && canOpen("/office/pricing-strategy/print-labels");
     const goPrintLabels = () => {
         router.push(`/office/pricing-strategy/print-labels?fromVoucher=${voucherId}`);
     };

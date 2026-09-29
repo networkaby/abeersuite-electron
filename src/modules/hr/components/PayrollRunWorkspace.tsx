@@ -16,6 +16,7 @@
 
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
@@ -333,9 +334,9 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                                                 {open.has(l.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                             </TableCell>
                                             <TableCell>
-                                                <Link href={`/office/hr/staff?user=${l.userId}`} className="font-medium hover:underline">
+                                                <GatedLink whenLocked="text" textClassName="font-medium" href={`/office/hr/staff?user=${l.userId}`} className="font-medium hover:underline">
                                                     {l.staffName}
-                                                </Link>
+                                                </GatedLink>
                                                 {l.staffCode && <span className="ml-2 text-xs text-muted-foreground">{l.staffCode}</span>}
                                                 {l.skipReason && <p className="text-xs text-amber-600">{l.skipReason}</p>}
                                             </TableCell>

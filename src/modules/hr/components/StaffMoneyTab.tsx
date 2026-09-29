@@ -6,6 +6,7 @@
 // vouchers against that ledger; this tab only reads and points.
 
 import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { BookOpen, HandCoins } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -80,9 +81,9 @@ export default function StaffMoneyTab({ detail, canPay = true }: {
                         </Button>
                     )}
                     <Button asChild size="sm" variant="outline">
-                        <Link href={`/office/accountancy/masters/ledgers/${ledger.id}`}>
+                        <GatedLink href={`/office/accountancy/masters/ledgers/${ledger.id}`}>
                             <BookOpen size={14} /> Open the ledger
-                        </Link>
+                        </GatedLink>
                     </Button>
                 </div>
             </div>

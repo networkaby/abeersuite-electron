@@ -6,7 +6,7 @@ import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
-import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { Send, Users2, Monitor, User, MessageSquare, Loader2, Hash, AtSign, Bell } from "lucide-react";
 import { supabase } from "@/shared/lib/supabase/supabaseClient";
 import { formatInboxTime } from "@/shared/lib/format/formatDate";
@@ -632,9 +632,9 @@ export default function InboxModule({
                                                             {message.body}
                                                         </p>
                                                         {message.link && (
-                                                            <Link href={message.link} className="mt-1 inline-flex text-xs font-medium text-primary hover:underline">
+                                                            <GatedLink href={message.link} className="mt-1 inline-flex text-xs font-medium text-primary hover:underline">
                                                                 Open →
-                                                            </Link>
+                                                            </GatedLink>
                                                         )}
                                                         <p className="mt-0.5 text-[10px] text-muted-foreground/60">
                                                             {formatInboxTime(message.createdAt)}
@@ -700,9 +700,9 @@ export default function InboxModule({
                                                         {message.body}
                                                     </p>
                                                     {message.link && (
-                                                        <Link href={message.link} className="mt-0.5 inline-flex text-xs text-primary hover:underline">
+                                                        <GatedLink href={message.link} className="mt-0.5 inline-flex text-xs text-primary hover:underline">
                                                             Open →
-                                                        </Link>
+                                                        </GatedLink>
                                                     )}
                                                 </div>
                                             </div>

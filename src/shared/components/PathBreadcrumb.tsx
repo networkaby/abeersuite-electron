@@ -21,6 +21,7 @@ import {
     BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
+import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 
 export interface PathBreadcrumbProps {
@@ -71,6 +72,9 @@ export function PathBreadcrumb({
 }: PathBreadcrumbProps) {
     const pathname = usePathname();
     useEscapeBack(escapeBack);
+    // A crumb whose page the page lock (pageAccess.ts) keeps this person out of is
+    // plain text — the CRM root is Deals, which a Reconnect-only person cannot open.
+    const canOpen = useCanOpenPage();
 
     if (hideOn?.includes(pathname)) return null;
 
@@ -101,6 +105,8 @@ export function PathBreadcrumb({
                 <BreadcrumbItem>
                     {crumbs.length === 0 ? (
                         <BreadcrumbPage>{root.label}</BreadcrumbPage>
+                    ) : !canOpen(root.href) ? (
+                        <span>{root.label}</span>
                     ) : (
                         <BreadcrumbLink asChild>
                             <Link href={root.href}>{root.label}</Link>
@@ -117,6 +123,8 @@ export function PathBreadcrumb({
                         <BreadcrumbItem key={crumbs[i].href}>
                             {crumbs[i].isLast ? (
                                 <BreadcrumbPage>{crumbs[i].label}</BreadcrumbPage>
+                            ) : !canOpen(crumbs[i].href) ? (
+                                <span>{crumbs[i].label}</span>
                             ) : (
                                 <BreadcrumbLink asChild>
                                     <Link href={crumbs[i].href}>{crumbs[i].label}</Link>

@@ -5,6 +5,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import {
     Loader2, ArrowLeft, AlertTriangle, ChevronRight, ChevronDown, Pencil,
     ArrowUp, ArrowDown, ArrowUpDown,
@@ -562,13 +563,13 @@ export default function StockSummaryPage() {
                                                     className={r.isLow ? "bg-amber-50/40 hover:bg-amber-100/60 dark:bg-amber-950/10 dark:hover:bg-amber-900/20" : "hover:bg-muted/30"}
                                                 >
                                                     <td className="px-3 py-1.5 pl-9">
-                                                        <Link
+                                                        <GatedLink whenLocked="text" textClassName="text-foreground"
                                                             href={`/office/inventory/inventory-details?productId=${r.id}`}
                                                             className="text-foreground hover:text-primary hover:underline"
                                                             onClick={(e) => e.stopPropagation()}
                                                         >
                                                             {r.name}
-                                                        </Link>
+                                                        </GatedLink>
                                                         <span className="ml-2 font-mono text-xs text-muted-foreground/70">{r.sku}</span>
                                                         {r.isLow && (
                                                             <span className="ml-2 inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400 text-xs">
@@ -710,12 +711,12 @@ export default function StockSummaryPage() {
                                         className={r.isLow ? "bg-amber-50/40 hover:bg-amber-100/60 dark:bg-amber-950/10 dark:hover:bg-amber-900/20" : "hover:bg-muted/30"}
                                     >
                                         <td className="px-3 py-1.5">
-                                            <Link
+                                            <GatedLink whenLocked="text" textClassName="text-foreground"
                                                 href={`/office/inventory/inventory-details?productId=${r.id}`}
                                                 className="text-foreground hover:text-primary hover:underline"
                                             >
                                                 {r.name}
-                                            </Link>
+                                            </GatedLink>
                                             <span className="ml-2 font-mono text-xs text-muted-foreground/70">{r.sku}</span>
                                             {r.isLow && (
                                                 <span className="ml-2 inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400 text-xs">

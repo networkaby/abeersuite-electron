@@ -5,6 +5,7 @@ import { timeAgo, timeUntil, formatDuration } from "@/shared/lib/format/timeAgo"
 import WorkInboxBoard, { type WorkInboxItem } from "@/modules/repairing/components/assignments/WorkInboxBoard";
 import { parseArgs, isUserArg, isEntryArg, argKey, resolveTicketSource, META_PREV_OUTCOME, META_LAST_NOTE, type TicketLike } from "@/modules/repairing/lib/ticketSources";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
+import { canOpenPage } from "@/shared/lib/auth/pageAccess";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { slaEnteredAt, slaOverdueMs, workLessSlaCandidates } from "@/modules/repairing/lib/resolveTimeSla";
 import LiveRefresh from "@/shared/components/LiveRefresh";
@@ -31,8 +32,12 @@ export default async function AssignmentsPage() {
         deal: "/office/crm/deals",
         task: "/office/administration",
     };
-    const detailHref = (entityType: string | null | undefined, id: number) =>
-        entityType === "ticket" ? `/office/repairing/tickets/${id}` : (entityType && MODULE_LIST_HREF[entityType]) || null;
+    // …and no link at all to a page the page lock (pageAccess.ts) keeps this person
+    // out of — the item still shows, it just is not a road to "no access".
+    const detailHref = (entityType: string | null | undefined, id: number) => {
+        const href = entityType === "ticket" ? `/office/repairing/tickets/${id}` : (entityType && MODULE_LIST_HREF[entityType]) || null;
+        return href && canOpenPage(href, resolvedUser.permissions) ? href : null;
+    };
 
     // The row's big headline. A repair ticket IS its device — "iPhone 13", "HP 640
     // G6" — so the device name doubles as the title there. Other flavours (help,

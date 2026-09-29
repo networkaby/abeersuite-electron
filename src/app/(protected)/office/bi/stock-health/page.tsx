@@ -6,7 +6,7 @@
 // classifier decided per item and WHY (band + source), plus the money locked.
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { fmt } from "@/shared/lib/format/moneyInr";
@@ -83,9 +83,9 @@ export default function StockHealthPage() {
                     <h1 className="text-2xl font-bold text-foreground">Stock Health</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
                         House lens: recency-based movement classes (drives the{" "}
-                        <Link href="/office/inventory/reorder" className="underline hover:text-foreground">Reorder page</Link>).
+                        <GatedLink whenLocked="text" href="/office/inventory/reorder" className="underline hover:text-foreground">Reorder page</GatedLink>).
                         Bands resolve group → category → org defaults. For the textbook turnover lens, see{" "}
-                        <Link href="/office/bi/fsn" className="underline hover:text-foreground">FSN &amp; Dead Stock</Link>.
+                        <GatedLink whenLocked="text" href="/office/bi/fsn" className="underline hover:text-foreground">FSN &amp; Dead Stock</GatedLink>.
                     </p>
                 </div>
                 <div className="flex items-center gap-2">

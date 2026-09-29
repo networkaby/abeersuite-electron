@@ -13,6 +13,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Loader2, ChevronLeft, ChevronRight, Search, ArrowDownToLine, ArrowUpFromLine, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -254,7 +255,7 @@ export default function OptionalVouchersPage() {
                                                     {r.partyName == null
                                                         ? <span className="text-muted-foreground/65">—</span>
                                                         : partyHref
-                                                            ? <Link href={partyHref} className="text-primary hover:underline">{r.partyName}</Link>
+                                                            ? <GatedLink whenLocked="text" href={partyHref} className="text-primary hover:underline">{r.partyName}</GatedLink>
                                                             : r.partyName}
                                                 </td>
                                                 <td className="px-3 py-2.5 text-muted-foreground truncate max-w-[260px]">{r.description}</td>
