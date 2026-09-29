@@ -24,8 +24,9 @@ export type InventoryMastersNavGroup = {
 
 const BASE = "/office/inventory/masters";
 
-// Viewing masters is a read — default-open, so every staff member sees every
-// tab. The masters:create/edit/delete keys gate the write APIs, not the nav.
+// Each master is its own sidebar link, so its page opens on that tick (the page
+// lock, pageAccess.ts) and the tab strip / hub show only those. The
+// masters:create/edit/delete keys gate the write APIs.
 export const INVENTORY_MASTERS_NAV_GROUPS: InventoryMastersNavGroup[] = [
     {
         label: "Masters",

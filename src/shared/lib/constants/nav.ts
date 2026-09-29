@@ -209,6 +209,12 @@ export type ModuleChild = {
     permission?: string;
     disabled?: boolean;
     children?: ModuleChild[];
+    /**
+     * Other addresses this link's page covers — tabs or drill-ins that sit beside its
+     * href instead of under it. The page lock (pageAccess.ts) opens them on this
+     * link's tick. Pages under the href itself need nothing here.
+     */
+    pathPrefixes?: string[];
 };
 
 export type ModuleCreateAction = {
@@ -367,8 +373,9 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Pending Inventory", icon: Hourglass, href: "/office/accountancy/reports/pending-vouchers", permission: "finance:voucher:create" },
             { label: "Stock Summary", icon: BarChart3, href: "/office/inventory/stock-summary" },
             { label: "Account Ledger", icon: BookOpen, href: "/office/accountancy/account-ledgers", permission: "finance:voucher:create" },
-            { label: "Bank Book", icon: Banknote, href: "/office/accountancy/bank-ledgers", permission: "finance:voucher:create" },
-            { label: "Cash Book", icon: Coins, href: "/office/accountancy/cash-ledgers", permission: "finance:voucher:create" },
+            // The top bar's Bank / Cash figures open the report view of the same book.
+            { label: "Bank Book", icon: Banknote, href: "/office/accountancy/bank-ledgers", permission: "finance:voucher:create", pathPrefixes: ["/office/accountancy/reports/bank-book"] },
+            { label: "Cash Book", icon: Coins, href: "/office/accountancy/cash-ledgers", permission: "finance:voucher:create", pathPrefixes: ["/office/accountancy/reports/cash-book"] },
             { label: "Loans Book", icon: Banknote, href: "/office/accountancy/loan-ledgers", permission: "finance:voucher:create" },
             // Same shape as Account Ledger / Cash Book above; `sidebarKey` only pins the
             // Role Matrix id (ui:sidebar:accountancy:group-report) against a label rename.
@@ -405,7 +412,8 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 
             {
                 label: "Vouchers Register", icon: Files, href: "/office/accountancy/vouchers-registers/all", permission: "finance:voucher:create",
-
+                // Every register tab (Sales, Payments, Journal…) is this link's page.
+                pathPrefixes: ["/office/accountancy/vouchers-registers"],
             },
 
             { label: "Recycle Bin", icon: Trash2, href: "/office/accountancy/recycle-bin", permission: "finance:voucher:hard-delete" },

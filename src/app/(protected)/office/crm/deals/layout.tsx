@@ -1,17 +1,8 @@
-import { auth } from "@/auth";
-import { redirect } from "next/navigation";
-import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 
-// Area layout for /office/crm/deals — permission gate + a breadcrumb strip rooted at
-// the Deals index and Esc → back. Mirrors the Administration work board layout.
-export default async function DealsModuleLayout({ children }: { children: React.ReactNode }) {
-    const session = await auth();
-    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    if (!hasModuleNavAccess(permissions, "crm")) {
-        redirect("/office/work-flow-inbox");
-    }
-
+// Area layout for /office/crm/deals — a breadcrumb strip rooted at the Deals index and
+// Esc → back. Who may open it is the page lock's call (pageAccess.ts, run in proxy.ts).
+export default function DealsModuleLayout({ children }: { children: React.ReactNode }) {
     return (
         <div className="flex h-full flex-col">
             <PathBreadcrumb

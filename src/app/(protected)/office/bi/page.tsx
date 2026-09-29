@@ -6,6 +6,7 @@ import { Users, ChartArea, Box, ArrowLeftRight, ClipboardList, Network, Layers, 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
+import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { useBiQuery } from "@/modules/bi/hooks/useBiQuery";
 import { fmtQty } from "@/modules/bi/lib/format";
@@ -46,6 +47,8 @@ const REPORTS = [
 ];
 
 export default function BiDashboardPage() {
+    // Report cards only for the reports this person may open (pageAccess.ts).
+    const canOpen = useCanOpenPage();
     const [from, setFrom] = useState(toIsoDate(indianFiscalYearStart()));
     const [to, setTo] = useState(toIsoDate(new Date()));
     const [branchId, setBranchId] = useState("");
@@ -106,7 +109,7 @@ export default function BiDashboardPage() {
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {REPORTS.map((r) => (
+                        {REPORTS.filter((r) => canOpen(r.href)).map((r) => (
                             <Link
                                 key={r.href} href={r.href}
                                 className="rounded-lg border border-border bg-card p-4 shadow-sm transition-colors hover:bg-muted/40"

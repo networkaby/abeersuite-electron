@@ -8,6 +8,7 @@ import { fmt } from "@/shared/lib/format/moneyInr";
 import { getActiveModule } from "@/utils/active-module";
 import { moduleColor } from "@/shared/lib/format/moduleTheme";
 import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
+import { canOpenPage } from "@/shared/lib/auth/pageAccess";
 import { Wallet, Building2, TrendingUp, TrendingDown, RefreshCw, SquareChevronDown, SquareChevronUp, Wrench, HandCoins } from "lucide-react";
 import { toast } from "sonner";
 import { usePanelStore } from "@/store/panelStore";
@@ -51,7 +52,9 @@ function Pill({
     icon: React.ReactNode;
     label: string;
     value: number;
-    href: string;
+    /** The report behind the figure — left out when this person cannot open it
+     *  (pageAccess.ts), so the figure shows but leads nowhere. */
+    href?: string;
     detail?: { name: string; balance: number }[];
     colorClass?: string;
 }) {
@@ -64,10 +67,10 @@ function Pill({
         <div className="relative">
             <button
                 type="button"
-                onClick={() => (hasDropdown ? setOpen((o) => !o) : router.push(href))}
+                onClick={() => (hasDropdown ? setOpen((o) => !o) : href && router.push(href))}
                 className={[
                     "flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors",
-                    "hover:bg-muted/60",
+                    hasDropdown || href ? "hover:bg-muted/60" : "cursor-default",
                     negative ? "text-red-600 dark:text-red-400" : (colorClass ?? "text-foreground"),
                 ].join(" ")}
             >
@@ -91,15 +94,17 @@ function Pill({
                             </span>
                         </div>
                     ))}
-                    <div className="border-t border-border mt-1 pt-1 px-3 pb-1">
-                        <Link
-                            href={href}
-                            className="text-[11px] text-primary hover:underline"
-                            onClick={() => setOpen(false)}
-                        >
-                            View full ledger →
-                        </Link>
-                    </div>
+                    {href && (
+                        <div className="border-t border-border mt-1 pt-1 px-3 pb-1">
+                            <Link
+                                href={href}
+                                className="text-[11px] text-primary hover:underline"
+                                onClick={() => setOpen(false)}
+                            >
+                                View full ledger →
+                            </Link>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -112,6 +117,8 @@ export default function FinanceTopBar({
     permissions?: string[];
 }) {
     const canView = hasModuleNavAccess(permissions, "accountancy");
+    // A figure links to its report only when this person may open that page.
+    const openable = (href: string) => (canOpenPage(href, permissions) ? href : undefined);
     // Seeded from localStorage only in the mount effect below — reading it here in
     // a lazy initialiser would render different HTML on server (no window) vs
     // client (cache hit), a hydration mismatch.
@@ -259,7 +266,7 @@ export default function FinanceTopBar({
                                 icon={<HandCoins size={12} />}
                                 label="Instant Fund"
                                 value={instantFund}
-                                href="/office/accountancy/usable-fund"
+                                href={openable("/office/accountancy/usable-fund")}
                                 colorClass="text-fuchsia-700 dark:text-fuchsia-400"
                             />
                             <span className="text-border">|</span>
@@ -270,7 +277,7 @@ export default function FinanceTopBar({
                         icon={<Wallet size={12} />}
                         label="Cash"
                         value={data.cash}
-                        href="/office/accountancy/reports/cash-book"
+                        href={openable("/office/accountancy/reports/cash-book")}
                         detail={data.cashAccounts}
                         colorClass="text-emerald-700 dark:text-emerald-400"
                     />
@@ -281,7 +288,7 @@ export default function FinanceTopBar({
                         icon={<Building2 size={12} />}
                         label="Bank"
                         value={data.bank}
-                        href="/office/accountancy/reports/bank-book"
+                        href={openable("/office/accountancy/reports/bank-book")}
                         detail={data.bankAccounts}
                         colorClass="text-blue-700 dark:text-blue-400"
                     />
@@ -292,7 +299,7 @@ export default function FinanceTopBar({
                         icon={<TrendingUp size={12} />}
                         label="Receivables"
                         value={data.receivables}
-                        href="/office/accountancy/reports/receivables"
+                        href={openable("/office/accountancy/reports/receivables")}
                         colorClass="text-sky-700 dark:text-sky-400"
                     />
 
@@ -302,7 +309,7 @@ export default function FinanceTopBar({
                         icon={<TrendingDown size={12} />}
                         label="Payables"
                         value={data.payables}
-                        href="/office/accountancy/reports/payables"
+                        href={openable("/office/accountancy/reports/payables")}
                         colorClass="text-amber-700 dark:text-amber-400"
                     />
                 </>

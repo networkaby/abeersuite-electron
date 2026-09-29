@@ -45,6 +45,7 @@ import { useSlSearchStore } from "@/store/slSearchStore";
 import { WORKSPACE_NAV, MODULE_SECTIONS, ADMIN_NAV, SETTINGS_NAV, type ModuleChild, type NavLinkItem } from "@/shared/lib/constants/nav";
 import { canViewModuleChild } from "@/utils/module-access";
 import { sidebarLinkPermissionIdForLabel } from "@/shared/lib/auth/sidebarModules";
+import { canOpenPage } from "@/shared/lib/auth/pageAccess";
 import { useIsDesktopApp } from "@/shared/lib/bridge";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
@@ -451,9 +452,25 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                 permission: undefined,
                 children: child.children ? applySidebarGrants(moduleKey, child.children) : child.children,
             }));
+    // The module name opens its landing page — or, when this person cannot open that
+    // page (the page lock, pageAccess.ts), their first ticked link in the module, so
+    // the click never lands on "no access".
+    const firstHref = (items: ModuleChild[]): string | undefined => {
+        for (const item of items) {
+            const href = item.href ?? (item.children ? firstHref(item.children) : undefined);
+            if (href) return href;
+        }
+        return undefined;
+    };
     const visibleModules = MODULE_SECTIONS
         .map((mod) => ({ ...mod, children: applySidebarGrants(mod.key, mod.children) }))
-        .filter((mod) => mod.children.length > 0);
+        .filter((mod) => mod.children.length > 0)
+        .map((mod) => ({
+            ...mod,
+            dashboardHref: mod.dashboardHref && !canOpenPage(mod.dashboardHref, permissions)
+                ? firstHref(mod.children) ?? mod.dashboardHref
+                : mod.dashboardHref,
+        }));
 
     const visibleAdmin = ADMIN_NAV.filter(
         (item) => isAdmin || hasSidebarLink("admin", item.label)

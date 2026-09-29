@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { moduleColor, moduleTint } from "@/shared/lib/format/moduleTheme";
+import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 
 const REPORTS = [
     {
@@ -89,6 +90,8 @@ const REPORTS = [
 ];
 
 export default function ReportsMenuPage() {
+    // Only the reports this person may open (the page lock, pageAccess.ts).
+    const canOpen = useCanOpenPage();
     return (
         <ScrollArea className="h-full" type="always">
             <div className="max-w-5xl mx-auto space-y-6 px-6 pt-3 pb-6">
@@ -100,7 +103,7 @@ export default function ReportsMenuPage() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {REPORTS.map((r) => {
+                    {REPORTS.filter((r) => canOpen(r.href)).map((r) => {
                         const Icon = r.icon;
                         return (
                             <Link

@@ -3,6 +3,7 @@ import { NextResponse, type NextFetchEvent, type NextMiddleware, type NextReques
 import { isLegalPath } from "@/shared/lib/legal/legalPaths";
 import { isStorefrontSlugPath } from "@/shared/lib/shop/storefrontSlugPath";
 import { RELAY_ACTIVE } from "@/shared/lib/counter/relayPolicy";
+import { canOpenPage, NO_ACCESS_HOME, NO_ACCESS_PARAM } from "@/shared/lib/auth/pageAccess";
 
 function isPublicPath(pathname: string): boolean {
     if (pathname === "/" || pathname === "/login") return true;
@@ -84,6 +85,16 @@ const pageProxy = auth((req) => {
 
     if (pathname === "/staff/login") {
         return NextResponse.redirect(new URL("/office/work-flow-inbox", req.url));
+    }
+
+    // Page lock: an office page opens only on its own sidebar tick (pageAccess.ts), so
+    // a typed address cannot reach what the Role page hides. The ticks ride the session
+    // already resolved above — no extra read.
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    if (!canOpenPage(pathname, permissions)) {
+        const dest = new URL(NO_ACCESS_HOME, req.url);
+        dest.searchParams.set(NO_ACCESS_PARAM, "1");
+        return NextResponse.redirect(dest);
     }
 
     return NextResponse.next();

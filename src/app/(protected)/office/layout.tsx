@@ -11,6 +11,8 @@ import ModuleSurface from "@/shared/components/ModuleSurface";
 import GlobalInboxListener from "@/modules/message/components/GlobalInboxListener";
 import CallFollowUpPopup from "@/modules/pos/components/CallFollowUpPopup";
 import FinanceTopBar from "@/shared/components/FinanceTopBar";
+import NoAccessNotice from "@/shared/components/NoAccessNotice";
+import { Suspense } from "react";
 
 export default async function ProtectedLayout({
     children,
@@ -66,6 +68,7 @@ export default async function ProtectedLayout({
                     }} />
                 </div>{/* end flex row */}
                 <Toaster richColors />
+                <Suspense fallback={null}><NoAccessNotice /></Suspense>
                 <QuickTicketButton />
                 <SlSearchDialog />
                 <GlobalInboxListener currentUserId={userId} />

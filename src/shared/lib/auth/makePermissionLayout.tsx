@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { NO_ACCESS_HOME, NO_ACCESS_PARAM } from "@/shared/lib/auth/pageAccess";
 
 export function makePermissionLayout(permission: string | string[]) {
     const required = Array.isArray(permission) ? permission : [permission];
@@ -8,7 +9,7 @@ export function makePermissionLayout(permission: string | string[]) {
         const session = await auth();
         const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
         if (!permissions.includes(PERMISSIONS.ADMIN_BYPASS) && !required.some((p) => permissions.includes(p))) {
-            redirect("/office/work-flow-inbox");
+            redirect(`${NO_ACCESS_HOME}?${NO_ACCESS_PARAM}=1`);
         }
         return <>{children}</>;
     };

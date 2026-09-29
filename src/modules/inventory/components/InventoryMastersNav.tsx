@@ -5,15 +5,20 @@ import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/shared/lib/format/utils";
 import { INVENTORY_MASTERS_NAV_GROUPS } from "@/modules/inventory/masters-nav";
+import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 
 function isActive(pathname: string, href: string): boolean {
     return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-// Viewing masters is a read — default-open; every staff member sees every tab.
+// A tab shows only when this person may open its page — each master is its own
+// sidebar tick (the page lock, pageAccess.ts). A group left empty is dropped.
 export function InventoryMastersNav() {
     const pathname = usePathname();
-    const groups = INVENTORY_MASTERS_NAV_GROUPS;
+    const canOpen = useCanOpenPage();
+    const groups = INVENTORY_MASTERS_NAV_GROUPS
+        .map((group) => ({ ...group, links: group.links.filter((link) => canOpen(link.href)) }))
+        .filter((group) => group.links.length > 0);
 
     return (
         <nav className="border-b border-border pb-2" aria-label="Inventory masters sections">

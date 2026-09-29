@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { auth } from "@/auth";
+import { canOpenPage } from "@/shared/lib/auth/pageAccess";
 import { INVENTORY_MASTERS_NAV_GROUPS } from "@/modules/inventory/masters-nav";
 import { moduleColor, moduleTint } from "@/shared/lib/format/moduleTheme";
 
@@ -28,14 +30,17 @@ const DESCRIPTIONS: Record<string, string> = {
 
 const cards = INVENTORY_MASTERS_NAV_GROUPS.flatMap((group) => group.links);
 
-export default function InventoryOverviewPage() {
+export default async function InventoryOverviewPage() {
+    // Only the masters this person may open (their own sidebar ticks, pageAccess.ts).
+    const session = await auth();
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const hue = moduleColor("inventory");
 
     return (
         <div className="space-y-4 p-6">
             <p className="text-muted-foreground text-sm">Choose a master list to create or edit records.</p>
             <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {cards.map(({ label, href, icon: Icon }) => (
+                {cards.filter(({ href }) => canOpenPage(href, permissions)).map(({ label, href, icon: Icon }) => (
                     <li key={href}>
                         <Link
                             href={href}

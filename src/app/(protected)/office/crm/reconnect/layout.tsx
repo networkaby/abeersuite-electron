@@ -1,17 +1,8 @@
-import { auth } from "@/auth";
-import { redirect } from "next/navigation";
-import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 
-// Area layout for /office/crm/reconnect — CRM page gate + breadcrumb strip.
-// Mirrors the Deals area layout.
-export default async function ReconnectModuleLayout({ children }: { children: React.ReactNode }) {
-    const session = await auth();
-    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    if (!hasModuleNavAccess(permissions, "crm")) {
-        redirect("/office/work-flow-inbox");
-    }
-
+// Area layout for /office/crm/reconnect — breadcrumb strip; the page lock
+// (pageAccess.ts) decides who may open it. Mirrors the Deals area layout.
+export default function ReconnectModuleLayout({ children }: { children: React.ReactNode }) {
     return (
         <div className="flex h-full flex-col">
             <PathBreadcrumb

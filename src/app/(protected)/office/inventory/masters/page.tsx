@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { auth } from "@/auth";
+import { canOpenPage } from "@/shared/lib/auth/pageAccess";
 import { Box, Layers, LayoutGrid, ListChecks, Percent, Ruler, ShieldCheck, Tag, Workflow } from "lucide-react";
 
 const masterCards = [
@@ -34,11 +36,14 @@ function CardGrid({ cards }: { cards: readonly { title: string; href: string; de
     );
 }
 
-export default function InventoryOverviewPage() {
+export default async function InventoryOverviewPage() {
+    // Only the masters this person may open (their own sidebar ticks, pageAccess.ts).
+    const session = await auth();
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     return (
         <section className="space-y-3 p-6">
             <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Masters</h2>
-            <CardGrid cards={masterCards} />
+            <CardGrid cards={masterCards.filter(({ href }) => canOpenPage(href, permissions))} />
         </section>
     );
 }

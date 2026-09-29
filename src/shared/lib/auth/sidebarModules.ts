@@ -26,12 +26,20 @@ const slug = (label: string) =>
 // Any nav node — matches ModuleChild / NavItem structurally (label + optional children).
 // `sidebarKey` overrides the label-derived slug so a display-label rename doesn't
 // change the `ui:sidebar:*` permission id (which would silently drop grants).
-type NavLike = { label: string; sidebarKey?: string; children?: readonly NavLike[] };
+type NavLike = {
+    label: string;
+    sidebarKey?: string;
+    href?: string;
+    pathPrefixes?: readonly string[];
+    children?: readonly NavLike[];
+};
 
 export interface SidebarChildRow {
     key: string;
     label: string;
     permissionId: string;
+    /** The link's address plus any `pathPrefixes` — the pages its tick opens (pageAccess.ts). */
+    paths: string[];
     /** Nested sub-nav links (e.g. Masters → Ledgers), same shape, any depth. */
     children?: SidebarChildRow[];
 }
@@ -63,6 +71,7 @@ function makeChildren(moduleKey: string, items: readonly NavLike[], seen: Set<st
             key: childKey,
             label: it.label,
             permissionId: sidebarChildPermissionId(moduleKey, childKey),
+            paths: [it.href, ...(it.pathPrefixes ?? [])].filter((p): p is string => !!p),
             children: it.children?.length ? makeChildren(moduleKey, it.children, seen) : undefined,
         };
     });

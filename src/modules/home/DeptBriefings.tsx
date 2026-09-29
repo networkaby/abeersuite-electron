@@ -19,11 +19,11 @@
  *   DEP-DESP    → Despatch briefing
  */
 
-import Link from "next/link";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { QuickLink } from "@/modules/home/QuickLink";
 import {
     Wrench, ShoppingCart, DollarSign, Settings2, Package,
-    Users, ChevronRight, AlertCircle, CheckCircle2,
+    Users, AlertCircle, CheckCircle2,
     FileText, BookOpen, CreditCard, ReceiptText, Coins, Banknote,
 } from "lucide-react";
 
@@ -57,19 +57,6 @@ function StatCard({ label, value, highlight = false }: { label: string; value: n
             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide truncate">{label}</p>
             <p className={`text-2xl font-bold mt-0.5 ${highlight ? "text-destructive" : "text-foreground"}`}>{value}</p>
         </div>
-    );
-}
-
-function QuickLink({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
-    return (
-        <Link
-            href={href}
-            className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted/60 transition-colors"
-        >
-            {icon}
-            <span className="flex-1">{label}</span>
-            <ChevronRight size={14} className="text-muted-foreground shrink-0" />
-        </Link>
     );
 }
 
