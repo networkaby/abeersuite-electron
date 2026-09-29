@@ -13,7 +13,6 @@
 const fs       = require("fs");
 const path     = require("path");
 const os       = require("os");
-const { exec } = require("child_process");
 const sharp    = require("sharp");
 const QRCode   = require("qrcode");
 
@@ -422,19 +421,22 @@ function sendToDq11Once(comPort, baud, bytes) {
     });
 }
 
+/** COM ports, from `serialport` — a packaged dependency, so it is the only source
+ *  (not `wmic`, which newer Windows 11 builds no longer ship). A failure is logged
+ *  with its reason and read as "none found". */
 function listComPorts() {
     return new Promise((resolve) => {
         try {
             const { SerialPort } = require("serialport");
             SerialPort.list()
                 .then((ports) => resolve(ports.map((p) => ({ path: p.path, description: p.manufacturer || p.friendlyName || "" }))))
-                .catch(() => resolve([]));
-        } catch {
-            exec("wmic path Win32_SerialPort get DeviceID /format:list", (err, stdout) => {
-                if (err) return resolve([]);
-                const ids = stdout.split(/\r?\n/).map((l) => l.replace(/^DeviceID=/, "").trim()).filter(Boolean);
-                resolve(ids.map((p) => ({ path: p, description: "" })));
-            });
+                .catch((err) => {
+                    console.error("[qr] could not list COM ports:", err.message);
+                    resolve([]);
+                });
+        } catch (err) {
+            console.error("[qr] serialport is missing from this install:", err.message);
+            resolve([]);
         }
     });
 }

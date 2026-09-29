@@ -14,7 +14,7 @@ const fs       = require("fs");
 const path     = require("path");
 const os       = require("os");
 const net      = require("net");
-const { exec } = require("child_process");
+const { execFile } = require("child_process");
 /**
  * `sharp` is a native module, and IS a dependency now — the QR display needs it
  * structurally, so it ships with the bridge (it is N-API, so no Electron rebuild is
@@ -1186,21 +1186,33 @@ function sendCom(comPort, buffer) {
     });
 }
 
+// Ships beside this file (package.json copies hardware-bridge/**; verify-package checks it).
+const PRINT_RAW_PS1 = path.join(__dirname, "print-raw.ps1");
+
+/**
+ * Run PowerShell with its arguments as an array — never a shell string, so a printer
+ * name holding a quote or a `$` is passed as data and cannot become part of a command.
+ */
+function powershell(args, done) {
+    execFile(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", ...args],
+        { windowsHide: true, encoding: "utf8" },
+        done,
+    );
+}
+
 function sendWindows(printerName, buffer) {
     return new Promise((resolve, reject) => {
-        const tmpFile  = path.join(os.tmpdir(), `receipt-${Date.now()}.bin`);
-        const psScript = path.join(__dirname, "print-raw.ps1");
+        const tmpFile = path.join(os.tmpdir(), `receipt-${Date.now()}.bin`);
         fs.writeFileSync(tmpFile, buffer);
-        exec(
-            `powershell -NoProfile -ExecutionPolicy Bypass -File "${psScript}" -PrinterName "${printerName}" -FilePath "${tmpFile}"`,
-            (err, stdout, stderr) => {
-                fs.unlink(tmpFile, () => {});
-                if (err) return reject(new Error(stderr.trim() || err.message));
-                const out = stdout.trim();
-                if (out !== "OK") return reject(new Error(out || "Print failed"));
-                resolve();
-            }
-        );
+        powershell(["-File", PRINT_RAW_PS1, "-PrinterName", printerName, "-FilePath", tmpFile], (err, stdout, stderr) => {
+            fs.unlink(tmpFile, () => {});
+            // The script prints "OK", or the reason it failed (and exits 1).
+            const out = String(stdout).trim();
+            if (out === "OK") return resolve();
+            reject(new Error(out || String(stderr).trim() || (err && err.message) || "Print failed"));
+        });
     });
 }
 
@@ -1280,36 +1292,42 @@ function canConnect(host, port, timeoutMs) {
 }
 
 // ── List helpers ──────────────────────────────────────────────────────────────
+//
+// Both lists feed printer:probe, which answers rather than throws — so a failure is
+// logged with its reason and read as "none found". Neither uses `wmic`: newer
+// Windows 11 builds no longer ship it.
 
+/** Printers installed in Windows (Settings → Printers & Scanners). Output is forced
+ *  to UTF-8 so a printer name outside ASCII comes back intact. */
 function listWindowsPrinters() {
     return new Promise((resolve) => {
-        exec("wmic printer get Name /format:list", (err, stdout) => {
-            if (err) return resolve([]);
-            const names = stdout
-                .split(/\r?\n/)
-                .map((l) => l.replace(/^Name=/, "").trim())
-                .filter(Boolean);
-            resolve(names);
-        });
+        powershell(
+            ["-Command", "[Console]::OutputEncoding = [Text.Encoding]::UTF8; Get-CimInstance Win32_Printer | ForEach-Object { $_.Name }"],
+            (err, stdout) => {
+                if (err) {
+                    console.error("[thermal] could not list Windows printers:", err.message);
+                    return resolve([]);
+                }
+                resolve(String(stdout).split(/\r?\n/).map((l) => l.trim()).filter(Boolean));
+            },
+        );
     });
 }
 
+/** COM ports, from `serialport` — a packaged dependency, so it is the only source. */
 function listComPorts() {
     return new Promise((resolve) => {
         try {
             const { SerialPort } = require("serialport");
             SerialPort.list()
                 .then((ports) => resolve(ports.map((p) => p.path)))
-                .catch(() => resolve([]));
-        } catch {
-            exec("wmic path Win32_SerialPort get DeviceID /format:list", (err, stdout) => {
-                if (err) return resolve([]);
-                const ids = stdout
-                    .split(/\r?\n/)
-                    .map((l) => l.replace(/^DeviceID=/, "").trim())
-                    .filter(Boolean);
-                resolve(ids);
-            });
+                .catch((err) => {
+                    console.error("[thermal] could not list COM ports:", err.message);
+                    resolve([]);
+                });
+        } catch (err) {
+            console.error("[thermal] serialport is missing from this install:", err.message);
+            resolve([]);
         }
     });
 }

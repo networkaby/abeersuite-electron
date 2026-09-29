@@ -549,6 +549,15 @@ function checkReplicaPayload(packageDir: string, failures: string[]): void {
             + "and the counter falls back to the browser print dialog."
         );
     }
+    // thermal.js runs this for every print to a "Windows Printer" (a USB printer on its
+    // Windows driver). It went missing once, when the old thermal relay was removed, and
+    // every such print failed with nothing flagging it here.
+    if (fs.existsSync(bridgeEntry) && !fs.existsSync(path.join(resourcesDir, "hardware-bridge", "print-raw.ps1"))) {
+        failures.push(
+            "resources/hardware-bridge/print-raw.ps1 is missing — printing to a Windows printer "
+            + "fails on every counter that uses one."
+        );
+    }
     if (fs.existsSync(path.join(resourcesDir, "hardware-bridge", "config.json"))) {
         failures.push(
             "resources/hardware-bridge/config.json IS PACKAGED — printer configuration is "
