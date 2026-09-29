@@ -16,14 +16,15 @@ interface LinkedCustomer {
 
 interface Props {
     companyId: number;
-    initialLinks: LinkedCustomer[];
-    onLinked?: () => void;
+    /** The parent's current list — the panel never keeps its own copy. */
+    links: LinkedCustomer[];
+    /** Called after a link or an unlink; the parent refetches and passes the new list. */
+    onChanged: () => void;
 }
 
 const fieldClass = "flex-1";
 
-export default function CompanyLinkPanel({ companyId, initialLinks, onLinked }: Props) {
-    const [links, setLinks] = useState(initialLinks);
+export default function CompanyLinkPanel({ companyId, links, onChanged }: Props) {
     const [showSearch, setShowSearch] = useState(false);
     const [query, setQuery] = useState("");
     const [results, setResults] = useState<{ id: number; name: string; phone: string | null }[]>([]);
@@ -49,17 +50,17 @@ export default function CompanyLinkPanel({ companyId, initialLinks, onLinked }: 
             setShowSearch(false);
             setQuery("");
             setResults([]);
-            onLinked?.();
+            onChanged();
         } catch (e: unknown) {
             toast.error(extractApiError(e, "Failed to link"));
         }
     };
 
-    const unlink = async (customerId: number, linkId: number) => {
+    const unlink = async (customerId: number) => {
         try {
             await axios.delete(`/api/companies/${companyId}/links?personId=${customerId}`);
-            setLinks(prev => prev.filter(l => l.id !== linkId));
             toast.success("Unlinked");
+            onChanged();
         } catch {
             toast.error("Failed to unlink");
         }
@@ -79,7 +80,7 @@ export default function CompanyLinkPanel({ companyId, initialLinks, onLinked }: 
                         </Link>
                         {lc.customer.phone && <span className="text-xs text-muted-foreground">· {lc.customer.phone}</span>}
                     </div>
-                    <Button onClick={() => unlink(lc.customer.id, lc.id)} variant="ghost" size="icon-xs" className="text-muted-foreground/65 hover:text-destructive">
+                    <Button onClick={() => unlink(lc.customer.id)} variant="ghost" size="icon-xs" className="text-muted-foreground/65 hover:text-destructive">
                         <X size={14} />
                     </Button>
                 </div>

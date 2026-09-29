@@ -356,8 +356,8 @@ Note `PassRejectModal` is imported **only** by `TicketCard`, which is itself dea
 |---|---|---|
 | `src/modules/admin/components/OrgLevels.tsx` | 310 | live org UI is `OrgExplorer` |
 | `src/modules/delivery/components/DeliveryBoard.tsx` | 265 | only importer is `RefundBoard`, also dead |
-| `src/modules/customer/components/CompanyProfileView.tsx` | 236 | also holds a dead link (see A4 family) |
-| `src/modules/customer/components/PersonProfileView.tsx` | 224 | same |
+| `src/modules/customer/components/CompanyProfileView.tsx` | 236 | also holds a dead link (see A4 family) (deleted 2026-09-30) |
+| `src/modules/customer/components/PersonProfileView.tsx` | 224 | same (deleted 2026-09-30) |
 | `src/modules/admin/components/OrgTree.tsx` | 166 | |
 | `src/modules/accountancy/lib/effectiveBalance.ts` | 117 | |
 | `src/modules/refund/components/RefundBoard.tsx` | 96 | |

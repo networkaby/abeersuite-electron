@@ -148,7 +148,6 @@ export default function CustomersPage() {
     const [txLoading, setTxLoading] = useState(false);
     const [from, setFrom] = useState(toIsoDate(indianFiscalYearStart()));
     const [to, setTo] = useState(toIsoDate(new Date()));
-    const [linkKey, setLinkKey] = useState(0);
 
     const [showCreate, setShowCreate] = useState(false);
     const [form, setForm] = useState({ name: "", phone: "", email: "", address: "" });
@@ -217,10 +216,9 @@ export default function CustomersPage() {
 
     const handleTabChange = (next: Tab) => { setTab(next); };
 
-    // Re-fetch after a link is added (CustomerLinkPanel), to get fresh companies list.
+    // Re-fetch after a company is linked or unlinked (CustomerLinkPanel draws the new list).
     const handleLinked = useCallback(() => {
         if (!selectedId) return;
-        setLinkKey(k => k + 1);
         axios.get<CustomerDetail>(`/api/person/${selectedId}`)
             .then((res) => setDetail(res.data))
             .catch(() => { });
@@ -558,10 +556,9 @@ export default function CustomersPage() {
                                 {/* Companies — link management */}
                                 {tab === "companies" && (
                                     <CustomerLinkPanel
-                                        key={linkKey}
                                         customerId={detail.id}
-                                        initialLinks={detail.companies}
-                                        onLinked={handleLinked}
+                                        links={detail.companies}
+                                        onChanged={handleLinked}
                                     />
                                 )}
 

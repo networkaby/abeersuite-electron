@@ -161,7 +161,6 @@ export default function CompaniesPage() {
     const [txLoading, setTxLoading] = useState(false);
     const [from, setFrom] = useState(toIsoDate(indianFiscalYearStart()));
     const [to, setTo] = useState(toIsoDate(new Date()));
-    const [linkKey, setLinkKey] = useState(0);
 
     const [showCreate, setShowCreate] = useState(false);
     const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", companyReg: "", taxId: "" });
@@ -257,10 +256,9 @@ export default function CompaniesPage() {
 
     const handleTabChange = (next: Tab) => { setTab(next); };
 
-    // Re-fetch after a contact is linked (CompanyLinkPanel).
+    // Re-fetch after a contact is linked or unlinked (CompanyLinkPanel draws the new list).
     const handleLinked = useCallback(() => {
         if (!selectedId) return;
-        setLinkKey(k => k + 1);
         axios.get<CompanyDetail>(`/api/companies/${selectedId}`)
             .then((res) => setDetail(res.data))
             .catch(() => {});
@@ -472,10 +470,9 @@ export default function CompaniesPage() {
                                 {/* Contacts — link management */}
                                 {tab === "contacts" && (
                                     <CompanyLinkPanel
-                                        key={linkKey}
                                         companyId={detail.id}
-                                        initialLinks={detail.customers}
-                                        onLinked={handleLinked}
+                                        links={detail.customers}
+                                        onChanged={handleLinked}
                                     />
                                 )}
 

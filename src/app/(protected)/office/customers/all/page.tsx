@@ -148,8 +148,6 @@ export default function AllCustomersPage() {
     // The books moved while the statement was off screen — re-read on the way in.
     const [txStale, setTxStale] = useState(false);
     const [txLoading, setTxLoading] = useState(false);
-    const [personLinkKey, setPersonLinkKey] = useState(0);
-    const [companyLinkKey, setCompanyLinkKey] = useState(0);
     const [showInactive, setShowInactive] = useState(false);
 
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
@@ -318,22 +316,6 @@ export default function AllCustomersPage() {
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, [router, selected]);
-
-    const handlePersonLinked = useCallback(() => {
-        if (!selected || selected.kind !== "person") return;
-        setPersonLinkKey(k => k + 1);
-        axios.get<PersonDetail>(`/api/person/${selected.id}`)
-            .then((res) => setPersonDetail(res.data))
-            .catch(() => { });
-    }, [selected]);
-
-    const handleCompanyLinked = useCallback(() => {
-        if (!selected || selected.kind !== "company") return;
-        setCompanyLinkKey(k => k + 1);
-        axios.get<CompanyDetail>(`/api/companies/${selected.id}`)
-            .then((res) => setCompanyDetail(res.data))
-            .catch(() => { });
-    }, [selected]);
 
     const refetchPersonDetail = useCallback(() => {
         if (!selected || selected.kind !== "person") return;
@@ -599,10 +581,9 @@ export default function AllCustomersPage() {
 
                                 {personTab === "companies" && (
                                     <CustomerLinkPanel
-                                        key={personLinkKey}
                                         customerId={personDetail.id}
-                                        initialLinks={personDetail.companies}
-                                        onLinked={handlePersonLinked}
+                                        links={personDetail.companies}
+                                        onChanged={refetchPersonDetail}
                                     />
                                 )}
 
@@ -704,10 +685,9 @@ export default function AllCustomersPage() {
 
                                 {companyTab === "contacts" && (
                                     <CompanyLinkPanel
-                                        key={companyLinkKey}
                                         companyId={companyDetail.id}
-                                        initialLinks={companyDetail.customers}
-                                        onLinked={handleCompanyLinked}
+                                        links={companyDetail.customers}
+                                        onChanged={refetchCompanyDetail}
                                     />
                                 )}
 
