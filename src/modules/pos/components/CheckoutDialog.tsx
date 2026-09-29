@@ -18,6 +18,10 @@
 //              gift-card / credit / overpayment. The parent passes a party picker
 //              as `topSlot` and a note field as `bottomSlot`; the tenders define
 //              the total; CTAs read "Record receipt" / "Record + Print".
+//   "confirm"— a save with NO money: the Estimate, and an Order / Estimate
+//              edit. Only the title and the two CTAs; the caller names them.
+//              The dialog itself takes Enter / Ctrl+Enter (no amount field to
+//              hang them on), so it confirms exactly like the Sale.
 
 import React from "react";
 import {
@@ -29,6 +33,7 @@ import { Label } from "@/components/ui/label";
 import { Clock, ReceiptIndianRupee, CreditCard, AlertCircle } from "lucide-react";
 import { type TenderSplit, type TenderAccount } from "@/modules/pos/components/TenderSplitInput";
 import { TenderEntry } from "@/modules/pos/components/TenderEntry";
+import { SavePrintButtons, savePrintKey } from "@/modules/pos/components/SavePrintButtons";
 import { formatInr } from "@/shared/lib/format";
 
 type PayState = { cashTendered: number; cashReturn: number };
@@ -44,10 +49,11 @@ export function CheckoutDialog({
     accounts, splits, setSplits,
     submitting, onConfirm, onShare,
     topSlot, bottomSlot, confirmDisabled = false,
+    title, confirmLabel, confirmPrintLabel,
 }: {
     open: boolean;
     onOpenChange: (v: boolean) => void;
-    mode?: "sale" | "order" | "receipt";
+    mode?: "sale" | "order" | "receipt" | "confirm";
     // Totals (all rupees). For "receipt" the bill-only fields are unused.
     total: number;
     collected?: number;
@@ -83,32 +89,38 @@ export function CheckoutDialog({
     topSlot?: React.ReactNode;
     bottomSlot?: React.ReactNode;
     confirmDisabled?: boolean;
+    // "confirm" mode names its own title and CTAs (the others derive them).
+    title?: string;
+    confirmLabel?: string;
+    confirmPrintLabel?: string;
 }) {
+    const isSale = mode === "sale";
     const isOrder = mode === "order";
     const isReceipt = mode === "receipt";
+    const isConfirm = mode === "confirm";
     // Sale allows an under-payment: whatever is not collected goes on the
     // customer's account, up to their credit limit. Only a BREACH of that limit
     // blocks Confirm. An order advance / a receipt are optional in amount, so
     // only `submitting` (+ a parent-supplied guard) gates them.
-    const confirmBlocked = submitting || confirmDisabled || (!isOrder && !isReceipt && creditLimitBreached);
-    const underpayTitle = !isOrder && !isReceipt && onCredit > 0.01
-        ? `${formatInr(onCredit)} goes on the customer's account — they owe it after this bill`
-        : overpaid > 0 ? "Extra is collected as a Receipt voucher — clears old dues first, leftover becomes advance" : undefined;
+    const confirmBlocked = submitting || confirmDisabled || (isSale && creditLimitBreached);
+    const underpayTitle = isConfirm ? undefined
+        : isSale && onCredit > 0.01
+            ? `${formatInr(onCredit)} goes on the customer's account — they owe it after this bill`
+            : overpaid > 0 ? "Extra is collected as a Receipt voucher — clears old dues first, leftover becomes advance" : undefined;
 
     // Enter on any amount field → confirm. Ctrl/Cmd+Enter → confirm + print.
-    const enterToSubmit = (e: React.KeyboardEvent) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            onConfirm(e.ctrlKey || e.metaKey);
-        }
-    };
+    const enterToSubmit = (e: React.KeyboardEvent) => savePrintKey(e, onConfirm, { disabled: confirmBlocked });
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-lg">
+            <DialogContent
+                className="sm:max-w-lg"
+                // No amount field in "confirm" mode — the dialog takes the keys.
+                onKeyDown={isConfirm ? enterToSubmit : undefined}
+            >
                 <DialogHeader>
                     <DialogTitle>
-                        {isReceipt ? "Receive from party" : isOrder ? `Save Order · ${formatInr(total)}` : `Checkout · ${formatInr(total)}`}
+                        {title ?? (isReceipt ? "Receive from party" : isOrder ? `Save Order · ${formatInr(total)}` : `Checkout · ${formatInr(total)}`)}
                         {isOrder && <span className="text-sm font-normal text-muted-foreground"> — advance optional</span>}
                     </DialogTitle>
                 </DialogHeader>
@@ -117,7 +129,7 @@ export function CheckoutDialog({
                     {/* Receipt: the party picker sits where the bill header would be. */}
                     {isReceipt && topSlot}
 
-                    {!isReceipt && (
+                    {!isReceipt && !isConfirm && (
                     <div className="grid grid-cols-3 gap-2 rounded-md border border-border bg-muted/30 p-3 text-center text-sm">
                         <div>
                             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Total</div>
@@ -134,7 +146,7 @@ export function CheckoutDialog({
                     </div>
                     )}
 
-                    {!isReceipt && giftCardApplied > 0.005 && (
+                    {!isReceipt && !isConfirm && giftCardApplied > 0.005 && (
                         <div className="flex items-center justify-between rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-sm dark:border-teal-500/30 dark:bg-teal-500/10">
                             <span className="flex items-center gap-1.5 text-teal-700 dark:text-teal-300"><CreditCard size={14} /> Gift card {giftCardCode} − {formatInr(giftCardApplied)}</span>
                             <span className="font-semibold tabular-nums">Pay {formatInr(payableTotal)}</span>
@@ -142,7 +154,7 @@ export function CheckoutDialog({
                     )}
 
                     {/* Sale: credit-limit warning when the on-credit portion would breach the limit. */}
-                    {!isOrder && !isReceipt && creditLimitBreached && (
+                    {isSale && creditLimitBreached && (
                         <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
                             <AlertCircle size={16} className="mt-0.5 shrink-0" />
                             <span>
@@ -171,6 +183,7 @@ export function CheckoutDialog({
                             also reused by the Rcv dialog. targetTotal (bill) enables the
                             cash "fill remaining" helper; receipt omits it (tenders define
                             the total, so it shows its own running Total instead). */}
+                        {!isConfirm && (
                         <TenderEntry
                             accounts={accounts}
                             splits={splits}
@@ -183,9 +196,10 @@ export function CheckoutDialog({
                             onShare={onShare}
                             onEnter={enterToSubmit}
                         />
+                        )}
 
                         {/* Credit — readonly, auto-balanced (bill modes only) */}
-                        {!isReceipt && (
+                        {!isReceipt && !isConfirm && (
                         <div className="grid grid-cols-[80px_1fr] items-center gap-2">
                             <Label className="flex items-center gap-1.5 text-xs text-muted-foreground"><Clock size={12} /> Credit</Label>
                             <Input
@@ -207,7 +221,7 @@ export function CheckoutDialog({
                             advance — booked as a separate GST Receipt voucher so the bank/UPI
                             statement matches 1:1. (Sale only — an order advance can't exceed
                             the total, so there's nothing to overpay.) */}
-                        {!isOrder && !isReceipt && (overpaid > 0 || balanceDue > 0) && (
+                        {isSale && (overpaid > 0 || balanceDue > 0) && (
                             <div className="space-y-1 rounded-md border border-border bg-muted/30 p-2.5 text-xs">
                                 {balanceDue > 0 && (
                                     <div className="flex items-center justify-between">
@@ -247,16 +261,17 @@ export function CheckoutDialog({
                         )}
 
                         {/* Inline confirm CTAs — final amount + actions sit close to the payment-line entry */}
-                        <div className="grid grid-cols-2 gap-2 pt-1">
-                            <Button onClick={() => onConfirm(false)} disabled={confirmBlocked} size="lg" variant="outline" title={underpayTitle}>
-                                <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : (isReceipt ? "Record receipt" : isOrder ? "Save Order" : overpaid > 0 ? "Confirm + collect" : "Confirm")}
-                                <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">↵</span>
-                            </Button>
-                            <Button onClick={() => onConfirm(true)} disabled={confirmBlocked} size="lg" title={underpayTitle}>
-                                <ReceiptIndianRupee size={16} /> {submitting ? "Saving…" : (isReceipt ? "Record + Print" : isOrder ? "Save + Print" : "Confirm + Print")}
-                                <span className="ml-2 rounded border border-border px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
-                            </Button>
-                        </div>
+                        <SavePrintButtons
+                            className="pt-1"
+                            size="lg"
+                            icon={<ReceiptIndianRupee size={16} />}
+                            label={confirmLabel ?? (isReceipt ? "Record receipt" : isOrder ? "Save Order" : overpaid > 0 ? "Confirm + collect" : "Confirm")}
+                            printLabel={confirmPrintLabel ?? (isReceipt ? "Record + Print" : isOrder ? "Save + Print" : "Confirm + Print")}
+                            onSave={onConfirm}
+                            disabled={confirmBlocked}
+                            submitting={submitting}
+                            title={underpayTitle}
+                        />
                     </div>
                 </div>
 

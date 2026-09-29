@@ -599,9 +599,9 @@ export function PosSalesRegister() {
                                                     {d.dealId ? <Badge variant="outline" className="text-[10px]">Deal #{d.dealId}</Badge> : <span className="text-muted-foreground">—</span>}
                                                 </td>
                                                 <td className="px-2 py-2 text-right">
-                                                    <a href={`/receipt/voucher/inv/${d.id}`} target="_blank" rel="noopener noreferrer" className="inline-flex text-muted-foreground hover:text-foreground" title="Print">
+                                                    <button type="button" onClick={() => void printVoucherThermal("inv", d.id, tab === "orders" ? "POS_ORDER" : "POS_ESTIMATE")} className="inline-flex text-muted-foreground hover:text-foreground" title="Print (thermal)">
                                                         <Printer size={14} />
-                                                    </a>
+                                                    </button>
                                                 </td>
                                             </tr>
                                         ))}

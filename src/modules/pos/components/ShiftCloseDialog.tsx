@@ -34,6 +34,7 @@ import { parseDigitsInput, parseDecimalInput } from "@/shared/lib/format";
 import { toDateTimeLocalInput } from "@/shared/lib/format/dateInput";
 import { TallyDateTimeInput } from "@/shared/components/TallyDateTimeInput";
 import { FooterToggle } from "@/modules/accountancy/components/FooterToggle";
+import { SavePrintButtons, savePrintKey } from "@/modules/pos/components/SavePrintButtons";
 import { captureMyDay } from "@/shared/lib/hr/myDay";
 import { getPriorInputAt } from "@/shared/components/ActivityPulse";
 import { signOutTo } from "@/shared/lib/auth/signOutTo";
@@ -58,8 +59,7 @@ type Mode = "vault" | "handover";
 // edited in Settings → Org Defaults).
 const DEFAULT_DENOMS = [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1];
 
-const PRINT_AFTER_SAVE_KEY = "pos_shift_print_after_save";
-const THERMAL_KEY          = "pos_shift_print_thermal";
+const THERMAL_KEY = "pos_shift_print_thermal";
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -129,17 +129,8 @@ export function ShiftCloseDialog({
     // Back-dated close (re-close flow only) — `yyyy-MM-ddTHH:mm` local.
     const [closedAt, setClosedAt]   = useState("");
 
-    // Print after save + Thermal toggles (persisted in localStorage)
-    const [printAfterSave, setPrintAfterSave] = useState(() => {
-        if (typeof window === "undefined") return true;
-        try {
-            const stored = window.localStorage.getItem(PRINT_AFTER_SAVE_KEY);
-            return stored !== null ? stored === "true" : true;
-        } catch {
-            return true;
-        }
-    });
-
+    // Print or not is the button (Close / Close + Print, Ctrl+Enter = print);
+    // the paper is this Thermal tick, remembered per PC in localStorage.
     const [thermal, setThermal] = useState(() => {
         if (typeof window === "undefined") return true;
         try {
@@ -149,11 +140,6 @@ export function ShiftCloseDialog({
             return true;
         }
     });
-
-    const updatePrintAfterSave = (val: boolean) => {
-        setPrintAfterSave(val);
-        try { window.localStorage.setItem(PRINT_AFTER_SAVE_KEY, String(val)); } catch { /* ignore */ }
-    };
 
     const updateThermal = (val: boolean) => {
         setThermal(val);
@@ -223,7 +209,7 @@ export function ShiftCloseDialog({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [declaredNum, mode]);
 
-    const submitVault = async () => {
+    const submitVault = async (print: boolean) => {
         if (!detail) return;
         if (declaredNum < 0) { toast.error("Declared count can't be negative"); return; }
         if (carryOverNum > declaredNum) { toast.error("Carry-over cannot exceed declared count"); return; }
@@ -238,7 +224,7 @@ export function ShiftCloseDialog({
                 closedAt:           initialClosedAt !== undefined ? new Date(closedAt).toISOString() : undefined,
             });
             toast.success(`Shift #${shiftId} closed successfully`);
-            if (printAfterSave) {
+            if (print) {
                 const paper = thermal ? "THERMAL_80MM" : "A4";
                 window.open(`/receipt/shift/${data.id}?paper=${paper}&autoprint=1`, "_blank", "noopener");
             }
@@ -287,6 +273,9 @@ export function ShiftCloseDialog({
                 // it. Only the explicit Cancel / Done / ✕ buttons dismiss it.
                 onInteractOutside={(e) => e.preventDefault()}
                 onEscapeKeyDown={(e) => e.preventDefault()}
+                // Ctrl+Enter → Close + Print. Plain Enter never closes a shift (it
+                // posts GL, and Enter walks the denomination grid).
+                onKeyDown={(e) => { if (mode === "vault") savePrintKey(e, (p) => void submitVault(p), { enterSaves: false, disabled: submitting || loading }); }}
             >
                 <DialogHeader className="pb-1">
                     <div className="flex items-center gap-3">
@@ -476,14 +465,6 @@ export function ShiftCloseDialog({
                             {/* A handover prints nothing — the report prints on the close. */}
                             {mode === "vault" && (
                                 <FooterToggle
-                                    label="Print after save"
-                                    checked={printAfterSave}
-                                    onChange={updatePrintAfterSave}
-                                    disabled={submitting}
-                                />
-                            )}
-                            {mode === "vault" && printAfterSave && (
-                                <FooterToggle
                                     label="Thermal"
                                     checked={thermal}
                                     onChange={updateThermal}
@@ -491,10 +472,16 @@ export function ShiftCloseDialog({
                                 />
                             )}
                             {mode === "vault" ? (
-                                <Button onClick={submitVault} disabled={submitting || loading} className="bg-green-600 hover:bg-green-700 text-white">
-                                    {submitting ? <Loader2 size={14} className="animate-spin" /> : <CheckCheck size={14} />}
-                                    Close &amp; sweep to vault
-                                </Button>
+                                <SavePrintButtons
+                                    icon={<CheckCheck size={14} />}
+                                    label="Close & sweep to vault"
+                                    printLabel="Close + Print"
+                                    onSave={(p) => void submitVault(p)}
+                                    disabled={loading}
+                                    submitting={submitting}
+                                    enterSaves={false}
+                                    printClassName="bg-green-600 hover:bg-green-700 text-white"
+                                />
                             ) : (
                                 <Button onClick={submitHandover} disabled={submitting || loading} className="bg-amber-600 hover:bg-amber-700 text-white">
                                     {submitting ? <Loader2 size={14} className="animate-spin" /> : <Users size={14} />}

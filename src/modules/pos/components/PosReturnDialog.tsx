@@ -25,6 +25,8 @@ import {
 } from "@/shared/components/PartySearchAndCreate";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { extractApiError } from "@/shared/lib/api";
+import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
+import { SavePrintButtons, savePrintKey } from "@/modules/pos/components/SavePrintButtons";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -246,7 +248,7 @@ export function PosReturnDialog({
 
     // ── Tab 1 & 2: submit normal return ──────────────────────────────────────
 
-    const handleSubmit = async () => {
+    const handleSubmit = async (print: boolean) => {
         if (!selected) return;
         if (selectedLines.length === 0) { toast.error("Select at least one item to return"); return; }
         // The cashier can pick "Back to card" and then add more lines. The server
@@ -258,8 +260,8 @@ export function PosReturnDialog({
         setSubmitting(true);
         try {
             const { data } = await axios.post<{
+                returnVoucherId: number;
                 returnNumber:    string;
-                journalEntryRef: string;
                 returnTotal:     number;
             }>("/api/pos/return", {
                 originalInvoiceId: selected.id,
@@ -271,9 +273,9 @@ export function PosReturnDialog({
                 `Return ${data.returnNumber} · ₹${fmt(data.returnTotal)} — ` +
                 (mode === "CASH" ? "cash refunded from till"
                  : mode === "GIFT_CARD" ? "put back on the gift card"
-                 : "credit note issued") +
-                ` · JE ${data.journalEntryRef}`
+                 : "credit note issued")
             );
+            if (print) void printVoucherThermal("inv", data.returnVoucherId, "SALE_RETURN");
             onDone();
             onOpenChange(false);
             reset();
@@ -295,6 +297,7 @@ export function PosReturnDialog({
     // ── Render ────────────────────────────────────────────────────────────────
 
     const busy = submitting;
+    const returnBlocked = selectedLines.length === 0 || returnTotal <= 0;
 
     return (
         <Dialog
@@ -303,7 +306,12 @@ export function PosReturnDialog({
                 if (!busy) { onOpenChange(v); if (!v) reset(); }
             }}
         >
-            <DialogContent className="sm:max-w-lg flex flex-col max-h-[90vh]">
+            <DialogContent
+                className="sm:max-w-lg flex flex-col max-h-[90vh]"
+                // Ctrl+Enter → Return + Print once the lines are picked. Plain Enter
+                // stays with the +/- steppers and the reason box, so it never posts.
+                onKeyDown={(e) => { if (selected) savePrintKey(e, (p) => void handleSubmit(p), { enterSaves: false, disabled: returnBlocked || submitting }); }}
+            >
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <RotateCcw size={16} className="text-primary" /> Sale Return
@@ -509,16 +517,16 @@ export function PosReturnDialog({
                     </Button>
 
                     {selected && (
-                        <Button
-                            onClick={handleSubmit}
-                            disabled={submitting || selectedLines.length === 0 || returnTotal <= 0}
-                            className="bg-red-600 hover:bg-red-700 text-white"
-                        >
-                            {submitting
-                                ? <Loader2 size={14} className="animate-spin" />
-                                : <Check size={14} />}
-                            Confirm return · ₹{fmt(returnTotal)}
-                        </Button>
+                        <SavePrintButtons
+                            icon={<Check size={14} />}
+                            label={`Return · ₹${fmt(returnTotal)}`}
+                            printLabel="Return + Print"
+                            onSave={(p) => void handleSubmit(p)}
+                            disabled={returnBlocked}
+                            submitting={submitting}
+                            enterSaves={false}
+                            printClassName="bg-red-600 hover:bg-red-700 text-white"
+                        />
                     )}
                 </DialogFooter>
             </DialogContent>

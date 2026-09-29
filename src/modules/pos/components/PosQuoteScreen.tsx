@@ -3,8 +3,9 @@
 // ── PosQuoteScreen (Order / Estimate) ─────────────────────────────────────────
 // Order and Estimate are ONE screen with a few seams. Order takes an optional
 // advance through the checkout dialog and LOCKS the full bill discount (its total
-// must equal the Sale it becomes); Estimate is a non-binding quote that saves
-// directly with the tier discount only — it never opens the checkout dialog.
+// must equal the Sale it becomes); Estimate is a non-binding quote with the tier
+// discount only — it takes no money, so it (and any edit) confirms through the
+// checkout dialog's "confirm" mode: Enter saves, Ctrl+Enter saves + prints.
 // The protected Sale screen (/vouchers/pos/new, PosScreen.tsx) is deliberately
 // NOT folded in here. All shared state + bill math lives in usePosBilling; the
 // shared render tree lives in PosScreenShell.
@@ -42,25 +43,25 @@ const QUOTE_CFG = {
 
 export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; editId?: number }) {
     const cfg = QUOTE_CFG[mode];
+    const printKind = mode === "order" ? "POS_ORDER" : "POS_ESTIMATE";
+    // "Save Estimate" / "Update Order" — the button, the dialog title and its CTAs.
+    const noun = mode === "order" ? "Order" : "Estimate";
     const router = useRouter();
     // Edit mode: reopen an existing order / estimate in this same screen, hydrate
     // its customer + lines, and PATCH on save instead of creating a new voucher.
     // Both go through the order endpoint — it accepts POS_ESTIMATE too (GL-silent).
     const isEdit = editId != null;
+    const verb = isEdit ? "Update" : "Save";
 
     // Focus/handle refs — owned here, shared with the hook and the shell.
     const partySearchRef = useRef<PartySearchAndCreateHandle>(null);
     const productSearchRef = useRef<HTMLInputElement>(null);
     const cashTenderedRef = useRef<HTMLInputElement>(null);
 
-    // Ctrl/Cmd+Enter → editing PATCHes; Estimate saves directly (no payment
-    // checkout); Order opens the dialog to (optionally) collect an advance.
+    // Ctrl/Cmd+Enter → the checkout dialog, like the Sale: a new Order collects
+    // its (optional) advance there; an Estimate or an edit just confirms.
     const b = usePosBilling({
-        onHotkeyConfirm: () => {
-            if (isEdit) void generateInvoice(false);
-            else if (mode === "estimate") void generateInvoice(true);
-            else b.openCheckout();
-        },
+        onHotkeyConfirm: () => b.openCheckout(),
         partySearchRef,
         productSearchRef,
         cashTenderedRef,
@@ -137,7 +138,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
         const goodsCart = cart.filter((l) => l.kind !== "service");
         const serviceCart = cart.filter((l) => l.kind === "service");
         // Edit mode → PATCH the existing order's lines + discount (server recomputes
-        // exactly like creation). No checkout / advance / print on an edit.
+        // exactly like creation). No advance on an edit; print only when asked.
         if (isEdit) {
             b.setSubmitting(true);
             try {
@@ -165,6 +166,8 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                     roundOff: mode === "order" ? b.roundOff : 0,
                 });
                 toast.success(mode === "order" ? "Order updated" : "Estimate updated");
+                b.setCheckoutOpen(false);   // no second Enter while the page navigates away
+                if (printAfter) await printVoucherThermal("inv", editId, printKind);
                 router.push(mode === "order" ? "/office/ecommerce/orders" : "/office/accountancy/vouchers-registers/estimates");
             } catch (e: unknown) {
                 toast.error(extractApiError(e, `Failed to update ${mode}`));
@@ -256,7 +259,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
             b.resetAfterSubmit();
             if (printAfter) {
                 // Silent thermal like a POS sale; no printer → the 80mm format page.
-                await printVoucherThermal("inv", data.voucherId, mode === "order" ? "POS_ORDER" : "POS_ESTIMATE");
+                await printVoucherThermal("inv", data.voucherId, printKind);
                 // Advance receipt prints as a second slip (GL voucher source).
                 if (data.receiptVoucherId) await printVoucherThermal("gl", data.receiptVoucherId, "RECEIPT");
             }
@@ -275,28 +278,32 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
             partySearchRef={partySearchRef}
             productSearchRef={productSearchRef}
             checkoutSlot={
-                <Button 
-                    onClick={isEdit ? () => void generateInvoice(false) : (mode === "estimate" ? () => void generateInvoice(true) : () => b.openCheckout())} 
-                    disabled={b.cart.length === 0 || !b.snapshot?.account || b.submitting} 
-                    className="h-12 w-full text-base" 
+                <Button
+                    onClick={() => b.openCheckout()}
+                    disabled={b.cart.length === 0 || !b.snapshot?.account || b.submitting}
+                    className="h-12 w-full text-base"
                     size="lg"
                     title={
                         b.cart.length === 0 ? "Scan an item first" :
                         !b.snapshot?.account ? "Select a customer first" :
                         b.submitting ? "Saving…" :
-                        mode === "estimate" ? "Save Estimate" : "Save Order"
+                        `${verb} ${noun}`
                     }
                 >
-                    <ReceiptIndianRupee size={18} /> {isEdit ? `Update Order · ${formatInr(b.total)}` : (mode === "estimate" ? `Save Estimate · ${formatInr(b.total)}` : `Save Order · ${formatInr(b.total)}`)}
+                    <ReceiptIndianRupee size={18} /> {`${verb} ${noun} · ${formatInr(b.total)}`}
                     <span className="ml-2 rounded border border-primary-foreground/30 px-1.5 py-px text-[10px] opacity-80">Ctrl ↵</span>
                 </Button>
             }
         >
-            {/* ── Checkout dialog — Order advance: the same checkout body as POS Sale,
-                in "order" mode (advance optional, no credit-limit block, "Save Order"
-                CTAs). ─────────────────────────────────────────────────────────── */}
+            {/* ── Checkout dialog — the same dialog as POS Sale. A new Order uses
+                "order" mode (advance optional, no credit-limit block); an Estimate
+                or an edit takes no money, so "confirm" mode — title + the two
+                CTAs only. ─────────────────────────────────────────────────── */}
             <CheckoutDialog
-                mode="order"
+                mode={isEdit || mode === "estimate" ? "confirm" : "order"}
+                title={`${verb} ${noun} · ${formatInr(b.total)}`}
+                confirmLabel={`${verb} ${noun}`}
+                confirmPrintLabel={`${verb} & Print ${noun}`}
                 open={b.checkoutOpen}
                 onOpenChange={b.setCheckoutOpen}
                 total={b.total}

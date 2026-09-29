@@ -7,11 +7,12 @@
 // shift close is reduced by it. Funding is always the shift's counter till —
 // the cashier can only spend from their own counter.
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
-import { Loader2, Banknote } from "lucide-react";
+import { Banknote } from "lucide-react";
+import { SavePrintButtons, savePrintKey } from "@/modules/pos/components/SavePrintButtons";
 import {
     Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -46,7 +47,7 @@ export function PosExpenditureDialog({
             .catch(() => toast.error("Failed to load expense accounts"));
     }, [open, shiftId]);
 
-    const submit = async () => {
+    const submit = async (print: boolean) => {
         const rupees = parseFloat(amount) || 0;
         if (rupees <= 0)            { toast.error("Amount must be positive"); return; }
         if (!description.trim())    { toast.error("Add a short note (e.g. tea, donation)"); return; }
@@ -60,7 +61,7 @@ export function PosExpenditureDialog({
             });
             toast.success(`Expenditure ${data.voucherRef} · ₹${rupees.toFixed(2)}`);
             // Silent thermal print of the payment voucher (selection page only as fallback).
-            void printVoucherThermal("gl", data.voucherId, "PAYMENT");
+            if (print) void printVoucherThermal("gl", data.voucherId, "PAYMENT");
             onDone();
             onOpenChange(false);
         } catch (e: unknown) {
@@ -70,9 +71,16 @@ export function PosExpenditureDialog({
         }
     };
 
+    // Enter in Amount / Note → Record; Ctrl+Enter anywhere → Record + Print. The
+    // account picker keeps its own Enter (it picks the ledger).
+    const onFieldKey = (e: ReactKeyboardEvent) => savePrintKey(e, (p) => void submit(p), { disabled: submitting });
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent
+                className="sm:max-w-md"
+                onKeyDown={(e) => savePrintKey(e, (p) => void submit(p), { enterSaves: false, disabled: submitting })}
+            >
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Banknote size={18} className="text-primary" /> Counter expenditure
@@ -95,6 +103,7 @@ export function PosExpenditureDialog({
                             onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))}
                             placeholder="10"
                             autoFocus
+                            onKeyDown={onFieldKey}
                         />
                     </div>
 
@@ -107,6 +116,7 @@ export function PosExpenditureDialog({
                             onChange={(e) => setDescription(e.target.value)}
                             placeholder="e.g. tea, sundry donation"
                             maxLength={200}
+                            onKeyDown={onFieldKey}
                         />
                     </div>
 
@@ -123,9 +133,12 @@ export function PosExpenditureDialog({
 
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</Button>
-                    <Button onClick={submit} disabled={submitting}>
-                        {submitting && <Loader2 size={14} className="animate-spin" />} Record expenditure
-                    </Button>
+                    <SavePrintButtons
+                        label="Record"
+                        printLabel="Record + Print"
+                        onSave={(p) => void submit(p)}
+                        submitting={submitting}
+                    />
                 </DialogFooter>
             </DialogContent>
         </Dialog>
