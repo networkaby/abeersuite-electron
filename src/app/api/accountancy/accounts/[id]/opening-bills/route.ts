@@ -1,6 +1,8 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/shared/lib/auth/permissions";
+import { requireAuth, hasPermission } from "@/shared/lib/auth/permissions";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { round2 } from "@/shared/lib/format";
 import { z } from "zod";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import {
@@ -72,6 +74,27 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     }
 }
 
+/**
+ * The one rewrite that needs no tick: a Receipt / Payment settling a one-figure
+ * opening first turns it into ONE bill of the same side and amount
+ * (settleFromPicks). Nothing the party owes moves, so the cashier taking the money
+ * needs no masters tick. Anything else — several bills, another figure, bills
+ * already there — is a real rewrite.
+ */
+async function isSameFigureSplit(accountId: number, put: z.infer<typeof putSchema>): Promise<boolean> {
+    if (put.bills.length !== 1 || put.bills[0].universalVoucherId != null) return false;
+    const [account, existing] = await Promise.all([
+        prisma.account.findUnique({
+            where:  { id: accountId },
+            select: { openingBalance: true, openingBalanceType: true },
+        }),
+        loadOpeningBills(prisma, accountId),
+    ]);
+    if (!account || account.openingBalance == null || existing.length > 0) return false;
+    return account.openingBalanceType === put.type
+        && round2(Math.abs(Number(account.openingBalance))) === round2(put.bills[0].amount);
+}
+
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { user, response } = await requireAuth();
     if (response) return response;
@@ -84,6 +107,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
     const { data, error } = await validateRequest(req, putSchema);
     if (error) return error;
+
+    // Rewriting a party's opening moves what they owed before the books began, so it
+    // rides the ticks of the one-figure editors: Accountancy Masters Edit (Opening
+    // Balance page, Edit Ledger) or Contacts Delete (the Contacts profile card).
+    const mayRewrite = hasPermission(user, PERMISSIONS.ACCOUNTANCY_MASTERS_EDIT)
+        || hasPermission(user, PERMISSIONS.CUSTOMERS_DELETE);
+    if (!mayRewrite && !(await isSameFigureSplit(accountId, data))) {
+        return NextResponse.json({ error: "You do not have permission to change this party's opening balance." }, { status: 403 });
+    }
 
     try {
         const result = await prisma.$transaction(

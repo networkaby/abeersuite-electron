@@ -99,7 +99,7 @@ export function BranchTransferPage() {
     const canDelete     = holds(requiredVoucherPermission("BRANCH_TRANSFER", "delete"));
     const canHardDelete = canDelete;
     // Posting is a separate permission — a create-but-not-post user keeps only Save
-    // Draft. Matches the route's userCanVoucherKind(type, "post") check exactly.
+    // Draft. Matches the route's userCanPostVoucher(type) check exactly.
     const canPost = holds(requiredVoucherPermission("BRANCH_TRANSFER", "post"));
 
     const [form, setForm] = useState({

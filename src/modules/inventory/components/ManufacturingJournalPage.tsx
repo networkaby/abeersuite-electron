@@ -110,7 +110,7 @@ export function ManufacturingJournalPage() {
     const canDelete     = holds(requiredVoucherPermission("MANUFACTURING_JOURNAL", "delete"));
     const canHardDelete = canDelete;
     // Posting is a separate permission — a create-but-not-post user keeps only Save
-    // Draft. Matches the route's userCanVoucherKind(type, "post") check exactly.
+    // Draft. Matches the route's userCanPostVoucher(type) check exactly.
     const canPost = holds(requiredVoucherPermission("MANUFACTURING_JOURNAL", "post"));
 
     // Close / Cancel — smart back-nav (matches TradingVoucherPage).

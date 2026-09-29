@@ -3,7 +3,9 @@ import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { NO_PARTY_LINK, partyLinkFields } from "@/shared/lib/parties/partyLink";
 import { resolvePartyAccountId, resolvePartyLinks } from "@/shared/lib/parties/partyLinkServer";
 import { NextResponse, type NextRequest } from "next/server";
-import { requireAuth, userCanVoucherKind, userCanActOnVoucher } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanPostVoucher, userCanActOnVoucher } from "@/shared/lib/auth/permissions";
+import { VOUCHER_MATRIX } from "@/shared/lib/auth/voucherMatrix";
+import { posKindForVoucherType } from "@/shared/lib/auth/posVoucherMatrix";
 import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { round2 } from "@/shared/lib/format";
 import { InvVoucherType, Prisma, type InvVoucherDeliveryMode } from "@/generated/prisma/client";
@@ -348,16 +350,25 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "type, date, description required" }, { status: 400 });
     }
 
+    // Only the kinds this route authors: the office inventory kinds, and POS Sale /
+    // Order / Estimate (Convert makes a POS Order from an Estimate). Anything else —
+    // an online order or invoice, a GL kind, OPENING, a made-up name — has no tick
+    // to check, so it is refused instead of waved through the gates below.
+    const authoredHere = VOUCHER_MATRIX.some((r) => r.module === "inventory" && r.type === type)
+        || posKindForVoucherType(type) != null;
+    if (!authoredHere) {
+        return NextResponse.json({ error: `${type} vouchers cannot be created here.` }, { status: 400 });
+    }
+
     // Per-kind create gate — a matrix voucher kind requires its own create key
     // (`inventory:voucher:create:<kind>`; admin:bypass also passes). POS Sale /
-    // Order / Estimate need their POS-table Create tick — this is how Convert
-    // (Estimate → POS Order) creates one. Online variants pass through.
+    // Order / Estimate need their POS-table Create tick.
     if (!userCanActOnVoucher(user, type, "create")) {
         return NextResponse.json({ error: "You do not have permission to create this voucher kind." }, { status: 403 });
     }
     // Posting in the same request still needs the POST key, exactly as the separate
     // /[id]/post call did — saving in one step must not be a way around the gate.
-    if (postNow && !userCanVoucherKind(user, type, "post")) {
+    if (postNow && !userCanPostVoucher(user, type)) {
         return NextResponse.json({ error: "You do not have permission to post this voucher kind." }, { status: 403 });
     }
 

@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/shared/lib/auth/permissions";
+import { requireAuth, hasPermission } from "@/shared/lib/auth/permissions";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { z } from "zod";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import {
@@ -36,6 +37,13 @@ export async function POST(req: Request) {
 
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;
+
+    // The preview is a read and stays open. Converting rewrites every party's
+    // opening at once, so it needs the Opening Balance page's own tick — the same
+    // one its single-figure editor (`accounts/[id]/opening`) checks.
+    if (!data.dryRun && !hasPermission(user, PERMISSIONS.ACCOUNTANCY_MASTERS_EDIT)) {
+        return NextResponse.json({ error: "You do not have permission to convert opening balances." }, { status: 403 });
+    }
 
     const date = data.date ?? defaultOpeningDateIso();
     const ref = data.ref?.trim() || DEFAULT_OPENING_REF;

@@ -1,12 +1,11 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { writeRestoreAudit } from "@/modules/accountancy/lib/restoreAudit";
 
 const restoreSchema = z.object({
@@ -18,7 +17,7 @@ const restoreSchema = z.object({
 // to POSTED. Mirror of the cancel route, gated by the SAME permission — whoever
 // may cancel a journal may restore one.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission(PERMISSIONS.FINANCE_VOUCHER_CANCEL_JOURNAL);
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;
@@ -27,9 +26,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const entry = await prisma.universalVoucher.findUnique({
         where:  { id: Number(id) },
-        select: { status: true, deletedAt: true, lines: { select: { accountId: true, type: true, amount: true } } },
+        select: { type: true, status: true, deletedAt: true, lines: { select: { accountId: true, type: true, amount: true } } },
     });
     if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // The saved voucher's own Cancel / edit tick — any voucher id reaches this route.
+    if (!userCanVoucher(user, entry.type, "cancel")) {
+        return NextResponse.json({ error: "You do not have permission to restore this voucher kind." }, { status: 403 });
+    }
     if (entry.deletedAt) {
         return NextResponse.json({ error: "Cannot restore a deleted entry — use the Recycle Bin" }, { status: 409 });
     }

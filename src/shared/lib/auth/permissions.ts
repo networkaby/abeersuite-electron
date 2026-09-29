@@ -6,7 +6,7 @@ import { idleLimitMinutesFor } from "@/shared/lib/hr/dutyTime";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { SESSION_REVOKED_MESSAGE } from "@/shared/lib/constants/session";
 import { requiredVoucherPermission, type VoucherAction } from "@/shared/lib/auth/voucherMatrix";
-import { canDoPosVoucher, canActOnVoucher, type PosAction } from "@/shared/lib/auth/posVoucherMatrix";
+import { canDoPosVoucher, canActOnVoucher, posKindForVoucherType, type PosAction } from "@/shared/lib/auth/posVoucherMatrix";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { isThisPcReleased, isThisPcWithoutCounter } from "@/shared/lib/counter/releaseGuard";
 import type { VoucherType } from "@/generated/prisma/client";
@@ -79,9 +79,9 @@ export function userCanVoucher(user: ResolvedUser, type: VoucherType | string, a
 /**
  * Like `userCanVoucher`, but a PASS-THROUGH (returns true) for voucher kinds that
  * have NO per-kind permission in the matrix — the POS / online channel variants
- * (POS, POS_ORDER, POS_ESTIMATE, ONLINE_ORDER, ONLINE_INVOICE). Used by the post
- * routes and the bill-wise link check. Create / Edit / Cancel / Delete use
- * `userCanActOnVoucher`, which does not wave the POS kinds through.
+ * (POS, POS_ORDER, POS_ESTIMATE, ONLINE_ORDER, ONLINE_INVOICE). Used by the
+ * bill-wise link check. Create / Edit / Cancel / Delete use `userCanActOnVoucher`
+ * and Post uses `userCanPostVoucher`, neither of which waves the POS kinds through.
  */
 export function userCanVoucherKind(user: ResolvedUser, type: VoucherType | string, action: VoucherAction): boolean {
     const perKind = requiredVoucherPermission(type as VoucherType, action);
@@ -99,6 +99,18 @@ export function userCanVoucherKind(user: ResolvedUser, type: VoucherType | strin
  */
 export function userCanActOnVoucher(user: ResolvedUser, type: VoucherType | string, action: PosAction): boolean {
     return canActOnVoucher(type, action, user.permissions);
+}
+
+/**
+ * Post gate — a draft going to POSTED, or a create that saves straight to posted.
+ * A POS Sale / Order / Estimate has no Post column (POS commits on Create), so a
+ * draft of one — from Duplicate, or saved as a draft — posts on its POS-row Create
+ * tick. Every other kind needs its own Post tick; online orders / invoices pass.
+ */
+export function userCanPostVoucher(user: ResolvedUser, type: VoucherType | string): boolean {
+    return posKindForVoucherType(type) != null
+        ? userCanActOnVoucher(user, type, "create")
+        : userCanVoucherKind(user, type, "post");
 }
 
 /**

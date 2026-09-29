@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
-import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanPostVoucher } from "@/shared/lib/auth/permissions";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
@@ -72,9 +72,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     if (!voucher)                   return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (voucher.status !== "DRAFT") return NextResponse.json({ error: `Voucher is already ${voucher.status}` }, { status: 409 });
 
-    // Per-kind post gate — matrix kinds require their own post key (or the generic
-    // inventory:edit fallback / admin:bypass). POS / online variants pass through.
-    if (!userCanVoucherKind(user, voucher.type, "post")) {
+    // Per-kind post gate — a matrix kind needs its own Post tick; a POS Sale / Order /
+    // Estimate draft needs its POS-row Create tick. Online variants pass through.
+    if (!userCanPostVoucher(user, voucher.type)) {
         return NextResponse.json({ error: "You do not have permission to post this voucher kind." }, { status: 403 });
     }
 

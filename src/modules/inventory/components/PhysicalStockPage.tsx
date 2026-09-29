@@ -99,7 +99,7 @@ export function PhysicalStockPage() {
     const canDelete     = holds(requiredVoucherPermission("PHYSICAL_STOCK", "delete"));
     const canHardDelete = canDelete;
     // Posting is a separate permission — a create-but-not-post user keeps only Save
-    // Draft. Matches the route's userCanVoucherKind(type, "post") check exactly.
+    // Draft. Matches the route's userCanPostVoucher(type) check exactly.
     const canPost = holds(requiredVoucherPermission("PHYSICAL_STOCK", "post"));
 
     // Close / Cancel — smart back-nav (matches TradingVoucherPage):
