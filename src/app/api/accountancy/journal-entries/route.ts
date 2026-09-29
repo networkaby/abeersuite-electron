@@ -105,23 +105,5 @@ export async function GET(req: Request) {
     }
 }
 
-// POST /api/accountancy/journal-entries — DEPRECATED.
-//
-// Removed in the GL engine refactor. The old behaviour was to write a
-// `JournalEntry` row directly with no parent `Voucher`, which left the
-// document hanging outside the primary-voucher lifecycle (no draft/post
-// workflow, no edit history, no Day Book identity beyond a raw JE reference).
-// All user-entered journals now go through `POST /api/accountancy/journal-
-// vouchers` — that route creates a `Voucher` row (type=JOURNAL, prefix `JV-`)
-// as the primary document and the GL engine creates the matching posting
-// behind it. Returns 410 Gone with a redirect hint instead of writing a
-// row, so any forgotten caller surfaces in logs.
-export function POST() {
-    return NextResponse.json(
-        {
-            error: "Endpoint deprecated. Use POST /api/accountancy/journal-vouchers instead — it creates a primary Voucher (type=JOURNAL, prefix JV-) with the GL posting attached.",
-            redirect: "/api/accountancy/journal-vouchers",
-        },
-        { status: 410 },
-    );
-}
+// No POST: journals are written through POST /api/accountancy/journal-vouchers, which
+// creates the JOURNAL voucher and its GL posting together.

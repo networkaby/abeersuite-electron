@@ -172,33 +172,28 @@ export default function CouriersSettingsPage() {
     });
 
     const save = async () => {
+        // The couriers are fixed (the server creates them on first read), so the dialog
+        // only ever opens on an existing row — there is nothing to add here.
+        const id = form.id;
+        if (id == null) return;
         if (!form.displayName.trim()) { toast.error("Display name is required"); return; }
         setSaving(true);
-        // For a Custom courier / local boy EDIT, the rate card + coverage live on the
+        // For a Custom courier / local boy, the rate card + coverage live on the
         // Standard Courier page — so preserve the stored config and only fold in the
-        // exclusions edited here. Create (and Shiprocket) build config from the form.
-        const preserveRates = (form.kind === "CUSTOM" || form.kind === "OWN_BOY") && form.id != null;
+        // exclusions edited here. Shiprocket builds its config from the form.
+        const preserveRates = form.kind === "CUSTOM" || form.kind === "OWN_BOY";
         const baseCfg = preserveRates
-            ? { ...(methods.find((m) => m.id === form.id)?.configJson ?? {}) }
+            ? { ...(methods.find((m) => m.id === id)?.configJson ?? {}) }
             : buildConfig();
         const configJson = { ...baseCfg, exclude: buildExclude() };
-        const payload = {
-            kind: form.kind,
-            displayName: form.displayName.trim(),
-            isActive: form.isActive,
-            sortOrder: form.sortOrder,
-            configJson,
-        };
         try {
-            if (form.id == null) {
-                await axios.post("/api/settings/couriers", payload);
-                toast.success("Courier added");
-            } else {
-                const { kind: _k, ...patch } = payload;
-                void _k;
-                await axios.patch(`/api/settings/couriers/${form.id}`, patch);
-                toast.success("Courier updated");
-            }
+            await axios.patch(`/api/settings/couriers/${id}`, {
+                displayName: form.displayName.trim(),
+                isActive: form.isActive,
+                sortOrder: form.sortOrder,
+                configJson,
+            });
+            toast.success("Courier updated");
             setDialogOpen(false);
             await load();
         } catch (e) {

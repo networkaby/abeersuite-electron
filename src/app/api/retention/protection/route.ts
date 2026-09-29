@@ -10,7 +10,16 @@ const protectionSchema = z.object({
     productId: z.coerce.number().int().positive(),
 });
 
+// Read and write share one gate — the Protection page is the only reader.
+const requireProtectionAccess = () => requireAnyPermission(
+    sidebarChildPermissionId("retention", "protection"),
+    PERMISSIONS.RETENTION_PROTECTION_MANAGE,
+);
+
 export async function GET() {
+    const { response } = await requireProtectionAccess();
+    if (response) return response;
+
     const items = await prisma.productProtection.findMany({
         include: {
             product: {
@@ -30,10 +39,7 @@ export async function POST(req: Request) {
     // RBAC bridge: page view rides the sidebar link grant; the manage capability
     // also opens the page. Relax the hard gate to match the page layout until
     // server-side per-action security is implemented (see AGENTS.md).
-    const { response } = await requireAnyPermission(
-        sidebarChildPermissionId("retention", "protection"),
-        PERMISSIONS.RETENTION_PROTECTION_MANAGE,
-    );
+    const { response } = await requireProtectionAccess();
     if (response) return response;
 
     const { data, error } = await validateRequest(req, protectionSchema);

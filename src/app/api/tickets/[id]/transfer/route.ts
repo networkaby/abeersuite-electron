@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -17,11 +17,8 @@ export async function POST(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const session = await auth();
-        if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-        const sessionUser = session.user as { id?: string };
-        const userId = Number(sessionUser.id);
+        const { user, response } = await requireAuth();
+        if (response) return response;
         // TODO(rbac): was gated on tickets:transfer — open to all staff for now.
 
         const { id } = await params;
@@ -78,7 +75,7 @@ export async function POST(
         const transferNote = note
             ? `Transferred from ${sourcePipelineLabel} to ${targetPipeline.label}. ${note}`
             : `Transferred from ${sourcePipelineLabel} to ${targetPipeline.label}`;
-        const author = await buildActorSnapshot(userId);
+        const author = await buildActorSnapshot(user.id);
 
         await prisma.$transaction([
             prisma.ticket.update({
@@ -112,8 +109,8 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const session = await auth();
-        if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        const { response } = await requireAuth();
+        if (response) return response;
 
         const { id } = await params;
         const ticket = await prisma.ticket.findUnique({

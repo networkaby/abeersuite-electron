@@ -1,7 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { auth } from "@/auth";
 import { z } from "zod";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { validateRequest } from "@/shared/lib/api";
@@ -18,8 +17,8 @@ export async function GET(
     _: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const session = await auth();
-    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { response } = await requireAuth();
+    if (response) return response;
 
     const { id } = await params;
     const ticketId = Number(id);

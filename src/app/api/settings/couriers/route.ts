@@ -40,11 +40,5 @@ export async function GET() {
     }
 }
 
-// No POST: the courier catalog is hard-coded (add a fifth by extending
-// DELIVERY_METHOD_DEFAULTS in code, not via the UI).
-export function POST() {
-    return NextResponse.json(
-        { error: "Couriers are fixed — a new courier kind is added in code, not here." },
-        { status: 405 }
-    );
-}
+// No POST: the courier catalog is hard-coded (add another by extending
+// DELIVERY_METHOD_DEFAULTS in code). Next answers 405 for the missing method.

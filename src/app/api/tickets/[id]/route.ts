@@ -1,11 +1,10 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { z } from "zod";
 import { Priority } from "@/generated/prisma/enums";
 import { Prisma } from "@/generated/prisma/client";
 import { statusHasWorkflowRole } from "@/shared/lib/constants/workflow";
-import { resolvedUserFromSession, requirePermission } from "@/shared/lib/auth/permissions";
+import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { passesWorkGate } from "@/modules/repairing/lib/workGate";
 import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
@@ -54,8 +53,8 @@ export async function GET(
 ) {
     try {
         const { id } = await params;
-        const session = await auth();
-        if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        const { response } = await requireAuth();
+        if (response) return response;
         // TODO(rbac): scope filtering removed — any authenticated staff can read any ticket.
 
         const ticket = await prisma.ticket.findFirst({
@@ -138,9 +137,8 @@ export async function PUT(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const session = await auth();
-        if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        const resolvedUser = resolvedUserFromSession(session);
+        const { user: resolvedUser, response } = await requireAuth();
+        if (response) return response;
         const userId = resolvedUser.id;
 
         const { id } = await params;

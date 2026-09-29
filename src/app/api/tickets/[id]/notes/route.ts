@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -18,9 +18,8 @@ export async function POST(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const session = await auth();
-        if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        const userId = Number((session.user as { id?: string }).id);
+        const { user, response } = await requireAuth();
+        if (response) return response;
 
         const { id } = await params;
         const ticketId = Number(id);
@@ -40,7 +39,7 @@ export async function POST(
                 status: ticket.status,
                 note,
                 visibility: visibility === "PUBLIC" ? "PUBLIC" : "INTERNAL",
-                author: await buildActorSnapshot(userId),
+                author: await buildActorSnapshot(user.id),
             },
         });
 

@@ -50,13 +50,57 @@ const GUARD_PATTERNS = [
     /\brequireModuleAccess\b/,
     /\brequirePosVoucher\b/,
     /\brequireBranchAccess\b/,
-    /\bauth\s*\(/,
+    // NOT a bare `auth()`: it answers "is anyone signed in", portal customers
+    // included, and skips the released-counter stop. Staff routes use requireAuth().
     /\bverifyWebhookSignature\b/,
     /\bverifyRazorpaySignature\b/,
     // Vercel Cron endpoints: guarded by the Bearer <CRON_SECRET> header check, not by
     // a staff session — there is no user behind a scheduled call.
     /\bCRON_SECRET\b/,
+    // The call-log feed from the phone system: a shared x-api-key header, same idea.
+    /\bCALLS_API_KEY\b/,
 ];
+
+const HANDLER_START = /^export\s+(?:async\s+)?(?:function|const)\s+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/gm;
+const LOCAL_FN_START = /^(?:async\s+)?function\s+(\w+)\s*[(<]|^const\s+(\w+)\s*=\s*(?:async\s*)?\(/gm;
+
+/**
+ * Source from `from` up to its closing line — the first line that starts with `}` (a
+ * function) or `);` (an arrow helper). Not a bare `)`: that is the `) {` ending a
+ * multi-line parameter list.
+ */
+function blockFrom(content: string, from: number): string {
+    const close = /^(?:\}|\);)/m;
+    const rest = content.slice(from);
+    const firstNewline = rest.indexOf("\n");
+    if (firstNewline < 0) return rest;
+    const m = close.exec(rest.slice(firstNewline + 1));
+    return m ? rest.slice(0, firstNewline + 1 + m.index + 1) : rest;
+}
+
+/**
+ * Every exported HTTP handler in a route file that does not guard itself. The check is
+ * per handler, not per file: one guarded POST used to vouch for an open GET beside it.
+ * A handler also counts as guarded when it calls a function defined in the same file
+ * whose own body is guarded (e.g. a shared `target()` or `requireXAccess()` helper).
+ */
+function unguardedHandlers(content: string): string[] {
+    const isGuarded = (text: string) => GUARD_PATTERNS.some((p) => p.test(text));
+    const guardedHelpers: string[] = [];
+    for (const m of content.matchAll(LOCAL_FN_START)) {
+        const name = m[1] ?? m[2];
+        if (isGuarded(blockFrom(content, m.index))) guardedHelpers.push(name);
+    }
+    const callsGuardedHelper = (text: string) =>
+        guardedHelpers.some((name) => new RegExp(`\\b${name}\\s*\\(`).test(text));
+
+    const open: string[] = [];
+    for (const m of content.matchAll(HANDLER_START)) {
+        const body = blockFrom(content, m.index);
+        if (!isGuarded(body) && !callsGuardedHelper(body)) open.push(m[1]);
+    }
+    return open;
+}
 
 function findRouteFiles(dir: string, out: string[] = []): string[] {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -228,7 +272,7 @@ function main() {
 
     const allRoutes = findRouteFiles(API_DIR);
     let officeCount = 0;
-    const unguarded = [];
+    const unguarded: string[] = [];
 
     for (const file of allRoutes) {
         const rel = path.relative(REPO, file).replace(/\\/g, "/");
@@ -241,17 +285,13 @@ function main() {
 
         officeCount++;
         const content = fs.readFileSync(file, "utf8");
-        const hasGuard = GUARD_PATTERNS.some((pattern) => pattern.test(content));
-
-        if (!hasGuard) {
-            unguarded.push(rel);
-        }
+        for (const method of unguardedHandlers(content)) unguarded.push(`${rel} ${method}`);
     }
 
     if (unguarded.length > 0) {
-        console.error(`\n[guard-lint] ERROR: Found ${unguarded.length} unguarded office route(s):`);
-        for (const file of unguarded) {
-            console.error(`  - ${file}`);
+        console.error(`\n[guard-lint] ERROR: Found ${unguarded.length} unguarded office route handler(s):`);
+        for (const hit of unguarded) {
+            console.error(`  - ${hit}`);
         }
         process.exit(1);
     }

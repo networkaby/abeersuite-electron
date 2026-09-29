@@ -140,7 +140,7 @@ Everything else in this document is occasional.
 | `pnpm db:local-schema` | Regenerates `resources/local-schema.sql` (the replica DDL) | — |
 | `pnpm db:local-schema:check` | Fails if that DDL has drifted from `prisma/schema/` | yes |
 | `pnpm check:counter-mode` | Counter/vercel routing guards and the v_live relay boundary, runs with **no database** | yes (5 variants) |
-| `pnpm check:guard-lint` | Every API route is guarded unless allowlisted | yes |
+| `pnpm check:guard-lint` | Every exported API route handler is guarded (a staff guard, not a bare `auth()`) unless allowlisted | yes |
 | `pnpm precommit` | All seven of the above in one go | — |
 | `pnpm install:git-hooks` | Installs the hook so `precommit` runs by itself | run once per clone |
 

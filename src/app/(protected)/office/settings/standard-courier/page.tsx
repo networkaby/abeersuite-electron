@@ -218,25 +218,6 @@ export default function StandardCourierPage() {
         }
     };
 
-    const createRow = async () => {
-        setSaving(true);
-        try {
-            await axios.post("/api/settings/couriers", {
-                kind: "CUSTOM",
-                displayName: "Standard courier",
-                isActive: true,
-                sortOrder: 1,
-                configJson: { mode: "FLAT", flatPaise: 9900, freeAbovePaise: 0 },
-            });
-            toast.success("Standard courier created");
-            await load();
-        } catch (e) {
-            toast.error(axios.isAxiosError(e) ? (e.response?.data?.error ?? "Failed to create") : "Failed to create");
-        } finally {
-            setSaving(false);
-        }
-    };
-
     const setService = (i: number, patch: Partial<ServiceForm>) =>
         setServices((ss) => ss.map((s, j) => (j === i ? { ...s, ...patch } : s)));
     const setZone = (i: number, zi: number, patch: Partial<ZoneForm>) =>
@@ -302,10 +283,8 @@ export default function StandardCourierPage() {
                 ) : !method ? (
                     <Card className="max-w-xl">
                         <CardContent className="py-8 text-center space-y-3">
-                            <p className="text-muted-foreground text-sm">No Standard courier exists yet.</p>
-                            <Button type="button" onClick={() => void createRow()} disabled={saving}>
-                                <Plus className="size-4" /> Create Standard courier
-                            </Button>
+                            <p className="text-muted-foreground text-sm">The Standard courier could not be found.</p>
+                            <Button type="button" variant="outline" size="sm" onClick={() => void load()}>Retry</Button>
                         </CardContent>
                     </Card>
                 ) : (

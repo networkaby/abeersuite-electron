@@ -1,9 +1,8 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { z } from "zod";
-import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { buildActorSnapshot, type ActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { statusHasWorkflowRole } from "@/shared/lib/constants/workflow";
@@ -40,9 +39,8 @@ export async function POST(
     { params }: { params: Promise<{ id: string }> },
 ) {
     try {
-        const session = await auth();
-        if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        const resolvedUser = resolvedUserFromSession(session);
+        const { user: resolvedUser, response } = await requireAuth();
+        if (response) return response;
 
         const { id } = await params;
         const ticketId = Number(id);
@@ -130,9 +128,8 @@ export async function PUT(
     { params }: { params: Promise<{ id: string }> },
 ) {
     try {
-        const session = await auth();
-        if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        const resolvedUser = resolvedUserFromSession(session);
+        const { user: resolvedUser, response } = await requireAuth();
+        if (response) return response;
 
         const { id } = await params;
         const ticketId = Number(id);

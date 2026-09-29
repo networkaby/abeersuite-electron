@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { requireAuth } from "@/shared/lib/auth/permissions";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { markRoomRead } from "@/modules/message/lib/inbox";
 import { NextResponse } from "next/server";
@@ -7,16 +7,15 @@ export async function PATCH(
     _req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const session = await auth();
-    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { user, response } = await requireAuth();
+    if (response) return response;
 
-    const userId = Number((session.user as { id?: string }).id ?? "0");
     const { id } = await params;
 
     const message = await prisma.chatMessage.findFirst({
         where: {
             id: Number(id),
-            room: { key: `system:${userId}` },
+            room: { key: `system:${user.id}` },
         },
         select: { createdAt: true, roomId: true },
     });
@@ -24,6 +23,6 @@ export async function PATCH(
         return NextResponse.json({ error: "Notification not found" }, { status: 404 });
     }
 
-    await markRoomRead(userId, message.roomId, message.createdAt);
+    await markRoomRead(user.id, message.roomId, message.createdAt);
     return NextResponse.json({ ok: true });
 }
