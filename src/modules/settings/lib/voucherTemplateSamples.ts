@@ -39,6 +39,15 @@ export const SAMPLE_GIFT_CARD: GiftCardData = {
 // Sample issuing-branch address for previewing the "Branch address" toggle.
 const SAMPLE_BRANCH_ADDRESS = "Zone Road, Ward 5\nBongaigaon, Assam, 783380";
 
+// Documents whose real print never carries an issuing branch — every voucher
+// kind does (voucherReceiptSample.ts, InvoiceReceipt), and so does Shift Close
+// (its shift's branch). Their preview gets no sample address and Settings
+// hides their Branch address switch, so the switch shows only where it prints.
+export const NO_BRANCH_ADDRESS_KINDS: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplateKind>([
+    "REPAIR_TICKET", "SHIPPING_SLIP", "SERVICE_SHIPPING_LABEL", "DELIVERY_SHIPPING_LABEL",
+    "COUPON", "GIFT_CARD", "PAYSLIP",
+]);
+
 // Bespoke-document body fixtures — the repair ticket / shipping slip carry their
 // OWN body (not the invoice line-items layout), so the settings preview renders
 // the real body with these samples instead of a phantom invoice.
@@ -231,6 +240,11 @@ function addSampleDays(iso: string, days: number): string {
 }
 
 export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSample {
+    const sample = kindSample(kind);
+    return NO_BRANCH_ADDRESS_KINDS.has(kind) ? sample : { ...sample, branchAddress: SAMPLE_BRANCH_ADDRESS };
+}
+
+function kindSample(kind: VoucherTemplateKind): ThermalReceiptSample {
     const today = new Date().toISOString().slice(0, 10);
     const productLines: ThermalReceiptSample["lines"] = [
         { description: "Logitech B100 USB Mouse", quantity: 2, amount: 598 },
@@ -302,7 +316,6 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 // "Party balance" toggle is on.
                 balanceBefore: "Rs. 12,400.00 Dr",
                 balanceAfter:  "Rs. 13,683.00 Dr",
-                branchAddress: SAMPLE_BRANCH_ADDRESS,
             };
         case "POS":
             // Customer COUNTER RECEIPT — the price-hiding "Counter discount" ladder:
@@ -343,7 +356,6 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 balanceDue: 1000,
                 balanceBefore: "Rs. 2,500.00 Dr",
                 balanceAfter:  "Rs. 3,500.00 Dr",
-                branchAddress: SAMPLE_BRANCH_ADDRESS,
             };
         case "ONLINE_INVOICE":
             // Parcel-insert receipt — duplicate of the POS ladder look, but for a
@@ -379,7 +391,6 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
                 hsnSummary: [
                     { hsn: "8471", ratePct: 18, taxable: 2173.73, cgst: 195.64, sgst: 195.63, total: 2565 },
                 ],
-                branchAddress: SAMPLE_BRANCH_ADDRESS,
             };
         case "PURCHASE":
             return {

@@ -5,6 +5,7 @@ import ReceiptPreview from "@/shared/components/print/ReceiptPreview";
 import type { ThermalReceiptSample } from "@/shared/components/print/ThermalReceiptPreview";
 import { formatDateTime } from "@/shared/lib/format/formatDate";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
+import { formatStructuredAddressBlock } from "@/shared/lib/org/organisationView";
 import { getVoucherTemplate, resolvePaperFormat } from "@/shared/lib/print/voucherTemplate";
 import { resolveTemplateForFormat } from "@/shared/lib/print/voucherTemplateDefaults";
 import { ShiftCloseBody, type ShiftCloseBodyData } from "@/shared/components/print/ShiftCloseBody";
@@ -153,11 +154,7 @@ export default async function ShiftReceiptPage({
         managerSignatureLabel: "Manager Signature",
     };
 
-    const branchAddr = [
-        shift.branch.addressLine1,
-        shift.branch.addressLine2,
-        [shift.branch.city, shift.branch.state, shift.branch.pinCode].filter(Boolean).join(", "),
-    ].filter(Boolean).join("\n");
+    const branchAddr = formatStructuredAddressBlock(shift.branch);
 
     const sample: ThermalReceiptSample = {
         reference:     `Shift #${shift.id}`,

@@ -34,6 +34,7 @@ import { mergeTemplateWithOrg, labelSender, labelFooter } from "@/shared/lib/pri
 import type { OrganisationView } from "@/shared/lib/org/organisationView";
 import {
     buildSampleForKind,
+    NO_BRANCH_ADDRESS_KINDS,
     VOUCHER_KIND_LABEL as KIND_LABEL,
     SAMPLE_REPAIR_TICKET,
     SAMPLE_SHIPPING_SLIP,
@@ -129,9 +130,10 @@ const PAYSLIP_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: BoolTempl
 ];
 
 // The bespoke documents (repair ticket / shipping slip) have no line-items
-// table, tax, barcode or issuing branch — hide those toggles for them.
+// table, tax or barcode — hide those toggles for them. Branch address follows
+// NO_BRANCH_ADDRESS_KINDS instead: Shift Close prints its shift's branch.
 const BESPOKE_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>([
-    "showTaxSummary", "showMrp", "showBarcode", "showBranchAddress",
+    "showTaxSummary", "showMrp", "showBarcode",
 ]);
 const BESPOKE_KINDS = new Set<VoucherTemplateKind>(["REPAIR_TICKET", "SHIPPING_SLIP", "SERVICE_SHIPPING_LABEL", "DELIVERY_SHIPPING_LABEL", "COUPON", "GIFT_CARD", "SHIFT_CLOSE", "PAYSLIP"]);
 // A Receipt / Payment is a receipt-book slip with no goods — no HSN table, no
@@ -250,6 +252,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
         // order, courier and payment always print) — no inert rows.
         if (isParcelLabel) return [];
         const hidden = new Set(BESPOKE_HIDDEN_ELEMENTS);
+        if (NO_BRANCH_ADDRESS_KINDS.has(selectedKind)) hidden.add("showBranchAddress");
         if (isCard) for (const k of CARD_HIDDEN_ELEMENTS) hidden.add(k);
         // Neither is a document a customer pays against — no bank block, no
         // party balance.

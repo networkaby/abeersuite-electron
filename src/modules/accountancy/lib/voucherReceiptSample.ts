@@ -69,6 +69,17 @@ const partyAccountSelect = {
     company: { select: { name: true, gstin: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" }] } } },
 } satisfies Prisma.AccountSelect;
 
+// Issuing branch (UniversalVoucher.branch) — every builder prints it in the
+// letterhead when the template's Branch address switch is on. Selected inside
+// each builder's own voucher query, so it costs no extra round trip.
+const branchAddressSelect = {
+    addressLine1: true, addressLine2: true, city: true, state: true, pinCode: true,
+} satisfies Prisma.BranchSelect;
+
+/** The branch's address block, or null when none is on file. */
+const branchAddressText = (branch: Parameters<typeof formatStructuredAddressBlock>[0] | null | undefined): string | null =>
+    branch ? formatStructuredAddressBlock(branch) || null : null;
+
 /**
  * Settlement JSON written by the trading voucher form — the tender + charge
  * INPUT re-rendered for edit. Money/reporting read the posted spine; the print
@@ -108,7 +119,10 @@ function addDaysIso(iso: string, days: number): string {
 async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     const vRow = await prisma.voucherDetail.findUnique({
         where: { id },
-        include: { universalVoucher: { select: { partyAccountId: true, description: true, voucherNo: true, date: true, type: true } } },   // 5D-4 party + 5D-5 desc + 5D-6 ref + 5D-10 date + 5D-11 type
+        include: { universalVoucher: { select: {
+            partyAccountId: true, description: true, voucherNo: true, date: true, type: true,   // 5D-4 party + 5D-5 desc + 5D-6 ref + 5D-10 date + 5D-11 type
+            branch: { select: branchAddressSelect },
+        } } },
     });
     if (!vRow) return notFoundData();
     // Phase 5 5C: goods lines hang off the spine.
@@ -349,6 +363,7 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
         dueDate:      creditDays > 0 ? addDaysIso(voucherDate, creditDays) : null,
         balanceBefore: paid.balanceBefore,
         balanceAfter:  paid.balanceAfter,
+        branchAddress: branchAddressText(v.universalVoucher?.branch),
     };
 
     const vType = (v.universalVoucher?.type ?? "") as InvVoucherType;   // 5D-11
@@ -362,7 +377,10 @@ async function buildGlSample(id: number): Promise<VoucherReceiptData> {
     // are scalar/id-only, so account names + the party are enriched via lookups.
     const spine = await prisma.universalVoucher.findUnique({
         where: { id },
-        include: { lines: { orderBy: [{ type: "asc" }, { id: "asc" }] } },
+        include: {
+            lines:  { orderBy: [{ type: "asc" }, { id: "asc" }] },
+            branch: { select: branchAddressSelect },
+        },
     });
     if (!spine) return notFoundData();
 
@@ -412,6 +430,7 @@ async function buildGlSample(id: number): Promise<VoucherReceiptData> {
         taxAmount: null,
         total,
         notes:     v.narration?.trim() || null,
+        branchAddress: branchAddressText(v.branch),
     };
 
     // CONTRA slips — swap the journal table for a bespoke denomination slip:
@@ -506,11 +525,11 @@ async function buildGlSample(id: number): Promise<VoucherReceiptData> {
 // look is the Receipt / Payment print template's: this only fills its blanks,
 // and each one prints only where the template switches it on.
 async function buildMoneySample(
-    spine: Prisma.UniversalVoucherGetPayload<{ include: { lines: true } }>,
+    spine: Prisma.UniversalVoucherGetPayload<{ include: { lines: true; branch: { select: typeof branchAddressSelect } } }>,
 ): Promise<VoucherReceiptData> {
     const isReceipt = spine.type === "RECEIPT";
     const acctIds = [...new Set([...(spine.partyAccountId != null ? [spine.partyAccountId] : []), ...spine.lines.map((l) => l.accountId)])];
-    const [accounts, branch, ledgerBalance] = await Promise.all([
+    const [accounts, ledgerBalance] = await Promise.all([
         prisma.account.findMany({
             where:  { id: { in: acctIds } },
             select: {
@@ -518,11 +537,6 @@ async function buildMoneySample(
                 person:  { select: { name: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" as const }] } } },
                 company: { select: { name: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" as const }] } } },
             },
-        }),
-        // Issuing branch — printed when the template's Branch address is on.
-        prisma.branch.findUnique({
-            where:  { id: spine.branchId },
-            select: { addressLine1: true, addressLine2: true, city: true, state: true, pinCode: true },
         }),
         // Party's running account before / after — the same reader the Sale and
         // POS bills print from. Null for a walk-in (no ledger).
@@ -575,7 +589,7 @@ async function buildMoneySample(
         notes:      spine.narration?.trim() || null,
         balanceBefore: ledgerBalance ? ledgerBalance.format(ledgerBalance.before) : null,
         balanceAfter:  ledgerBalance ? ledgerBalance.format(ledgerBalance.after)  : null,
-        branchAddress: branch ? formatStructuredAddressBlock(branch) || null : null,
+        branchAddress: branchAddressText(spine.branch),
     };
 
     return { kind: isReceipt ? "RECEIPT" : "PAYMENT", sample, docTitle: `${isReceipt ? "Receipt" : "Payment"} ${reference}` };
@@ -585,7 +599,7 @@ async function buildMoneySample(
 async function buildJeSample(id: number): Promise<VoucherReceiptData> {
     const v = await prisma.universalVoucher.findUnique({
         where: { id },
-        include: { lines: true },
+        include: { lines: true, branch: { select: branchAddressSelect } },
     });
     if (!v) return notFoundData();
 
@@ -617,6 +631,7 @@ async function buildJeSample(id: number): Promise<VoucherReceiptData> {
         taxAmount: null,
         total,
         notes:     v.description?.trim() || null,
+        branchAddress: branchAddressText(v.branch),
     };
 
     return { kind: "JOURNAL", sample, docTitle: `JOURNAL ${(v.voucherNo ?? formatUvNo(v.id))}` };
