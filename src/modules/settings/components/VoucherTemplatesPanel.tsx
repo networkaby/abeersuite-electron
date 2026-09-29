@@ -134,6 +134,10 @@ const BESPOKE_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>([
     "showTaxSummary", "showMrp", "showBarcode", "showBranchAddress",
 ]);
 const BESPOKE_KINDS = new Set<VoucherTemplateKind>(["REPAIR_TICKET", "SHIPPING_SLIP", "SERVICE_SHIPPING_LABEL", "DELIVERY_SHIPPING_LABEL", "COUPON", "GIFT_CARD", "SHIFT_CLOSE", "PAYSLIP"]);
+// A Receipt / Payment is a receipt-book slip with no goods — no HSN table, no
+// MRP to strike — so those two switches would do nothing on it.
+const MONEY_KINDS = new Set<VoucherTemplateKind>(["RECEIPT", "PAYMENT"]);
+const MONEY_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>(["showTaxSummary", "showMrp"]);
 // The cards read only logo / brand / phone (foot) — the rest of the chrome has no place on them.
 const CARD_KINDS = new Set<VoucherTemplateKind>(["COUPON", "GIFT_CARD"]);
 const CARD_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>([
@@ -240,6 +244,7 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
         ? { ...sample, lines: [], subtotal: null, taxAmount: null, total: null, discounts: null, hsnSummary: null }
         : sample;
     const visibleElements = (() => {
+        if (MONEY_KINDS.has(selectedKind)) return SHOW_HIDE_ELEMENTS.filter((e) => !MONEY_HIDDEN_ELEMENTS.has(e.a4));
         if (!BESPOKE_KINDS.has(selectedKind)) return SHOW_HIDE_ELEMENTS;
         // The parcel label reads no show/hide flag at all (sender, receiver,
         // order, courier and payment always print) — no inert rows.

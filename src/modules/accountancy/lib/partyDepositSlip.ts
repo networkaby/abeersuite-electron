@@ -78,12 +78,6 @@ async function findDepositPayee(v: SpineLike): Promise<DepositPayee | null> {
     };
 }
 
-/** True when this PAYMENT prints as the party Bank Deposit Slip. The money-slip
- *  builder (paymentSlip.ts) stands down for it; buildGlSample owns that print. */
-export async function isPartyCashDeposit(v: SpineLike): Promise<boolean> {
-    return (await findDepositPayee(v)) != null;
-}
-
 /** Org's note/coin list (high → low) for the slip's pen-fill rows, with a sane
  *  India fallback. Shared by the Contra and the party deposit slips. */
 export async function loadSlipDenominations(): Promise<number[]> {

@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
         });
 
         // Resolve reprint targets via the direct spine link (G5): InvVoucher (POS
-        // sale) → /receipt/invoice; GL RECEIPT/PAYMENT spine → /receipt/payment.
+        // sale) → /receipt/invoice; GL RECEIPT/PAYMENT spine → /receipt/voucher/gl.
         // Phase 5 5E: the spine IS the financial voucher, so the RECEIPT/PAYMENT
         // case reads straight off the spine — no separate Voucher lookup.
         const uvIds = [...new Set(lines.map((l) => l.universalVoucher.id))];

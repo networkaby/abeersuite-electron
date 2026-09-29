@@ -25,8 +25,9 @@ import { requireStaffPage } from "@/shared/lib/auth/permissions";
 //        bridge once on mount; no printer / bridge down → this same page stays
 //        open as the format-selection page (nothing auto-prints)
 //
-// The POS counter flow keeps its dedicated relay pages (/receipt/invoice?kind=POS
-// and /receipt/payment) — this route is the catch-all for every other kind.
+// The POS sale keeps its dedicated relay page (/receipt/invoice?kind=POS, the
+// price ladder) — this route prints every other kind, the POS Rcv / Exp and
+// office Receipt / Payment slips included (/receipt/payment only forwards here).
 
 const SOURCES = new Set<VoucherReceiptSource>(["inv", "gl", "je"]);
 

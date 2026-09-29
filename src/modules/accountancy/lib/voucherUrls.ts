@@ -59,8 +59,9 @@ export type ReceiptVariant = "thermal" | "pdf";
  *   • `pdf` → `?autoprint=0`: the format-selection page from the start. The
  *     user picks A4 / thermal and the printer in the browser dialog.
  *
- * POS sales and GL receipts/payments keep their dedicated pages; every other
- * kind goes through the generic template-driven `/receipt/voucher` route.
+ * POS sales keep their dedicated page (the price ladder); every other kind —
+ * Receipt and Payment included — goes through the generic template-driven
+ * `/receipt/voucher` route.
  */
 export function receiptHref(
     source: VoucherSource,
@@ -69,14 +70,10 @@ export function receiptHref(
     variant: ReceiptVariant,
 ): string {
     const posLikeInvoice = source === "inv" && (kind === "POS" || kind === "ONLINE_INVOICE");
-    const paymentLikeReceipt = source === "gl" && (kind === "RECEIPT" || kind === "PAYMENT");
 
     if (posLikeInvoice) {
         const qs = variant === "thermal" ? `?kind=${kind}&mode=thermal` : `?kind=${kind}&autoprint=0`;
         return `/receipt/invoice/${rawId}${qs}`;
-    }
-    if (paymentLikeReceipt) {
-        return variant === "thermal" ? `/receipt/payment/${rawId}?mode=thermal` : `/receipt/payment/${rawId}?autoprint=0`;
     }
     if (variant === "thermal") return `/receipt/voucher/${source}/${rawId}?mode=thermal`;
     return `/receipt/voucher/${source}/${rawId}?autoprint=0`;

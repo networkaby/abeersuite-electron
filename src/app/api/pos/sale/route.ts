@@ -18,7 +18,7 @@ import { Prisma, type PaymentMethod } from "@/generated/prisma/client";
 import { buildPartyJson } from "@/shared/lib/accountancy/partySnapshot";
 import { getOpenSaleBillsForFifo } from "@/modules/accountancy/lib/outstandings";
 import { getThermalTemplate } from "@/shared/lib/print/voucherTemplate";
-import { buildPaymentSlipPrint } from "@/modules/accountancy/lib/paymentSlip";
+import { buildVoucherBridgePayload } from "@/modules/accountancy/lib/voucherReceiptSample";
 import { partyBalanceAroundVoucher } from "@/shared/lib/accountancy/partyLedgerBalance";
 import * as Sentry from "@sentry/nextjs";
 import { validateRequest } from "@/shared/lib/api";
@@ -1259,11 +1259,11 @@ export async function POST(req: Request) {
         // forwarded to the thermal relay so the printed slip obeys the template's
         // *Thermal* toggles and matches /receipt/invoice/[id]?kind=POS. The
         // overpayment Receipt voucher (RV-…) rides along the same way, built by
-        // the same helper as /receipt/payment/[id]. Display-only.
+        // the same helper as every other Receipt print. Display-only.
         const posTemplateP = getThermalTemplate("POS");
-        const [posTemplate, receiptSlip, ledgerBalance] = await Promise.all([
+        const [posTemplate, receiptPrint, ledgerBalance] = await Promise.all([
             posTemplateP,
-            result.receiptVoucherId ? buildPaymentSlipPrint(result.receiptVoucherId) : null,
+            result.receiptVoucherId ? buildVoucherBridgePayload("gl", result.receiptVoucherId) : null,
             // The customer's running account for the slip's Previous / Closing
             // balance — read only when the template prints it, and never for the
             // walk-in ledger (it pools every walk-in). The bill and its RV-… are
@@ -1274,7 +1274,6 @@ export async function POST(req: Request) {
                     : null)
                 : null,
         ]);
-        const receiptPrint = receiptSlip?.relayPayload ?? null;
         const partyBalance = ledgerBalance
             ? { before: ledgerBalance.format(ledgerBalance.before), after: ledgerBalance.format(ledgerBalance.after) }
             : null;

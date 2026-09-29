@@ -412,13 +412,15 @@ export function buildSampleForKind(kind: VoucherTemplateKind): ThermalReceiptSam
         case "RECEIPT":
         case "PAYMENT":
             // Money vouchers render the receipt-book middle: the line description
-            // becomes the "by ___" instrument, notes become "towards ___".
+            // becomes the "by ___" instrument, notes become "towards ___". Shaped
+            // like buildMoneySample builds it — money ledger · instrument, and a
+            // named party (a walk-in has no ledger, so no balance to print).
             return {
                 reference: kind === "RECEIPT" ? "RV/26-27/0091" : "PV/26-27/0073",
                 date: today,
-                partyName: kind === "RECEIPT" ? "Walk-in" : "Acme Distributors",
-                partyPhone: null,
-                lines: [{ description: kind === "RECEIPT" ? "Cash" : "Bank Transfer", quantity: 1, amount: 5000 }],
+                partyName: kind === "RECEIPT" ? "Sample Customer" : "Acme Distributors",
+                partyPhone: kind === "RECEIPT" ? "98765 43210" : null,
+                lines: [{ description: kind === "RECEIPT" ? "HDFC Bank · UPI (4532)" : "HDFC Bank · Cheque (483920)", quantity: 1, amount: 5000 }],
                 subtotal: null, taxAmount: null, total: 5000,
                 notes: kind === "RECEIPT" ? "Against bill #SV/26-27/0017" : "Against bill #PV/26-27/0008",
                 // Party ledger strip: customer owes Dr, supplier is owed Cr.

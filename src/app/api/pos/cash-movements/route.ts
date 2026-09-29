@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
             const partyId = partyIdFor(v);
             return {
                 id:        `v-${v.id}`,
-                voucherId: v.id,                  // → /receipt/payment/[voucherId] reprint
+                voucherId: v.id,                  // → /receipt/voucher/gl/[voucherId] reprint
                 kind:      v.type === "RECEIPT" ? ("IN" as const) : ("OUT" as const),
                 reference: v.voucherNo ?? formatUvNo(v.id),
                 date:      v.createdAt.toISOString(),

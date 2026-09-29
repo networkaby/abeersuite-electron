@@ -357,7 +357,8 @@ function printMoneyMiddle(printer, sample, t, fmt, formattedDate) {
     const total     = Number(sample.total || 0);
     const modes     = (sample.lines || []).filter((l) => String(l.description || "").trim());
     printer.alignLeft();
-    // Money slips carry a date + time ("06 Sept 2026, 05:30") — give it room.
+    // Wider date column than the invoice middle — kept from when money slips
+    // printed a time too; an ISO day ("2026-09-29") fits either way.
     printer.tableCustom([
         { text: String(sample.reference || ""), align: "LEFT",  width: 0.45 },
         { text: formattedDate,                  align: "RIGHT", width: 0.55 },

@@ -22,7 +22,7 @@ import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { bridgeOk, bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
-import type { PaymentRelayPayload } from "@/modules/accountancy/lib/paymentSlip";
+import type { VoucherBridgePayload } from "@/modules/accountancy/lib/voucherReceiptSample";
 import { extractApiError } from "@/shared/lib/api";
 import { formatInr, round2, todayIso, toDateOnly } from "@/shared/lib/format";
 import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearchAndCreate";
@@ -264,7 +264,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             // leftover = customer advance) so the bank/UPI statement matches 1:1.
 
             const validCharges = b.charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005);
-            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; freeCouponId: number | null; freeCouponCode: string | null; freeItems: { productId: number; freeQty: number; productName: string }[]; posTemplate: VoucherTemplateDefaults; receiptPrint: PaymentRelayPayload | null; surplusCollected: number; arrearCleared: number; advanceCredited: number; receiptVoucherId: number | null; receiptVoucherRef: string | null; partyBalance: { before: string; after: string } | null }>("/api/pos/sale", {
+            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; freeCouponId: number | null; freeCouponCode: string | null; freeItems: { productId: number; freeQty: number; productName: string }[]; posTemplate: VoucherTemplateDefaults; receiptPrint: VoucherBridgePayload | null; surplusCollected: number; arrearCleared: number; advanceCredited: number; receiptVoucherId: number | null; receiptVoucherRef: string | null; partyBalance: { before: string; after: string } | null }>("/api/pos/sale", {
                 accountId: snapshot.account.id,
                 issueDate: today,
                 dueDate: toDateOnly(due),   // local day, same reason as `today`
@@ -435,7 +435,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     // 80mm view; the cashier picks the format + printer and prints).
                     window.open(`/receipt/invoice/${data.voucherId}?kind=POS&paper=THERMAL_80MM&autoprint=0`, "_blank", "noopener");
                     if (data.receiptVoucherId) {
-                        window.open(`/receipt/payment/${data.receiptVoucherId}?paper=THERMAL_80MM&autoprint=0`, "_blank", "noopener");
+                        window.open(`/receipt/voucher/gl/${data.receiptVoucherId}?paper=THERMAL_80MM&autoprint=0`, "_blank", "noopener");
                     }
                 }
             }

@@ -6,16 +6,19 @@ import type {
 } from "@/shared/components/print/ThermalReceiptPreview";
 import {
     isVoucherTemplateKind,
+    type VoucherTemplateDefaults,
     type VoucherTemplateKind,
 } from "@/shared/lib/print/voucherTemplateDefaults";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { loadEstimateDiscountVisibility } from "@/shared/lib/pos/estimateDiscountVisibility";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
-import { parseBankJson } from "@/shared/lib/org/organisationView";
+import { formatStructuredAddressBlock, parseBankJson } from "@/shared/lib/org/organisationView";
 import { parseDenomJson } from "@/shared/lib/accountancy/denomJson";
 import { buildPartyDepositSlip, loadSlipDenominations } from "@/modules/accountancy/lib/partyDepositSlip";
 import { paymentInstrumentText } from "@/shared/lib/constants/accounting";
+import { partyBalanceAroundVoucher } from "@/shared/lib/accountancy/partyLedgerBalance";
+import { getThermalTemplate } from "@/shared/lib/print/voucherTemplate";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { computeGstSplit, gstinDerivedStateCode } from "@/shared/lib/gst/computeGstSplit";
 import { stateNameForCode } from "@/shared/lib/gst/indianStates";
@@ -29,9 +32,10 @@ import { loadBillSettlementPrint } from "@/modules/accountancy/lib/billSettlemen
 // (`ReceiptPreview` → A4 / Thermal) consumes. This is what lets the Day Book
 // 3-dot menu print every voucher kind — not just POS sales — through one path.
 //
-// The POS counter flow keeps its own rich pages (/receipt/invoice?kind=POS with
-// the price ladder, /receipt/payment with the relay). This builder powers the
-// generic /receipt/voucher/[source]/[id] route used by the register menus.
+// The POS sale keeps its own rich page (/receipt/invoice?kind=POS, the price
+// ladder). This builder powers the generic /receipt/voucher/[source]/[id] route
+// and every silent thermal print (buildVoucherBridgePayload) — so a Receipt or
+// Payment, from any button, is one slip on its print template.
 
 export type VoucherReceiptSource = "inv" | "gl" | "je";
 
@@ -362,6 +366,14 @@ async function buildGlSample(id: number): Promise<VoucherReceiptData> {
     });
     if (!spine) return notFoundData();
 
+    // A Receipt / Payment prints the receipt-book slip (buildMoneySample) — except
+    // cash paid to a party, which goes into their bank and prints the Bank
+    // Deposit Slip with THEIR bank details (see partyDepositSlip.ts) below.
+    const partyDeposit = spine.type === "PAYMENT" ? await buildPartyDepositSlip(spine) : null;
+    if ((spine.type === "RECEIPT" || spine.type === "PAYMENT") && !partyDeposit) {
+        return buildMoneySample(spine);
+    }
+
     const lineAcctIds = [...new Set(spine.lines.map((l) => l.accountId))];
     const [partyAcct, lineAccts] = await Promise.all([
         spine.partyAccountId != null ? prisma.account.findUnique({ where: { id: spine.partyAccountId }, select: partyAccountSelect }) : Promise.resolve(null),
@@ -380,18 +392,7 @@ async function buildGlSample(id: number): Promise<VoucherReceiptData> {
 
     // GL vouchers have no qty×rate goods — render each ledger line as
     // "<Account> (Dr|Cr)" with its amount so the slip reads as a journal.
-    // Payment / Receipt print a receipt-book "By:" line instead, so only the
-    // money side (Cash/Bank) is sent. The instruments live on the particulars
-    // rows (one party by UPI, the next by cheque) and are gathered onto that
-    // line: "HDFC Bank · UPI (4532…), Cheque (IN955468)". The party is already
-    // the addressee.
-    const moneySide = v.type === "RECEIPT" ? "DEBIT" : v.type === "PAYMENT" ? "CREDIT" : null;
-    const instruments = moneySide
-        ? v.lines.filter((l) => l.type !== moneySide).map((l) => paymentInstrumentText(l.method, l.reference)).filter(Boolean).join(", ")
-        : "";
-    const printLines = v.lines
-        .filter((l) => moneySide == null || l.type === moneySide)
-        .map((l) => ({ ...l, description: instruments ? `${l.account.name} · ${instruments}` : l.account.name }));
+    const printLines = v.lines.map((l) => ({ ...l, description: l.account.name }));
     const sample: ThermalReceiptSample = {
         reference:  (v.voucherNo ?? formatUvNo(v.id)),
         date:       isoDate(v.date),
@@ -473,12 +474,9 @@ async function buildGlSample(id: number): Promise<VoucherReceiptData> {
     // PAYMENT in cash to a party with an A/C No on file — the cash goes into the
     // party's own bank, so it prints the same Bank Deposit Slip with THEIR bank
     // details (see partyDepositSlip.ts). The slip total is the cash side.
-    if (v.type === "PAYMENT") {
-        const party = await buildPartyDepositSlip(spine);
-        if (party) {
-            sample.depositSlip = party.slip;
-            sample.total = party.amount;
-        }
+    if (partyDeposit) {
+        sample.depositSlip = partyDeposit.slip;
+        sample.total = partyDeposit.amount;
     }
 
     // A cash→bank deposit and a cash→cash handover are both CONTRA rows in the
@@ -496,6 +494,91 @@ async function buildGlSample(id: number): Promise<VoucherReceiptData> {
         : v.type;
     const docTitle = `${docLabel} ${(v.voucherNo ?? formatUvNo(v.id))}`;
     return { kind, sample, docTitle };
+}
+
+// ── Money voucher (RECEIPT / PAYMENT) — the receipt-book slip ────────────────
+//
+// Every way a receipt or payment prints comes here: the form's "Print after
+// save", the Day Book / ledger menus, POS Rcv (a RECEIPT) and Exp (a PAYMENT),
+// the overpayment RV-… a POS sale books, and every silent thermal print. It
+// used to be two builders — one had the party balance, the other the UPI /
+// cheque details — so the same receipt printed differently by button. The
+// look is the Receipt / Payment print template's: this only fills its blanks,
+// and each one prints only where the template switches it on.
+async function buildMoneySample(
+    spine: Prisma.UniversalVoucherGetPayload<{ include: { lines: true } }>,
+): Promise<VoucherReceiptData> {
+    const isReceipt = spine.type === "RECEIPT";
+    const acctIds = [...new Set([...(spine.partyAccountId != null ? [spine.partyAccountId] : []), ...spine.lines.map((l) => l.accountId)])];
+    const [accounts, branch, ledgerBalance] = await Promise.all([
+        prisma.account.findMany({
+            where:  { id: { in: acctIds } },
+            select: {
+                id: true, name: true,
+                person:  { select: { name: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" as const }] } } },
+                company: { select: { name: true, phones: { take: 1, orderBy: [{ isPrimary: "desc" as const }] } } },
+            },
+        }),
+        // Issuing branch — printed when the template's Branch address is on.
+        prisma.branch.findUnique({
+            where:  { id: spine.branchId },
+            select: { addressLine1: true, addressLine2: true, city: true, state: true, pinCode: true },
+        }),
+        // Party's running account before / after — the same reader the Sale and
+        // POS bills print from. Null for a walk-in (no ledger).
+        partyBalanceAroundVoucher(spine.partyAccountId, spine.id),
+    ]);
+    const acctById = new Map(accounts.map((a) => [a.id, a]));
+    const nameOf   = (accountId: number) => acctById.get(accountId)?.name ?? "—";
+
+    // The money side. RECEIPT: the debit ledgers (till / UPI / card the cash
+    // landed in). PAYMENT: the credit ledgers it left from. A POS
+    // "collect-on-the-go" surplus posts ONE receipt with several tenders, so list
+    // them all — this voucher is where the tender breakdown lives.
+    const moneySide   = isReceipt ? "DEBIT" : "CREDIT";
+    const tenderLines = spine.lines.filter((l) => l.type === moneySide);
+    // The instrument (UPI ref, cheque no.) is entered on each particulars row —
+    // one party by UPI, the next by cheque — and printed on the "By:" line:
+    // "HDFC Bank · UPI (4532…), Cheque (IN955468)". Only onto a single money
+    // ledger: with several (a POS split tender) there is no telling which
+    // tender a row's instrument went through, and those rows carry none.
+    const instruments = spine.lines
+        .filter((l) => l.type !== moneySide)
+        .map((l) => paymentInstrumentText(l.method, l.reference))
+        .filter(Boolean)
+        .join(", ");
+    const tenderText = (name: string) =>
+        instruments && tenderLines.length === 1 ? `${name} · ${instruments}` : name;
+
+    // RECEIPT: FROM the party (else the first credit ledger). PAYMENT: TO the
+    // party — a supplier's name beats the expense-ledger name — else the first
+    // debit ledger (a counter Exp names only its expense head).
+    const partyAccount = spine.partyAccountId != null ? acctById.get(spine.partyAccountId) ?? null : null;
+    const owner        = partyAccount?.person ?? partyAccount?.company ?? null;
+    const partyName    = owner?.name ?? partyAccount?.name ?? null;
+    const otherSide    = spine.lines.find((l) => l.type !== moneySide);
+    const reference    = spine.voucherNo ?? formatUvNo(spine.id);
+
+    // Both formats render their built-in money middles from this sample (A4:
+    // MoneyReceiptMiddle; thermal: MoneyThermalMiddle; the bridge: printMoneyMiddle).
+    const sample: ThermalReceiptSample = {
+        reference,
+        // `date` is a DATE column — there is no time of day to print (formatting
+        // it with one printed a made-up 05:30).
+        date:       isoDate(spine.date),
+        partyName:  partyName ?? (otherSide ? nameOf(otherSide.accountId) : "—"),
+        partyPhone: isReceipt ? owner?.phones[0]?.phone ?? null : null,
+        lines:      tenderLines.map((l) => ({ description: tenderText(nameOf(l.accountId)), quantity: 1, amount: toNumber(l.amount) })),
+        subtotal:   null,
+        taxAmount:  null,
+        total:      spine.lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + toNumber(l.amount), 0),
+        notes:      spine.narration?.trim() || null,
+        balanceBefore: ledgerBalance ? ledgerBalance.format(ledgerBalance.before) : null,
+        balanceAfter:  ledgerBalance ? ledgerBalance.format(ledgerBalance.after)  : null,
+        branchAddress: branch ? formatStructuredAddressBlock(branch) || null : null,
+    };
+
+    return { kind: isReceipt ? "RECEIPT" : "PAYMENT", sample, docTitle: `${isReceipt ? "Receipt" : "Payment"} ${reference}` };
 }
 
 // ── Journal entry (GL spine row) ────────────────────────────────────────────
@@ -559,4 +642,28 @@ export async function buildVoucherReceiptSample(
       : await buildJeSample(id);
     if (data.sample == null) return null;
     return data;
+}
+
+/** The bridge `print/voucher` payload — `{ kind, title, sample, template }`. */
+export interface VoucherBridgePayload {
+    kind:     VoucherTemplateKind;
+    title:    string;
+    sample:   ThermalReceiptSample;
+    /** Thermal-resolved, so the slip obeys the template's Thermal column. */
+    template: VoucherTemplateDefaults;
+}
+
+/**
+ * The silent-thermal print of any Day-Book voucher — the same sample the print
+ * page renders, with the kind's template resolved for the 80mm roll. Shared by
+ * `/api/print/thermal/[source]/[id]` and the POS sale response (its overpayment
+ * RV-…), so a slip printed silently and one printed from the page are one slip.
+ */
+export async function buildVoucherBridgePayload(
+    source: VoucherReceiptSource,
+    id: number,
+): Promise<VoucherBridgePayload | null> {
+    const data = await buildVoucherReceiptSample(source, id);
+    if (!data) return null;
+    return { kind: data.kind, title: data.docTitle, sample: data.sample, template: await getThermalTemplate(data.kind) };
 }

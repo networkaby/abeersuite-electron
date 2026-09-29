@@ -7,10 +7,12 @@ import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/grou
  * Party ledger balance around one voucher — what the party owed BEFORE it and
  * what they owe AFTER it.
  *
- * "After" = opening balance + every POSTED line on the account; "before" = that
- * minus this voucher's own lines. Deriving `before` by subtraction (rather than
- * summing everything dated earlier) keeps a reprint correct no matter when it
- * happens or what was entered in between.
+ * "Before" = opening balance + every POSTED line on the account except this
+ * voucher's own; "after" = that plus this voucher's own lines. Leaving the
+ * voucher out (rather than summing everything dated earlier) keeps a reprint
+ * correct no matter when it happens or what was entered in between — and a
+ * DRAFT printed from the form, which the books do not count yet, still prints
+ * the balance it will leave instead of one shifted by its own amount.
  *
  * A list of ids treats them as ONE document — a POS bill and the receipt booked
  * with it at the counter (an overpayment's RV-…) are one visit, and "before"
@@ -47,9 +49,13 @@ export async function partyBalanceAroundVoucher(
     const nb = acct.normalBalance
         ?? (acct.group?.type ? defaultNormalBalanceForGroupType(acct.group.type) : "DEBIT");
 
-    const [allLines, ownLines] = await Promise.all([
+    const [otherLines, ownLines] = await Promise.all([
         prisma.voucherGlLine.findMany({
-            where:  { accountId: partyAccountId, universalVoucher: ledgerStatusFilterUv() },
+            where:  {
+                accountId: partyAccountId,
+                universalVoucher: ledgerStatusFilterUv(),
+                ...(ownIds.length > 0 ? { universalVoucherId: { notIn: ownIds } } : {}),
+            },
             select: { type: true, amount: true },
         }),
         ownIds.length > 0
@@ -60,12 +66,12 @@ export async function partyBalanceAroundVoucher(
             : Promise.resolve([]),
     ]);
 
-    let after = allLines.reduce((bal, l) => bal + balanceDelta(nb, l.type, toNumber(l.amount)), 0);
+    let before = otherLines.reduce((bal, l) => bal + balanceDelta(nb, l.type, toNumber(l.amount)), 0);
     if (acct.openingBalance && acct.openingBalanceType) {
-        after += balanceDelta(nb, acct.openingBalanceType, toNumber(acct.openingBalance));
+        before += balanceDelta(nb, acct.openingBalanceType, toNumber(acct.openingBalance));
     }
-    const own    = ownLines.reduce((bal, l) => bal + balanceDelta(nb, l.type, toNumber(l.amount)), 0);
-    const before = after - own;
+    const own   = ownLines.reduce((bal, l) => bal + balanceDelta(nb, l.type, toNumber(l.amount)), 0);
+    const after = before + own;
 
     // Positive = the account's normal side (customer Dr / supplier Cr).
     const format = (n: number) => {

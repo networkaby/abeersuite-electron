@@ -258,7 +258,7 @@ export default async function InvoiceReceipt({
 
     // NOTE: when this POS sale was overpaid, the money (tenders) + how it was
     // applied (old dues / advance) live on the separate Receipt voucher (RV-…,
-    // printed via /receipt/payment/[id]) — NOT on this invoice. The invoice
+    // printed via /receipt/voucher/gl/[id]) — NOT on this invoice. The invoice
     // only shows that receipt's link as "Payment adjusted (RV-…)", so it does
     // not read as unpaid.
     const sample: ThermalReceiptSample = {
