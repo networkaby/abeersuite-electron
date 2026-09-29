@@ -6,7 +6,7 @@ import { idleLimitMinutesFor } from "@/shared/lib/hr/dutyTime";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { SESSION_REVOKED_MESSAGE } from "@/shared/lib/constants/session";
 import { requiredVoucherPermission, type VoucherAction } from "@/shared/lib/auth/voucherMatrix";
-import { canDoPosVoucher, type PosAction } from "@/shared/lib/auth/posVoucherMatrix";
+import { canDoPosVoucher, posKindForVoucherType, type PosAction } from "@/shared/lib/auth/posVoucherMatrix";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { isThisPcReleased, isThisPcWithoutCounter } from "@/shared/lib/counter/releaseGuard";
 import type { VoucherType } from "@/generated/prisma/client";
@@ -79,15 +79,28 @@ export function userCanVoucher(user: ResolvedUser, type: VoucherType | string, a
 /**
  * Like `userCanVoucher`, but a PASS-THROUGH (returns true) for voucher kinds that
  * have NO per-kind permission in the matrix — the POS / online channel variants
- * (POS, POS_ORDER, POS_ESTIMATE, ONLINE_ORDER, ONLINE_INVOICE). Use only in the
- * create / post routes, which had no prior permission gate: this newly enforces
- * the per-kind key (or its generic `inventory:edit` fallback) on the matrix kinds
- * while leaving the channel vouchers gated exactly as before (by their own flow).
+ * (POS, POS_ORDER, POS_ESTIMATE, ONLINE_ORDER, ONLINE_INVOICE). Used by the
+ * create / post routes and the bill-wise link check. The Edit / Cancel / Delete
+ * routes use `userCanChangeVoucher`, which does not wave the POS kinds through.
  */
 export function userCanVoucherKind(user: ResolvedUser, type: VoucherType | string, action: VoucherAction): boolean {
     const perKind = requiredVoucherPermission(type as VoucherType, action);
     if (perKind == null) return true;
     return hasPermission(user, perKind);
+}
+
+/**
+ * Edit / Cancel / Delete gate on a saved voucher (and their undo: un-cancel,
+ * Recycle Bin restore). Same as `userCanVoucherKind`, except the three POS
+ * channel kinds — POS Sale, POS Order, POS Estimate — ride their row in the Role
+ * page's POS table (`pos:voucher:cancel|delete:<kind>`, the office-equivalent key
+ * also counting) instead of passing through. Online orders / invoices still pass.
+ * `action: "cancel"` is the Cancel / edit column.
+ */
+export function userCanChangeVoucher(user: ResolvedUser, type: VoucherType | string, action: "cancel" | "delete"): boolean {
+    const posKind = posKindForVoucherType(type);
+    if (posKind != null) return canDoPosVoucher(posKind, action, user.permissions, isAdmin(user));
+    return userCanVoucherKind(user, type, action);
 }
 
 /**
@@ -105,7 +118,7 @@ export function userCanVoucherKind(user: ResolvedUser, type: VoucherType | strin
 export function userCanRestoreAudit(user: ResolvedUser, entityType: string, subtype: string | null): boolean {
     const kind = subtype ?? (entityType === "JOURNAL_ENTRY" ? "JOURNAL" : null);
     if (kind == null) return false;
-    return userCanVoucherKind(user, kind, "delete");
+    return userCanChangeVoucher(user, kind, "delete");
 }
 
 /**

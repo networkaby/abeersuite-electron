@@ -26,9 +26,11 @@ import type { VoucherType, InvVoucherType } from "@/generated/prisma/client";
  * Read access (view/open) is NOT gated per kind — reads are default-open; seeing
  * the rows rides the module sidebar nav. No own/branch/org scope either.
  *
- * POS / online channel variants (POS, POS_ORDER, ONLINE_ORDER, ONLINE_INVOICE)
- * are intentionally NOT here — they are gated by their channel (pos:shift:* /
- * the online order flow), not hand-created from the voucher menu.
+ * POS / online channel variants (POS, POS_ORDER, POS_ESTIMATE, ONLINE_ORDER,
+ * ONLINE_INVOICE) are intentionally NOT here — they are not hand-created from the
+ * voucher menu. POS Sale / Order / Estimate ride the POS matrix instead
+ * (posVoucherMatrix.ts) for Create and for their Day Book Edit / Cancel / Delete;
+ * online orders are gated by their own flow.
  */
 
 // The write actions enforced by the voucher route guards — also the matrix

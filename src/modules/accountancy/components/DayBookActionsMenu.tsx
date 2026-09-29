@@ -17,6 +17,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
@@ -36,6 +37,7 @@ import { apiBase, referenceHref, receiptHref, type ReceiptVariant } from "@/modu
 import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import { stashDuplicate, todayLocalISO, type DuplicateLine } from "@/modules/accountancy/lib/duplicate";
 import { convertTargets } from "@/modules/accountancy/lib/convertMap";
+import { canDoPosVoucher, posKindForVoucherType, type PosAction } from "@/shared/lib/auth/posVoucherMatrix";
 
 // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -64,6 +66,19 @@ export function DayBookActionsMenu({
     const [busy, setBusy] = useState(false);
 
     const base = apiBase(source, rawId);
+
+    // POS Sale / Order / Estimate: Edit, Cancel and Delete follow the Role page's
+    // POS table — the same check the server makes (userCanChangeVoucher). Other
+    // kinds show all three; their routes answer for themselves.
+    const { data: session } = useSession();
+    const posKind = source === "inv" ? posKindForVoucherType(kind) : null;
+    const allowed = (action: PosAction) => {
+        if (posKind == null) return true;
+        const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+        return canDoPosVoucher(posKind, action, perms, perms.includes("admin:bypass"));
+    };
+    const canEdit   = allowed("cancel");
+    const canDelete = allowed("delete");
 
     // ── The two print ways ───────────────────────────────────────────────────
     // "Print (thermal)" sends straight to the counter printer, like a POS sale —
@@ -230,16 +245,22 @@ export function DayBookActionsMenu({
                         <FileText className="size-4" /> Print / PDF
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onSelect={goEdit} disabled={busy}>
-                        <Pencil className="size-4" /> Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={startCancel} disabled={busy}>
-                        <Ban className="size-4" /> Cancel
-                    </DropdownMenuItem>
-                    <DropdownMenuItem variant="destructive" onSelect={startHardDelete} disabled={busy}>
-                        <Trash2 className="size-4" /> Delete
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
+                    {canEdit && (
+                        <DropdownMenuItem onSelect={goEdit} disabled={busy}>
+                            <Pencil className="size-4" /> Edit
+                        </DropdownMenuItem>
+                    )}
+                    {canEdit && (
+                        <DropdownMenuItem onSelect={startCancel} disabled={busy}>
+                            <Ban className="size-4" /> Cancel
+                        </DropdownMenuItem>
+                    )}
+                    {canDelete && (
+                        <DropdownMenuItem variant="destructive" onSelect={startHardDelete} disabled={busy}>
+                            <Trash2 className="size-4" /> Delete
+                        </DropdownMenuItem>
+                    )}
+                    {(canEdit || canDelete) && <DropdownMenuSeparator />}
                     <DropdownMenuItem onSelect={() => void duplicate()} disabled={busy}>
                         <Copy className="size-4" /> Duplicate
                     </DropdownMenuItem>

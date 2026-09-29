@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanChangeVoucher } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
@@ -15,7 +15,8 @@ import { Prisma } from "@/generated/prisma/client";
 //   line / change a quantity at Review, recompute totals (same math as creation).
 //   Allowed only on order-type InvVouchers that are still PRE-CONFIRM (New / Under
 //   Review) — once Confirmed the stock is reserved and the order is locked harder.
-//   "With permission" — gated; a dedicated orders:edit key can replace the gate.
+//   Gated by the kind's Cancel / edit tick: the POS table's row for a POS Order /
+//   Estimate, the office Sales Order row for a Sales Order (userCanChangeVoucher).
 
 const EDITABLE_STAGES: string[] = [ORDER_STAGE.NEW, ORDER_STAGE.UNDER_REVIEW];
 
@@ -92,7 +93,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ source: string; id: string }> }) {
-    const { response } = await requireModuleAccess("orders");
+    const { response, user } = await requireAuth();
     if (response) return response;
     const { source, id: idStr } = await params;
     const id = Number(idStr);
@@ -120,6 +121,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ source
 
         const order = await prisma.voucherDetail.findUnique({ where: { id }, select: { universalVoucher: { select: { type: true, links: { where: { kind: "ORDER_STATUS" }, select: { targetId: true } } } } } });   // 5D-11
         if (!order || (order.universalVoucher?.type !== "POS_ORDER" && order.universalVoucher?.type !== "SALES_ORDER" && order.universalVoucher?.type !== "POS_ESTIMATE")) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+        if (!userCanChangeVoucher(user, order.universalVoucher?.type ?? "", "cancel")) {
+            return NextResponse.json({ error: "You do not have permission to edit this voucher kind." }, { status: 403 });
+        }
         const patchOrderStatusId = order.universalVoucher?.links[0]?.targetId ?? null;
         // Estimates are GL-silent quotes → always editable. Orders only at New / Under-Review.
         if (order.universalVoucher?.type !== "POS_ESTIMATE" && (!patchOrderStatusId || !EDITABLE_STAGES.includes(patchOrderStatusId))) {

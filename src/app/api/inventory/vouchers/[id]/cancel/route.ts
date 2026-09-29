@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
-import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanChangeVoucher } from "@/shared/lib/auth/permissions";
 import { applyLineBalances, toNumber } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { reverseStockMovement, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
@@ -34,12 +34,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // 5D-8/5D-11/5D-12: status/deletedAt + type + branch live on the spine — attach for the helpers + guards + stock rows.
     const voucher = { ...voucherRow, lines: goodsLines, type: voucherRow.universalVoucher?.type ?? "", branchId: voucherRow.universalVoucher?.branchId ?? "", status: voucherRow.universalVoucher?.status ?? "DRAFT", deletedAt: voucherRow.universalVoucher?.deletedAt ?? null };
 
-    // Per-kind cancel gate. Kinds WITH a matrix row need their cancel key; the
-    // channel kinds (POS, POS_ORDER, ONLINE_ORDER, ONLINE_INVOICE) have no row
-    // and pass through — they are gated by their channel, not by the voucher
-    // matrix. Same helper the create / post routes use, so all four lifecycle
-    // actions treat the channel kinds identically.
-    if (!userCanVoucherKind(user, voucher.type, "cancel")) {
+    // Per-kind cancel gate. Office kinds need their matrix cancel key; POS Sale /
+    // Order / Estimate need their POS-table Cancel / edit tick; online orders and
+    // invoices pass through (gated by their own flow).
+    if (!userCanChangeVoucher(user, voucher.type, "cancel")) {
         return NextResponse.json({ error: "You do not have permission to cancel this voucher kind." }, { status: 403 });
     }
 

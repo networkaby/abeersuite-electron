@@ -3,7 +3,8 @@ import { PRE_EDIT_ACTION } from "@/shared/lib/accountancy/auditSnapshotKind";
 import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
-import { requireAuth } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanChangeVoucher } from "@/shared/lib/auth/permissions";
+import { posKindForVoucherType } from "@/shared/lib/auth/posVoucherMatrix";
 import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { round2 } from "@/shared/lib/format";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
@@ -147,6 +148,12 @@ export async function PATCH(req: Request, { params }: Params) {
     if (existing.universalVoucher?.deletedAt) return NextResponse.json({ error: "Voucher is deleted" }, { status: 409 });
     if (existing.universalVoucher?.status === "CANCELLED") {
         return NextResponse.json({ error: "Voucher is cancelled — use Duplicate to create a fresh copy." }, { status: 409 });
+    }
+    // A POS Sale / Order / Estimate edit needs its POS-table Cancel / edit tick.
+    // Office kinds keep their existing page-level gate.
+    const existingType = existing.universalVoucher?.type ?? "";
+    if (posKindForVoucherType(existingType) != null && !userCanChangeVoucher(user, existingType, "cancel")) {
+        return NextResponse.json({ error: "You do not have permission to edit this voucher kind." }, { status: 403 });
     }
 
     const body = await req.json();
@@ -607,14 +614,19 @@ export async function PATCH(req: Request, { params }: Params) {
 
 // DELETE /api/inventory/vouchers/[id]  — only allowed on DRAFT
 export async function DELETE(_req: Request, { params }: Params) {
-    const { response } = await requireAuth();
+    const { response, user } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;
-    const existing = await prisma.voucherDetail.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { status: true } } } });   // 5D-8
+    const existing = await prisma.voucherDetail.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { status: true, type: true } } } });   // 5D-8
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (existing.universalVoucher?.status !== "DRAFT") {
         return NextResponse.json({ error: "Only DRAFT vouchers can be deleted via this route. Use /cancel or /delete for lifecycle." }, { status: 409 });
+    }
+    // Same Delete tick as hard-delete — a POS Estimate flipped to Draft from the
+    // register must not become a way round it (and this removal skips the Recycle Bin).
+    if (!userCanChangeVoucher(user, existing.universalVoucher?.type ?? "", "delete")) {
+        return NextResponse.json({ error: "You do not have permission to delete this voucher kind." }, { status: 403 });
     }
     await prisma.voucherInventoryLine.deleteMany({ where: { universalVoucherId: existing.universalVoucherId ?? -1 } });
     await prisma.voucherDetail.delete({ where: { id: Number(id) } });
