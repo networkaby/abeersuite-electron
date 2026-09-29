@@ -188,6 +188,21 @@ export function isThisPcWithoutCounter(): boolean {
     return readCounterSetupState().state === "absent";
 }
 
+/**
+ * Is this server running on a desktop PC that holds a counter? The staff password
+ * sign-in asks, to decide whether "Can login outside counter" is needed.
+ *
+ * Off the desktop app (the office website, the dev server) there is never a counter.
+ * On it, the answer is the setup file — the same test the login page makes — and not
+ * `IS_COUNTER_PC`, which is false on a till whose local database did not start. Only a
+ * POSITIVE "no setup here" means no counter: an unreadable file is silence, and silence
+ * must not lock a till's cashiers out.
+ */
+export function isThisPcACounter(): boolean {
+    if (!process.env.COUNTER_MACHINE_ID || !process.env.COUNTER_USER_DATA) return false;
+    return readCounterSetupState().state !== "absent";
+}
+
 /** Same TTL as the replica-readiness cache. */
 const CACHE_TTL_MS = 30_000;
 let cachedReleased: { value: boolean; at: number } | null = null;

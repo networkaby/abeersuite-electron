@@ -42,6 +42,14 @@ export const SESSION_IDLE_LABEL = `${SESSION_IDLE_MAX_AGE_MS / (60 * 60 * 1000)}
 export const SESSION_REVOKED_MESSAGE =
     "You were signed out — your access changed, or you signed out on another device. Please sign in again.";
 
+/**
+ * The code a staff password sign-in fails with when the password was right but this
+ * is not a counter and the person lacks "Can login outside counter"
+ * (`authorizeStaffCredentials`). The server throws it and the login page reads it
+ * from `signIn()`'s result, so both sides share the one string.
+ */
+export const OUTSIDE_COUNTER_SIGNIN_CODE = "outside-counter";
+
 // ─── Idle sign-out ───────────────────────────────────────────────────────────
 
 /**

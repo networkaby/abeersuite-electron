@@ -2,11 +2,12 @@
 
 import { signIn, signOut, getSession } from "next-auth/react";
 import { isElectronEnvironment } from "@/shared/lib/bridge/bridgeHealth";
-import { getLocalCounterSetup, isWebCounterBound, reconcileCounterSetup } from "@/shared/lib/counter/setupGate";
+import { getLocalCounterSetup, reconcileCounterSetup } from "@/shared/lib/counter/setupGate";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { refreshCounterStatus } from "@/shared/hooks/useCounterMode";
 import { refreshSyncStatus } from "@/shared/hooks/useSyncStatus";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { OUTSIDE_COUNTER_SIGNIN_CODE } from "@/shared/lib/constants/session";
 import {
     LOGIN_BACKGROUNDS,
     LOGIN_MODULES,
@@ -30,6 +31,15 @@ import PinPad from "./PinPad";
 import { ShiftTakeoverDialog, type CounterTakeover } from "@/modules/pos/components/ShiftTakeoverDialog";
 import { fetchCounterTakeover } from "@/modules/pos/lib/currentShift";
 import { readShellRoster, type ShellRosterEntry } from "@/shared/lib/counter/shellRoster";
+
+/** Why a right password still did not open the app here: not a counter, and no
+ *  "Can login outside counter". Said by the server's refusal and by the check after
+ *  sign-in alike. */
+function outsideCounterMessage(electron: boolean): string {
+    return electron
+        ? "This PC is not set up as a counter yet. Only a user with 'Can login outside counter' permission can sign in here to set it up."
+        : "The office website is for office staff only. Sign in on a counter, or ask admin for 'Can login outside counter' permission.";
+}
 
 /**
  * Rotates through a list on a fixed beat, fading out and back in.
@@ -239,7 +249,13 @@ function StaffLoginForm() {
             ? await signIn("credentials-staff-pin", { email: emailValue, pin: secret, redirect: false })
             : await signIn("credentials-staff", { email: emailValue, password: secret, redirect: false });
 
-        if (res?.error) {
+        if (res?.error && res.code === OUTSIDE_COUNTER_SIGNIN_CODE) {
+            // The password was right; the server refused because this is not a counter
+            // and the person lacks "Can login outside counter" (authorizeStaff.ts).
+            setError(outsideCounterMessage(isElectronEnvironment()));
+            setStage("password");
+            setLoading(false);
+        } else if (res?.error) {
             // A PC with no counter has an empty replica, so the user lookup goes to the
             // cloud — offline, that fails and reads as a wrong password. Say what it is:
             // this machine must be online to bind a counter before it can sign in offline.
@@ -277,10 +293,11 @@ function StaffLoginForm() {
 
             // ── Is this machine a counter? ──────────────────────────────────────
             // Desktop app: the local file plus the counter row (one DB read when
-            // online, the replica when offline). Web version: is the local bridge's id
-            // bound to a counter in the DB. The two ids are never cross-matched.
+            // online, the replica when offline). The office website is never a
+            // counter: browser tills through the legacy bridge were retired once the
+            // desktop app took the counters over, so the website is for office staff.
             const electron = isElectronEnvironment();
-            let isCounter: boolean;
+            let isCounter = false;
             if (electron) {
                 // A PC with no local file short-circuits to "not-set-up" without fetching.
                 const status = await reconcileCounterSetup(true);
@@ -289,21 +306,19 @@ function StaffLoginForm() {
                 // "unreachable" — the replica could not answer; trust the file, the
                 // readiness gate keeps the app covered until it can.
                 isCounter = status === "valid" || status === "unreachable";
-            } else {
-                isCounter = await isWebCounterBound();
             }
 
             // ── Not a counter: only "login outside counter" may proceed ─────────
-            // Same rule for both versions. On the desktop app this is also who may
-            // onboard a fresh PC — setting up a counter is an office action, not a
-            // cashier's.
+            // The server already refused a sign-in without it (authorizeStaff.ts);
+            // this catches the one case it cannot see — a desktop PC whose counter
+            // was released, which it still reads as a counter until the file above
+            // is cleared. On the desktop app this is also who may onboard a fresh
+            // PC — setting up a counter is an office action, not a cashier's.
             if (!isCounter) {
                 const perms = (session?.user as { permissions?: string[] })?.permissions ?? [];
                 if (!hasPermissionWithScope(perms, PERMISSIONS.AUTH_LOGIN_OUTSIDE_COUNTER)) {
                     await signOut({ redirect: false });
-                    setError(electron
-                        ? "This PC is not set up as a counter yet. Only a user with 'Can login outside counter' permission can sign in here to set it up."
-                        : "This machine is not a counter. Contact admin to grant 'Can login outside counter' permission.");
+                    setError(outsideCounterMessage(electron));
                     setLoading(false);
                     return;
                 }

@@ -87,27 +87,6 @@ export async function getLocalCounterSetup(): Promise<{ counterId: number; count
 }
 
 /**
- * The web version's counter check: is the local bridge's id bound to a counter in the
- * DB? There is no local file off Electron, so this is the whole test. False when the
- * bridge is absent, has no id, or the DB cannot be reached — a browser with no
- * counter falls to the "login outside counter" permission gate.
- */
-export async function isWebCounterBound(): Promise<boolean> {
-    if (isElectronEnvironment()) return false;
-    try {
-        const identity = await resolveMachineIdentity();
-        if (!identity.machineId) return false;
-        const qs = new URLSearchParams({ deviceId: identity.machineId, authoritative: "1" });
-        const res = await fetch(`/api/pos/counters/my-binding?${qs}`, { cache: "no-store" });
-        if (!res.ok) return false;
-        const body: MyBindingResponse = await res.json();
-        return body.reachable && !!body.counter;
-    } catch {
-        return false;
-    }
-}
-
-/**
  * Confirms the local setup still matches the server. Never throws — a network
  * failure resolves to "unreachable", not an error the caller has to catch.
  */

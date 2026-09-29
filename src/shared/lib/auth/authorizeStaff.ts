@@ -5,7 +5,12 @@ import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist
 import { isLoginBlocked, recordLoginFailure, clearLoginFailures } from "@/shared/lib/auth/loginRateLimit";
 import { applyPermissionOverrides, normalizeCrudGrants } from "@/shared/lib/auth/crudLadder";
 import { positionScopeLabel } from "@/shared/lib/org/positionScope";
+import { CredentialsSignin } from "next-auth";
 import { pinClocksExpired, stampCounterPinLogin, thisCounterId } from "@/shared/lib/auth/counterPin";
+import { isThisPcACounter } from "@/shared/lib/counter/releaseGuard";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { OUTSIDE_COUNTER_SIGNIN_CODE } from "@/shared/lib/constants/session";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 import { stampAttendanceIn } from "@/shared/lib/hr/attendanceStamp";
 import { idleLimitMinutesFor } from "@/shared/lib/hr/dutyTime";
@@ -374,6 +379,15 @@ export async function authorizeStaffCredentials(
     }
     clearLoginFailures(email);
 
+    const staff = await buildStaffAuthUser(prisma, user);
+    // Off a counter — the office website, or a desktop PC with no counter — only
+    // "Can login outside counter" may sign in. Checked here, where the session is
+    // minted: the login page's own check runs after the session already exists, so a
+    // request that skips the page would skip it too.
+    if (!isThisPcACounter() && !hasPermissionWithScope(staff.permissions, PERMISSIONS.AUTH_LOGIN_OUTSIDE_COUNTER)) {
+        throw new OutsideCounterSignin();
+    }
+
     // Typing the password here is exactly what the 10-day rule asks for — both clocks
     // go back to zero, and the PIN this person set on this counter keeps working.
     // A no-op for anyone who has no PIN, and off a counter entirely.
@@ -381,7 +395,16 @@ export async function authorizeStaffCredentials(
     // The first sign-in on a till marks the business day PRESENT (HR & People).
     { const counterId = thisCounterId(); if (counterId) await stampAttendanceIn(prisma, user.id, counterId); }
 
-    return buildStaffAuthUser(prisma, user);
+    return staff;
+}
+
+/**
+ * The password was right, but this is not a counter and the person lacks "Can login
+ * outside counter". Its own code (reaches `signIn()`'s result as `code`) so the login
+ * page can say so instead of "Invalid email or password".
+ */
+export class OutsideCounterSignin extends CredentialsSignin {
+    code = OUTSIDE_COUNTER_SIGNIN_CODE;
 }
 
 
