@@ -4,10 +4,6 @@ export type PermissionScope = "own" | "department" | "branch" | "org";
 
 const SCOPE_ORDER: PermissionScope[] = ["own", "department", "branch", "org"];
 
-// Legacy umbrella→granular expansion. The users:manage / roles:manage umbrellas
-// were retired (not UI-assignable); checks now use the granular keys directly.
-const LEGACY_TO_SCOPED_ACTIONS: Record<string, string[]> = {};
-
 function isScope(value: string): value is PermissionScope {
     return (SCOPE_ORDER as string[]).includes(value);
 }
@@ -24,12 +20,6 @@ function hasScopedPermissionAtOrAbove(
     const idx = SCOPE_ORDER.indexOf(requiredScope);
     if (idx < 0) return false;
     return SCOPE_ORDER.slice(idx).some((scope) => permissions.has(`${basePermission}:${scope}`));
-}
-
-function hasEquivalentScopedPermission(permissions: Set<string>, permissionId: string): boolean {
-    const actions = LEGACY_TO_SCOPED_ACTIONS[permissionId];
-    if (!actions) return false;
-    return actions.some((action) => permissions.has(action) || hasAnyScopedPermission(permissions, action));
 }
 
 /**
@@ -94,10 +84,7 @@ export function hasPermissionWithScope(
         return hasScopedPermissionAtOrAbove(permissions, basePermission, parts[2]);
     }
 
-    if (parts.length === 2) {
-        if (hasAnyScopedPermission(permissions, permissionId)) return true;
-        if (hasEquivalentScopedPermission(permissions, permissionId)) return true;
-    }
+    if (parts.length === 2 && hasAnyScopedPermission(permissions, permissionId)) return true;
 
     return false;
 }

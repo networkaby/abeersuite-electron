@@ -135,11 +135,9 @@ export async function GET(req: NextRequest) {
         },
     });
 
-    // Resolve each row's party to a live record so the Day Book / register can
-    // link the Party cell. The voucher only stores a bare `partyId`, and after a
-    // Person<->Company conversion that id no longer resolves on its own — the
-    // shared resolver follows the conversion tombstone so the link still lands
-    // on the party's live profile instead of going dead.
+    // Resolve each row's party to its profile link so the Day Book / register can
+    // link the Party cell. A conversion or merge re-points every bill's party id at
+    // the surviving record, so the stored id always leads to a live profile.
     // `withAccountId` because the settlement pass below keys off partyAccountId.
     const partyLinks = await resolvePartyLinks(prisma, vouchers, { withAccountId: true });
     // 5D-2: resolve creator names from each row's spine (createdById on the spine).

@@ -438,9 +438,9 @@ every future nav addition, and unlike the old `apply-permissions` it embeds no p
 list: it imports `PERMISSION_CATALOG` and takes the policy from its flags, so there is
 nothing in it that can go stale.
 
-**Loose end still worth cleaning (not done here):** `scripts/` holds obvious throwaways —
-`tmp-check-apportioned-vouchers.ts`, `tmp-check-unit-cols.ts`, `inspect-call-raw.ts`,
-`survey-call-keys.ts`, `test-tally-date.ts`, `drop-rguest.sql`.
+The one-off throwaways that used to sit in `scripts/` (the `tmp-*` checks, the call-log
+probes, the R-GUEST drop) were deleted on 2026-09-30; `test-tally-date.ts` stays — it is a
+real check of the Tally date parser (`pnpm tsx scripts/test-tally-date.ts`).
 
 ### 7.6 New in this repo — not in the webapp
 

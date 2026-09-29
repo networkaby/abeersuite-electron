@@ -54,9 +54,8 @@ export async function GET(req: Request) {
     const cursor = paginate ? parseBrowseCursor(searchParams) : null;
     // Opt-in, and deliberately so. `toLink` costs two more queries over every GL
     // line these parties have ever had — worth it for the three customer list
-    // pages that show the broken-chain mark, wasted on the till's party cache,
-    // referenceStore and every voucher picker, which call this route and never
-    // draw it. Same reasoning as `paginate` above.
+    // pages that show the broken-chain mark, wasted on the till's party cache
+    // and every voucher picker, which call this route and never draw it. Same reasoning as `paginate` above.
     const withLinkHint = searchParams.get("withLinkHint") === "1";
 
     try {
@@ -140,7 +139,7 @@ export async function GET(req: Request) {
             accountGroupType: p.account?.group?.type ?? null,
         }));
         // The envelope is opt-in, sent only to a caller that asked to paginate —
-        // every existing caller (the "All" parties page, referenceStore) still
+        // every other caller (the till's party cache, the voucher pickers) still
         // gets the plain array it always has, unchanged.
         return NextResponse.json(
             paginate ? { items: normalised, nextCursor: nextBrowseCursor(persons, BROWSE_PAGE_SIZE) } : normalised,

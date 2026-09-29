@@ -101,8 +101,8 @@ export async function GET(req: Request) {
     const linesFor = (v: { universalVoucherId: number | null }) =>
         v.universalVoucherId != null ? (linesByUv.get(v.universalVoucherId) ?? []) : [];
 
-    // One bounded pass resolves every party id to its live Person/Company —
-    // following the conversion tombstone — so the Party cell never goes dead.
+    // One bounded pass resolves every party id to its Person/Company profile link
+    // for the Party cell.
     const partyLinks = await resolvePartyLinks(prisma, rows);
 
     const shaped = rows.map((v) => {

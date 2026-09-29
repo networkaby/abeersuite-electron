@@ -368,7 +368,7 @@ Note `PassRejectModal` is imported **only** by `TicketCard`, which is itself dea
 | `src/modules/ecommerce/components/AdminTabsNav.tsx` | 54 | its only use is commented out — `src/app/(protected)/office/ecommerce/layout.tsx:25-27` |
 | `src/shared/components/OfficeModuleHub.tsx` | 45 | |
 | `src/shared/components/DataPageHeader.tsx` | 35 | |
-| `src/store/referenceStore.ts` | 28 | named only inside comments |
+| `src/store/referenceStore.ts` | 28 | named only inside comments (deleted 2026-09-30) |
 | `src/shared/hooks/useBridgePresent.ts` | 25 | |
 | `src/shared/lib/auth/freeRoutes.ts` | 21 | **see E4 — read before deleting** (deleted 2026-09-27) |
 | `src/shared/lib/constants/index.ts` | 7 | empty barrel, everyone imports deep paths |
