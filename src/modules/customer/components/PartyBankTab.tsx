@@ -7,7 +7,8 @@
 // Two blocks:
 //   • NEFT/RTGS — beneficiary, bank, branch, A/C no, IFSC. A/C no and IFSC get
 //     a copy button, because those are the two values staff retype into
-//     net-banking and the two a typo is most expensive on.
+//     net-banking and the two a typo is most expensive on. Typing the IFSC
+//     fills a blank Bank Name / Branch from RBI's list (useIfscLookup).
 //   • UPI — the VPA, with a live scan-to-pay QR beside it.
 //
 // Stored as one JSON column (Person.bankJson / Company.bankJson) through the
@@ -23,6 +24,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { extractApiError } from "@/shared/lib/api";
 import { QrSvg } from "@/shared/components/print/QrSvg";
+import { IfscLookupHint } from "@/shared/components/IfscLookupHint";
+import { useIfscLookup } from "@/shared/hooks";
 import {
     PARTY_BANK_FIELDS, parsePartyBank, hasPartyBankData,
     buildPartyUpiLink, isValidIfsc, isValidVpa,
@@ -70,6 +73,7 @@ export default function PartyBankTab({ party, initialBank, canEdit, onSaved }: P
 
     const set = (key: keyof PartyBankFields, value: string) =>
         setBank((b) => ({ ...b, [key]: value }));
+    const ifsc = useIfscLookup(bank, (patch) => setBank((b) => ({ ...b, ...patch })));
 
     const isDirty = JSON.stringify(bank) !== JSON.stringify(baseline);
     const ifscBad = !isValidIfsc(bank.ifsc);
@@ -117,9 +121,9 @@ export default function PartyBankTab({ party, initialBank, canEdit, onSaved }: P
                                         placeholder={f.placeholder}
                                         aria-invalid={f.key === "ifsc" && ifscBad}
                                         onChange={(e) =>
-                                            set(f.key, f.key === "ifsc"
-                                                ? e.target.value.toUpperCase()
-                                                : e.target.value)
+                                            f.key === "ifsc"
+                                                ? ifsc.typeIfsc(e.target.value)
+                                                : set(f.key, e.target.value)
                                         }
                                     />
                                     {f.copyable && <CopyButton value={bank[f.key]} />}
@@ -127,10 +131,12 @@ export default function PartyBankTab({ party, initialBank, canEdit, onSaved }: P
                             </div>
                         ))}
                     </div>
-                    {ifscBad && (
+                    {ifscBad ? (
                         <p className="mt-2 text-xs text-destructive">
                             IFSC looks wrong — expected 4 letters, a 0, then 6 characters (e.g. SBIN0000123).
                         </p>
+                    ) : (
+                        <IfscLookupHint state={ifsc.state} onUse={ifsc.use} canUse={canEdit} className="mt-2" />
                     )}
                     <p className="mt-3 text-xs text-muted-foreground">
                         Used when we pay this {party.kind === "person" ? "person" : "company"} — a supplier

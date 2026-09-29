@@ -23,3 +23,4 @@ export { usePartyBrowseList, type BrowseListRow } from "./usePartyBrowseList";
 export { useFieldSave, type FieldSaveState } from "./useFieldSave";
 export { useClientPagination } from "./useClientPagination";
 export { useRegisterReads } from "./useRegisterReads";
+export { useIfscLookup, type IfscDetails, type IfscLookupState, type IfscPatch } from "./useIfscLookup";

@@ -16,7 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/shared/components/Field";
 import { FieldSaveMark } from "@/shared/components/FieldSaveMark";
 import { QueryStateBlock } from "@/shared/components/QueryStateBlock";
-import { useApiResource, useFieldSave } from "@/shared/hooks";
+import { IfscLookupHint } from "@/shared/components/IfscLookupHint";
+import { useApiResource, useFieldSave, useIfscLookup } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import {
     PARTY_BANK_FIELDS, hasPartyBankData, isValidIfsc, isValidVpa, parsePartyBank,
@@ -159,6 +160,7 @@ function BankBlock({ profile, canEdit, onSave, onSaved }: {
     const [saving, setSaving] = useState(false);
 
     const set = (key: keyof PartyBankFields, value: string) => setBank((b) => ({ ...b, [key]: value }));
+    const ifsc = useIfscLookup(bank, (patch) => setBank((b) => ({ ...b, ...patch })));
     const isDirty = JSON.stringify(bank) !== JSON.stringify(baseline);
     const ifscBad = !isValidIfsc(bank.ifsc);
     const vpaBad = !isValidVpa(bank.upiVpa);
@@ -194,7 +196,7 @@ function BankBlock({ profile, canEdit, onSave, onSaved }: {
                                 value={bank[f.key]}
                                 placeholder={f.placeholder}
                                 aria-invalid={f.key === "ifsc" && ifscBad}
-                                onChange={(e) => set(f.key, f.key === "ifsc" ? e.target.value.toUpperCase() : e.target.value)}
+                                onChange={(e) => (f.key === "ifsc" ? ifsc.typeIfsc(e.target.value) : set(f.key, e.target.value))}
                             />
                         )}
                     </Field>
@@ -212,7 +214,9 @@ function BankBlock({ profile, canEdit, onSave, onSaved }: {
                     )}
                 </Field>
             </div>
-            {ifscBad && <p className="mt-2 text-xs text-destructive">IFSC looks wrong — expected 4 letters, a 0, then 6 characters (e.g. SBIN0000123).</p>}
+            {ifscBad
+                ? <p className="mt-2 text-xs text-destructive">IFSC looks wrong — expected 4 letters, a 0, then 6 characters (e.g. SBIN0000123).</p>
+                : <IfscLookupHint state={ifsc.state} onUse={ifsc.use} canUse={canEdit} className="mt-2" />}
             {vpaBad && <p className="mt-2 text-xs text-destructive">UPI id looks wrong — expected something like name@okhdfcbank.</p>}
             <div className="mt-3 flex items-center gap-3">
                 <Button type="button" size="sm" disabled={!isDirty || saving || ifscBad || vpaBad} onClick={() => void submit()}>
