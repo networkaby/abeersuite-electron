@@ -10,7 +10,6 @@ import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { shopQualification, storefrontQualifiable } from "@/modules/ecommerce/lib/shopQualification";
 import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
-import { invProductDb } from "@/shared/types/inventoryTypes";
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import ShopCatalogClient from "@/modules/external/shop/ShopCatalogClient";
 import { loadShopAdContext } from "@/shared/lib/shop/adContext";
@@ -35,7 +34,7 @@ const loadBrandWithProducts = cache(async (slug: string) => {
         loadShopStockPolicy(),
         loadShopGroupIndex(),
     ]);
-    const rows = await invProductDb(prisma).findMany({
+    const rows = await prisma.invProduct.findMany({
         where: { brandId: brand.id, isListedInShop: true, isActive: true },
         include: { category: { select: { name: true } } },
         orderBy: { id: "asc" },

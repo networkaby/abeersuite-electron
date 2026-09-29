@@ -1,4 +1,4 @@
-import type { InvProductFull } from "@/shared/types/inventoryTypes";
+import type { InvProduct } from "@/generated/prisma/client";
 import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 // From groupTree, NOT groupCategory: this module is reached from client
 // components, and groupCategory imports prisma. See groupTree.ts.
@@ -94,7 +94,7 @@ export type ShopProductPublicOptions = {
  * existing non-storefront callers are unaffected.
  */
 export function invProductToPublic(
-    p: InvProductFull & { category?: { name: string } | null },
+    p: InvProduct & { category?: { name: string } | null },
     opts: ShopProductPublicOptions = {}
 ): ShopProductPublic {
     const { bands, avail, groupIndex } = opts;

@@ -7,7 +7,6 @@ import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { shopQualification, storefrontQualifiable } from "@/modules/ecommerce/lib/shopQualification";
 import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
-import { invProductDb } from "@/shared/types/inventoryTypes";
 import { handleApiError } from "@/shared/lib/api";
 
 export async function GET() {
@@ -18,7 +17,7 @@ export async function GET() {
             loadShopStockPolicy(),
             loadShopGroupIndex(),
         ]);
-        const products = await invProductDb(prisma).findMany({
+        const products = await prisma.invProduct.findMany({
             where: { isListedInShop: true, isActive: true },
             include: { category: { select: { name: true } } },
             orderBy: [{ shopCategory: "asc" }, { id: "asc" }],

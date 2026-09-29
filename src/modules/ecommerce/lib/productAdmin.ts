@@ -1,4 +1,4 @@
-import type { InvProductFull } from "@/shared/types/inventoryTypes";
+import type { InvProduct } from "@/generated/prisma/client";
 import { invProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 
@@ -37,7 +37,7 @@ export type ShopProductAdmin = ShopProductPublic & {
 };
 
 export function invProductToAdmin(
-    p: InvProductFull & {
+    p: InvProduct & {
         category?: { name: string } | null;
         brand?: { name: string } | null;
         group?: { name: string } | null;

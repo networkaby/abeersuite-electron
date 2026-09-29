@@ -7,7 +7,6 @@ import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { shopQualification, storefrontQualifiable } from "@/modules/ecommerce/lib/shopQualification";
 import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
-import { invProductDb } from "@/shared/types/inventoryTypes";
 import { handleApiError } from "@/shared/lib/api";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ handle: string }> }) {
@@ -16,7 +15,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ handle: string
         const decoded = decodeURIComponent(handle);
         const asId = /^\d+$/.test(decoded) ? parseInt(decoded, 10) : null;
 
-        const db = invProductDb(prisma);
+        const db = prisma.invProduct;
         const product = asId
             ? await db.findFirst({
                   where: { id: asId, isListedInShop: true, isActive: true },

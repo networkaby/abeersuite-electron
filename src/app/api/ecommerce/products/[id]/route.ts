@@ -5,7 +5,6 @@ import { invProductToAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
-import { invProductDb } from "@/shared/types/inventoryTypes";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
@@ -56,7 +55,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     if (!Number.isFinite(pid)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
     try {
         const bands = await loadBarcodeBands();
-        const p = await invProductDb(prisma).findUnique({ where: { id: pid }, include: productInclude });
+        const p = await prisma.invProduct.findUnique({ where: { id: pid }, include: productInclude });
         if (!p) return NextResponse.json({ error: "Not found" }, { status: 404 });
         return NextResponse.json(invProductToAdmin(p, bands));
     } catch (e) {
@@ -160,7 +159,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         data.isListedInShop = listing.isListedInShop;
         data.slug = listing.slug;
 
-        const p = await invProductDb(prisma).update({
+        const p = await prisma.invProduct.update({
             where: { id: pid },
             data,
             include: productInclude,
@@ -180,7 +179,7 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
     const pid = parseInt(id, 10);
     if (!Number.isFinite(pid)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
     try {
-        const p = await invProductDb(prisma).update({
+        const p = await prisma.invProduct.update({
             where: { id: pid },
             data: { isListedInShop: false, isActive: false },
             include: productInclude,

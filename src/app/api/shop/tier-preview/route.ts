@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePortalCustomer } from "@/shared/lib/auth/portalAuthGuard";
 import { resolvePortalAccountContext } from "@/shared/lib/auth/portalAccountContext";
-import { invProductDb } from "@/shared/types/inventoryTypes";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { barcodeTagPaise } from "@/shared/lib/pricing/barcodePrice";
@@ -51,7 +50,7 @@ export async function POST(req: Request) {
         // skipped, not errors: the cart page may hold a just-delisted item.
         const productIds = [...new Set(data.lines.map((l) => l.productId))];
         const [products, bands] = await Promise.all([
-            invProductDb(prisma).findMany({
+            prisma.invProduct.findMany({
                 where: { id: { in: productIds }, isListedInShop: true, isActive: true },
             }),
             loadBarcodeBands(),

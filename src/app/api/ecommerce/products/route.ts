@@ -5,7 +5,6 @@ import { invProductToAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
-import { invProductDb } from "@/shared/types/inventoryTypes";
 import { prismaUniqueError } from "@/shared/lib/api";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
@@ -59,7 +58,7 @@ export async function GET(req: Request) {
         const q = searchParams.get("q")?.trim();
         const shopCategory = searchParams.get("category")?.trim();
         const bands = await loadBarcodeBands();
-        const products = await invProductDb(prisma).findMany({
+        const products = await prisma.invProduct.findMany({
             where: {
                 ...(q ? {
                     OR: [
@@ -125,7 +124,7 @@ export async function POST(req: Request) {
             );
         }
 
-        const p = await invProductDb(prisma).create({
+        const p = await prisma.invProduct.create({
             data: {
                 sku,
                 name: b.name,

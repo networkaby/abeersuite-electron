@@ -4,7 +4,6 @@ import { z } from "zod";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { resolvePortalAccountContext } from "@/shared/lib/auth/portalAccountContext";
 import { requirePortalCustomer } from "@/shared/lib/auth/portalAuthGuard";
-import { invProductDb } from "@/shared/types/inventoryTypes";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
@@ -72,7 +71,7 @@ export async function POST(req: Request) {
 
         const productIds = [...new Set(lines.map((l) => l.productId))];
         const [products, bands, ordersPipeline, stockPolicy, srMethod] = await Promise.all([
-            invProductDb(prisma).findMany({
+            prisma.invProduct.findMany({
                 where: { id: { in: productIds }, isListedInShop: true, isActive: true },
             }),
             loadBarcodeBands(),

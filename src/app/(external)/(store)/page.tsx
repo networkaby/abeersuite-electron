@@ -8,7 +8,6 @@ import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { shopQualification, storefrontQualifiable } from "@/modules/ecommerce/lib/shopQualification";
 import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
-import { invProductDb } from "@/shared/types/inventoryTypes";
 import { STORE_PAGE_HEADING } from "@/shared/lib/shop/storeContent";
 import {
     resolveHomeSections,
@@ -176,7 +175,7 @@ export default async function StoreHomePage({
         loadHomeLayout(),
         loadShopAdContext(sp),
     ]);
-    const rows = await invProductDb(prisma).findMany({
+    const rows = await prisma.invProduct.findMany({
         where: { isListedInShop: true, isActive: true },
         include: { category: { select: { name: true } } },
         orderBy: [{ shopCategory: "asc" }, { id: "asc" }],

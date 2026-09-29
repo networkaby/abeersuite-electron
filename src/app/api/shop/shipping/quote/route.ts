@@ -2,7 +2,6 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
-import { invProductDb } from "@/shared/types/inventoryTypes";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { barcodeTagPaise } from "@/shared/lib/pricing/barcodePrice";
 import { quoteShipping } from "@/modules/delivery/lib/shippingQuote";
@@ -38,7 +37,7 @@ export async function POST(req: Request) {
 
         const productIds = [...new Set(lines.map((l) => l.productId))];
         const [products, bands, srMethod] = await Promise.all([
-            invProductDb(prisma).findMany({
+            prisma.invProduct.findMany({
                 where: { id: { in: productIds }, isListedInShop: true, isActive: true },
             }),
             loadBarcodeBands(),

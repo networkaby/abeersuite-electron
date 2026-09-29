@@ -6,7 +6,6 @@ import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { shopQualification, storefrontQualifiable } from "@/modules/ecommerce/lib/shopQualification";
 import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
-import { invProductDb } from "@/shared/types/inventoryTypes";
 import ShopPageBanner from "@/modules/external/shop/ShopPageBanner";
 import TrustStrip from "@/modules/external/store/TrustStrip";
 import BrandStrip from "@/modules/external/store/BrandStrip";
@@ -27,7 +26,7 @@ export default async function ShopCatalogPage({
         loadShopGroupIndex(),
         loadShopAdContext(sp),
     ]);
-    const rows = await invProductDb(prisma).findMany({
+    const rows = await prisma.invProduct.findMany({
         where: { isListedInShop: true, isActive: true },
         include: { category: { select: { name: true } } },
         orderBy: [{ shopCategory: "asc" }, { id: "asc" }],

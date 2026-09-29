@@ -1,5 +1,4 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { invProductDb } from "@/shared/types/inventoryTypes";
 import { invProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
@@ -86,7 +85,7 @@ export async function loadSimilarProducts(
 
     for (const groupIds of rungs) {
         if (picked.length >= limit) break;
-        const rows = await invProductDb(prisma).findMany({
+        const rows = await prisma.invProduct.findMany({
             where: {
                 isListedInShop: true,
                 isActive: true,

@@ -9,7 +9,6 @@ import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
-import { invProductDb } from "@/shared/types/inventoryTypes";
 import ProductGallery from "@/modules/external/shop/ProductGallery";
 import ProductPurchasePanel from "@/modules/external/shop/ProductPurchasePanel";
 import ProductDetailTabs from "@/modules/external/shop/ProductDetailTabs";
@@ -36,7 +35,7 @@ import { buildProductLd } from "@/shared/lib/seo/jsonLd";
  */
 const loadProduct = cache(async (handle: string, staffPreview: boolean) => {
     const decoded = decodeURIComponent(handle);
-    const db = invProductDb(prisma);
+    const db = prisma.invProduct;
     const [bands, policy, groupIndex] = await Promise.all([
         loadBarcodeBands(),
         loadShopStockPolicy(),
