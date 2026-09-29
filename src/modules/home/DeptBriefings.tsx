@@ -24,7 +24,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import {
     Wrench, ShoppingCart, DollarSign, Settings2, Package,
     Users, ChevronRight, AlertCircle, CheckCircle2,
-    FileText, BookOpen, CreditCard, ReceiptText,
+    FileText, BookOpen, CreditCard, ReceiptText, Coins, Banknote,
 } from "lucide-react";
 
 // ── Shared helpers ─────────────────────────────────────────────────────────────
@@ -186,11 +186,13 @@ export function FinanceBriefing() {
             color="bg-green-50 text-green-800"
         >
             <div className="grid grid-cols-2 gap-2">
-                <QuickLink href="/office/accountancy/daybook" icon={<BookOpen size={14} />} label="Day Book" />
-                <QuickLink href="/office/accountancy/receivables" icon={<CreditCard size={14} />} label="Receivables" />
-                <QuickLink href="/office/accountancy/cash-bank" icon={<DollarSign size={14} />} label="Cash &amp; Bank Book" />
-                <QuickLink href="/office/accountancy/gst" icon={<FileText size={14} />} label="GST Hub" />
-                <QuickLink href="/office/accountancy" icon={<ReceiptText size={14} />} label="Journals" />
+                {/* The sidebar's own addresses (nav.ts). Cash and Bank are two books there,
+                    so two tiles here; the old "Journals" tile only reopened the Day Book. */}
+                <QuickLink href="/office/accountancy/reports/day-book" icon={<BookOpen size={14} />} label="Day Book" />
+                <QuickLink href="/office/accountancy/reports/receivables" icon={<CreditCard size={14} />} label="Receivables" />
+                <QuickLink href="/office/accountancy/cash-ledgers" icon={<Coins size={14} />} label="Cash Book" />
+                <QuickLink href="/office/accountancy/bank-ledgers" icon={<Banknote size={14} />} label="Bank Book" />
+                <QuickLink href="/office/accountancy/reports/gst" icon={<FileText size={14} />} label="GST Hub" />
                 <QuickLink href="/office/accountancy/reports" icon={<FileText size={14} />} label="Reports" />
             </div>
         </BriefingCard>
