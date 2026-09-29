@@ -23,6 +23,7 @@ import { usePosBilling } from "@/modules/pos/hooks/usePosBilling";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { extractApiError } from "@/shared/lib/api";
 import { formatInr, todayIso } from "@/shared/lib/format";
+import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearchAndCreate";
 
 type QuoteMode = "order" | "estimate";
@@ -254,9 +255,10 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
             void qrDisplay.idle();
             b.resetAfterSubmit();
             if (printAfter) {
-                window.open(`/receipt/voucher/inv/${data.voucherId}`, "_blank", "noopener");
+                // Silent thermal like a POS sale; no printer → the 80mm format page.
+                await printVoucherThermal("inv", data.voucherId, mode === "order" ? "POS_ORDER" : "POS_ESTIMATE");
                 // Advance receipt prints as a second slip (GL voucher source).
-                if (data.receiptVoucherId) window.open(`/receipt/voucher/gl/${data.receiptVoucherId}`, "_blank", "noopener");
+                if (data.receiptVoucherId) await printVoucherThermal("gl", data.receiptVoucherId, "RECEIPT");
             }
         } catch (e: unknown) {
             toast.error(extractApiError(e, cfg.saveErr));
