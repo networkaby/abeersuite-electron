@@ -1,5 +1,6 @@
-import { VOUCHER_MATRIX, type VoucherAction } from "@/shared/lib/auth/voucherMatrix";
+import { VOUCHER_MATRIX, requiredVoucherPermission, type VoucherAction } from "@/shared/lib/auth/voucherMatrix";
 import { crudSatisfied } from "@/shared/lib/auth/crudLadder";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import type { VoucherType, InvVoucherType } from "@/generated/prisma/client";
 
 /**
@@ -113,6 +114,20 @@ export function canDoPosVoucher(
     const office = officeEquivalentPosPermission(kind, action);
     return crudSatisfied(set, posVoucherPermissionId(action, kind))
         || (!!office && crudSatisfied(set, office));
+}
+
+/**
+ * Create / Edit / Cancel / Delete on a voucher of `type` — one rule for the
+ * server (`userCanActOnVoucher`) and the voucher menus. POS Sale / Order /
+ * Estimate ride their POS-table row; an office kind needs its office-matrix key;
+ * a type with neither (online orders / invoices) passes. `"cancel"` is the
+ * Cancel / edit column.
+ */
+export function canActOnVoucher(type: string, action: PosAction, held: string[]): boolean {
+    const posKind = posKindForVoucherType(type);
+    if (posKind != null) return canDoPosVoucher(posKind, action, held, held.includes("admin:bypass"));
+    const perKind = requiredVoucherPermission(type, action);
+    return perKind == null || hasPermissionWithScope(held, perKind);
 }
 
 const ACTION_LABEL: Record<PosAction, string> =

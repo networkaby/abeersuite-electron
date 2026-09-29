@@ -16,7 +16,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
@@ -30,7 +30,9 @@ const expenditureSchema = z.object({
 });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { user, response } = await requirePermission(PERMISSIONS.POS_SHIFT_DROP);
+    // The POS table's Expense Create tick (office-equivalent key also counts) — the
+    // same tick the POS screen uses to show this tab. Not the Cash drop chip.
+    const { user, response } = await requirePosVoucher("expense", "create");
     if (response) return response;
 
     const { id: idStr } = await params;

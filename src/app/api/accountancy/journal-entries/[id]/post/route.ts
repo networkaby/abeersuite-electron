@@ -1,22 +1,27 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { isBalanced, applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { handleApiError } from "@/shared/lib/api";
 
 // POST /api/accountancy/journal-entries/[id]/post
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireModuleAccess("accountancy");
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;
 
     const entry = await prisma.universalVoucher.findUnique({
         where:  { id: Number(id) },
-        select: { status: true, deletedAt: true, lines: { select: { accountId: true, type: true, amount: true } } },
+        select: { type: true, status: true, deletedAt: true, lines: { select: { accountId: true, type: true, amount: true } } },
     });
     if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // The kind's Post tick (Journal → finance:voucher:post:journal), same as the
+    // GL voucher post route.
+    if (!userCanVoucher(user, entry.type, "post")) {
+        return NextResponse.json({ error: "You do not have permission to post this voucher kind." }, { status: 403 });
+    }
     if (entry.deletedAt) {
         return NextResponse.json({ error: "Cannot post a deleted entry — restore it first" }, { status: 409 });
     }

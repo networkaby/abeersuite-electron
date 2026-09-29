@@ -9,7 +9,7 @@ import { canDoPosVoucher } from "@/shared/lib/auth/posVoucherMatrix";
 // actions and mode tabs. `canDoPosVoucher` bakes in the office ⊇ POS rule.
 //
 // NOTE: this is client-side UI gating only — it hides controls. Real enforcement
-// lives in the APIs (requirePosVoucher on create, userCanChangeVoucher on edit /
+// lives in the APIs (requirePosVoucher on create, userCanActOnVoucher on edit /
 // cancel / delete); a hidden button is not a security boundary.
 export interface PosAccess {
     canSale: boolean;

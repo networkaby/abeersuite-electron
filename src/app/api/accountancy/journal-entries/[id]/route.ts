@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isBalanced, applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { validateRequest } from "@/shared/lib/api";
@@ -63,7 +63,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 // Operates directly on the spine (UniversalVoucher + VoucherGlLine) — the lone
 // GL representation since G5. `id` is the spine id.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { response } = await requireModuleAccess("accountancy");
+    const { user, response } = await requireAuth();
     if (response) return response;
 
     const { id } = await params;
@@ -73,6 +73,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         include: { lines: true },
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    // "Who can cancel can edit" — the kind's Cancel / edit tick (Journal →
+    // finance:voucher:cancel:journal), same as the GL voucher edit route.
+    if (!userCanVoucher(user, existing.type, "cancel")) {
+        return NextResponse.json({ error: "You do not have permission to edit this voucher kind." }, { status: 403 });
+    }
     if (existing.deletedAt) {
         return NextResponse.json({ error: "Entry is deleted — restore it first" }, { status: 409 });
     }

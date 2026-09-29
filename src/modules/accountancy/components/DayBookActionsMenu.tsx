@@ -37,7 +37,7 @@ import { apiBase, referenceHref, receiptHref, type ReceiptVariant } from "@/modu
 import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import { stashDuplicate, todayLocalISO, type DuplicateLine } from "@/modules/accountancy/lib/duplicate";
 import { convertTargets } from "@/modules/accountancy/lib/convertMap";
-import { canDoPosVoucher, posKindForVoucherType, type PosAction } from "@/shared/lib/auth/posVoucherMatrix";
+import { canActOnVoucher } from "@/shared/lib/auth/posVoucherMatrix";
 
 // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -67,18 +67,13 @@ export function DayBookActionsMenu({
 
     const base = apiBase(source, rawId);
 
-    // POS Sale / Order / Estimate: Edit, Cancel and Delete follow the Role page's
-    // POS table — the same check the server makes (userCanChangeVoucher). Other
-    // kinds show all three; their routes answer for themselves.
+    // Edit, Cancel and Delete follow the Role page's ticks for this kind — the
+    // same rule the server applies (canActOnVoucher): Cancel / edit for the
+    // first two, Delete for the last.
     const { data: session } = useSession();
-    const posKind = source === "inv" ? posKindForVoucherType(kind) : null;
-    const allowed = (action: PosAction) => {
-        if (posKind == null) return true;
-        const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-        return canDoPosVoucher(posKind, action, perms, perms.includes("admin:bypass"));
-    };
-    const canEdit   = allowed("cancel");
-    const canDelete = allowed("delete");
+    const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canEdit   = canActOnVoucher(kind, "cancel", perms);
+    const canDelete = canActOnVoucher(kind, "delete", perms);
 
     // ── The two print ways ───────────────────────────────────────────────────
     // "Print (thermal)" sends straight to the counter printer, like a POS sale —

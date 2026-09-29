@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, userCanChangeVoucher } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanActOnVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
@@ -60,7 +60,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // so it rides the voucher matrix rather than a separate admin-only gate.
     // POS Sale / Order / Estimate have no office row — they need their POS-table
     // Delete tick; online orders and invoices pass through.
-    if (!userCanChangeVoucher(user, voucher.type, "delete")) {
+    if (!userCanActOnVoucher(user, voucher.type, "delete")) {
         return NextResponse.json({ error: "You do not have permission to delete this voucher kind." }, { status: 403 });
     }
 

@@ -14,10 +14,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
 import { MoreVertical, Pencil, Ban, Trash2, Copy, Printer } from "lucide-react";
 import { extractApiError } from "@/shared/lib/api";
+import { canActOnVoucher } from "@/shared/lib/auth/posVoucherMatrix";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,6 +56,13 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
     const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
     const [reason, setReason] = useState("");
     const [busy, setBusy] = useState(false);
+
+    // Edit / Cancel / Delete follow the Role page's ticks for this kind — the
+    // same rule as the Day Book menu and the server (canActOnVoucher).
+    const { data: session } = useSession();
+    const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canEdit   = canActOnVoucher(voucherType, "cancel", perms);
+    const canDelete = canActOnVoucher(voucherType, "delete", perms);
 
     const hasEditableForm = voucherType in EDIT_FORM_URLS;
 
@@ -145,16 +154,22 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
-                    <DropdownMenuItem onSelect={goEdit} disabled={busy}>
-                        <Pencil className="size-4" /> Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={startCancel}>
-                        <Ban className="size-4" /> Cancel
-                    </DropdownMenuItem>
-                    <DropdownMenuItem variant="destructive" onSelect={startDelete}>
-                        <Trash2 className="size-4" /> Delete
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
+                    {canEdit && (
+                        <DropdownMenuItem onSelect={goEdit} disabled={busy}>
+                            <Pencil className="size-4" /> Edit
+                        </DropdownMenuItem>
+                    )}
+                    {canEdit && (
+                        <DropdownMenuItem onSelect={startCancel}>
+                            <Ban className="size-4" /> Cancel
+                        </DropdownMenuItem>
+                    )}
+                    {canDelete && (
+                        <DropdownMenuItem variant="destructive" onSelect={startDelete}>
+                            <Trash2 className="size-4" /> Delete
+                        </DropdownMenuItem>
+                    )}
+                    {(canEdit || canDelete) && <DropdownMenuSeparator />}
                     <DropdownMenuItem onSelect={duplicate} disabled={busy}>
                         <Copy className="size-4" /> Duplicate
                     </DropdownMenuItem>

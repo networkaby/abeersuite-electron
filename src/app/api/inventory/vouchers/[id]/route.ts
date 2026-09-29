@@ -3,8 +3,7 @@ import { PRE_EDIT_ACTION } from "@/shared/lib/accountancy/auditSnapshotKind";
 import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
-import { requireAuth, userCanChangeVoucher } from "@/shared/lib/auth/permissions";
-import { posKindForVoucherType } from "@/shared/lib/auth/posVoucherMatrix";
+import { requireAuth, userCanActOnVoucher } from "@/shared/lib/auth/permissions";
 import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { round2 } from "@/shared/lib/format";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
@@ -149,10 +148,10 @@ export async function PATCH(req: Request, { params }: Params) {
     if (existing.universalVoucher?.status === "CANCELLED") {
         return NextResponse.json({ error: "Voucher is cancelled — use Duplicate to create a fresh copy." }, { status: 409 });
     }
-    // A POS Sale / Order / Estimate edit needs its POS-table Cancel / edit tick.
-    // Office kinds keep their existing page-level gate.
-    const existingType = existing.universalVoucher?.type ?? "";
-    if (posKindForVoucherType(existingType) != null && !userCanChangeVoucher(user, existingType, "cancel")) {
+    // "Who can cancel can edit" — the kind's Cancel / edit tick, draft or posted,
+    // the same rule the GL voucher edit applies. POS Sale / Order / Estimate ride
+    // their POS-table row (userCanActOnVoucher).
+    if (!userCanActOnVoucher(user, existing.universalVoucher?.type ?? "", "cancel")) {
         return NextResponse.json({ error: "You do not have permission to edit this voucher kind." }, { status: 403 });
     }
 
@@ -625,7 +624,7 @@ export async function DELETE(_req: Request, { params }: Params) {
     }
     // Same Delete tick as hard-delete — a POS Estimate flipped to Draft from the
     // register must not become a way round it (and this removal skips the Recycle Bin).
-    if (!userCanChangeVoucher(user, existing.universalVoucher?.type ?? "", "delete")) {
+    if (!userCanActOnVoucher(user, existing.universalVoucher?.type ?? "", "delete")) {
         return NextResponse.json({ error: "You do not have permission to delete this voucher kind." }, { status: 403 });
     }
     await prisma.voucherInventoryLine.deleteMany({ where: { universalVoucherId: existing.universalVoucherId ?? -1 } });

@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { systemBranchId } from "@/shared/lib/org/systemBranch";
 import { Prisma, type InvVoucherType } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanActOnVoucher } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
@@ -34,6 +34,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             include: { universalVoucher: { select: { partyAccountId: true, description: true, type: true, branchId: true } } },   // 5D-4 party + 5D-5 description + 5D-11 type + 5D-12 branch on spine
         });
         if (!source) return NextResponse.json({ error: "Not found" }, { status: 404 });
+        // A copy is a new voucher of the same kind — it needs that kind's Create
+        // tick, the same gate the create route applies.
+        if (!userCanActOnVoucher(user, source.universalVoucher?.type ?? "", "create")) {
+            return NextResponse.json({ error: "You do not have permission to create this voucher kind." }, { status: 403 });
+        }
         // Phase 5 5C: source goods lines hang off the source's spine.
         const sourceLines = await prisma.voucherInventoryLine.findMany({
             where: { universalVoucherId: source.universalVoucherId ?? -1 },

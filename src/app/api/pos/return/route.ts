@@ -32,10 +32,9 @@ import { NextResponse } from "next/server";
 import { after } from "next/server";
 import { z } from "zod";
 import { buildPartyJson, readPartyName } from "@/shared/lib/accountancy/partySnapshot";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { invNextRef, calcLineTotals } from "@/modules/inventory/lib/stock";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
@@ -64,7 +63,9 @@ class GlPostFailedError extends Error {
 }
 
 export async function POST(req: Request) {
-    const { user, response } = await requirePermission(PERMISSIONS.POS_SHIFT_OPEN);
+    // The POS table's Sale Return Create tick (office Sale Return key also counts) —
+    // same gate as the lost-bill return. A cash refund still needs an open shift.
+    const { user, response } = await requirePosVoucher("sale-return", "create");
     if (response) return response;
 
     const { data, error } = await validateRequest(req, returnSchema);

@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
-import { requireAuth, userCanChangeVoucher } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanActOnVoucher } from "@/shared/lib/auth/permissions";
 import { applyLineBalances, toNumber } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { reverseStockMovement, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
@@ -37,7 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // Per-kind cancel gate. Office kinds need their matrix cancel key; POS Sale /
     // Order / Estimate need their POS-table Cancel / edit tick; online orders and
     // invoices pass through (gated by their own flow).
-    if (!userCanChangeVoucher(user, voucher.type, "cancel")) {
+    if (!userCanActOnVoucher(user, voucher.type, "cancel")) {
         return NextResponse.json({ error: "You do not have permission to cancel this voucher kind." }, { status: 403 });
     }
 

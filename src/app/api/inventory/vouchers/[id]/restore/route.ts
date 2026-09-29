@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
-import { requireAuth, userCanChangeVoucher } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanActOnVoucher } from "@/shared/lib/auth/permissions";
 import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { deleteCancelCounterRows, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
@@ -54,7 +54,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     };
 
     // Same per-kind gate as cancel: whoever may cancel this kind may restore it.
-    if (!userCanChangeVoucher(user, voucher.type, "cancel")) {
+    if (!userCanActOnVoucher(user, voucher.type, "cancel")) {
         return NextResponse.json({ error: "You do not have permission to restore this voucher kind." }, { status: 403 });
     }
 

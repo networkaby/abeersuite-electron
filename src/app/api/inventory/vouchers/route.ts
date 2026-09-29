@@ -3,7 +3,7 @@ import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 import { NO_PARTY_LINK, partyLinkFields } from "@/shared/lib/parties/partyLink";
 import { resolvePartyAccountId, resolvePartyLinks } from "@/shared/lib/parties/partyLinkServer";
 import { NextResponse, type NextRequest } from "next/server";
-import { requireAuth, userCanVoucherKind } from "@/shared/lib/auth/permissions";
+import { requireAuth, userCanVoucherKind, userCanActOnVoucher } from "@/shared/lib/auth/permissions";
 import { calcLineTotals, calcVoucherTotals } from "@/modules/inventory/lib/stock";
 import { round2 } from "@/shared/lib/format";
 import { InvVoucherType, Prisma, type InvVoucherDeliveryMode } from "@/generated/prisma/client";
@@ -349,10 +349,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Per-kind create gate — a matrix voucher kind requires its own create key
-    // (`inventory:voucher:create:<kind>`) or the generic `inventory:edit` fallback
-    // (admin:bypass also passes). POS / online channel variants aren't in the
-    // matrix, so they pass through to their own flow's gating, unchanged.
-    if (!userCanVoucherKind(user, type, "create")) {
+    // (`inventory:voucher:create:<kind>`; admin:bypass also passes). POS Sale /
+    // Order / Estimate need their POS-table Create tick — this is how Convert
+    // (Estimate → POS Order) creates one. Online variants pass through.
+    if (!userCanActOnVoucher(user, type, "create")) {
         return NextResponse.json({ error: "You do not have permission to create this voucher kind." }, { status: 403 });
     }
     // Posting in the same request still needs the POST key, exactly as the separate
