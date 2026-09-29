@@ -3,6 +3,7 @@
 // the create and the edit ledger dialog; kept here so they share one copy.
 
 import axios from "axios";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 
 export type GroupType = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 
@@ -29,6 +30,23 @@ export function flattenGroups(nodes: GroupNode[], depth = 0, out: GroupOption[] 
         flattenGroups(n.children ?? [], depth + 1, out);
     }
     return out;
+}
+
+/** True when the group is Sundry Debtors / Sundry Creditors or any sub-group
+ *  beneath them — the client-side twin of `partyLedgerIds`. Leans on
+ *  flattenGroups' depth-first order: walking back up the list, the first row
+ *  one level shallower is the parent. */
+export function isPartyGroup(groups: GroupOption[], groupId: number | null): boolean {
+    let i = groups.findIndex((g) => g.id === groupId);
+    if (i < 0) return false;
+    let depth = groups[i].depth;
+    for (; i >= 0 && depth >= 0; i--) {
+        if (groups[i].depth !== depth) continue;
+        const name = groups[i].name;
+        if (name === ACCOUNT_GROUPS.SUNDRY_DEBTORS || name === ACCOUNT_GROUPS.SUNDRY_CREDITORS) return true;
+        depth--;
+    }
+    return false;
 }
 
 /** A ledger's normal balance is inherited from its group's accounting nature. */

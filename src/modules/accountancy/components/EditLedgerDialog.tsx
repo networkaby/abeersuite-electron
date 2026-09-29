@@ -29,7 +29,7 @@ import {
     type ParticularsState,
 } from "@/modules/accountancy/lib/ledgerParticulars";
 import {
-    loadGroupOptions, type GroupOption,
+    loadGroupOptions, isPartyGroup, type GroupOption,
 } from "@/modules/accountancy/lib/groupOptions";
 import { formatAliasInput, parseAliasInput } from "@/modules/accountancy/lib/accountAlias";
 
@@ -99,6 +99,12 @@ export function EditLedgerDialog({
     }, [open, groupsProp]);
 
     const selectedGroupName = groups.find((g) => g.id === groupId)?.name;
+    // Bill-wise acts on the SAVED ledger, so both the saved group and the one
+    // picked here must be a party group — moving it out hides the button at
+    // once, moving it in shows it only after Save.
+    const billWise = !!ledger
+        && isPartyGroup(groups, ledger.groupId)
+        && isPartyGroup(groups, groupId);
 
     const save = async () => {
         if (!ledger) return;
@@ -181,9 +187,9 @@ export function EditLedgerDialog({
                             Opening Balance <span className="font-normal text-muted-foreground">— leave blank to clear</span>
                         </p>
                         {/* For a party, one figure is rarely one bill. Breaking it up
-                            lets each piece age and be settled on its own; the dialog
-                            itself says so when this ledger is not a party. */}
-                        {ledger && (
+                            lets each piece age and be settled on its own. A bank,
+                            expense or capital opening has no bills behind it. */}
+                        {billWise && (
                             <Button
                                 type="button" size="sm" variant="outline"
                                 className="mb-3"
