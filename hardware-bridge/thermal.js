@@ -1152,6 +1152,27 @@ async function buildVoucherBuffer(data) {
     return printer.getBuffer();
 }
 
+// ── Cash drawer ───────────────────────────────────────────────────────────────
+//
+// The drawer hangs off the printer's RJ11 socket and opens on ESC p m t1 t2: a pulse on
+// pin m, t1×2 ms on and t2×2 ms off. Written out in full rather than through
+// node-thermal-printer's openCashDrawer(), which sends only `ESC p m` — the printer then
+// reads the next two bytes as t1/t2, so its pin-5 kick is swallowed by the pin-2 one and
+// a stray byte lands on the slip. Both pins, because a drawer is wired to either and a
+// pulse on the empty pin does nothing.
+const DRAWER_KICK = Buffer.from([
+    0x1b, 0x70, 0x00, 0x19, 0xfa,   // pin 2 — 50 ms on, 500 ms off
+    0x1b, 0x70, 0x01, 0x19, 0xfa,   // pin 5
+]);
+
+// A slip opens the drawer only when the app asks — a fresh sale, Rcv, Exp or cash refund
+// where cash changed hands, never a reprint — AND this PC says a drawer is fitted. The
+// kick goes FIRST, so the drawer opens while the slip prints and still opens when the
+// paper has run out: the sale is already saved and the customer is waiting for change.
+function withDrawerKick(cfg, payload, buffer) {
+    return cfg.cashDrawer && payload && payload.openDrawer ? Buffer.concat([DRAWER_KICK, buffer]) : buffer;
+}
+
 // ── Send buffer ───────────────────────────────────────────────────────────────
 
 function sendNetwork(ip, port, buffer) {
@@ -1380,7 +1401,7 @@ function start({ getConfig, setConfig }) {
             const { invoiceNumber, lines } = payload || {};
             if (!invoiceNumber || !lines) throw new Error("Missing required fields: invoiceNumber, lines");
             const cfg = getConfig();
-            await sendBuffer(cfg, await buildPosBuffer(payload));
+            await sendBuffer(cfg, withDrawerKick(cfg, payload, await buildPosBuffer(payload)));
             console.log(`[thermal] POS printed: ${invoiceNumber}`);
             return { ok: true };
         },
@@ -1394,8 +1415,16 @@ function start({ getConfig, setConfig }) {
                 throw new Error("Missing required field: sample.lines");
             }
             const cfg = getConfig();
-            await sendBuffer(cfg, await buildVoucherBuffer(payload));
+            await sendBuffer(cfg, withDrawerKick(cfg, payload, await buildVoucherBuffer(payload)));
             console.log(`[thermal] Voucher printed: ${(sample && sample.reference) || (body && `Shift #${body.id}`) || ""}`);
+            return { ok: true };
+        },
+
+        // The "Open drawer" test on Printer Settings — the kick alone, no slip. Ignores
+        // the cashDrawer tick on purpose: it is how the wiring is checked before ticking.
+        "drawer:open": async () => {
+            await sendBuffer(getConfig(), DRAWER_KICK);
+            console.log("[thermal] drawer opened (test)");
             return { ok: true };
         },
     };
@@ -1438,4 +1467,4 @@ function start({ getConfig, setConfig }) {
     if (cfg.connectionType === "windows") console.log(`[thermal] windows printer: ${cfg.windowsPrinterName}`);
 }
 
-module.exports = { start, buildPosBuffer, buildVoucherBuffer };
+module.exports = { start, buildPosBuffer, buildVoucherBuffer, withDrawerKick, DRAWER_KICK };

@@ -21,6 +21,7 @@ import { CheckoutDialog } from "@/modules/pos/components/CheckoutDialog";
 import { ClearBillDialog } from "@/modules/pos/components/ClearBillDialog";
 import { PaymentLinkDialog } from "@/modules/pos/components/PaymentLinkDialog";
 import { PosScreenShell } from "@/modules/pos/components/PosScreenShell";
+import { movesCash } from "@/modules/pos/components/TenderEntry";
 import { usePosBilling } from "@/modules/pos/hooks/usePosBilling";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { extractApiError } from "@/shared/lib/api";
@@ -197,6 +198,8 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
         }
         const advance = paymentsList.reduce((s, p) => s + p.amount, 0);
         if (advance > b.total + 0.01) { toast.error("Advance can't exceed the order total"); return; }
+        // Read before resetAfterSubmit clears the tenders: a cash advance opens the drawer.
+        const cashAdvance = mode === "order" && movesCash(b.pay);
         b.setSubmitting(true);
         try {
             const today = todayIso();
@@ -266,8 +269,9 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
             if (printAfter) {
                 // Silent thermal like a POS sale; no printer → the 80mm format page.
                 await printVoucherThermal("inv", data.voucherId, printKind);
-                // Advance receipt prints as a second slip (GL voucher source).
-                if (data.receiptVoucherId) await printVoucherThermal("gl", data.receiptVoucherId, "RECEIPT");
+                // Advance receipt prints as a second slip (GL voucher source) — the
+                // slip that records the cash is the one that opens the drawer.
+                if (data.receiptVoucherId) await printVoucherThermal("gl", data.receiptVoucherId, "RECEIPT", { openDrawer: cashAdvance });
             }
         } catch (e: unknown) {
             toast.error(extractApiError(e, cfg.saveErr));

@@ -328,3 +328,23 @@ test("SHIFT_CLOSE signature obeys the template toggle", async () => {
     assert.ok(on.includes("Manager Signature"), "Manager signature shown when toggle is on");
 });
 
+test("drawer kick: full five-byte ESC p on both pins", () => {
+    assert.deepEqual(
+        [...rest.DRAWER_KICK],
+        [0x1b, 0x70, 0x00, 0x19, 0xfa, 0x1b, 0x70, 0x01, 0x19, 0xfa],
+    );
+});
+
+test("drawer opens only when the PC has one AND the slip asks — kick first", async () => {
+    const slip = await buildPosBuffer(posPayload());
+    const both = rest.withDrawerKick({ cashDrawer: true }, { openDrawer: true }, slip);
+    assert.deepEqual(both.subarray(0, rest.DRAWER_KICK.length), rest.DRAWER_KICK);
+    assert.deepEqual(both.subarray(rest.DRAWER_KICK.length), slip);
+    // A reprint (no openDrawer) or a PC without a drawer sends the slip untouched.
+    assert.equal(rest.withDrawerKick({ cashDrawer: true },  {},                   slip), slip);
+    assert.equal(rest.withDrawerKick({ cashDrawer: false }, { openDrawer: true }, slip), slip);
+    assert.equal(rest.withDrawerKick({},                     { openDrawer: true }, slip), slip);
+    // The slip itself never carries a kick on its own.
+    assert.ok(!slip.includes(Buffer.from([0x1b, 0x70])));
+});
+

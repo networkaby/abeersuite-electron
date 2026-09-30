@@ -275,7 +275,8 @@ export function PosReturnDialog({
                  : mode === "GIFT_CARD" ? "put back on the gift card"
                  : "credit note issued")
             );
-            if (print) void printVoucherThermal("inv", data.returnVoucherId, "SALE_RETURN");
+            // A cash refund comes out of the drawer; credit note / gift card does not.
+            if (print) void printVoucherThermal("inv", data.returnVoucherId, "SALE_RETURN", { openDrawer: mode === "CASH" });
             onDone();
             onOpenChange(false);
             reset();

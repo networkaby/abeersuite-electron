@@ -61,7 +61,8 @@ export function PosExpenditureDialog({
             });
             toast.success(`Expenditure ${data.voucherRef} · ₹${rupees.toFixed(2)}`);
             // Silent thermal print of the payment voucher (selection page only as fallback).
-            if (print) void printVoucherThermal("gl", data.voucherId, "PAYMENT");
+            // Always paid in cash from the drawer, so the slip always opens it.
+            if (print) void printVoucherThermal("gl", data.voucherId, "PAYMENT", { openDrawer: true });
             onDone();
             onOpenChange(false);
         } catch (e: unknown) {

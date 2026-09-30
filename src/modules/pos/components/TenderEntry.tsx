@@ -20,6 +20,10 @@ import { formatInr } from "@/shared/lib/format";
 
 export type PayState = { cashTendered: number; cashReturn: number };
 
+/** Paper money changed hands — notes taken in or change given back. The slip for
+ *  such a sale / receipt opens the cash drawer; a UPI- or card-only one does not. */
+export const movesCash = (pay: PayState): boolean => pay.cashTendered > 0.005 || pay.cashReturn > 0.005;
+
 export function TenderEntry({
     accounts, splits, setSplits,
     pay, setPay, cashTenderedRef,

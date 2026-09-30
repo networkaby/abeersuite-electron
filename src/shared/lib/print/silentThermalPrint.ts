@@ -5,6 +5,13 @@ import { toast } from "sonner";
 import { receiptHref, voucherPrintPageHref, type VoucherSource } from "@/modules/accountancy/lib/voucherUrls";
 
 /**
+ * `openDrawer` — the counter just took or paid out cash for this voucher (a
+ * fresh Rcv, Exp, cash refund or order advance), so the slip also opens the
+ * cash drawer, if Printer Settings says this PC has one. Never set on a reprint.
+ */
+type ThermalPrintOpts = { openDrawer?: boolean };
+
+/**
  * Silent thermal print of a Day-Book voucher — the way a POS sale prints:
  * no page, no dialog. Fetches the bridge payload from
  * `/api/print/thermal/[source]/[id]` and sends it over the bridge.
@@ -13,14 +20,14 @@ import { receiptHref, voucherPrintPageHref, type VoucherSource } from "@/modules
  * bridge, no printer of any type in Printer Settings, or the send failed — so
  * the caller can fall back to the format-selection page.
  */
-export async function printVoucherThermalSilently(source: VoucherSource, rawId: number): Promise<boolean> {
+export async function printVoucherThermalSilently(source: VoucherSource, rawId: number, opts: ThermalPrintOpts = {}): Promise<boolean> {
     try {
         if (!await bridgeOk("thermal", 1200)) return false;
         if (!await thermalPrinterConfigured()) return false;
         const res = await fetch(`/api/print/thermal/${source}/${rawId}`, { cache: "no-store" });
         if (!res.ok) return false;
-        const { cmd, payload } = (await res.json()) as { cmd: string; payload: unknown };
-        await bridgeRequest("thermal", cmd, payload);
+        const { cmd, payload } = (await res.json()) as { cmd: string; payload: object };
+        await bridgeRequest("thermal", cmd, opts.openDrawer ? { ...payload, openDrawer: true } : payload);
         return true;
     } catch {
         return false;
@@ -34,8 +41,8 @@ export async function printVoucherThermalSilently(source: VoucherSource, rawId: 
  * the 80mm view). `kind` picks the page: POS / ONLINE_INVOICE → the invoice
  * page, RECEIPT / PAYMENT → the payment slip, anything else → generic.
  */
-export async function printVoucherThermal(source: VoucherSource, rawId: number, kind: string): Promise<void> {
-    if (await printVoucherThermalSilently(source, rawId)) {
+export async function printVoucherThermal(source: VoucherSource, rawId: number, kind: string, opts: ThermalPrintOpts = {}): Promise<void> {
+    if (await printVoucherThermalSilently(source, rawId, opts)) {
         toast.success("Sent to thermal printer");
         return;
     }

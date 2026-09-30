@@ -18,6 +18,7 @@ import { PaymentLinkDialog } from "@/modules/pos/components/PaymentLinkDialog";
 import { CheckoutDialog } from "@/modules/pos/components/CheckoutDialog";
 import { ClearBillDialog } from "@/modules/pos/components/ClearBillDialog";
 import { PosScreenShell } from "@/modules/pos/components/PosScreenShell";
+import { movesCash } from "@/modules/pos/components/TenderEntry";
 import { usePosBilling, parseAmt } from "@/modules/pos/hooks/usePosBilling";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { bridgeOk, bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
@@ -430,10 +431,13 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                         // Total GST embedded in the bill (goods + shipping/tax-bearing
                         // charges) — additive field, older relays ignore it.
                         taxTotal: printLadder.taxTotal,
+                        // Cash taken → the slip opens the drawer (if this PC has one).
+                        openDrawer: movesCash(pay),
                     }).catch(() => toast.error("Thermal print failed"));
                     // Overpayment booked a separate Receipt voucher (RV-…). On a
                     // relay setup it prints on the SAME thermal printer — the tender
-                    // breakdown lives here, not on the sale slip above.
+                    // breakdown lives here, not on the sale slip above. The drawer
+                    // already opened with the sale slip, so this one never asks.
                     if (data.receiptPrint) {
                         void bridgeRequest("thermal", "print/voucher", data.receiptPrint)
                             .catch(() => toast.error("Receipt voucher print failed"));

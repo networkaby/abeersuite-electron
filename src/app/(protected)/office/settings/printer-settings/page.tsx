@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { GatedLink } from "@/shared/components/GatedLink";
-import { Loader2, Wifi, Usb, Monitor, CheckCircle, XCircle, RefreshCw, Printer, Download } from "lucide-react";
+import { Loader2, Wifi, Usb, Monitor, CheckCircle, XCircle, RefreshCw, Printer, Download, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { BridgeNotRunningNotice } from "@/modules/settings/components/BridgeNotRunningNotice";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +34,9 @@ interface RelayConfig {
     printerPort: number;
     comPort: string;
     windowsPrinterName: string;
+    /** A cash drawer is plugged into this printer: a fresh bill that took or paid
+     *  out cash opens it (hardware-bridge/thermal.js `withDrawerKick`). */
+    cashDrawer: boolean;
     /**
      * Not editable here and never printed: the slip header comes from the print
      * template (headerLine1, filled from the Organisation). Kept in the saved
@@ -51,6 +55,7 @@ const DEFAULT: RelayConfig = {
     printerPort: 9100,
     comPort: "",
     windowsPrinterName: "",
+    cashDrawer: false,
     companyName: "",
     relayPort: 9191,
     deviceId: null,
@@ -82,6 +87,7 @@ export default function PrinterSettingsPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState(false);
+    const [kicking, setKicking] = useState(false);
     const [winPrinters, setWinPrinters] = useState<string[]>([]);
     const [comPorts, setComPorts] = useState<string[]>([]);
     const [portsLoading, setPortsLoading] = useState(false);
@@ -245,6 +251,20 @@ export default function PrinterSettingsPage() {
             toast.error(err instanceof Error ? err.message : "Test failed");
         } finally {
             setTesting(false);
+        }
+    };
+
+    // Kick alone, to the SAVED printer — works before the tick is on, so the wiring
+    // can be checked first.
+    const handleDrawerTest = async () => {
+        setKicking(true);
+        try {
+            await bridgeRequest("thermal", "drawer:open");
+            toast.success("Drawer signal sent — it should pop open");
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Could not reach the drawer");
+        } finally {
+            setKicking(false);
         }
     };
 
@@ -469,6 +489,34 @@ export default function PrinterSettingsPage() {
                             </div>
                         </div>
                     )}
+
+                    {/* Cash drawer — hangs off the printer's drawer socket, so it is set
+                        per PC, beside the printer it is plugged into. */}
+                    <div className="rounded-lg border border-border bg-card p-5 space-y-3">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Cash Drawer</p>
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="space-y-1">
+                                <Label htmlFor="cash-drawer">Open the cash drawer when a bill prints</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    For a drawer plugged into this printer. Opens on a new Sale, Rcv or order advance
+                                    that takes cash, on every Exp, and on a cash refund — never on a UPI- or card-only
+                                    bill, and never on a reprint. Without a thermal printer set here the bill prints
+                                    from the browser, which cannot open the drawer; turn on the drawer option in the
+                                    Windows printer driver instead.
+                                </p>
+                            </div>
+                            <Switch
+                                id="cash-drawer"
+                                checked={config.cashDrawer}
+                                onCheckedChange={(v) => setConfig((c) => ({ ...c, cashDrawer: v }))}
+                            />
+                        </div>
+                        <Button variant="outline" size="sm" onClick={handleDrawerTest} disabled={kicking || !relayUp}>
+                            {kicking ? <Loader2 size={14} className="animate-spin" /> : <Inbox size={14} />}
+                            Open Drawer
+                        </Button>
+                        <p className="text-xs text-muted-foreground">Uses the saved printer — Save first if you just changed it.</p>
+                    </div>
 
                     <div className="flex gap-3">
                         <Button variant="outline" onClick={handleTest} disabled={testing || !relayUp}>

@@ -30,7 +30,7 @@ import {
     type PickedParty,
 } from "@/shared/components/PartySearchAndCreate";
 import { type TenderSplit, type TenderAccount } from "@/modules/pos/components/TenderSplitInput";
-import { type PayState } from "@/modules/pos/components/TenderEntry";
+import { type PayState, movesCash } from "@/modules/pos/components/TenderEntry";
 import { CheckoutDialog } from "@/modules/pos/components/CheckoutDialog";
 import { PaymentLinkDialog } from "@/modules/pos/components/PaymentLinkDialog";
 import { extractApiError } from "@/shared/lib/api";
@@ -133,7 +133,7 @@ export function PosReceiptDialog({
                 note:      note.trim() || undefined,
             });
             toast.success(`Receipt ${data.voucherRef} · ${formatInr(total)} from ${party.name}`);
-            if (printAfter) void printVoucherThermal("gl", data.voucherId, "RECEIPT");
+            if (printAfter) void printVoucherThermal("gl", data.voucherId, "RECEIPT", { openDrawer: movesCash(pay) });
             onDone();
             onOpenChange(false);
         } catch (e: unknown) {
