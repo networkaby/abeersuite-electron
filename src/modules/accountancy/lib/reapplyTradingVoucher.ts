@@ -18,6 +18,7 @@ import { GlBuildError, type PostVoucherInput } from "./postInvVoucher";
 import { recomputeAccountBalances } from "./aggregateLedger";
 import { assertGlBalanced, glLineRow } from "./transactionEngine";
 import { recordStockMovement, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
+import { retreatReconciliation } from "./reconciliation";
 
 export async function reapplyTradingVoucherInPlace(
     tx: Prisma.TransactionClient,
@@ -31,9 +32,12 @@ export async function reapplyTradingVoucherInPlace(
         /// The EXISTING JE to rewrite in place (kept — never re-minted). Null for
         /// stock-only trading types (GRN/CHALLAN/REJECTION) that never had a JE.
         journalEntryId: number | null;
+        /// The voucher's date BEFORE this edit — the reconciliation lock retreats
+        /// from the earlier of it and the edited date.
+        previousDate:   Date;
     },
 ): Promise<number | null> {
-    const { voucher, branchId, lines, journalEntryId } = args;
+    const { voucher, branchId, lines, journalEntryId, previousDate } = args;
 
     // Recompute the spec (GL lines + stock moves) from the edited voucher.
     const spec = await saleToSpec(tx, voucher, { branchId, lines });
@@ -80,7 +84,16 @@ export async function reapplyTradingVoucherInPlace(
             })),
         });
 
-        await recomputeAccountBalances(tx, [...new Set([...oldAccountIds, ...spec.glLines.map((l) => l.accountId)])]);
+        const touched = [...new Set([...oldAccountIds, ...spec.glLines.map((l) => l.accountId)])];
+        await recomputeAccountBalances(tx, touched);
+
+        // A backdated edit dirties the reconciled window of every ledger it
+        // touches — and the lines were just re-minted, so any bank tick on the
+        // old ones is stale and must be re-made, which a frozen line cannot be.
+        // Retreat from the earlier of the old and new dates, as every other
+        // voucher edit does (see reconciliation.ts).
+        const newDate = new Date(voucher.date);
+        await retreatReconciliation(tx, touched, previousDate < newDate ? previousDate : newDate);
     }
 
     // ── Stock: replace this voucher's ledger rows, then recompute on-hand ─────

@@ -137,7 +137,7 @@ export async function PATCH(req: Request, { params }: Params) {
     const id = Number(idStr);
     if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
-    const existing = await prisma.voucherDetail.findUnique({ where: { id }, include: { universalVoucher: { select: { voucherNo: true, status: true, deletedAt: true, type: true } } } });   // 5D-6/5D-8/5D-11
+    const existing = await prisma.voucherDetail.findUnique({ where: { id }, include: { universalVoucher: { select: { voucherNo: true, status: true, deletedAt: true, type: true, date: true } } } });   // 5D-6/5D-8/5D-11
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Phase 5 5C: capture old line product ids (goods hang off the spine) for the
     // after-commit pricing recompute — the lines themselves are rewritten below.
@@ -559,6 +559,7 @@ export async function PATCH(req: Request, { params }: Params) {
                     branchId:       fresh.branchId,
                     lines:          fresh.lines,
                     journalEntryId: existing.universalVoucherId,
+                    previousDate:   existing.universalVoucher?.date ?? fresh.date,
                 });
                 // G4d: reapply resyncs the spine (delete + re-mirror → new spine id);
                 // refresh the direct link so InvVoucher.universalVoucherId stays valid.

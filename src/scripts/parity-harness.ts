@@ -596,6 +596,7 @@ async function runEditCycle(): Promise<boolean> {
                 branchId:       branch.id,
                 lines:          edited!.lines,
                 journalEntryId: saleJe,
+                previousDate:   new Date(),
             });
 
             // 3. Assertions.

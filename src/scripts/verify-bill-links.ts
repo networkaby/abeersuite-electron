@@ -286,6 +286,7 @@ async function main(): Promise<void> {
                     branchId:       "",
                     lines:          [],
                     journalEntryId: editable,
+                    previousDate:   new Date(),
                 });
             } catch (e) { refusedRebuild = e; }
             check("an edit whose payment rows no longer cover the total is refused",
