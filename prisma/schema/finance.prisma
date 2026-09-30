@@ -447,6 +447,10 @@ model VoucherPrintTemplate {
   showTaxSummaryThermal    Boolean @default(true)
   showMrp                  Boolean @default(true) // struck-through MRP on the customer price ladder (POS/SALE)
   showMrpThermal           Boolean @default(true)
+  // The note typed on a goods line (serial no., colour, config) — printed
+  // under the item name. On by default: a serial on the bill is the warranty.
+  showLineNote             Boolean @default(true)
+  showLineNoteThermal      Boolean @default(true)
   showSignature            Boolean @default(false)
   showSignatureThermal     Boolean @default(false)
   showQrCode               Boolean @default(false) // dormant (not yet rendered)

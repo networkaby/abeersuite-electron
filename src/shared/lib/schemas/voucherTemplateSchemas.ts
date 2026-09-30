@@ -32,6 +32,8 @@ export const voucherTemplateUpdateSchema = z.object({
     showTaxSummaryThermal:    z.boolean().optional(),
     showMrp:                  z.boolean().optional(),
     showMrpThermal:           z.boolean().optional(),
+    showLineNote:             z.boolean().optional(),
+    showLineNoteThermal:      z.boolean().optional(),
     showSignature:            z.boolean().optional(),
     showSignatureThermal:     z.boolean().optional(),
     showQrCode:               z.boolean().optional(),

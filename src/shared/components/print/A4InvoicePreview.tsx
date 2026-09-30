@@ -203,7 +203,7 @@ function inlineA4Styles(scope: string): string {
         ${s}table.goods .item { font-weight: 600; }
         /* Line remark — indented under the item name so it reads as a note on
            the item, never as a second product. */
-        ${s}table.goods .note {
+        ${s}table.goods .note, ${s}table.lines .note {
             font-weight: 400;
             font-style: italic;
             color: #555;
@@ -1105,7 +1105,7 @@ function GoodsTable({
                         <td className="ctr">{startIndex + i + 1}</td>
                         <td>
                             <div className="item">{l.description}</div>
-                            {l.note && <div className="note">{l.note}</div>}
+                            {template.showLineNote && l.note && <div className="note">{l.note}</div>}
                         </td>
                         {anyHsn && <td className="ctr">{l.hsn ?? ""}</td>}
                         {anyMrp && <td className="num">{l.mrp ? fmtINR(l.mrp).replace("Rs. ", "") : "—"}</td>}
@@ -1355,7 +1355,10 @@ function DefaultA4Middle({ template, sample, page }: A4ChromeProps & { page?: Pa
                                 return (
                                     <tr key={i}>
                                         <td className="sn">{startSerial + i + 1}</td>
-                                        <td>{l.description}</td>
+                                        <td>
+                                            {l.description}
+                                            {template.showLineNote && l.note && <div className="note">{l.note}</div>}
+                                        </td>
                                         <td className="qty">{l.quantity}</td>
                                         {template.showMrp && (
                                             <td className="rate">
@@ -1772,7 +1775,7 @@ const MIN_LINES_PER_SHEET = 3;
 
 function paginateGoods(sample: ThermalReceiptSample, template: VoucherTemplateDefaults): PageSlice[] {
     const lines = sample.lines;
-    const rowMm = (l: ThermalReceiptSample["lines"][number]) => ROW_MM + (l.note ? NOTE_MM : 0);
+    const rowMm = (l: ThermalReceiptSample["lines"][number]) => ROW_MM + (template.showLineNote && l.note ? NOTE_MM : 0);
     const sumMm = (ls: typeof lines) => ls.reduce((s, l) => s + rowMm(l), 0);
 
     // Everything that must sit under the last line: ledger rows, Total, words,

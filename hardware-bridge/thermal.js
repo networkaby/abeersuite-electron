@@ -224,6 +224,15 @@ function printDisclaimer(printer, t) {
 
 // The preview prints `sample.date` exactly as the page supplied it (an ISO day
 // "2026-09-06" or a preformatted "06 Sept 2026, 05:30"), so the slip does too.
+// The goods line's note (serial no. / colour the cashier typed), indented under
+// the item, behind the template's showLineNote. A template from a server older
+// than the flag carries no key at all — that reads as on, the flag's default.
+function printLineNote(printer, t, note) {
+    const text = String(note || "").trim();
+    if (!text || t.showLineNote === false) return;
+    printer.tableCustom([{ text: `  ${text}`, align: "LEFT", width: 1 }]);
+}
+
 function displayDate(d) {
     return d == null ? "" : String(d);
 }
@@ -491,6 +500,7 @@ async function buildPosBuffer(data) {
             { text: String(line.qty),  align: "RIGHT", width: 0.15 },
             { text: fmtAmt(lineAmt),   align: "RIGHT", width: 0.35 },
         ]);
+        printLineNote(printer, t, line.note);
         // MRP reference, struck through (rasterized — escpos has no strike-through
         // text style). Gated by the template's showMrp toggle. Falls back to plain
         // text if the raster fails.
@@ -1061,6 +1071,7 @@ async function buildVoucherBuffer(data) {
             { text: String(line.quantity ?? ""), align: "RIGHT", width: 0.15 },
             { text: fmtAmt(line.amount),         align: "RIGHT", width: 0.35 },
         ]);
+        printLineNote(printer, t, line.note);
         // Struck MRP sub-line (raster — escpos has no strike-through), gated by
         // the template, only in ladder mode (matches the browser slip).
         if (t.showMrp && sample.discounts && line.mrp != null && line.mrp > Number(line.amount) + 0.005) {

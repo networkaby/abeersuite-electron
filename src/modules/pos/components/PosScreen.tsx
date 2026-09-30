@@ -388,6 +388,8 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                             const ll = printLadder.lines[i];
                             return {
                                 name: l.name,
+                                // Serial no. / colour typed in the line's Note box.
+                                note: l.description.trim() || null,
                                 qty: l.qty,
                                 unitPrice: l.unitPrice,
                                 amount: l.qty * l.unitPrice,

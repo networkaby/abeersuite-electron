@@ -248,7 +248,7 @@ function kindSample(kind: VoucherTemplateKind): ThermalReceiptSample {
     const today = new Date().toISOString().slice(0, 10);
     const productLines: ThermalReceiptSample["lines"] = [
         { description: "Logitech B100 USB Mouse", quantity: 2, amount: 598 },
-        { description: "HP Laptop 14s Charger",   quantity: 1, amount: 1499 },
+        { description: "HP Laptop 14s Charger",   quantity: 1, amount: 1499, note: "SN 5CG1234XYZ" },
         { description: "TP-Link Cat6 Cable 5m",   quantity: 3, amount: 597 },
     ];
     const cashLine: ThermalReceiptSample["lines"] = [
@@ -327,7 +327,7 @@ function kindSample(kind: VoucherTemplateKind): ThermalReceiptSample {
                 partyName: "Rahul Das", partyPhone: null, partyGstin: null,
                 lines: [
                     { description: "Logitech B100 USB Mouse", quantity: 2, amount: 700,  mrp: 800,  barcode: 700 },
-                    { description: "HP Laptop 14s Charger",   quantity: 1, amount: 1600, mrp: 1800, barcode: 1600 },
+                    { description: "HP Laptop 14s Charger",   quantity: 1, amount: 1600, mrp: 1800, barcode: 1600, note: "SN 5CG1234XYZ" },
                     { description: "TP-Link Cat6 Cable 5m",   quantity: 3, amount: 700,  mrp: 800,  barcode: 700 },
                 ],
                 subtotal: 3000, taxAmount: 345.51, total: 2315,
@@ -367,7 +367,7 @@ function kindSample(kind: VoucherTemplateKind): ThermalReceiptSample {
                 partyName: "Akramul Jakir", partyPhone: "+91 90000 00000", partyGstin: null,
                 lines: [
                     { description: "Logitech B100 USB Mouse", quantity: 2, amount: 700,  mrp: 800,  barcode: 700 },
-                    { description: "HP Laptop 14s Charger",   quantity: 1, amount: 1600, mrp: 1800, barcode: 1600 },
+                    { description: "HP Laptop 14s Charger",   quantity: 1, amount: 1600, mrp: 1800, barcode: 1600, note: "SN 5CG1234XYZ" },
                     { description: "TP-Link Cat6 Cable 5m",   quantity: 3, amount: 700,  mrp: 800,  barcode: 700 },
                 ],
                 subtotal: 3000, taxAmount: 391.27, total: 2615,

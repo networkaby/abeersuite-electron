@@ -19,6 +19,7 @@ import { buildPartyDepositSlip, loadSlipDenominations } from "@/modules/accounta
 import { paymentInstrumentText } from "@/shared/lib/constants/accounting";
 import { partyBalanceAroundVoucher } from "@/shared/lib/accountancy/partyLedgerBalance";
 import { getThermalTemplate } from "@/shared/lib/print/voucherTemplate";
+import { splitLineDescription } from "@/shared/lib/print/lineDescription";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { computeGstSplit, gstinDerivedStateCode } from "@/shared/lib/gst/computeGstSplit";
 import { stateNameForCode } from "@/shared/lib/gst/indianStates";
@@ -137,25 +138,11 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     const v = { ...vRow, lines: invLines, account };
 
     const party = partyFromAccount(v.account);
-    // Strip the POS "<sku> — <name>" prefix so the printed line reads cleanly.
-    const lineName = (l: (typeof v.lines)[number]): string => {
-        const desc = (l.description ?? "").trim();
-        const sku  = l.product?.sku;
-        if (sku && desc.startsWith(`${sku} — `)) return desc.slice(sku.length + 3);
-        return desc || l.product?.name || "";
-    };
-    // On the office trading form `description` is the per-line NOTE, not the
-    // item name — it is only the name on POS-style rows that carry no product.
-    // Print the product name as the item and the note under it; using the note
-    // as the name (the old behaviour) silently renamed the item on the invoice.
-    const itemName = (l: (typeof v.lines)[number]): string => l.product?.name || lineName(l);
-    const itemNote = (l: (typeof v.lines)[number]): string | null => {
-        const desc = (l.description ?? "").trim();
-        if (!desc || !l.product?.name) return null;
-        // Only suppress it when it merely repeats the item name — otherwise it
-        // is a genuine remark the user typed and belongs on the invoice.
-        return desc === l.product.name ? null : desc;
-    };
+    // The item prints as the item and the note (the office form's remark, or the
+    // serial the cashier typed after POS's "<sku> — <name> · ") prints under it.
+    // Using the note as the name (the old behaviour) silently renamed the item.
+    const itemName = (l: (typeof v.lines)[number]): string => splitLineDescription(l.description, l.product).name;
+    const itemNote = (l: (typeof v.lines)[number]): string | null => splitLineDescription(l.description, l.product).note;
 
     let subtotal  = toNumber(v.subtotal);
     let taxAmount = toNumber(v.taxAmount);

@@ -16,6 +16,7 @@ import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { round2 } from "@/shared/lib/format";
 import { loadBillSettlementPrint } from "@/modules/accountancy/lib/billSettlementPrint";
+import { splitLineDescription } from "@/shared/lib/print/lineDescription";
 
 // Shared invoice-print body for InvVoucher-shaped sales. Extracted so both
 // the staff print surface (`/receipt/invoice/[id]`, any voucher, full paper/
@@ -89,15 +90,9 @@ export default async function InvoiceReceipt({
     const partyPhone = owner?.phones[0]?.phone ?? null;
     const partyGstin = owner?.gstin ?? null;   // B2B tax invoice prints the buyer GSTIN
 
-    // Customer receipt shows the clean product name. POS bakes an internal
-    // "<sku> — <name>" prefix into the stored line description; strip the SKU so
-    // the customer sees just the product (keeping any "· note" the cashier added).
-    const lineName = (l: (typeof voucher.lines)[number]): string => {
-        const desc = (l.description ?? "").trim();
-        const sku  = l.product?.sku;
-        if (sku && desc.startsWith(`${sku} — `)) return desc.slice(sku.length + 3);
-        return desc || l.product?.name || "";
-    };
+    // Customer receipt shows the clean product name, with the line's note
+    // (serial no. / colour the cashier typed) as its own field under it.
+    const lineText = (l: (typeof voucher.lines)[number]) => splitLineDescription(l.description, l.product);
 
     const templateP = getVoucherTemplate(kind);
     const [template, org, loyaltyConfig, couponConfig, taxByProduct, spendTiers, paid] = await Promise.all([
@@ -229,7 +224,7 @@ export default async function InvoiceReceipt({
         ? computePriceLadder(
             {
                 lines: voucher.lines.map((l) => ({
-                    description: lineName(l),
+                    description: lineText(l).name,
                     qty:         lineQty(l),
                     mrpPaise:    l.mrpPaise,
                     barcodePaise: l.savedSalePricePaise,
@@ -272,8 +267,10 @@ export default async function InvoiceReceipt({
             const eff = Number(l.amount);
             const freeQty = Number(l.freeQty ?? 0);
             const isFreeLine = Number(l.quantity) === 0 && freeQty > 0;
+            const text = lineText(l);
             return {
-                description: lineName(l),
+                description: text.name,
+                note:        text.note,
                 quantity:    isFreeLine ? freeQty : Number(l.quantity),
                 // Ladder mode shows the gross-at-tag (barcode) amount; falls back
                 // to the charged amount when no barcode was snapshotted. Free
@@ -338,8 +335,10 @@ export default async function InvoiceReceipt({
             const lad = ladder?.lines[i];
             const qty = Number(l.quantity);
             const rate = Number(l.rate);
+            const text = lineText(l);
             return {
-                name:      lineName(l),
+                name:      text.name,
+                note:      text.note,
                 qty,
                 unitPrice: rate,
                 amount:    qty * rate,

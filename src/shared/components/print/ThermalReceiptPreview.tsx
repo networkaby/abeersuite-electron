@@ -454,6 +454,7 @@ function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateD
                         <tr key={i}>
                             <td>
                                 {l.description}
+                                {template.showLineNote && l.note && <div className="small">{l.note}</div>}
                                 {template.showMrp && sample.discounts && l.mrp != null && l.mrp > l.amount + 0.005 && (
                                     <div className="small">MRP <s>{fmtINR(l.mrp)}</s></div>
                                 )}

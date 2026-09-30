@@ -98,6 +98,7 @@ const SHOW_HIDE_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: BoolTem
     // total block always print. The thermal slip carries no such table.
     { label: "HSN tax analysis table", a4: "showTaxSummary", thermal: "showTaxSummaryThermal", a4Only: true },
     { label: "MRP (struck)",   a4: "showMrp",           thermal: "showMrpThermal" },
+    { label: "Line note (serial no. / colour)", a4: "showLineNote", thermal: "showLineNoteThermal" },
     { label: "Signature",      a4: "showSignature",     thermal: "showSignatureThermal" },
     { label: "Barcode",        a4: "showBarcode",       thermal: "showBarcodeThermal" },
     { label: "Bank details",   a4: "showBank",          thermal: "showBankThermal" },
@@ -133,13 +134,13 @@ const PAYSLIP_ELEMENTS: { label: string; a4: BoolTemplateKey; thermal: BoolTempl
 // table, tax or barcode — hide those toggles for them. Branch address follows
 // NO_BRANCH_ADDRESS_KINDS instead: Shift Close prints its shift's branch.
 const BESPOKE_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>([
-    "showTaxSummary", "showMrp", "showBarcode",
+    "showTaxSummary", "showMrp", "showLineNote", "showBarcode",
 ]);
 const BESPOKE_KINDS = new Set<VoucherTemplateKind>(["REPAIR_TICKET", "SHIPPING_SLIP", "SERVICE_SHIPPING_LABEL", "DELIVERY_SHIPPING_LABEL", "COUPON", "GIFT_CARD", "SHIFT_CLOSE", "PAYSLIP"]);
 // A Receipt / Payment is a receipt-book slip with no goods — no HSN table, no
-// MRP to strike — so those two switches would do nothing on it.
+// MRP to strike, no line note — so those switches would do nothing on it.
 const MONEY_KINDS = new Set<VoucherTemplateKind>(["RECEIPT", "PAYMENT"]);
-const MONEY_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>(["showTaxSummary", "showMrp"]);
+const MONEY_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>(["showTaxSummary", "showMrp", "showLineNote"]);
 // The cards read only logo / brand / phone (foot) — the rest of the chrome has no place on them.
 const CARD_KINDS = new Set<VoucherTemplateKind>(["COUPON", "GIFT_CARD"]);
 const CARD_HIDDEN_ELEMENTS = new Set<BoolTemplateKey>([

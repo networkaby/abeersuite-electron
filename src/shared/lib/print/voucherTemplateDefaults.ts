@@ -431,6 +431,8 @@ export interface VoucherTemplateDefaults {
     showPhone: boolean;              showPhoneThermal: boolean;
     showTaxSummary: boolean;         showTaxSummaryThermal: boolean;
     showMrp: boolean;                showMrpThermal: boolean;
+    // The note typed on a goods line (serial no., colour) under the item name.
+    showLineNote: boolean;           showLineNoteThermal: boolean;
     showSignature: boolean;          showSignatureThermal: boolean;
     showBarcode: boolean;            showBarcodeThermal: boolean;
     showBank: boolean;               showBankThermal: boolean;   // shop bank details block
@@ -491,6 +493,7 @@ export function buildVoucherTemplateDefaults(kind: VoucherTemplateKind): Voucher
         showPhone: true,                                 showPhoneThermal: true,
         showTaxSummary: !NO_TAX_SUMMARY.has(kind),       showTaxSummaryThermal: !NO_TAX_SUMMARY.has(kind),
         showMrp: true,                                   showMrpThermal: true,
+        showLineNote: true,                              showLineNoteThermal: true,
         showSignature: WITH_SIGNATURE.has(kind),         showSignatureThermal: WITH_SIGNATURE.has(kind),
         showBarcode: BARCODE_KINDS.has(kind),            showBarcodeThermal: BARCODE_KINDS.has(kind),
         showBank: false,                                 showBankThermal: false,
@@ -559,6 +562,7 @@ export type VoucherPrintTemplateRow = {
     showPhone?: boolean | null;               showPhoneThermal?: boolean | null;
     showTaxSummary?: boolean | null;          showTaxSummaryThermal?: boolean | null;
     showMrp?: boolean | null;                 showMrpThermal?: boolean | null;
+    showLineNote?: boolean | null;            showLineNoteThermal?: boolean | null;
     showSignature?: boolean | null;           showSignatureThermal?: boolean | null;
     showQrCode?: boolean | null;
     showBarcode?: boolean | null;             showBarcodeThermal?: boolean | null;
@@ -616,6 +620,8 @@ export function rowToVoucherTemplateDefaults(row: VoucherPrintTemplateRow): Vouc
         showTaxSummaryThermal:    row.showTaxSummaryThermal    ?? f.showTaxSummaryThermal,
         showMrp:                  row.showMrp                  ?? f.showMrp,
         showMrpThermal:           row.showMrpThermal           ?? f.showMrpThermal,
+        showLineNote:             row.showLineNote             ?? f.showLineNote,
+        showLineNoteThermal:      row.showLineNoteThermal      ?? f.showLineNoteThermal,
         showSignature:            row.showSignature            ?? f.showSignature,
         showSignatureThermal:     row.showSignatureThermal     ?? f.showSignatureThermal,
         showQrCode:               row.showQrCode               ?? f.showQrCode,
@@ -685,6 +691,7 @@ export function resolveTemplateForFormat(
         showPhone:         t.showPhoneThermal,
         showTaxSummary:    t.showTaxSummaryThermal,
         showMrp:           t.showMrpThermal,
+        showLineNote:      t.showLineNoteThermal,
         showSignature:     t.showSignatureThermal,
         showBarcode:       t.showBarcodeThermal,
         showBank:          t.showBankThermal,

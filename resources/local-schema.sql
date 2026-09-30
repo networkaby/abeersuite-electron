@@ -1383,6 +1383,8 @@ CREATE TABLE IF NOT EXISTS "VoucherPrintTemplate" (
     "showTaxSummaryThermal" BOOLEAN NOT NULL DEFAULT true,
     "showMrp" BOOLEAN NOT NULL DEFAULT true,
     "showMrpThermal" BOOLEAN NOT NULL DEFAULT true,
+    "showLineNote" BOOLEAN NOT NULL DEFAULT true,
+    "showLineNoteThermal" BOOLEAN NOT NULL DEFAULT true,
     "showSignature" BOOLEAN NOT NULL DEFAULT false,
     "showSignatureThermal" BOOLEAN NOT NULL DEFAULT false,
     "showQrCode" BOOLEAN NOT NULL DEFAULT false,
@@ -1455,6 +1457,8 @@ ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showTaxSummary" BOO
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showTaxSummaryThermal" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showMrp" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showMrpThermal" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showLineNote" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showLineNoteThermal" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showSignature" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showSignatureThermal" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "VoucherPrintTemplate" ADD COLUMN IF NOT EXISTS "showQrCode" BOOLEAN NOT NULL DEFAULT false;

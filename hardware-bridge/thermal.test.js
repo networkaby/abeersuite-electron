@@ -150,6 +150,40 @@ const moneyPayload = (kind, tpl = {}) => ({
     },
 });
 
+test("POS: line note (serial) prints under the item unless showLineNote is off", async () => {
+    const withNote = (tpl) => {
+        const p = posPayload(tpl);
+        p.lines = [{ ...p.lines[0], note: "SN 11142677" }];
+        return p;
+    };
+    const on = text(await buildPosBuffer(withNote({ showLineNote: true })));
+    assert.ok(on.includes("SN 11142677"));
+    assert.ok(on.indexOf("SN 11142677") > on.indexOf("Adapater ASUS"), "note sits under the item");
+    // A template from a server that predates the flag has no key — still prints.
+    assert.ok(!("showLineNote" in baseTemplate));
+    assert.ok(text(await buildPosBuffer(withNote({}))).includes("SN 11142677"));
+    const off = text(await buildPosBuffer(withNote({ showLineNote: false })));
+    assert.ok(!off.includes("SN 11142677"));
+});
+
+test("print/voucher: line note prints under the item unless showLineNote is off", async () => {
+    const payload = (showLineNote) => ({
+        kind: "POS",
+        template: { ...baseTemplate, showLineNote },
+        sample: {
+            reference: "POS-940787-26",
+            date: "2026-09-06",
+            partyName: "Mezanur Rahman",
+            lines: [{ description: "Fingerprint Scanner Mantra MFS110 L1", note: "11142677", quantity: 1, amount: 2900 }],
+            subtotal: 2900, taxAmount: 442.37, total: 2900,
+        },
+    });
+    const on = text(await buildVoucherBuffer(payload(true)));
+    assert.ok(on.includes("11142677"));
+    assert.ok(on.indexOf("11142677") > on.indexOf("Fingerprint"), "note sits under the item");
+    assert.ok(!text(await buildVoucherBuffer(payload(false))).includes("11142677"));
+});
+
 test("RECEIPT via print/voucher: money middle mirrors the preview", async () => {
     const out = text(await buildVoucherBuffer(moneyPayload("RECEIPT")));
     assert.ok(out.includes("Received from:"));
