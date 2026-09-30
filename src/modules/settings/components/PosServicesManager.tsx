@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/shared/components/NumericInput";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
@@ -225,11 +226,12 @@ export function PosServicesManager() {
                             ))}
                         </SelectContent>
                     </Select>
-                    <Input
+                    <NumericInput
+                        mode="decimal"
+                        min={0}
                         value={draftPriceStr}
-                        onChange={(e) => setDraftPriceStr(e.target.value.replace(/[^\d.]/g, ""))}
+                        onValueChange={setDraftPriceStr}
                         placeholder="Price ₹ (optional)"
-                        inputMode="decimal"
                         className="h-8 text-right text-sm"
                     />
                     <Button size="sm" onClick={() => void addService()} disabled={saving}>

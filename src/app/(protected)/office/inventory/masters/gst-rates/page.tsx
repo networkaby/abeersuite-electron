@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
 import { useDeleteWithConfirm } from "@/shared/hooks";
+import { parseDecimalInput } from "@/shared/lib/format";
 
 type Row = { id: number; rate: string; label: string; description: string | null; isActive: boolean };
 
@@ -104,7 +105,7 @@ export default function GstRatesPage() {
                                 type="text"
                                 placeholder="e.g. 18"
                                 value={form.rate}
-                                onChange={(e) => setForm((f) => ({ ...f, rate: e.target.value.replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1") }))}
+                                onChange={(e) => setForm((f) => ({ ...f, rate: parseDecimalInput(e.target.value) }))}
                             />
                         </div>
                         <div className="space-y-2">

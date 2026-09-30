@@ -48,7 +48,7 @@ const EMPTY_PRODUCTS: never[] = [];
 const EMPTY_CART: never[] = [];
 const NOOP = () => {};
 import { PosBillSummary } from "@/modules/pos/components/PosBillSummary";
-import { formatInr } from "@/shared/lib/format";
+import { formatInr, parseDecimalInput } from "@/shared/lib/format";
 import { useApiResource } from "@/shared/hooks";
 import type { TaskPositionOption } from "@/modules/administration/lib/types";
 import type { PosBilling } from "@/modules/pos/hooks/usePosBilling";
@@ -779,9 +779,7 @@ function PriceInput({
             onKeyDown={onKeyDown}
             onChange={(e) => {
                 // Allow digits + a single decimal point only.
-                let raw = e.target.value.replace(/[^\d.]/g, "");
-                const dot = raw.indexOf(".");
-                if (dot !== -1) raw = raw.slice(0, dot + 1) + raw.slice(dot + 1).replace(/\./g, "");
+                const raw = parseDecimalInput(e.target.value);
                 setDraft(raw);
                 onCommit(parseFloat(raw) || 0);
             }}

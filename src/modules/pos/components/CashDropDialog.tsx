@@ -13,7 +13,7 @@ import {
     Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/shared/components/NumericInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { extractApiError } from "@/shared/lib/api";
@@ -67,12 +67,12 @@ export function CashDropDialog({
                 <div className="space-y-4 py-2">
                     <div className="space-y-1.5">
                         <Label htmlFor="drop-amount">Amount dropped (₹)</Label>
-                        <Input
+                        <NumericInput
                             id="drop-amount"
-                            type="text"
-                            inputMode="decimal"
+                            mode="decimal"
+                            min={0}
                             value={amount}
-                            onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))}
+                            onValueChange={setAmount}
                             placeholder="5000"
                             autoFocus
                         />

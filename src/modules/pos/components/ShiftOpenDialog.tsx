@@ -23,7 +23,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/shared/components/NumericInput";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { fmt } from "@/shared/lib/format/moneyInr";
@@ -241,12 +241,12 @@ export function ShiftOpenDialog({
                             <Label htmlFor="vault-topup" className="flex items-center gap-1.5">
                                 <Banknote size={13} /> Add fresh cash from vault (₹)
                             </Label>
-                            <Input
+                            <NumericInput
                                 id="vault-topup"
-                                type="text"
-                                inputMode="decimal"
+                                mode="decimal"
+                                min={0}
                                 value={vaultTopUp}
-                                onChange={(e) => setVaultTopUp(e.target.value.replace(/[^\d.]/g, ""))}
+                                onValueChange={setVaultTopUp}
                                 placeholder="0"
                             />
                             <p className="text-xs text-muted-foreground">

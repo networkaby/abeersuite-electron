@@ -9,6 +9,7 @@ import { extractApiError } from "@/shared/lib/api";
 import { formatRupees } from "@/shared/lib/format/moneyInr";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { parseDecimalInput, parseDigitsInput } from "@/shared/lib/format";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
@@ -21,14 +22,9 @@ interface CreditLimitConfig {
     roundToStep: number;
 }
 
-const digitsOnly = (s: string): string => s.replace(/\D/g, "");
-// Digits + a single dot (repo rule: no <input type="number">).
-const decimalOnly = (s: string): string => {
-    const cleaned = s.replace(/[^\d.]/g, "");
-    const firstDot = cleaned.indexOf(".");
-    if (firstDot === -1) return cleaned;
-    return cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
-};
+// Repo rule: no <input type="number"> — the shared sanitisers, digits + a single dot.
+const digitsOnly = parseDigitsInput;
+const decimalOnly = parseDecimalInput;
 
 export function CreditLimitConfigForm() {
     const [data, setData] = useState<CreditLimitConfig | null>(null);

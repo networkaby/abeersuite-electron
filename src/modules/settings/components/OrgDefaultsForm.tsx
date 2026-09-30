@@ -9,6 +9,7 @@ import { invalidateOrgDefaultsCache } from "@/shared/lib/orgDefaults";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/shared/components/NumericInput";
 import { Label } from "@/components/ui/label";
 import {
     Select,
@@ -457,15 +458,13 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
                 </div>
                 <div className="max-w-[260px] space-y-1">
                     <Label className="text-xs">Clearance margin cutoff (%)</Label>
-                    <Input
-                        type="text"
+                    <NumericInput
+                        mode="decimal"
+                        min={0}
                         className="h-9"
                         placeholder="e.g. 1"
                         value={String(draft.clearanceMarginCutoffPct ?? "")}
-                        onChange={(e) => {
-                            const v = e.target.value.replace(/[^0-9.]/g, "");
-                            set("clearanceMarginCutoffPct", v);
-                        }}
+                        onValueChange={(v) => set("clearanceMarginCutoffPct", v)}
                     />
                     <p className="text-[10px] text-muted-foreground">
                         A sale at pre-tax price ≤ cost × (1 + this%) counts as clearance — stock leaving, never demand.

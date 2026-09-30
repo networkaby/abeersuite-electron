@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
-import { toDateTimeLocalInput } from "@/shared/lib/format";
+import { parseRupeesToPaise, toDateTimeLocalInput } from "@/shared/lib/format";
+import { NumericInput } from "@/shared/components/NumericInput";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,14 +27,6 @@ const UNASSIGNED = "__none__";
 const SOURCES = ["Walk-in", "Phone", "Website", "Referral", "Social", "Exhibition", "Other"];
 
 type Linked = { kind: "person" | "company"; id: number; name: string };
-
-/** "1234.50" → 123450 paise; blank/invalid → null. */
-function rupeesToPaise(v: string): number | null {
-    const cleaned = v.replace(/[^0-9.]/g, "");
-    if (!cleaned) return null;
-    const n = Number(cleaned);
-    return Number.isFinite(n) ? Math.round(n * 100) : null;
-}
 
 export default function DealFormDialog({
     open,
@@ -108,7 +101,7 @@ export default function DealFormDialog({
             phone: phone.trim() || null,
             email: email.trim() || null,
             companyName: companyName.trim() || null,
-            valuePaise: rupeesToPaise(value),
+            valuePaise: parseRupeesToPaise(value),
             source: source || null,
             priority,
             assignedPositionId: assignedPositionId === UNASSIGNED ? null : assignedPositionId,
@@ -225,7 +218,7 @@ export default function DealFormDialog({
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="deal-value">Deal value (₹)</Label>
-                            <Input id="deal-value" inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="e.g. 45000" />
+                            <NumericInput id="deal-value" mode="decimal" min={0} value={value} onValueChange={setValue} placeholder="e.g. 45000" />
                         </div>
                         <div className="space-y-2">
                             <Label>Source</Label>

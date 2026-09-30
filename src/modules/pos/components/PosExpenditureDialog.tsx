@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/shared/components/NumericInput";
 import { Label } from "@/components/ui/label";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { extractApiError } from "@/shared/lib/api";
@@ -96,12 +97,12 @@ export function PosExpenditureDialog({
                 <div className="space-y-4 py-2">
                     <div className="space-y-1.5">
                         <Label htmlFor="exp-amount">Amount (₹)</Label>
-                        <Input
+                        <NumericInput
                             id="exp-amount"
-                            type="text"
-                            inputMode="decimal"
+                            mode="decimal"
+                            min={0}
                             value={amount}
-                            onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))}
+                            onValueChange={setAmount}
                             placeholder="10"
                             autoFocus
                             onKeyDown={onFieldKey}
