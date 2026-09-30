@@ -19,6 +19,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { splitLineDescription } from "@/shared/lib/print/lineDescription";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { hasPermission, requireAuth } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -46,15 +47,6 @@ function accountPartyLink(a: { personId: number | null; companyId: number | null
     if (a?.personId != null) return { partyKind: "person", partyEntityId: a.personId };
     if (a?.companyId != null) return { partyKind: "company", partyEntityId: a.companyId };
     return NO_PARTY_LINK;
-}
-
-/** The note part of a line description. The POS saves `"<sku> — <name> · <note>"`
- *  (PosScreen), so matching the whole string would also hit a SKU or a word in the
- *  product name; office forms save the note alone. */
-function lineNote(description: string, sku: string): string {
-    if (!description.startsWith(`${sku} — `)) return description;
-    const cut = description.indexOf(" · ");
-    return cut === -1 ? "" : description.slice(cut + 3);
 }
 
 export async function GET(req: Request) {
@@ -148,7 +140,9 @@ export async function GET(req: Request) {
         ]);
 
         const billLines = lines
-            .map((l) => ({ ...l, note: lineNote(l.description ?? "", l.product.sku) }))
+            // The note part only: the POS saves "<sku> — <name> · <note>", so matching the
+            // whole text would also hit a SKU or a word in the product name.
+            .map((l) => ({ ...l, note: splitLineDescription(l.description, l.product).note ?? "" }))
             .filter((l) => l.note.toLowerCase().includes(needle))
             .slice(0, BILL_LIMIT);
 

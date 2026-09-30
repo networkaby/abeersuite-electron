@@ -26,6 +26,7 @@ import { usePosBilling } from "@/modules/pos/hooks/usePosBilling";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { extractApiError } from "@/shared/lib/api";
 import { formatInr, todayIso } from "@/shared/lib/format";
+import { composeLineDescription, splitLineDescription } from "@/shared/lib/print/lineDescription";
 import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearchAndCreate";
 
@@ -105,8 +106,8 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                         name: l.name,
                         qty: l.quantity,
                         unitPrice: l.rate,
-                        // The server embeds "sku — name · note"; keep only the cashier's note.
-                        description: l.description?.split(" · ").slice(1).join(" · ") || "",
+                        // The server stores "sku — name · note"; keep only the cashier's note.
+                        description: splitLineDescription(l.description, { sku: l.sku, name: l.name }).note ?? "",
                         taxRate: l.taxRate,
                         mrpPaise: l.mrpPaise,
                         barcodePaise: l.savedSalePricePaise,
@@ -205,7 +206,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
             const today = todayIso();
             const lines = goodsCart.map((l) => ({
                 productId: l.productId,
-                description: `${l.sku} — ${l.name}${l.description ? ` · ${l.description}` : ""}`,
+                description: composeLineDescription({ sku: l.sku, name: l.name, note: l.description }),
                 quantity: l.qty,
                 unitPrice: l.unitPrice,
                 taxRate: l.taxRate,

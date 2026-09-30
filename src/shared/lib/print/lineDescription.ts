@@ -12,6 +12,17 @@ const NOTE_SEP = " · ";
 export type LineText = { name: string; note: string | null };
 
 /**
+ * The POS's stored form of a goods line: "<sku> — <name>", then " · <note>" when
+ * the cashier typed one. The one writer of the format `splitLineDescription`
+ * reads back — the POS sale, its edit and the POS order / estimate all save
+ * through here, so the two can never drift apart.
+ */
+export function composeLineDescription(line: { sku: string; name: string; note?: string | null }): string {
+    const note = (line.note ?? "").trim();
+    return `${line.sku}${SKU_SEP}${line.name}${note ? `${NOTE_SEP}${note}` : ""}`;
+}
+
+/**
  * Split a stored line text into the item name and the note.
  *   - POS "<sku> — <name> · <note>" → the name as sold, and the note.
  *   - Anything else on a product line → the product name; the text is the note
