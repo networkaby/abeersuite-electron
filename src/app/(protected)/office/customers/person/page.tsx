@@ -48,7 +48,8 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
-import { TransactionsTable, type CustomerTransactions } from "@/modules/customer/components/TransactionsTable";
+import { TransactionsTable } from "@/modules/customer/components/TransactionsTable";
+import { usePartyDetail, usePartyTransactions } from "@/modules/customer/hooks/usePartyProfile";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
@@ -126,9 +127,14 @@ export default function CustomersPage() {
     const [showInactive, setShowInactive] = useState(false);
     const [search, setSearch] = useState("");
     const [selectedId, setSelectedId] = useState<number | null>(null);
-    const [detail, setDetail] = useState<CustomerDetail | null>(null);
-    const [detailLoading, setDetailLoading] = useState(false);
-    const [tab, setTab] = useState<Tab>("transactions");
+    // The open profile — a reply for a party the screen has already left is dropped.
+    const { detail, loading: detailLoading, reload: reloadDetail } =
+        usePartyDetail<CustomerDetail>(selectedId ? "person" : null, selectedId, "Failed to load customer");
+    // A newly opened party starts on its statement; a tab choice belongs to the party
+    // it was made for.
+    const [tabChoice, setTabChoice] = useState<{ id: number | null; tab: Tab }>({ id: null, tab: "transactions" });
+    const tab: Tab = tabChoice.id === selectedId ? tabChoice.tab : "transactions";
+    const setTab = (next: Tab) => setTabChoice({ id: selectedId, tab: next });
     // Quick Actions read the open profile so a party-facing voucher opens with
     // this party in place. Cleared when the profile closes or the page unmounts.
     const setActiveParty = useActivePartyStore((s) => s.setParty);
@@ -142,12 +148,13 @@ export default function CustomersPage() {
         } : null);
         return () => setActiveParty(null);
     }, [detail, setActiveParty]);
-    const [transactions, setTransactions] = useState<CustomerTransactions | null>(null);
-    // The books moved while the statement was off screen — re-read on the way in.
-    const [txStale, setTxStale] = useState(false);
-    const [txLoading, setTxLoading] = useState(false);
     const [from, setFrom] = useState(toIsoDate(indianFiscalYearStart()));
     const [to, setTo] = useState(toIsoDate(new Date()));
+    // The statement for the open party and period — read while its tab is on screen,
+    // marked stale (and re-read on the way back in) while it is not.
+    const {
+        transactions, loading: txLoading, refreshing: txRefreshing, reload: reloadTransactions, markStale: markTxStale,
+    } = usePartyTransactions(selectedId ? "person" : null, selectedId, { from, to }, tab === "transactions");
 
     const [showCreate, setShowCreate] = useState(false);
     const [form, setForm] = useState({ name: "", phone: "", email: "", address: "" });
@@ -182,25 +189,6 @@ export default function CustomersPage() {
         cachePlaceholder: placeholderFromCache,
     });
 
-    useEffect(() => {
-        if (!selectedId) {
-            setDetail(null);
-            setTransactions(null);
-            setTxStale(false);
-            return;
-        }
-        setDetailLoading(true);
-        setTransactions(null);
-        setTxStale(false);
-        axios.get<CustomerDetail>(`/api/person/${selectedId}`)
-            .then((response) => {
-                setDetail(response.data);
-                setTab("transactions");
-            })
-            .catch(() => toast.error("Failed to load customer"))
-            .finally(() => setDetailLoading(false));
-    }, [selectedId]);
-
     // Esc closes the open party first, then goes back. An open dialog or menu takes
     // its own Esc first (see useEscape).
     useEscape(() => {
@@ -211,25 +199,15 @@ export default function CustomersPage() {
     const handleTabChange = (next: Tab) => { setTab(next); };
 
     // Re-fetch after a company is linked or unlinked (CustomerLinkPanel draws the new list).
-    const handleLinked = useCallback(() => {
-        if (!selectedId) return;
-        axios.get<CustomerDetail>(`/api/person/${selectedId}`)
-            .then((res) => setDetail(res.data))
-            .catch(() => { });
-    }, [selectedId]);
+    const handleLinked = useCallback(() => { void reloadDetail(); }, [reloadDetail]);
 
     // Re-fetch after profile edits (name/address/phones/emails saved). Patches
     // the loaded row's name in place — the rest of a rename doesn't change
     // which page it belongs on, so a full reload would be wasted work.
-    const refetchDetail = useCallback(() => {
-        if (!selectedId) return;
-        axios.get<CustomerDetail>(`/api/person/${selectedId}`)
-            .then((res) => {
-                setDetail(res.data);
-                updateItem(selectedId, { name: res.data.name } as Partial<CustomerListItem>);
-            })
-            .catch(() => { });
-    }, [selectedId, updateItem]);
+    const refetchDetail = useCallback(async () => {
+        const fresh = await reloadDetail();
+        if (fresh) updateItem(fresh.id, { name: fresh.name } as Partial<CustomerListItem>);
+    }, [reloadDetail, updateItem]);
 
     // Deleted (hard) or deactivated — either way it drops out of the isActive
     // list, so close the detail and reload.
@@ -243,48 +221,6 @@ export default function CustomersPage() {
         refetchDetail();
         void refresh();
     }, [refetchDetail, refresh]);
-
-    // Load (or reload) transactions for the current customer + period.
-    //
-    // `quiet` is a re-read underneath someone who is already reading the statement
-    // — the replica caught up, nothing was asked for. It must not blank the table
-    // behind a spinner (AGENTS.md §7: show cached data while refreshing, no blank
-    // flicker), and it must not raise a toast either: a background read that fails
-    // is not something the user did, and the next cycle will try again anyway.
-    // The loud path is unchanged — first open, a date change, the Refresh button.
-    const loadTransactions = useCallback((f: string, t: string, quiet = false) => {
-        if (!selectedId) return;
-        if (!quiet) setTxLoading(true);
-        axios.get<CustomerTransactions>(`/api/person/${selectedId}/transactions?from=${f}&to=${t}`)
-            .then((r) => setTransactions(r.data))
-            .catch(() => { if (!quiet) toast.error("Failed to load transactions"); })
-            .finally(() => { if (!quiet) setTxLoading(false); });
-    }, [selectedId]);
-
-    // Auto-load transactions when the tab is active and not yet loaded — and
-    // re-read quietly when it is loaded but went stale while we were elsewhere.
-    // Quietly matters: the rows are already right there, so they stay up and are
-    // swapped, rather than blinking through a spinner (AGENTS.md §7).
-    useEffect(() => {
-        if (!selectedId || tab !== "transactions") return;
-        if (!transactions) { loadTransactions(from, to); return; }
-        if (txStale) { setTxStale(false); loadTransactions(from, to, true); }
-    }, [selectedId, tab, transactions, txStale, from, to, loadTransactions]);
-
-    // A receipt made at Head Office reaches this till's replica a moment later, and
-    // until now the statement went on showing the old chips — "Due" against money
-    // that was already linked — until someone pressed Refresh. On a counter this
-    // fires only after the sync worker has committed the rows; on the web it is the
-    // Supabase channel as before. Either way the party's books follow the books.
-    // On screen → refresh in place. Off screen → do NOT fetch for a tab nobody is
-    // looking at (AGENTS.md §7), just remember that it went stale, and the effect
-    // below re-reads the moment the tab is opened. Before this the signal was
-    // dropped outright, so linking a bill on the Outstanding tab left the
-    // statement's Settled / Partial / Due chips wrong until a full reload.
-    useRealtimeTopics(["ledger"], () => {
-        if (tab === "transactions") loadTransactions(from, to, true);
-        else setTxStale(true);
-    });
 
     // The same for the party list itself — a customer added or renamed on another
     // machine appears here without F5.
@@ -579,7 +515,7 @@ export default function CustomersPage() {
                                         key={`po-${detail.accountId}`}
                                         accountId={detail.accountId}
                                         partyName={detail.name}
-                                        onChanged={() => setTxStale(true)}
+                                        onChanged={markTxStale}
                                     />
                                 )}
 
@@ -593,20 +529,20 @@ export default function CustomersPage() {
                                                 <label className="text-xs text-muted-foreground">From</label>
                                                 <TallyDateInput
                                                     value={from}
-                                                    onValueChange={(v) => { setFrom(v); loadTransactions(v, to); }}
+                                                    onValueChange={setFrom}
                                                     className="h-7 w-36 text-xs"
                                                 />
                                                 <label className="text-xs text-muted-foreground">To</label>
                                                 <TallyDateInput
                                                     value={to}
-                                                    onValueChange={(v) => { setTo(v); loadTransactions(from, v); }}
+                                                    onValueChange={setTo}
                                                     monthMode="end"
                                                     className="h-7 w-36 text-xs"
                                                 />
                                                 {/* Where a deliberate re-read says so, now that it no longer
                                                     announces itself by blanking the table. */}
-                                                <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => loadTransactions(from, to)} disabled={txLoading}>
-                                                    <RefreshCw size={12} className={cn("mr-1", txLoading && "animate-spin")} />
+                                                <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => void reloadTransactions()} disabled={txLoading || txRefreshing}>
+                                                    <RefreshCw size={12} className={cn("mr-1", (txLoading || txRefreshing) && "animate-spin")} />
                                                     Refresh
                                                 </Button>
                                                 <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => window.print()}>
@@ -630,7 +566,7 @@ export default function CustomersPage() {
                                             ) : !transactions ? null : transactions.invVouchers.length === 0 ? (
                                                 <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
                                             ) : (
-                                                <TransactionsTable invVouchers={transactions.invVouchers} accountId={transactions.accountId} onChanged={() => loadTransactions(from, to)} />
+                                                <TransactionsTable invVouchers={transactions.invVouchers} accountId={transactions.accountId} onChanged={() => void reloadTransactions()} />
                                             )}
                                         </div>
                                     </>

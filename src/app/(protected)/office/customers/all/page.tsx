@@ -31,7 +31,8 @@ import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import type { Ticket, CustomerDevice } from "@/modules/customer/lib/customerTypes";
 import CustomerEmptyState from "@/modules/customer/components/CustomerEmptyState";
 import { EntityListPanel } from "@/shared/components/EntityListPanel";
-import { TransactionsTable, type CustomerTransactions } from "@/modules/customer/components/TransactionsTable";
+import { TransactionsTable } from "@/modules/customer/components/TransactionsTable";
+import { usePartyDetail, usePartyTransactions } from "@/modules/customer/hooks/usePartyProfile";
 import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
 import CompanyLinkPanel from "@/modules/customer/components/CompanyLinkPanel";
 import PersonProfileTab from "@/modules/customer/components/PersonProfileTab";
@@ -139,15 +140,24 @@ export default function AllCustomersPage() {
     const [sort, setSort] = useState<PartySort>(DEFAULT_PARTY_SORT);
     const [search, setSearch] = useState("");
     const [selected, setSelected] = useState<SelectedItem | null>(null);
-    const [personDetail, setPersonDetail] = useState<PersonDetail | null>(null);
-    const [companyDetail, setCompanyDetail] = useState<CompanyDetail | null>(null);
-    const [detailLoading, setDetailLoading] = useState(false);
-    const [personTab, setPersonTab] = useState<PersonTab>("transactions");
-    const [companyTab, setCompanyTab] = useState<CompanyTab>("transactions");
-    const [transactions, setTransactions] = useState<CustomerTransactions | null>(null);
-    // The books moved while the statement was off screen — re-read on the way in.
-    const [txStale, setTxStale] = useState(false);
-    const [txLoading, setTxLoading] = useState(false);
+    // The open profile — a reply for a party the screen has already left is dropped,
+    // so one party's details can never sit under another's name.
+    const person = usePartyDetail<PersonDetail>(
+        selected?.kind === "person" ? "person" : null, selected?.id ?? null, "Failed to load customer",
+    );
+    const company = usePartyDetail<CompanyDetail>(
+        selected?.kind === "company" ? "company" : null, selected?.id ?? null, "Failed to load company",
+    );
+    const personDetail = person.detail;
+    const companyDetail = company.detail;
+    const detailLoading = person.loading || company.loading;
+    // A newly opened party starts on its statement; a tab choice belongs to the party
+    // it was made for.
+    const selectedKey = selected ? `${selected.kind}:${selected.id}` : null;
+    const [personTabChoice, setPersonTabChoice] = useState<{ key: string | null; tab: PersonTab }>({ key: null, tab: "transactions" });
+    const [companyTabChoice, setCompanyTabChoice] = useState<{ key: string | null; tab: CompanyTab }>({ key: null, tab: "transactions" });
+    const personTab: PersonTab = personTabChoice.key === selectedKey ? personTabChoice.tab : "transactions";
+    const companyTab: CompanyTab = companyTabChoice.key === selectedKey ? companyTabChoice.tab : "transactions";
     const [showInactive, setShowInactive] = useState(false);
 
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
@@ -194,115 +204,22 @@ export default function AllCustomersPage() {
         // is owned by the existing onClick handler below.
     }, [searchParams]);
 
-    useEffect(() => {
-        if (!selected) {
-            const id = window.setTimeout(() => {
-                setPersonDetail(null);
-                setCompanyDetail(null);
-                setTransactions(null);
-                setTxStale(false);
-                setDetailLoading(false);
-            }, 0);
-            return () => window.clearTimeout(id);
-        }
-
-        let cancelled = false;
-        queueMicrotask(() => {
-            if (cancelled) return;
-            setDetailLoading(true);
-            setTransactions(null);
-            setTxStale(false);
-            const finishLoading = () => { if (!cancelled) setDetailLoading(false); };
-
-            if (selected.kind === "person") {
-                axios
-                    .get<PersonDetail>(`/api/person/${selected.id}`)
-                    .then((res) => {
-                        if (cancelled) return;
-                        setPersonDetail(res.data);
-                        setCompanyDetail(null);
-                        setPersonTab("transactions");
-                    })
-                    .catch(() => { if (cancelled) return; setPersonDetail(null); setCompanyDetail(null); })
-                    .finally(finishLoading);
-                return;
-            }
-
-            axios
-                .get<CompanyDetail>(`/api/companies/${selected.id}`)
-                .then((res) => {
-                    if (cancelled) return;
-                    setCompanyDetail(res.data);
-                    setPersonDetail(null);
-                    setCompanyTab("transactions");
-                })
-                .catch(() => { if (cancelled) return; setCompanyDetail(null); setPersonDetail(null); })
-                .finally(finishLoading);
-        });
-
-        return () => { cancelled = true; };
-    }, [selected]);
-
     const handlePersonTabChange = (next: PersonTab) => {
-        setPersonTab(next);
+        setPersonTabChoice({ key: selectedKey, tab: next });
     };
 
     const handleCompanyTabChange = (next: CompanyTab) => {
-        setCompanyTab(next);
+        setCompanyTabChoice({ key: selectedKey, tab: next });
     };
 
-    // `silent` is a re-read underneath someone who is already reading the
-    // statement — the books moved on another machine, or a bill-wise link was just
-    // saved from a row's Status chip. It must not blank the table (AGENTS.md §7).
-    // The loud path is the first open of the tab, where there is nothing to keep.
-    const reloadTransactions = useCallback((silent = false) => {
-        if (!selected) return;
-        if (!silent) setTxLoading(true);
-        const url =
-            selected.kind === "person"
-                ? `/api/person/${selected.id}/transactions`
-                : `/api/companies/${selected.id}/transactions`;
-
-        axios
-            .get<CustomerTransactions>(url)
-            .then((r) => setTransactions(r.data))
-            .catch(() => { })
-            .finally(() => { if (!silent) setTxLoading(false); });
-    }, [selected]);
-    // The open party's statement follows the books — silently, because nobody
-    // asked for this read, and only while a statement is actually on screen, so a
-    // ledger signal costs the other tabs nothing.
+    // The open party's statement (its whole history on this page) — read while it
+    // is on screen; the books moving while it is not only mark it stale, and it is
+    // re-read quietly on the way back in (AGENTS.md §7).
     const showingTransactions = selected !== null
         && (selected.kind === "person" ? personTab === "transactions" : companyTab === "transactions");
-    // On screen → refresh in place. Off screen → do NOT fetch for a tab nobody is
-    // looking at (AGENTS.md §7), just remember it went stale; the effect below
-    // re-reads on the way in. Before this the signal was dropped outright, so
-    // linking a bill on the Outstanding tab left the statement's Settled /
-    // Partial / Due chips wrong until a full reload.
-    useRealtimeTopics(["ledger"], () => {
-        if (showingTransactions) reloadTransactions(true);
-        else setTxStale(true);
-    });
-
-    useEffect(() => {
-        if (!selected) return;
-        const wantsTransactions =
-            (selected.kind === "person" && personTab === "transactions")
-            || (selected.kind === "company" && companyTab === "transactions");
-        if (!wantsTransactions) return;
-
-        if (!transactions) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            reloadTransactions();
-            return;
-        }
-        // Loaded, but the books moved while we were on another tab. Re-read
-        // quietly so the rows on screen are swapped rather than blanked.
-        if (txStale) {
-            setTxStale(false);
-            reloadTransactions(true);
-        }
-    }, [selected, personTab, companyTab, transactions, txStale, reloadTransactions]);
+    const {
+        transactions, loading: txLoading, reload: reloadTransactions, markStale: markTxStale,
+    } = usePartyTransactions(selected?.kind ?? null, selected?.id ?? null, null, showingTransactions);
 
     // Esc closes the open party first, then goes back. An open dialog or menu takes
     // its own Esc first (see useEscape).
@@ -311,19 +228,10 @@ export default function AllCustomersPage() {
         else router.back();
     });
 
-    const refetchPersonDetail = useCallback(() => {
-        if (!selected || selected.kind !== "person") return;
-        axios.get<PersonDetail>(`/api/person/${selected.id}`)
-            .then((res) => setPersonDetail(res.data))
-            .catch(() => { });
-    }, [selected]);
-
-    const refetchCompanyDetail = useCallback(() => {
-        if (!selected || selected.kind !== "company") return;
-        axios.get<CompanyDetail>(`/api/companies/${selected.id}`)
-            .then((res) => setCompanyDetail(res.data))
-            .catch(() => { });
-    }, [selected]);
+    const reloadPerson = person.reload;
+    const reloadCompany = company.reload;
+    const refetchPersonDetail = useCallback(() => { void reloadPerson(); }, [reloadPerson]);
+    const refetchCompanyDetail = useCallback(() => { void reloadCompany(); }, [reloadCompany]);
 
     // Deleted (hard) or deactivated — either way it drops out of the isActive
     // lists, so close the detail and reload both.
@@ -601,7 +509,7 @@ export default function AllCustomersPage() {
                                         key={`po-${personDetail.accountId}`}
                                         accountId={personDetail.accountId}
                                         partyName={personDetail.name}
-                                        onChanged={() => setTxStale(true)}
+                                        onChanged={markTxStale}
                                     />
                                 )}
 
@@ -741,7 +649,7 @@ export default function AllCustomersPage() {
                                         key={`co-${companyDetail.accountId}`}
                                         accountId={companyDetail.accountId}
                                         partyName={companyDetail.name}
-                                        onChanged={() => setTxStale(true)}
+                                        onChanged={markTxStale}
                                     />
                                 )}
 
