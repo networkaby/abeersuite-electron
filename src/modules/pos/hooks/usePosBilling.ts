@@ -703,45 +703,48 @@ export function usePosBilling(opts: {
     }
 
     // ── Coupon apply + auto-revalidation ──────────────────────────────────────
-    // The server owns the ₹ value. We re-validate whenever the cart / tier /
-    // loyalty inputs change so the stored amount never goes stale (checkout
-    // re-validates too — the server is the final authority).
-    const couponSig = useMemo(
-        () => `${cart.map((l) => `${l.productId}:${l.qty}:${l.unitPrice}`).join("|")}#${discountAmount}#${redemptionRupees}`,
-        [cart, discountAmount, redemptionRupees],
-    );
+    // The server owns the ₹ value. Everything the coupon routes judge this bill
+    // by is built here, once, and the re-validation signature IS that payload —
+    // so any change the server would see re-checks the coupon (checkout
+    // re-validates too — the server is the final authority). A hand-picked
+    // signature used to leave out billAmountIncl, so changing shipping, a charge
+    // or the round-off never re-checked a free grant's minimum bill.
+    const couponBill = useMemo(() => snapshot?.account ? {
+        accountId: snapshot.account.id,
+        isNewCustomer: snapshot.turnover.invoiceCount === 0,
+        tierRupees: discountAmount,
+        loyaltyRupees: redemptionRupees,
+        // Free-grant min-bill qualifies on the full voucher total (all +/− in).
+        billAmountIncl,
+        // taxRate rides along so the server can gross up its resolved cost to
+        // cost-incl-tax — the LINE-scope tier-share estimate base. Service
+        // lines are excluded — coupons evaluate the goods cart only (mirrors
+        // /api/pos/sale).
+        lines: cart.filter((l) => l.kind !== "service").map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice, taxRate: l.taxRate })),
+    } : null, [snapshot?.account, snapshot?.turnover.invoiceCount, discountAmount, redemptionRupees, billAmountIncl, cart]);
+    const couponSig = JSON.stringify(couponBill);
     // Coupon identity for re-validation: AUTO offers carry no code, so the key
     // is the coupon id — a typed code keeps its code (and shows on the bill).
     const appliedCouponKey = appliedCoupon ? `${appliedCoupon.couponId}:${appliedCoupon.code ?? ""}` : null;
     const appliedFreeKey = appliedFree ? `${appliedFree.couponId}:${appliedFree.code ?? ""}` : null;
     type ValidateResp = { ok: boolean; reason?: string; couponId: number; code: string | null; name: string; discountRupees: number; droppedTier: boolean; blockedLoyalty: boolean; freeLines?: { productId: number; freeQty: number; productName: string }[]; onTop?: boolean; moneyGrant?: boolean };
     async function runValidate(validateOpts: { code?: string; freeCode?: string; couponId?: number; freeCouponId?: number; autoApply?: boolean; freeAutoApply?: boolean }): Promise<ValidateResp | null> {
-        if (!snapshot?.account) return null;
+        if (!couponBill) return null;
         const { data } = await axios.post<ValidateResp>("/api/pos/coupon-validate", {
-            accountId: snapshot.account.id,
+            ...couponBill,
             code: validateOpts.code,
             freeCode: validateOpts.freeCode,
             couponId: validateOpts.couponId,
             freeCouponId: validateOpts.freeCouponId,
             autoApply: validateOpts.autoApply,
             freeAutoApply: validateOpts.freeAutoApply,
-            isNewCustomer: snapshot.turnover.invoiceCount === 0,
-            tierRupees: discountAmount,
-            loyaltyRupees: redemptionRupees,
-            // Free-grant min-bill qualifies on the full voucher total (all +/− in).
-            billAmountIncl,
-            // taxRate rides along so the server can gross up its resolved cost to
-            // cost-incl-tax — the LINE-scope tier-share estimate base. Service
-            // lines are excluded — coupons evaluate the goods cart only (mirrors
-            // /api/pos/sale).
-            lines: cart.filter((l) => l.kind !== "service").map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice, taxRate: l.taxRate })),
         });
         return data;
     }
     const hit = (d: ValidateResp): CouponHit => ({ couponId: d.couponId, code: d.code, name: d.name, rupees: d.discountRupees, droppedTier: d.droppedTier, blockedLoyalty: d.blockedLoyalty });
 
-    // Re-validate the applied coupon when the cart / tier / loyalty change — by
-    // code when it has one, by id for a force-applied AUTO offer.
+    // Re-validate the applied coupon whenever the bill the server judges changes
+    // (couponSig) — by code when it has one, by id for a force-applied AUTO offer.
     useEffect(() => {
         if (!appliedCoupon || !snapshot?.account) return;
         let cancelled = false;
@@ -818,19 +821,16 @@ export function usePosBilling(opts: {
     // so fast scanning doesn't hammer the route. The server owns every gate;
     // this only renders what it returns.
     useEffect(() => {
-        if (!snapshot?.account) { setOffers(null); return; }
-        // Capture before the debounce — the closure loses the narrowing.
-        const accountId = snapshot.account.id;
-        const isNewCustomer = snapshot.turnover.invoiceCount === 0;
+        if (!couponBill) { setOffers(null); return; }
+        // The same bill the coupon checks read, so the panel can never disagree.
+        const { accountId, isNewCustomer, billAmountIncl: billIncl, lines } = couponBill;
         let cancelled = false;
         const t = setTimeout(() => {
             axios.post<{ offers: PosOffer[]; crossSell: ProductOption[] }>("/api/pos/coupon-offers", {
                 accountId,
                 isNewCustomer,
-                // Free-grant min-bill qualifies on the full voucher total (all +/− in).
-                billAmountIncl,
-                // Coupons evaluate the goods cart only (mirrors coupon-validate).
-                lines: cart.filter((l) => l.kind !== "service").map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice, taxRate: l.taxRate })),
+                billAmountIncl: billIncl,
+                lines,
             })
                 .then((r) => { if (!cancelled) { setOffers(r.data.offers); setCrossSell(r.data.crossSell); } })
                 .catch(() => { if (!cancelled) { setOffers(null); setCrossSell([]); } });
