@@ -171,8 +171,8 @@ service removal, and all nine `useDeleteWithConfirm` callers.
 fields all write when focus leaves the box. Success was silent, so nobody could
 tell whether it landed. Failure toasted and then left the rejected number sitting
 on screen looking saved. These are the numbers the till charges by. Worse, in
-`CustomerGroupsManager`, clearing a name and blurring saved nothing at all while
-the box stayed visibly empty, so the old name silently returned on reload.
+the old `CustomerGroupsManager`, clearing a name and blurring saved nothing at all
+while the box stayed visibly empty, so the old name silently returned on reload.
 
 **The mechanism.** `useFieldSave` + `<FieldSaveMark />`. Three rules it makes
 explicit:
@@ -182,12 +182,14 @@ explicit:
 3. On failure put the **original value back**. Leaving the rejected text in the
    box is what makes people believe a bad price was accepted.
 
-**Still to do** — all of it, this one has no page applied yet:
+**Still to do** — the rest of it:
 
 - `update-print-labels` — margin % and MRP (the highest-stakes instance).
 - `pricing-strategy/needs-attention` — cost-excl, cost-incl and MRP.
 - `PosServicesManager` — service name, ledger, GST and price (Settings → Services; the same catalogue the POS cart and every office trading voucher add from).
-- `CustomerGroupsManager` — the rename, including the empty-value case above.
+- ~~`CustomerGroupsManager`~~ — done: that page was retired into Pricing Strategy →
+  Group pricing (`GroupPricingManager`), whose group rename uses `useFieldSave` and
+  puts the old name back when the box is emptied.
 
 ---
 

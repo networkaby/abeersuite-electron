@@ -9374,6 +9374,10 @@
     },
     {
       "roleId": "R1",
+      "permissionId": "ui:sidebar:pricing-strategy:group-pricing"
+    },
+    {
+      "roleId": "R1",
       "permissionId": "ui:sidebar:pricing-strategy:print-labels"
     },
     {
@@ -9435,10 +9439,6 @@
     {
       "roleId": "R1",
       "permissionId": "ui:sidebar:settings:credit-limit"
-    },
-    {
-      "roleId": "R1",
-      "permissionId": "ui:sidebar:settings:customer-groups"
     },
     {
       "roleId": "R1",
@@ -9583,10 +9583,6 @@
     {
       "roleId": "R2",
       "permissionId": "ui:sidebar:settings:credit-limit"
-    },
-    {
-      "roleId": "R2",
-      "permissionId": "ui:sidebar:settings:customer-groups"
     },
     {
       "roleId": "R2",
@@ -11156,10 +11152,6 @@
     },
     {
       "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:settings:customer-groups"
-    },
-    {
-      "departmentId": "DEP-OP",
       "permissionId": "ui:sidebar:help:help-desk"
     },
     {
@@ -11649,10 +11641,6 @@
     {
       "departmentId": "DEP-SALES",
       "permissionId": "ui:sidebar:settings:credit-limit"
-    },
-    {
-      "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:settings:customer-groups"
     },
     {
       "departmentId": "DEP-SALES",

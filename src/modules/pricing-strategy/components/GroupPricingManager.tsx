@@ -1,20 +1,26 @@
 "use client";
 
-// Pricing Strategy → Group pricing. Pick a customer group, give it one price
-// rule per product group (MRP / print price / profit sharing X% / revenue
-// discount X%) and tick which automatic benefits it may get. Saved as a unit
-// per group. POS only; nothing about it prints — see groupPricing.ts.
+// Pricing Strategy → Group pricing — the one home of the customer-group
+// master (it replaced Settings → Customer Groups). Add / rename / switch off /
+// delete a group here; pick one and give it a price rule per product group
+// (MRP / print price / profit sharing X% / revenue discount X%) and tick which
+// automatic benefits it may get. Name and Active save on their own (the group
+// master API the customer Profile tab also reads); the price list is saved as
+// a unit per group. POS only; nothing about it prints — see groupPricing.ts.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Plus, Save, Trash2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
 import { NumericInput } from "@/shared/components/NumericInput";
+import { FieldSaveMark } from "@/shared/components/FieldSaveMark";
+import { useFieldSave } from "@/shared/hooks/useFieldSave";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { extractApiError } from "@/shared/lib/api";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
@@ -66,6 +72,9 @@ export function GroupPricingManager() {
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [draft, setDraft] = useState<Draft | null>(null);
     const [saving, setSaving] = useState(false);
+    const [newName, setNewName] = useState("");
+    const [adding, setAdding] = useState(false);
+    const { save: saveField, stateOf } = useFieldSave();
 
     const load = useCallback((silent = false) => {
         axios.get<Resp>("/api/pricing-strategy/group-pricing")
@@ -90,15 +99,74 @@ export function GroupPricingManager() {
 
     const dirty = !!(selected && draft && draftSig(draft) !== draftSig(toDraft(selected)));
 
+    /** Unsaved price-list edits are the user's — ask before dropping them. */
+    const leaveDraft = async () => !dirty || confirmAction({
+        title: `Leave ${selected?.name ?? "this group"} without saving?`,
+        body: "The changes you made to its pricing will be lost.",
+        confirmLabel: "Leave",
+    });
+
     const pick = async (g: GroupRow) => {
         if (g.id === selectedId) return;
-        if (dirty && !(await confirmAction({
-            title: `Leave ${selected?.name ?? "this group"} without saving?`,
-            body: "The changes you made to its pricing will be lost.",
-            confirmLabel: "Leave",
-        }))) return;
+        if (!(await leaveDraft())) return;
         setSelectedId(g.id);
         setDraft(toDraft(g));
+    };
+
+    /** Merge a master change (name / active) into the list without touching the draft. */
+    const patchGroupRow = (id: number, patch: Partial<GroupRow>) =>
+        setData((d) => d && { ...d, groups: d.groups.map((g) => (g.id === id ? { ...g, ...patch } : g)) });
+
+    const addGroup = async () => {
+        const name = newName.trim();
+        if (!name) { toast.error("Give the group a name"); return; }
+        if (!(await leaveDraft())) return;
+        setAdding(true);
+        try {
+            const { data: row } = await axios.post<{ id: number; name: string; isActive: boolean }>("/api/settings/customer-groups", { name });
+            const fresh: GroupRow = {
+                id: row.id, name: row.name, isActive: row.isActive, members: 0,
+                allowTierDiscount: true, allowCoupons: true, allowLoyalty: true, rules: [],
+            };
+            setData((d) => d && { ...d, groups: [...d.groups, fresh].sort((a, b) => a.name.localeCompare(b.name)) });
+            setSelectedId(fresh.id);
+            setDraft(toDraft(fresh));
+            setNewName("");
+            toast.success(`Group "${row.name}" added`);
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not add the group"));
+        } finally {
+            setAdding(false);
+        }
+    };
+
+    const setActive = async (g: GroupRow, isActive: boolean) => {
+        patchGroupRow(g.id, { isActive });
+        try {
+            await axios.patch(`/api/settings/customer-groups/${g.id}`, { isActive });
+        } catch (e) {
+            patchGroupRow(g.id, { isActive: g.isActive });
+            toast.error(extractApiError(e, "Could not update the group"));
+        }
+    };
+
+    const removeGroup = async (g: GroupRow) => {
+        const ok = await confirmAction({
+            title: `Delete group "${g.name}"?`,
+            body: `${g.members > 0 ? `${g.members} customer(s) will be taken out of it. ` : ""}Its pricing goes with it. This cannot be undone.`,
+            confirmLabel: "Delete",
+        });
+        if (!ok) return;
+        try {
+            await axios.delete(`/api/settings/customer-groups/${g.id}`);
+            const rest = groups.filter((x) => x.id !== g.id);
+            setData((d) => d && { ...d, groups: rest });
+            setSelectedId(rest[0]?.id ?? null);
+            setDraft(rest[0] ? toDraft(rest[0]) : null);
+            toast.success(`Group "${g.name}" deleted`);
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not delete the group"));
+        }
     };
 
     const groupOptions = useMemo(() => [
@@ -164,19 +232,16 @@ export function GroupPricingManager() {
     };
 
     if (!data) return <p className="px-6 pt-4 text-sm text-muted-foreground">Loading…</p>;
-    if (groups.length === 0) {
-        return (
-            <p className="px-6 pt-4 text-sm text-muted-foreground">
-                No customer groups yet. Add them in Settings → Customer Groups, then set their pricing here.
-            </p>
-        );
-    }
 
     return (
         <div className="grid h-full min-h-0 grid-cols-[220px_minmax(0,1fr)] gap-4 px-6 pt-3 pb-6">
             {/* Customer groups */}
-            <div className="min-h-0 overflow-auto rounded-lg border border-border p-1.5">
+            <div className="flex min-h-0 flex-col rounded-lg border border-border p-1.5">
                 <p className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Customer groups</p>
+                <div className="min-h-0 flex-1 overflow-auto">
+                {groups.length === 0 && (
+                    <p className="px-2 py-2 text-xs text-muted-foreground">No groups yet — add the first one below.</p>
+                )}
                 {groups.map((g) => (
                     <button
                         key={g.id}
@@ -185,25 +250,74 @@ export function GroupPricingManager() {
                         className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm ${g.id === selectedId ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted"}`}
                     >
                         <span className={`truncate ${g.isActive ? "" : "text-muted-foreground line-through"}`}>{g.name}</span>
-                        <span className="shrink-0 text-xs text-muted-foreground">{g.rules.length}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground" title="Price rules">{g.rules.length}</span>
                     </button>
                 ))}
+                </div>
+                <div className="mt-1.5 flex items-center gap-1 border-t border-border pt-1.5">
+                    <Input
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") void addGroup(); }}
+                        placeholder="New group"
+                        aria-label="New group name"
+                        className="h-8 text-sm"
+                    />
+                    <Button size="icon-sm" variant="outline" title="Add group" onClick={() => void addGroup()} disabled={adding}>
+                        <Plus size={14} />
+                    </Button>
+                </div>
             </div>
 
             {/* The selected group's price list */}
             {selected && draft && (
                 <div className="min-h-0 space-y-4 overflow-auto">
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                            <h2 className="flex items-center gap-2 text-base font-semibold">
-                                {selected.name}
-                                {!selected.isActive && <Badge variant="outline">Inactive — rules are off</Badge>}
-                            </h2>
+                        <div className="min-w-0 space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                                {/* Rename — saves on blur; an emptied box puts the old name back. */}
+                                <Input
+                                    key={`${selected.id}:${selected.name}`}
+                                    defaultValue={selected.name}
+                                    aria-label="Group name"
+                                    className="h-8 w-64 text-base font-semibold"
+                                    onBlur={(e) => {
+                                        const input = e.currentTarget;
+                                        const next = input.value.trim();
+                                        if (!next) {
+                                            input.value = selected.name;
+                                            if (selected.name) toast.error("A group needs a name — kept the old one");
+                                            return;
+                                        }
+                                        void saveField({
+                                            key: `${selected.id}:name`,
+                                            original: selected.name,
+                                            next,
+                                            label: "Group name",
+                                            write: (v) => axios.patch(`/api/settings/customer-groups/${selected.id}`, { name: v }),
+                                            revert: (v) => { input.value = v; },
+                                            onSaved: (v) => patchGroupRow(selected.id, { name: v }),
+                                        });
+                                    }}
+                                    onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                                />
+                                <FieldSaveMark state={stateOf(`${selected.id}:name`)} />
+                                <label className="flex items-center gap-2 text-sm">
+                                    <Switch checked={selected.isActive} onCheckedChange={(v) => void setActive(selected, v)} />
+                                    Active
+                                </label>
+                                {!selected.isActive && (
+                                    <Badge variant="outline" title="Hidden from the customer Profile tab, and its rules are off">Rules off</Badge>
+                                )}
+                            </div>
                             <p className="text-xs text-muted-foreground">
-                                {selected.members} customer{selected.members === 1 ? "" : "s"} · POS only · the customer never sees any of this
+                                {selected.members} customer{selected.members === 1 ? "" : "s"} · assign a group on the customer&apos;s Profile tab · POS only · the customer never sees any of this
                             </p>
                         </div>
                         <div className="flex gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => void removeGroup(selected)} title="Delete this group">
+                                <Trash2 size={14} className="mr-1 text-destructive" /> Delete
+                            </Button>
                             {dirty && (
                                 <Button variant="ghost" size="sm" onClick={() => setDraft(toDraft(selected))}>
                                     <Undo2 size={14} className="mr-1" /> Undo

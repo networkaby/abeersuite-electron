@@ -153,7 +153,8 @@ model Company {
 }
 
 /// Marketing segment master (Corporate / School / Lawyer …) for product
-/// targeting — internal-only, managed at /office/settings/customer-groups.
+/// targeting and group pricing — internal-only, managed at
+/// /office/pricing-strategy/group-pricing (Pricing Strategy → Group pricing).
 /// One group per customer via Person/Company.customerGroupId.
 model CustomerGroup {
   id        Int       @id @default(autoincrement())

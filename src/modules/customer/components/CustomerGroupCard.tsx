@@ -80,7 +80,7 @@ export default function CustomerGroupCard({ party, initialGroupId, onSaved }: Pr
             </Select>
             <p className="mt-2 text-xs text-muted-foreground">
                 Segment for product targeting — internal only, the customer never sees it.
-                Manage the list in Settings → Customer Groups.
+                Manage the list in Pricing Strategy → Group pricing.
             </p>
         </div>
     );

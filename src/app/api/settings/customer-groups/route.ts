@@ -4,9 +4,10 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError, prismaUniqueError, validateRequest } from "@/shared/lib/api";
 import { z } from "zod";
 
-// Settings → Customer Groups — marketing segment master (Corporate / School /
-// Lawyer …) for product targeting. Internal-only: assigned on the customer
-// profile, never shown to the customer. See customerQuality.ts.
+// Customer-group master (Corporate / School / Lawyer …) — managed on Pricing
+// Strategy → Group pricing (which retired the old Settings → Customer Groups
+// page); the customer Profile tab's group picker reads this list. Internal-only:
+// never shown to the customer. See customerQuality.ts and groupPricing.ts.
 
 const createSchema = z.object({
     name:     z.string().trim().min(1).max(80),

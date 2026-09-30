@@ -76,7 +76,6 @@ import {
     GitCompare,
     Goal,
     Grid2x2,
-    Group,
     Hammer,
     Handshake,
     Hash,
@@ -765,6 +764,5 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Item Import", href: "/office/settings/item-import", icon: Upload, permission: "inventory:masters:edit" },
     { label: "Customer Import", href: "/office/settings/customer-import", icon: FileUp, permission: "customers:edit" },
     { label: "Customer Tools", href: "/office/settings/customer-tools", icon: Wand2, permission: "customers:edit" },
-    { label: "Customer Groups", href: "/office/settings/customer-groups", icon: Group, permission: "customers:edit" },
     { label: "Offline Policies", href: "/office/settings/offline-policies", icon: WifiOff, permission: "settings:manage" },
 ];
