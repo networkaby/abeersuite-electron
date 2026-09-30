@@ -27,6 +27,7 @@ import {
 import AdEditor from "@/modules/ecommerce/components/adsEditor/AdEditor";
 import AdPreview from "@/modules/ecommerce/components/adsEditor/AdPreview";
 import SpotMap from "@/modules/ecommerce/components/adsEditor/SpotMap";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 /**
  * E-Commerce → Ads: the storefront ad inventory. One list, saved whole, same
@@ -236,8 +237,12 @@ export default function EcommerceAdsPage() {
             </div>
             <div className="flex items-center gap-3">
                 {!loaded ? <span className="text-xs text-muted-foreground">Loading…</span> : null}
+                {/* The office website, not a bare "/shop": the desktop app has no shop
+                    pages, so it opens in the computer's own browser. The empty ad
+                    slots only draw for staff signed in there; anyone else sees the
+                    live ads. */}
                 <Button variant="outline" size="sm" asChild>
-                    <Link href="/shop?adPreview=1" target="_blank" rel="noopener noreferrer">
+                    <Link href={`${COMPANY_DETAILS.sites.office}/shop?adPreview=1`} target="_blank" rel="noopener noreferrer">
                         Preview on shop
                         <ExternalLink className="ml-1.5 size-3.5" aria-hidden />
                     </Link>

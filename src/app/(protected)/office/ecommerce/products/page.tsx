@@ -45,7 +45,7 @@ import {
     X,
     // SlidersHorizontal,
 } from "lucide-react";
-import { productPreviewPath } from "@/shared/lib/shop/productPublic";
+import { productPreviewPath, productShopUrl } from "@/shared/lib/shop/productPublic";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 // Sticky-header scroll frame (costing-page pattern): a plain overflow-auto div,
@@ -662,7 +662,7 @@ export default function EcommerceProductsPage() {
                                                     </Button>
                                                 ) : null}
                                                 {/* Works whatever the publish state — draft, ready or live. */}
-                                                <Button variant="ghost" size="sm" asChild title="Preview on the storefront">
+                                                <Button variant="ghost" size="sm" asChild title="Full-page preview">
                                                     <a
                                                         href={productPreviewPath(p)}
                                                         target="_blank"
@@ -724,10 +724,22 @@ export default function EcommerceProductsPage() {
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
                                                             >
-                                                                Preview in shop
+                                                                Preview
                                                                 <ExternalLink className="size-3.5" />
                                                             </a>
                                                         </Button>
+                                                        {status.kind === "live" ? (
+                                                            <Button variant="outline" size="sm" asChild>
+                                                                <a
+                                                                    href={productShopUrl(p)}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                >
+                                                                    Open in shop
+                                                                    <ExternalLink className="size-3.5" />
+                                                                </a>
+                                                            </Button>
+                                                        ) : null}
                                                     </div>
                                                 </div>
                                             </TableCell>

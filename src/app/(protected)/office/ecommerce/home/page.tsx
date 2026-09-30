@@ -37,6 +37,7 @@ import BannerSlidesEditor from "@/modules/ecommerce/components/homeEditor/Banner
 import TrustItemsEditor from "@/modules/ecommerce/components/homeEditor/TrustItemsEditor";
 import HeadingEditor from "@/modules/ecommerce/components/homeEditor/HeadingEditor";
 import { getWithRetry } from "@/shared/lib/http/getWithRetry";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
@@ -671,8 +672,10 @@ export default function CustomizeHomePage() {
 
             <div className="flex items-center gap-3">
                 {!loaded ? <span className="text-xs text-muted-foreground">Loading…</span> : null}
+                {/* The real shop website, not "/": the desktop app has no shop pages,
+                    and an outside address opens in the computer's own browser. */}
                 <Button variant="outline" size="sm" asChild>
-                    <Link href="/" target="_blank" rel="noopener noreferrer">
+                    <Link href={COMPANY_DETAILS.sites.shop} target="_blank" rel="noopener noreferrer">
                         View storefront
                         <ExternalLink className="ml-1.5 size-3.5" aria-hidden />
                     </Link>

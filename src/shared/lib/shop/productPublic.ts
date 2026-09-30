@@ -4,6 +4,7 @@ import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodeP
 // components, and groupCategory imports prisma. See groupTree.ts.
 import { rootOf, type ShopGroupIndex } from "@/shared/lib/shop/groupTree";
 import type { StockStatus } from "@/modules/ecommerce/lib/shopStock";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 /** Serializable storefront shape (SSR → client, APIs). */
 export type ShopProductPublic = {
@@ -64,13 +65,23 @@ export function productPath(p: Pick<ShopProductPublic, "id" | "slug">): string {
 }
 
 /**
- * Storefront URL carrying the staff preview flag. Renders the product page
- * whatever its publish state — an unpublished draft (no slug yet, so this falls
- * back to the id) looks exactly as it will once live. The flag only works for a
- * signed-in staff session; for anyone else the page 404s as usual.
+ * The staff full-page preview of a product, whatever its publish state — a
+ * draft looks exactly as it will once live. Not under /shop because the desktop
+ * app is built without the shop pages and runs on its own sign-in: a /shop link
+ * there is a 404, and many staff may not sign in from an outside browser at all
+ * ("Can login outside counter"). See `src/app/preview/product/[id]/page.tsx`.
  */
-export function productPreviewPath(p: Pick<ShopProductPublic, "id" | "slug">): string {
-    return `${productPath(p)}?preview=1`;
+export function productPreviewPath(p: Pick<ShopProductPublic, "id">): string {
+    return `/preview/product/${p.id}`;
+}
+
+/**
+ * The product's page on the real shop website — the "Open in shop" link, for a
+ * published product only. Absolute on purpose: the desktop app sends an outside
+ * address to the computer's own browser.
+ */
+export function productShopUrl(p: Pick<ShopProductPublic, "id" | "slug">): string {
+    return `${COMPANY_DETAILS.sites.shop}${productPath(p)}`;
 }
 
 /** Optional reference data the mapper resolves against. */

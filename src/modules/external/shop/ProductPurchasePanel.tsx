@@ -15,7 +15,18 @@ import { toast } from "sonner";
 import { Heart, GitCompare, Minus, Plus, Share2, Star } from "lucide-react";
 import { cn } from "@/shared/lib/format/utils";
 
-export default function ProductPurchasePanel({ product }: { product: ShopProductPublic }) {
+export default function ProductPurchasePanel({
+    product,
+    preview = false,
+}: {
+    product: ShopProductPublic;
+    /**
+     * Office full-page preview: no Share (it would copy the office address), no
+     * View cart and no portal line — the desktop app has no shop pages, so those
+     * links would only open a 404.
+     */
+    preview?: boolean;
+}) {
     const add = useShopCartStore((s) => s.add);
     const toggleWish = useShopWishlistStore((s) => s.toggle);
     const wishHas = useShopWishlistStore((s) => s.has(product.id));
@@ -164,21 +175,27 @@ export default function ProductPurchasePanel({ product }: { product: ShopProduct
                         <GitCompare className="size-4 mr-2" />
                         Compare
                     </Button>
-                    <Button type="button" variant="outline" className="rounded-full" onClick={() => void share()}>
-                        <Share2 className="size-4 mr-2" />
-                        Share
-                    </Button>
-                    <Button variant="secondary" className="rounded-full" asChild>
-                        <Link href="/shop/cart">View cart</Link>
-                    </Button>
+                    {preview ? null : (
+                        <>
+                            <Button type="button" variant="outline" className="rounded-full" onClick={() => void share()}>
+                                <Share2 className="size-4 mr-2" />
+                                Share
+                            </Button>
+                            <Button variant="secondary" className="rounded-full" asChild>
+                                <Link href="/shop/cart">View cart</Link>
+                            </Button>
+                        </>
+                    )}
                 </div>
             </div>
-            <p className="text-sm text-muted-foreground">
-                Need this with a service ticket?{" "}
-                <Link href="/portal" className="text-primary font-medium underline underline-offset-4">
-                    Open the customer portal
-                </Link>
-            </p>
+            {preview ? null : (
+                <p className="text-sm text-muted-foreground">
+                    Need this with a service ticket?{" "}
+                    <Link href="/portal" className="text-primary font-medium underline underline-offset-4">
+                        Open the customer portal
+                    </Link>
+                </p>
+            )}
         </div>
     );
 }

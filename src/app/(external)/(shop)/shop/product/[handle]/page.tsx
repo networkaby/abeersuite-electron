@@ -1,17 +1,9 @@
 import type { Metadata } from "next";
-import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { auth } from "@/auth";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { invProductToPublic as shopProductToPublic, productPath } from "@/shared/lib/shop/productPublic";
-import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
-import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
-import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
-import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
-import ProductGallery from "@/modules/external/shop/ProductGallery";
-import ProductPurchasePanel from "@/modules/external/shop/ProductPurchasePanel";
-import ProductDetailTabs from "@/modules/external/shop/ProductDetailTabs";
+import { productPath } from "@/shared/lib/shop/productPublic";
+import { loadShopProduct } from "@/shared/lib/shop/loadShopProduct";
+import ProductDetailView from "@/modules/external/shop/ProductDetailView";
 import ProductRail from "@/modules/external/shop/ProductRail";
 import AdUnit from "@/modules/external/shop/ads/AdUnit";
 import { loadSimilarProducts, SIMILAR_PRODUCTS_LIMIT } from "@/shared/lib/shop/similarProducts";
@@ -21,69 +13,17 @@ import { ChevronRight } from "lucide-react";
 import JsonLd from "@/shared/components/JsonLd";
 import { buildProductLd } from "@/shared/lib/seo/jsonLd";
 
-/**
- * Load one product in its storefront shape.
- *
- * Bands and stock policy are passed in for the same reason the store home and
- * /shop pass them: the price a customer sees must be the printed barcode tag,
- * identical on the card, this page, the receipt and the shelf label. Without
- * them the mapper falls back to the effective sale price, and the card and the
- * product page quote two different numbers for the same item.
- *
- * `cache()` dedupes the whole thing across generateMetadata and the page body,
- * which both need the product — one render, one set of queries.
- */
-const loadProduct = cache(async (handle: string, staffPreview: boolean) => {
-    const decoded = decodeURIComponent(handle);
-    const db = prisma.invProduct;
-    const [bands, policy, groupIndex] = await Promise.all([
-        loadBarcodeBands(),
-        loadShopStockPolicy(),
-        loadShopGroupIndex(),
-    ]);
-
-    // Staff preview drops the isListedInShop gate so a draft product (unpublished,
-    // still failing the qualification checklist) is reachable before it ever goes
-    // live — Save & keep editing without needing to flip the switch first.
-    const where = /^\d+$/.test(decoded)
-        ? { id: parseInt(decoded, 10), ...(staffPreview ? {} : { isListedInShop: true }), isActive: true }
-        : { slug: decoded, ...(staffPreview ? {} : { isListedInShop: true }), isActive: true };
-
-    const p = await db.findFirst({
-        where,
-        include: { category: { select: { name: true } } },
-    });
-    if (!p) return null;
-
-    // Same visibility gate as the listing pages. A product the catalogue hides
-    // must not stay reachable (and indexable) on its own URL — unless staff is
-    // previewing it, in which case seeing the real out-of-stock state is the point.
-    const avail = resolveAvailability(p.stock, p.allowBackorder, policy, p.reserved);
-    if (!avail.visible && !staffPreview) return null;
-
-    return shopProductToPublic(p, { bands, avail, groupIndex });
-});
-
-/** `?preview=1` only works for a signed-in staff session — never for a customer. */
-async function isStaffPreview(searchParams: { preview?: string }): Promise<boolean> {
-    if (searchParams.preview !== "1") return false;
-    const session = await auth();
-    return Boolean(session?.user);
-}
+// Staff preview a product (draft or live) on /preview/product/<id> instead, which
+// draws the same ProductDetailView from the same loader, on the app's own sign-in.
 
 export async function generateMetadata({
     params,
-    searchParams,
 }: {
     params: Promise<{ handle: string }>;
-    searchParams: Promise<{ preview?: string }>;
 }): Promise<Metadata> {
     const { handle } = await params;
-    const preview = await isStaffPreview(await searchParams);
-    const p = await loadProduct(handle, preview);
+    const p = (await loadShopProduct(handle, false))?.product;
     if (!p) return { title: "Product" };
-    // A preview page must never surface in search results.
-    if (preview) return { title: p.displayName, robots: { index: false, follow: false } };
 
     const description = p.description ?? undefined;
     // A product is reachable by numeric id AND by slug. Point both at the slug
@@ -115,12 +55,11 @@ export default async function ShopProductPage({
     searchParams,
 }: {
     params: Promise<{ handle: string }>;
-    searchParams: Promise<{ preview?: string; adPreview?: string }>;
+    searchParams: Promise<{ adPreview?: string }>;
 }) {
     const { handle } = await params;
     const sp = await searchParams;
-    const preview = await isStaffPreview(sp);
-    const product = await loadProduct(handle, preview);
+    const product = (await loadShopProduct(handle, false))?.product;
     if (!product) notFound();
 
     // Similar = same office GROUP, widening up the ancestor chain only if the
@@ -148,11 +87,6 @@ export default async function ShopProductPage({
 
     return (
         <main className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
-            {preview ? (
-                <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900">
-                    Staff preview — this product is not published to customers yet.
-                </div>
-            ) : null}
             {/* Built from the same `product` object the page renders, so the
                 offer price and availability always match what the customer sees. */}
             <JsonLd data={buildProductLd(product)} />
@@ -192,12 +126,7 @@ export default async function ShopProductPage({
                 </p>
             ) : null}
 
-            <div className="grid gap-10 lg:grid-cols-2 lg:gap-12 items-start">
-                <ProductGallery urls={product.galleryUrls} alt={product.displayName} />
-                <ProductPurchasePanel product={product} />
-            </div>
-
-            <ProductDetailTabs product={product} />
+            <ProductDetailView product={product} />
 
             {pageAd ? <AdUnit ad={pageAd} className="mt-12" /> : null}
 

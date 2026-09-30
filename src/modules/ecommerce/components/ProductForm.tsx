@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
-import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { productShopUrl, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import ProductGalleryUploader from "@/modules/ecommerce/components/ProductGalleryUploader";
 import ProductCard from "@/modules/external/shop/ProductCard";
 import {
@@ -604,21 +604,20 @@ export default function ProductForm({
             <div className="space-y-2">
                 <div className="flex items-center justify-between">
                     <Label>Live preview</Label>
-                    {/* Always available, published or not — the card below is only the
-                        listing tile; this opens the real product page. */}
-                    {/* {initial?.id ? (
+                    {/* The card's photo, name and Details open the full-page preview in
+                        the app, draft or live. A published product also has its real
+                        shop page, which opens in the computer's own browser. */}
+                    {initial?.id && published ? (
                         <a
-                            href={productPreviewPath({ id: initial.id, slug: initial.slug ?? null })}
+                            href={productShopUrl({ id: initial.id, slug: initial.slug ?? null })}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-xs text-primary underline"
                         >
-                            Open full page
+                            Open in shop
                             <ExternalLink className="size-3" />
                         </a>
-                    ) : (
-                        <span className="text-xs text-muted-foreground">Full page opens after you create it</span>
-                    )} */}
+                    ) : null}
                 </div>
                 <div className="rounded-lg border border-dashed border-border p-4">
                     <ProductCard product={previewProduct as ShopProductPublic} preview={!!initial?.id} />

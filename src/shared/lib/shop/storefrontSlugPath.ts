@@ -22,6 +22,7 @@ const RESERVED_SEGMENTS = new Set([
     // Protected surfaces — must stay auth-gated.
     "office",
     "vouchers",
+    "preview",
     // Auth entry points.
     "login",
     "staff",

@@ -23,9 +23,9 @@ export default function ProductCard({
     product: ShopProductPublic;
     className?: string;
     /**
-     * Office-side use only: point the card's links at the staff preview URL so
-     * they resolve for an UNPUBLISHED product too (the plain path 404s until it
-     * is listed). Never set on the storefront.
+     * Office-side use only: point the card's links at the staff full-page
+     * preview, which opens a draft too and works in the desktop app (no shop
+     * pages there). Never set on the storefront.
      */
     preview?: boolean;
 }) {

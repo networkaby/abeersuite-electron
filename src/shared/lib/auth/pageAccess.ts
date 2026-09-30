@@ -19,8 +19,9 @@ import { SIDEBAR_MODULES, type SidebarChildRow } from "@/shared/lib/auth/sidebar
  *   • else nothing: open to every signed-in staff member.
  * On a tie the link wins over its module (/office/help is both).
  *
- * Enforced in `proxy.ts` for every /office page. /vouchers and the print pages are
- * not sidebar pages: their writes are gated by the voucher ticks at the API.
+ * Enforced in `proxy.ts` for every /office page, and for the bare pages in
+ * `LOCKED_AS`. /vouchers and the print pages are not sidebar pages: their writes
+ * are gated by the voucher ticks at the API.
  */
 
 /** Where a refused page sends the person, and the flag that makes it say why. */
@@ -67,10 +68,19 @@ const RULES: Rule[] = (() => {
     return [...byKey.values()].sort((a, b) => b.segments - a.segments || Number(b.link) - Number(a.link));
 })();
 
+/** Bare staff pages outside /office (no sidebar frame) that show one office page's
+ *  data, and so open on that page's tick. */
+const LOCKED_AS: Record<string, string> = {
+    "/preview/product": "/office/ecommerce/products",
+};
+
 /** The sidebar ticks that open `href` — any one of them will do — or null when no
  *  tick governs the page. A query or hash on the address is ignored. */
 export function pageLinkIds(href: string): string[] | null {
-    const pathname = href.split(/[?#]/)[0].replace(/(.)\/+$/, "$1");
+    let pathname = href.split(/[?#]/)[0].replace(/(.)\/+$/, "$1");
+    for (const [bare, office] of Object.entries(LOCKED_AS)) {
+        if (under(pathname, bare)) pathname = office;
+    }
     if (!under(pathname, "/office") || pathname === "/office") return null;
     if (OPEN_TO_ALL.some((p) => under(pathname, p))) return null;
     return RULES.find((r) => under(pathname, r.prefix))?.ids ?? null;

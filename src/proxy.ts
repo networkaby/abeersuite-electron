@@ -31,7 +31,8 @@ function wantsStaffSignIn(pathname: string): boolean {
         pathname.startsWith("/office") ||
         pathname.startsWith("/vouchers") ||
         pathname.startsWith("/receipt") ||
-        pathname.startsWith("/shipping-")
+        pathname.startsWith("/shipping-") ||
+        pathname.startsWith("/preview/")
     );
 }
 

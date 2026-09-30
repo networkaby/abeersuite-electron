@@ -113,7 +113,7 @@ export const PUBLIC_API_ALLOWLIST = new Set(["auth", "portal", "shop", "upload-s
 
 /** Whole subtrees that are office-only regardless of what's under `src/app/api`. Unchanged
  *  from the original `strip-public-build.mjs`. */
-export const OFFICE_ONLY_APP_PATHS = ["(protected)", "staff", "receipt", "shipping-label", "shipping-slip"];
+export const OFFICE_ONLY_APP_PATHS = ["(protected)", "staff", "receipt", "shipping-label", "shipping-slip", "preview"];
 
 // ── `office` / `counter` modes — temporary rename, local dev tree (counter-build.ts) ──
 
