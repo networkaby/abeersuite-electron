@@ -94,7 +94,7 @@ type MergedRow =
 
 // A row nobody has tied yet — the only kind worth suggesting.
 function isOpen(r: MergedRow) {
-    return r.kind === "st" ? (r.st.match == null || r.st.match.stale) && !r.st.locked : r.gl.match == null && !r.gl.locked;
+    return r.kind === "st" ? (r.st.match == null || r.st.match.stale) && !r.st.locked && !r.st.inOpening : r.gl.match == null && !r.gl.locked;
 }
 
 function money(n: number | null | undefined) {
@@ -198,7 +198,7 @@ export function BankReconciliationPage() {
             const b = byDelta.get(k); if (b) b.push(g); else byDelta.set(k, [g]);
         }
         for (const st of data.statementLines) {
-            if ((st.match != null && !st.match.stale) || st.locked) continue;
+            if ((st.match != null && !st.match.stale) || st.locked || st.inOpening) continue;
             const delta = (st.deposit ?? 0) - (st.withdrawal ?? 0);
             if (delta === 0) continue;
             const all = byDelta.get(delta.toFixed(2)) ?? [];
@@ -541,6 +541,11 @@ export function BankReconciliationPage() {
                                         <Lock size={12} className="mr-1" /> Lock upto {formatDate(s.suggestedReconciledThrough)}
                                     </Button>
                                 )}
+                                {s.openingCover && !s.openingCover.agrees && s.openingCover.bankOpening != null && (
+                                    <span className="text-[11px] text-amber-600" title="Bank lines before the year the books begin stay open until the two openings agree.">
+                                        Opening on {formatDate(s.openingCover.fyStart)}: books {fmt(s.openingCover.booksOpening)}, bank {fmt(s.openingCover.bankOpening)} — check the opening balance
+                                    </span>
+                                )}
                                 {s.counts.stale > 0 && <span className="text-[11px] text-amber-600">{s.counts.stale} match(es) point at a changed voucher — auto-match clears them</span>}
                             </div>
                         </div>
@@ -819,6 +824,17 @@ function AgreedLegend({ summary }: { summary: ReconPayload["summary"] }) {
     );
 }
 
+function OpeningTag() {
+    return (
+        <span
+            className="rounded bg-muted px-1 text-[10px] font-medium text-muted-foreground"
+            title="Dated before the year the books begin. The bank's balance going into that year equals the books' opening balance, so this line is already inside the opening balance — nothing to book, nothing to match."
+        >
+            in opening balance
+        </span>
+    );
+}
+
 function Stat({ label, value, hint, sub, emphasis, warn }: { label: string; value: number | null; hint?: string; sub?: string; emphasis?: boolean; warn?: boolean }) {
     return (
         <div className="min-w-0">
@@ -860,6 +876,9 @@ function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGro
         ? row.st.match!.glLineIds.map((id) => glById.find((g) => g.id === id)?.voucherNo ?? `#${id}`)
         : [];
     const matchGap = isSt && matched ? matchGapDays(row.st.date, row.st.match!.glLineIds, glById) : 0;
+    // Locked, or already inside the opening balance: shown, never touched.
+    const opening = isSt && row.st.inOpening;
+    const frozen = r.locked || opening;
     const sug = row.sug;
     const run = row.run;
     // One background, chosen — not three bg-* utilities stacked, where which one
@@ -881,7 +900,7 @@ function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGro
             // miss; everything else keeps the hairline.
             row.strongBelow ? "border-b-2 border-b-foreground/30" : "border-b-border/60",
             background,
-            r.locked && "opacity-60",
+            frozen && "opacity-60",
         )}>
             <td className="relative px-2 py-1.5 align-top">
                 {run && (
@@ -895,7 +914,7 @@ function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGro
                         )}
                     />
                 )}
-                {!matched && !r.locked && (
+                {!matched && !frozen && (
                     <input type="checkbox" checked={selected} onChange={onToggle} aria-label={isSt ? `Select statement line ${formatDate(r.date)} ${row.st.narration}` : `Select book entry ${row.gl.voucherNo}`} />
                 )}
                 {matched && <CheckCircle2 size={13} className="text-green-600" />}
@@ -954,6 +973,7 @@ Same amount, same side, but ${hint.gap} day(s) away with no reference in common,
                         </button>
                     )}
                     {isSt && row.st.match?.stale && <span className="text-amber-600">matched voucher changed — re-match</span>}
+                    {opening && <OpeningTag />}
                 </div>
             </td>
             <td className="px-2 py-1.5 text-right align-top font-mono">{money(isSt ? row.st.withdrawal : row.gl.credit)}</td>
@@ -964,7 +984,7 @@ Same amount, same side, but ${hint.gap} day(s) away with no reference in common,
                 {matched && !r.locked && (
                     <button type="button" className="inline-flex items-center gap-0.5 text-muted-foreground hover:text-red-600" disabled={busy} onClick={onUnmatch} title="Unmatch"><Unlink size={12} /></button>
                 )}
-                {isSt && !matched && !r.locked && (
+                {isSt && !matched && !frozen && (
                     <span className="inline-flex items-center gap-0.5">
                         <Sparkles size={11} className="text-muted-foreground" />
                         <button type="button" className="rounded px-1 text-[11px] text-primary hover:underline" disabled={busy} onClick={() => onBook(row.st.deposit != null ? "RECEIPT" : "PAYMENT")}>{row.st.deposit != null ? "Receipt" : "Payment"}</button>
@@ -984,10 +1004,11 @@ function StatementRowView({ r, selected, onToggle, onUnmatch, onBook, busy, glBy
     const matched = r.match != null && !r.match.stale;
     const partners = matched ? r.match!.glLineIds.map((id) => glById.find((g) => g.id === id)?.voucherNo ?? `#${id}`) : [];
     const matchGap = matched ? matchGapDays(r.date, r.match!.glLineIds, glById) : 0;
+    const frozen = r.locked || r.inOpening;
     return (
-        <tr className={cn("hover:bg-muted/40", selected ? "bg-primary/15" : matched && "bg-green-50/40 dark:bg-green-900/10", r.locked && "opacity-60")}>
+        <tr className={cn("hover:bg-muted/40", selected ? "bg-primary/15" : matched && "bg-green-50/40 dark:bg-green-900/10", frozen && "opacity-60")}>
             <td className="px-2 py-1.5 align-top">
-                {!matched && !r.locked && (
+                {!matched && !frozen && (
                     <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select statement line ${formatDate(r.date)} ${r.narration}`} />
                 )}
                 {matched && <CheckCircle2 size={13} className="text-green-600" />}
@@ -1017,6 +1038,7 @@ Same amount, same side, but ${hint.gap} day(s) away with no reference in common,
                         </button>
                     )}
                     {r.match?.stale && <span className="text-amber-600">matched voucher changed — re-match</span>}
+                    {r.inOpening && <OpeningTag />}
                 </div>
             </td>
             <td className="px-2 py-1.5 text-right font-mono align-top">{money(r.withdrawal)}</td>
@@ -1026,7 +1048,7 @@ Same amount, same side, but ${hint.gap} day(s) away with no reference in common,
                 {matched && !r.locked && (
                     <button type="button" className="inline-flex items-center gap-0.5 text-muted-foreground hover:text-red-600" disabled={busy} onClick={onUnmatch} title="Unmatch"><Unlink size={12} /></button>
                 )}
-                {!matched && !r.locked && (
+                {!matched && !frozen && (
                     <span className="inline-flex items-center gap-0.5">
                         <Sparkles size={11} className="text-muted-foreground" />
                         <button type="button" className="rounded px-1 text-[11px] text-primary hover:underline" disabled={busy} onClick={() => onBook(r.deposit != null ? "RECEIPT" : "PAYMENT")}>{r.deposit != null ? "Receipt" : "Payment"}</button>

@@ -28,7 +28,7 @@ import { accountIdsUnderGroup } from "./accountGroups";
 import { ledgerStatusFilterUv } from "./ledgerStatus";
 import { collapseEditReversals } from "./collapseEditReversals";
 import { toNumber } from "./balance";
-import { agreementRun, type AgreementBreak } from "./bankReconAgreement";
+import { agreementRun, fyStartOf, inOpening, openingCover, type AgreementBreak, type OpeningCover } from "./bankReconAgreement";
 import { resolveSourceBatch } from "./journalEntrySource";
 import { referenceHref, voucherSourceForType } from "./voucherUrls";
 
@@ -116,6 +116,8 @@ export interface StatementLineView {
     deposit: number | null;
     balance: number | null;
     locked: boolean;
+    /** Dated before the book-start year and proven inside the opening balance — explained, never matched. */
+    inOpening: boolean;
     match: { groupId: string; auto: boolean; glLineIds: number[]; stale: boolean } | null;
 }
 
@@ -153,6 +155,8 @@ export interface ReconSummary {
     agreedThrough: string | null;
     /** The first day that fails, and why — null when the whole period agrees. */
     breakAt: AgreementBreak | null;
+    /** The book-start year's opening, books against bank. Null when the ledger has no book entries yet. */
+    openingCover: OpeningCover | null;
 }
 
 export interface ReconPayload {
@@ -194,6 +198,71 @@ async function loadMatchState(accountId: number, db: Prisma.TransactionClient | 
     return { matches, staleGroups };
 }
 
+/**
+ * The book-start year's opening, books against bank (see openingCover). The
+ * year is the one the opening balance belongs to: the day after its date when
+ * one is set (so "as on 31 Mar" and "from 1 Apr" both land on 1 Apr), otherwise
+ * the year of the ledger's first book entry.
+ */
+export async function loadOpeningCover(accountId: number, db: Prisma.TransactionClient | typeof prisma = prisma): Promise<OpeningCover | null> {
+    const acc = await db.account.findUnique({
+        where: { id: accountId },
+        select: { openingBalance: true, openingBalanceType: true, openingBalanceDate: true },
+    });
+    let fyStart: string | null = null;
+    if (acc?.openingBalanceDate) {
+        fyStart = fyStartOf(toDateOnlyUtc(new Date(acc.openingBalanceDate.getTime() + 86400000)));
+    } else {
+        const first = await db.voucherGlLine.findFirst({
+            where: { accountId, universalVoucher: { ...ledgerStatusFilterUv() } },
+            orderBy: { universalVoucher: { date: "asc" } },
+            select: { universalVoucher: { select: { date: true } } },
+        });
+        if (first) fyStart = fyStartOf(toDateOnly(first.universalVoucher.date));
+    }
+    if (!fyStart) return null;
+    const fy = startOfDayUtc(fyStart);
+
+    const [before, firstIn, lastBefore] = await Promise.all([
+        // Edit reversals net to nothing on the account, so a raw sum is right here.
+        db.voucherGlLine.groupBy({
+            by: ["type"],
+            where: { accountId, universalVoucher: { ...ledgerStatusFilterUv(), date: { lt: fy } } },
+            _sum: { amount: true },
+        }),
+        db.bankStatementLine.findFirst({
+            where: { accountId, date: { gte: fy } },
+            orderBy: [{ date: "asc" }, { seq: "asc" }],
+            select: { balance: true, deposit: true, withdrawal: true },
+        }),
+        db.bankStatementLine.findFirst({
+            where: { accountId, date: { lt: fy }, balance: { not: null } },
+            orderBy: [{ date: "desc" }, { seq: "desc" }],
+            select: { balance: true },
+        }),
+    ]);
+    let booksOpening = 0;
+    if (acc?.openingBalance != null && acc.openingBalanceType) {
+        const ob = toNumber(acc.openingBalance);
+        booksOpening += acc.openingBalanceType === "DEBIT" ? ob : -ob;
+    }
+    for (const b of before) {
+        const amt = b._sum.amount != null ? toNumber(b._sum.amount) : 0;
+        booksOpening += b.type === "DEBIT" ? amt : -amt;
+    }
+    return openingCover({
+        fyStart,
+        booksOpening,
+        firstInYear: firstIn
+            ? {
+                balance: firstIn.balance != null ? toNumber(firstIn.balance) : null,
+                net: (firstIn.deposit != null ? toNumber(firstIn.deposit) : 0) - (firstIn.withdrawal != null ? toNumber(firstIn.withdrawal) : 0),
+            }
+            : null,
+        lastBeforeYear: lastBefore?.balance != null ? toNumber(lastBefore.balance) : null,
+    });
+}
+
 function glLineSelect() {
     return {
         id: true, type: true, amount: true, reference: true, method: true,
@@ -206,7 +275,7 @@ export async function loadReconciliation(accountId: number, fromIso: string, toI
     const from = startOfDayUtc(fromIso);
     const to = endOfDayUtc(toIso);
 
-    const [{ matches, staleGroups }, periodGl, allGlToDate, stLinesAll, imports, ledgerRow] = await Promise.all([
+    const [{ matches, staleGroups }, periodGl, allGlToDate, stLinesAll, imports, ledgerRow, cover] = await Promise.all([
         loadMatchState(accountId),
         prisma.voucherGlLine.findMany({
             where: { accountId, universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: from, lte: to } } },
@@ -236,6 +305,7 @@ export async function loadReconciliation(accountId: number, fromIso: string, toI
             where: { id: accountId },
             select: { openingBalance: true, openingBalanceType: true, openingBalanceDate: true },
         }),
+        loadOpeningCover(accountId),
     ]);
 
     // Live matches only; stale groups read as unmatched everywhere below.
@@ -276,7 +346,7 @@ export async function loadReconciliation(accountId: number, fromIso: string, toI
     for (const s of stLinesAll) {
         const d = toDateOnlyUtc(s.date);
         lastLine = { date: d, balance: s.balance != null ? toNumber(s.balance) : null };
-        if (byStatement.has(s.id)) continue;
+        if (byStatement.has(s.id) || inOpening(d, cover)) continue;
         depositsNotInBooks += s.deposit != null ? toNumber(s.deposit) : 0;
         withdrawalsNotInBooks += s.withdrawal != null ? toNumber(s.withdrawal) : 0;
         stUnmatched++;
@@ -316,7 +386,7 @@ export async function loadReconciliation(accountId: number, fromIso: string, toI
         statement: stLinesAll.map((s) => ({
             date: toDateOnlyUtc(s.date),
             balance: s.balance != null ? toNumber(s.balance) : null,
-            ticked: byStatement.has(s.id),
+            ticked: byStatement.has(s.id) || inOpening(toDateOnlyUtc(s.date), cover),
         })),
     });
     const sourceMap = await resolveSourceBatch([...new Set(visiblePeriod.map((l) => l.universalVoucher.id))]);
@@ -367,6 +437,7 @@ export async function loadReconciliation(accountId: number, fromIso: string, toI
                 deposit: s.deposit != null ? toNumber(s.deposit) : null,
                 balance: s.balance != null ? toNumber(s.balance) : null,
                 locked: isLocked(d, account.lock),
+                inOpening: inOpening(d, cover),
                 match: ms
                     ? { groupId: ms[0].groupId, auto: ms[0].auto, glLineIds: ms.map((m) => m.glLineId), stale: false }
                     : stale
@@ -398,6 +469,7 @@ export async function loadReconciliation(accountId: number, fromIso: string, toI
             suggestedReconciledThrough: suggested,
             agreedThrough,
             breakAt,
+            openingCover: cover,
         },
         statementLines,
         glLines,
@@ -647,7 +719,7 @@ export async function runAutoMatch(accountId: number, userId: number, fromIso: s
         const matchedSt = new Set(live.map((m) => m.statementLineId));
         const matchedGl = new Set(live.map((m) => m.glLineId));
 
-        const [stRows, glRows] = await Promise.all([
+        const [stRows, glRows, cover] = await Promise.all([
             tx.bankStatementLine.findMany({
                 where: { accountId, date: { gte: from, lte: to } },
                 select: { id: true, date: true, deposit: true, withdrawal: true, narration: true, reference: true },
@@ -659,11 +731,12 @@ export async function runAutoMatch(accountId: number, userId: number, fromIso: s
                 },
                 select: glLineSelect(),
             }),
+            loadOpeningCover(accountId, tx),
         ]);
         const glVisible = collapseEditReversals(glRows);
 
         const statement: StCandidate[] = stRows
-            .filter((s) => !matchedSt.has(s.id) && !isLocked(toDateOnlyUtc(s.date), account.lock))
+            .filter((s) => !matchedSt.has(s.id) && !isLocked(toDateOnlyUtc(s.date), account.lock) && !inOpening(toDateOnlyUtc(s.date), cover))
             .map((s) => ({
                 id: s.id,
                 date: toDateOnlyUtc(s.date),
@@ -702,7 +775,7 @@ export async function createMatch(accountId: number, userId: number, statementLi
     if (statementLineIds.length === 0 || glLineIds.length === 0) throw new BankReconError("Pick at least one line on each side.");
 
     return prisma.$transaction(async (tx) => {
-        const [st, gl, taken] = await Promise.all([
+        const [st, gl, taken, cover] = await Promise.all([
             tx.bankStatementLine.findMany({
                 where: { id: { in: statementLineIds }, accountId },
                 select: { id: true, date: true, deposit: true, withdrawal: true },
@@ -715,10 +788,12 @@ export async function createMatch(accountId: number, userId: number, statementLi
                 where: { OR: [{ statementLineId: { in: statementLineIds } }, { glLineId: { in: glLineIds } }] },
                 select: { groupId: true, statementLineId: true, glLineId: true },
             }),
+            loadOpeningCover(accountId, tx),
         ]);
         if (st.length !== statementLineIds.length) throw new BankReconError("A statement line was not found on this ledger.");
         if (gl.length !== glLineIds.length) throw new BankReconError("A book entry was not found on this ledger, or its voucher is not posted.");
         for (const s of st) if (isLocked(toDateOnlyUtc(s.date), account.lock)) throw new BankReconError("A statement line is before the reconciled lock.");
+        for (const s of st) if (inOpening(toDateOnlyUtc(s.date), cover)) throw new BankReconError("A statement line is already inside the opening balance — there is nothing in the books to match it to.");
         for (const g of gl) if (isLocked(toDateOnly(g.universalVoucher.date), account.lock)) throw new BankReconError("A book entry is before the reconciled lock.");
 
         // Already matched? Only a stale match may be replaced.
@@ -773,13 +848,14 @@ export async function removeMatchGroup(accountId: number, groupId: string) {
  * that is what "cheque issued, not presented" means.
  */
 export async function assertLockAllowed(accountId: number, throughIso: string): Promise<void> {
-    const { matches, staleGroups } = await loadMatchState(accountId);
+    // Lines already inside the proven opening balance are explained, not open.
+    const [{ matches, staleGroups }, cover] = await Promise.all([loadMatchState(accountId), loadOpeningCover(accountId)]);
     const matchedSt = new Set(matches.filter((m) => !staleGroups.has(m.groupId)).map((m) => m.statementLineId));
     const lines = await prisma.bankStatementLine.findMany({
         where: { accountId, date: { lte: endOfDayUtc(throughIso) } },
         select: { id: true, date: true },
     });
-    const open = lines.filter((l) => !matchedSt.has(l.id));
+    const open = lines.filter((l) => !matchedSt.has(l.id) && !inOpening(toDateOnlyUtc(l.date), cover));
     if (open.length) {
         const first = open.map((l) => toDateOnlyUtc(l.date)).sort()[0];
         throw new BankReconError(`${open.length} statement line(s) up to that date are not matched or booked yet — the first is on ${first}.`, 409);

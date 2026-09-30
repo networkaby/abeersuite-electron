@@ -71,3 +71,58 @@ export function agreementRun(input: {
     }
     return { agreedThrough, breakAt: null };
 }
+
+// ── The book-start year's opening ────────────────────────────────────────────
+//
+// The books begin with an opening balance: the bank's balance at the close of
+// the day before the book-start year. Statement lines dated before that year
+// are therefore already inside the opening balance — there is no voucher for
+// them and never will be. Once proven (the bank's balance going into the year
+// equals the books' opening, to the paisa), they count as explained: not "not
+// in books", and no bar to the lock. Unproven, nothing is excused, so a wrong
+// opening balance still shows as a difference. Only the book-start year needs
+// this; every later year runs on from the day before like any other day.
+
+/** 1 April on or before this date — the Indian financial year it falls in. */
+export function fyStartOf(iso: string): string {
+    const y = Number(iso.slice(0, 4));
+    const m = Number(iso.slice(5, 7));
+    return `${m >= 4 ? y : y - 1}-04-01`;
+}
+
+export type OpeningCover = {
+    /** First day of the book-start year. */
+    fyStart: string;
+    /** Books' balance going into that day, signed as the bank sees it. */
+    booksOpening: number;
+    /** Bank's balance going into that day, or null when the statement cannot say. */
+    bankOpening: number | null;
+    agrees: boolean;
+};
+
+export function openingCover(input: {
+    fyStart: string;
+    booksOpening: number;
+    /** The first statement line on or after `fyStart` — its printed balance and its own signed amount. */
+    firstInYear: { balance: number | null; net: number } | null;
+    /** The last printed balance before `fyStart`, when the first line in the year has none. */
+    lastBeforeYear: number | null;
+}): OpeningCover {
+    // The bank's opening is read off the first line available in the year —
+    // its balance before its own amount — whatever date that line falls on.
+    const bankOpening = input.firstInYear?.balance != null
+        ? money2(input.firstInYear.balance - input.firstInYear.net)
+        : input.lastBeforeYear;
+    const booksOpening = money2(input.booksOpening);
+    return {
+        fyStart: input.fyStart,
+        booksOpening,
+        bankOpening,
+        agrees: bankOpening != null && Math.abs(bankOpening - booksOpening) < EPS,
+    };
+}
+
+/** A statement line already inside the proven opening balance. */
+export function inOpening(dateIso: string, cover: OpeningCover | null): boolean {
+    return cover != null && cover.agrees && dateIso < cover.fyStart;
+}
