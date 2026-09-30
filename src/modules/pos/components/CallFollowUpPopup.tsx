@@ -16,11 +16,25 @@
  *
  * WHICH CALLS. No shift needs to be open — `useMyCounterExtension` resolves
  * this PC's counter from the bridge's device id, which stays bound long after
- * a shift closes. If it resolves to "no known extension" (bridge down, or
- * this PC was never bound to a counter) the popup does NOT stay silent — it
- * falls back to every unhandled call across every counter, on the theory
- * that a slow, unscoped reminder beats calls going unlogged just because
- * today's PC has no bridge.
+ * a shift closes. A counter sees the calls on its own extension(s) at once.
+ * Every other call reaches it too, on two rules (server side, `forCounter=1`,
+ * see `counterPopupScope`): a call that belongs to NO counter — no extension
+ * at all (an unanswered incoming call records none) or one no counter is set
+ * to (a spare handset, Ext 45) — shows everywhere at once; another counter's
+ * call shows everywhere once it has waited `CALL_POPUP_PUBLIC_AFTER_MS`
+ * unlogged. A PC with no known extension (bridge down, or never bound) has no
+ * calls of its own and gets just those two. The line under the title names
+ * the extension (or trunk), so staff can tell whose call it was.
+ *
+ * A MISSED CALL IS LOCKED. Under `MISSED_CALL_UNDER_SEC` of talk nobody has
+ * spoken to the caller, so there is nothing to note — only a call back. The
+ * panel shows no note, ticket or save for it, only that line, and its chip is
+ * red. It closes by itself when someone really talks to the caller (that call
+ * joins the same chip as its newest call and unlocks it, and the one save
+ * covers the miss too), or when the customer turns up at the shop — a bill or
+ * a ticket for them after the miss (`customerSeenSince`). In an emergency a
+ * note on the CRM Call Log closes it. It still drops off after
+ * `CALL_POPUP_MAX_AGE_MS` like any other call.
  *
  * ONE CALLER, ONE ENTRY. A customer who rings five times has one thing to say,
  * not five, so pending calls fold together by their normalised number: one chip,
@@ -173,7 +187,19 @@ type PendingCall = {
     rawNumber: string | null;
     occurredAt: string;
     customer: { kind: "person" | "company"; id: number; name: string } | null;
+    fromExt: string | null;
+    toExt: string | null;
+    trunk: string | null;
+    /** Under MISSED_CALL_UNDER_SEC of talk — needs a call back, see the module doc. */
+    missed: boolean;
 };
+
+/** Which extension took the call — the popup can open on another counter, so
+ *  staff need to see whose call it was. Trunk when the exchange sent no ext. */
+function callExtLabel(c: PendingCall): string | null {
+    const ext = c.direction === "OUTGOING" ? c.fromExt : c.toExt;
+    return ext ? `Ext ${ext}` : c.trunk;
+}
 
 /** One caller's pending calls. `latest` is what the panel shows and saves from. */
 type Group = { key: string; calls: PendingCall[]; latest: PendingCall };
@@ -264,14 +290,15 @@ export default function CallFollowUpPopup() {
     const refresh = useCallback(async () => {
         if (extension === "unknown") return; // still resolving which counter this PC is
         try {
-            // `extension === null` → no ext param → GET /api/calls falls back to
-            // every counter's unhandled calls (see the module doc's WHICH CALLS).
+            // `forCounter` scopes to this counter's own calls plus the ones that
+            // are nobody's or have waited too long; `extension === null` sends no
+            // ext, so only the latter (see the module doc's WHICH CALLS).
             // The window is days now, not minutes, so ask for more than a
             // screenful — the icon's count has to be the honest total.
             // `sinceLastLogged` drops calls from a number that came BEFORE that
             // number's most recent logged call — staff already answered those.
             // The CRM Call Log never sends it; nothing may be hidden there.
-            const params: Record<string, string> = { unhandled: "1", sinceLastLogged: "1", limit: "50" };
+            const params: Record<string, string> = { unhandled: "1", sinceLastLogged: "1", forCounter: "1", limit: "50" };
             if (extension) params.ext = extension;
             const seq = ++refreshSeqRef.current;
             const { data } = await axios.get<{ items: PendingCall[]; pagination?: { total: number } }>("/api/calls", { params });
@@ -367,7 +394,8 @@ export default function CallFollowUpPopup() {
     // end. Matches on the linked person/company AND on the ticket's own
     // phone field — see the module doc.
     useEffect(() => {
-        if (!call) { setLinkCandidates([]); return; }
+        // A missed call is locked (no ticket to link) — skip the read.
+        if (!call || call.missed) { setLinkCandidates([]); return; }
         const customer = call.customer;
         const phone = call.rawNumber;
         if (!customer && !phone) { setLinkCandidates([]); return; }
@@ -571,6 +599,7 @@ export default function CallFollowUpPopup() {
                                     {phoneDisplay}
                                     {call.customer ? ` — ${call.customer.name}` : ""}
                                     {" · "}{formatDateTime(call.occurredAt)}
+                                    {callExtLabel(call) ? ` · ${callExtLabel(call)}` : ""}
                                 </DialogDescription>
                             </DialogHeader>
 
@@ -609,7 +638,7 @@ export default function CallFollowUpPopup() {
                                             key={g.key}
                                             type="button"
                                             onClick={() => setSelectedKey(g.key)}
-                                            className={`rounded-full border px-2.5 py-1 text-xs transition ${g.key === current.key ? "border-primary bg-primary/10 font-medium" : "border-muted-foreground/30 text-muted-foreground hover:bg-muted"}`}
+                                            className={`rounded-full border px-2.5 py-1 text-xs transition ${g.key === current.key ? "bg-primary/10 font-medium" : "hover:bg-muted"} ${g.latest.missed ? "border-destructive/60 text-destructive" : g.key === current.key ? "border-primary" : "border-muted-foreground/30 text-muted-foreground"}`}
                                         >
                                             {g.latest.customer ? g.latest.customer.name : formatCallerNumber(g.latest.rawNumber, g.latest.direction)}
                                             {g.calls.length > 1 ? ` ×${g.calls.length}` : ""} · {relativeLabel(g.latest.occurredAt)}
@@ -618,76 +647,89 @@ export default function CallFollowUpPopup() {
                                 </div>
                             )}
 
-                            <div className="space-y-2">
-                                {linkCandidates.length > 0 && (
-                                    <div className="space-y-1.5">
-                                        <p className="text-xs font-medium text-muted-foreground">Already has an open ticket — link instead?</p>
-                                        {linkCandidates.map((c) => {
-                                            const picked = selectedTicketId === c.id;
-                                            return (
-                                                <button
-                                                    key={`${c.kind}-${c.id}`}
-                                                    type="button"
-                                                    disabled={busy}
-                                                    onClick={() => pickTicket(c.id)}
-                                                    className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition disabled:opacity-50 ${picked ? "border-primary bg-primary/10" : "hover:bg-muted"}`}
-                                                >
-                                                    <span className="flex min-w-0 items-center gap-2">
-                                                        <span className={`flex size-4 shrink-0 items-center justify-center rounded-sm border ${picked ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"}`}>
-                                                            {picked && <Check size={11} />}
-                                                        </span>
-                                                        <span className="truncate">
-                                                            <span className="text-xs uppercase text-muted-foreground">{c.kind === "help" ? "Help" : "Deal"}</span>{" "}
-                                                            {c.label}
-                                                        </span>
-                                                    </span>
-                                                    {c.statusLabel && <span className="ml-2 shrink-0 text-xs text-muted-foreground">{c.statusLabel}</span>}
-                                                </button>
-                                            );
-                                        })}
+                            {/* A missed call is LOCKED: nobody has talked to this caller,
+                                so there is nothing to note — only a call back. It closes
+                                by itself once someone really talks to them (the new call
+                                joins this chip and unlocks it) or they turn up at the shop;
+                                in an emergency, a note on the CRM Call Log closes it. */}
+                            {call.missed ? (
+                                <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                                    Missed call — call back to the caller. Closes once you talk to them or they visit.
+                                </p>
+                            ) : (
+                                <>
+                                    <div className="space-y-2">
+                                        {linkCandidates.length > 0 && (
+                                            <div className="space-y-1.5">
+                                                <p className="text-xs font-medium text-muted-foreground">Already has an open ticket — link instead?</p>
+                                                {linkCandidates.map((c) => {
+                                                    const picked = selectedTicketId === c.id;
+                                                    return (
+                                                        <button
+                                                            key={`${c.kind}-${c.id}`}
+                                                            type="button"
+                                                            disabled={busy}
+                                                            onClick={() => pickTicket(c.id)}
+                                                            className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm transition disabled:opacity-50 ${picked ? "border-primary bg-primary/10" : "hover:bg-muted"}`}
+                                                        >
+                                                            <span className="flex min-w-0 items-center gap-2">
+                                                                <span className={`flex size-4 shrink-0 items-center justify-center rounded-sm border ${picked ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"}`}>
+                                                                    {picked && <Check size={11} />}
+                                                                </span>
+                                                                <span className="truncate">
+                                                                    <span className="text-xs uppercase text-muted-foreground">{c.kind === "help" ? "Help" : "Deal"}</span>{" "}
+                                                                    {c.label}
+                                                                </span>
+                                                            </span>
+                                                            {c.statusLabel && <span className="ml-2 shrink-0 text-xs text-muted-foreground">{c.statusLabel}</span>}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                        {linkLoading && (
+                                            <p className="text-xs text-muted-foreground">Checking for open tickets…</p>
+                                        )}
+
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <Button
+                                                variant={createAs === "help" ? "default" : "outline"}
+                                                onClick={() => pickCreateAs("help")}
+                                                disabled={busy || selectedTicketId != null}
+                                            >
+                                                <Ticket size={15} /> Help ticket
+                                            </Button>
+                                            <Button
+                                                variant={createAs === "deal" ? "default" : "outline"}
+                                                onClick={() => pickCreateAs("deal")}
+                                                disabled={busy || selectedTicketId != null}
+                                            >
+                                                <HandCoins size={15} /> Deal
+                                            </Button>
+                                        </div>
+
+                                        <Textarea
+                                            ref={noteRef}
+                                            value={noteDraft}
+                                            onChange={(e) => setNoteDraft(e.target.value)}
+                                            placeholder={
+                                                selectedTicketId != null ? "Follow-up note for this ticket…"
+                                                    : createAs ? "What does the customer need?"
+                                                        : "What was this call about?"
+                                            }
+                                            rows={3}
+                                        />
                                     </div>
-                                )}
-                                {linkLoading && (
-                                    <p className="text-xs text-muted-foreground">Checking for open tickets…</p>
-                                )}
 
-                                <div className="grid grid-cols-2 gap-2">
-                                    <Button
-                                        variant={createAs === "help" ? "default" : "outline"}
-                                        onClick={() => pickCreateAs("help")}
-                                        disabled={busy || selectedTicketId != null}
-                                    >
-                                        <Ticket size={15} /> Help ticket
-                                    </Button>
-                                    <Button
-                                        variant={createAs === "deal" ? "default" : "outline"}
-                                        onClick={() => pickCreateAs("deal")}
-                                        disabled={busy || selectedTicketId != null}
-                                    >
-                                        <HandCoins size={15} /> Deal
-                                    </Button>
-                                </div>
-
-                                <Textarea
-                                    ref={noteRef}
-                                    value={noteDraft}
-                                    onChange={(e) => setNoteDraft(e.target.value)}
-                                    placeholder={
-                                        selectedTicketId != null ? "Follow-up note for this ticket…"
-                                            : createAs ? "What does the customer need?"
-                                                : "What was this call about?"
-                                    }
-                                    rows={3}
-                                />
-                            </div>
-
-                            <DialogFooter>
-                                <Button onClick={() => void save()} disabled={busy || !noteDraft.trim()} className="w-full">
-                                    {busy ? "Saving…" : (
-                                        <>{selectedTicketId != null && <Link2 size={15} />} {saveLabel}</>
-                                    )}
-                                </Button>
-                            </DialogFooter>
+                                    <DialogFooter>
+                                        <Button onClick={() => void save()} disabled={busy || !noteDraft.trim()} className="w-full">
+                                            {busy ? "Saving…" : (
+                                                <>{selectedTicketId != null && <Link2 size={15} />} {saveLabel}</>
+                                            )}
+                                        </Button>
+                                    </DialogFooter>
+                                </>
+                            )}
                         </>
                     )}
                 </DialogContent>

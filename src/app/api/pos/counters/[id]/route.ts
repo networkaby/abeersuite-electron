@@ -11,6 +11,8 @@ import { tillBalancePaise } from "@/modules/pos/lib/shiftMath";
 import { normalizeExtensions } from "@/shared/lib/counter/idRange";
 import { prismaUniqueError } from "@/shared/lib/api/prismaUniqueError";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
+import { revalidateTag } from "next/cache";
+import { COUNTER_EXTENSIONS_TAG } from "@/shared/lib/calls/followUp";
 
 // One payment account on the counter. `id` present = update that row; absent =
 // create. `accountId` is the bank/cash-style ledger debited when collected here.
@@ -275,6 +277,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         // the outbox flusher, and the authoritative write above never enters the
         // outbox. So say it from here, the way /api/calls does. Best-effort.
         if (released) await publishChangeServer(["settings"]);
+        // The call popup's "which extensions belong to a counter" list.
+        if (data.epbxExtension !== undefined || data.isActive !== undefined) revalidateTag(COUNTER_EXTENSIONS_TAG, { expire: 0 });
 
         return NextResponse.json({
             id: updated.id,
@@ -335,6 +339,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
 
         // Payment-account rows cascade-delete with the counter (onDelete: Cascade).
         await prisma.posCounter.delete({ where: { id } });
+        revalidateTag(COUNTER_EXTENSIONS_TAG, { expire: 0 });
         // We intentionally KEEP the till GL account (audit trail) — just unlinked from the counter now.
         return NextResponse.json({ success: true });
     } catch (e) {

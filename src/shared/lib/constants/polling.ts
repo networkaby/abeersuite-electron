@@ -119,6 +119,19 @@ export const CALL_POPUP_HANDLED_TTL_MS = 15 * 60 * 1000;   // 15 minutes
 export const CALL_POPUP_REMIND_MS = 30 * 60 * 1000;   // 30 minutes
 
 /**
+ * How long a call waits at its own counter before every counter's follow-up
+ * popup shows it too. A counter sees the calls on its own extension(s) at once;
+ * once a call has gone this long without being logged, it is nobody's in
+ * particular any more and any counter may take it.
+ *
+ * A call that belongs to no counter never waits: one with no extension (an
+ * unanswered incoming call records none) or on an extension no counter is set
+ * to (a spare handset, say Ext 45) shows everywhere at once.
+ * **Edit this one line to change how long a counter has its calls to itself.**
+ */
+export const CALL_POPUP_PUBLIC_AFTER_MS = 30 * 60 * 1000;   // 30 minutes
+
+/**
  * The shell's two status surfaces — /api/counter/status and /api/sync/status,
  * feeding the counter badge, the sync badge and the Electron window title.
  *

@@ -1,14 +1,19 @@
 import type { CallDirection, Prisma } from "@/generated/prisma/client";
 
-// A "miscall" = a call where nobody connected. Two flavours, both valuable:
-//   • INCOMING unanswered (speechSec 0) — a customer we missed → call them back.
-//   • OUTGOING unanswered (durationSec 0) — our call that went unanswered →
+// A "miscall" = a call where nobody really talked. Two flavours, both valuable:
+//   • INCOMING (speechSec) — a customer we missed → call them back.
+//   • OUTGOING (durationSec) — our call that went unanswered →
 //     staff-accountability signal.
+// A call picked up and cut inside MISSED_CALL_UNDER_SEC counts too: nothing was
+// said, so the customer still needs a call back.
 // INTERNAL / UNKNOWN never count as a customer miscall.
 
+/** Talk time below this many seconds is a miscall. */
+export const MISSED_CALL_UNDER_SEC = 2;
+
 export function isMissedCall(direction: CallDirection, speechSec: number, durationSec: number): boolean {
-    if (direction === "INCOMING") return speechSec === 0;
-    if (direction === "OUTGOING") return durationSec === 0;
+    if (direction === "INCOMING") return speechSec < MISSED_CALL_UNDER_SEC;
+    if (direction === "OUTGOING") return durationSec < MISSED_CALL_UNDER_SEC;
     return false;
 }
 
@@ -16,8 +21,8 @@ export function isMissedCall(direction: CallDirection, speechSec: number, durati
  *  or wrap in `{ NOT: MISSED_CALL_WHERE }` to exclude them. */
 export const MISSED_CALL_WHERE: Prisma.CallWhereInput = {
     OR: [
-        { direction: "INCOMING", speechSec: 0 },
-        { direction: "OUTGOING", durationSec: 0 },
+        { direction: "INCOMING", speechSec: { lt: MISSED_CALL_UNDER_SEC } },
+        { direction: "OUTGOING", durationSec: { lt: MISSED_CALL_UNDER_SEC } },
     ],
 };
 

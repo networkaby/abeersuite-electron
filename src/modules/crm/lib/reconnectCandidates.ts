@@ -3,7 +3,7 @@ import type { ContactLifecycle, Prisma } from "@/generated/prisma/client";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { loadMarginLines } from "@/modules/bi/lib/marginEngine";
 import { phoneMatchKey } from "@/shared/lib/format";
-import { MISSED_CALL_WHERE } from "@/shared/lib/calls";
+import { MISSED_CALL_UNDER_SEC, MISSED_CALL_WHERE } from "@/shared/lib/calls";
 import type { ReconnectFilterInput } from "@/shared/lib/schemas/reconnectSchema";
 
 /**
@@ -369,10 +369,11 @@ async function callLogKeys(idx: UniverseIndex, direction: "any" | "in" | "out", 
     }
     const phoneKeys = [...keyToCustomer.keys()];
     if (phoneKeys.length) {
-        // A miscall is direction-specific: incoming = speech 0, outgoing = duration 0.
-        // "exclude" = the opposite (some talk time).
-        const missWhen = (zeroField: "speechSec" | "durationSec"): Prisma.CallWhereInput =>
-            missedMode === "only" ? { [zeroField]: 0 } : missedMode === "exclude" ? { [zeroField]: { gt: 0 } } : {};
+        // A miscall is direction-specific: incoming = speech, outgoing = duration,
+        // under MISSED_CALL_UNDER_SEC. "exclude" = the opposite (real talk time).
+        const missWhen = (field: "speechSec" | "durationSec"): Prisma.CallWhereInput =>
+            missedMode === "only" ? { [field]: { lt: MISSED_CALL_UNDER_SEC } }
+                : missedMode === "exclude" ? { [field]: { gte: MISSED_CALL_UNDER_SEC } } : {};
         const dirWhere: Prisma.CallWhereInput =
             direction === "in" ? { direction: "INCOMING", ...missWhen("speechSec") }
                 : direction === "out" ? { direction: "OUTGOING", ...missWhen("durationSec") }

@@ -7,6 +7,7 @@ import {
     phoneMatchKey, phoneKeyVariants, normalizeDialedNumber, readCallerNumber, partialCliPrefixes,
 } from "@/shared/lib/format";
 import { isMissedCall, MISSED_CALL_WHERE, parseMissedMode } from "@/shared/lib/calls";
+import { counterPopupScope, customerKey, customerSeenSince } from "@/shared/lib/calls/followUp";
 
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { Prisma } from "@/generated/prisma/client";
@@ -245,11 +246,15 @@ export async function GET(req: Request) {
         const spam = sp.get("spam"); // "1" only spam, "0"/absent excludes spam
         const missedMode = parseMissedMode(sp.get("missed")); // all | only | exclude
         const search = sp.get("search")?.trim() ?? "";
-        // Which extension answered/dialled — the counter follow-up popup's own
-        // lookup, matching either side (an outgoing callback dials FROM the
-        // counter's extension; an incoming call is answered TO it). A counter may
-        // sit at several extensions, so this accepts a comma-separated list.
+        // Which extension answered/dialled, matching either side (an outgoing
+        // callback dials FROM the counter's extension; an incoming call is
+        // answered TO it). A counter may sit at several extensions, so this
+        // accepts a comma-separated list.
         const exts = splitExtensions(sp.get("ext"));
+        // The counter follow-up popup: its own extensions at once, plus every
+        // call that is nobody's or has waited too long — see counterPopupScope.
+        // `ext` may be empty here (a PC bound to no counter).
+        const forCounter = sp.get("forCounter") === "1";
         // Filter by normalized phone key (for showing an unknown caller's call log).
         const phoneKey = sp.get("phone")?.trim();
         // Never triaged: no note (not even a dismissal) and no linked ticket/deal.
@@ -261,6 +266,7 @@ export async function GET(req: Request) {
 
         const and: Prisma.CallWhereInput[] = [];
         if (phoneKey) and.push({ phone: phoneKey });
+        else if (forCounter) and.push(await counterPopupScope(exts));
         else if (exts.length) and.push({ OR: [{ toExt: { in: exts } }, { fromExt: { in: exts } }] });
         if (unhandled) and.push({ note: null, ticketId: null });
         if (parsedDir.success) {
@@ -472,7 +478,29 @@ export async function GET(req: Request) {
             c.direction === "OUTGOING" ? normalizeDialedNumber(c.rawNumber) : c.rawNumber,
         ).shape === "partial";
 
-        const items = calls.filter((c) => !answeredAlready(c.phone, c.occurredAt)).map((c) => ({
+        const kept = calls.filter((c) => !answeredAlready(c.phone, c.occurredAt));
+
+        // ── A missed call closes when the customer turns up ─────────────────
+        // The popup keeps a missed call open until someone really talks to the
+        // caller. A logged real call does that through the cutoff above; so
+        // does the customer coming to the shop — a bill or a ticket for them
+        // AFTER the missed call. Only asked for the numbers still open, so an
+        // ordinary refresh with no missed call reads nothing extra.
+        const openMisses = sinceLastLogged
+            ? kept.filter((c) => isMissedCall(c.direction, c.speechSec, c.durationSec) && ownerOf(c))
+            : [];
+        const seenAt = openMisses.length
+            ? await customerSeenSince(
+                openMisses.map((c) => ownerOf(c)!),
+                new Date(Math.min(...openMisses.map((c) => c.occurredAt.getTime()))),
+            )
+            : new Map<string, number>();
+        const visitedSince = (c: (typeof calls)[number]) => {
+            const owner = ownerOf(c);
+            return !!owner && (seenAt.get(customerKey(owner)) ?? 0) > c.occurredAt.getTime();
+        };
+
+        const items = kept.filter((c) => !openMisses.includes(c) || !visitedSince(c)).map((c) => ({
             id: c.id,
             direction: c.direction,
             phone: c.phone,
