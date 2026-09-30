@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, Fragment } from "react";
-import axios from "axios";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import { toast } from "sonner";
+import { useApiResource } from "@/shared/hooks/useApiResource";
 import { Loader2, Printer, ChevronRight, ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,6 @@ import { fmtPeriodDate } from "@/modules/accountancy/lib/period";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { groupReportUrl } from "@/modules/accountancy/lib/groupReportUrl";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 
 type GroupTypeStr = "ASSET" | "LIABILITY";
@@ -205,43 +204,33 @@ export default function BalanceSheetPage() {
     const canOpen = useCanOpenPage();
     const go = (href: string) => { if (canOpen(href)) router.push(href); };
     const [asOf, setAsOf] = useState(toIsoDate(new Date()));
-    const [data, setData] = useState<BalanceSheetData | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [expanded, setExpanded] = useState<Set<number>>(new Set());
     /** ORG_DEFAULT sentinel = use OrgDefaults.valuationMethod (BS API default). */
     const [valuationMethod, setValuationMethod] = useState<string>(ORG_DEFAULT);
 
-    const load = useCallback((silent = false) => {
-        // A realtime refresh must not blank a report the user is reading.
-        if (!silent) setLoading(true);
-        const qs = new URLSearchParams({ asOf });
-        if (valuationMethod !== ORG_DEFAULT) qs.set("valuationMethod", valuationMethod);
-        axios.get<BalanceSheetData>(`/api/accountancy/reports/balance-sheet?${qs.toString()}`)
-            .then((r) => {
-                setData(r.data);
-                // auto-expand top-level groups on first load
-                setExpanded((prev) => {
-                    if (prev.size > 0) return prev;
-                    const ids = [...r.data.liabilities, ...r.data.assets].map((g) => g.id);
-                    return new Set(ids);
-                });
-            })
-            .catch(() => toast.error("Failed to load balance sheet"))
-            .finally(() => setLoading(false));
-    }, [asOf, valuationMethod]);
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(load, [load]);
-
+    const qs = new URLSearchParams({ asOf });
+    if (valuationMethod !== ORG_DEFAULT) qs.set("valuationMethod", valuationMethod);
+    // A reply for a date / valuation the screen has moved away from is dropped
+    // (useApiResource), and a realtime refresh keeps the report on screen.
     // Every write that moves the books announces "ledger", so this covers a
     // voucher posted at another counter as well as one posted here.
-    useRealtimeTopics(["ledger"], () => load(true));
+    const { data = null, loading, error, reload } = useApiResource<BalanceSheetData>(
+        `/api/accountancy/reports/balance-sheet?${qs.toString()}`,
+        { topics: ["ledger"] },
+    );
+    useEffect(() => { if (error) toast.error("Failed to load balance sheet"); }, [error]);
+    // Top-level groups open by default; once the reader opens or closes one, their
+    // choice stands across refreshes (null = still the default).
+    const [expandedChoice, setExpanded] = useState<Set<number> | null>(null);
+    const expanded = useMemo(
+        () => expandedChoice ?? new Set([...(data?.liabilities ?? []), ...(data?.assets ?? [])].map((g) => g.id)),
+        [expandedChoice, data],
+    );
 
-    const toggle = (id: number) => setExpanded((prev) => {
-        const next = new Set(prev);
+    const toggle = (id: number) => {
+        const next = new Set(expanded);
         if (next.has(id)) { next.delete(id); } else { next.add(id); }
-        return next;
-    });
+        setExpanded(next);
+    };
 
     const goLedger = (ledger: LedgerNode) => {
         const { id, personId, companyId } = ledger;
@@ -318,7 +307,7 @@ export default function BalanceSheetPage() {
                         <Label>As at</Label>
                         <TallyDateInput value={asOf} onValueChange={setAsOf} className="w-auto" />
                     </div>
-                    <Button onClick={() => load()}>Refresh</Button>
+                    <Button onClick={reload}>Refresh</Button>
                     <Button variant="outline" onClick={() => window.print()} title="Print">
                         <Printer size={14} />
                     </Button>

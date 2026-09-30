@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import axios from "axios";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useApiResource } from "@/shared/hooks/useApiResource";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,6 @@ import { fmt } from "@/shared/lib/format/moneyInr";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type HsnBucket = {
     hsn:          string;
@@ -36,24 +35,16 @@ export default function HsnSummaryPage() {
     const [from, setFrom]           = useState(toIsoDate(fyStart));
     const [to, setTo]               = useState(toIsoDate(new Date()));
     const [direction, setDirection] = useState<"OUTWARD" | "INWARD">("OUTWARD");
-    const [data, setData]           = useState<HsnData | null>(null);
-    const [loading, setLoading]     = useState(false);
 
-    const load = useCallback((silent = false) => {
-        // A realtime refresh must not blank a report the user is reading.
-        if (!silent) setLoading(true);
-        axios.get<HsnData>(`/api/accountancy/reports/gst-hsn-summary?from=${from}&to=${to}&direction=${direction}`)
-            .then((r) => setData(r.data))
-            .catch(() => toast.error("Failed to load HSN summary"))
-            .finally(() => setLoading(false));
-    }, [from, to, direction]);
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(load, [load]);
-
+    // A reply for dates / a direction the screen has moved away from is dropped
+    // (useApiResource), and a realtime refresh keeps the report on screen.
     // Every write that moves the books announces "ledger", so this covers a
     // voucher posted at another counter as well as one posted here.
-    useRealtimeTopics(["ledger"], () => load(true));
+    const { data = null, loading, error, reload } = useApiResource<HsnData>(
+        `/api/accountancy/reports/gst-hsn-summary?from=${from}&to=${to}&direction=${direction}`,
+        { topics: ["ledger"] },
+    );
+    useEffect(() => { if (error) toast.error("Failed to load HSN summary"); }, [error]);
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -90,7 +81,7 @@ export default function HsnSummaryPage() {
                         <Label>To</Label>
                         <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" />
                     </div>
-                    <Button onClick={() => load()}>Refresh</Button>
+                    <Button onClick={reload}>Refresh</Button>
                 </div>
             </div>
 

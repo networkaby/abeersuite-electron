@@ -3,16 +3,15 @@
 // Shared body for both Outward (Sales) and Inward (Purchase) GST summary
 // pages — same shape, different filter direction.
 
-import { useEffect, useState, useCallback } from "react";
-import axios from "axios";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useApiResource } from "@/shared/hooks/useApiResource";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
 
 export type GstBucket = {
@@ -40,23 +39,14 @@ export function GstSummaryView({
     const fyStart = indianFiscalYearStart();
     const [from, setFrom] = useState(formatDateInput(fyStart));
     const [to, setTo]     = useState(formatDateInput(new Date()));
-    const [data, setData] = useState<GstSummaryData | null>(null);
-    const [loading, setLoading] = useState(false);
-
-    /** `silent` keeps the summary on screen while it re-reads — a live update
-     *  must not blank a report someone is reading. Refresh passes nothing. */
-    const load = useCallback((silent = false) => {
-        if (!silent) setLoading(true);
-        axios.get<GstSummaryData>(`/api/accountancy/reports/gst-summary?from=${from}&to=${to}&direction=${direction}`)
-            .then((r) => setData(r.data))
-            .catch(() => toast.error(`Failed to load ${title}`))
-            .finally(() => setLoading(false));
-    }, [from, to, direction, title]);
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(() => { load(); }, [load]);
-    // Every GST-bearing voucher moves these totals.
-    useRealtimeTopics(["ledger"], () => { load(true); });
+    // A reply for dates the screen has moved away from is dropped (useApiResource);
+    // every GST-bearing voucher moves these totals, and a live update re-reads them
+    // with the summary kept on screen.
+    const { data = null, loading, error, reload } = useApiResource<GstSummaryData>(
+        `/api/accountancy/reports/gst-summary?from=${from}&to=${to}&direction=${direction}`,
+        { topics: ["ledger"] },
+    );
+    useEffect(() => { if (error) toast.error(`Failed to load ${title}`); }, [error, title]);
 
     return (
         <div className="max-w-5xl mx-auto space-y-5">
@@ -74,7 +64,7 @@ export function GstSummaryView({
                         <Label>To</Label>
                         <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" />
                     </div>
-                    <Button onClick={() => load()}>Refresh</Button>
+                    <Button onClick={reload}>Refresh</Button>
                 </div>
             </div>
 

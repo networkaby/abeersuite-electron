@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { useApiResource } from "@/shared/hooks/useApiResource";
 import { Award, Plus, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,21 +31,15 @@ const REASON_LABEL: Record<LedgerRow["reason"], string> = {
 const fmtDate = (s: string) => new Date(s).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 
 export function LoyaltyPanel({ accountId, canManage = false }: { accountId: number; canManage?: boolean }) {
-    const [wallet, setWallet] = useState<Wallet | null>(null);
-    const [loading, setLoading] = useState(true);
+    // One customer's wallet: a reply for the customer the screen has moved away
+    // from is dropped (useApiResource), and a reload after an adjustment keeps
+    // the wallet on screen while it re-reads.
+    const { data: wallet = null, loading, error, reload: load } = useApiResource<Wallet>(`/api/loyalty/${accountId}`);
+    useEffect(() => { if (error) toast.error("Failed to load loyalty wallet"); }, [error]);
     const [deltaStr, setDeltaStr] = useState("");
     const [note, setNote] = useState("");
     const [saving, setSaving] = useState(false);
 
-    const load = useCallback(() => {
-        setLoading(true);
-        axios
-            .get<Wallet>(`/api/loyalty/${accountId}`)
-            .then((r) => setWallet(r.data))
-            .catch(() => toast.error("Failed to load loyalty wallet"))
-            .finally(() => setLoading(false));
-    }, [accountId]);
-    useEffect(load, [load]);
 
     async function adjust() {
         const delta = Number(deltaStr);

@@ -5,12 +5,12 @@
 // same drill-down. So there is one screen here and each page just says which
 // side it is. Anything added below shows up on both, which is the point.
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { partyProfileHref } from "@/shared/lib/parties";
 import Link from "next/link";
 import { GatedLink } from "@/shared/components/GatedLink";
-import axios from "axios";
 import { toast } from "sonner";
+import { useApiResource } from "@/shared/hooks/useApiResource";
 import { Loader2, ChevronRight, HandCoins, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +27,6 @@ import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkContextMenu";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import type { OutstandingsReport } from "@/modules/accountancy/lib/outstandings";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useEscape } from "@/shared/hooks/useEscape";
 import { referenceHref, voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
 import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
@@ -67,8 +66,15 @@ export function OutstandingsReportScreen({
     // read the party off the screen the way a profile tab can.
     const [link, setLink] = useState<{ accountId: number; name: string; voucherId: number } | null>(null);
     const { menu: linkMenu, close: closeLinkMenu, onContainerContextMenu: onLinkContextMenu } = useLinkContextMenu();
-    const [data, setData] = useState<OutstandingsReport | null>(null);
-    const [loading, setLoading] = useState(false);
+    // A reply for a date the screen has moved away from is dropped (useApiResource),
+    // and a realtime refresh keeps the report on screen while it re-reads.
+    // Every write that moves the books announces "ledger", so this covers a
+    // voucher posted at another counter as well as one posted here.
+    const { data = null, loading, error, reload } = useApiResource<OutstandingsReport>(
+        `${apiPath}?asOf=${asOf}`,
+        { topics: ["ledger"] },
+    );
+    useEffect(() => { if (error) toast.error(loadError); }, [error, loadError]);
     const [view, setView] = useState<ViewMode>("party");
     const [query, setQuery] = useState("");
     // Clicking a period card shows that period alone; clicking it again clears.
@@ -76,22 +82,6 @@ export function OutstandingsReportScreen({
     // Clicking a party row narrows this same page to that party's bills — held by
     // account id, not by name, so two look-alike names can never be confused.
     const [focus, setFocus] = useState<{ accountId: number; name: string } | null>(null);
-
-    const load = useCallback((silent = false) => {
-        // A realtime refresh must not blank a report the user is reading.
-        if (!silent) setLoading(true);
-        axios.get<OutstandingsReport>(`${apiPath}?asOf=${asOf}`)
-            .then((r) => setData(r.data))
-            .catch(() => toast.error(loadError))
-            .finally(() => setLoading(false));
-    }, [asOf, apiPath, loadError]);
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(load, [load]);
-
-    // Every write that moves the books announces "ledger", so this covers a
-    // voucher posted at another counter as well as one posted here.
-    useRealtimeTopics(["ledger"], () => load(true));
 
     // Esc leaves the focused party (an open dialog or menu takes its own Esc first).
     useEscape(() => setFocus(null), { enabled: focus != null });
@@ -197,7 +187,7 @@ export function OutstandingsReportScreen({
                         <Label>As on</Label>
                         <TallyDateInput value={asOf} onValueChange={setAsOf} className="w-auto" />
                     </div>
-                    <Button onClick={() => load()}>Refresh</Button>
+                    <Button onClick={reload}>Refresh</Button>
                 </div>
             </div>
 
@@ -456,7 +446,7 @@ export function OutstandingsReportScreen({
         <GlVoucherDialog
             kind={settle?.kind ?? null}
             settleBill={settle}
-            onClose={() => { setSettle(null); clearBillLinkCache(); load(true); }}
+            onClose={() => { setSettle(null); clearBillLinkCache(); reload(); }}
         />
 
         {/* Clicking a bill's Status opens the same bill-wise popup the customer's
@@ -470,7 +460,7 @@ export function OutstandingsReportScreen({
                 accountId={link.accountId}
                 partyName={link.name}
                 voucherId={link.voucherId}
-                onSaved={() => { clearBillLinkCache(); setLink(null); load(true); }}
+                onSaved={() => { clearBillLinkCache(); setLink(null); reload(); }}
             />
         )}
         <LinkContextMenu menu={linkMenu} onClose={closeLinkMenu} />

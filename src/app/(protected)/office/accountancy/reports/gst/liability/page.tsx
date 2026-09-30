@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import axios from "axios";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useApiResource } from "@/shared/hooks/useApiResource";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,6 @@ import { fmt } from "@/shared/lib/format/moneyInr";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type Bucket = { rate: number; taxableValue: number; taxAmount: number; grossValue: number; invoiceCount: number };
 type Summary = { buckets: Bucket[]; totals: { taxableValue: number; taxAmount: number; grossValue: number; invoiceCount: number } };
@@ -20,28 +19,24 @@ export default function GstLiabilityPage() {
     const fyStart = indianFiscalYearStart();
     const [from, setFrom] = useState(toIsoDate(fyStart));
     const [to, setTo]     = useState(toIsoDate(new Date()));
-    const [outward, setOutward] = useState<Summary | null>(null);
-    const [inward,  setInward]  = useState<Summary | null>(null);
-    const [loading, setLoading] = useState(false);
-
-    const load = useCallback((silent = false) => {
-        // A realtime refresh must not blank a report the user is reading.
-        if (!silent) setLoading(true);
-        Promise.all([
-            axios.get<Summary>(`/api/accountancy/reports/gst-summary?from=${from}&to=${to}&direction=OUTWARD`).then((r) => r.data),
-            axios.get<Summary>(`/api/accountancy/reports/gst-summary?from=${from}&to=${to}&direction=INWARD`).then((r) => r.data),
-        ])
-            .then(([o, i]) => { setOutward(o); setInward(i); })
-            .catch(() => toast.error("Failed to load GST liability"))
-            .finally(() => setLoading(false));
-    }, [from, to]);
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(load, [load]);
-
+    // Output and input tax, each a reply for these dates only (useApiResource drops
+    // a late one for dates the screen has left); a realtime refresh keeps them shown.
     // Every write that moves the books announces "ledger", so this covers a
     // voucher posted at another counter as well as one posted here.
-    useRealtimeTopics(["ledger"], () => load(true));
+    const out = useApiResource<Summary>(
+        `/api/accountancy/reports/gst-summary?from=${from}&to=${to}&direction=OUTWARD`,
+        { topics: ["ledger"] },
+    );
+    const inn = useApiResource<Summary>(
+        `/api/accountancy/reports/gst-summary?from=${from}&to=${to}&direction=INWARD`,
+        { topics: ["ledger"] },
+    );
+    const outward = out.data ?? null;
+    const inward = inn.data ?? null;
+    const loading = out.loading || inn.loading;
+    const loadError = out.error ?? inn.error;
+    useEffect(() => { if (loadError) toast.error("Failed to load GST liability"); }, [loadError]);
+    const reload = () => { out.reload(); inn.reload(); };
 
     const outputTax = outward?.totals.taxAmount ?? 0;
     const inputTax  = inward?.totals.taxAmount ?? 0;
@@ -66,7 +61,7 @@ export default function GstLiabilityPage() {
                         <Label>To</Label>
                         <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" />
                     </div>
-                    <Button onClick={() => load()}>Refresh</Button>
+                    <Button onClick={reload}>Refresh</Button>
                 </div>
             </div>
 

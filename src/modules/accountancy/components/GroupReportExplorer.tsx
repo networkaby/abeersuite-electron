@@ -18,8 +18,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import axios from "axios";
 import { toast } from "sonner";
+import { useApiResource } from "@/shared/hooks/useApiResource";
 import { ChevronRight, FolderTree, Loader2 } from "lucide-react";
 import {
     Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
@@ -38,7 +38,6 @@ import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { groupReportUrl } from "@/modules/accountancy/lib/groupReportUrl";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { formatDateInput, indianFiscalYearStart } from "@/modules/accountancy/lib/period";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useEscape } from "@/shared/hooks";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -146,8 +145,16 @@ export function GroupReportExplorer() {
     // Balance carry `from`/`to`. Read once; after that the date inputs own it.
     const [from, setFrom] = useState(() => urlParams.get("from") ?? formatDateInput(fyStart));
     const [to, setTo]     = useState(() => urlParams.get("to") ?? urlParams.get("asOf") ?? formatDateInput(new Date()));
-    const [data, setData] = useState<TBData | null>(null);
-    const [refreshing, setRefreshing] = useState(false);
+    // A change of dates, and a live update, keep the table on screen while it
+    // re-reads (keepPrevious) — they must not blank a report someone is reading —
+    // and a reply for dates the screen has already left is dropped. Every voucher
+    // moves some group's figures, so the report follows the floor instead of
+    // waiting for someone to press Refresh.
+    const { data = null, refreshing, error, reload } = useApiResource<TBData>(
+        `/api/accountancy/reports/trial-balance?from=${from}&to=${to}`,
+        { topics: ["ledger"], keepPrevious: true },
+    );
+    useEffect(() => { if (error) toast.error("Failed to load Group Report"); }, [error]);
     const [search, setSearch] = useState("");
 
     // The selected group lives in the URL, not in state: that is what makes the
@@ -158,23 +165,6 @@ export function GroupReportExplorer() {
         (id: number | null) => { router.replace(groupReportUrl(id, { from, to })); },
         [router, from, to],
     );
-
-    /** `silent` keeps the table on screen while it re-reads — a live update, and
-     *  a change of dates, must not blank a report someone is reading. Only the
-     *  Refresh button asks for the spinner. */
-    const load = useCallback((silent = true) => {
-        if (!silent) setRefreshing(true);
-        axios.get<TBData>(`/api/accountancy/reports/trial-balance?from=${from}&to=${to}`)
-            .then((r) => setData(r.data))
-            .catch(() => toast.error("Failed to load Group Report"))
-            .finally(() => setRefreshing(false));
-    }, [from, to]);
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(() => { load(); }, [load]);
-    // Every voucher moves some group's figures, so the report follows the floor
-    // instead of waiting for someone to press Refresh.
-    useRealtimeTopics(["ledger"], () => { load(); });
 
     useEscape(() => {
         if (selectedId) select(null);
@@ -270,7 +260,7 @@ export function GroupReportExplorer() {
                 <Label>To</Label>
                 <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" />
             </div>
-            <Button onClick={() => load(false)} disabled={refreshing}>
+            <Button onClick={reload} disabled={refreshing}>
                 {refreshing && <Loader2 size={14} className="animate-spin" />} Refresh
             </Button>
         </div>

@@ -47,9 +47,9 @@
  *   3. Whether buckets also split by branch.
  */
 
-import { useEffect, useMemo, useState, useCallback } from "react";
-import axios from "axios";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useApiResource } from "@/shared/hooks/useApiResource";
 import type { LucideIcon } from "lucide-react";
 import {
     Wallet,
@@ -70,7 +70,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 // ─── Shape (mirrors the API response) ────────────────────────────────────────
 
@@ -230,37 +229,22 @@ const ledgersInTier = (g: FundGroup, tier: FundTier): FundLedger[] =>
 
 export default function UsableFundPage() {
     const [asOf, setAsOf] = useState(toIsoDate(new Date()));
-    const [groups, setGroups] = useState<FundGroup[] | null>(null);
-    const [loading, setLoading] = useState(false);
-
-    /** `silent` keeps the figures on screen while they re-read. */
-    const load = useCallback((silent = false) => {
-        if (!silent) setLoading(true);
-        axios
-            .get<{ asOf: string; buckets: ApiBucket[] }>(
-                `/api/accountancy/reports/usable-fund?asOf=${asOf}`,
-            )
-            .then((r) => {
-                setGroups(
-                    r.data.buckets.map((b) => ({
-                        ...b,
-                        ...(STYLE_BY_KEY[b.key] ?? FALLBACK_STYLE),
-                    })),
-                );
-            })
-            .catch(() => toast.error("Failed to load Usable Fund"))
-            .finally(() => setLoading(false));
-    }, [asOf]);
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(() => { load(); }, [load]);
-
+    // A reply for a date the screen has moved away from is dropped (useApiResource).
     // This page has no shared cache with the Ledgers page, so a ledger saved there
     // used to reach it only via a hand-rolled focus/visibility listener — a refetch
-    // on every tab return, whether or not anything had moved. `useRealtimeTopics`
-    // replaces both halves: it re-reads when the books actually change, and it
-    // already reads once on visibility return of its own accord.
-    useRealtimeTopics(["ledger"], () => { load(true); });
+    // on every tab return, whether or not anything had moved. The "ledger" topic
+    // replaces both halves: it re-reads when the books actually change (keeping the
+    // figures on screen), and it already reads once on visibility return of its own
+    // accord.
+    const { data, loading, refreshing, error, reload } = useApiResource<{ asOf: string; buckets: ApiBucket[] }>(
+        `/api/accountancy/reports/usable-fund?asOf=${asOf}`,
+        { topics: ["ledger"] },
+    );
+    useEffect(() => { if (error) toast.error("Failed to load Usable Fund"); }, [error]);
+    const groups = useMemo<FundGroup[] | null>(
+        () => data ? data.buckets.map((b) => ({ ...b, ...(STYLE_BY_KEY[b.key] ?? FALLBACK_STYLE) })) : null,
+        [data],
+    );
 
     const drawnByKey = useMemo(() => sharedDrawnByKey(groups ?? []), [groups]);
 
@@ -302,9 +286,9 @@ export default function UsableFundPage() {
                         </div>
                         <button
                             type="button"
-                            onClick={() => load()}
+                            onClick={reload}
                             title="Refresh — a ledger saved elsewhere doesn't push an update here"
-                            className={`mb-[3px] text-muted-foreground hover:text-foreground transition-colors ${loading ? "animate-spin" : ""}`}
+                            className={`mb-[3px] text-muted-foreground hover:text-foreground transition-colors ${loading || refreshing ? "animate-spin" : ""}`}
                         >
                             <RefreshCw size={15} />
                         </button>

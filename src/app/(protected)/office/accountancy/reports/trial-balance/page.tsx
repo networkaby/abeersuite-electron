@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback, Fragment, useMemo } from "react";
+import { useEffect, useState, Fragment, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import axios from "axios";
 import { toast } from "sonner";
+import { useApiResource } from "@/shared/hooks/useApiResource";
 import { Loader2, Printer, ChevronRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -15,7 +15,6 @@ import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { groupReportUrl } from "@/modules/accountancy/lib/groupReportUrl";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 
 type GroupTypeStr = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
@@ -221,32 +220,24 @@ export default function TrialBalancePage() {
     const fyStart = indianFiscalYearStart();
     const [from, setFrom] = useState(toIsoDate(fyStart));
     const [to, setTo]     = useState(toIsoDate(new Date()));
-    const [data, setData] = useState<TBData | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [expanded, setExpanded] = useState<Set<number>>(new Set());
-    const [showEmpty, setShowEmpty] = useState(false);
-
-    const load = useCallback((silent = false) => {
-        // A realtime refresh must not blank a report the user is reading.
-        if (!silent) setLoading(true);
-        axios.get<TBData>(`/api/accountancy/reports/trial-balance?from=${from}&to=${to}`)
-            .then((r) => {
-                setData(r.data);
-                setExpanded((prev) => {
-                    if (prev.size > 0) return prev;
-                    return new Set(r.data.tree.map((g) => g.id));
-                });
-            })
-            .catch(() => toast.error("Failed to load trial balance"))
-            .finally(() => setLoading(false));
-    }, [from, to]);
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(load, [load]);
-
+    // A reply for dates the screen has moved away from is dropped (useApiResource),
+    // and a realtime refresh keeps the report on screen while it re-reads.
     // Every write that moves the books announces "ledger", so this covers a
     // voucher posted at another counter as well as one posted here.
-    useRealtimeTopics(["ledger"], () => load(true));
+    const { data = null, loading, error, reload } = useApiResource<TBData>(
+        `/api/accountancy/reports/trial-balance?from=${from}&to=${to}`,
+        { topics: ["ledger"] },
+    );
+    useEffect(() => { if (error) toast.error("Failed to load trial balance"); }, [error]);
+    // Every top group opens by default; once the reader opens or closes one, their
+    // choice stands across refreshes (null = still the default).
+    const [expandedChoice, setExpanded] = useState<Set<number> | null>(null);
+    const expanded = useMemo(
+        () => expandedChoice ?? new Set(data?.tree.map((g) => g.id) ?? []),
+        [expandedChoice, data],
+    );
+    const [showEmpty, setShowEmpty] = useState(false);
+
 
     const viewTree = useMemo(() => {
         if (!data) return [];
@@ -284,11 +275,11 @@ export default function TrialBalancePage() {
         };
     }, [data, stockAdjOpen, stockAdjClose]);
 
-    const toggle = (id: number) => setExpanded((prev) => {
-        const next = new Set(prev);
+    const toggle = (id: number) => {
+        const next = new Set(expanded);
         if (next.has(id)) { next.delete(id); } else { next.add(id); }
-        return next;
-    });
+        setExpanded(next);
+    };
     const goLedger = (id: number) => {
         // id -1 is the synthetic "Closing Stock (live)" row injected by the API
         // — no Account row sits behind it, so send the reader to the stock
@@ -333,7 +324,7 @@ export default function TrialBalancePage() {
                     <Button variant="outline" onClick={() => setShowEmpty((v) => !v)} title="Toggle visibility of groups / ledgers with no activity">
                         {showEmpty ? "Hide empty" : "Show all"}
                     </Button>
-                    <Button onClick={() => load()}>Refresh</Button>
+                    <Button onClick={reload}>Refresh</Button>
                     <Button variant="outline" onClick={() => window.print()}><Printer size={14} /></Button>
                 </div>
             </div>

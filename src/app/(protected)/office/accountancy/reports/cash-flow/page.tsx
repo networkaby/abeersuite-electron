@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import axios from "axios";
 import { toast } from "sonner";
+import { useApiResource } from "@/shared/hooks/useApiResource";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -13,7 +13,6 @@ import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type Flow = { id: number; name: string; amount: number };
 type CashFlowData = {
@@ -28,24 +27,15 @@ export default function CashFlowPage() {
     const fyStart = indianFiscalYearStart();
     const [from, setFrom] = useState(toIsoDate(fyStart));
     const [to, setTo]     = useState(toIsoDate(new Date()));
-    const [data, setData] = useState<CashFlowData | null>(null);
-    const [loading, setLoading] = useState(false);
-
-    const load = useCallback((silent = false) => {
-        // A realtime refresh must not blank a report the user is reading.
-        if (!silent) setLoading(true);
-        axios.get<CashFlowData>(`/api/accountancy/reports/cash-flow?from=${from}&to=${to}`)
-            .then((r) => setData(r.data))
-            .catch(() => toast.error("Failed to load cash flow"))
-            .finally(() => setLoading(false));
-    }, [from, to]);
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(load, [load]);
-
+    // A reply for dates the screen has moved away from is dropped (useApiResource),
+    // and a realtime refresh keeps the report on screen while it re-reads.
     // Every write that moves the books announces "ledger", so this covers a
     // voucher posted at another counter as well as one posted here.
-    useRealtimeTopics(["ledger"], () => load(true));
+    const { data = null, loading, error, reload } = useApiResource<CashFlowData>(
+        `/api/accountancy/reports/cash-flow?from=${from}&to=${to}`,
+        { topics: ["ledger"] },
+    );
+    useEffect(() => { if (error) toast.error("Failed to load cash flow"); }, [error]);
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -66,7 +56,7 @@ export default function CashFlowPage() {
                         <Label>To</Label>
                         <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" />
                     </div>
-                    <Button onClick={() => load()}>Refresh</Button>
+                    <Button onClick={reload}>Refresh</Button>
                 </div>
             </div>
 

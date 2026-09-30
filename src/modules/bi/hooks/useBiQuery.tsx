@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { QueryStateBlock } from "@/shared/components/QueryStateBlock";
@@ -58,18 +58,27 @@ export function useBiQuery<T>(url: string): {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Only the newest request may write. A report re-read for new dates while the
+    // old dates' answer is still on its way used to take whichever arrived LAST —
+    // a slow reply for the previous period could land over the current one, under
+    // the current date boxes. The previous figures still stay on screen while the
+    // new ones load (Pattern B above); they are just never overwritten by an
+    // answer to a question the screen no longer asks.
+    const latest = useRef(0);
     const load = useCallback(() => {
+        const mine = ++latest.current;
         setLoading(true);
         axios
             .get<T>(url)
             .then((r) => {
+                if (mine !== latest.current) return;
                 setData(r.data);
                 setError(null);
             })
             // Deliberately no toast: a toast for a failure that persists on screen
             // is told twice, and the one that fades is the one people trust.
-            .catch((e) => setError(extractApiError(e, "Failed to load report")))
-            .finally(() => setLoading(false));
+            .catch((e) => { if (mine === latest.current) setError(extractApiError(e, "Failed to load report")); })
+            .finally(() => { if (mine === latest.current) setLoading(false); });
     }, [url]);
 
     // eslint-disable-next-line react-hooks/set-state-in-effect

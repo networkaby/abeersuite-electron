@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import axios from "axios";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useApiResource } from "@/shared/hooks/useApiResource";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -10,7 +10,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 type RatioData = {
     from: string; to: string;
@@ -44,24 +43,15 @@ const ratio = (v: number | null): string =>
 
 export default function RatioAnalysisPage() {
     const [asOf, setAsOf] = useState(toIsoDate(new Date()));
-    const [data, setData] = useState<RatioData | null>(null);
-    const [loading, setLoading] = useState(false);
-
-    const load = useCallback((silent = false) => {
-        // A realtime refresh must not blank a report the user is reading.
-        if (!silent) setLoading(true);
-        axios.get<RatioData>(`/api/accountancy/reports/ratio-analysis?asOf=${asOf}`)
-            .then((r) => setData(r.data))
-            .catch(() => toast.error("Failed to load ratio analysis"))
-            .finally(() => setLoading(false));
-    }, [asOf]);
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(load, [load]);
-
+    // A reply for dates the screen has moved away from is dropped (useApiResource),
+    // and a realtime refresh keeps the report on screen while it re-reads.
     // Every write that moves the books announces "ledger", so this covers a
     // voucher posted at another counter as well as one posted here.
-    useRealtimeTopics(["ledger"], () => load(true));
+    const { data = null, loading, error, reload } = useApiResource<RatioData>(
+        `/api/accountancy/reports/ratio-analysis?asOf=${asOf}`,
+        { topics: ["ledger"] },
+    );
+    useEffect(() => { if (error) toast.error("Failed to load ratio analysis"); }, [error]);
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -78,7 +68,7 @@ export default function RatioAnalysisPage() {
                         <Label>As on</Label>
                         <TallyDateInput value={asOf} onValueChange={setAsOf} className="w-auto" />
                     </div>
-                    <Button onClick={() => load()}>Refresh</Button>
+                    <Button onClick={reload}>Refresh</Button>
                 </div>
             </div>
 

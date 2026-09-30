@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, Fragment } from "react";
-import axios from "axios";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import { toast } from "sonner";
+import { useApiResource } from "@/shared/hooks/useApiResource";
 import { Loader2, Printer, ChevronRight, ChevronDown, ArrowLeft } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -16,7 +16,6 @@ import { groupReportUrl } from "@/modules/accountancy/lib/groupReportUrl";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 interface LedgerNode {
     id: number; name: string; closing: number;
@@ -165,9 +164,24 @@ export default function ProfitLossPage() {
     // Date params on the URL come from the BS drilldown (passes ?from=&to=&ref=balance-sheet).
     const [from, setFrom] = useState(search.get("from") ?? toIsoDate(fyStart));
     const [to, setTo]     = useState(search.get("to")   ?? toIsoDate(new Date()));
-    const [data, setData] = useState<PLData | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [expanded, setExpanded] = useState<Set<number>>(new Set());
+    // A reply for dates the screen has moved away from is dropped (useApiResource),
+    // and a realtime refresh keeps the report on screen while it re-reads.
+    // Every write that moves the books announces "ledger", so this covers a
+    // voucher posted at another counter as well as one posted here.
+    const { data = null, loading, error, reload } = useApiResource<PLData>(
+        `/api/accountancy/reports/profit-loss?from=${from}&to=${to}`,
+        { topics: ["ledger"] },
+    );
+    useEffect(() => { if (error) toast.error("Failed to load P&L"); }, [error]);
+    // Every section opens by default; once the reader opens or closes one, their
+    // choice stands across refreshes (null = still the default).
+    const [expandedChoice, setExpanded] = useState<Set<number> | null>(null);
+    const expanded = useMemo(() => {
+        if (expandedChoice) return expandedChoice;
+        const ids: number[] = [];
+        Object.values(data?.trees ?? {}).forEach((t) => { if (t) ids.push(t.id); });
+        return new Set(ids);
+    }, [expandedChoice, data]);
 
     // Escape to go back — works when the user drilled in from BS / dashboard / etc.
     useEscapeBack();
@@ -176,35 +190,11 @@ export default function ProfitLossPage() {
     const cameFromBalanceSheet = search.get("ref") === "balance-sheet";
     const bsHref = `/office/accountancy/reports/balance-sheet?asOf=${to}`;
 
-    const load = useCallback((silent = false) => {
-        // A realtime refresh must not blank a report the user is reading.
-        if (!silent) setLoading(true);
-        axios.get<PLData>(`/api/accountancy/reports/profit-loss?from=${from}&to=${to}`)
-            .then((r) => {
-                setData(r.data);
-                setExpanded((prev) => {
-                    if (prev.size > 0) return prev;
-                    const ids: number[] = [];
-                    Object.values(r.data.trees).forEach((t) => { if (t) ids.push(t.id); });
-                    return new Set(ids);
-                });
-            })
-            .catch(() => toast.error("Failed to load P&L"))
-            .finally(() => setLoading(false));
-    }, [from, to]);
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(load, [load]);
-
-    // Every write that moves the books announces "ledger", so this covers a
-    // voucher posted at another counter as well as one posted here.
-    useRealtimeTopics(["ledger"], () => load(true));
-
-    const toggle = (id: number) => setExpanded((prev) => {
-        const next = new Set(prev);
+    const toggle = (id: number) => {
+        const next = new Set(expanded);
         if (next.has(id)) { next.delete(id); } else { next.add(id); }
-        return next;
-    });
+        setExpanded(next);
+    };
     const goLedger = (id: number) => router.push(accountLedgerUrl(id, { from, to }));
     const goGroup  = (id: number) => router.push(groupReportUrl(id, { from, to }));
 
@@ -250,7 +240,7 @@ export default function ProfitLossPage() {
                         <Label>To</Label>
                         <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" />
                     </div>
-                    <Button onClick={() => load()}>Refresh</Button>
+                    <Button onClick={reload}>Refresh</Button>
                     <Button variant="outline" onClick={() => window.print()} title="Print"><Printer size={14} /></Button>
                 </div>
             </div>

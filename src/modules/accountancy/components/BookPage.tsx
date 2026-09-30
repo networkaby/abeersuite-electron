@@ -9,10 +9,10 @@
 // Tally's behaviour where Cash Book opens straight into the Cash A/c register
 // when you have a single cash ledger.
 
-import { useEffect, useState, useCallback, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import axios from "axios";
 import { toast } from "sonner";
+import { useApiResource } from "@/shared/hooks/useApiResource";
 import { Loader2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -21,7 +21,6 @@ import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/li
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { groupColor } from "@/shared/lib/format/groupColor";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
 
 type LedgerNode = {
@@ -117,42 +116,42 @@ export function BookPage({
     const fyStart = indianFiscalYearStart();
     const [from, setFrom] = useState(formatDateInput(fyStart));
     const [to, setTo]     = useState(formatDateInput(new Date()));
-    const [sections, setSections] = useState<Section[] | null>(null);
-    const [loading, setLoading] = useState(false);
-
     const groupNames = Array.isArray(groupName) ? groupName : [groupName];
+    const groupKey = groupNames.join("|");
     // Multiple groups render as their own labeled sections (e.g. "Loans" vs
     // "Credit Card") instead of merging into one alphabetical list.
     const sectioned = groupNames.length > 1;
 
-    /** `silent` keeps the table on screen while it re-reads — a live update must
-     *  not blank a book someone is reading. The Refresh button passes nothing. */
-    const load = useCallback((silent = false) => {
-        if (!silent) setLoading(true);
-        axios.get<TBData>(`/api/accountancy/reports/trial-balance?from=${from}&to=${to}`)
-            .then((r) => {
-                const secs: Section[] = groupNames.map((name) => {
-                    const found = findGroup(r.data.tree, name);
-                    // Every other section's group is pruned out of this one's subtree.
-                    const others = new Set(groupNames.filter((n) => n !== name));
-                    return { name, node: found ? pruneGroups(found, others) : null };
-                });
-                setSections(secs);
-                const all = secs.flatMap((s) => (s.node ? flattenLedgers(s.node) : []));
-                if (autoSingle && all.length === 1) {
-                    if (onSelectLedger) onSelectLedger(all[0].id);
-                    else router.replace(accountLedgerUrl(all[0].id, { from, to }));
-                }
-            })
-            .catch(() => toast.error(`Failed to load ${title}`))
-            .finally(() => setLoading(false));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [from, to, groupNames.join("|"), autoSingle, router, title, onSelectLedger]);
+    // A reply for dates the screen has moved away from is dropped (useApiResource),
+    // and a live update keeps the table on screen while it re-reads. Every voucher
+    // touching a cash/bank/loan ledger moves these balances, so the book follows
+    // the floor instead of waiting for someone to press Refresh.
+    const url = `/api/accountancy/reports/trial-balance?from=${from}&to=${to}`;
+    const { data, loading, error, reload } = useApiResource<TBData>(url, { topics: ["ledger"] });
+    useEffect(() => { if (error) toast.error(`Failed to load ${title}`); }, [error, title]);
 
-    useEffect(() => { load(); }, [load]);
-    // Every voucher touching a cash/bank/loan ledger moves these balances, so the
-    // book follows the floor instead of waiting for someone to press Refresh.
-    useRealtimeTopics(["ledger"], () => { load(true); });
+    const sections = useMemo<Section[] | null>(() => {
+        if (!data) return null;
+        const names = groupKey.split("|");
+        return names.map((name) => {
+            const found = findGroup(data.tree, name);
+            // Every other section's group is pruned out of this one's subtree.
+            const others = new Set(names.filter((n) => n !== name));
+            return { name, node: found ? pruneGroups(found, others) : null };
+        });
+    }, [data, groupKey]);
+
+    // A book with a single ledger opens it — once per period. It used to fire again
+    // on every live update, pulling the reader back to that ledger mid-work.
+    const autoOpenedFor = useRef<string | null>(null);
+    useEffect(() => {
+        if (!autoSingle || !sections || autoOpenedFor.current === url) return;
+        autoOpenedFor.current = url;
+        const all = sections.flatMap((s) => (s.node ? flattenLedgers(s.node) : []));
+        if (all.length !== 1) return;
+        if (onSelectLedger) onSelectLedger(all[0].id);
+        else router.replace(accountLedgerUrl(all[0].id, { from, to }));
+    }, [autoSingle, sections, url, onSelectLedger, router, from, to]);
 
     const ledgers = sections?.flatMap((s) => (s.node ? flattenLedgers(s.node) : [])) ?? null;
     const grandTotal = ledgers && sectioned ? sumSection(ledgers) : null;
@@ -236,7 +235,7 @@ export function BookPage({
                         <Label>To</Label>
                         <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" />
                     </div>
-                    <Button onClick={() => load()}>Refresh</Button>
+                    <Button onClick={reload}>Refresh</Button>
                 </div>
             </div>
 
