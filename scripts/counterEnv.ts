@@ -33,8 +33,8 @@
  * NOT here, on purpose:
  *   - `DIRECT_URL` — only seeds and maintenance scripts read it, so the direct 5432
  *     connection string has no reason to sit on a shop PC.
- *   - `SUPER_ADMIN_PASSWORD` — a full-authority login in plaintext; the escape hatch is
- *     for recovering a broken machine by hand, not for every counter.
+ *   - `SUPER_ADMIN_PASSWORD` on the `counter` variant — see `COUNTER_ENV_SUPER_ADMIN_KEYS`:
+ *     only the `office` build carries the super admin login.
  *   - Payments, Firebase, Meta WA, Resend, Sentry — no counter surface uses them, and
  *     each one is a credential that cannot be un-shipped once installed.
  *   - Cloudinary on the `counter` variant — see `COUNTER_ENV_CLOUDINARY_KEYS`: only the
@@ -261,6 +261,11 @@ export const COUNTER_ENV_COURIER_KEYS: readonly string[] = [
     "SHIPWAY_API_BASE",
 ];
 
-/** Lets Permissions show the env super admin as full access. Grants no sign-in without
- *  SUPER_ADMIN_PASSWORD, which stays withheld. REMOVE before any public desktop release. */
-export const COUNTER_ENV_SUPER_ADMIN_KEYS: readonly string[] = ["SUPER_ADMIN_EMAIL"];
+/**
+ * The env super admin login (`checkSuperAdminEnv` in authorizeStaff.ts) — the way into a
+ * till when no staff login works. The email alone only let Permissions show the super
+ * admin as full access; the password was added on the owner's call (2026-09-30), office
+ * only like the rest. The cost: a full-authority login in plaintext on every till and in
+ * every installer. REMOVE before any public desktop release.
+ */
+export const COUNTER_ENV_SUPER_ADMIN_KEYS: readonly string[] = ["SUPER_ADMIN_EMAIL", "SUPER_ADMIN_PASSWORD"];
