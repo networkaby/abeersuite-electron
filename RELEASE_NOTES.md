@@ -1,36 +1,23 @@
-# v1.9.2
+# v1.9.3 [urgent]
 
-A safety and staff-access update for every counter and the office app. The Role page is now obeyed everywhere: a page or a voucher action that is not ticked for someone stays closed to them, even through a link or a typed address. A counter can no longer lose its unsent sales to a damaged setup file, and printing through a Windows printer driver works again. There is no database change and no rush: counters install it on their own at the next quiet moment.
+An urgent update for every counter and the office app. Missed calls now stay on the call popup until someone calls the customer back, and every counter now sees the calls nobody picked up. The cash drawer can open by itself when a bill that took cash prints, and the product preview in E-Commerce opens inside the app instead of showing "page not found". There is no database change. Every counter shows an update box and installs within 30 minutes, so finish the bill in hand and restart when it asks.
 
-**After it installs:** if a staff member says a page they used to open now shows "no access", tick that page for their role on the Role page.
+**After it installs:** on a counter with a cash drawer, open **Settings → Thermal Printer**, press **Open Drawer** once to check the wiring, then tick **Open the cash drawer when a bill prints** and save. The tick is per PC and starts off, so nothing changes until you tick it.
 
-## Staff access (Role page)
-- **Every office page opens only on its own tick.** Before this, the sidebar hid an unticked page, but a bookmark, a typed address or a link on another screen still opened it. Now the person lands on Work Flow with a "no access" message.
-- **Links to a page someone cannot open are hidden**, or shown as plain text, so a cashier is no longer led into a "no access" page from another screen.
-- **Every voucher obeys its Create, Cancel / edit, Delete and Post ticks.** This covers POS Sale, Order and Estimate, Journal, POS Rcv / Exp, Sale Return, Duplicate and Convert. Before this, some of these ticks were shown but not checked.
-- **"Can login outside counter" is checked with the password.** The office website is for office staff only. Anyone without the tick now sees a clear message saying why, instead of "Invalid email or password".
-- Five ticks that had no box now have one: **Staff Directory edit, Attendance edit, Leave approve, Payroll run and Backup & Restore.**
-- Giving **Delete** always gives **Edit** too. The Quick Actions **"POS +"** chip now gives both Start and End shift, not only Start.
-- Ticking "Can change tax" no longer shows a "not seeded" warning on Save.
-- A customer's shop login can no longer open staff repair tickets or staff notifications.
+## Calls — follow-up popup
+- **A missed call stays open until someone calls back.** It shows in red with "Missed call — call back to the caller", and has no note, ticket or save until then. So a missed customer is not forgotten.
+- **It closes by itself** when someone really talks to that caller (one save then covers both calls), or when the customer gets a bill or a ticket after the missed call. To close one by hand, add a note on **CRM → Call Log**.
+- **A call under 2 seconds now counts as missed**, the same on the popup, the Call Log, the customer's history and Reconnect.
+- **The popup shows which extension took the call**, for example "· Ext 21", because the popup can now show on other counters too.
+- **Which counter sees which call:** your own extension's calls at once. A call nobody answered, or on an extension no counter uses, shows on every counter at once. Another counter's call shows everywhere after 30 minutes if it is still open. An office PC with no counter no longer shows every till's calls at once.
 
-## Counter
-- **Unsent sales are safe if the counter's setup file gets damaged**, for example by a power cut while it was being saved. Before this, a damaged file could empty the counter's local data, including sales not yet sent to the server. Now the counter sets the damaged file aside, rebuilds its setup from its own data and keeps the unsent sales.
-- **Back never lands on the faces / PIN lock screen** while you are signed in.
+## Counter — cash drawer
+- **The drawer opens when a bill that moved cash prints.** A new Sale, Rcv or order advance opens it when cash was taken or change was given. Every Exp opens it. A Sale Return opens it only when the refund is in cash.
+- **It stays shut for UPI-only and card-only bills**, for edits, and for every reprint (Sales Register, Day Book, receipt pages).
+- **The drawer opens as the slip starts printing**, and still opens if the printer is out of paper.
+- Works with LAN, USB and COM receipt printers. A counter printing through the browser (no bridge) cannot open the drawer; use the Windows printer driver's own drawer option there.
 
-## Printing
-- **Printing to a USB printer through its Windows driver works again.** Every such print was failing.
-- The printer list works on newer Windows 11 PCs too.
-
-## Accounts
-- **Receipt / Payment with bills ticked saves in one go.** Before this, it could refuse with "has only ₹… open — cannot place ₹…" because the bills were counted twice.
-- **Typing an IFSC code fills Bank Name and Branch** on the company / contact Bank tab, the staff salary account, and Create / Edit Ledger. It fills only an empty box. If you have typed something different, a hint shows the bank's answer with a **Use** button, so your own entry always wins. An unknown code shows a warning but never stops a save.
-- **The trading voucher's party card shows a company's balance.** Before this, a company always showed ₹0.
-- **Edit Ledger shows Bill-wise details only for a party ledger** (Sundry Debtors / Sundry Creditors). Expense, bank and capital ledgers no longer show a button that led nowhere.
-- **Optional Vouchers keeps your search and type filter** when you change the dates.
-
-## Everywhere else
-- **Esc closes only the box on top.** Closing a dialog, menu or dropdown with Esc no longer also takes you back a page. On the trading voucher's "Unsaved changes" prompt, Esc no longer goes back twice.
-- **Home → Finance card:** every tile opens a real page now. "Cash & Bank Book" is split into Cash Book and Bank Book, like the sidebar.
-- **Customers:** a new company / contact link shows at once, and an unlink disappears at once.
-- **Backup & Restore:** the restore box now asks for the **DIRECT URL** and says where to copy it from.
+## E-Commerce
+- **Product preview opens inside the app.** On the product page, the photo, name and **Details** on the live preview card, and the preview icon on the Products list, open a new window showing the full product page — no sidebar, the same price and stock a customer sees. Draft products open too, with a "not published yet" strip. Before this, it showed "page not found" in the app.
+- **Open in shop** appears for a published product. It opens the product on the real shop website in your browser.
+- **Customize Home → View storefront** and **Ads → Preview on shop** open the website in your browser instead of "page not found" in the app. The empty ad-slot boxes show only to staff signed in on the office website; everyone else sees the live ads.
