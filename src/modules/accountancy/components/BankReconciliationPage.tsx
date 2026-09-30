@@ -615,6 +615,8 @@ export function BankReconciliationPage() {
                                     <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-violet-500" /> Books · {data.account.name} · {glRows.length}</span>
                                     <span className="text-muted-foreground/40">|</span>
                                     <span className="inline-flex items-center gap-1 font-normal normal-case"><span className="h-3.5 w-[3px] rounded-full bg-amber-400" /> same date, same amount</span>
+                                    <span className="text-muted-foreground/40">|</span>
+                                    <AgreedLegend summary={s} />
                                 </span>
                                 <span className="flex items-center gap-3 font-normal normal-case">
                                     <span>{data.imports.length} upload(s)</span>
@@ -654,6 +656,7 @@ export function BankReconciliationPage() {
                                                 onSelectGroup={selectGroup}
                                                 busy={busy != null}
                                                 glById={data.glLines}
+                                                agreed={isAgreed(row.date, s.agreedThrough)}
                                                 hint={row.kind === "st" ? hints.get(row.st.id) : undefined}
                                                 onSelectHint={() => {
                                                     if (row.kind !== "st") return;
@@ -687,7 +690,7 @@ export function BankReconciliationPage() {
                         {/* Bank side */}
                         <div className="flex min-h-0 flex-col border-r">
                             <div className="flex items-center justify-between border-b px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                <span>Bank statement · {stRows.length}</span>
+                                <span className="flex items-center gap-2">Bank statement · {stRows.length} <AgreedLegend summary={s} /></span>
                                 <span className="font-normal normal-case">{data.imports.length} upload(s)</span>
                             </div>
                             <div className="min-h-0 flex-1 overflow-auto">
@@ -709,7 +712,7 @@ export function BankReconciliationPage() {
                                                 {data.statementLines.length === 0 ? "No statement lines in this period — upload the bank statement." : `Nothing ${filter === "all" ? "" : filter} here.`}
                                             </td></tr>
                                         )}
-                                        {stPage.pageRows.map((r) => <StatementRowView key={r.id} r={r} selected={selSt.has(r.id)} onToggle={() => setSelSt((s0) => toggle(s0, r.id))} onUnmatch={() => void unmatch(r.match!.groupId)} onBook={(k) => bookIt([r], k)} busy={busy != null} glById={data.glLines} hint={hints.get(r.id)} onSelectHint={() => { const h = hints.get(r.id); if (h) selectHint(r.id, h); }} />)}
+                                        {stPage.pageRows.map((r) => <StatementRowView key={r.id} r={r} selected={selSt.has(r.id)} onToggle={() => setSelSt((s0) => toggle(s0, r.id))} onUnmatch={() => void unmatch(r.match!.groupId)} onBook={(k) => bookIt([r], k)} busy={busy != null} glById={data.glLines} agreed={isAgreed(r.date, s.agreedThrough)} hint={hints.get(r.id)} onSelectHint={() => { const h = hints.get(r.id); if (h) selectHint(r.id, h); }} />)}
                                     </tbody>
                                 </table>
                             </div>
@@ -786,6 +789,36 @@ export function BankReconciliationPage() {
     );
 }
 
+// The agreement band. The Balance column is coloured, without a break, on every
+// row up to the last day books and bank are proven to agree — same closing
+// balance AND every row ticked (see agreementRun). Where the colour stops is
+// where the mismatch starts.
+const AGREED_CELL = "bg-emerald-400/45 font-medium text-emerald-950 dark:bg-emerald-500/30 dark:text-emerald-50";
+const AGREED_TITLE = "Books and bank agree up to here, and every row is ticked";
+
+function isAgreed(date: string, through: string | null) {
+    return through != null && date.slice(0, 10) <= through;
+}
+
+function AgreedLegend({ summary }: { summary: ReconPayload["summary"] }) {
+    const b = summary.breakAt;
+    const why = b == null
+        ? "Books and bank agree for the whole period, every row ticked."
+        : `Stops before ${formatDate(b.date)}: ${[
+            b.unticked ? `${b.unticked} row(s) not ticked` : null,
+            b.gap == null ? "no bank balance yet" : Math.abs(b.gap) >= 0.005 ? `balance differs by ${fmt(b.gap)}` : null,
+        ].filter(Boolean).join(", ")}.`;
+    return (
+        <span className="inline-flex items-center gap-1 font-normal normal-case" title={why}>
+            <span className="h-3 w-3 rounded-sm bg-emerald-400/70 dark:bg-emerald-500/50" />
+            {summary.agreedThrough
+                ? <>books = bank, all ticked · through {formatDate(summary.agreedThrough)}</>
+                : <>books = bank, all ticked · not from the first day</>}
+            {b && <span className="text-red-600 dark:text-red-400">· breaks {formatDate(b.date)}</span>}
+        </span>
+    );
+}
+
 function Stat({ label, value, hint, sub, emphasis, warn }: { label: string; value: number | null; hint?: string; sub?: string; emphasis?: boolean; warn?: boolean }) {
     return (
         <div className="min-w-0">
@@ -815,10 +848,10 @@ function matchGapDays(stDate: string, glLineIds: number[], glById: GlLineView[])
 // a withdrawal sits under the credit that explains it, a deposit under its
 // debit — so an equal pair reads straight down the page. The colour band and
 // the Side tag say which book a row comes from; colour is never the only clue.
-function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGroup, busy, glById, hint, onSelectHint }: {
+function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGroup, busy, glById, agreed, hint, onSelectHint }: {
     row: MergedRow; selected: boolean; onToggle: () => void; onUnmatch: () => void;
     onBook: (kind: "PAYMENT" | "RECEIPT" | "CONTRA") => void; onSelectGroup: (sug: Suggestion) => void;
-    busy: boolean; glById: GlLineView[]; hint?: CrossDateHint; onSelectHint: () => void;
+    busy: boolean; glById: GlLineView[]; agreed: boolean; hint?: CrossDateHint; onSelectHint: () => void;
 }) {
     const isSt = row.kind === "st";
     const r = isSt ? row.st : row.gl;
@@ -925,7 +958,8 @@ Same amount, same side, but ${hint.gap} day(s) away with no reference in common,
             </td>
             <td className="px-2 py-1.5 text-right align-top font-mono">{money(isSt ? row.st.withdrawal : row.gl.credit)}</td>
             <td className="px-2 py-1.5 text-right align-top font-mono">{money(isSt ? row.st.deposit : row.gl.debit)}</td>
-            <td className="px-2 py-1.5 text-right align-top font-mono text-muted-foreground">{isSt && row.st.balance != null ? fmt(row.st.balance) : ""}</td>
+            {/* Books rows carry the band too, with no figure, so it never has a hole. */}
+            <td className={cn("px-2 py-1.5 text-right align-top font-mono", agreed ? AGREED_CELL : "text-muted-foreground")} title={agreed ? AGREED_TITLE : undefined}>{isSt && row.st.balance != null ? fmt(row.st.balance) : ""}</td>
             <td className="whitespace-nowrap px-2 py-1.5 text-right align-top">
                 {matched && !r.locked && (
                     <button type="button" className="inline-flex items-center gap-0.5 text-muted-foreground hover:text-red-600" disabled={busy} onClick={onUnmatch} title="Unmatch"><Unlink size={12} /></button>
@@ -942,10 +976,10 @@ Same amount, same side, but ${hint.gap} day(s) away with no reference in common,
     );
 }
 
-function StatementRowView({ r, selected, onToggle, onUnmatch, onBook, busy, glById, hint, onSelectHint }: {
+function StatementRowView({ r, selected, onToggle, onUnmatch, onBook, busy, glById, agreed, hint, onSelectHint }: {
     r: StatementLineView; selected: boolean; onToggle: () => void; onUnmatch: () => void;
     onBook: (kind: "PAYMENT" | "RECEIPT" | "CONTRA") => void; busy: boolean; glById: GlLineView[];
-    hint?: CrossDateHint; onSelectHint: () => void;
+    agreed: boolean; hint?: CrossDateHint; onSelectHint: () => void;
 }) {
     const matched = r.match != null && !r.match.stale;
     const partners = matched ? r.match!.glLineIds.map((id) => glById.find((g) => g.id === id)?.voucherNo ?? `#${id}`) : [];
@@ -987,7 +1021,7 @@ Same amount, same side, but ${hint.gap} day(s) away with no reference in common,
             </td>
             <td className="px-2 py-1.5 text-right font-mono align-top">{money(r.withdrawal)}</td>
             <td className="px-2 py-1.5 text-right font-mono align-top">{money(r.deposit)}</td>
-            <td className="px-2 py-1.5 text-right font-mono align-top text-muted-foreground">{r.balance != null ? fmt(r.balance) : ""}</td>
+            <td className={cn("px-2 py-1.5 text-right font-mono align-top", agreed ? AGREED_CELL : "text-muted-foreground")} title={agreed ? AGREED_TITLE : undefined}>{r.balance != null ? fmt(r.balance) : ""}</td>
             <td className="whitespace-nowrap px-2 py-1.5 text-right align-top">
                 {matched && !r.locked && (
                     <button type="button" className="inline-flex items-center gap-0.5 text-muted-foreground hover:text-red-600" disabled={busy} onClick={onUnmatch} title="Unmatch"><Unlink size={12} /></button>

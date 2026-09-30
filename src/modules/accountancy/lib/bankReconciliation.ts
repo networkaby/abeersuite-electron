@@ -28,6 +28,7 @@ import { accountIdsUnderGroup } from "./accountGroups";
 import { ledgerStatusFilterUv } from "./ledgerStatus";
 import { collapseEditReversals } from "./collapseEditReversals";
 import { toNumber } from "./balance";
+import { agreementRun, type AgreementBreak } from "./bankReconAgreement";
 import { resolveSourceBatch } from "./journalEntrySource";
 import { referenceHref, voucherSourceForType } from "./voucherUrls";
 
@@ -141,6 +142,17 @@ export interface ReconSummary {
     };
     /** The latest date every statement line up to it is matched, or null. */
     suggestedReconciledThrough: string | null;
+    /**
+     * The last day of the period through which books and bank are proven to
+     * agree: every day from `from` up to it closes with the same balance on
+     * both sides AND has every row on it ticked. A matching total is not proof
+     * (two bank lines summing to one book entry may be two different sums of
+     * money), so an unticked day ends the run even when the balances agree.
+     * Null when the very first day already fails.
+     */
+    agreedThrough: string | null;
+    /** The first day that fails, and why — null when the whole period agrees. */
+    breakAt: AgreementBreak | null;
 }
 
 export interface ReconPayload {
@@ -288,6 +300,25 @@ export async function loadReconciliation(accountId: number, fromIso: string, toI
 
     // ── Rows for the two panes (the period) ────────────────────────────────
     const visiblePeriod = collapseEditReversals(periodGl);
+    const { agreedThrough, breakAt } = agreementRun({
+        fromIso,
+        opening: ledgerRow?.openingBalance != null && ledgerRow.openingBalanceType
+            ? {
+                amount: ledgerRow.openingBalanceType === "DEBIT" ? toNumber(ledgerRow.openingBalance) : -toNumber(ledgerRow.openingBalance),
+                date: ledgerRow.openingBalanceDate ? toDateOnlyUtc(ledgerRow.openingBalanceDate) : null,
+            }
+            : null,
+        books: visibleAll.map((l) => ({
+            date: toDateOnly(l.universalVoucher.date),
+            net: l.type === "DEBIT" ? toNumber(l.amount) : -toNumber(l.amount),
+        })),
+        periodBooks: visiblePeriod.map((l) => ({ date: toDateOnly(l.universalVoucher.date), ticked: byGl.has(l.id) })),
+        statement: stLinesAll.map((s) => ({
+            date: toDateOnlyUtc(s.date),
+            balance: s.balance != null ? toNumber(s.balance) : null,
+            ticked: byStatement.has(s.id),
+        })),
+    });
     const sourceMap = await resolveSourceBatch([...new Set(visiblePeriod.map((l) => l.universalVoucher.id))]);
     const glLines: GlLineView[] = visiblePeriod.map((l) => {
         const d = toDateOnly(l.universalVoucher.date);
@@ -365,6 +396,8 @@ export async function loadReconciliation(accountId: number, fromIso: string, toI
                 stale: staleGroups.size,
             },
             suggestedReconciledThrough: suggested,
+            agreedThrough,
+            breakAt,
         },
         statementLines,
         glLines,
