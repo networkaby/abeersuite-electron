@@ -134,6 +134,7 @@ model InvProductGroup {
   products         InvProduct[]
   loyaltyEarnRules LoyaltyEarnRule[]   @relation("InvProductGroupLoyaltyRules")
   couponRules      CouponProductRule[] @relation("CouponRuleGroup")
+  customerPriceRules CustomerGroupPriceRule[]
 
   @@unique([name])
   @@index([parentId])

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { loadPartyPricing } from "@/modules/pricing-strategy/lib/groupPricingServer";
 import { Prisma } from "@/generated/prisma/client";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
@@ -112,17 +113,12 @@ export async function POST(req: Request) {
     if (error) return error;
 
     try {
-        // Customer Quality: no-discount flag — flagged customer gets no OFFERS
-        // (same deliberate silence as coupon-validate; the POS never learns why),
-        // but cross-sell suggestions still apply (add-ons are full-price sales).
-        let noDiscountFlag = false;
-        if (data.accountId != null) {
-            const acct = await prisma.account.findUnique({
-                where:  { id: data.accountId },
-                select: { person: { select: { noDiscount: true } }, company: { select: { noDiscount: true } } },
-            });
-            noDiscountFlag = (acct?.person?.noDiscount ?? acct?.company?.noDiscount) === true;
-        }
+        // No coupons for this party (its no-discount flag or its customer
+        // group's Coupons tick) → no OFFERS (same deliberate silence as
+        // coupon-validate; the POS never learns why), but cross-sell
+        // suggestions still apply (add-ons are full-price sales).
+        const noCoupons = data.accountId != null
+            && !(await loadPartyPricing(prisma, data.accountId)).benefits.coupons;
 
         const now = new Date();
         const goodsValue = round2(data.lines.reduce((s, l) => s + l.qty * l.unitPrice, 0));
@@ -186,7 +182,7 @@ export async function POST(req: Request) {
         const name = (id: number): string | null => offerNames.get(id) ?? null;
 
         const orderRank: Record<string, number> = { ready: 0, progress: 1, unavailable: 2 };
-        const offers = noDiscountFlag ? [] : coupons.map((c) => {
+        const offers = noCoupons ? [] : coupons.map((c) => {
             const used = usedTotal.get(c.id) ?? 0;
             const usedCust = usedByCust.get(c.id) ?? 0;
             const usageLeft = c.totalUsageLimit != null ? Math.max(0, c.totalUsageLimit - used) : null;

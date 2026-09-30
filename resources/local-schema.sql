@@ -19,6 +19,13 @@ END $$;
 
 -- CreateEnum
 DO $$ BEGIN
+    CREATE TYPE "GroupPriceType" AS ENUM ('MRP', 'PRINT_PRICE', 'PROFIT_SHARE', 'REVENUE_DISCOUNT');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- CreateEnum
+DO $$ BEGIN
     CREATE TYPE "ContactLifecycle" AS ENUM ('LEAD', 'PROSPECT', 'CUSTOMER', 'INACTIVE');
 EXCEPTION
     WHEN duplicate_object THEN NULL;
@@ -731,6 +738,10 @@ CREATE TABLE IF NOT EXISTS "CustomerGroup" (
     "name" TEXT NOT NULL,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "allowTierDiscount" BOOLEAN NOT NULL DEFAULT true,
+    "allowCoupons" BOOLEAN NOT NULL DEFAULT true,
+    "allowLoyalty" BOOLEAN NOT NULL DEFAULT true,
 
     CONSTRAINT "CustomerGroup_pkey" PRIMARY KEY ("id")
 );
@@ -738,6 +749,28 @@ ALTER TABLE "CustomerGroup" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
 ALTER TABLE "CustomerGroup" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL;
 ALTER TABLE "CustomerGroup" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "CustomerGroup" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "CustomerGroup" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "CustomerGroup" ADD COLUMN IF NOT EXISTS "allowTierDiscount" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "CustomerGroup" ADD COLUMN IF NOT EXISTS "allowCoupons" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "CustomerGroup" ADD COLUMN IF NOT EXISTS "allowLoyalty" BOOLEAN NOT NULL DEFAULT true;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "CustomerGroupPriceRule" (
+    "id" SERIAL NOT NULL,
+    "customerGroupId" INTEGER NOT NULL,
+    "productGroupId" INTEGER,
+    "priceType" "GroupPriceType" NOT NULL,
+    "pct" DECIMAL(5,2),
+
+    CONSTRAINT "CustomerGroupPriceRule_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "CustomerGroupPriceRule" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "CustomerGroupPriceRule" ADD COLUMN IF NOT EXISTS "customerGroupId" INTEGER NOT NULL;
+ALTER TABLE "CustomerGroupPriceRule" ADD COLUMN IF NOT EXISTS "productGroupId" INTEGER;
+ALTER TABLE "CustomerGroupPriceRule" ALTER COLUMN "productGroupId" DROP NOT NULL;
+ALTER TABLE "CustomerGroupPriceRule" ADD COLUMN IF NOT EXISTS "priceType" "GroupPriceType" NOT NULL;
+ALTER TABLE "CustomerGroupPriceRule" ADD COLUMN IF NOT EXISTS "pct" DECIMAL(5,2);
+ALTER TABLE "CustomerGroupPriceRule" ALTER COLUMN "pct" DROP NOT NULL;
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "PersonCompany" (
@@ -4660,6 +4693,12 @@ CREATE INDEX IF NOT EXISTS "Company_updatedAt_idx" ON "Company"("updatedAt");
 CREATE UNIQUE INDEX IF NOT EXISTS "CustomerGroup_name_key" ON "CustomerGroup"("name");
 
 -- CreateIndex
+CREATE INDEX IF NOT EXISTS "CustomerGroupPriceRule_productGroupId_idx" ON "CustomerGroupPriceRule"("productGroupId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "CustomerGroupPriceRule_customerGroupId_productGroupId_key" ON "CustomerGroupPriceRule"("customerGroupId", "productGroupId");
+
+-- CreateIndex
 CREATE INDEX IF NOT EXISTS "PersonCompany_personId_idx" ON "PersonCompany"("personId");
 
 -- CreateIndex
@@ -5486,6 +5525,20 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "Company" ADD CONSTRAINT "Company_ownerPositionId_fkey" FOREIGN KEY ("ownerPositionId") REFERENCES "Position"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "CustomerGroupPriceRule" ADD CONSTRAINT "CustomerGroupPriceRule_customerGroupId_fkey" FOREIGN KEY ("customerGroupId") REFERENCES "CustomerGroup"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "CustomerGroupPriceRule" ADD CONSTRAINT "CustomerGroupPriceRule_productGroupId_fkey" FOREIGN KEY ("productGroupId") REFERENCES "InvProductGroup"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -7335,6 +7388,13 @@ DO $$ BEGIN
     IF to_regclass('public."CustomerGroup"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "CustomerGroup";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "CustomerGroup"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."CustomerGroupPriceRule"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "CustomerGroupPriceRule";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "CustomerGroupPriceRule"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;

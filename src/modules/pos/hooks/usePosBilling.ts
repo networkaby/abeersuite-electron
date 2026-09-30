@@ -27,6 +27,7 @@ import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { DEFAULT_PAYEE_NAME } from "@/modules/pos/lib/paymentLink";
 import { formatInr, parseDigitsInput, round2 } from "@/shared/lib/format";
 import { resolveTierTitles } from "@/shared/lib/pricing";
+import { groupRebatesExcl, groupStartPricePaise, rebatedRate, ruleForGroup } from "@/modules/pricing-strategy/lib/groupPricing";
 import { usePosDraftStore } from "@/store/posDraftStore";
 import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type OnTopHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
 import { searchProducts, readCachedProducts, syncProducts } from "@/shared/lib/inventory";
@@ -54,6 +55,11 @@ export function usePosBilling(opts: {
     partySearchRef: React.RefObject<PartySearchAndCreateHandle | null>;
     productSearchRef: React.RefObject<HTMLInputElement | null>;
     cashTenderedRef: React.RefObject<HTMLInputElement | null>;
+    /** Work the customer group's silent rebate into the bill (Pricing Strategy
+     *  → Group pricing). Only a NEW POS sale posts it — /api/pos/sale works the
+     *  same rebate out server-side. Orders, estimates and an edited sale (whose
+     *  stored rates already carry it) leave it off. */
+    groupRebate?: boolean;
 }) {
     const { partySearchRef, productSearchRef, cashTenderedRef } = opts;
     // Router for the help-page fallback when the browser blocks the new tab.
@@ -421,6 +427,8 @@ export function usePosBilling(opts: {
     // Per-line tax via the same calcLineTotals helper office SALE uses, so
     // POS and SALE always compute identical GST. POS has no per-line discount
     // today (only voucher-level loyalty %) so discountPct/Amt are 0 here.
+    // These are the rows BEFORE any customer-group rebate — the tier, loyalty
+    // and coupon math reads them; the bill itself shows `billLineRows` below.
     const lineRows = cart.map((l) => {
         const { taxAmount, amount } = calcLineTotals({
             quantity: l.qty,
@@ -565,18 +573,68 @@ export function usePosBilling(opts: {
     // Loyalty redemption + coupon + on-top all ride chargesNet as negative
     // charges, exactly as the server folds them into calcVoucherTotals.
     const chargesNet = manualChargesNet - effRedemptionRupees - couponRupees - onTopRupees;
+
+    // ── Customer-group rebate (mirrors /api/pos/sale) ──────────────────────────
+    // PROFIT_SHARE / REVENUE_DISCOUNT rules give back part of the profit still
+    // left after every other discount, taken silently out of each line's rate
+    // before GST. Same groupRebatesExcl, same inputs as the server — goods
+    // lines only, bill-level discounts = coupon + on-top + loyalty + manual
+    // minus charges — so the total collected here is the total it posts. No
+    // rule → every rebate is 0 and the bill math below is exactly as before.
+    const groupPricing = opts.groupRebate ? snapshot?.groupPricing ?? null : null;
+    const lineTierAfterCoupon = lineTierDiscExcl.map((v) => (couponDroppedTier ? 0 : v));
+    const lineRebateExcl = cart.map(() => 0);
+    if (groupPricing) {
+        const goodsIdx = cart.flatMap((l, i) => (l.kind !== "service" ? [i] : []));
+        const billDiscountIncl = effRedemptionRupees + couponRupees + onTopRupees
+            // Only the rows the sale actually sends (PosScreen's validCharges).
+            + charges
+                .filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005)
+                .reduce((sum, c) => sum + Math.max(0, -parseAmt(c.amount)), 0);
+        const rebates = groupRebatesExcl(goodsIdx.map((i) => {
+            const l = cart[i];
+            return {
+                quantity: l.qty,
+                unitPrice: l.unitPrice,
+                taxRate: l.taxRate,
+                tierDiscExcl: round2(lineTierAfterCoupon[i]),
+                costExcl: lineCostExcl(l),
+                protected: lineProtected(l),
+                rule: ruleForGroup(groupPricing, l.groupId ?? allProducts.find((p) => p.id === l.productId)?.groupId ?? null),
+            };
+        }), billDiscountIncl);
+        goodsIdx.forEach((i, k) => { lineRebateExcl[i] = rebates[k]; });
+    }
+    const anyRebate = lineRebateExcl.some((r) => r > 0);
+    // The bill's own rows — each line at its rate after the rebate. Without a
+    // rebate they ARE lineRows, and the tier stays effDiscountAmount untouched.
+    const billLineRows = !anyRebate ? lineRows : cart.map((l, i) => {
+        if (lineRebateExcl[i] <= 0) return lineRows[i];
+        const rate = rebatedRate(l.unitPrice, l.qty, lineRebateExcl[i]);
+        const { taxAmount, amount } = calcLineTotals({ quantity: l.qty, rate, discountPct: 0, discountAmt: 0, taxRate: l.taxRate });
+        return { amount, taxAmount, gross: l.qty * rate };
+    });
+    // Tier discount re-measured on the rebated rows (the server nets it per line
+    // at the rebated rate) — identical to effDiscountAmount when nothing moved.
+    const billTierDiscount = !anyRebate ? effDiscountAmount : cart.reduce((sum, l, i) => {
+        const rate = rebatedRate(l.unitPrice, l.qty, lineRebateExcl[i]);
+        const net = calcLineTotals({ quantity: l.qty, rate, discountPct: 0, discountAmt: round2(lineTierAfterCoupon[i]), taxRate: l.taxRate }).amount;
+        return sum + (billLineRows[i].amount - net);
+    }, 0);
+    const billSubtotal = !anyRebate ? subtotal : billLineRows.reduce((sum, r) => sum + r.gross, 0);
+    const billTax = !anyRebate ? tax : billLineRows.reduce((sum, r) => sum + r.taxAmount, 0);
     // Auto round-off: figure out the round-off that lands Total on a whole
     // rupee by computing the pre-round total first, then deriving the delta.
     // If the cashier has manually typed a value, that override wins.
-    const naturalTotal = calcVoucherTotals(lineRows, shippingAmt, effDiscountAmount, 0, chargesNet).totalAmount;
+    const naturalTotal = calcVoucherTotals(billLineRows, shippingAmt, billTierDiscount, 0, chargesNet).totalAmount;
     const autoRoundOff = Math.round(naturalTotal) - naturalTotal;
     const roundOff = roundOffManuallyEdited ? parseAmt(roundOffStr) : autoRoundOff;
     // Single source of truth — matches /api/inventory/vouchers SALE math via
     // calcVoucherTotals, so server-side validation cannot disagree.
     const { totalAmount: total } = calcVoucherTotals(
-        lineRows,                  // each row's `amount` is tax-inclusive
+        billLineRows,              // each row's `amount` is tax-inclusive
         shippingAmt,
-        effDiscountAmount,
+        billTierDiscount,
         roundOff,
         chargesNet,
     );
@@ -990,7 +1048,12 @@ export function usePosBilling(opts: {
         // the price tag / MRP-style retail expectations). We back-calculate the
         // pre-tax rate here so the rest of the math (calcLineTotals) — which
         // expects an exclusive rate — produces the right breakdown.
-        const inclusivePrice = p.effectiveSalePricePaise ? p.effectiveSalePricePaise / 100 : 0;
+        // A customer group may bill this product group at MRP or the printed
+        // barcode price instead (Pricing Strategy → Group pricing).
+        const startPaise = groupStartPricePaise(ruleForGroup(snapshot?.groupPricing, p.groupId), {
+            salePaise: p.effectiveSalePricePaise, tagPaise: p.barcodePricePaise, mrpPaise: p.mrpPaise,
+        });
+        const inclusivePrice = startPaise ? startPaise / 100 : 0;
         const taxRate = p.taxRate ?? 0;
         const defaultPrice = taxRate > 0 ? inclusivePrice / (1 + taxRate / 100) : inclusivePrice;
         const warrantyLabel = p.warrantyTerm
@@ -1012,6 +1075,9 @@ export function usePosBilling(opts: {
                 costPaise: p.costPaise ?? null,
                 mrpPaise: p.mrpPaise ?? null,
                 barcodePaise: p.barcodePricePaise ?? null,
+                salePaise: p.effectiveSalePricePaise ?? null,
+                groupId: p.groupId ?? null,
+                autoPrice: true,
                 warrantyLabel,
                 requireSaleNote: p.requireSaleNote ?? false,
                 redeemCapPct: p.redeemCapPct ?? null,
@@ -1064,8 +1130,36 @@ export function usePosBilling(opts: {
         setCart((p) => p.map((l) => l.productId === productId ? { ...l, qty } : l));
     }, [setCart, setCartSelectedId, cart, cartSelectedId]);
 
+    // A typed price is the cashier's call — the line stops following the
+    // customer's group pricing (see the re-price effect below).
     const setPrice = (productId: number, unitPrice: number) =>
-        setCart((p) => p.map((l) => l.productId === productId ? { ...l, unitPrice } : l));
+        setCart((p) => p.map((l) => l.productId === productId ? { ...l, unitPrice, autoPrice: false } : l));
+
+    // Customer picked / changed / cleared → re-price the lines the POS priced
+    // itself by the new customer's group rule (MRP / print price / normal
+    // sale price). Typed prices, services and hydrated edit / converted lines
+    // (no autoPrice) stay as they are. Only writes when a price really moves.
+    const groupPricingSig = JSON.stringify(snapshot?.groupPricing ?? null);
+    useEffect(() => {
+        const pricing = snapshot?.groupPricing ?? null;
+        setCart((prev) => {
+            let moved = false;
+            const next = prev.map((l) => {
+                if (!l.autoPrice || l.kind === "service") return l;
+                const startPaise = groupStartPricePaise(ruleForGroup(pricing, l.groupId), {
+                    salePaise: l.salePaise, tagPaise: l.barcodePaise, mrpPaise: l.mrpPaise,
+                });
+                if (startPaise == null) return l;
+                const incl = startPaise / 100;
+                const unitPrice = l.taxRate > 0 ? incl / (1 + l.taxRate / 100) : incl;
+                if (Math.abs(unitPrice - l.unitPrice) < 1e-9) return l;
+                moved = true;
+                return { ...l, unitPrice };
+            });
+            return moved ? next : prev;
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the rules' content, not the snapshot object
+    }, [groupPricingSig, setCart]);
 
     const setLineDescription = (productId: number, description: string) =>
         setCart((p) => p.map((l) => l.productId === productId ? { ...l, description } : l));
@@ -1420,15 +1514,32 @@ export function usePosBilling(opts: {
     const arrearPaid = Math.min(overpaid, balanceDue);
     const advanceTaken = Math.max(0, overpaid - balanceDue);
 
+    // The Explorer hover shows the price this customer would actually start
+    // at (their group may bill it at MRP / print price). Memoised: the display
+    // effect keys on this object, so a fresh one per render would reset its
+    // debounce on every keystroke.
+    const hoverPreviewAtGroupPrice = useMemo(() => {
+        if (!hoverPreviewProduct) return null;
+        const startPaise = groupStartPricePaise(ruleForGroup(snapshot?.groupPricing, hoverPreviewProduct.groupId), {
+            salePaise: hoverPreviewProduct.effectiveSalePricePaise,
+            tagPaise: hoverPreviewProduct.barcodePricePaise,
+            mrpPaise: hoverPreviewProduct.mrpPaise,
+        });
+        return startPaise === hoverPreviewProduct.effectiveSalePricePaise
+            ? hoverPreviewProduct
+            : { ...hoverPreviewProduct, effectiveSalePricePaise: startPaise };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the rules' content, not the snapshot object
+    }, [hoverPreviewProduct, groupPricingSig]);
+
     // Customer-facing display coordinator (shared hook — the live QR/cart/customer
     // frames while a bill is built). The post-sale thank-you finale + printing stay
     // in each screen's submit routine; only this live coordinator is shared.
     usePosCustomerDisplay({
         displayHold, checkoutOpen, upiEntered, upiVpa, upiPayeeName: DEFAULT_PAYEE_NAME,
         cashNet, splitsSum, payableTotal, collected,
-        cart, snapshot, subtotal, discountAmount, total, totalDiscount,
-        effDiscountAmount, effRedemptionRupees, couponRupees, posExtraCharges, posTierLabel,
-        hoverPreview: hoverPreviewProduct,
+        cart, lineRows: billLineRows, snapshot, subtotal: billSubtotal, discountAmount, total, totalDiscount,
+        effDiscountAmount: billTierDiscount, effRedemptionRupees, couponRupees, posExtraCharges, posTierLabel,
+        hoverPreview: hoverPreviewAtGroupPrice,
     });
 
     // Credit-limit guard — true when the on-credit portion of this sale would
@@ -1491,10 +1602,14 @@ export function usePosBilling(opts: {
         refreshActiveShift, shiftOpenedAt,
         payAccounts, payAccountById,
         // bill math
-        lineRows, subtotal, tax, discountPct, synthDiscountPct, discountAmount, totalDiscount,
+        // lineRows / subtotal / tax / effDiscountAmount are the BILL's figures —
+        // after any customer-group rebate — so the summary, the customer display
+        // and the printed slip all reconcile to `total`.
+        lineRows: billLineRows, subtotal: billSubtotal, tax: billTax,
+        discountPct, synthDiscountPct, discountAmount, totalDiscount,
         tier, currentSaleValue,
         rates, canRedeem, loyaltyBalance, redeemBlocked, maxRedeemablePts,
-        effRedeemPts, effRedemptionRupees, effDiscountAmount, couponRupees,
+        effRedeemPts, effRedemptionRupees, effDiscountAmount: billTierDiscount, couponRupees,
         couponDroppedTier, couponBlockedLoyalty, onTopRupees,
         total, giftCardApplied, payableTotal, posExtraCharges, posTierLabel,
         // tender math

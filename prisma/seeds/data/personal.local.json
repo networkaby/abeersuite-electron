@@ -12321,33 +12321,55 @@
   "customerGroups": [
     {
       "name": "Govt Office",
-      "isActive": true
+      "isActive": true,
+      "allowTierDiscount": true,
+      "allowCoupons": true,
+      "allowLoyalty": true
     },
     {
       "name": "Private Office",
-      "isActive": true
+      "isActive": true,
+      "allowTierDiscount": true,
+      "allowCoupons": true,
+      "allowLoyalty": true
     },
     {
       "name": "Govt School",
-      "isActive": true
+      "isActive": true,
+      "allowTierDiscount": true,
+      "allowCoupons": true,
+      "allowLoyalty": true
     },
     {
       "name": "Private School",
-      "isActive": true
+      "isActive": true,
+      "allowTierDiscount": true,
+      "allowCoupons": true,
+      "allowLoyalty": true
     },
     {
       "name": "B2B",
-      "isActive": true
+      "isActive": true,
+      "allowTierDiscount": true,
+      "allowCoupons": true,
+      "allowLoyalty": true
     },
     {
       "name": "Agent/ Mechanic",
-      "isActive": true
+      "isActive": true,
+      "allowTierDiscount": true,
+      "allowCoupons": true,
+      "allowLoyalty": true
     },
     {
       "name": "CSP/CSC/DTP/ONLINE Shop",
-      "isActive": true
+      "isActive": true,
+      "allowTierDiscount": true,
+      "allowCoupons": true,
+      "allowLoyalty": true
     }
   ],
+  "customerGroupPriceRules": [],
   "posCounters": [
     {
       "branchId": "BR-HQ",

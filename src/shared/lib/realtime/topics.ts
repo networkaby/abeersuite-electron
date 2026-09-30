@@ -69,6 +69,8 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
     [/^\/api\/inventory\/products/,                 ["stock", "catalogue"]],
     [/^\/api\/inventory\/(brands|categories|masters|attribute-masters|units|product-groups|gst-rates|boms|warranty-terms|naming-config)/, ["catalogue"]],
     [/^\/api\/pricing-strategy\//,                  ["catalogue"]],
+    // Group pricing writes CustomerGroup + its price rules (a child set).
+    [/^\/api\/pricing-strategy\/group-pricing/,      ["parties"]],
     [/^\/api\/coupons/,                             ["catalogue"]],
     [/^\/api\/(ecommerce|shop)\/products/,          ["catalogue"]],
     [/^\/api\/pos\/services/,                       ["catalogue"]],

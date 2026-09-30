@@ -71,7 +71,7 @@ export function CustomerGroupsManager() {
         const members = row._count.persons + row._count.companies;
         const ok = await confirmAction({
             title: `Delete group "${row.name}"?`,
-            body: members > 0 ? `${members} customer(s) will be detached from it.` : "This cannot be undone.",
+            body: `${members > 0 ? `${members} customer(s) will be detached from it. ` : ""}Its group pricing (Pricing Strategy) goes with it. This cannot be undone.`,
             confirmLabel: "Delete",
         });
         if (!ok) return;

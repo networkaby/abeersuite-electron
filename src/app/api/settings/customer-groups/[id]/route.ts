@@ -29,9 +29,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 }
 
-// DELETE /api/settings/customer-groups/[id] — remove a group. It is only a
-// marketing label, so members are detached (customerGroupId → null) and the
-// row deleted in one transaction; deactivating via PATCH is the soft option.
+// DELETE /api/settings/customer-groups/[id] — remove a group. Members are
+// detached (customerGroupId → null) and the row deleted in one transaction —
+// its group-pricing rules cascade with it; deactivating via PATCH is the soft
+// option (an inactive group's pricing is switched off, not lost).
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requireAuth();
     if (response) return response;

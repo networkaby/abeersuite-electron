@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { loadPartyPricing } from "@/modules/pricing-strategy/lib/groupPricingServer";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -57,16 +58,11 @@ export async function POST(req: Request) {
     if (error) return error;
 
     try {
-        // Customer Quality: no-discount flag — flagged customer gets no coupons.
-        // Same generic wording as an ineligible coupon, so nothing is revealed.
-        if (data.accountId != null) {
-            const acct = await prisma.account.findUnique({
-                where:  { id: data.accountId },
-                select: { person: { select: { noDiscount: true } }, company: { select: { noDiscount: true } } },
-            });
-            if ((acct?.person?.noDiscount ?? acct?.company?.noDiscount) === true) {
-                return NextResponse.json({ ok: false, reason: data.code ? "No coupon applied" : "No automatic offer available" });
-            }
+        // No coupons for this party — its no-discount flag (Customer Quality) or
+        // its customer group's Coupons tick is off. Same generic wording as an
+        // ineligible coupon, so nothing is revealed.
+        if (data.accountId != null && !(await loadPartyPricing(prisma, data.accountId)).benefits.coupons) {
+            return NextResponse.json({ ok: false, reason: data.code ? "No coupon applied" : "No automatic offer available" });
         }
 
         const goodsValue = data.lines.reduce((s, l) => s + l.qty * l.unitPrice, 0);

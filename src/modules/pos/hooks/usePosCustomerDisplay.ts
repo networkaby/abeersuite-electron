@@ -8,7 +8,6 @@
 // and printing stay in each screen — only this live coordinator is shared.
 
 import { useEffect } from "react";
-import { calcLineTotals } from "@/modules/inventory/lib/voucherMath";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import type { Snapshot, CartLine, ProductOption } from "@/modules/pos/lib/posDraftTypes";
@@ -27,6 +26,9 @@ export type PosCustomerDisplayParams = {
     payableTotal: number;
     collected: number;
     cart: CartLine[];
+    /** The bill's own per-line figures (index-aligned with `cart`), after any
+     *  customer-group rebate — so the ladder reconciles to `total`. */
+    lineRows: { amount: number; taxAmount: number }[];
     snapshot: Snapshot | null;
     subtotal: number;
     discountAmount: number;
@@ -62,7 +64,7 @@ const UPI_SETTLE_MS = 1000;
 export function usePosCustomerDisplay({
     displayHold, checkoutOpen, upiEntered, upiVpa, upiPayeeName,
     cashNet, splitsSum, payableTotal, collected,
-    cart, snapshot, subtotal, discountAmount, total, totalDiscount,
+    cart, lineRows, snapshot, subtotal, discountAmount, total, totalDiscount,
     effDiscountAmount, effRedemptionRupees, couponRupees, posExtraCharges, posTierLabel,
     hoverPreview,
 }: PosCustomerDisplayParams) {
@@ -101,7 +103,7 @@ export function usePosCustomerDisplay({
                 });
             } else if (cart.length > 0) {
                 // Customer-facing price ladder — same computed view as the receipt.
-                const lr = cart.map((l) => calcLineTotals({ quantity: l.qty, rate: l.unitPrice, discountPct: 0, discountAmt: 0, taxRate: l.taxRate }));
+                const lr = lineRows;
                 const lad = computePriceLadder({
                     lines: cart.map((l, i) => ({
                         description: l.name,

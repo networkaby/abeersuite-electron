@@ -69,6 +69,9 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
         partySearchRef,
         productSearchRef,
         cashTenderedRef,
+        // A new sale works the customer group's silent rebate into the bill; an
+        // edit re-sends rates that already carry it.
+        groupRebate: !isEdit,
     });
 
     // Which rail the share dialog opens locked to — set by the Share button on a
@@ -386,13 +389,16 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                             // MRP-fallback hides the real price even with no barcode. The
                             // relay multiplies by qty to rebuild the line total.
                             const ll = printLadder.lines[i];
+                            // The bill's own pre-tax line value — after any customer-
+                            // group rebate, which is never printed as its own row.
+                            const gross = lineRows[i]?.gross ?? l.qty * l.unitPrice;
                             return {
                                 name: l.name,
                                 // Serial no. / colour typed in the line's Note box.
                                 note: l.description.trim() || null,
                                 qty: l.qty,
-                                unitPrice: l.unitPrice,
-                                amount: l.qty * l.unitPrice,
+                                unitPrice: l.qty ? gross / l.qty : l.unitPrice,
+                                amount: gross,
                                 mrp: ll?.mrp != null && l.qty ? ll.mrp / l.qty : null,
                                 barcode: ll?.barcode != null && l.qty ? ll.barcode / l.qty : null,
                             };

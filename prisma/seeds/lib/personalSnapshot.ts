@@ -91,6 +91,9 @@ export interface PersonalSnapshot {
     deliveryMethods: Row[];
     /** Customer Quality marketing-group master (Settings → Customer Groups). */
     customerGroups: Row[];
+    /** Group pricing (Pricing Strategy → Group pricing) — name-keyed:
+     *  { customerGroup, productGroup (null = All items), priceType, pct }. */
+    customerGroupPriceRules?: Row[];
     posCounters: Row[];
     posPaymentAccounts: Row[];
     posServices: Row[];
@@ -374,7 +377,16 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
     const deliveryMethods = (await prisma.deliveryMethod.findMany()).map((m) => omit(m, ["id", "createdAt", "updatedAt"]));
 
     // ── Customer Quality: marketing-group master (name-keyed, no refs) ──
-    const customerGroups = (await prisma.customerGroup.findMany()).map((g) => omit(g, ["id", "createdAt"]));
+    const customerGroups = (await prisma.customerGroup.findMany()).map((g) => omit(g, ["id", "createdAt", "updatedAt"]));
+    const customerGroupPriceRules = (await prisma.customerGroupPriceRule.findMany({
+        include: { customerGroup: { select: { name: true } }, productGroup: { select: { name: true } } },
+        orderBy: { id: "asc" },
+    })).map((r) => ({
+        customerGroup: r.customerGroup.name,
+        productGroup: r.productGroup?.name ?? null,
+        priceType: r.priceType,
+        pct: r.pct == null ? null : Number(r.pct),
+    }));
 
     // ── POS setup ──
     const paymentGateways = (await prisma.paymentGateway.findMany()).map((g) => omit(g, ["id", "createdAt", "updatedAt"]));
@@ -407,7 +419,7 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
         branches, departments,
         roles, rolePermissions, departmentPermissions, positions, positionRoles, users, userPositions, userPermissions,
         staffProfiles, staffSalaries, holidays,
-        paymentGateways, deliveryMethods, customerGroups, posCounters, posPaymentAccounts, posServices,
+        paymentGateways, deliveryMethods, customerGroups, customerGroupPriceRules, posCounters, posPaymentAccounts, posServices,
         pipelines, workGroups, works, workGroupWorks, ticketStatuses, ticketWorkers, statusTransitions, workerTransitions,
     };
 }
@@ -721,6 +733,24 @@ export async function importPersonal(prisma: Db, snap: PersonalSnapshot): Promis
     const customerGroups = snap.customerGroups ?? [];
     for (const g of customerGroups) await put(prisma.customerGroup, { name: g.name }, g);
     count("customerGroups", customerGroups.length);
+    // Group pricing rules — each group's set is replaced whole (name-keyed;
+    // a rule whose customer or product group is missing here is skipped).
+    const priceRules = snap.customerGroupPriceRules ?? [];
+    const rulesByGroup = new Map<string, Row[]>();
+    for (const r of priceRules) rulesByGroup.set(r.customerGroup, [...(rulesByGroup.get(r.customerGroup) ?? []), r]);
+    for (const [groupName, rows] of rulesByGroup) {
+        const cg = await prisma.customerGroup.findUnique({ where: { name: groupName }, select: { id: true } });
+        if (!cg) continue;
+        const data: { customerGroupId: number; productGroupId: number | null; priceType: any; pct: number | null }[] = [];
+        for (const r of rows) {
+            const pg = r.productGroup == null ? null : await prisma.invProductGroup.findFirst({ where: { name: r.productGroup }, select: { id: true } });
+            if (r.productGroup != null && !pg) continue;
+            data.push({ customerGroupId: cg.id, productGroupId: pg?.id ?? null, priceType: r.priceType, pct: r.pct ?? null });
+        }
+        await prisma.customerGroupPriceRule.deleteMany({ where: { customerGroupId: cg.id } });
+        if (data.length) await prisma.customerGroupPriceRule.createMany({ data });
+    }
+    count("customerGroupPriceRules", priceRules.length);
     idx = await buildRefIndex(prisma); // gateways now resolvable
     for (const c of snap.posCounters) {
         const data = internalize(c, { tillAccountId: "account" }, idx);

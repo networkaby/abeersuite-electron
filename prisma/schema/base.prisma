@@ -160,8 +160,49 @@ model CustomerGroup {
   name      String    @unique
   isActive  Boolean   @default(true)
   createdAt DateTime  @default(now())
+  /// Bumped by every save, rules included — the counter replica pulls this
+  /// table whole when its content changes, and its price rules come along.
+  updatedAt DateTime  @default(now()) @updatedAt
   persons   Person[]
   companies Company[]
+
+  // ── Group pricing (Pricing Strategy → Group pricing) — POS only ─────────
+  /// Which automatic benefits a customer of this group may get on a POS bill.
+  /// The customer's own noDiscount flag still blocks all three regardless.
+  allowTierDiscount Boolean @default(true)
+  allowCoupons      Boolean @default(true)
+  allowLoyalty      Boolean @default(true)
+  priceRules        CustomerGroupPriceRule[]
+}
+
+/// How a customer group is billed on one product group's items (POS only).
+enum GroupPriceType {
+  /// Line starts at the item's MRP.
+  MRP
+  /// Line starts at the printed barcode tag price.
+  PRINT_PRICE
+  /// `pct`% of the profit still left after every other discount is given back.
+  PROFIT_SHARE
+  /// `pct`% off the price left after every other discount, never below cost.
+  REVENUE_DISCOUNT
+}
+
+/// One row of a customer group's price list: "Govt Office → Paper → MRP".
+/// A rule on a parent product group covers its whole sub-tree; the nearest
+/// group wins. productGroupId null = the group's "All items" catch-all row.
+/// See src/shared/lib/pricing/groupPricing.ts.
+model CustomerGroupPriceRule {
+  id              Int              @id @default(autoincrement())
+  customerGroupId Int
+  customerGroup   CustomerGroup    @relation(fields: [customerGroupId], references: [id], onDelete: Cascade)
+  productGroupId  Int?
+  productGroup    InvProductGroup? @relation(fields: [productGroupId], references: [id], onDelete: Cascade)
+  priceType       GroupPriceType
+  /// % for PROFIT_SHARE / REVENUE_DISCOUNT (0–100); null for MRP / PRINT_PRICE.
+  pct             Decimal?         @db.Decimal(5, 2)
+
+  @@unique([customerGroupId, productGroupId])
+  @@index([productGroupId])
 }
 
 /// Contact funnel stage (HubSpot-style) — shared by Person & Company.

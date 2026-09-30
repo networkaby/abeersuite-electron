@@ -5,6 +5,7 @@
 
 import { type TierPeriodInput, type TierTitle } from "@/shared/lib/pricing";
 import { type QualityLogEntry } from "@/modules/customer/lib/customerQuality";
+import { type GroupPricing } from "@/modules/pricing-strategy/lib/groupPricing";
 
 export type Snapshot = {
     party: { kind: "person" | "company"; id: number; name: string; phone: string | null; email: string | null; gstin: string | null; address: string | null };
@@ -48,6 +49,10 @@ export type Snapshot = {
     lastVisitAt: string | null;
     recentTickets: Array<{ id: number; createdAt: string; statusLabel: string; statusColor: string }>;
     warrantiesEnding: Array<{ productName: string; endsAt: string }>;
+    /// Customer-group price rules (Pricing Strategy → Group pricing), already
+    /// walked down the product-group tree. null/absent = normal pricing. Picks
+    /// each line's starting price at add-to-cart and the silent group rebate.
+    groupPricing?: GroupPricing | null;
 };
 
 export type ProductOption = {
@@ -166,6 +171,15 @@ export type CartLine = {
     /// Discount-protected (ProductProtection blacklist) — the line gets no tier
     /// discount and sits outside the loyalty redeem ceiling on the POS screen.
     protected?: boolean;
+    /// Group pricing inputs, snapshotted at add-to-cart: the product's normal
+    /// sale price (paise, tax-inclusive) and its product group. With them a
+    /// customer change can re-price the line by the new customer's group rule.
+    salePaise?: number | null;
+    groupId?: number | null;
+    /// True while the line still carries the price the POS picked itself. A
+    /// cashier's typed price clears it, and a hydrated edit / converted line
+    /// never has it — only auto-priced lines follow a customer change.
+    autoPrice?: boolean;
     /// FREE-GRANT line: the item an independent FREE_ITEM / BOGO coupon granted.
     /// Display-only on the POS (zero price + FREE badge so the cashier hands it
     /// over) — it is NOT sent in the sale payload; the server re-derives it from

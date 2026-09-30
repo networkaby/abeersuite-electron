@@ -10,6 +10,7 @@ import { resolveTierForAccount, TIER_SPEND_VOUCHER_TYPES } from "@/shared/lib/pr
 import { resolveEffectiveCreditLimit } from "@/shared/lib/accountancy/creditLimit";
 import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 import { latestRating, parseQualityLog } from "@/modules/customer/lib/customerQuality";
+import { loadPartyPricing } from "@/modules/pricing-strategy/lib/groupPricingServer";
 
 // GET /api/pos/account-snapshot/[accountId]
 // Polymorphic POS "we know you" panel — works for either a Person account
@@ -66,7 +67,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                         name: true,
                         gstin: true,
                         address: true,
-                        noDiscount: true,
                         qualityLog: true,
                         phones: selectPrimaryPhone,
                         emails: selectPrimaryEmail,
@@ -78,7 +78,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                         name: true,
                         gstin: true,
                         address: true,
-                        noDiscount: true,
                         qualityLog: true,
                         phones: selectPrimaryPhone,
                         emails: selectPrimaryEmail,
@@ -114,15 +113,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
         }
         if (!party) return NextResponse.json({ error: "Account is not linked to a person or company" }, { status: 400 });
 
-        // Customer Quality — staff rating/comments timeline + the silent
-        // no-discount flag. When flagged, every automatic benefit is stripped
-        // from the response (tier, offers, loyalty), so the POS naturally
-        // previews a benefit-less bill at barcode price. The flag itself is
-        // NEVER sent — POS staff see no reason, by design (customer module
-        // Quality tab is the only place the flag shows).
+        // Customer Quality — staff rating/comments timeline.
         const partyRow = (account.person ?? account.company)!;
         const qualityLog = parseQualityLog(partyRow.qualityLog);
-        const noDiscount = partyRow.noDiscount;
 
         const oneYearAgo = new Date();
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
@@ -132,7 +125,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             universalVoucher: { partyAccountId: accountId, status: "POSTED", deletedAt: null, type: { in: [...SALE_TYPES] } },
         };
 
-        const [lifetimeAgg, ytdAgg, tierCtx, latestVoucher, latestTicket, recentTickets, ledgerOutstanding, loyaltyConfig] = await Promise.all([
+        const [lifetimeAgg, ytdAgg, tierCtx, latestVoucher, latestTicket, recentTickets, ledgerOutstanding, loyaltyConfig, partyPricing] = await Promise.all([
             prisma.voucherDetail.aggregate({
                 where: baseWhere,
                 _sum: { totalAmount: true },
@@ -171,7 +164,14 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             // Real persisted loyalty balance + the rates the POS UI needs to
             // compute the ₹ value of a redemption live.
             prisma.loyaltyConfig.findUnique({ where: { id: 1 } }),
+            // Which benefits this party may get + its customer group's price
+            // rules. The no-discount flag (Customer Quality) and the group's
+            // ticks both land here: a switched-off benefit is stripped from the
+            // response below, so the POS previews the bill the server will post.
+            // Neither the flag nor the group is ever named — POS staff see no reason.
+            loadPartyPricing(prisma, accountId),
         ]);
+        const { benefits } = partyPricing;
 
         const lifetimeTotal = Number(lifetimeAgg?._sum.totalAmount ?? 0);
         const ytdTotal = Number(ytdAgg?._sum.totalAmount ?? 0);
@@ -228,21 +228,25 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                 openingBalance: account.openingBalance != null ? Number(account.openingBalance) : null,
             },
             turnover: { lifetime: lifetimeTotal, last12Months: ytdTotal, invoiceCount },
-            discountPct: noDiscount ? 0 : discountPct,
+            discountPct: benefits.tier ? discountPct : 0,
             // The raw material, so the POS can re-resolve against the live cart — a
             // CURRENT_SALE period scores 0 until there is a bill to score.
-            // Flagged customer → empty periods, so the live re-resolve yields 0 too.
-            tierPeriods: noDiscount ? [] : tierPeriodInputs,
+            // Tier switched off → empty periods, so the live re-resolve yields 0 too.
+            tierPeriods: benefits.tier ? tierPeriodInputs : [],
             tierCapPct,
             // History-only view (no bill). The POS recomputes all of this from
             // `tierPeriods` as items are scanned; other callers can use it as-is.
-            tierTitles:    noDiscount ? [] : tier.titles,
-            badgePeriodId: noDiscount ? null : tier.badgePeriodId,
-            rawTierPct:    noDiscount ? 0 : tier.rawPct,
-            cappedByGuard: noDiscount ? false : tier.cappedByGuard,
-            loyaltyPoints: noDiscount ? 0 : loyaltyPoints,
-            loyaltyRates:  noDiscount ? null : loyaltyRates,
-            customerLevel: noDiscount ? "" : customerLevel,
+            tierTitles:    benefits.tier ? tier.titles : [],
+            badgePeriodId: benefits.tier ? tier.badgePeriodId : null,
+            rawTierPct:    benefits.tier ? tier.rawPct : 0,
+            cappedByGuard: benefits.tier ? tier.cappedByGuard : false,
+            loyaltyPoints: benefits.loyalty ? loyaltyPoints : 0,
+            loyaltyRates:  benefits.loyalty ? loyaltyRates : null,
+            customerLevel: benefits.tier ? customerLevel : "",
+            // Customer-group price rules (MRP / print price / profit share /
+            // revenue discount), walked down the product-group tree — the POS
+            // picks each line's starting price and the silent rebate from it.
+            groupPricing: partyPricing.pricing,
             creditLimit,
             balanceDue,
             balanceOverdue: overdueDue,

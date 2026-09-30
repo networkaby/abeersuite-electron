@@ -55,6 +55,8 @@ import {
 import { resolveProductTax } from "@/modules/inventory/lib/gstResolver";
 import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
 import { touchPosShift } from "@/modules/pos/lib/touchShift";
+import { loadPartyPricing } from "@/modules/pricing-strategy/lib/groupPricingServer";
+import { groupRebatesExcl, rebatedRate, ruleForGroup } from "@/modules/pricing-strategy/lib/groupPricing";
 // Note: branch context comes from the cashier's active shift, NOT from the
 // session cookie. This allows multiple browsers / users to bill in parallel
 // from different counters without their active-branch cookie interfering.
@@ -85,6 +87,8 @@ const lineSchema = z.object({
     productId: z.number().int().positive(),
     description: z.string().trim().min(1),
     quantity: z.number().positive(),
+    // Pre-tax rate BEFORE any customer-group rebate — the server works the
+    // rebate out itself and posts the line at the lower rate.
     unitPrice: z.number().min(0),
     taxRate: z.number().min(0).max(100).default(0),
     // Snapshots for the customer-facing "Today's discount" price ladder (paise).
@@ -205,7 +209,7 @@ export async function POST(req: Request) {
     // without their active-branch cookie interfering.
     // Independent reads — fetch in parallel (separate pooled connections) instead
     // of three serial round-trips. Guards run after, in the same order + messages.
-    const [shift, customerAccount, loyaltyConfig] = await Promise.all([
+    const [shift, customerAccount, loyaltyConfig, partyPricing] = await Promise.all([
         prisma.posShift.findFirst({
             where: { userId: user!.id, status: "OPEN" },
             select: {
@@ -227,11 +231,14 @@ export async function POST(req: Request) {
             where: { id: body.accountId },
             select: {
                 id: true, name: true, personId: true, companyId: true,
-                person: { select: { name: true, noDiscount: true } },
-                company: { select: { name: true, noDiscount: true } },
+                person: { select: { name: true } },
+                company: { select: { name: true } },
             },
         }),
         prisma.loyaltyConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} }),
+        // Which benefits this party may get + its customer group's price rules
+        // (Pricing Strategy → Group pricing) — see groupPricingServer.ts.
+        loadPartyPricing(prisma, body.accountId),
     ]);
     if (!shift) {
         return NextResponse.json(
@@ -265,17 +272,16 @@ export async function POST(req: Request) {
         ?? customerAccount.companyId
         ?? customerAccount.id;
 
-    // ── Customer Quality: no-discount flag (server-authoritative) ─────────
-    // Flagged customer bills at barcode price — ALL automatic benefits are
-    // stripped here regardless of what the client sent (hard-coded all-block;
-    // a settings toggle may refine the scope later): tier discount → 0,
-    // coupons → skipped, loyalty earn + redeem → off. Silent by design — the
-    // POS UI never learns the flag (the snapshot already previews zeros); the
-    // cashier's manual price edits still apply as typed. Flag UI lives only on
-    // the customer module's Quality tab (customers:edit).
-    const noDiscountFlag =
-        (customerAccount.person?.noDiscount ?? customerAccount.company?.noDiscount) === true;
-    if (noDiscountFlag) {
+    // ── Benefits this party may get (server-authoritative) ────────────────
+    // The customer's no-discount flag (Customer Quality) switches every
+    // automatic benefit off; otherwise its customer group's ticks decide each
+    // one. A switched-off benefit is stripped here regardless of what the
+    // client sent: tier discount → 0, coupons → skipped, loyalty earn + redeem
+    // → off. Silent by design — the POS UI never learns why (the snapshot
+    // already previews zeros); the cashier's manual price edits still apply
+    // as typed.
+    const { benefits, pricing: groupPricing } = partyPricing;
+    if (!benefits.tier) {
         body.discountPct = 0;
         body.discountAmt = 0;
     }
@@ -285,7 +291,7 @@ export async function POST(req: Request) {
     // anonymous walk-in / counter ledgers never accrue points.
     const isIdentified = customerAccount.personId !== null || customerAccount.companyId !== null;
     const loyaltyRates = ratesFromConfig(loyaltyConfig);
-    const loyaltyEnabled = isIdentified && loyaltyRates.enabled && !noDiscountFlag;
+    const loyaltyEnabled = isIdentified && loyaltyRates.enabled && benefits.loyalty;
     // Live, dynamic balance — Σ in-window lots (respects the current expiry window).
     const loyaltyBalance = loyaltyEnabled
         ? await liveBalance(prisma, customerAccount.id, loyaltyRates)
@@ -481,9 +487,9 @@ export async function POST(req: Request) {
         };
         return couponInput;
     }
-    // noDiscountFlag: coupons (typed code AND auto-offers, money and free-grant
-    // alike) are skipped silently.
-    if (!noDiscountFlag && (body.couponCode || body.autoApply || body.couponId != null)) {
+    // Coupons switched off for this party: coupons (typed code AND auto-offers,
+    // money and free-grant alike) are skipped silently.
+    if (benefits.coupons && (body.couponCode || body.autoApply || body.couponId != null)) {
         couponConfig = await prisma.couponConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
         couponExpenseAccountId = couponConfig.couponExpenseAccountId;
         selected = body.couponId != null
@@ -512,7 +518,7 @@ export async function POST(req: Request) {
     // of the money coupon. Never drops tier, never blocks loyalty, never hits
     // the guard — fully free grants free lines (rule 1), a partial adds its ₹
     // on top (rule 2).
-    if (!noDiscountFlag && (body.freeCouponCode || body.freeCouponId != null)) {
+    if (benefits.coupons && (body.freeCouponCode || body.freeCouponId != null)) {
         const sel = body.freeCouponId != null
             // AUTO on-top offer force-applied by id.
             ? await selectCouponForCartById(prisma, {
@@ -535,7 +541,7 @@ export async function POST(req: Request) {
     // (grant or partial), applied on top with no code (the client's
     // freeAutoApply flag — the server re-derives the grant/₹ from the cart, so
     // a stale client state can't drop it off the invoice).
-    if (!noDiscountFlag && !freeSelected && !onTopSelected && body.freeAutoApply) {
+    if (benefits.coupons && !freeSelected && !onTopSelected && body.freeAutoApply) {
         const sel = await selectAutoOnTopCoupon(prisma, {
             channel: "POS", input: { ...(await buildCouponInput()), billAmountIncl: freeBillAmountIncl }, protectedProductIds,
         });
@@ -627,21 +633,45 @@ export async function POST(req: Request) {
             { status: 422 },
         );
     }
+    // ── Group rebate (Pricing Strategy → Group pricing) ─────────────────────
+    // A customer group's PROFIT_SHARE / REVENUE_DISCOUNT rule gives back part
+    // of the profit STILL LEFT after every other discount — tier (per line),
+    // then coupon, on-top coupon, loyalty and manual minus charges spread over
+    // the bill. Worked out last, and taken silently out of the line's rate
+    // before GST: nothing prints it, the line just posts at a lower price.
+    // The POS preview runs the same groupRebatesExcl on the same inputs, so
+    // the total the cashier collected is the total posted here.
+    let lineRebateExcl: number[] = body.lines.map(() => 0);
+    if (groupPricing) {
+        const tax = await loadTaxonomy();
+        const billDiscountIncl = couponRupees + onTopRupees + redemptionRupees
+            + body.charges.reduce((s, c) => s + Math.max(0, -c.amount), 0);
+        lineRebateExcl = groupRebatesExcl(body.lines.map((l, i) => ({
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            taxRate: l.taxRate,
+            tierDiscExcl: round2(lineTierDiscAfterCoupon[i]),
+            costExcl: costExclById.get(l.productId) ?? null,
+            protected: protectedProductIds.has(l.productId),
+            rule: ruleForGroup(groupPricing, tax.get(l.productId)?.groupId ?? null),
+        })), billDiscountIncl);
+    }
     const computedLines: Array<{
         productId: number; description: string; quantity: number; freeQty: number;
         unitPrice: number; taxRate: number; discountAmt: number; discountPct: number;
         taxAmount: number; amount: number; mrpPaise: number | null; savedSalePricePaise: number | null;
     }> = body.lines.map((l, i) => {
         const discountAmt = round2(lineTierDiscAfterCoupon[i]);
+        const unitPrice = rebatedRate(l.unitPrice, l.quantity, lineRebateExcl[i]);
         const { taxAmount: lineTax, amount } = calcLineTotals({
-            quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt, taxRate: l.taxRate,
+            quantity: l.quantity, rate: unitPrice, discountPct: 0, discountAmt, taxRate: l.taxRate,
         });
         return {
             productId: l.productId,
             description: l.description,
             quantity: l.quantity,
             freeQty: 0,
-            unitPrice: l.unitPrice,
+            unitPrice,
             taxRate: l.taxRate,
             // Per-line spend-tier discount (pre-tax); discountPct is the configured
             // tier % (record only — the displayed % is derived synthetically).
@@ -654,6 +684,11 @@ export async function POST(req: Request) {
             savedSalePricePaise: l.savedSalePricePaise ?? null,
         };
     });
+    // Customer-facing rupees of the group rebate (GST included) — earns no points.
+    const groupRebateIncl = body.lines.reduce((s, l, i) => s + (lineRebateExcl[i] > 0
+        ? calcLineTotals({ quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt: round2(lineTierDiscAfterCoupon[i]), taxRate: l.taxRate }).amount
+            - computedLines[i].amount
+        : 0), 0);
     // Free-grant lines (rule 1 on-top grant + rule 3 money-grant): the granted
     // item rides the bill as a zero-price line — quantity 0 + freeQty, so stock
     // and COGS move (the margin engine counts free units as real cost given
@@ -1044,7 +1079,7 @@ export async function POST(req: Request) {
                     // Protected lines neither earn nor redeem — filtered out of
                     // the earn base (index-aligned with the unfiltered array).
                     earnLines: earnLines.filter((_, i) => !protectedProductIds.has(body.lines[i].productId)),
-                    combinedDiscount: tierDiscountAfterCoupon + redemptionRupees + couponRupees,
+                    combinedDiscount: tierDiscountAfterCoupon + redemptionRupees + couponRupees + groupRebateIncl,
                     redeemPoints,
                     invoiceValue: invoiceValueGross,
                     rates: loyaltyRates,
