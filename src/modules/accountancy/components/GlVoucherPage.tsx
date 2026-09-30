@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useEscape } from "@/shared/hooks/useEscape";
 import { toast } from "sonner";
 import { Plus, Trash2, CheckCircle2, X, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -422,25 +423,6 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
         }
     };
 
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key !== "Escape") return;
-            const t = e.target as HTMLElement | null;
-            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-            // Another dialog (discard prompt, bill link…) owns Esc — but not the
-            // dialog this form itself lives in when opened from Quick Actions.
-            const root = rootRef.current;
-            const dialogs = Array.from(document.querySelectorAll('[data-state="open"][role="dialog"]'));
-            if (dialogs.some((d) => !root || !d.contains(root))) return;
-            if (isDirtyRef.current) { setCloseDialogOpen(true); return; }
-            closeForm();
-        };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-        // closeForm is stable in effect (router + onClose only).
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [router, onClose]);
-    const rootRef = useRef<HTMLDivElement>(null);
     // The form body's visible height, measured — caps the side column so a long
     // open-bills list plus the note count scroll inside it instead of running
     // off the bottom of a pinned column (dialog and full page differ in height).
@@ -458,6 +440,9 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     const handleClose = () => {
         if (isDirtyRef.current) { setCloseDialogOpen(true); } else { closeForm(); }
     };
+    // Esc = Back. The discard prompt, a bill-link dialog or an open list take their
+    // own Esc first; hosted in GlVoucherDialog, this owns the dialog's Esc.
+    useEscape(handleClose);
 
     // Accounts loaded once on mount; particulars combobox picks from rowFilter,
     // top picker from topFilter.
@@ -1145,7 +1130,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     };
 
     return (
-        <div ref={rootRef} className="flex flex-col flex-1 min-h-0 bg-background" onChange={() => { isDirtyRef.current = true; }}>
+        <div className="flex flex-col flex-1 min-h-0 bg-background" onChange={() => { isDirtyRef.current = true; }}>
             {/* Breadcrumb bar */}
             <VoucherTopBar
                 title={copy.title}

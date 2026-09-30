@@ -44,6 +44,7 @@ import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
+import { useEscape } from "@/shared/hooks/useEscape";
 
 type LineForm = {
     productId: number;
@@ -119,22 +120,13 @@ export function ManufacturingJournalPage() {
         if (window.history.length > 1) router.back();
         else window.close();
     }, [router]);
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key !== "Escape") return;
-            const t = e.target as HTMLElement | null;
-            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-            if (document.querySelector('[data-state="open"][role="dialog"]')) return;
-            if (isDirtyRef.current) { setCloseDialogOpen(true); } else { closeForm(); }
-        };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [closeForm]);
     const isDirtyRef = useRef(false);
     const [closeDialogOpen, setCloseDialogOpen] = useState(false);
     const handleClose = useCallback(() => {
         if (isDirtyRef.current) { setCloseDialogOpen(true); } else { closeForm(); }
     }, [closeForm]);
+    // Esc = Back; an open dialog or list takes its own Esc first (see useEscape).
+    useEscape(handleClose);
     const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
 
     const [form, setForm] = useState({

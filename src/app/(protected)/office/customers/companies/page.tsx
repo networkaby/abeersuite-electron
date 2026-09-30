@@ -17,7 +17,7 @@ import { cn } from "@/shared/lib/format/utils";
 import { DEFAULT_PARTY_SORT, sortParties, type PartySort } from "@/modules/customer/lib/partySort";
 import { PartySortToggle } from "@/modules/customer/components/PartySortToggle";
 import { PartyInactiveToggle } from "@/modules/customer/components/PartyInactiveToggle";
-import { useDebouncedValue, usePartyBrowseList, useRealtimeTopics, type BrowseListRow } from "@/shared/hooks";
+import { useDebouncedValue, useEscape, usePartyBrowseList, useRealtimeTopics, type BrowseListRow } from "@/shared/hooks";
 import type { Party } from "@/shared/lib/parties";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
@@ -241,18 +241,12 @@ export default function CompaniesPage() {
         if (txStale) { setTxStale(false); loadTransactions(from, to, true); }
     }, [selectedId, tab, transactions, txStale, from, to, loadTransactions]);
 
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key !== "Escape") return;
-            const t = e.target as HTMLElement | null;
-            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-            if (document.querySelector('[data-state="open"][role="dialog"]')) return;
-            if (selectedId !== null) setSelectedId(null);
-            else router.back();
-        };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [router, selectedId]);
+    // Esc closes the open party first, then goes back. An open dialog or menu takes
+    // its own Esc first (see useEscape).
+    useEscape(() => {
+        if (selectedId !== null) setSelectedId(null);
+        else router.back();
+    });
 
     const handleTabChange = (next: Tab) => { setTab(next); };
 

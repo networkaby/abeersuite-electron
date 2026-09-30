@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useEscapeLayer } from "@/shared/hooks/useEscape";
 
 /** Where the menu sits and which page it would open. */
 export interface LinkMenuState { x: number; y: number; href: string; }
@@ -35,17 +36,16 @@ export function LinkContextMenu({ menu, onClose }: { menu: LinkMenuState | null;
             if ((e.target as HTMLElement).closest("[data-link-ctx-menu]")) return;
             closeRef.current();
         };
-        const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeRef.current(); };
         const onScroll = () => closeRef.current();
         document.addEventListener("mousedown", onDown);
-        document.addEventListener("keydown", onKey);
         document.addEventListener("scroll", onScroll, true);
         return () => {
             document.removeEventListener("mousedown", onDown);
-            document.removeEventListener("keydown", onKey);
             document.removeEventListener("scroll", onScroll, true);
         };
     }, [menu]);
+    // Esc closes only the menu, not the page behind it (see useEscape).
+    useEscapeLayer(menu != null, () => closeRef.current());
 
     if (!menu) return null;
     const x = Math.min(menu.x, window.innerWidth - 200);

@@ -22,6 +22,7 @@ import {
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { useDayBook } from "@/modules/accountancy/hooks/useDayBook";
 import { useRegisterFilters, type DatePreset } from "@/modules/accountancy/hooks/useRegisterFilters";
+import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
 import { NON_REGULAR_KINDS } from "@/modules/accountancy/lib/voucherKinds";
 import { VoucherRegisterTable } from "@/modules/accountancy/components/VoucherRegisterTable";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
@@ -76,18 +77,8 @@ export default function DayBookPage() {
         rows, loading, loadingMore, hasMore, error, stale, loadMore, reload, branches,
     } = useDayBook(query);
 
-    // Escape → back
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key !== "Escape") return;
-            const t = e.target as HTMLElement | null;
-            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-            if (document.querySelector('[data-state="open"][role="dialog"]')) return;
-            router.back();
-        };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [router]);
+    // Escape → back (an open dialog or menu takes its own Esc first).
+    useEscapeBack();
 
     // Infinite scroll — the sentinel sits under the table and asks for the next
     // page as it comes into view.

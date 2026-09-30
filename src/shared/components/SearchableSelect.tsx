@@ -17,6 +17,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, X } from "lucide-react";
+import { useEscapeLayer } from "@/shared/hooks/useEscape";
 
 export interface SearchableSelectOption<V extends string | number> {
     value: V;
@@ -79,26 +80,17 @@ export function SearchableSelect<V extends string | number>({
         return [...prefix, ...sub];
     }, [options, query]);
 
-    // Close on outside click + Escape. Capture-phase Escape so it doesn't
-    // bubble up and close a parent Dialog or modal.
+    // Close on outside click.
     useEffect(() => {
         if (!open) return;
         function onDoc(e: MouseEvent) {
             if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
         }
-        function onKey(e: KeyboardEvent) {
-            if (e.key === "Escape") {
-                e.stopPropagation();
-                setOpen(false);
-            }
-        }
         document.addEventListener("mousedown", onDoc);
-        document.addEventListener("keydown", onKey, true);
-        return () => {
-            document.removeEventListener("mousedown", onDoc);
-            document.removeEventListener("keydown", onKey, true);
-        };
+        return () => document.removeEventListener("mousedown", onDoc);
     }, [open]);
+    // Esc closes only this list — not the dialog around it, nor the page behind.
+    useEscapeLayer(open, () => setOpen(false));
 
     // Focus the search input each time the popover opens. (Query + highlight are
     // reset in the toggle/onChange handlers so we don't call setState in an effect.)

@@ -28,6 +28,7 @@ import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkCon
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import type { OutstandingsReport } from "@/modules/accountancy/lib/outstandings";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useEscape } from "@/shared/hooks/useEscape";
 import { referenceHref, voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
 import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
 
@@ -92,12 +93,8 @@ export function OutstandingsReportScreen({
     // voucher posted at another counter as well as one posted here.
     useRealtimeTopics(["ledger"], () => load(true));
 
-    useEffect(() => {
-        if (!focus) return;
-        const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFocus(null); };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [focus]);
+    // Esc leaves the focused party (an open dialog or menu takes its own Esc first).
+    useEscape(() => setFocus(null), { enabled: focus != null });
 
     // `searchKey` carries the party's name, GSTIN and phone numbers, and on
     // a bill row its reference number too. Searching and the period toggle only

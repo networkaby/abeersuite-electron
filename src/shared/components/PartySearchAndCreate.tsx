@@ -430,7 +430,10 @@ export const PartySearchAndCreate = forwardRef<
             // No hits yet (debounce may not have fired) — fall through to the
             // create dialog; doOpenNewParty handles the exact-match re-check.
             openNewParty();
-        } else if (e.key === "Escape") {
+        } else if (e.key === "Escape" && query) {
+            // Clearing the search is this press's whole job — marked so the screen
+            // behind does not also act on it (see useEscape). An empty box lets Esc through.
+            e.preventDefault();
             setQuery("");
         }
     };

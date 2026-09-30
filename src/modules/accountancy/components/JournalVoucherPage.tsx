@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
+import { useEscape } from "@/shared/hooks/useEscape";
 import { NO_ACCESS_HOME } from "@/shared/lib/auth/pageAccess";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
@@ -180,28 +181,14 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
         }
     };
 
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key !== "Escape") return;
-            const t = e.target as HTMLElement | null;
-            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-            // Another dialog owns Esc — but not the one this form itself lives in.
-            const root = rootRef.current;
-            const dialogs = Array.from(document.querySelectorAll('[data-state="open"][role="dialog"]'));
-            if (dialogs.some((d) => !root || !d.contains(root))) return;
-            if (isDirtyRef.current) { setCloseDialogOpen(true); return; }
-            closeForm();
-        };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [router, onClose]);
-    const rootRef = useRef<HTMLDivElement>(null);
     const isDirtyRef = useRef(false);
     const [closeDialogOpen, setCloseDialogOpen] = useState(false);
     const handleClose = () => {
         if (isDirtyRef.current) { setCloseDialogOpen(true); } else { closeForm(); }
     };
+    // Esc = Back. An open dialog or list takes its own Esc first; hosted in
+    // GlVoucherDialog, this owns the dialog's Esc.
+    useEscape(handleClose);
 
     const isEditing = voucherId != null && Number.isFinite(voucherId);
     const { accounts: sharedAccounts } = useGlAccounts({ onError: () => toast.error("Failed to load accounts") });
@@ -470,7 +457,7 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
     };
 
     return (
-        <div ref={rootRef} className="flex flex-col flex-1 min-h-0 bg-background" onChange={() => { isDirtyRef.current = true; }}>
+        <div className="flex flex-col flex-1 min-h-0 bg-background" onChange={() => { isDirtyRef.current = true; }}>
             {/* Breadcrumb bar */}
             <VoucherTopBar
                 title="Journal Voucher"

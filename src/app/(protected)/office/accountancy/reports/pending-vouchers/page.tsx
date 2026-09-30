@@ -26,6 +26,7 @@ import {
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useEscape } from "@/shared/hooks/useEscape";
 
 type PendingType = "CHALLAN" | "GRN" | "REJECTION_IN" | "REJECTION_OUT";
 
@@ -382,20 +383,13 @@ export default function PendingVouchersPage() {
             .catch(() => { });
     }, []);
 
-    // Esc collapses expanded rows; if none expanded, goes back.
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key !== "Escape") return;
-            const t = e.target as HTMLElement | null;
-            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-            if (document.querySelector('[data-state="open"][role="dialog"]')) return;
-            if (expanded.size > 0) { setExpanded(new Set()); return; }
-            if (stockExpanded.size > 0) { setStockExpanded(new Set()); return; }
-            router.back();
-        };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [expanded, stockExpanded, router]);
+    // Esc collapses expanded rows; if none expanded, goes back. An open dialog or
+    // menu takes its own Esc first (see useEscape).
+    useEscape(() => {
+        if (expanded.size > 0) { setExpanded(new Set()); return; }
+        if (stockExpanded.size > 0) { setStockExpanded(new Set()); return; }
+        router.back();
+    });
 
     const toggleExpand = (id: number) => setExpanded((prev) => {
         const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next;

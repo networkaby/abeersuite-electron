@@ -21,7 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
-import { useDebouncedValue } from "@/shared/hooks";
+import { useDebouncedValue, useEscape } from "@/shared/hooks";
 import { LoyaltyPanel } from "@/modules/loyalty/components/LoyaltyPanel";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { cn } from "@/shared/lib/format/utils";
@@ -304,18 +304,12 @@ export default function AllCustomersPage() {
         }
     }, [selected, personTab, companyTab, transactions, txStale, reloadTransactions]);
 
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key !== "Escape") return;
-            const t = e.target as HTMLElement | null;
-            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-            if (document.querySelector('[data-state="open"][role="dialog"]')) return;
-            if (selected !== null) setSelected(null);
-            else router.back();
-        };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [router, selected]);
+    // Esc closes the open party first, then goes back. An open dialog or menu takes
+    // its own Esc first (see useEscape).
+    useEscape(() => {
+        if (selected !== null) setSelected(null);
+        else router.back();
+    });
 
     const refetchPersonDetail = useCallback(() => {
         if (!selected || selected.kind !== "person") return;

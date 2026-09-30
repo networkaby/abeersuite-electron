@@ -29,6 +29,7 @@ import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
+import { useEscape } from "@/shared/hooks/useEscape";
 
 type OptionalType =
     | "SALES_ORDER" | "PURCHASE_ORDER"
@@ -143,19 +144,12 @@ export default function OptionalVouchersPage() {
 
     useRealtimeTopics(["ledger"], () => setLiveCount((n) => n + 1));
 
-    // Esc collapses expanded rows; if none expanded, goes back.
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key !== "Escape") return;
-            const t = e.target as HTMLElement | null;
-            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-            if (document.querySelector('[data-state="open"][role="dialog"]')) return;
-            if (expanded.size > 0) setExpanded(new Set());
-            else                   router.back();
-        };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [expanded, router]);
+    // Esc collapses expanded rows; if none expanded, goes back. An open dialog or
+    // menu takes its own Esc first (see useEscape).
+    useEscape(() => {
+        if (expanded.size > 0) setExpanded(new Set());
+        else                   router.back();
+    });
 
     const toggleExpand = (id: number) => setExpanded((prev) => {
         const next = new Set(prev);

@@ -41,6 +41,7 @@ import OrgAppointDialog from "./OrgAppointDialog";
 import OrgTransferDialog from "./OrgTransferDialog";
 import { initials } from "@/shared/lib/format/initials";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { useEscapeLayer } from "@/shared/hooks/useEscape";
 
 const HQ_BRANCH_ID = "BR-HQ";
 
@@ -104,17 +105,16 @@ function ContextMenu({ menu, onClose }: { menu: MenuState | null; onClose: () =>
             if ((e.target as HTMLElement).closest("[data-org-context-menu]")) return;
             onClose();
         };
-        const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
         const onScroll = () => onClose();
         document.addEventListener("mousedown", onDocDown);
-        document.addEventListener("keydown", onKey);
         document.addEventListener("scroll", onScroll, true);
         return () => {
             document.removeEventListener("mousedown", onDocDown);
-            document.removeEventListener("keydown", onKey);
             document.removeEventListener("scroll", onScroll, true);
         };
     }, [menu, onClose]);
+    // Esc closes only the menu, not the page behind it (see useEscape).
+    useEscapeLayer(menu != null, onClose);
 
     if (!menu) return null;
 

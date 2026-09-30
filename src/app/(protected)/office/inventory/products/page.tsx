@@ -47,7 +47,7 @@ import {
     BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
-import { useEscape, useActiveRow } from "@/shared/hooks";
+import { useEscape, useEscapeLayer, useActiveRow } from "@/shared/hooks";
 import { gridRowClass, GRID_FROZEN_CELL, GRID_FROZEN_HEAD, GRID_FROZEN_EDGE } from "@/shared/lib/format";
 import { type ProductCode, primaryBarcode, withPrimaryBarcode } from "@/shared/lib/inventory";
 import { productMatchesSearch, searchableText } from "@/shared/lib/inventory";
@@ -1217,14 +1217,11 @@ function ColumnChooser({
         function onDocClick(e: MouseEvent) {
             if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
         }
-        function onKey(e: KeyboardEvent) { if (e.key === "Escape") setOpen(false); }
         document.addEventListener("mousedown", onDocClick);
-        document.addEventListener("keydown", onKey);
-        return () => {
-            document.removeEventListener("mousedown", onDocClick);
-            document.removeEventListener("keydown", onKey);
-        };
+        return () => document.removeEventListener("mousedown", onDocClick);
     }, [open]);
+    // Esc closes only this popover, not the page (see useEscape).
+    useEscapeLayer(open, () => setOpen(false));
 
     const hiddenCount = COLUMNS.length - visible.size;
     return (
@@ -1298,14 +1295,11 @@ function ColFilter({
         function onDocClick(e: MouseEvent) {
             if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
         }
-        function onKey(e: KeyboardEvent) { if (e.key === "Escape") setOpen(false); }
         document.addEventListener("mousedown", onDocClick);
-        document.addEventListener("keydown", onKey);
-        return () => {
-            document.removeEventListener("mousedown", onDocClick);
-            document.removeEventListener("keydown", onKey);
-        };
+        return () => document.removeEventListener("mousedown", onDocClick);
     }, [open]);
+    // Esc closes only this popover, not the page (see useEscape).
+    useEscapeLayer(open, () => setOpen(false));
 
     // Focus the search input each time the popover opens. (Query is reset in the
     // toggle handler so we don't call setState inside this effect.)
@@ -1460,20 +1454,16 @@ function CellSelect({
         return [...prefix, ...sub];
     }, [options, query]);
 
-    // Close on outside click + Escape.
+    // Close on outside click; Esc closes only this popover, not the page.
     useEffect(() => {
         if (!open) return;
         function onDoc(e: MouseEvent) {
             if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
         }
-        function onKey(e: KeyboardEvent) { if (e.key === "Escape") setOpen(false); }
         document.addEventListener("mousedown", onDoc);
-        document.addEventListener("keydown", onKey);
-        return () => {
-            document.removeEventListener("mousedown", onDoc);
-            document.removeEventListener("keydown", onKey);
-        };
+        return () => document.removeEventListener("mousedown", onDoc);
     }, [open]);
+    useEscapeLayer(open, () => setOpen(false));
 
     // Focus the input each time the popover opens. (Query + highlight are reset in
     // the toggle/onChange handlers so we don't call setState inside this effect.)

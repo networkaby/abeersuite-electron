@@ -25,7 +25,9 @@ export const GL_DIALOG_KIND_BY_ACTION: Record<string, GlDialogKind> = {
  * `onClose`, so Back / Cancel / Esc / after-save close this dialog.
  *
  * Esc and outside clicks are left to the form: it owns the "discard unsaved
- * changes?" prompt, and Radix closing underneath it would lose that.
+ * changes?" prompt, and Radix closing underneath it would lose that. Esc reaches
+ * it through DialogContent's slot — the form's `useEscape` claims this dialog's
+ * Esc (src/shared/lib/ui/escapeLayer.ts); outside clicks are simply ignored.
  */
 export default function GlVoucherDialog({ kind, onClose, onSaved, initialParty = null, settleBill = null }: {
     kind: GlDialogKind | null;
@@ -42,7 +44,6 @@ export default function GlVoucherDialog({ kind, onClose, onSaved, initialParty =
         <Dialog open={kind != null} onOpenChange={(o) => { if (!o) onClose(); }}>
             <DialogContent
                 showCloseButton={false}
-                onEscapeKeyDown={(e) => e.preventDefault()}
                 onInteractOutside={(e) => e.preventDefault()}
                 className="flex h-[94vh] max-h-[94vh] w-[96vw] max-w-[96vw] flex-col gap-0 overflow-hidden p-0 sm:max-w-[96vw]"
             >

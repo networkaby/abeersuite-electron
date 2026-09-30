@@ -2,12 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, RefObject } from "react";
+import { useEscapeLayer } from "./useEscape";
 
 /**
  * Generic dropdown/combobox keyboard navigation. Owns `open`, `highlighted`,
  * `dropdownWidth`, and the wrapper/list/input refs. Returns a `handleKeyDown`
- * for ArrowUp/Down/Enter/Escape, plus `handleBlur` (close after 150ms so
- * onMouseDown on a list item can fire first) and `clear`.
+ * for ArrowUp/Down/Enter, plus `handleBlur` (close after 150ms so
+ * onMouseDown on a list item can fire first) and `clear`. Esc closes the open
+ * list through `useEscapeLayer` — before a dialog around it or the page behind
+ * it can see the press.
  *
  * Consumers handle their own Tab behaviour (some commit selection on Tab,
  * others just close) by wrapping the returned `handleKeyDown` and inspecting
@@ -48,6 +51,8 @@ export function useComboboxNav(opts: {
     const [open, setOpen] = useState(false);
     const [highlighted, setHighlighted] = useState(0);
     const [dropdownWidth, setDropdownWidth] = useState<number | null>(null);
+    // Esc closes only the list — not a dialog around it, nor the page behind.
+    useEscapeLayer(open, () => setOpen(false));
     const wrapperRef = useRef<HTMLDivElement | null>(null);
     const inputRef = useRef<HTMLInputElement | null>(null);
     const listRef = useRef<HTMLUListElement | null>(null);
@@ -79,9 +84,6 @@ export function useComboboxNav(opts: {
             } else if (e.key === "Enter") {
                 e.preventDefault();
                 if (highlighted < count) onSelect(highlighted);
-            } else if (e.key === "Escape") {
-                e.stopPropagation(); // don't bubble to a dialog Esc handler
-                setOpen(false);
             }
         },
         [open, highlighted, count, onSelect],

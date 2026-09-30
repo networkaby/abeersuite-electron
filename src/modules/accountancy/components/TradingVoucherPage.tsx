@@ -75,6 +75,7 @@ import { isMoneyGroupName } from "@/modules/accountancy/lib/moneyAccount";
 import { extractApiError, creditLimitDetailOf } from "@/shared/lib/api";
 import { parseDecimalInput, round2, todayIso, gridRowClass } from "@/shared/lib/format";
 import { useActiveRow } from "@/shared/hooks/useActiveRow";
+import { useEscape } from "@/shared/hooks/useEscape";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { BillLinkDialog } from "@/modules/accountancy/components/BillLinkDialog";
@@ -162,36 +163,6 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         }
     };
 
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key !== "Escape") return;
-            const t = e.target as HTMLElement | null;
-            // Skip only when the user is editing rich text (contentEditable);
-            // plain inputs and textareas SHOULD respond to Esc so the dirty
-            // confirmation dialog can fire from anywhere in the form.
-            if (t && t.isContentEditable) return;
-            // If the unsaved-changes confirm dialog is open, let it own Esc
-            // (Radix closes the dialog natively). Read React state via a ref
-            // — the DOM `data-state` attribute races with the window listener
-            // and can read "closed" before React's re-render, causing this
-            // handler to mistakenly re-open the dialog.
-            if (dialogOpenRef.current) return;
-            // Also defer to any other open Radix dialog (Create Party / Create
-            // Product / etc.) so their native Esc closes them, not our page.
-            if (document.querySelector('[data-state="open"][role="dialog"]')) return;
-            if (isDirtyRef.current) {
-                e.preventDefault();
-                setCloseDialogOpen(true);
-                return;
-            }
-            if (typeof window !== "undefined") {
-                if (window.history.length > 1) router.back(); else window.close();
-            }
-        };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [router]);
-
     // Browser-level guard for tab close / refresh / external navigations.
     // Triggers the OS-native "leave site?" prompt when the form is dirty.
     // Our in-app close paths (Cancel button, top-bar X / back arrow, Esc)
@@ -227,18 +198,14 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     }, []);
     const isDirtyRef = useRef(false);
     const [closeDialogOpen, setCloseDialogOpen] = useState(false);
-    // Mirror of closeDialogOpen for the window-level Esc handler. The DOM
-    // query for `[data-state="open"]` races with Radix's own Esc handler —
-    // by the time the window handler runs (bubble phase, after Radix's
-    // React-tree listener), data-state may have flipped to "closed" and the
-    // handler would mistakenly re-open the dialog. Reading React state via
-    // a ref is consistent: dialogOpenRef stays true until React commits the
-    // setCloseDialogOpen(false) from Radix.
-    const dialogOpenRef = useRef(false);
-    useEffect(() => { dialogOpenRef.current = closeDialogOpen; }, [closeDialogOpen]);
     const handleClose = () => {
         if (isDirtyRef.current) { setCloseDialogOpen(true); } else { closeForm(); }
     };
+    // Esc = Back, from anywhere in the form — inputs included, so the unsaved-
+    // changes prompt can fire mid-typing. The prompt itself, a party / product
+    // dialog or an open list take their own Esc first (see useEscape), so one
+    // press never both closes the prompt and leaves the page.
+    useEscape(handleClose, { inInputs: true });
 
     // Edit mode: /sale?voucherId=4 → fetch the voucher, prefill the form,
     // PATCH on save. Set once on mount and locked in; subsequent param
