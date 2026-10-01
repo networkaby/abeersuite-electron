@@ -73,29 +73,6 @@ CREATE TABLE IF NOT EXISTS "_provision" (
 `;
 
 /**
- * Offline write outbox. Mutations created while the counter is offline are
- * enqueued here in the SAME local transaction as the row they describe — a crash
- * between the two must not lose the write. Flushed in `created_at` order on
- * reconnect; the idempotency key prevents double-posting a document.
- *
- * Created by the provisioner rather than the sync engine because the outbox is
- * the app's responsibility — it writes rows, the engine only reads them.
- */
-const OUTBOX_DDL = `
-CREATE TABLE IF NOT EXISTS "_outbox" (
-    id              SERIAL PRIMARY KEY,
-    table_name      text        NOT NULL,
-    row_pk          text        NOT NULL,
-    operation       text        NOT NULL CHECK (operation IN ('create', 'update')),
-    payload         jsonb       NOT NULL,
-    created_at      timestamptz NOT NULL DEFAULT now(),
-    pushed_at       timestamptz,
-    idempotency_key text        UNIQUE NOT NULL,
-    error           text
-);
-`;
-
-/**
  * Grants are re-issued on every provision rather than only at creation. A schema
  * re-apply can add tables, and a grant that only ran once would leave those new tables
  * unreadable by the app — which surfaces as a permission error deep in a page, not as a
@@ -140,7 +117,9 @@ export async function provisionLocalDatabase(adminUrl: string): Promise<Provisio
     try {
         await client.connect();
         await client.query(PROVISION_DDL);
-        await client.query(OUTBOX_DDL);
+        // The offline write outbox (`_outbox`) is defined once, in local-schema.sql
+        // (gen-local-schema.ts COUNTER_LOCAL_DDL), with its backfills. A second,
+        // older copy used to run here first on every boot.
 
         const { rows } = await client.query<{ schema_hash: string }>(
             `SELECT schema_hash FROM "_provision" WHERE only_row`,

@@ -10,52 +10,48 @@
  */
 
 const { q } = require("./db");
+const { ensureTable } = require("./bookkeeping");
 
 const TABLE = "_sync_state";
 
-const DDL = `
-CREATE TABLE IF NOT EXISTS ${q(TABLE)} (
-  table_num   integer PRIMARY KEY,
-  model       text        NOT NULL,
-  table_name  text        NOT NULL,
-  strategy    text        NOT NULL,
-  -- High-water mark for watermark/append tables: the largest source timestamp
-  -- known to have been pulled. NULL means "never synced".
-  watermark   timestamptz,
-  -- Tie-breaker for that timestamp. Timestamps are NOT unique: a bulk import can
-  -- stamp thousands of rows identically (Person has 3529 rows sharing one value).
-  -- With a timestamp-only cursor, a page that ends inside such a block advances the
-  -- watermark past it and the remainder becomes permanently invisible - no error,
-  -- no retry, just rows that never arrive. Pagination is therefore keyed on
-  -- (watermark, watermark_id), which is a total order.
-  watermark_id text,
-  -- WHICH source column the watermark above was read from. A stored high-water mark
-  -- only means something against the column it was taken from, and that column can
-  -- change underneath it: when a model gains @updatedAt the generator re-files the
-  -- table from append/createdAt to watermark/updatedAt, and the old createdAt value
-  -- is then read as an updatedAt cursor. Nothing about that is an error - it
-  -- silently skips rows or silently re-reads them, with no log either way. Call is
-  -- the worked example (2026-09-13): notes staff had already saved sat in Supabase
-  -- and never reached a counter. NULL on a row written by an engine older than this
-  -- column; see cursorFor for why that is not treated as a change.
-  cursor_column text,
-  row_count   bigint,
-  checksum    text,
-  last_ok_at  timestamptz,
-  -- When this table was last proved equal to the source. Deletes on a watermarked
-  -- table are invisible to any timestamp, so equality has to be checked on a
-  -- schedule rather than inferred from a successful pull.
-  last_verify_at timestamptz,
-  last_error  text
-);
-`;
+/** One list for create AND upgrade — see bookkeeping.js. */
+const COLUMNS = [
+    ["table_num", "integer PRIMARY KEY"],
+    ["model", "text NOT NULL"],
+    ["table_name", "text NOT NULL"],
+    ["strategy", "text NOT NULL"],
+    // High-water mark for watermark/append tables: the largest source timestamp
+    // known to have been pulled. NULL means "never synced".
+    ["watermark", "timestamptz"],
+    // Tie-breaker for that timestamp. Timestamps are NOT unique: a bulk import can
+    // stamp thousands of rows identically (Person has 3529 rows sharing one value).
+    // With a timestamp-only cursor, a page that ends inside such a block advances the
+    // watermark past it and the remainder becomes permanently invisible - no error,
+    // no retry, just rows that never arrive. Pagination is therefore keyed on
+    // (watermark, watermark_id), which is a total order.
+    ["watermark_id", "text"],
+    // WHICH source column the watermark above was read from. A stored high-water mark
+    // only means something against the column it was taken from, and that column can
+    // change underneath it: when a model gains @updatedAt the generator re-files the
+    // table from append/createdAt to watermark/updatedAt, and the old createdAt value
+    // is then read as an updatedAt cursor. Nothing about that is an error - it
+    // silently skips rows or silently re-reads them, with no log either way. Call is
+    // the worked example (2026-09-13): notes staff had already saved sat in Supabase
+    // and never reached a counter. NULL on a row written by an engine older than this
+    // column; see cursorFor for why that is not treated as a change.
+    ["cursor_column", "text"],
+    ["row_count", "bigint"],
+    ["checksum", "text"],
+    ["last_ok_at", "timestamptz"],
+    // When this table was last proved equal to the source. Deletes on a watermarked
+    // table are invisible to any timestamp, so equality has to be checked on a
+    // schedule rather than inferred from a successful pull.
+    ["last_verify_at", "timestamptz"],
+    ["last_error", "text"],
+];
 
 async function ensure(client) {
-    await client.query(DDL);
-    // Additive upgrade for a replica whose _sync_state predates the tie-breaker.
-    await client.query(`ALTER TABLE ${q(TABLE)} ADD COLUMN IF NOT EXISTS watermark_id text`);
-    await client.query(`ALTER TABLE ${q(TABLE)} ADD COLUMN IF NOT EXISTS last_verify_at timestamptz`);
-    await client.query(`ALTER TABLE ${q(TABLE)} ADD COLUMN IF NOT EXISTS cursor_column text`);
+    await ensureTable(client, TABLE, COLUMNS);
 }
 
 /**

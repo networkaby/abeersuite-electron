@@ -14,26 +14,28 @@
  */
 
 const { q } = require("./db");
+const { ensureTable } = require("./bookkeeping");
 
 const TABLE = "_sync_status";
 
-const DDL = `
-CREATE TABLE IF NOT EXISTS ${q(TABLE)} (
-  -- Single row, enforced by the primary key rather than by convention.
-  only_row      boolean PRIMARY KEY DEFAULT true CHECK (only_row),
-  schema_ok     boolean     NOT NULL DEFAULT false,
-  schema_detail text,
-  ready         boolean     NOT NULL DEFAULT false,
-  ready_detail  text,
-  last_cycle_at timestamptz,
-  tables_total  integer,
-  tables_synced integer,
-  worst_lag_sec integer
-);
-`;
+/** One list for create AND upgrade — see bookkeeping.js. Until this list, a column
+ *  added here never reached a till that already had the table, and `publish()`'s
+ *  UPDATE naming it would have failed every cycle. */
+const COLUMNS = [
+    // Single row, enforced by the primary key rather than by convention.
+    ["only_row", "boolean PRIMARY KEY DEFAULT true CHECK (only_row)"],
+    ["schema_ok", "boolean NOT NULL DEFAULT false"],
+    ["schema_detail", "text"],
+    ["ready", "boolean NOT NULL DEFAULT false"],
+    ["ready_detail", "text"],
+    ["last_cycle_at", "timestamptz"],
+    ["tables_total", "integer"],
+    ["tables_synced", "integer"],
+    ["worst_lag_sec", "integer"],
+];
 
 async function ensure(client) {
-    await client.query(DDL);
+    await ensureTable(client, TABLE, COLUMNS);
     await client.query(`INSERT INTO ${q(TABLE)} (only_row) VALUES (true) ON CONFLICT DO NOTHING`);
     // The app's role is created before this table exists, and ALTER DEFAULT
     // PRIVILEGES only covers tables created by the role that owns the default. Grant
