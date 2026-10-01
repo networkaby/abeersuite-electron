@@ -238,9 +238,12 @@ model PersonCompany {
 // ── Shared polymorphic contact tables ─────────────────────────────────────────
 //
 // Each row is owned by exactly one of Person or Company (XOR enforced by:
-//   (a) Zod refinement on every write path, and
-//   (b) Postgres CHECK ((person_id IS NULL) != (company_id IS NULL))
-//   added in the migration).
+//   (a) the write helpers on every path (contactWrite.ts), and
+//   (b) Postgres CHECKs Phone_owner_xor / Email_owner_xor
+//   (("personId" IS NULL) <> ("companyId" IS NULL)) — added by the seed
+//   (prisma/seeds/lib/codeOwnedCatalog.ts), not by a migration; a counter
+//   replica does not carry them).
+// An unknown caller's number lives in the call log (Call.phone), not here.
 //
 // Global @unique on the value column means no two parties (person OR company)
 // can hold the same phone/email. A company "uses" a related person's phone by
