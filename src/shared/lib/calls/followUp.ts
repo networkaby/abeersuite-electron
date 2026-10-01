@@ -85,7 +85,7 @@ export async function customerSeenSince(customers: CustomerRef[], since: Date): 
         accountIds.length
             ? prisma.universalVoucher.groupBy({
                 by: ["partyAccountId"],
-                where: { partyAccountId: { in: accountIds }, type: { in: [...SALE_TYPES] }, status: "POSTED", deletedAt: null, createdAt: { gte: since } },
+                where: { partyAccountId: { in: accountIds }, type: { in: [...SALE_TYPES] }, status: "POSTED", createdAt: { gte: since } },
                 _max: { createdAt: true },
             })
             : Promise.resolve([]),

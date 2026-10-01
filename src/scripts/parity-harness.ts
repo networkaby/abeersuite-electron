@@ -519,7 +519,7 @@ async function runStockRecompute(): Promise<boolean> {
             // Account.balance can carry pre-existing drift, so verify the helper
             // against an INDEPENDENT line-sum (Cash is DEBIT-normal) instead.
             const cashLines = await tx.voucherGlLine.groupBy({
-                by: ["type"], where: { accountId: cash.id, universalVoucher: { status: "POSTED", deletedAt: null } }, _sum: { amount: true },
+                by: ["type"], where: { accountId: cash.id, universalVoucher: { status: "POSTED" } }, _sum: { amount: true },
             });
             let expectedCash = 0;
             for (const l of cashLines) expectedCash += (String(l.type) === "DEBIT" ? 1 : -1) * Number(l._sum.amount ?? 0);

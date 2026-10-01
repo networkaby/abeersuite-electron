@@ -69,7 +69,7 @@ async function main(): Promise<void> {
     // risking on a whole book at once.
     const alreadyBillWise = new Set(
         (await prisma.universalVoucher.findMany({
-            where:  { type: OPENING_TYPE, partyAccountId: { in: partyIds }, deletedAt: null, status: { not: "CANCELLED" } },
+            where:  { type: OPENING_TYPE, partyAccountId: { in: partyIds }, status: { not: "CANCELLED" } },
             select: { partyAccountId: true },
             distinct: ["partyAccountId"],
         })).map((v) => v.partyAccountId).filter((x): x is number => x !== null),

@@ -68,7 +68,6 @@ type ExistingVoucher = {
     date:             string;
     description:      string;
     status:           "DRAFT" | "POSTED" | "CANCELLED";
-    deletedAt:        string | null;
     cancelledAt:      string | null;
     branchId:         string;
     paymentAccountId: number | null;
@@ -166,7 +165,7 @@ export function ManufacturingJournalPage() {
             .then((r) => {
                 const v = r.data;
                 setVoucherRef(v.reference);
-                setLoadedVoucher({ status: v.status, deletedAt: v.deletedAt, cancelledAt: v.cancelledAt });
+                setLoadedVoucher({ status: v.status, cancelledAt: v.cancelledAt });
                 if (v.branchId) setSelectedBranchId(v.branchId);
                 const toForm = (l: ExistingVoucher["lines"][number]): LineForm => ({
                     productId: l.productId,

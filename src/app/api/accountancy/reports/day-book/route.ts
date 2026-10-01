@@ -186,9 +186,6 @@ export async function GET(req: Request) {
             : [];
 
         const where: Prisma.UniversalVoucherWhereInput = {
-            // Always-true guard — nothing writes `deletedAt` (soft-delete removed
-            // 2026-08-01). Kept as a cheap net for legacy rows.
-            deletedAt: null,
             ...(kinds ? { type: { in: kinds } } : {}),
             ...(statuses.length > 0 ? { status: { in: statuses } } : {}),
             ...(branchId && branchId !== "__all__" ? { branchId } : {}),
@@ -351,7 +348,7 @@ export async function GET(req: Request) {
         const liveRefs = detailIds.length === 0 ? [] : await prisma.voucherDetail.findMany({
             where: {
                 refVoucherId: { in: detailIds },
-                universalVoucher: { deletedAt: null, status: { not: "CANCELLED" } },
+                universalVoucher: { status: { not: "CANCELLED" } },
             },
             select: { refVoucherId: true },
         });

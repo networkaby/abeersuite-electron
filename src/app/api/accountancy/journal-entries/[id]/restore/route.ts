@@ -26,15 +26,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const entry = await prisma.universalVoucher.findUnique({
         where:  { id: Number(id) },
-        select: { type: true, status: true, deletedAt: true, lines: { select: { accountId: true, type: true, amount: true } } },
+        select: { type: true, status: true, lines: { select: { accountId: true, type: true, amount: true } } },
     });
     if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // The saved voucher's own Cancel / edit tick — any voucher id reaches this route.
     if (!userCanVoucher(user, entry.type, "cancel")) {
         return NextResponse.json({ error: "You do not have permission to restore this voucher kind." }, { status: 403 });
-    }
-    if (entry.deletedAt) {
-        return NextResponse.json({ error: "Cannot restore a deleted entry — use the Recycle Bin" }, { status: 409 });
     }
     if (entry.status !== "CANCELLED") {
         return NextResponse.json({ error: "Only cancelled entries can be restored" }, { status: 409 });

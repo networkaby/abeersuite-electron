@@ -90,14 +90,14 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
         (async () => {
             try {
                 const { data } = await axios.get<{
-                    accountId: number | null; type: string; status: string; deletedAt: string | null;
+                    accountId: number | null; type: string; status: string;
                     discountAmt: string | number | null; discountPct: string | number | null;
                     shippingAmt: string | number | null; roundOff: string | number | null;
                     lines: { productId: number; description: string | null; quantity: string | number; rate: string | number; taxRate: string | number; mrpPaise: number | null; savedSalePricePaise: number | null; product: { sku: string; name: string } }[];
                     charges: { accountId: number; description: string | null; amount: string | number; taxAmount?: string | number | null }[];
                 }>(`/api/inventory/vouchers/${editId}`);
                 if (cancelled) return;
-                if (data.type !== "POS" || data.deletedAt || data.status === "CANCELLED") {
+                if (data.type !== "POS" || data.status === "CANCELLED") {
                     toast.error("This POS sale can't be edited.");
                     router.push(salesListHref);
                     return;

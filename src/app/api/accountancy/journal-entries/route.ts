@@ -27,8 +27,6 @@ export async function GET(req: Request) {
         const entries = await prisma.universalVoucher.findMany({
             where: {
                 ...(status ? { status: status as "DRAFT" | "POSTED" | "CANCELLED" } : {}),
-                // Always-true guard — nothing writes `deletedAt` (soft-delete removed 2026-08-01).
-                deletedAt: null,
                 ...(from || to ? {
                     date: {
                         ...(from ? { gte: new Date(from) } : {}),

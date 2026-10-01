@@ -204,7 +204,6 @@ export async function loadPartyUnallocated(
             JOIN "UniversalVoucher" v ON v."id" = l."universalVoucherId"
             WHERE l."accountId" = ANY(${ids})
               AND v."status" = 'POSTED'
-              AND v."deletedAt" IS NULL
               AND (${asOf}::timestamp IS NULL OR v."date" <= ${asOf}::timestamp)
             GROUP BY 1, 2
         ), linked AS (
@@ -216,7 +215,7 @@ export async function loadPartyUnallocated(
                 SELECT a."targetId" AS uv_id, a."amount" AS amount
                 FROM "VoucherAllocation" a
                 JOIN "UniversalVoucher" s
-                  ON s."id" = a."sourceId" AND s."status" = 'POSTED' AND s."deletedAt" IS NULL
+                  ON s."id" = a."sourceId" AND s."status" = 'POSTED'
                 WHERE a."targetType" = 'UNIVERSAL_VOUCHER'
                   AND a."sourceType" IN ('VOUCHER', 'PAYMENT')
                   AND a."targetId" <> a."sourceId"
@@ -225,7 +224,7 @@ export async function loadPartyUnallocated(
                 SELECT a."sourceId" AS uv_id, a."amount" AS amount
                 FROM "VoucherAllocation" a
                 JOIN "UniversalVoucher" t
-                  ON t."id" = a."targetId" AND t."status" = 'POSTED' AND t."deletedAt" IS NULL
+                  ON t."id" = a."targetId" AND t."status" = 'POSTED'
                 WHERE a."targetType" = 'UNIVERSAL_VOUCHER'
                   AND a."sourceType" IN ('VOUCHER', 'PAYMENT')
                   AND a."targetId" <> a."sourceId"
@@ -271,7 +270,7 @@ export async function loadPartyUnallocated(
 export async function loadLinkWorkParties(db: Prisma.TransactionClient): Promise<number[]> {
     const parties = await db.universalVoucher.groupBy({
         by:    ["partyAccountId"],
-        where: { status: "POSTED", deletedAt: null, partyAccountId: { not: null } },
+        where: { status: "POSTED", partyAccountId: { not: null } },
     });
     const ids = parties.map((p) => p.partyAccountId).filter((id): id is number => id != null);
     if (ids.length === 0) return [];

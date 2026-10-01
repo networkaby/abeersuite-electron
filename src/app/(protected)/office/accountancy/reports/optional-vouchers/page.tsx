@@ -11,7 +11,7 @@ import { partyProfileHref, type PartyLinkKind } from "@/shared/lib/parties";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, ChevronLeft, ChevronRight, Search, ArrowDownToLine, ArrowUpFromLine, Trash2 } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight, Search, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import Link from "next/link";
 import { GatedLink } from "@/shared/components/GatedLink";
 import { Button } from "@/components/ui/button";
@@ -82,7 +82,6 @@ type Row = {
     partyEntityId: number | null;
     partyId:     number | null;
     status:      "DRAFT" | "POSTED" | "CANCELLED";
-    deletedAt:   string | null;
     totalAmount: number;
     stockDir:    "IN" | "OUT" | "NONE";
     refVoucher:  { id: number; reference: string; type: string } | null;
@@ -237,7 +236,7 @@ export default function OptionalVouchersPage() {
                                     return (
                                         <Fragment key={r.id}>
                                             <tr
-                                                className={`border-b last:border-0 hover:bg-muted/40 cursor-pointer ${r.deletedAt ? "opacity-60" : ""}`}
+                                                className="border-b last:border-0 hover:bg-muted/40 cursor-pointer"
                                                 title="Left-click to open voucher · Right-click to see line items"
                                                 onClick={() => router.push(drillUrl)}
                                                 onContextMenu={(e) => { e.preventDefault(); toggleExpand(r.id); }}
@@ -280,11 +279,6 @@ export default function OptionalVouchersPage() {
                                                 </td>
                                                 <td className="px-3 py-2.5 text-center">
                                                     <span className={`text-xs px-2 py-0.5 font-medium rounded-sm ${JOURNAL_STATUS_COLORS[r.status]}`}>{r.status}</span>
-                                                    {r.deletedAt && (
-                                                        <span className="ml-1 inline-flex items-center rounded bg-destructive/10 px-1 py-0.5 text-[10px] uppercase text-destructive">
-                                                            <Trash2 size={9} />
-                                                        </span>
-                                                    )}
                                                 </td>
                                             </tr>
                                             {isOpen && r.lines.map((l, i) => (

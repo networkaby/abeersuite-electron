@@ -315,7 +315,7 @@ export function candidateTotals(
  * point of the relation: a run that says POSTED must be able to prove it by
  * the journal's own status, not by the copy of the number it is holding.
  */
-export const PAYROLL_VOUCHER_SELECT = { select: { id: true, status: true, deletedAt: true } } as const;
+export const PAYROLL_VOUCHER_SELECT = { select: { id: true, status: true } } as const;
 
 export const PAYROLL_RUN_INCLUDE = {
     lines: { orderBy: { staffName: "asc" as const } },
@@ -328,17 +328,15 @@ export const PAYROLL_RUN_INCLUDE = {
  *
  * `voucherId` null with `voucherRef` set is REMOVED, not NONE: the FK's
  * SET NULL broke the pointer when the voucher was deleted, and the ref string
- * left behind is the evidence there once was one. A soft-deleted voucher
- * (`deletedAt`) counts as removed too — it is out of the books either way.
+ * left behind is the evidence there once was one.
  */
 export function voucherStateOf(r: {
     voucherId: number | null;
     voucherRef: string | null;
-    voucher?: { status: string; deletedAt: Date | null } | null;
+    voucher?: { status: string } | null;
 }): PayrollVoucherState {
     if (!r.voucherId) return r.voucherRef ? "REMOVED" : "NONE";
     if (!r.voucher) return "REMOVED";
-    if (r.voucher.deletedAt) return "REMOVED";
     if (r.voucher.status === "CANCELLED") return "CANCELLED";
     if (r.voucher.status === "DRAFT") return "DRAFT";
     return "LIVE";
@@ -349,7 +347,7 @@ export type PayrollRunWithLines = Prisma.PayrollRunGetPayload<{ include: typeof 
 export function toRunRow(
     r: Omit<PayrollRunWithLines, "lines"> & {
         expenseAccount?: { id: number; name: string } | null;
-        voucher?: { status: string; deletedAt: Date | null } | null;
+        voucher?: { status: string } | null;
     },
     names: Map<number, string>,
 ): PayrollRunRow {

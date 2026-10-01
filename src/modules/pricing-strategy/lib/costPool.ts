@@ -121,7 +121,7 @@ export async function getPoolSummary(asOf?: Date): Promise<PoolSummary> {
         where: {
             type: "DEBIT",
             accountId: { in: ledgerIds },
-            universalVoucher: { status: "POSTED", deletedAt: null, ...(asOf ? { date: { lte: asOf } } : {}) },
+            universalVoucher: { status: "POSTED", ...(asOf ? { date: { lte: asOf } } : {}) },
         },
         select: {
             id: true,
@@ -192,7 +192,7 @@ export async function getEntryRemainingPaise(glLineId: number): Promise<number |
         where: {
             id: glLineId,
             type: "DEBIT",
-            universalVoucher: { status: "POSTED", deletedAt: null },
+            universalVoucher: { status: "POSTED" },
         },
         select: { amount: true },
     });

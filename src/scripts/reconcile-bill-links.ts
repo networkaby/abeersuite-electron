@@ -102,7 +102,6 @@ async function loadCandidates(): Promise<{ rows: Candidate[]; noParty: number }>
         where: {
             type:      { in: types },
             status:    "POSTED",
-            deletedAt: null,
             ...(ONLY_PARTY !== null ? { partyAccountId: ONLY_PARTY } : {}),
         },
         select:  { id: true, type: true, voucherNo: true, date: true, partyAccountId: true },

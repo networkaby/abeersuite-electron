@@ -73,7 +73,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const liveTargets = await prisma.voucherDetail.count({
             where: {
                 refVoucherId:     sourceId,
-                universalVoucher: { deletedAt: null, status: { not: "CANCELLED" } },
+                universalVoucher: { status: { not: "CANCELLED" } },
             },
         });
         if (liveTargets > 0) {

@@ -234,7 +234,6 @@ async function loadOpenBills(
                 // simply missing from Receivables and Payables: two views
                 // disagreeing about the same money.
                 type:           { in: ["CREDIT_NOTE", "DEBIT_NOTE", OPENING_TYPE] },
-                deletedAt:      null,
                 status:         { not: "CANCELLED" },
                 date:           { lte: asOf },
             },
@@ -288,7 +287,7 @@ async function loadOpenBills(
     const invVouchers = accountIds.length === 0 ? [] : await prisma.voucherDetail.findMany({
         where: {
             // 5D-8 lifecycle + 5D-10 date + 5D-11 type on spine
-            universalVoucher: { status: "POSTED", deletedAt: null, date: { lte: asOf }, type: invTypeFilter },
+            universalVoucher: { status: "POSTED", date: { lte: asOf }, type: invTypeFilter },
             OR: partyOr,
         },
         select: {
@@ -486,7 +485,7 @@ export async function getOpenSaleBillsForFifo(
     const invVouchers = await tx.voucherDetail.findMany({
         where: {
             // 5D-8 lifecycle + 5D-10 date + 5D-11 type on spine
-            universalVoucher: { status: "POSTED", deletedAt: null, date: { lte: asOf }, type: { in: ["SALE", "POS"] } },
+            universalVoucher: { status: "POSTED", date: { lte: asOf }, type: { in: ["SALE", "POS"] } },
             OR:        partyOr,
         },
         select: {

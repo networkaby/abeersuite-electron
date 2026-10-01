@@ -39,7 +39,7 @@ async function main(): Promise<void> {
     const TYPES = ["SALE", "POS", "ONLINE_INVOICE", "PURCHASE", "SALE_RETURN", "PURCHASE_RETURN"];
 
     const rows = await prisma.voucherDetail.findMany({
-        where: { universalVoucher: { status: "POSTED", deletedAt: null, type: { in: TYPES } } },
+        where: { universalVoucher: { status: "POSTED", type: { in: TYPES } } },
         select: {
             id: true, totalAmount: true, updatedAt: true,
             universalVoucher: {

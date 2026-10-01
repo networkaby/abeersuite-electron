@@ -616,9 +616,9 @@ model VoucherDetail {
   // ORDER_PIPELINE/ORDER_STATUS). All readers were cut over to VoucherLink before drop.
 
   // ── Lifecycle (Phase 5 5D-8) ────────────────────────────────────────────
-  // `status` + `deletedAt` now live ENTIRELY on the spine (UniversalVoucher).
-  // Readers reach lifecycle state via `universalVoucher.status` / `.deletedAt`;
-  // full metadata (cancelledAt/By/Reason + deletedById/deleteReason) is there too.
+  // `status` now lives ENTIRELY on the spine (UniversalVoucher).
+  // Readers reach lifecycle state via `universalVoucher.status`; full metadata
+  // (cancelledAt/By/Reason) is there too.
   // Phase 5 5D-2: createdBy also lives on the spine.
   // Phase 5 5C: goods lines (VoucherInventoryLine) + stock rows (InvStockLedger)
   // hang off the SPINE now, not InvVoucher — reach them via universalVoucher.

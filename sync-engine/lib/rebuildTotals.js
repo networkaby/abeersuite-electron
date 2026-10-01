@@ -90,7 +90,7 @@ sums AS (
       FROM "VoucherGlLine" l
       JOIN nb ON nb.id = l."accountId" AND nb.side IS NOT NULL
       JOIN "UniversalVoucher" v ON v.id = l."universalVoucherId"
-     WHERE v.status = 'POSTED' AND v."deletedAt" IS NULL
+     WHERE v.status = 'POSTED'
      GROUP BY l."accountId"
 )
 UPDATE "Account" a
@@ -206,7 +206,7 @@ async function driftReport(client) {
               FROM "VoucherGlLine" l
               JOIN nb ON nb.id = l."accountId" AND nb.side IS NOT NULL
               JOIN "UniversalVoucher" v ON v.id = l."universalVoucherId"
-             WHERE v.status = 'POSTED' AND v."deletedAt" IS NULL
+             WHERE v.status = 'POSTED'
              GROUP BY 1
         )
         SELECT count(*)::int AS n FROM nb LEFT JOIN sums s ON s.id = nb.id

@@ -125,7 +125,7 @@ export async function buildCustomerTimeline(ref: CustomerRef, limit = 20): Promi
     // Any posted, non-deleted voucher on the account = a financial touch. Sales carry
     // product lines; receipts/others show as a plain payment entry.
     const salesWhere: Prisma.UniversalVoucherWhereInput | null = accountId
-        ? { partyAccountId: accountId, status: "POSTED", deletedAt: null }
+        ? { partyAccountId: accountId, status: "POSTED" }
         : null;
 
     // Auto-captured PBX calls have no customer FK — they're matched by phone.

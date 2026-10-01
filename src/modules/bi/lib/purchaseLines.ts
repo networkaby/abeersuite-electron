@@ -37,7 +37,6 @@ export async function loadPurchaseLines(q: {
             universalVoucher: {
                 type: { in: [PURCHASE_TYPE, PURCHASE_RETURN_TYPE] },
                 status: "POSTED",
-                deletedAt: null,
                 date: { gte: q.from, lte: q.to },
                 ...(q.branchId ? { branchId: q.branchId } : {}),
             },

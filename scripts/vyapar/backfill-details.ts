@@ -81,7 +81,7 @@ async function main(): Promise<void> {
                from "UniversalVoucher" u
                left join "VoucherDetail" d on d."universalVoucherId" = u.id
               where u.type = $1 and u.date between $2::date and $3::date
-                and u."deletedAt" is null and d.id is null
+                and d.id is null
               order by u.date, u.id`,
             [type, from, to],
         )).rows as Array<{ id: number; voucherNo: string | null; date: string; partyAccountId: number | null; status: string }>;

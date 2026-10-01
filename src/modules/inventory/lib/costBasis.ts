@@ -49,7 +49,7 @@ export async function loadUnitCostMap(
                 productId: { in: productIds },
                 inQty: { gt: 0 },
                 date: { lte: asOf },
-                universalVoucher: { status: "POSTED", deletedAt: null },
+                universalVoucher: { status: "POSTED" },
             },
             select: { productId: true, date: true, inQty: true, rate: true },
             orderBy: [{ date: "asc" }, { id: "asc" }],

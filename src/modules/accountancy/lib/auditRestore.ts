@@ -25,7 +25,7 @@ type EntryType = "DEBIT" | "CREDIT";
 type Num = string | number | { toString(): string };
 interface Row { [key: string]: unknown }
 interface JeLine extends Row { accountId: number; type: EntryType; amount: Num; account?: { normalBalance?: NormalBalance | null } }
-interface JeSnapshot extends Row { lines?: JeLine[]; status?: string; deletedAt?: unknown }
+interface JeSnapshot extends Row { lines?: JeLine[]; status?: string }
 interface VoucherLine extends Row { accountId?: number; type?: EntryType; amount?: unknown; account?: { normalBalance?: NormalBalance | null } }
 
 // Real column names per model, straight from the generated datamodel. Snapshots
@@ -123,8 +123,8 @@ async function reapplyBalance(tx: Tx, lines: JeLine[]): Promise<void> {
     await applyLineBalances(tx, withAccount, "apply");
 }
 
-function isLive(status: unknown, deletedAt: unknown, cancelledAt: unknown): boolean {
-    return status === "POSTED" && !deletedAt && !cancelledAt;
+function isLive(status: unknown, cancelledAt: unknown): boolean {
+    return status === "POSTED" && !cancelledAt;
 }
 
 /**
@@ -148,7 +148,7 @@ export async function restoreFromAudit(
     if (audit.entityType === "JOURNAL_ENTRY") {
         const je = snap as JeSnapshot;
         const newId = await recreateJournalEntry(tx, cols, je);
-        if (isLive(je.status, je.deletedAt, undefined)) await reapplyBalance(tx, je.lines ?? []);
+        if (isLive(je.status, undefined)) await reapplyBalance(tx, je.lines ?? []);
         void newId;
         return referenceOf(snap, je);
     }
@@ -159,7 +159,7 @@ export async function restoreFromAudit(
         // rebuilder and re-apply balances if the restored voucher is live.
         const lines = (snap.lines as VoucherLine[]) ?? [];
         await recreateJournalEntry(tx, cols, snap as JeSnapshot);
-        if (isLive(snap.status, snap.deletedAt, snap.cancelledAt)) {
+        if (isLive(snap.status, snap.cancelledAt)) {
             await reapplyBalance(tx, lines.filter((l): l is JeLine => l.accountId != null && l.type != null));
         }
         return referenceOf(snap, snap as JeSnapshot);
@@ -205,13 +205,13 @@ export async function restoreFromAudit(
         }
     }
 
-    if (isLive(snap.status, snap.deletedAt, snap.cancelledAt)) {
+    if (isLive(snap.status, snap.cancelledAt)) {
         // Rebuild on-hand from the ledger now that the rows are back, instead of
         // hand-applying each row's delta — same safety net as the edit / cancel /
         // delete paths, and correct for branch transfers and physical stock too.
         await recomputeProductStock(tx, stockEntries.map((s) => s.productId as number));
         // Account.balance forward, from the JE lines (carry account.normalBalance), if the JE is live.
-        if (journalEntry && isLive(journalEntry.status, journalEntry.deletedAt, undefined)) {
+        if (journalEntry && isLive(journalEntry.status, undefined)) {
             await reapplyBalance(tx, journalEntry.lines ?? []);
         }
     }

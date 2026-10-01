@@ -20,8 +20,8 @@ import { carryStatementMatches, changedLedgers, retreatReconciliation } from "@/
 // id-only for party/creator/account, so those are enriched from lookups to keep
 // the old response shape the voucher UI consumes.
 
-async function enrichVoucher(v: { id: number; createdById: number; cancelledById: number | null; deletedById: number | null; partyAccountId: number | null; lines: { accountId: number; type: string; amount: unknown }[] } & Record<string, unknown>) {
-    const userIds = [v.createdById, v.cancelledById, v.deletedById].filter((x): x is number => x != null);
+async function enrichVoucher(v: { id: number; createdById: number; cancelledById: number | null; partyAccountId: number | null; lines: { accountId: number; type: string; amount: unknown }[] } & Record<string, unknown>) {
+    const userIds = [v.createdById, v.cancelledById].filter((x): x is number => x != null);
     const acctIds = [...new Set([...(v.partyAccountId != null ? [v.partyAccountId] : []), ...v.lines.map((l) => l.accountId)])];
     const [users, accounts] = await Promise.all([
         prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } }),
@@ -33,7 +33,6 @@ async function enrichVoucher(v: { id: number; createdById: number; cancelledById
         ...v,
         createdBy:    userById.get(v.createdById) ?? null,
         cancelledBy:  v.cancelledById != null ? (userById.get(v.cancelledById) ?? null) : null,
-        deletedBy:    v.deletedById   != null ? (userById.get(v.deletedById)   ?? null) : null,
         partyAccount: v.partyAccountId != null ? (acctById.get(v.partyAccountId) ?? null) : null,
         totalAmount:  v.lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + Number(l.amount), 0),
         lines:        v.lines.map((l) => ({ ...l, account: acctById.get(l.accountId) ?? null })),
@@ -103,9 +102,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     // "Who can cancel can edit also" — gated by the per-kind cancel permission.
     if (!userCanVoucher(user, existing.type, "cancel")) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    if (existing.deletedAt) {
-        return NextResponse.json({ error: "Voucher is deleted — restore it first" }, { status: 409 });
     }
     if (existing.status === "CANCELLED") {
         return NextResponse.json({ error: "Cancelled vouchers cannot be edited" }, { status: 409 });

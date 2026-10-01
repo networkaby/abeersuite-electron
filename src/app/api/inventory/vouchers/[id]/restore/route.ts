@@ -42,7 +42,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const voucherRow = await prisma.voucherDetail.findUnique({
         where:   { id: Number(id) },
-        include: { universalVoucher: { select: { voucherNo: true, status: true, deletedAt: true, type: true, branchId: true, partyAccountId: true } } },
+        include: { universalVoucher: { select: { voucherNo: true, status: true, type: true, branchId: true, partyAccountId: true } } },
     });
     if (!voucherRow) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -50,7 +50,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         ...voucherRow,
         type:       voucherRow.universalVoucher?.type ?? "",
         status:     voucherRow.universalVoucher?.status ?? "DRAFT",
-        deletedAt:  voucherRow.universalVoucher?.deletedAt ?? null,
     };
 
     // Same per-kind gate as cancel: whoever may cancel this kind may restore it.

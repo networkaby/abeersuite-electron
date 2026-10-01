@@ -70,11 +70,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             const voucher = run.voucherId
                 ? await tx.universalVoucher.findUnique({
                       where:  { id: run.voucherId },
-                      select: { id: true, deletedAt: true },
+                      select: { id: true },
                   })
                 : null;
 
-            if (voucher && !voucher.deletedAt) {
+            if (voucher) {
                 // `skipIfCancelled`: someone may have cancelled the journal by
                 // hand in Accountancy already, which is exactly the state we
                 // want — that must not stop the run being marked to match.

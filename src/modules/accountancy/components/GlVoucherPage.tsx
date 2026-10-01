@@ -82,7 +82,6 @@ type LoadedVoucher = {
     narration:      string | null;
     status:         "DRAFT" | "POSTED" | "CANCELLED";
     cancelledAt:    string | null;
-    deletedAt:      string | null;
     partyAccountId: number | null;
     partyAccount:   { id: number; name: string } | null;
     lines:          LoadedLine[];
@@ -1568,7 +1567,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                 onCancel={closeForm}
                 onSave={() => submit(true, printAfterSave)}
                 saveLabel={isEditing ? "Save Changes" : "Save"}
-                saveDisabled={saving || !balanced || loading || (isEditing && (loadedVoucher?.status === "CANCELLED" || !!loadedVoucher?.deletedAt))}
+                saveDisabled={saving || !balanced || loading || (isEditing && (loadedVoucher?.status === "CANCELLED"))}
                 onSaveDraft={() => submit(false, printAfterSave)}
                 showSaveDraft={!isEditing}
                 showPrintToggle
@@ -1592,7 +1591,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                             canHardDelete={canHardDelete}
                             onChanged={() => setReloadCounter((c) => c + 1)}
                         />
-                        {loadedVoucher.status === "POSTED" && !loadedVoucher.deletedAt && !loadedVoucher.cancelledAt && partyLedgerId != null && voucherId != null && (
+                        {loadedVoucher.status === "POSTED" && !loadedVoucher.cancelledAt && partyLedgerId != null && voucherId != null && (
                             <Button
                                 variant="ghost"
                                 size="sm"
@@ -1603,7 +1602,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                                 <Link2 size={14} /> Link to bills
                             </Button>
                         )}
-                        {loadedVoucher.status === "POSTED" && !loadedVoucher.deletedAt && !loadedVoucher.cancelledAt && (
+                        {loadedVoucher.status === "POSTED" && !loadedVoucher.cancelledAt && (
                             <span className="text-[11px] text-amber-600 italic">
                                 Will reverse + re-post on save (reference preserved)
                             </span>

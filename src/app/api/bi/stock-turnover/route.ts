@@ -28,7 +28,7 @@ export const GET = withApiError("Failed to build the stock turnover report", asy
 
     const ledgerWhere = {
         ...(branchId ? { branchId } : {}),
-        universalVoucher: { status: "POSTED" as const, deletedAt: null },
+        universalVoucher: { status: "POSTED" as const },
     };
 
     const [{ lines, costMethod }, products, periodSums, branches] = await Promise.all([

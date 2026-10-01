@@ -37,8 +37,6 @@ type Voucher = {
     postedAt:       string | null;
     cancelledAt:    string | null;
     cancelReason:   string | null;
-    deletedAt:      string | null;
-    deleteReason:   string | null;
     createdBy:      { name: string };
     createdAt:      string;
     refVoucherId:   number | null;
@@ -148,7 +146,7 @@ export function InvVoucherDetail({ basePath, label, formPath }: {
                     <p className="text-sm text-muted-foreground mt-0.5">{voucher.description}</p>
                 </div>
                 <div className="flex gap-2 items-center">
-                    {voucher.status !== "CANCELLED" && !voucher.deletedAt && (
+                    {voucher.status !== "CANCELLED" && (
                         <Button
                             variant="outline"
                             onClick={() => router.push(`${editPath}?voucherId=${voucher.id}`)}
@@ -215,12 +213,6 @@ export function InvVoucherDetail({ basePath, label, formPath }: {
             {voucher.cancelReason && (
                 <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
                     Cancel reason: {voucher.cancelReason}
-                </div>
-            )}
-            {voucher.deletedAt && (
-                <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm">
-                    <p className="font-medium text-destructive">Deleted on {new Date(voucher.deletedAt).toLocaleString()}</p>
-                    {voucher.deleteReason && <p className="text-destructive/80 mt-1">Reason: {voucher.deleteReason}</p>}
                 </div>
             )}
 

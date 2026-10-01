@@ -68,7 +68,6 @@ export async function GET(req: Request) {
                     description: has,
                     universalVoucher: {
                         status: "POSTED",
-                        deletedAt: null,
                         // Filtered in the query, not after it, so the page still fills.
                         ...(seesSuppliers ? {} : { type: { notIn: SUPPLIER_SIDE_TYPES } }),
                     },

@@ -79,9 +79,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (!userCanVoucher(user, existing.type, "cancel")) {
         return NextResponse.json({ error: "You do not have permission to edit this voucher kind." }, { status: 403 });
     }
-    if (existing.deletedAt) {
-        return NextResponse.json({ error: "Entry is deleted — restore it first" }, { status: 409 });
-    }
     if (existing.status === "CANCELLED") {
         return NextResponse.json({ error: "Cancelled entries cannot be edited" }, { status: 409 });
     }

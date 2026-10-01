@@ -34,7 +34,7 @@ export async function GET(req: Request) {
             // financial types so we don't double-count the inv kinds (grouped below).
             prisma.universalVoucher.groupBy({
                 by: ["type", "status"],
-                where: { date: dateRange, deletedAt: null, type: { in: ["CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE", "JOURNAL"] } },
+                where: { date: dateRange, type: { in: ["CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE", "JOURNAL"] } },
                 _count: { _all: true },
             }),
             // 5D-8: inv-voucher status lives on the spine. Group the spine by type+status
@@ -42,14 +42,14 @@ export async function GET(req: Request) {
             // mirroring how voucherByType handles the financial side.
             prisma.universalVoucher.groupBy({
                 by: ["type", "status"],
-                where: { date: dateRange, deletedAt: null, type: { notIn: ["CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE", "JOURNAL"] } },
+                where: { date: dateRange, type: { notIn: ["CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE", "JOURNAL"] } },
                 _count: { _all: true },
             }),
             // Legacy invoice counts retired with the Invoice → InvVoucher
             // consolidation (Layer 3e, 2026-05-24). Sale counts are now
             // exposed via invVoucherTypes[SALE / POS] in the same payload.
             prisma.universalVoucher.count({
-                where: { date: dateRange, deletedAt: null },
+                where: { date: dateRange },
             }),
             prisma.accountGroup.count({ where: { isActive: true } }),
             prisma.account.count({

@@ -45,7 +45,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     // Live balance is currently affected only by entries that are POSTED and not deleted.
     // cancel() reverses + writes a counter-entry; delete() reverses without a counter-entry.
-    const needsLedgerReversal = entry.status === "POSTED" && !entry.deletedAt;
+    const needsLedgerReversal = entry.status === "POSTED";
 
     try {
         const audit = await prisma.$transaction(async (tx) => {

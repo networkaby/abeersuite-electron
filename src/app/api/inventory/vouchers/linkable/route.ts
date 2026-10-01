@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
     const rows = await prisma.voucherDetail.findMany({
         where: {
             // 5D-8 lifecycle + 5D-11 type + 5D-12 branch all live on the spine
-            universalVoucher: { status: VoucherStatus.POSTED, deletedAt: null, type: { in: types }, branchId: activeBranchId },
+            universalVoucher: { status: VoucherStatus.POSTED, type: { in: types }, branchId: activeBranchId },
             refVoucherId: null,   // not already linked to a source voucher
             ...partyFilter,
         },

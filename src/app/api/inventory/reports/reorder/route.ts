@@ -81,7 +81,7 @@ export async function GET(req: Request) {
         // Untouched bucket — it has a real history that happens to end at zero.
         prisma.invStockLedger.groupBy({
             by: ["productId"],
-            where: { universalVoucher: { status: "POSTED", deletedAt: null } },
+            where: { universalVoucher: { status: "POSTED" } },
         }),
     ]);
     const transactedIds = new Set(ledgerProductIds.map((l) => l.productId));

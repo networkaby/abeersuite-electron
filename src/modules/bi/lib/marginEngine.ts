@@ -81,7 +81,6 @@ export async function loadMarginLines(q: MarginQuery): Promise<MarginResult> {
             universalVoucher: {
                 type: { in: [...SALE_TYPES, SALE_RETURN_TYPE] },
                 status: "POSTED",
-                deletedAt: null,
                 date: { gte: q.from, lte: q.to },
                 ...(q.branchId ? { branchId: q.branchId } : {}),
             },

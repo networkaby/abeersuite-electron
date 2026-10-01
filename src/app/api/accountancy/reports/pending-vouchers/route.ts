@@ -65,10 +65,9 @@ export async function GET(req: NextRequest) {
         : [];
 
     const where: Prisma.VoucherDetailWhereInput = {
-        // 5D-8/5D-10/5D-12: status/deletedAt + date + branch all live on the spine.
+        // 5D-8/5D-10/5D-12: status + date + branch all live on the spine.
         universalVoucher: {
             status: VoucherStatus.POSTED,
-            deletedAt: null,
             ...(branchScopeId ? { branchId: branchScopeId } : {}),
             ...((from || to) ? { date: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}),
         },

@@ -62,7 +62,7 @@ async function main(): Promise<void> {
 
     // Every posted online invoice, with the shop order it was raised from.
     const invoices = await prisma.universalVoucher.findMany({
-        where: { type: "ONLINE_INVOICE", status: "POSTED", deletedAt: null },
+        where: { type: "ONLINE_INVOICE", status: "POSTED" },
         select: {
             id: true,
             voucherNo: true,
@@ -92,7 +92,7 @@ async function main(): Promise<void> {
         // The receipt must be a real posted RECEIPT spine. Anything else is a stale or
         // wrong stamp on the order — report it, never guess at it.
         const receipt = await prisma.universalVoucher.findFirst({
-            where: { id: receiptSpineId, type: "RECEIPT", status: "POSTED", deletedAt: null },
+            where: { id: receiptSpineId, type: "RECEIPT", status: "POSTED" },
             select: { voucherNo: true },
         });
         if (!receipt) {

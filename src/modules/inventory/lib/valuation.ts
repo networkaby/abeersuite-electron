@@ -76,7 +76,7 @@ async function loadInwardLots(productIds: number[], asOf?: Date): Promise<Map<nu
                 productId: { in: productIds },
                 inQty:     { gt: 0 },
                 ...(asOf ? { date: { lte: asOf } } : {}),
-                universalVoucher:   { status: "POSTED", deletedAt: null },
+                universalVoucher:   { status: "POSTED" },
             },
             select:  { id: true, productId: true, date: true, inQty: true, rate: true },
             orderBy: [{ date: "asc" }, { id: "asc" }],
@@ -427,7 +427,7 @@ export async function valueStockOrgTotalAsOf(
             by:    ["productId"],
             where: {
                 date: { lte: asOf },
-                universalVoucher: { status: "POSTED", deletedAt: null },
+                universalVoucher: { status: "POSTED" },
             },
             _sum:  { inQty: true, outQty: true },
         }),

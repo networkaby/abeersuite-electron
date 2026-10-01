@@ -36,12 +36,11 @@ export async function GET(req: NextRequest) {
     try {
         const vouchers = await prisma.voucherDetail.findMany({
             where: {
-                // 5D-8 status/deletedAt + 5D-11 type + party (5D-4) + voucher-number
+                // 5D-8 status + 5D-11 type + party (5D-4) + voucher-number
                 // search (5D-6) all resolve via the spine.
                 universalVoucher: {
                     type:      { in: ["POS", "SALE"] },
                     status:    "POSTED",
-                    deletedAt: null,
                     ...(customerId
                         ? { partyAccountId: Number(customerId) }
                         : { voucherNo: { contains: q, mode: "insensitive" } }),
@@ -53,7 +52,7 @@ export async function GET(req: NextRequest) {
                 universalVoucher: { select: { partyAccountId: true, voucherNo: true, date: true } },   // 5D-4 party + 5D-6 ref + 5D-10 date
                 // SALE_RETURN children of this voucher — for the dialog's "already returned" guard
                 refReturns: {
-                    where:  { universalVoucher: { status: "POSTED", deletedAt: null } },
+                    where:  { universalVoucher: { status: "POSTED" } },
                     select: { id: true, totalAmount: true, universalVoucherId: true, universalVoucher: { select: { voucherNo: true } } },
                 },
             },

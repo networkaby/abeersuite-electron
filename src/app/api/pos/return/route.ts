@@ -104,7 +104,7 @@ export async function POST(req: Request) {
         // product appears on at most one line per original voucher — matching
         // prior SALE_RETURNs back to this original by productId is unambiguous.
         const priorReturns = await prisma.voucherDetail.findMany({
-            where:  { refVoucherId: original.id, universalVoucher: { status: "POSTED", deletedAt: null } },
+            where:  { refVoucherId: original.id, universalVoucher: { status: "POSTED" } },
             select: { universalVoucherId: true },
         });
         const priorReturnUvIds = priorReturns.map((r) => r.universalVoucherId).filter((id): id is number => id != null);

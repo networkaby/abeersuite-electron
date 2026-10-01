@@ -40,7 +40,6 @@ async function resolveAdvance(ref: OrderRef): Promise<{ amountPaise: number; sou
         where: {
             type:      "RECEIPT",
             status:    "POSTED",
-            deletedAt: null,
             links:     { some: { kind: "ADVANCE_FOR", targetId: String(order.universalVoucherId) } },
         },
         select: { id: true, lines: { select: { type: true, amount: true } } },

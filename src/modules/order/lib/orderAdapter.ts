@@ -36,7 +36,6 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
         prisma.voucherDetail.findMany({
             where: {
                 universalVoucher: {
-                    deletedAt: null,
                     type: { in: ["POS_ORDER", "SALES_ORDER"] },
                     ...(opts?.statusId
                         ? { links: { some: { kind: "ORDER_STATUS", targetId: opts.statusId } } }
@@ -116,9 +115,9 @@ export async function resolveOrderStatus(ref: OrderRef): Promise<{ statusId: str
     if (ref.source === "inv") {
         const v = await prisma.voucherDetail.findUnique({
             where: { id: ref.id },
-            select: { universalVoucher: { select: { deletedAt: true, links: { where: { kind: "ORDER_STATUS" }, select: { targetId: true } } } } },
+            select: { universalVoucher: { select: { links: { where: { kind: "ORDER_STATUS" }, select: { targetId: true } } } } },
         });
-        if (!v || v.universalVoucher?.deletedAt) return null;
+        if (!v) return null;
         return { statusId: v.universalVoucher?.links[0]?.targetId ?? null };
     }
     const o = await prisma.ticket.findUnique({ where: { id: ref.id }, select: { status: true } });

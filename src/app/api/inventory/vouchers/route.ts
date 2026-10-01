@@ -92,15 +92,12 @@ export async function GET(req: NextRequest) {
         branchScopeId = branchParam;
     }
 
-    // 5D-4/8/10/11/12: type/status/deletedAt/party/branch all live on the spine.
+    // 5D-4/8/10/11/12: type/status/party/branch all live on the spine.
     // (Typed so future drift is caught — the prior untyped literal silently kept
     // dropped columns via conditional spreads.)
     const spineFilter: Prisma.UniversalVoucherWhereInput = {
         ...(typeList.length > 0 ? { type: { in: typeList } } : {}),
         ...(status ? { status } : {}),
-        // Always-true guard: nothing writes `deletedAt` since soft-delete was
-        // removed (2026-08-01). Kept as a cheap safety net for legacy rows.
-        deletedAt: null,
         ...(accountIdParam ? { partyAccountId: Number(accountIdParam) } : {}),
         ...(branchScopeId ? { branchId: branchScopeId } : {}),
         // "Only this counter" on the POS register (Orders / Estimates tabs).
@@ -126,7 +123,7 @@ export async function GET(req: NextRequest) {
         ],   // 5D-10: date on spine
         include: {
             // 5D-2 creator + 5D-6 ref + 5D-8 lifecycle + 5D-10 date + 5D-12 branch live on the spine.
-            universalVoucher: { select: { createdById: true, voucherNo: true, description: true, date: true, type: true, status: true, deletedAt: true, cancelledAt: true, createdAt: true, sourceCreatedAt: true, sourceCounterId: true, branch: { select: { id: true, name: true, number: true } }, _count: { select: { inventoryLines: true } } } },   // +5D-5 description +5D-11 type +5D-12 branch; _count.inventoryLines = how many goods lines the voucher carries (5C: lines hang off the spine)
+            universalVoucher: { select: { createdById: true, voucherNo: true, description: true, date: true, type: true, status: true, cancelledAt: true, createdAt: true, sourceCreatedAt: true, sourceCounterId: true, branch: { select: { id: true, name: true, number: true } }, _count: { select: { inventoryLines: true } } } },   // +5D-5 description +5D-11 type +5D-12 branch; _count.inventoryLines = how many goods lines the voucher carries (5C: lines hang off the spine)
             // refReturns = vouchers that reference THIS one via refVoucherId. For a
             // POS_ORDER / POS_ESTIMATE it means a sale was raised against it →
             // "converted" (not pending). (For SALE etc. it's the returns count.)
@@ -153,7 +150,7 @@ export async function GET(req: NextRequest) {
     // target clears the flag (re-opens conversion). One grouped lookup.
     const voucherIdsForConv = vouchers.map((v) => v.id);
     const liveConvRefs = voucherIdsForConv.length === 0 ? [] : await prisma.voucherDetail.findMany({
-        where:  { refVoucherId: { in: voucherIdsForConv }, universalVoucher: { deletedAt: null, status: { not: "CANCELLED" } } },
+        where:  { refVoucherId: { in: voucherIdsForConv }, universalVoucher: { status: { not: "CANCELLED" } } },
         select: { refVoucherId: true },
     });
     const convertedIds = new Set(liveConvRefs.map((r) => r.refVoucherId));
@@ -161,11 +158,10 @@ export async function GET(req: NextRequest) {
         // Derived party display fields from the frozen snapshot so list/register
         // clients keep reading `partyName` / `partyPhone` unchanged.
         const partyDisplay = { partyName: readPartyName(v.partyJson), partyPhone: readPartyPhone(v.partyJson), partyAddress: readPartyAddress(v.partyJson) };
-        // 5D-8: lifecycle (status/deletedAt/cancelledAt) + createdAt live on the spine
+        // 5D-8: lifecycle (status/cancelledAt) + createdAt live on the spine
         // now — surface them so register/Day-Book clients keep reading the old shape.
         const spineLifecycle = {
             status:      v.universalVoucher?.status,
-            deletedAt:   v.universalVoucher?.deletedAt ?? null,
             cancelledAt: v.universalVoucher?.cancelledAt ?? null,
             createdAt:   v.universalVoucher?.createdAt,
             // Faithful posting wall-clock + the till it was raised at. Surfaced
@@ -186,7 +182,7 @@ export async function GET(req: NextRequest) {
             reference:       voucherDisplayNo(v.universalVoucher?.voucherNo, v.universalVoucherId),   // 5D-6
             description:     v.universalVoucher?.description ?? null,   // 5D-5: narration on spine
             lineCount:       v.universalVoucher?._count?.inventoryLines ?? 0,   // how many goods lines this voucher carries
-            ...spineLifecycle,   // 5D-8: status/deletedAt/cancelledAt/createdAt on spine
+            ...spineLifecycle,   // 5D-8: status/cancelledAt/createdAt on spine
             ...partyDisplay,
             createdBy:       creatorName(v),
             converted:       convertedIds.has(v.id),

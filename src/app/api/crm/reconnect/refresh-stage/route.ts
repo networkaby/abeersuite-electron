@@ -35,7 +35,7 @@ export async function POST(req: Request) {
         const accountId = await resolveAccountId(ref);
         const hasTransacted = accountId != null && (await Promise.all([
             prisma.universalVoucher.findFirst({
-                where: { partyAccountId: accountId, status: "POSTED", deletedAt: null, type: { in: [...SALE_TYPES] } },
+                where: { partyAccountId: accountId, status: "POSTED", type: { in: [...SALE_TYPES] } },
                 select: { id: true },
             }),
             prisma.ticket.findFirst({ where: { accountId, repair: { isNot: null } }, select: { id: true } }),

@@ -67,7 +67,6 @@ type ExistingVoucher = {
     date:         string;
     description:  string;
     status:       "DRAFT" | "POSTED" | "CANCELLED";
-    deletedAt:    string | null;
     cancelledAt:  string | null;
     branchId:     string;
     branch?:      { id: string; name: string };
@@ -143,7 +142,7 @@ export function PhysicalStockPage() {
             .then((r) => {
                 const v = r.data;
                 setVoucherRef(v.reference);
-                setLoadedVoucher({ status: v.status, deletedAt: v.deletedAt, cancelledAt: v.cancelledAt });
+                setLoadedVoucher({ status: v.status, cancelledAt: v.cancelledAt });
                 if (v.branchId) setSelectedBranchId(v.branchId);
                 setForm({
                     date: v.date.slice(0, 10),

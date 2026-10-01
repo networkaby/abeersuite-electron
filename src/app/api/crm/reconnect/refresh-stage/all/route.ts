@@ -35,7 +35,7 @@ export async function POST() {
         if (accountIds.length) {
             const [sales, repairs] = await Promise.all([
                 prisma.universalVoucher.findMany({
-                    where: { partyAccountId: { in: accountIds }, status: "POSTED", deletedAt: null, type: { in: [...SALE_TYPES] } },
+                    where: { partyAccountId: { in: accountIds }, status: "POSTED", type: { in: [...SALE_TYPES] } },
                     select: { partyAccountId: true },
                     distinct: ["partyAccountId"],
                 }),

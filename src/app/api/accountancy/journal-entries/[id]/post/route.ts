@@ -14,16 +14,13 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
     const entry = await prisma.universalVoucher.findUnique({
         where:  { id: Number(id) },
-        select: { type: true, status: true, deletedAt: true, lines: { select: { accountId: true, type: true, amount: true } } },
+        select: { type: true, status: true, lines: { select: { accountId: true, type: true, amount: true } } },
     });
     if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // The kind's Post tick (Journal → finance:voucher:post:journal), same as the
     // GL voucher post route.
     if (!userCanVoucher(user, entry.type, "post")) {
         return NextResponse.json({ error: "You do not have permission to post this voucher kind." }, { status: 403 });
-    }
-    if (entry.deletedAt) {
-        return NextResponse.json({ error: "Cannot post a deleted entry — restore it first" }, { status: 409 });
     }
     if (entry.status !== "DRAFT") {
         return NextResponse.json({ error: `Entry is already ${entry.status}` }, { status: 409 });

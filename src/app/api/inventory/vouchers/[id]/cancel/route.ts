@@ -24,15 +24,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const userId = user!.id;
 
-    const voucherRow = await prisma.voucherDetail.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { voucherNo: true, status: true, deletedAt: true, type: true, branchId: true, partyAccountId: true } } } });   // 5D-6/5D-8/5D-11/5D-12 + 5D-4 party (loyalty reversal)
+    const voucherRow = await prisma.voucherDetail.findUnique({ where: { id: Number(id) }, include: { universalVoucher: { select: { voucherNo: true, status: true, type: true, branchId: true, partyAccountId: true } } } });   // 5D-6/5D-8/5D-11/5D-12 + 5D-4 party (loyalty reversal)
     if (!voucherRow) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Phase 5 5C: goods lines hang off the spine — load + attach as `voucher.lines`.
     const goodsLines = await prisma.voucherInventoryLine.findMany({
         where:   { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
         include: { product: { select: { id: true } } },
     });
-    // 5D-8/5D-11/5D-12: status/deletedAt + type + branch live on the spine — attach for the helpers + guards + stock rows.
-    const voucher = { ...voucherRow, lines: goodsLines, type: voucherRow.universalVoucher?.type ?? "", branchId: voucherRow.universalVoucher?.branchId ?? "", status: voucherRow.universalVoucher?.status ?? "DRAFT", deletedAt: voucherRow.universalVoucher?.deletedAt ?? null };
+    // 5D-8/5D-11/5D-12: status + type + branch live on the spine — attach for the helpers + guards + stock rows.
+    const voucher = { ...voucherRow, lines: goodsLines, type: voucherRow.universalVoucher?.type ?? "", branchId: voucherRow.universalVoucher?.branchId ?? "", status: voucherRow.universalVoucher?.status ?? "DRAFT" };
 
     // Per-kind cancel gate. Office kinds need their matrix cancel key; POS Sale /
     // Order / Estimate need their POS-table Cancel / edit tick; online orders and

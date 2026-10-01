@@ -118,7 +118,6 @@ export async function ShowroomBriefing() {
     // 2026-05-24 (Layer 3d of the Invoice → InvVoucher consolidation).
     const posFilter = {
         createdAt: { gte: today },
-        deletedAt: null,
         status:    "POSTED" as const,
         type:      "POS" as const,
     };

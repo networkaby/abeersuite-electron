@@ -62,7 +62,6 @@ export async function shiftDeleteBlockers(db: PrismaClient, shift: DeleteGuardSh
         .filter((x): x is number => x != null);
     const where = {
         sourceShiftId: shift.id,
-        deletedAt:     null,
         status:        { not: "CANCELLED" as const },
         ...(own.length > 0 ? { id: { notIn: own } } : {}),
     };

@@ -27,7 +27,7 @@ export const GET = withApiError("Failed to build the movement register", async (
 
     const ledgerWhere = {
         ...(branchId ? { branchId } : {}),
-        universalVoucher: { status: "POSTED" as const, deletedAt: null },
+        universalVoucher: { status: "POSTED" as const },
     };
 
     if (productParam !== null) {

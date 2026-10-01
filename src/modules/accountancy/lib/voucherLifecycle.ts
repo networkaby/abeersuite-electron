@@ -16,12 +16,10 @@
 // restore it.
 //
 // There is only ONE delete. The middle soft-delete tier (set `deletedAt`, hide
-// from views, restore flips it back) was removed on 2026-08-01: it had no UI
-// entry point, no route left, and zero rows in the database — Cancel already
-// covers "undo but keep it visible" and hard-delete covers "remove recoverably".
-// The `deletedAt` COLUMNS and the `deletedAt: null` read filters deliberately
-// remain (dropping them needs a schema push and a sweep through Balance Sheet /
-// valuation); they are now always-true guards. Nothing writes `deletedAt`.
+// from views, restore flips it back) was removed on 2026-08-01 — Cancel covers
+// "undo but keep it visible" and hard-delete covers "remove recoverably" (an
+// AuditLog snapshot, restorable from the Recycle Bin). Its columns and their
+// always-true read filters were dropped in B3b (2026-10-01).
 //
 // The GL / stock reversal logic itself stays in each route handler since it
 // differs per voucher type. These helpers cover the bookkeeping boilerplate
@@ -38,7 +36,6 @@ export type LifecycleStatus = "DRAFT" | "POSTED" | "CANCELLED" | "DRAFT_INV";
 export interface LifecycleVoucher {
   status: string;
   cancelledAt?: Date | null;
-  deletedAt?: Date | null;
 }
 
 export class LifecycleError extends Error {
@@ -55,11 +52,6 @@ export function isCancelled(v: LifecycleVoucher): boolean {
   return v.status === "CANCELLED" || !!v.cancelledAt;
 }
 
-/** True when the voucher has been soft-deleted. */
-export function isDeleted(v: LifecycleVoucher): boolean {
-  return !!v.deletedAt;
-}
-
 /** True when the voucher has live GL/stock impact and could be cancelled. */
 export function isPosted(v: LifecycleVoucher): boolean {
   return v.status === "POSTED";
@@ -73,13 +65,11 @@ export function isDraft(v: LifecycleVoucher): boolean {
 // ── Pre-flight checks (throw LifecycleError on failure) ───────────────────
 
 export function ensureCancelable(v: LifecycleVoucher): void {
-  if (isDeleted(v)) throw new LifecycleError(409, "Cannot cancel a deleted voucher — restore it first");
   if (isCancelled(v)) throw new LifecycleError(409, "Voucher is already cancelled");
   if (!isPosted(v)) throw new LifecycleError(409, "Only POSTED vouchers can be cancelled");
 }
 
 export function ensureRestorable(v: LifecycleVoucher): void {
-  if (isDeleted(v)) throw new LifecycleError(409, "Cannot restore a deleted voucher — use the Recycle Bin");
   if (!isCancelled(v)) throw new LifecycleError(409, "Only cancelled vouchers can be restored");
 }
 

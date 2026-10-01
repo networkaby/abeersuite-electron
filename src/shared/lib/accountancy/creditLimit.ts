@@ -69,7 +69,6 @@ export async function windowSalesTotal(
             universalVoucher: {
                 partyAccountId: accountId,
                 status:         "POSTED",
-                deletedAt:      null,
                 type:           { in: [...SALE_TYPES] },
                 date:           { gte: since },
             },

@@ -93,7 +93,6 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
                   where: {
                       id: { in: invLinks.map((l) => l.universalVoucherId) },
                       status: { not: "CANCELLED" },
-                      deletedAt: null,
                   },
                   orderBy: { id: "desc" },
                   select: {
@@ -120,7 +119,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
                 ? prisma.voucherDetail.findFirst({
                       where: {
                           refVoucherId: invVoucher.id,
-                          universalVoucher: { type: "SALE_RETURN", status: { not: "CANCELLED" }, deletedAt: null },
+                          universalVoucher: { type: "SALE_RETURN", status: { not: "CANCELLED" } },
                       },
                       select: {
                           id: true,

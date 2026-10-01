@@ -44,7 +44,6 @@ export async function GET(req: NextRequest) {
             where: {
                 type:          { in: ["RECEIPT", "PAYMENT"] },
                 status:        "POSTED",
-                deletedAt:     null,
                 sourceShiftId: shiftIds == null ? { not: null } : { in: shiftIds },
             },
             orderBy: { createdAt: "desc" },

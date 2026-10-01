@@ -34,10 +34,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         const v = await prisma.voucherDetail.findUnique({
             where: { id },
-            // 5D-8/5D-9: status + deletedAt + binding live on the spine.
-            select: { id: true, universalVoucherId: true, universalVoucher: { select: { deletedAt: true, binding: true } } },
+            // 5D-8/5D-9: status + binding live on the spine.
+            select: { id: true, universalVoucherId: true, universalVoucher: { select: { binding: true } } },
         });
-        if (!v || v.universalVoucher?.deletedAt) return NextResponse.json({ error: "Voucher not found" }, { status: 404 });
+        if (!v) return NextResponse.json({ error: "Voucher not found" }, { status: 404 });
         // Only OPTIONAL (non-binding) documents carry a free document-lifecycle status
         // that may be toggled here. A REGULAR voucher's status is owned by the
         // post/cancel flow and must never be flipped here (that would desync the books).

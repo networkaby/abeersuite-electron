@@ -70,7 +70,7 @@ async function main() {
     const [spines, products] = await Promise.all([
         prisma.universalVoucher.findMany({
             where:  { id: { in: spineIds } },
-            select: { id: true, type: true, status: true, voucherNo: true, date: true, deletedAt: true, cancelledAt: true },
+            select: { id: true, type: true, status: true, voucherNo: true, date: true, cancelledAt: true },
         }),
         prisma.invProduct.findMany({ where: { id: { in: productIds } }, select: { id: true, sku: true, name: true } }),
     ]);
@@ -110,10 +110,6 @@ async function main() {
         }
 
         // A / B / C — lifecycle states where the ledger must not carry weight.
-        if (hasLedger && spine.deletedAt != null && Math.abs(ledgerNet) > EPS) {
-            push("B", uv, pid, `spine soft-deleted but ledger still nets ${ledgerNet}`);
-            continue;
-        }
         if (hasLedger && spine.status === "DRAFT") {
             push("A", uv, pid, `DRAFT spine carries ${led!._count._all} ledger row(s), net ${ledgerNet}`);
             continue;

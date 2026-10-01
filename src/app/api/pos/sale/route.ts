@@ -458,7 +458,7 @@ export async function POST(req: Request) {
             // First-time buyer = no prior POSTED sale-type voucher on ANY
             // channel (SALE / POS / ONLINE_INVOICE — a webshop buyer isn't
             // "new" at the counter). Identified customers only.
-            ? (await prisma.voucherDetail.count({ where: { universalVoucher: { partyAccountId: customerAccountId, status: "POSTED", deletedAt: null, type: { in: [...TIER_SPEND_VOUCHER_TYPES] } } } })) === 0
+            ? (await prisma.voucherDetail.count({ where: { universalVoucher: { partyAccountId: customerAccountId, status: "POSTED", type: { in: [...TIER_SPEND_VOUCHER_TYPES] } } } })) === 0
             : false;
         const tax = await loadTaxonomy();
         // Coupon lines carry NO cost — PERCENT coupons discount the SALE value,
@@ -1094,7 +1094,7 @@ export async function POST(req: Request) {
                 if (milestoneTiers.length > 0) {
                     // Every sale channel counts toward milestone lifetime spend.
                     const spendAgg = await tx.voucherDetail.aggregate({
-                        where: { universalVoucher: { partyAccountId: customerAccount.id, status: "POSTED", deletedAt: null, type: { in: [...TIER_SPEND_VOUCHER_TYPES] } } },
+                        where: { universalVoucher: { partyAccountId: customerAccount.id, status: "POSTED", type: { in: [...TIER_SPEND_VOUCHER_TYPES] } } },
                         _sum: { totalAmount: true },
                     });
                     const lifetimeSpend = Number(spendAgg._sum.totalAmount ?? 0);

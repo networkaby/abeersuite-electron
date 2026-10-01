@@ -69,7 +69,7 @@ export async function GET(req: Request) {
     const otherIds = links.map((l) => (l.targetId === voucherId ? l.sourceId : l.targetId));
     const others = otherIds.length === 0 ? [] : await prisma.universalVoucher.findMany({
         where:  { id: { in: [...new Set(otherIds)] } },
-        select: { id: true, type: true, voucherNo: true, date: true, status: true, cancelledAt: true, deletedAt: true },
+        select: { id: true, type: true, voucherNo: true, date: true, status: true, cancelledAt: true },
     });
     const otherById = new Map(others.map((o) => [o.id, o]));
 
@@ -85,7 +85,7 @@ export async function GET(req: Request) {
             other,
             // A link whose other end has gone is already ignored by every reader —
             // saying so lets the UI show it as spent rather than as settlement.
-            live: other !== null && other.status === "POSTED" && other.deletedAt === null,
+            live: other !== null && other.status === "POSTED",
         };
     }));
 }

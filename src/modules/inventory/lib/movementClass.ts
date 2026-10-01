@@ -191,7 +191,7 @@ export async function classifyProducts(
             by: ["productId", "date"],
             where: {
                 ...(opts.branchId ? { branchId: opts.branchId } : {}),
-                universalVoucher: { status: "POSTED", deletedAt: null },
+                universalVoucher: { status: "POSTED" },
                 date: { gte: from },
                 outQty: { gt: 0 },
             },
@@ -202,7 +202,6 @@ export async function classifyProducts(
                 universalVoucher: {
                     type: { in: [...SALE_TYPES] },
                     status: "POSTED",
-                    deletedAt: null,
                     date: { gte: from },
                     ...(opts.branchId ? { branchId: opts.branchId } : {}),
                 },

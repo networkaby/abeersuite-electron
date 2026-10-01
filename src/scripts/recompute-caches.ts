@@ -49,7 +49,7 @@ async function accounts(): Promise<Drift[]> {
         prisma.voucherGlLine.groupBy({
             by: ["accountId", "type"],
             _sum: { amount: true },
-            where: { universalVoucher: { status: "POSTED", deletedAt: null } },
+            where: { universalVoucher: { status: "POSTED" } },
         }),
     ]);
     const nb = new Map<number, "DEBIT" | "CREDIT">();

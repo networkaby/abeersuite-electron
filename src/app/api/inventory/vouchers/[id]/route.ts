@@ -35,7 +35,7 @@ export async function GET(_req: Request, { params }: Params) {
             // 5D-5/5D-10: date + description + narration + postedAt live on the spine too —
             // without them the edit form read `v.date === undefined` and silently
             // fell back to TODAY on every old voucher (same for the narration box).
-            universalVoucher: { select: { createdById: true, voucherNo: true, type: true, date: true, description: true, narration: true, postedAt: true, branchId: true, partyAccountId: true, status: true, deletedAt: true, cancelledAt: true, branch: { select: { id: true, name: true } } } },
+            universalVoucher: { select: { createdById: true, voucherNo: true, type: true, date: true, description: true, narration: true, postedAt: true, branchId: true, partyAccountId: true, status: true, cancelledAt: true, branch: { select: { id: true, name: true } } } },
             // refVoucher powers parent-link surfaces — "Replaces <old ref>"
             // for a SALE_RETURN against a SALE, or "Linked to PO-…" on a GRN.
             refVoucher: { select: { id: true, universalVoucher: { select: { id: true, voucherNo: true, type: true } } } },   // 5D-11 type on spine
@@ -86,10 +86,9 @@ export async function GET(_req: Request, { params }: Params) {
         branchId:     voucher.universalVoucher?.branchId ?? null,
         // Lifecycle also lives on the spine now — VoucherDetail itself carries
         // none of these, so without surfacing them here the edit form's
-        // `v.status`/`v.deletedAt`/`v.cancelledAt` reads always came back
+        // `v.status`/`v.cancelledAt` reads always came back
         // undefined (posted-vs-draft never detected; CANCELLED never caught).
         status:       voucher.universalVoucher?.status ?? null,
-        deletedAt:    voucher.universalVoucher?.deletedAt ?? null,
         cancelledAt:  voucher.universalVoucher?.cancelledAt ?? null,
         // 5D-4: the canonical party ledger lives on the spine — surface it as
         // `accountId` so edit-mode hydration (POS screen, forms) can load the customer.
@@ -137,14 +136,13 @@ export async function PATCH(req: Request, { params }: Params) {
     const id = Number(idStr);
     if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
-    const existing = await prisma.voucherDetail.findUnique({ where: { id }, include: { universalVoucher: { select: { voucherNo: true, status: true, deletedAt: true, type: true, date: true } } } });   // 5D-6/5D-8/5D-11
+    const existing = await prisma.voucherDetail.findUnique({ where: { id }, include: { universalVoucher: { select: { voucherNo: true, status: true, type: true, date: true } } } });   // 5D-6/5D-8/5D-11
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Phase 5 5C: capture old line product ids (goods hang off the spine) for the
     // after-commit pricing recompute — the lines themselves are rewritten below.
     const existingLineProductIds = (await prisma.voucherInventoryLine.findMany({
         where: { universalVoucherId: existing.universalVoucherId ?? -1 }, select: { productId: true },
     })).map((l) => l.productId);
-    if (existing.universalVoucher?.deletedAt) return NextResponse.json({ error: "Voucher is deleted" }, { status: 409 });
     if (existing.universalVoucher?.status === "CANCELLED") {
         return NextResponse.json({ error: "Voucher is cancelled — use Duplicate to create a fresh copy." }, { status: 409 });
     }

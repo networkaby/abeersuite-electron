@@ -430,7 +430,6 @@ export type SpineLifecycle = Partial<{
     status: "DRAFT" | "POSTED" | "CANCELLED";
     postedAt: Date | null;
     cancelledAt: Date | null; cancelledById: number | null; cancelReason: string | null;
-    deletedAt: Date | null; deletedById: number | null; deleteReason: string | null;
 }>;
 
 /** Apply a lifecycle change to the spine row by id (no-op when it doesn't exist). */

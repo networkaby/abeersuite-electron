@@ -6,7 +6,7 @@ import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 import { removeLinksForVoucher } from "@/modules/accountancy/lib/billLink";
-import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { auditSnapshot, isPosted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 
@@ -34,15 +34,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         where: { id: Number(id) },
         // settlementJson (tender/charge input) is a scalar — captured in the snapshot
         // automatically. 5D-2: creator lives on the spine (not needed for the snapshot).
-        include: { universalVoucher: { select: { createdById: true, voucherNo: true, status: true, deletedAt: true, type: true } } },   // 5D-6/5D-8/5D-11
+        include: { universalVoucher: { select: { createdById: true, voucherNo: true, status: true, type: true } } },   // 5D-6/5D-8/5D-11
     });
     // Phase 5 5C: goods lines + stock ledger hang off the spine — load + attach.
-    // 5D-8/5D-11: lifecycle status/deletedAt + type live on the spine — attach for the helpers + type guards.
+    // 5D-8/5D-11: lifecycle status + type live on the spine — attach for the helpers + type guards.
     const voucher = voucherRow ? {
         ...voucherRow,
         type:      voucherRow.universalVoucher?.type ?? "",
         status:    voucherRow.universalVoucher?.status ?? "DRAFT",
-        deletedAt: voucherRow.universalVoucher?.deletedAt ?? null,
         lines: await prisma.voucherInventoryLine.findMany({
             where:   { universalVoucherId: voucherRow.universalVoucherId ?? -1 },
             include: { product: { select: { id: true, sku: true, name: true } } },
@@ -64,7 +63,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         return NextResponse.json({ error: "You do not have permission to delete this voucher kind." }, { status: 403 });
     }
 
-    const needsReversal = isPosted(voucher) && !isDeleted(voucher) && !isCancelled(voucher);
+    const needsReversal = isPosted(voucher) && !isCancelled(voucher);
 
     try {
         const audit = await prisma.$transaction(async (tx) => {
@@ -89,9 +88,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
                 // Restore the cached Account.balance (denormalised column read by the
                 // ledgers list / summary bar — NOT recomputed on row delete). Only when
-                // the JE is currently live (a cancelled / soft-deleted JE was already
+                // the JE is currently live (a cancelled JE was already
                 // neutralised, so needsReversal is false and we never get here).
-                if (origJe && origJe.status === "POSTED" && !origJe.deletedAt) {
+                if (origJe && origJe.status === "POSTED") {
                     // Spine lines are scalar — resolve nature in one lookup, the
                     // same way the engine did when it applied these deltas.
                     await applyLineBalances(tx, origJe.lines, "reverse");

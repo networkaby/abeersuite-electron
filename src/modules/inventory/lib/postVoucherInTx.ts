@@ -313,7 +313,7 @@ export async function postVoucherInTx(
                             productId: line.productId,
                             branchId:  voucher.branchId,
                             date:      { lt: voucher.universalVoucher!.date },
-                            universalVoucher: { status: "POSTED", deletedAt: null },
+                            universalVoucher: { status: "POSTED" },
                         },
                         select: { inQty: true, outQty: true },
                     });

@@ -32,7 +32,7 @@ export async function buildCustomerPurchaseProfile(ref: CustomerRef): Promise<{ 
     if (accountId == null) return { items: [] };
 
     const lines = await prisma.voucherInventoryLine.findMany({
-        where: { universalVoucher: { partyAccountId: accountId, status: "POSTED", deletedAt: null, type: { in: [...SALE_TYPES] } } },
+        where: { universalVoucher: { partyAccountId: accountId, status: "POSTED", type: { in: [...SALE_TYPES] } } },
         select: {
             quantity: true,
             amount: true,

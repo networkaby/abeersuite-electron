@@ -83,7 +83,7 @@ export async function GET(req: Request) {
             take: limit,
             include: {
                 refVoucher: { select: { id: true, universalVoucher: { select: { id: true, voucherNo: true, type: true } } } },   // 5D-11 type on spine
-                universalVoucher: { select: { description: true, voucherNo: true, status: true, deletedAt: true, date: true, type: true } },   // 5D-5 desc + 5D-6 ref + 5D-8 lifecycle + 5D-10 date + 5D-11 type
+                universalVoucher: { select: { description: true, voucherNo: true, status: true, date: true, type: true } },   // 5D-5 desc + 5D-6 ref + 5D-8 lifecycle + 5D-10 date + 5D-11 type
             },
         }),
     ]);
@@ -118,7 +118,6 @@ export async function GET(req: Request) {
         partyId:     v.partyId,
         ...partyLinkFields(partyLinks.for(v)),
         status:      v.universalVoucher?.status ?? "DRAFT",
-        deletedAt:   v.universalVoucher?.deletedAt ?? null,
         totalAmount: Number(v.totalAmount),
         stockDir:    STOCK_IN_TYPES.has(vType) ? "IN"
                    : STOCK_OUT_TYPES.has(vType) ? "OUT"

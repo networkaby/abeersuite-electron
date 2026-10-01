@@ -360,7 +360,7 @@ export async function POST(req: Request) {
         //    the date + unit rate of the customer's most recent purchase.
         if (accountId != null) {
             const recentVouchers = await prisma.universalVoucher.findMany({
-                where:  { type: { in: ["POS", "SALE"] }, status: "POSTED", deletedAt: null, partyAccountId: accountId },
+                where:  { type: { in: ["POS", "SALE"] }, status: "POSTED", partyAccountId: accountId },
                 orderBy: { date: "desc" },
                 take:   12,
                 select: { id: true },
@@ -402,7 +402,6 @@ export async function POST(req: Request) {
                     universalVoucher: {
                         type:  { in: ["POS", "SALE"] },
                         status: "POSTED",
-                        deletedAt: null,
                         date:  { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
                     },
                 },

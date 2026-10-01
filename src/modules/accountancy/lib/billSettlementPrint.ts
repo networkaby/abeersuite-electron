@@ -70,10 +70,10 @@ export async function loadBillSettlementPrint({
     const otherEnds = [...new Set(allocations.map((a) => (a.targetId === uvId ? a.sourceId : a.targetId)))];
     const ends = otherEnds.length === 0 ? [] : await prisma.universalVoucher.findMany({
         where:  { id: { in: uvId != null ? [...otherEnds, uvId] : otherEnds } },
-        select: { id: true, status: true, deletedAt: true, sourceShiftId: true },
+        select: { id: true, status: true, sourceShiftId: true },
     });
     const liveEnds = new Set(
-        ends.filter((r) => r.id !== uvId && r.status === "POSTED" && r.deletedAt == null).map((r) => r.id),
+        ends.filter((r) => r.id !== uvId && r.status === "POSTED").map((r) => r.id),
     );
 
     // The bill plus every live voucher linked to it on the SAME POS shift — the

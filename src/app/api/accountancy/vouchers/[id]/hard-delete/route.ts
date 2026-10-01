@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { applyLineBalances } from "@/modules/accountancy/lib/balance";
-import { auditSnapshot, isPosted, isDeleted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
+import { auditSnapshot, isPosted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 import { removeLinksForVoucher } from "@/modules/accountancy/lib/billLink";
 import { validateRequest } from "@/shared/lib/api";
@@ -33,7 +33,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const needsReversal = isPosted(voucher) && !isDeleted(voucher) && !isCancelled(voucher);
+    const needsReversal = isPosted(voucher) && !isCancelled(voucher);
 
     try {
         const audit = await prisma.$transaction(async (tx) => {

@@ -161,7 +161,7 @@ export async function findReconnectCandidates(filter: ReconnectFilterInput): Pro
     if (loaded.length > 0) {
         const { accountToKey, personIds, companyIds, accountIds } = idx;
         const [saleMax, ticketMax, deals, helps, personLogs, companyLogs] = await Promise.all([
-            accountIds.length ? prisma.universalVoucher.groupBy({ by: ["partyAccountId"], where: { partyAccountId: { in: accountIds }, status: "POSTED", deletedAt: null }, _max: { date: true } }) : Promise.resolve([]),
+            accountIds.length ? prisma.universalVoucher.groupBy({ by: ["partyAccountId"], where: { partyAccountId: { in: accountIds }, status: "POSTED" }, _max: { date: true } }) : Promise.resolve([]),
             accountIds.length ? prisma.ticket.groupBy({ by: ["accountId"], where: { accountId: { in: accountIds } }, _max: { createdAt: true } }) : Promise.resolve([]),
             personIds.length || companyIds.length ? prisma.ticketDeal.findMany({ where: { OR: [{ personId: { in: personIds } }, { companyId: { in: companyIds } }] }, select: { personId: true, companyId: true, ticket: { select: { createdAt: true } } } }) : Promise.resolve([]),
             personIds.length || companyIds.length ? prisma.ticketHelp.findMany({ where: { OR: [{ personId: { in: personIds } }, { companyId: { in: companyIds } }] }, select: { personId: true, companyId: true, ticket: { select: { createdAt: true } } } }) : Promise.resolve([]),
@@ -434,7 +434,7 @@ async function soldAccounts(accountIds: number[], categoryId: number | undefined
     const dateFilter = win.from || win.to ? { date: { ...(win.from ? { gte: win.from } : {}), ...(win.to ? { lte: win.to } : {}) } } : {};
     const lines = await prisma.voucherInventoryLine.findMany({
         where: {
-            universalVoucher: { partyAccountId: { in: accountIds }, status: "POSTED", deletedAt: null, type: { in: [...SALE_TYPES] }, ...dateFilter },
+            universalVoucher: { partyAccountId: { in: accountIds }, status: "POSTED", type: { in: [...SALE_TYPES] }, ...dateFilter },
             product: { ...(categoryId != null ? { categoryId } : {}), ...(productQ?.trim() ? { name: { contains: productQ.trim(), mode: "insensitive" } } : {}) },
         },
         select: { universalVoucher: { select: { partyAccountId: true } } },
@@ -449,7 +449,7 @@ async function warrantyAccounts(accountIds: number[], endingDays: number, termId
     const horizon = now + endingDays * DAY;
     const lines = await prisma.voucherInventoryLine.findMany({
         where: {
-            universalVoucher: { partyAccountId: { in: accountIds }, status: "POSTED", deletedAt: null, type: { in: [...SALE_TYPES] } },
+            universalVoucher: { partyAccountId: { in: accountIds }, status: "POSTED", type: { in: [...SALE_TYPES] } },
             product: { warrantyTerm: { durationDays: { gt: 0 }, ...(termIds?.length ? { id: { in: termIds } } : {}) } },
         },
         select: { universalVoucher: { select: { partyAccountId: true, date: true } }, product: { select: { warrantyTerm: { select: { durationDays: true } } } } },
@@ -469,7 +469,7 @@ async function warrantyAccounts(accountIds: number[], endingDays: number, termId
 async function revenueAccounts(accountIds: number[], min: number | undefined, max: number | undefined, win: { from: Date; to: Date }): Promise<Set<number>> {
     if (accountIds.length === 0) return new Set();
     const rows = await prisma.voucherDetail.findMany({
-        where: { universalVoucher: { partyAccountId: { in: accountIds }, status: "POSTED", deletedAt: null, type: { in: [...SALE_TYPES] }, date: { gte: win.from, lte: win.to } } },
+        where: { universalVoucher: { partyAccountId: { in: accountIds }, status: "POSTED", type: { in: [...SALE_TYPES] }, date: { gte: win.from, lte: win.to } } },
         select: { totalAmount: true, universalVoucher: { select: { partyAccountId: true } } },
     });
     const sum = new Map<number, number>();
@@ -524,7 +524,7 @@ async function oneTypeKeys(idx: UniverseIndex, type: ConcreteActivityType, win: 
 
     if (type === "sale") {
         if (!accountIds.length) return keys;
-        const rows = await prisma.universalVoucher.findMany({ where: { partyAccountId: { in: accountIds }, status: "POSTED", deletedAt: null, type: { in: [...SALE_TYPES] }, ...(dr ? { date: dr } : {}) }, select: { partyAccountId: true }, distinct: ["partyAccountId"] });
+        const rows = await prisma.universalVoucher.findMany({ where: { partyAccountId: { in: accountIds }, status: "POSTED", type: { in: [...SALE_TYPES] }, ...(dr ? { date: dr } : {}) }, select: { partyAccountId: true }, distinct: ["partyAccountId"] });
         for (const r of rows) { const k = r.partyAccountId != null ? accountToKey.get(r.partyAccountId) : undefined; if (k) keys.add(k); }
     } else if (type === "repair") {
         if (!accountIds.length) return keys;

@@ -73,8 +73,6 @@ export async function GET(req: Request) {
             where: {
                 ...(type ? { type } : { type: { in: FINANCIAL_TYPES } }),
                 ...(status ? { status } : {}),
-                // Always-true guard — nothing writes `deletedAt` (soft-delete removed 2026-08-01).
-                deletedAt: null,
                 ...(from || to ? {
                     date: {
                         ...(from ? { gte: new Date(from) } : {}),

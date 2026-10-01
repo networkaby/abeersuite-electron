@@ -19,7 +19,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     if (!userCanVoucher(user, voucher.type, "post")) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    if (voucher.deletedAt) return NextResponse.json({ error: "Voucher is deleted — restore first" }, { status: 409 });
     if (voucher.status !== "DRAFT") return NextResponse.json({ error: "Only DRAFT vouchers can be posted" }, { status: 409 });
 
     try {

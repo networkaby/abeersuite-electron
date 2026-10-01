@@ -53,7 +53,7 @@ async function stampParties(): Promise<{ fixed: number; ambiguous: string[]; non
     const partyIds = new Set([...debtors, ...creditors]);
 
     const vouchers = await prisma.universalVoucher.findMany({
-        where:  { partyAccountId: null, deletedAt: null },
+        where:  { partyAccountId: null },
         select: { id: true, type: true, voucherNo: true, lines: { select: { accountId: true } } },
         orderBy: { id: "asc" },
     });

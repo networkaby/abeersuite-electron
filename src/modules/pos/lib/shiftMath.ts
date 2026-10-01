@@ -148,7 +148,6 @@ export async function listShiftMovements(
         where: {
             type:          { in: ["RECEIPT", "PAYMENT"] },
             status:        "POSTED",
-            deletedAt:     null,
             sourceShiftId: shiftId,
         },
         orderBy: { createdAt: "desc" },
@@ -210,7 +209,7 @@ export async function sumShiftTendersByAccount(
     // on another counter was kept out only because the GL filter below happens to
     // be restricted to this counter's own ledgers. The link decides now.
     const posUvIds = (await tx.universalVoucher.findMany({
-        where:  { type: "POS", status: "POSTED", deletedAt: null, sourceShiftId: args.shiftId },
+        where:  { type: "POS", status: "POSTED", sourceShiftId: args.shiftId },
         select: { id: true },
     })).map((v) => v.id);
     const posTenders = posUvIds.length === 0 ? [] : await tx.voucherGlLine.groupBy({
@@ -229,7 +228,7 @@ export async function sumShiftTendersByAccount(
         where: {
             accountId:        { in: args.accountIds },
             type:             "DEBIT",
-            universalVoucher: { type: "RECEIPT", status: "POSTED", deletedAt: null, sourceShiftId: args.shiftId },
+            universalVoucher: { type: "RECEIPT", status: "POSTED", sourceShiftId: args.shiftId },
         },
         _sum:  { amount: true },
     });
@@ -312,7 +311,7 @@ export async function buildShiftMovementBreakdown(
 
     // 1. POS cash sales raised on this shift
     const posUvIds = (await tx.universalVoucher.findMany({
-        where:  { type: "POS", status: "POSTED", deletedAt: null, sourceShiftId: args.shiftId },
+        where:  { type: "POS", status: "POSTED", sourceShiftId: args.shiftId },
         select: { id: true },
     })).map((v) => v.id);
 
@@ -331,7 +330,7 @@ export async function buildShiftMovementBreakdown(
         where: {
             accountId:        args.tillAccountId,
             type:             "DEBIT",
-            universalVoucher: { type: "RECEIPT", status: "POSTED", deletedAt: null, sourceShiftId: args.shiftId },
+            universalVoucher: { type: "RECEIPT", status: "POSTED", sourceShiftId: args.shiftId },
         },
         _sum: { amount: true },
     });
@@ -342,7 +341,7 @@ export async function buildShiftMovementBreakdown(
         where: {
             accountId:        args.tillAccountId,
             type:             "CREDIT",
-            universalVoucher: { type: "PAYMENT", status: "POSTED", deletedAt: null, sourceShiftId: args.shiftId },
+            universalVoucher: { type: "PAYMENT", status: "POSTED", sourceShiftId: args.shiftId },
         },
         _sum: { amount: true },
     });
@@ -353,7 +352,7 @@ export async function buildShiftMovementBreakdown(
         where: {
             accountId:        args.tillAccountId,
             type:             "CREDIT",
-            universalVoucher: { type: { in: ["SALES_RETURN", "REFUND"] }, status: "POSTED", deletedAt: null, sourceShiftId: args.shiftId },
+            universalVoucher: { type: { in: ["SALES_RETURN", "REFUND"] }, status: "POSTED", sourceShiftId: args.shiftId },
         },
         _sum: { amount: true },
     });
@@ -419,7 +418,7 @@ export async function buildShiftCollectionsBreakdown(
 
     // 1. POS sales raised on this shift
     const posVouchers = await tx.universalVoucher.findMany({
-        where:  { type: "POS", status: "POSTED", deletedAt: null, sourceShiftId: args.shiftId },
+        where:  { type: "POS", status: "POSTED", sourceShiftId: args.shiftId },
         select: { id: true },
     });
     const posUvIds = posVouchers.map((v) => v.id);
@@ -436,7 +435,7 @@ export async function buildShiftCollectionsBreakdown(
 
     // 2. Customer receipts collected on this shift
     const receiptVouchers = await tx.universalVoucher.findMany({
-        where:  { type: "RECEIPT", status: "POSTED", deletedAt: null, sourceShiftId: args.shiftId },
+        where:  { type: "RECEIPT", status: "POSTED", sourceShiftId: args.shiftId },
         select: { id: true },
     });
     const receiptUvIds = receiptVouchers.map((v) => v.id);
@@ -453,7 +452,7 @@ export async function buildShiftCollectionsBreakdown(
 
     // 3. Sales returns / refunds paid on this shift
     const refundVouchers = await tx.universalVoucher.findMany({
-        where:  { type: { in: ["SALES_RETURN", "REFUND"] }, status: "POSTED", deletedAt: null, sourceShiftId: args.shiftId },
+        where:  { type: { in: ["SALES_RETURN", "REFUND"] }, status: "POSTED", sourceShiftId: args.shiftId },
         select: { id: true },
     });
     const refundUvIds = refundVouchers.map((v) => v.id);

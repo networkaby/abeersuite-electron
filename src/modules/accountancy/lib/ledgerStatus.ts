@@ -24,6 +24,6 @@ export type LedgerMode = "posted" | "provisional";
  */
 export function ledgerStatusFilterUv(mode: LedgerMode = "posted"): Prisma.UniversalVoucherWhereInput {
     return mode === "provisional"
-        ? { status: { in: ["POSTED", "DRAFT"] as VoucherStatus[] }, deletedAt: null }
-        : { status: "POSTED" as VoucherStatus, deletedAt: null };
+        ? { status: { in: ["POSTED", "DRAFT"] as VoucherStatus[] } }
+        : { status: "POSTED" as VoucherStatus };
 }

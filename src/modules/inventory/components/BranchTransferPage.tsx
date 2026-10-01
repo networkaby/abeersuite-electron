@@ -65,7 +65,6 @@ type ExistingVoucher = {
     date:                string;
     description:         string;
     status:              "DRAFT" | "POSTED" | "CANCELLED";
-    deletedAt:           string | null;
     cancelledAt:         string | null;
     branchId:            string;
     destinationBranchId: string | null;
@@ -174,7 +173,7 @@ export function BranchTransferPage() {
             .then((r) => {
                 const v = r.data;
                 setVoucherRef(v.reference);
-                setLoadedVoucher({ status: v.status, deletedAt: v.deletedAt, cancelledAt: v.cancelledAt });
+                setLoadedVoucher({ status: v.status, cancelledAt: v.cancelledAt });
                 if (v.branchId) setSourceBranchId(v.branchId);
                 if (v.destinationBranchId) setDestinationBranchId(v.destinationBranchId);
                 setForm({

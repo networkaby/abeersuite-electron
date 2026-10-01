@@ -114,7 +114,6 @@ export default async function PortalOrdersPage() {
               where: {
                   id: { in: invLinks.map((l) => l.universalVoucherId) },
                   status: "POSTED",
-                  deletedAt: null,
               },
               select: {
                   id: true,

@@ -66,7 +66,6 @@ type LoadedJe = {
     description: string | null;
     status:      "DRAFT" | "POSTED" | "CANCELLED";
     cancelledAt: string | null;
-    deletedAt:   string | null;
     lines:       LoadedJeLine[];
 };
 
@@ -685,7 +684,7 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
                 onCancel={closeForm}
                 onSave={() => submit(true, printAfterSave)}
                 saveLabel={isEditing ? "Save Changes" : "Save"}
-                saveDisabled={saving || !balanced || loading || (isEditing && (loadedJe?.status === "CANCELLED" || !!loadedJe?.deletedAt))}
+                saveDisabled={saving || !balanced || loading || (isEditing && (loadedJe?.status === "CANCELLED"))}
                 onSaveDraft={() => submit(false, printAfterSave)}
                 showSaveDraft={!isEditing}
                 showPrintToggle
@@ -709,7 +708,7 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
                             canHardDelete={canHardDelete}
                             onChanged={() => setReloadCounter((c) => c + 1)}
                         />
-                        {loadedJe.status === "POSTED" && !loadedJe.deletedAt && !loadedJe.cancelledAt && (
+                        {loadedJe.status === "POSTED" && !loadedJe.cancelledAt && (
                             <span className="text-[11px] text-amber-600 italic">
                                 Will reverse + re-post on save (reference preserved)
                             </span>

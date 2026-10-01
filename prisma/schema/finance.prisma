@@ -142,9 +142,9 @@ model UniversalVoucher {
   cancelledAt               DateTime?
   cancelledById             Int?
   cancelReason              String?
-  deletedAt                 DateTime?
-  deletedById               Int?
-  deleteReason              String?
+  // deletedAt / deletedById / deleteReason dropped in B3b (2026-10-01): soft-delete
+  // was retired 2026-08-01 and nothing wrote them since — a delete is a hard delete
+  // with an AuditLog snapshot (Recycle Bin).
   createdById               Int
   // Phase 4 G5 groundwork: faithful transaction wall-clock (= the source
   // voucher's posting time). Lets intra-day windowed readers (POS shift
@@ -179,7 +179,6 @@ model UniversalVoucher {
   @@index([status, date])
   @@index([date])
   @@index([type, status])
-  @@index([deletedAt])
   @@index([partyAccountId])
   @@index([branchId])
   // "Only this counter" on the POS register filters on this alone.

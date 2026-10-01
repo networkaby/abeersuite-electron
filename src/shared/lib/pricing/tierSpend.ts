@@ -71,7 +71,7 @@ export async function resolveTierForAccount(
             return db.voucherDetail.aggregate({
                 where: {
                     universalVoucher: {
-                        partyAccountId: accountId, status: "POSTED", deletedAt: null,
+                        partyAccountId: accountId, status: "POSTED",
                         type: { in: [...TIER_SPEND_VOUCHER_TYPES] },
                         date: p.fromDay === 0 ? { gt: notBefore } : { gt: notBefore, lte: notAfter },
                     },
@@ -82,7 +82,7 @@ export async function resolveTierForAccount(
         db.voucherDetail.count({
             where: {
                 universalVoucher: {
-                    partyAccountId: accountId, status: "POSTED", deletedAt: null,
+                    partyAccountId: accountId, status: "POSTED",
                     type: { in: [...TIER_SPEND_VOUCHER_TYPES] },
                 },
             },

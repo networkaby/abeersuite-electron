@@ -154,7 +154,6 @@ export async function salesByUser(db: Db, userIds: readonly number[], fromIso: s
         where: {
             createdById: { in: [...userIds] },
             status: "POSTED",
-            deletedAt: null,
             type: { in: [...COMMISSION_SALE_TYPES, ...COMMISSION_RETURN_TYPES] },
             date: { gte: dateOnlyFromIso(fromIso), lte: dateOnlyFromIso(toIso) },
         },

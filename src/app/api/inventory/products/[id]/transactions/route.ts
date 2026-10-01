@@ -83,7 +83,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 productId: id,
                 universalVoucher: {
                     status: "POSTED",
-                    deletedAt: null,
                     ...(from || to ? { date: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
                 },
             },

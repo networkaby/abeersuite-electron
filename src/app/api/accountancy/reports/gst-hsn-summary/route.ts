@@ -24,7 +24,6 @@ export async function GET(req: Request) {
                 universalVoucher: {
                     type:      invType,
                     status:    "POSTED",
-                    deletedAt: null,
                     date:      { gte: from, lte: to },
                 },
             },

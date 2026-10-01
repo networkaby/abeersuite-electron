@@ -90,7 +90,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         });
         const invSpine = links.length
             ? await prisma.universalVoucher.findFirst({
-                  where: { id: { in: links.map((l) => l.universalVoucherId) }, status: "POSTED", deletedAt: null },
+                  where: { id: { in: links.map((l) => l.universalVoucherId) }, status: "POSTED" },
                   orderBy: { id: "desc" },
                   select: {
                       id: true,
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         const priorReturn = await prisma.voucherDetail.findFirst({
             where: {
                 refVoucherId: invDetail.id,
-                universalVoucher: { type: "SALE_RETURN", status: { not: "CANCELLED" }, deletedAt: null },
+                universalVoucher: { type: "SALE_RETURN", status: { not: "CANCELLED" } },
             },
             select: { id: true, universalVoucher: { select: { voucherNo: true } } },
         });

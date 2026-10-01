@@ -24,16 +24,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const entry = await prisma.universalVoucher.findUnique({
         where:  { id: Number(id) },
-        select: { type: true, status: true, deletedAt: true, lines: { select: { accountId: true, type: true, amount: true } } },
+        select: { type: true, status: true, lines: { select: { accountId: true, type: true, amount: true } } },
     });
     if (!entry) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // The saved voucher's own Cancel / edit tick, same as the post and hard-delete
     // routes beside this one — any voucher id reaches this route, not only journals.
     if (!userCanVoucher(user, entry.type, "cancel")) {
         return NextResponse.json({ error: "You do not have permission to cancel this voucher kind." }, { status: 403 });
-    }
-    if (entry.deletedAt) {
-        return NextResponse.json({ error: "Cannot cancel a deleted entry — restore it first" }, { status: 409 });
     }
     if (entry.status !== "POSTED") {
         return NextResponse.json({ error: "Only POSTED entries can be cancelled" }, { status: 409 });

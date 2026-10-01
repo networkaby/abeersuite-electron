@@ -182,7 +182,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     const [editingWasPosted, setEditingWasPosted] = useState(false);
     // Loaded voucher's lifecycle fields — handed to the inline LifecycleActions
     // bar in the footer when editing a posted voucher.
-    const [loadedLifecycle, setLoadedLifecycle] = useState<{ status: string; deletedAt: string | null; cancelledAt: string | null } | null>(null);
+    const [loadedLifecycle, setLoadedLifecycle] = useState<{ status: string; cancelledAt: string | null } | null>(null);
     // Spine id of the voucher being edited — what a bill-wise link points at.
     const [spineId, setSpineId] = useState<number | null>(null);
     const [linkOpen, setLinkOpen] = useState(false);
@@ -587,7 +587,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 }
                 setEditingRef(v.reference);
                 setEditingWasPosted(v.status === "POSTED");
-                setLoadedLifecycle({ status: v.status, deletedAt: (v as { deletedAt?: string | null }).deletedAt ?? null, cancelledAt: (v as { cancelledAt?: string | null }).cancelledAt ?? null });
+                setLoadedLifecycle({ status: v.status, cancelledAt: (v as { cancelledAt?: string | null }).cancelledAt ?? null });
 
                 // Lines → LineState mapping. Stub salePrice / costPrice as
                 // null on the SelectedProduct stub; rate auto-fill only

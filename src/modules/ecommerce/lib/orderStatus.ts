@@ -57,7 +57,6 @@ export async function transitionOrderPipelineStatus(input: TransitionOrderPipeli
                   where: {
                       id: { in: links.map((l) => l.universalVoucherId) },
                       status: "POSTED",
-                      deletedAt: null,
                   },
                   select: { id: true },
               })

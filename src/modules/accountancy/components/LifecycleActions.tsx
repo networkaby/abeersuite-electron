@@ -36,7 +36,6 @@ import {
 
 export interface LifecycleVoucher {
     status:      string;
-    deletedAt?:  string | null;
     cancelledAt?: string | null;
 }
 

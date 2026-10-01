@@ -458,7 +458,7 @@ async function main(): Promise<void> {
     // nobody asked whether Receivables could see them.
     const { getLedgerOutstanding } = await import("@/modules/accountancy/lib/outstandings");
     const anyOpening = await prisma.universalVoucher.findFirst({
-        where:  { type: "OPENING", partyAccountId: { not: null }, status: "POSTED", deletedAt: null },
+        where:  { type: "OPENING", partyAccountId: { not: null }, status: "POSTED" },
         select: { id: true, partyAccountId: true, voucherNo: true },
         orderBy: { id: "desc" },
     });

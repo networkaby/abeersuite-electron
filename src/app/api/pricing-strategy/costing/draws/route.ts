@@ -47,7 +47,7 @@ export async function GET(req: Request) {
                 sourceVoucherGlLine: {
                     select: {
                         accountId: true,
-                        universalVoucher: { select: { voucherNo: true, type: true, status: true, deletedAt: true } },
+                        universalVoucher: { select: { voucherNo: true, type: true, status: true } },
                     },
                 },
                 // Phase 5 5B: the source document is the spine (not InvVoucher).
@@ -90,10 +90,8 @@ export async function GET(req: Request) {
             invVoucherType: r.sourceUniversalVoucher?.type ?? null,
             invVoucherParty: r.sourceUniversalVoucher?.partyAccountId != null ? (acctNameById.get(r.sourceUniversalVoucher.partyAccountId) ?? null) : null,
             createdByName: r.createdBy?.name ?? null,
-            // The source entry was cancelled/deleted after this draw was made.
-            orphaned:
-                r.sourceVoucherGlLine?.universalVoucher?.status !== "POSTED" ||
-                r.sourceVoucherGlLine?.universalVoucher?.deletedAt != null,
+            // The source entry was cancelled after this draw was made.
+            orphaned: r.sourceVoucherGlLine?.universalVoucher?.status !== "POSTED",
         }));
 
         return NextResponse.json(draws);

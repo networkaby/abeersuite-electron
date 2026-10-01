@@ -381,7 +381,6 @@ export async function loadSaleByMonth(
             universalVoucher: {
                 type: { in: [...SALE_TYPES, SALE_RETURN_TYPE] },
                 status: "POSTED",
-                deletedAt: null,
                 date: { gte: from, lte: to },
                 ...(branchId ? { branchId } : {}),
             },
@@ -417,7 +416,6 @@ export async function loadBankDepositsTotal(
             type: "DEBIT",
             universalVoucher: {
                 status: "POSTED",
-                deletedAt: null,
                 date: { gte: from, lte: to },
                 ...(branchId ? { branchId } : {}),
             },

@@ -1193,9 +1193,6 @@ CREATE TABLE IF NOT EXISTS "UniversalVoucher" (
     "cancelledAt" TIMESTAMP(3),
     "cancelledById" INTEGER,
     "cancelReason" TEXT,
-    "deletedAt" TIMESTAMP(3),
-    "deletedById" INTEGER,
-    "deleteReason" TEXT,
     "createdById" INTEGER NOT NULL,
     "sourceCreatedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1230,12 +1227,6 @@ ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "cancelledById" INTEGER;
 ALTER TABLE "UniversalVoucher" ALTER COLUMN "cancelledById" DROP NOT NULL;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "cancelReason" TEXT;
 ALTER TABLE "UniversalVoucher" ALTER COLUMN "cancelReason" DROP NOT NULL;
-ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3);
-ALTER TABLE "UniversalVoucher" ALTER COLUMN "deletedAt" DROP NOT NULL;
-ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "deletedById" INTEGER;
-ALTER TABLE "UniversalVoucher" ALTER COLUMN "deletedById" DROP NOT NULL;
-ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "deleteReason" TEXT;
-ALTER TABLE "UniversalVoucher" ALTER COLUMN "deleteReason" DROP NOT NULL;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "createdById" INTEGER NOT NULL;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "sourceCreatedAt" TIMESTAMP(3);
 ALTER TABLE "UniversalVoucher" ALTER COLUMN "sourceCreatedAt" DROP NOT NULL;
@@ -4817,9 +4808,6 @@ CREATE INDEX IF NOT EXISTS "UniversalVoucher_date_idx" ON "UniversalVoucher"("da
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "UniversalVoucher_type_status_idx" ON "UniversalVoucher"("type", "status");
-
--- CreateIndex
-CREATE INDEX IF NOT EXISTS "UniversalVoucher_deletedAt_idx" ON "UniversalVoucher"("deletedAt");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "UniversalVoucher_partyAccountId_idx" ON "UniversalVoucher"("partyAccountId");

@@ -67,7 +67,6 @@ async function findLinkedInvoice(orderId: number) {
         where: {
             id: { in: links.map((l) => l.universalVoucherId) },
             status: { not: "CANCELLED" },
-            deletedAt: null,
         },
         select: {
             id: true,
@@ -527,7 +526,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                     // Lifetime spend aggregated inside the tx so it includes the
                     // just-posted invoice; every sale channel counts.
                     const spendAgg = await tx.voucherDetail.aggregate({
-                        where: { universalVoucher: { partyAccountId: accountId, status: "POSTED", deletedAt: null, type: { in: [...TIER_SPEND_VOUCHER_TYPES] } } },
+                        where: { universalVoucher: { partyAccountId: accountId, status: "POSTED", type: { in: [...TIER_SPEND_VOUCHER_TYPES] } } },
                         _sum: { totalAmount: true },
                     });
                     await applyMilestones(tx, {
@@ -550,7 +549,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                 });
                 const liveTarget = priorAllocs.length
                     ? await tx.universalVoucher.findFirst({
-                          where: { id: { in: priorAllocs.map((a) => a.targetId) }, status: { not: "CANCELLED" }, deletedAt: null },
+                          where: { id: { in: priorAllocs.map((a) => a.targetId) }, status: { not: "CANCELLED" } },
                           select: { id: true },
                       })
                     : null;
@@ -562,7 +561,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                     // total comes from the DEBIT GL legs. Guarded on kind/status so a stale id
                     // cannot allocate some unrelated voucher's money onto this invoice.
                     const receipt = await tx.universalVoucher.findFirst({
-                        where: { id: receiptVoucherId, type: "RECEIPT", status: "POSTED", deletedAt: null },
+                        where: { id: receiptVoucherId, type: "RECEIPT", status: "POSTED" },
                         select: { voucherNo: true },
                     });
                     if (receipt) {
