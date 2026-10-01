@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {
-    BookOpen, BarChart2, ClipboardList, Calendar, FileText, Wallet, CreditCard, Coins, Landmark, Activity, PieChart, TrendingUp, GitBranch, Receipt,
+    BookOpen, BarChart2, ClipboardList, Calendar, Wallet, CreditCard, Coins, Landmark, Activity, PieChart, TrendingUp, GitBranch, Receipt,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { moduleColor, moduleTint } from "@/shared/lib/format/moduleTheme";
@@ -32,12 +32,6 @@ const REPORTS = [
         href: "/office/accountancy/reports/day-book",
         description: "All posted vouchers in chronological order, jump-to-source.",
         icon: Calendar,
-    },
-    {
-        title: "Optional Vouchers",
-        href: "/office/accountancy/reports/optional-vouchers",
-        description: "Sales / Purchase Orders, GRNs, Challans and Rejections — the documents that move no money, in date order.",
-        icon: FileText,
     },
     {
         title: "Receivables",

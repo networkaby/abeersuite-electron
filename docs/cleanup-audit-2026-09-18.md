@@ -247,7 +247,9 @@ Expect no output. (The only mention anywhere is a breadcrumb *label* at
 redirect shims for stale bookmarks and stored notification links. Read them, they are ~15 lines each and
 only call `redirect()`.
 
-> **Settled 2026-10-02:** deleted, with the two stubs above, `/office/customers/dashboard` and the
+> **Settled 2026-10-02:** `orders-estimates` and `optional-vouchers` deleted (owner) — Day Book lists every
+> estimate, order, challan, GRN and rejection (its Optional / Inventory ticks) and converts from each row's ⋮ menu.
+> The two shims above deleted too, with the two stubs above, `/office/customers/dashboard` and the
 > `/receipt/payment/[id]` forwarder. No code links to them, and no stored link (chat messages) points at
 > them; every till runs v1.10.x, which prints Receipt / Payment through `/receipt/voucher/gl/[id]`.
 
