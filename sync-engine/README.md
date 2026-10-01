@@ -179,7 +179,8 @@ replica kept the old value forever. `reconcile.fingerprint()` hashes `to_jsonb(r
 for those tables; the source query also returns its column list in the same statement
 and the replica hashes only those columns, so a stale replica-only column cannot make
 the sides disagree. Both pools pin the session to UTC so time renders identically.
-Watermark tables keep the key-only hash — their edits ride `updatedAt`.
+Watermark tables hash each key together with its `updatedAt` — see *An edit stamped
+behind the cursor* below.
 
 ### The cursor is (timestamp, primary key), not the timestamp
 
@@ -222,13 +223,16 @@ nothing else ever looked at that table. Found on a real replica on 2026-09-03: 2
 `LoyaltyLedger` and 24 `LoyaltyLot` rows in Supabase, 0 locally, every cycle reporting
 "0 failed". A child table costs the same two numbers to prove as any other.
 
-The cheap check runs first (count + key hash, two numbers per side). Only a mismatch
-pays to move keys, and then both directions are repaired:
+The cheap check runs first (count + key hash, two numbers per side; on a `watermark`
+table the hash covers each key with its `updatedAt`). Only a mismatch pays to move keys,
+and then every direction is repaired:
 
 - **onlyLocal** — deleted upstream. Nothing else can ever detect this.
 - **onlySource** — present upstream, missing here, with a timestamp already *behind*
   the cursor, so no future delta pull would look at it again. Left alone it stays
   missing for the life of the replica.
+- **stale** — on both sides, last changed at a different time: an edit stamped behind
+  the cursor. See *An edit stamped behind the cursor* below.
 
 After repairing, the table is re-fingerprinted before being marked verified — if it
 still differs, no proof is recorded and the next cycle looks again.
@@ -346,6 +350,46 @@ totals) are still excluded; those are re-summed locally by `rebuildTotals.js`.
 Found by `test-reconcile.js`, not by review: the first version of the FK repair passed
 every check except the one that read the row back off disk.
 
+### An edit stamped behind the cursor (2026-10-01)
+
+A delta pull only looks past its cursor, and the cursor is the largest stamp *seen*. An
+edit whose `updatedAt` lands behind it is never pulled, and until now never repaired
+either — a key hash cannot see it, because the key set is unchanged. (A missed *new*
+row was already healed by `onlySource`.) Three ways it happens:
+
+- **A late commit.** `updatedAt` is stamped when the writer's statement runs, not when
+  its transaction commits. A voucher save stamped 10:00:00 that commits at 10:00:05 is
+  invisible to a pull at 10:00:02, which may carry the cursor to 10:00:01.
+- **An offline counter pushing.** The push keeps the counter's own stamp, which can be
+  hours behind every other till's cursor.
+- **A refused push, or a skewed clock.** The office drops a replay that would un-post a
+  voucher or reopen a closed shift, and the push comments promise "the counter converges
+  at the next pull" — but the office's copy is stamped behind the cursor, so no pull ever
+  brought it back.
+
+Two layers close it:
+
+1. **Hourly, in the reconcile.** A `watermark` table's fingerprint hashes
+   `key || updatedAt` (`reconcile.stampColumn`), so a missed edit makes it disagree;
+   `keyDiff` then also returns **stale** keys and `refreshByKeys` re-pulls them,
+   forcing past the monotonic guard like every repair. It holds the same two things
+   `deleteByKeys` holds: a row still waiting in `_outbox` (this counter's own newer
+   edit on its way up) and every row of a `localAuthority` table. Those tables, and
+   `append` tables (whose `createdAt` an edit never moves), keep the key-only hash.
+   Stamps render fixed-width (`to_char … .US`) so both servers agree byte for byte and
+   text order is time order.
+2. **Every cycle, for a late commit.** Before draining a cursor table, `recheckBehindCursor`
+   compares `(key, stamp)` over the last 60 s behind the cursor the previous cycle left
+   and pulls what is newer upstream (or missing here) — the ordinary monotonic guard
+   applies, since this is a delta pull reaching back. Skipped once that cursor is older
+   than 15 minutes (no transaction runs that long), so a quiet table pays nothing; the
+   horizon outlasts the 10-minute interval cycle, so a late commit no signal announced
+   is still caught by the next scheduled one. Not on a `relay` cycle. Its ids go to the
+   children, so a late voucher edit brings its lines.
+
+The first hourly pass after this ships repairs whatever stamp drift a till already has,
+once; after that a table only mismatches while one of its rows is pending in `_outbox`.
+
 ### A replica whose schema is behind reads as "every row differs"
 
 The column list exists so a column the **replica** kept and the source dropped cannot
@@ -370,10 +414,12 @@ Seen live on 2026-09-08: a counter still on the previous build reported all 405
 node test-reconcile.js   # needs TEST_SOURCE_URL and TEST_LOCAL_URL — two empty databases
 ```
 
-Reproduces all three faults against a throwaway pair of databases — the FK-rewritten
-row, the child row edited in place, and the replica whose schema is behind — and
-asserts that a key hash calls each one clean while the new machinery finds it, repairs
-what is repairable, and refuses to "repair" a schema gap. 15 checks. The header explains
+Reproduces every fault above against a throwaway pair of databases — the FK-rewritten
+row, the child row edited in place, the replica whose schema is behind, the unpushed
+row that is not an upstream delete, the edit stamped behind the cursor and the late
+commit — and asserts that a key hash calls each one clean while the new machinery finds
+it, repairs what is repairable, holds what this counter still owes the office, and
+refuses to "repair" a schema gap. 35 checks. The header explains
 how to make a scratch cluster from the binaries the app already ships.
 
 ### Verifying row contents: `--deep`
@@ -384,10 +430,10 @@ schedule**: it reads every row on both sides, and paying that against Supabase i
 egress this project exists to avoid. Reach for it when a counter's screen disagrees
 with the office, or after a hard delete on the office.
 
-What it still covers that the hourly pass does not: `watermark` and `append` tables.
-Those keep a key-only fingerprint, on the argument that `updatedAt` carries an edit —
-which is true right up until something changes a row without going through Prisma, as
-cause 1 above did. The engine now repairs the known way that happens; `--deep` is how
+What it still covers that the hourly pass does not: a `watermark` row whose content
+changed while its `updatedAt` did not (the hourly hash covers key + stamp, which is
+enough right up until something changes a row without going through Prisma, as cause 1
+above did), and `append` tables, which keep a key-only fingerprint. The engine now repairs the known way that happens; `--deep` is how
 you check for one nobody has thought of yet.
 
 First full run against a live pair (2026-09-08, 116 tables, 20,748 rows, 23 s):

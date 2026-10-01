@@ -23,9 +23,11 @@
  *   node verify-replica.js --deep --repair   ...and re-pull the rows that disagree
  *
  * ── Why --deep exists, and why it is not the default ───────────────────────
- * The ordinary run hashes primary keys, so it answers "is a row missing or extra?"
- * and nothing more. A row present on BOTH sides with DIFFERENT CONTENT reads as
- * agreement — and that is a real state, not a theoretical one: an ON DELETE SET NULL
+ * The ordinary run hashes primary keys — with each row's `updatedAt` beside the key on a
+ * watermark table — so it answers "is a row missing or extra?" and "was a row edited
+ * at a different time?" and nothing more. A row present on BOTH sides with DIFFERENT
+ * CONTENT and the SAME stamp reads as agreement — and that is a real state, not a
+ * theoretical one: an ON DELETE SET NULL
  * fires inside PostgreSQL on the source, so Prisma's @updatedAt never runs and no
  * delta pull revisits the row, while the replica applies deletes with FK actions
  * suspended and so never makes the matching change. This tool would call such a table
@@ -45,7 +47,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { configPath } = require("./lib/configPath");
 const { pool } = require("./lib/db");
-const { pullByKeys, deleteByKeys } = require("./lib/pull");
+const { pullByKeys, refreshByKeys, deleteByKeys } = require("./lib/pull");
 const registryLib = require("./lib/registry");
 const reconcile = require("./lib/reconcile");
 const totals = require("./lib/rebuildTotals");
@@ -146,11 +148,12 @@ async function main() {
                 }
 
                 const diff = await reconcile.keyDiff(source, local, b.entry);
-                // Rows present on both sides whose contents disagree. Only a deep run
-                // can see these, and they are the ones no amount of waiting repairs.
+                // Rows present on both sides that disagree. A deep run compares contents;
+                // otherwise a watermark table still names the rows last changed at a
+                // different time (`stale`) — an edit the delta pull missed.
                 const drifted = DEEP
                     ? await reconcile.rowHashDiff(source, local, b.entry, b.src.columns || [])
-                    : [];
+                    : diff.stale;
 
                 const show = (label, keys) => {
                     if (keys.length === 0) return;
@@ -159,16 +162,16 @@ async function main() {
                 };
                 show("present locally but gone from source", diff.onlyLocal);
                 show("present on source but missing here", diff.onlySource);
-                show("on both sides with DIFFERENT content", drifted);
+                show(DEEP ? "on both sides with DIFFERENT content" : "on both sides, last changed at a different time", drifted);
 
                 if (!REPAIR) continue;
 
                 const { removed, heldKeys } = await deleteByKeys(local, b.entry, diff.onlyLocal);
-                // A local row still waiting in _outbox is not an upstream delete, and
-                // deleteByKeys keeps it. Name them so "-0" reads as a decision, not a miss.
-                show("kept: written here and not yet pushed", heldKeys);
+                // A local row still waiting in _outbox is neither an upstream delete nor
+                // drift, and both helpers keep it. Name them so "-0" reads as a decision.
+                const { refreshed, heldKeys: heldEdits } = await refreshByKeys(source, local, b.entry, drifted);
+                show("kept: written here and not yet pushed", [...heldKeys, ...heldEdits]);
                 const added = await pullByKeys(source, local, b.entry, diff.onlySource);
-                const refreshed = await pullByKeys(source, local, b.entry, drifted);
                 repairedTables++;
                 repairedRows += removed + added + refreshed;
                 console.log(`  ${b.model}: repaired -${removed} +${added} ~${refreshed}`);

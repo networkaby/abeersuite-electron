@@ -28,7 +28,7 @@
 
 const { pool } = require("./lib/db");
 const reconcile = require("./lib/reconcile");
-const { pullByKeys, deleteByKeys } = require("./lib/pull");
+const { pullByKeys, refreshByKeys, recheckBehindCursor, deleteByKeys } = require("./lib/pull");
 const { repairReferencing } = require("./sync-once.js");
 
 const SOURCE_URL = process.env.TEST_SOURCE_URL;
@@ -249,6 +249,74 @@ async function main() {
         await local.query('DROP TABLE "_outbox"');
         const bare = await deleteByKeys(local, tables.PlainCounter, [k2]);
         check("no _outbox table → nothing held", [bare.removed, bare.heldKeys], [1, []]);
+
+        console.log("\n5. An edit stamped behind the cursor (a late commit, an offline push, a skewed clock)");
+
+        check("watermark tables hash the stamp beside the key", reconcile.stampColumn(tables.Person), "updatedAt");
+        check("...but not a localAuthority one, whose stamps differ by design",
+            reconcile.stampColumn(tables.VoucherSeriesCounter), null);
+        check("...nor append, whose createdAt an edit never moves",
+            reconcile.stampColumn({ ...tables.Person, strategy: "append", column: "createdAt" }), null);
+
+        // The office edits 9000; the replica never pulled it because its stamp sits
+        // behind the cursor. Meanwhile this counter edited 8282 and has not pushed it.
+        await source.query(`UPDATE "Person" SET name = 'Other, edited', "updatedAt" = '2026-08-19 05:00:00' WHERE id = 9000`);
+        await local.query(`UPDATE "Person" SET name = 'JSK, local', "updatedAt" = '2026-08-19 06:00:00' WHERE id = 8282`);
+        await local.query(OUTBOX);
+        await local.query(`INSERT INTO "_outbox" (table_name, row_pk, row_key, operation, payload)
+                           VALUES ('Person', '8282', '{"id":8282}', 'update', '{}')`);
+
+        const sSrc = await reconcile.fingerprint(source, tables.Person);
+        const sLoc = await reconcile.fingerprint(local, tables.Person);
+        check("the stamped hash sees what a key hash called clean", reconcile.same(sSrc, sLoc), false);
+
+        const sd = await reconcile.keyDiff(source, local, tables.Person);
+        check("keyDiff names both rows as stale, and nothing missing",
+            [sd.stale.sort(), sd.onlyLocal, sd.onlySource], [["8282", "9000"], [], []]);
+
+        const rf = await refreshByKeys(source, local, tables.Person, sd.stale);
+        check("the missed edit is refreshed, the unpushed local edit held",
+            [rf.refreshed, rf.heldKeys], [1, ["8282"]]);
+        check("...the office's edit is on disk",
+            (await local.query(`SELECT name FROM "Person" WHERE id = 9000`)).rows[0].name, "Other, edited");
+        check("...and the counter's own edit survived",
+            (await local.query(`SELECT name FROM "Person" WHERE id = 8282`)).rows[0].name, "JSK, local");
+
+        console.log("\n6. A row that committed after the last pull passed its stamp");
+
+        // Stamped as the office would now, in UTC. The cursor row (9200) is on both
+        // sides; 9100 committed late as a NEW row and 9000 as an EDIT, both stamped
+        // behind it; 8282 is newer here (the unpushed edit) and must not be pulled; 9300
+        // ties the cursor stamp with a higher id, so it is ahead and the drain's job.
+        await local.query(`DELETE FROM "_outbox"`);
+        const utc = (sec) => `(now() AT TIME ZONE 'UTC') - interval '${sec} seconds'`;
+        await source.query(`
+            UPDATE "Person" SET "updatedAt" = ${utc(40)} WHERE id = 8282;
+            UPDATE "Person" SET name = 'Other, late', "updatedAt" = ${utc(20)} WHERE id = 9000;
+            INSERT INTO "Person" (id, name, "updatedAt") VALUES (9100, 'Late new', ${utc(30)});
+            INSERT INTO "Person" (id, name, "updatedAt") VALUES (9200, 'Cursor row', ${utc(10)});
+            INSERT INTO "Person" (id, name, "updatedAt") SELECT 9300, 'Ahead', "updatedAt" FROM "Person" WHERE id = 9200;
+        `);
+        await local.query(`UPDATE "Person" SET "updatedAt" = (now() AT TIME ZONE 'UTC') WHERE id = 8282`);
+        // Read the cursor the way the worker does: a Date off a zone-less column. Writing
+        // it back is the worker's own round trip, so 9200 lands with the identical stamp.
+        const cursor = (await source.query(`SELECT "updatedAt" AS t FROM "Person" WHERE id = 9200`)).rows[0].t;
+        await local.query(`INSERT INTO "Person" (id, name, "updatedAt") VALUES (9200, 'Cursor row', $1)`, [cursor]);
+
+        const late = await recheckBehindCursor(source, local, tables.Person, cursor, "9200");
+        check("the late edit and the late row are pulled, nothing else",
+            [late.pulled, late.ids.sort()], [2, ["9000", "9100"]]);
+        check("...the late edit is on disk",
+            (await local.query(`SELECT name FROM "Person" WHERE id = 9000`)).rows[0].name, "Other, late");
+        check("...the newer local edit is untouched",
+            (await local.query(`SELECT name FROM "Person" WHERE id = 8282`)).rows[0].name, "JSK, local");
+        check("...and the row ahead of the cursor is left to the drain",
+            (await local.query(`SELECT count(*)::int AS c FROM "Person" WHERE id = 9300`)).rows[0].c, 0);
+
+        const stale = new Date(cursor.getTime() - 20 * 60 * 1000);
+        check("a cursor older than the horizon costs no query at all",
+            await recheckBehindCursor({ query: () => { throw new Error("queried"); } }, local, tables.Person, stale, "9200"),
+            { pulled: 0, ids: [] });
     } finally {
         local.release();
         source.release();

@@ -16,6 +16,13 @@
  *   2. CATCHING DELETES on watermarked tables, where no timestamp can ever reveal
  *      that a row is gone.
  *
+ *   3. CATCHING MISSED EDITS on watermarked tables. A delta pull only looks past its
+ *      cursor, so an edit whose `updatedAt` lands BEHIND the cursor is never pulled:
+ *      an office transaction that commits after a pull already passed its stamp, a
+ *      counter pushing an edit it made offline an hour ago, a till whose clock is off.
+ *      A key hash cannot see any of them — the key set is unchanged. So a `watermark`
+ *      table hashes each key TOGETHER WITH its `updatedAt`; see STAMPED below.
+ *
  * Why a checksum and not just a count: a count alone misses the case where one row
  * is deleted and another inserted between two cycles - the total is unchanged while
  * the contents are not. Hashing the keys catches that.
@@ -64,6 +71,34 @@ const { q } = require("./db");
 const HASHES_ROW_CONTENT = new Set(["full", "child"]);
 
 /**
+ * Strategies whose fingerprint carries each row's cursor stamp beside its key.
+ *
+ * `watermark` only. An `append` table's cursor is `createdAt`, which an edit never
+ * moves, so its stamp would cost a heap read per row and catch nothing.
+ *
+ * And not a `localAuthority` table (VoucherSeriesCounter, UserCounterPin): this machine
+ * owns its rows there and pushes them over the cloud's copy, which the office then
+ * merges (`mergeSeriesCounter` keeps the higher number). The two stamps differing is
+ * that design working, not drift, and a stamped hash would mismatch every hour forever.
+ */
+const STAMPED = new Set(["watermark"]);
+
+/** The column whose value is compared beside the key, or null for a key-only hash. */
+function stampColumn(entry) {
+    return STAMPED.has(entry.strategy) && !entry.localAuthority && entry.column ? entry.column : null;
+}
+
+/**
+ * SQL rendering a stamp as fixed-width text, so the two servers agree byte for byte
+ * (both sessions are pinned to UTC, db.js) AND a plain string comparison orders it in
+ * time — `::text` drops trailing zeros from the fraction, which breaks the second.
+ * NULL renders as '' so a row with no stamp still hashes.
+ */
+function stampExpression(column) {
+    return `COALESCE(to_char(${q(column)}, 'YYYY-MM-DD HH24:MI:SS.US'), '')`;
+}
+
+/**
  * What sits between the columns of a compound key once it is rendered as text.
  *
  * This is the FOUR characters backslash, x, 1, f — not the US control character the
@@ -106,9 +141,13 @@ function keyExpression(entry) {
 async function fingerprint(client, entry, columns) {
     if (HASHES_ROW_CONTENT.has(entry.strategy)) return contentFingerprint(client, entry, columns);
 
+    const stamp = stampColumn(entry);
+    const hashed = stamp
+        ? `${keyExpression(entry)} || '${KEY_SEPARATOR}' || ${stampExpression(stamp)}`
+        : keyExpression(entry);
     const { rows } = await client.query(
         `SELECT count(*)::text AS count,
-                COALESCE(sum(hashtextextended(${keyExpression(entry)}, 0)), 0)::text AS checksum
+                COALESCE(sum(hashtextextended(${hashed}, 0)), 0)::text AS checksum
          FROM ${q(entry.table)}`,
     );
     return rows[0];
@@ -169,20 +208,25 @@ function same(a, b) {
  *   onlySource - present upstream but missing here, with a timestamp already BEHIND
  *                our cursor, so no future delta pull will look at it again. Left
  *                alone it stays missing for the life of the replica.
+ *   stale      - on both sides, last changed at a different time: an edit the delta
+ *                pull missed (see job 3 at the top). Only a stamped table (stampColumn)
+ *                can report these; for every other table it is empty.
  */
 async function keyDiff(source, local, entry) {
     const keyExpr = keyExpression(entry);
+    const stamp = stampColumn(entry);
+    const select = stamp
+        ? `SELECT ${keyExpr} AS k, ${stampExpression(stamp)} AS s FROM ${q(entry.table)}`
+        : `SELECT ${keyExpr} AS k FROM ${q(entry.table)}`;
 
-    const [srcKeys, localKeys] = await Promise.all([
-        source.query(`SELECT ${keyExpr} AS k FROM ${q(entry.table)}`),
-        local.query(`SELECT ${keyExpr} AS k FROM ${q(entry.table)}`),
-    ]);
-    const live = new Set(srcKeys.rows.map((r) => r.k));
-    const here = new Set(localKeys.rows.map((r) => r.k));
+    const [srcKeys, localKeys] = await Promise.all([source.query(select), local.query(select)]);
+    const live = new Map(srcKeys.rows.map((r) => [r.k, r.s]));
+    const here = new Map(localKeys.rows.map((r) => [r.k, r.s]));
 
     return {
-        onlyLocal: [...here].filter((k) => !live.has(k)),
-        onlySource: [...live].filter((k) => !here.has(k)),
+        onlyLocal: [...here.keys()].filter((k) => !live.has(k)),
+        onlySource: [...live.keys()].filter((k) => !here.has(k)),
+        stale: stamp ? [...live].filter(([k, s]) => here.has(k) && here.get(k) !== s).map(([k]) => k) : [],
     };
 }
 
@@ -315,6 +359,7 @@ function missingColumns(srcFp, locFp) {
 
 module.exports = {
     fingerprint, contentFingerprint, same, keyDiff, rowHashDiff, keyExpression, KEY_SEPARATOR,
+    stampColumn, stampExpression,
     referencingNullers,
     referencingCascades, hashesRowContent, missingColumns,
 };

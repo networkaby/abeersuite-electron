@@ -12,7 +12,7 @@
  */
 
 const { q, inReplicaTransaction } = require("./db");
-const { keyExpression } = require("./reconcile");
+const { keyExpression, stampExpression } = require("./reconcile");
 const outboxGuard = require("./outboxGuard");
 const totals = require("./rebuildTotals");
 
@@ -294,6 +294,106 @@ async function pullByKeys(source, local, entry, keys, force = true) {
 }
 
 /**
+ * Overwrite rows here with the source's copy — except the ones this counter still owes
+ * the source.
+ *
+ * For rows on both sides that disagree (reconcile.keyDiff's `stale`). The source is the
+ * authority, so this forces past the monotonic guard like every reconcile repair — which
+ * is what makes the push's "dropped, the counter converges at the next pull" true for an
+ * edit the office refused (an un-posting replay, a write to a closed shift): that row's
+ * cloud stamp sits behind every cursor, so no pull would ever bring it back.
+ *
+ * Same two holds as deleteByKeys, for the same reason, kept inside the function so no
+ * caller can forget them: a `localAuthority` table refreshes nothing, and a row still
+ * waiting in `_outbox` is this counter's newer edit, not drift.
+ *
+ * @returns {Promise<{ refreshed: number, heldKeys: string[] }>}
+ */
+async function refreshByKeys(source, local, entry, keys) {
+    const out = { refreshed: 0, heldKeys: [] };
+    if (!keys || keys.length === 0) return out;
+
+    if (entry.localAuthority) {
+        out.heldKeys = [...keys];
+        return out;
+    }
+    const pending = await outboxGuard.pendingKeys(local, entry);
+    const take = [];
+    for (const k of keys) (pending.has(k) ? out.heldKeys : take).push(k);
+    out.refreshed = await pullByKeys(source, local, entry, take);
+    return out;
+}
+
+/** How far behind its cursor a table is re-checked for late commits. */
+const LATE_WINDOW_MS = 60 * 1000;
+/** A cursor older than this is not re-checked: nothing can still be committing behind it.
+ *  Longer than index.js's 10-minute interval, so a late commit no signal announces is
+ *  still caught by the next scheduled cycle. */
+const LATE_HORIZON_MS = 15 * 60 * 1000;
+
+/**
+ * A source `timestamp` (no zone) reaches JS as a Date read in LOCAL time, so its
+ * wall-clock fields — not its epoch — hold the stored UTC value. This is that value.
+ */
+function storedUtcMs(d) {
+    return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(),
+        d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds());
+}
+
+/**
+ * Pull rows stamped just BEHIND the cursor that this replica holds an older copy of, or
+ * none at all.
+ *
+ * The cursor is the largest stamp SEEN, and a stamp is taken when the writer's statement
+ * runs, not when its transaction commits. A voucher save stamped 10:00:00 that commits at
+ * 10:00:05 is invisible to a pull at 10:00:02, which may carry the cursor to 10:00:01 —
+ * and every later pull starts past it. A new row then waited for the hourly reconcile; an
+ * EDIT was never repaired at all before the stamped fingerprint (reconcile.js, job 3).
+ *
+ * So each cycle first compares key + stamp over the last LATE_WINDOW_MS behind the cursor
+ * the previous cycle left, and pulls what is newer upstream: one source query returning a
+ * handful of (key, stamp) pairs, one local lookup. Skipped outright once the cursor is
+ * older than LATE_HORIZON_MS, which keeps a quiet table at zero extra round trips.
+ *
+ * The ordinary monotonic guard applies (`force` off): this is a delta pull reaching back,
+ * not a reconcile, and a newer local edit wins here exactly as it does against a page.
+ * Rows at or ahead of the (stamp, id) cursor are left to the drain that follows.
+ *
+ * @returns {Promise<{ pulled: number, ids: string[] }>} `ids` (single-column keys only)
+ *   go to the children, exactly as a page's do: a late voucher edit brings its lines.
+ */
+async function recheckBehindCursor(source, local, entry, since, sinceId) {
+    const none = { pulled: 0, ids: [] };
+    if (!since || !entry.column) return none;
+    const at = since instanceof Date ? since : new Date(since);
+    if (Number.isNaN(at.getTime()) || Date.now() - storedUtcMs(at) > LATE_HORIZON_MS) return none;
+
+    const col = q(entry.column);
+    const keyExpr = keyExpression(entry);
+    const stamp = stampExpression(entry.column);
+    const keyed = entry.pk.length === 1 && sinceId != null;
+    const { rows } = await source.query(
+        `SELECT ${keyExpr} AS k, ${stamp} AS s FROM ${q(entry.table)}
+          WHERE ${col} > $1
+            AND ${keyed ? `(${col}, ${q(entry.pk[0])}::text) <= ($2, $3)` : `${col} <= $2`}`,
+        keyed ? [new Date(at.getTime() - LATE_WINDOW_MS), at, sinceId] : [new Date(at.getTime() - LATE_WINDOW_MS), at],
+    );
+    if (rows.length === 0) return none;
+
+    const here = await local.query(
+        `SELECT ${keyExpr} AS k, ${stamp} AS s FROM ${q(entry.table)} WHERE ${keyExpr} = ANY($1)`,
+        [rows.map((r) => r.k)],
+    );
+    const mine = new Map(here.rows.map((r) => [r.k, r.s]));
+    // Fixed-width stamps (stampExpression), so text order is time order.
+    const behind = rows.filter((r) => !mine.has(r.k) || mine.get(r.k) < r.s).map((r) => r.k);
+    if (behind.length === 0) return none;
+
+    const pulled = await pullByKeys(source, local, entry, behind, false);
+    return { pulled, ids: entry.pk.length === 1 ? behind : [] };
+}
+
+/**
  * Remove rows the source no longer has — except the ones the source has never SEEN.
  *
  * `keys` is "present here, absent upstream". Two very different things look like
@@ -335,4 +435,7 @@ async function deleteByKeys(local, entry, keys) {
     return out;
 }
 
-module.exports = { pullWatermark, pullFull, pullChildren, pullByKeys, deleteByKeys, upsert, jsonColumnsOf, coerce, CHUNK };
+module.exports = {
+    pullWatermark, pullFull, pullChildren, pullByKeys, refreshByKeys, recheckBehindCursor, deleteByKeys,
+    upsert, jsonColumnsOf, coerce, CHUNK,
+};

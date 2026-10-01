@@ -27,7 +27,9 @@ const path = require("node:path");
 const { pool, canSuspendForeignKeys, q } = require("./lib/db");
 const registryLib = require("./lib/registry");
 const state = require("./lib/state");
-const { pullWatermark, pullFull, pullChildren, pullByKeys, deleteByKeys } = require("./lib/pull");
+const {
+    pullWatermark, pullFull, pullChildren, pullByKeys, refreshByKeys, recheckBehindCursor, deleteByKeys,
+} = require("./lib/pull");
 const totals = require("./lib/rebuildTotals");
 const reconcile = require("./lib/reconcile");
 const schemaGuard = require("./lib/schemaGuard");
@@ -428,7 +430,19 @@ async function main() {
                         // tick: a counter that has been offline can be many pages
                         // behind, and stopping after one page would mean it never
                         // catches up while changes keep arriving.
-                        res = { pulled: 0, watermark: null, watermarkId: null, ids: [], more: true };
+                        //
+                        // First, rows that committed after the last cycle had already
+                        // passed their stamp: they sit behind the cursor, where the drain
+                        // never looks (pull.js recheckBehindCursor). Not on a relay cycle,
+                        // which holds a cashier's response; not on a cursor reset, which
+                        // re-drains everything anyway.
+                        const late = REASON === "relay" || resume.reason != null
+                            ? { pulled: 0, ids: [] }
+                            : await recheckBehindCursor(source, local, entry, since, resume.sinceId);
+                        if (late.pulled > 0) {
+                            console.log(`  ${model.padEnd(28)} late      ${late.pulled} (committed behind the cursor)`);
+                        }
+                        res = { pulled: late.pulled, watermark: null, watermarkId: null, ids: [...late.ids], more: true };
                         let cursor = since;
                         let cursorId = resume.sinceId;
                         let pages = 0;
@@ -518,8 +532,8 @@ async function main() {
         //
         // A watermark reports that a row CHANGED; it can never report that a row is
         // GONE. Without this pass a deleted invoice would sit on the counter forever,
-        // and a row whose timestamp is behind our cursor could never be recovered.
-        // Both directions are repaired.
+        // and a row — or an edit — whose timestamp is behind our cursor could never be
+        // recovered. Both directions are repaired, and missed edits too.
         //
         // Not in a relay cycle: that one holds a cashier's response, and the interval
         // and signal cycles verify the same tables on the same schedule regardless.
@@ -575,11 +589,18 @@ async function main() {
                     // with held rows stays unverified until the push lands, and a log
                     // reading "-0" every hour with no reason would look like a fault.
                     const { removed, deletedKeys, heldKeys } = await deleteByKeys(local, entry, diff.onlyLocal);
-                    if (heldKeys.length > 0) {
-                        console.log(`  ${model.padEnd(28)} held      ${heldKeys.length} local row(s) not yet pushed`);
+                    // An edit the delta pull missed: the same key on both sides, last
+                    // changed at a different time (reconcile.js, job 3). The source's copy
+                    // wins — except a row still in _outbox, which is this counter's own
+                    // newer edit on its way up, and is held for the same reason.
+                    const { refreshed: restamped, heldKeys: heldEdits } =
+                        await refreshByKeys(source, local, entry, diff.stale);
+                    const held = heldKeys.length + heldEdits.length;
+                    if (held > 0) {
+                        console.log(`  ${model.padEnd(28)} held      ${held} local row(s) not yet pushed`);
                     }
                     const added = await pullByKeys(source, local, entry, diff.onlySource);
-                    repaired += removed + added;
+                    repaired += removed + added + restamped;
                     // The source's ON DELETE SET NULL rewrote the rows that referenced
                     // what we just deleted; ours did not, because FK actions are
                     // suspended while applying. Re-read them. See repairReferencing.
@@ -610,9 +631,9 @@ async function main() {
                     repaired += refreshed;
                     // A repair changes what this replica serves just as a pull does, so
                     // the screens must hear about it (see __SYNC_APPLIED__ below).
-                    if (removed + added + refreshed > 0) changedModels.add(model);
+                    if (removed + added + refreshed + restamped > 0) changedModels.add(model);
                     console.log(
-                        `  ${model.padEnd(28)} repair    -${removed} +${added} ~${refreshed}`,
+                        `  ${model.padEnd(28)} repair    -${removed} +${added} ~${refreshed + restamped}`,
                     );
                     const after = await reconcile.fingerprint(local, entry, srcFp.columns || []);
                     if (reconcile.same(srcFp, after)) {
