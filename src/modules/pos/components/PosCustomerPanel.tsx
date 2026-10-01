@@ -134,10 +134,10 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
 
     // Level names are admin-defined; anything not Platinum/Gold/Silver wears bronze.
     const levelColor = (name: string) =>
-        name === "Platinum" ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" :
-            name === "Gold" ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" :
-                name === "Silver" ? "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
-                    "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300";
+        name === "Platinum" ? "border-violet-300 bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" :
+            name === "Gold" ? "border-amber-300 bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" :
+                name === "Silver" ? "border-slate-400 bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
+                    "border-orange-300 bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300";
     return (
         <div className="space-y-2">
             {/* Identity */}
@@ -154,7 +154,7 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
                             <span
                                 key={t.periodId}
                                 title={`${formatInr(t.spend)} spent ${t.fromDay}–${t.toDay} days ago${t.includesCurrentSale ? " (incl. this bill)" : ""} · +${t.discountPct}%`}
-                                className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${levelColor(t.levelName)}`}
+                                className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${levelColor(t.levelName)}`}
                             >
                                 <Medal size={10} /> {t.periodName} {t.levelName}
                             </span>
