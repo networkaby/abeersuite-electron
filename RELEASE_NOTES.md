@@ -1,32 +1,29 @@
-# v1.10.1 [urgent]
+# v1.11.0
 
-Every counter should take this update. It changes the database, so a counter's sync pauses until it restarts on this version. Please restart each till once today.
-
-## Bill numbers
-- Every voucher type now takes its number from its own series, so the same number is never given out twice, even after a bill is deleted.
-- POS Estimate and POS Order get their own number series, in the same style as your POS bills.
-- New year format in Settings → Year Ending: **Fiscal short (26/27)**, with a slash instead of a dash.
+Every counter should take this update. It changes the database, so please let every till restart on this version before the office site is updated. Until a till has this version, its voucher uploads can wait in its queue.
 
 ## Billing (POS)
-- A customer with no credit limit now shows "no credit" instead of "Unlimited", which matches what billing actually allows.
-- Offers re-check when you change shipping, a charge or the round-off.
-- A line note comes back complete when you edit the bill, even if the product name has " · " in it.
+- Edit a customer right from the counter. If you rename the customer, the ledger name changes too.
+- Convert an open Estimate or Order into a bill from the mode dropdown.
+- The customer panel now shows medals for each spend period. The tier colour shows on the medal border.
+- Wider rate box on cart lines. The edit-customer window is also wider, with Advanced in two columns.
 
-## Stock
-- Cancelling and restoring a voucher now reverses exactly the right stock rows, including free-issue items with zero rate.
-- A Journal with stock items no longer leaves an empty extra record behind. Old leftovers are cleaned up.
+## Accountancy
+- Day Book now converts Estimates and Orders. The old Orders & Estimates page is gone, and the sidebar link stays.
+- Optional Vouchers report is removed. Day Book covers it.
+- Some old pages that nothing opened are removed.
+- A ledger made from a picker opens complete in the edit box.
 
-## Bank reconciliation
-- Auto-match pairs only entries with the same date and same amount. When the amount and reference match but the date differs, you get a link to fix the voucher's date.
-- Bank lines dated before your books start are treated as part of the opening balance, so they no longer show as a false difference.
-- The Balance column shows where the books and the bank stop agreeing, in orange so it stands out on ticked rows.
-- Editing, cancelling or back-dating a voucher moves the reconciliation lock back only where needed, and your bank ticks are kept.
+## Contacts
+- Office Profile shows "Verified" or "Not verified" on each phone number and email.
 
-## Screens
-- "Unsaved changes" asks only when you really changed something.
-- Contacts, Ledgers, Pending Vouchers and the POS Sales Register no longer show an old page after you change a filter.
-- Reports never show an older answer over the one you asked for.
-- Dropdown lists stay open while you scroll them.
-- A product or ledger created from one row shows up in every row straight away.
-- Money boxes accept only a valid amount.
-- One party's details never show under another party's name.
+## Numbers and notes
+- Voucher numbers now run per counter only. The old fallback count is gone, so a number is never repeated.
+- A line note now has its own place, so a product name with " · " in it no longer loses a piece. Old notes are split once, only where it is certain.
+
+## Sync and counters
+- A missed edit from another machine now gets repaired by itself.
+- The sync badge now shows real upload failures instead of always saying "reachable".
+- Closing the app or shutting down Windows during a sync no longer leaves balances wrong. The next sync finishes the job.
+- If the printer helper or sync helper crashes, it starts again by itself. Before, you had to restart the app.
+- A till now sends only the columns the office knows, so a database clean-up can never block its queue.
