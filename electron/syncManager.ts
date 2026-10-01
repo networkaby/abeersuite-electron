@@ -31,8 +31,18 @@ import { BrowserWindow } from "electron";
 import { writeJsonAtomic } from "./stateFile";
 import { app } from "electron";
 import { noteSchemaDrift } from "./updateManager";
+import { HelperSupervisor } from "./helperSupervisor";
 
 let worker: ChildProcess | null = null;
+
+/** Brings a crashed worker back (see helperSupervisor.ts). */
+const supervisor = new HelperSupervisor("sync", "Sync");
+
+/** What the worker tells the app (sync-engine/index.js `tellApp`). */
+type WorkerMessage =
+    | { type: "applied"; rows: number; models: string[] }
+    | { type: "drift" }
+    | { type: "cycle-ok" };
 
 /** Mirrors the dev/packaged split used by postgresManager and localDbProvisioner. */
 function syncEngineDir(): string {
@@ -91,6 +101,12 @@ function writeConfig(syncUrl: string): string | null {
  */
 export function startSyncWorker(syncUrl: string): void {
     if (worker) return;
+    supervisor.reset();
+    spawnWorker(syncUrl);
+}
+
+function spawnWorker(syncUrl: string): void {
+    if (worker) return;
 
     const dir = syncEngineDir();
     const entry = path.join(dir, "index.js");
@@ -104,7 +120,8 @@ export function startSyncWorker(syncUrl: string): void {
 
     // ELECTRON_RUN_AS_NODE makes the Electron binary behave as plain Node, so the
     // worker needs no separate Node runtime installed on the counter — the whole point
-    // of shipping one box. The `ipc` channel is how it is asked to stop (stopSyncWorker).
+    // of shipping one box. The `ipc` channel carries its messages to us (onWorkerMessage)
+    // and our request to stop (stopSyncWorker).
     const proc = spawn(process.execPath, [entry], {
         cwd: dir,
         stdio: ["ignore", "pipe", "pipe", "ipc"],
@@ -115,24 +132,16 @@ export function startSyncWorker(syncUrl: string): void {
         },
     });
 
+    // The log only. Nothing here is read for meaning any more — see onWorkerMessage.
     const relay = (buf: Buffer) => {
         for (const line of String(buf).split("\n")) {
-            if (!line.trim()) continue;
-            console.log(`[sync] ${line.trimEnd()}`);
-            // The one line that means "the rows are queryable now" — see below. This
-            // call was missing, so `sync:applied` never reached a window and every
-            // screen (and the counter reconciler) kept waiting for an event that
-            // never came.
-            notifyIfApplied(line);
-            // The worker's own verdict on the replica's shape (sync-engine/index.js). A
-            // halt means only a new build can help, so the updater is told at once.
-            if (line.includes("SCHEMA DRIFT")) noteSchemaDrift(true);
-            else if (line.includes("cycle ok")) noteSchemaDrift(false);
+            if (line.trim()) console.log(`[sync] ${line.trimEnd()}`);
         }
     };
     worker = proc;
     proc.stdout?.on("data", relay);
     proc.stderr?.on("data", relay);
+    proc.on("message", onWorkerMessage);
 
     // `worker === proc`: a worker stopped and replaced (restore, counter reset) exits
     // after its successor has started, and must not clear the successor's slot.
@@ -142,39 +151,41 @@ export function startSyncWorker(syncUrl: string): void {
     });
 
     proc.on("exit", (code, sig) => {
-        // Deliberately not restarted here. The worker already retries internally and
-        // backs off hard on schema drift (a fault only a deploy can fix); a restart loop
-        // in this process would just hide that and hammer the source.
         console.log(`[SyncManager] Sync worker exited (code ${code}, signal ${sig}).`);
-        if (worker === proc) worker = null;
+        // Not ours to restart: one we stopped or replaced (stopSyncWorker clears the
+        // slot first).
+        if (worker !== proc) return;
+        worker = null;
+        // Exit 2 is the worker's "no config / no registry": a restart cannot fix that.
+        // Schema drift never gets here — the worker stays up and backs off on its own.
+        if (code === 2) return;
+        supervisor.crashed(() => spawnWorker(syncUrl));
     });
 
     console.log("[SyncManager] Sync worker started.");
 }
 
 /**
- * The worker prints one machine-readable line, after a cycle has committed rows into
- * the replica (`__SYNC_APPLIED__` in sync-engine/sync-once.js). Forward it to every
- * window so screens re-read once the data is ACTUALLY there, instead of racing the
- * worker on the same Realtime signal and losing.
+ * The worker's messages, over IPC. They used to be fished out of its printed log by
+ * matching text chunk by chunk — two relays deep, no line buffering — so a reworded log
+ * line or a chunk split mid-line could lose one.
  *
- * Matched on the raw line rather than a clean protocol because the text passes through
- * two relays that each prefix it; the marker plus a JSON tail survives both. A line that
- * does not parse is ignored — a log message is not worth crashing a boot path for.
+ *   applied  — a cycle committed rows into the replica. Forwarded to every window so
+ *              screens re-read once the data is ACTUALLY there, instead of racing the
+ *              worker on the same Realtime signal and losing.
+ *   drift / cycle-ok — the worker's verdict on the replica's shape. A halt means only a
+ *              new build can help, so the updater is told at once.
  */
-const APPLIED_RE = /__SYNC_APPLIED__ (\{.*\})\s*$/;
-
-function notifyIfApplied(line: string): void {
-    const m = APPLIED_RE.exec(line);
-    if (!m) return;
-    let info: { rows: number; models: string[] };
-    try {
-        info = JSON.parse(m[1]);
-    } catch {
-        return;
-    }
-    for (const win of BrowserWindow.getAllWindows()) {
-        if (!win.isDestroyed()) win.webContents.send("sync:applied", info);
+function onWorkerMessage(msg: WorkerMessage): void {
+    if (msg?.type === "applied") {
+        const info = { rows: msg.rows, models: msg.models };
+        for (const win of BrowserWindow.getAllWindows()) {
+            if (!win.isDestroyed()) win.webContents.send("sync:applied", info);
+        }
+    } else if (msg?.type === "drift") {
+        noteSchemaDrift(true);
+    } else if (msg?.type === "cycle-ok") {
+        noteSchemaDrift(false);
     }
 }
 
@@ -190,6 +201,7 @@ function notifyIfApplied(line: string): void {
  * owed wait in `_sync_dirty` for the next one. Past `graceMs` the worker is ended anyway.
  */
 export async function stopSyncWorker(graceMs = 5000): Promise<void> {
+    supervisor.reset();
     const proc = worker;
     worker = null;
     if (!proc || proc.killed || proc.exitCode !== null) return;

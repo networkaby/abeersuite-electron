@@ -1121,7 +1121,8 @@ import { wipeReplica, replicaBindsThisPc, countPendingOutbox, counterBoundToThis
 import { waitForReplicaReady } from "./waitForReplica";
 import { startHardwareBridge, stopHardwareBridge, bridgeSend, bridgeRequest, isBridgeConnected } from "./hardwareBridgeManager";
 import { applyIdRanges } from "./applyIdRanges";
-import { startNextServer, stopNextServer, warmRoutes, type ServerStartResult } from "./serverManager";
+import { startNextServer, stopNextServer, onNextServerRestarted, warmRoutes, type ServerStartResult } from "./serverManager";
+import { helperNotes, onHelperNotesChanged } from "./helperSupervisor";
 import { setupAutoUpdater, stopAutoUpdater, getUpdateState, onUpdateState, install, checkNow, setCartBusy, clearUpdateSplash } from "./updateManager";
 import { repairAfterSwap } from "./stagedUpdate";
 import { attachZoom, fitToScreen, stepZoom, readDisplayPreference, writeDisplayPreference, applyPreferenceToAllWindows, resolveZoomFactor, ZOOM_STEPS } from "./displayPreference";
@@ -1482,6 +1483,8 @@ function buildFullTitle(): string {
     const parts: string[] = [base];
     if (currentSyncStatus) parts.push(currentSyncStatus);
     if (currentConnectionStatus) parts.push(currentConnectionStatus);
+    // A helper that crashed: "Printer bridge restarting…" (helperSupervisor.ts).
+    parts.push(...helperNotes());
     return parts.join(" | ");
 }
 
@@ -1777,6 +1780,17 @@ app.whenReady().then(async () => {
 
     mainWindow = createShellWindow(isHiddenLaunch);
 
+    // A crashed helper comes back by itself (helperSupervisor.ts); the title says so
+    // while it does. Pages are served by the Next server, so a restarted one means
+    // every page in the window is stale — reloaded once the new process answers.
+    onHelperNotesChanged(() => {
+        // Also called while quitting (each stop clears its note), window or no window.
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setTitle(buildFullTitle());
+    });
+    onNextServerRestarted(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.reload();
+    });
+
     sendBootProgress("Starting database…");
     try {
         const localDbUrl = await ensurePostgresRunning();
@@ -1891,8 +1905,8 @@ app.whenReady().then(async () => {
         console.error("[Main] Error during postgres initialization:", err);
     }
 
-    // Drives the thermal printer on :9191. Independent of the database — a counter with
-    // no replica still prints — so it starts regardless of what happened above.
+    // Drives the thermal printer and the QR display. Independent of the database — a
+    // counter with no replica still prints — so it starts regardless of what happened above.
     startHardwareBridge();
 
     // The Next server needs to know WHICH machine it is, to refuse work for a counter

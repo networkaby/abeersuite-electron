@@ -1,24 +1,24 @@
 /**
  * Supervises the shop-hardware bridge (`hardware-bridge/`), which drives the thermal
- * printer on loopback :9191.
+ * printer and the QR display (the DQ11 customer-facing panel, `hardware-bridge/qr.js`).
  *
  * Same arrangement, and the same reasoning, as `syncManager.ts`: the code moved in
  * wholesale from the separate `combined-bridge` service rather than being rewritten, and
  * runs as a child process so a wedged printer or a stuck COM port cannot take the POS
- * window down with it. See `hardware-bridge/index.js` for why it still speaks HTTP on
- * the port the renderer already knows.
- *
- * The QR display half (:9192, the DQ11 customer-facing panel) lives here too — see
- * `hardware-bridge/qr.js`, started alongside thermal by `index.js`. Both relays bind
- * loopback only and check the request Origin; they are not reachable from the LAN.
+ * window down with it. It listens on no port: both modules take messages over the IPC
+ * channel below (see `hardware-bridge/index.js` for why the old :9191 / :9192 went).
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { app } from "electron";
+import { HelperSupervisor } from "./helperSupervisor";
 
 let bridge: ChildProcess | null = null;
+
+/** Brings a crashed bridge back (see helperSupervisor.ts). */
+const supervisor = new HelperSupervisor("bridge", "Printer bridge");
 
 /** Mirrors the dev/packaged split used by the other managers. */
 function bridgeDir(): string {
@@ -39,6 +39,12 @@ function configFilePath(): string {
  */
 export function startHardwareBridge(): void {
     if (bridge) return;
+    supervisor.reset();
+    spawnBridge();
+}
+
+function spawnBridge(): void {
+    if (bridge) return;
 
     const dir = bridgeDir();
     const entry = path.join(dir, "index.js");
@@ -53,7 +59,7 @@ export function startHardwareBridge(): void {
 
     // ELECTRON_RUN_AS_NODE makes the Electron binary behave as plain Node, so no separate
     // Node runtime has to be installed on the counter.
-    bridge = spawn(process.execPath, [entry], {
+    const proc = spawn(process.execPath, [entry], {
         cwd: dir,
         // The 4th slot opens the IPC channel the QR display is driven over — see
         // `sendQr`/`requestQr` below and the COMMANDS table in hardware-bridge/qr.js.
@@ -71,23 +77,27 @@ export function startHardwareBridge(): void {
             if (line.trim()) console.log(`[bridge] ${line.trimEnd()}`);
         }
     };
+    bridge = proc;
     resetReady();
-    attachReplyRouter(bridge);
+    attachReplyRouter(proc);
 
-    bridge.stdout?.on("data", relay);
-    bridge.stderr?.on("data", relay);
+    proc.stdout?.on("data", relay);
+    proc.stderr?.on("data", relay);
 
-    bridge.on("error", (err) => {
+    proc.on("error", (err) => {
         console.error("[HardwareBridge] Failed to start:", err);
-        bridge = null;
+        if (bridge === proc) bridge = null;
     });
 
-    bridge.on("exit", (code, sig) => {
-        // Not restarted automatically. The commonest reason to exit is EADDRINUSE — an
-        // OLD standalone combined-bridge install still holding :9191 — and a restart loop
-        // would spin forever against it while burying the one log line that explains it.
+    proc.on("exit", (code, sig) => {
         console.log(`[HardwareBridge] Exited (code ${code}, signal ${sig}).`);
-        bridge = null;
+        // The bridge never exits on its own purpose, so any exit we did not ask for
+        // (stopHardwareBridge clears the slot first) is a crash: back it comes, with a
+        // backoff and a limit (helperSupervisor.ts). It used to stay down until the app
+        // was restarted — on the argument that an old install held :9191 and a restart
+        // would spin against it, which stopped applying once the bridge left the port.
+        const crashed = bridge === proc;
+        if (crashed) bridge = null;
         // Nothing will ever answer these now — reject rather than let the settings page
         // sit on a promise until its own timeout.
         for (const [id, slot] of pending) {
@@ -95,6 +105,7 @@ export function startHardwareBridge(): void {
             slot.reject(new Error("Display bridge exited."));
             pending.delete(id);
         }
+        if (crashed) supervisor.crashed(spawnBridge);
     });
 
     console.log("[HardwareBridge] Started.");
@@ -203,12 +214,15 @@ export function bridgeRequest(mod: BridgeModule, cmd: string, payload?: unknown,
 }
 
 export function stopHardwareBridge(): void {
-    if (!bridge || bridge.killed) return;
+    supervisor.reset();
+    const proc = bridge;
+    // Cleared first, so its exit handler reads this as a stop and not a crash.
+    bridge = null;
+    if (!proc || proc.killed) return;
     console.log("[HardwareBridge] Stopping…");
     try {
-        bridge.kill();
+        proc.kill();
     } catch (err) {
         console.error("[HardwareBridge] Error stopping:", err);
     }
-    bridge = null;
 }

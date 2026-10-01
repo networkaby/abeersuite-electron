@@ -580,6 +580,15 @@ fight over the same tables and watermarks.
 Schema drift backs off hard (3x interval) instead of retrying on the usual schedule:
 it is a fault only a deploy can fix, so retrying quickly would just bury the log.
 
+**Talking to the app (2026-10-01).** Under Electron the worker has an IPC channel
+(`electron/syncManager.ts`) and sends three messages: `{ type: "applied", rows, models }`
+when a cycle's `__SYNC_APPLIED__` line arrives (read as whole lines — a chunk can end
+mid-line), `{ type: "drift" }` on exit 4 and `{ type: "cycle-ok" }` on a clean cycle. The
+app used to fish these out of the printed log by matching text chunk by chunk, two relays
+deep, so a reworded log line or a split chunk could lose one. By hand there is no channel
+and the log is all there is. A worker that crashes is restarted by the app with a backoff
+(`electron/helperSupervisor.ts`), except exit 2 (no config), which a restart cannot fix.
+
 **Stopping (2026-10-01).** The desktop app asks over IPC (`{ type: "shutdown", graceMs }`,
 `electron/syncManager.ts stopSyncWorker`); SIGINT / SIGTERM do the same by hand. A cycle in
 flight gets the grace to finish, then the worker ends it and exits — it never leaves one

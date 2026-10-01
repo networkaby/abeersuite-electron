@@ -54,6 +54,49 @@ function log(msg) {
     console.log(`[${new Date().toISOString()}] ${msg}`);
 }
 
+/**
+ * Tell the desktop app something it acts on, over the IPC channel it opened
+ * (electron/syncManager.ts). Three messages:
+ *
+ *   { type: "applied", rows, models }  a cycle committed rows; screens re-read now
+ *   { type: "drift" }                  schema drift, sync halted until a new build
+ *   { type: "cycle-ok" }               a cycle passed, so any drift is over
+ *
+ * They used to be fished out of this process's printed log by matching text, chunk by
+ * chunk with no line buffering — a reworded log line or a chunk split mid-line was
+ * enough to lose one. Absent when this runs by hand: then the log is all there is.
+ */
+function tellApp(msg) {
+    if (!process.send) return;
+    try {
+        process.send(msg);
+    } catch {
+        // The channel closes as the app quits; nothing left to tell.
+    }
+}
+
+/** The line sync-once.js prints once a cycle's rows are queryable. */
+const APPLIED_MARK = "__SYNC_APPLIED__ ";
+
+/**
+ * Feed a stream's chunks, get whole lines. A chunk can end mid-line, and the applied
+ * line — a marker plus a JSON tail — must never be read in two halves. `flush` hands
+ * over a last line with no newline once the stream closes.
+ */
+function lineReader(onLine) {
+    let rest = "";
+    const feed = (buf) => {
+        const parts = (rest + String(buf)).split("\n");
+        rest = parts.pop();
+        for (const line of parts) onLine(line);
+    };
+    feed.flush = () => {
+        if (rest) onLine(rest);
+        rest = "";
+    };
+    return feed;
+}
+
 if (!fs.existsSync(CONFIG)) {
     log(`No config.json at ${CONFIG}. Copy config.example.json and fill it in.`);
     process.exit(2);
@@ -136,13 +179,26 @@ function runCycle(reason, targeted = null, opts = {}) {
         child.kill("SIGKILL");
     }, CYCLE_TIMEOUT_MS);
 
-    const relay = (buf) => {
-        for (const line of String(buf).split("\n")) {
-            if (line.trim()) log(`  ${line.trimEnd()}`);
+    const onLine = (line) => {
+        if (!line.trim()) return;
+        log(`  ${line.trimEnd()}`);
+        if (!line.startsWith(APPLIED_MARK)) return;
+        try {
+            const info = JSON.parse(line.slice(APPLIED_MARK.length));
+            tellApp({ type: "applied", rows: info.rows, models: info.models });
+        } catch {
+            // A mangled line is a log message, not worth losing the worker over.
         }
     };
-    child.stdout.on("data", relay);
-    child.stderr.on("data", relay);
+    const out = lineReader(onLine);
+    const err = lineReader(onLine);
+    child.stdout.on("data", out);
+    child.stderr.on("data", err);
+    // `close`, not `exit`: the streams can still be delivering after the process ends.
+    child.on("close", () => {
+        out.flush();
+        err.flush();
+    });
 
     child.on("exit", (code) => {
         clearTimeout(kill);
@@ -172,6 +228,7 @@ function runCycle(reason, targeted = null, opts = {}) {
             // fault only a deploy can fix, so back off hard and stay loud. Targeted
             // pulls cannot succeed either, so answer them now rather than never.
             log("SCHEMA DRIFT - sync halted. Update the app artifact / reseed the replica.");
+            tellApp({ type: "drift" });
             answerRelayQueue(false);
             scheduleNext(INTERVAL_MS * 3);
             return;
@@ -186,6 +243,7 @@ function runCycle(reason, targeted = null, opts = {}) {
         }
 
         log("cycle ok");
+        tellApp({ type: "cycle-ok" });
         if (relayQueue.length) {
             // Someone is holding a response for this; it goes before anything else.
             setImmediate(runRelayCycle);

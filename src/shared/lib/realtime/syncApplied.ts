@@ -13,8 +13,8 @@
  * that is exactly the case a person is sitting and watching.
  *
  * The worker is the only thing that knows when rows are really queryable, so it says so:
- * `sync-once.js` prints `__SYNC_APPLIED__` after committing, `syncManager.ts` forwards it
- * to every window, and this module turns that into a DOM event `useRealtimeTopics`
+ * `sync-once.js` prints `__SYNC_APPLIED__` after committing, the worker sends it over IPC,
+ * `syncManager.ts` forwards it to every window, and this module turns that into a DOM event `useRealtimeTopics`
  * listens for. Silent when a cycle pulled nothing, so a no-op cycle wakes no screen.
  *
  * Off Electron this does nothing at all: a browser reads Supabase directly, so there is

@@ -8,6 +8,7 @@
  *
  *   Supabase realtime  →  "sync engine, come and pull"      ← a nudge, not data
  *   sync-once.js       →  pulls, commits, then prints       __SYNC_APPLIED__
+ *   index.js (worker)  →  sends it over IPC                  { type: "applied" }
  *   syncManager.ts     →  forwards it to every window        "sync:applied"
  *   syncApplied.ts     →  window event carrying { rows, models }
  *

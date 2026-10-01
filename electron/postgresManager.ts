@@ -3,6 +3,7 @@ import * as path from "path";
 import * as fs from "fs";
 import { spawn, spawnSync, type ChildProcess } from "child_process";
 import { app } from "electron";
+import { setHelperNote } from "./helperSupervisor";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { Client: PgClient } = require("pg") as typeof import("pg");
 
@@ -395,10 +396,11 @@ async function startEmbeddedPostgres(): Promise<boolean> {
         // that left a failure with no diagnosis at all: the app just reported "never
         // became ready" and dropped to live mode, with nothing anywhere saying why.
         // Relayed into the app log, which is the first thing anyone reads.
-        pgProcess = spawn(postgresExe, ["-D", dataDir, "-p", String(EMBEDDED_PG_PORT)], {
+        const proc = spawn(postgresExe, ["-D", dataDir, "-p", String(EMBEDDED_PG_PORT)], {
             detached: false,
             stdio: ["ignore", "pipe", "pipe"],
         });
+        pgProcess = proc;
 
         const relay = (buf: Buffer) => {
             for (const line of String(buf).split("\n")) {
@@ -412,10 +414,17 @@ async function startEmbeddedPostgres(): Promise<boolean> {
             console.error("[PostgresManager] Failed to start postgres process:", err);
         });
 
-        pgProcess.on("exit", (code, sig) => {
-            // Exiting during startup is the interesting case: it means the wait below is
-            // doomed and the reason has just been relayed above.
+        proc.on("exit", (code, sig) => {
+            // Exiting during startup: the wait below is doomed, and the reason has just
+            // been relayed above.
             console.warn(`[PostgresManager] postgres exited (code ${code}, signal ${sig}).`);
+            // Exiting once in use, without stopEmbeddedPostgres having asked (it clears
+            // both first): every local read and write now fails. Not restarted here — a
+            // restart needs the whole boot sequence (provisioning, the worker, the server's
+            // URL) — so the window title says so instead (helperSupervisor.ts).
+            if (clusterInUse && pgProcess === proc) {
+                setHelperNote("postgres", "Local database stopped — restart the app");
+            }
         });
 
         if (await waitForPostgresReady(EMBEDDED_PG_PORT)) {

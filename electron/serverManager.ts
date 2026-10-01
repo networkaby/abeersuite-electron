@@ -4,8 +4,21 @@ import { app } from "electron";
 import { fork, type ChildProcess } from "child_process";
 
 import * as http from "http";
+import { HelperSupervisor } from "./helperSupervisor";
 
 let nextProcess: ChildProcess | null = null;
+
+/** Brings a crashed server back (see helperSupervisor.ts). */
+const supervisor = new HelperSupervisor("server", "App server");
+
+/** The server has answered at least once, so a restart has a window to refresh. */
+let answeredOnce = false;
+let onRestarted: ((url: string) => void) | null = null;
+
+/** main.ts: told the URL once a server restarted after a crash answers again. */
+export function onNextServerRestarted(fn: (url: string) => void): void {
+    onRestarted = fn;
+}
 
 /** Result of a boot attempt. `ready: false` means the caller must not treat `url` as live. */
 export interface ServerStartResult {
@@ -60,6 +73,18 @@ export async function startNextServer(port = 3000, compileCacheDir?: string): Pr
         return { url: `http://127.0.0.1:${port}`, ready: true };
     }
 
+    supervisor.reset();
+    const result = await bootServer(port, compileCacheDir);
+    if (result.ready) answeredOnce = true;
+    return result;
+}
+
+/**
+ * Forks the server and waits for it to answer. Also the restart after a crash: the
+ * window is reloaded once the new one answers (main.ts), since every page it held was
+ * served by the process that died.
+ */
+async function bootServer(port: number, compileCacheDir?: string): Promise<ServerStartResult> {
     // No "reuse an existing listener" path here on purpose: it used to adopt *any*
     // process already on the port, including a stray `next dev` left running from
     // this same machine, and load a foreign app into the POS window. Single-instance
@@ -76,7 +101,7 @@ export async function startNextServer(port = 3000, compileCacheDir?: string): Pr
     const standaloneDir = path.join(process.resourcesPath, "standalone");
     const serverScript = path.join(standaloneDir, "server.js");
 
-    nextProcess = fork(serverScript, [], {
+    const proc = fork(serverScript, [], {
         cwd: standaloneDir,
         env: {
             ...process.env,
@@ -103,23 +128,32 @@ export async function startNextServer(port = 3000, compileCacheDir?: string): Pr
         stdio: "pipe",
     });
 
+    nextProcess = proc;
+
     // Pipe child stdout/stderr through console logger so it is recorded in main.log.
-    nextProcess.stdout?.on("data", (chunk: Buffer) => {
+    proc.stdout?.on("data", (chunk: Buffer) => {
         const text = chunk.toString().trimEnd();
         if (text) console.log(`[NextServer] ${text}`);
     });
-    nextProcess.stderr?.on("data", (chunk: Buffer) => {
+    proc.stderr?.on("data", (chunk: Buffer) => {
         const text = chunk.toString().trimEnd();
         if (text) console.error(`[NextServer:err] ${text}`);
     });
 
-    nextProcess.on("error", (err) => {
+    proc.on("error", (err) => {
         console.error("[NextServer] Fork error:", err);
     });
 
-    nextProcess.on("exit", (code, signal) => {
+    proc.on("exit", (code, signal) => {
         console.log(`[NextServer] Process exited (code=${code}, signal=${signal}).`);
+        // stopNextServer clears the slot before stopping it, so only a crash gets here.
+        if (nextProcess !== proc) return;
         nextProcess = null;
+        supervisor.crashed(() => {
+            void bootServer(port, compileCacheDir).then((r) => {
+                if (r.ready && answeredOnce) onRestarted?.(r.url);
+            });
+        });
     });
 
     // 1. Wait up to 30s for the TCP port to open. Polled at 50ms (was 200ms) — with
@@ -219,6 +253,7 @@ export function warmRoutes(baseUrl: string, routePaths: readonly string[]): void
  * The process is ended after `graceMs` whether it answered or not.
  */
 export async function stopNextServer(graceMs = 3000): Promise<void> {
+    supervisor.reset();
     const proc = nextProcess;
     nextProcess = null;
     if (!proc || proc.killed || proc.exitCode !== null) return;

@@ -20,7 +20,7 @@
  *           keyboard, and at the end of the countdown regardless.
  *
  *   schema  The counter itself has found its replica halted on schema drift (the sync
- *           worker prints a SCHEMA DRIFT line, see syncManager.ts). Billing on a replica
+ *           worker sends `{ type: "drift" }`, see syncManager.ts). Billing on a replica
  *           counter is already paused by ReplicaReadyGate, and only a new build clears
  *           it — so this is the shortest countdown of all, and it also triggers a check
  *           at once rather than waiting out the 30-minute timer.
