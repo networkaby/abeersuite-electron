@@ -29,8 +29,8 @@ export default function PortalHeader() {
                         Shop
                     </Link>
                     {isCustomer ? (
-                        <Link href="/portal/tickets" className={navClass("/portal/tickets")}>
-                            My tickets
+                        <Link href="/portal/repairs" className={navClass("/portal/repairs")}>
+                            My Repairs
                         </Link>
                     ) : null}
                 </nav>

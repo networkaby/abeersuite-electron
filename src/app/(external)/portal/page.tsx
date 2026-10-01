@@ -41,9 +41,9 @@ export default async function PortalHomePage() {
                         {isCustomer ? (
                             <>
                                 <Button asChild className="gap-1.5">
-                                    <Link href="/portal/tickets">
+                                    <Link href="/portal/repairs">
                                         <Ticket className="size-4" />
-                                        My tickets
+                                        My Repairs
                                     </Link>
                                 </Button>
                                 <Button variant="outline" asChild className="gap-1.5">

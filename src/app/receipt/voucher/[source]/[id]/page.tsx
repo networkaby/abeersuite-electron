@@ -27,7 +27,7 @@ import { requireStaffPage } from "@/shared/lib/auth/permissions";
 //
 // The POS sale keeps its dedicated relay page (/receipt/invoice?kind=POS, the
 // price ladder) — this route prints every other kind, the POS Rcv / Exp and
-// office Receipt / Payment slips included (/receipt/payment only forwards here).
+// office Receipt / Payment slips included.
 
 const SOURCES = new Set<VoucherReceiptSource>(["inv", "gl", "je"]);
 

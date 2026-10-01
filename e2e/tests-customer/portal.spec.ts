@@ -12,8 +12,13 @@ test.describe("customer portal", () => {
         await expect(page.getByText(/welcome back,/i)).toBeVisible();
     });
 
-    test("tickets page loads", async ({ page }) => {
+    test("repairs page loads", async ({ page }) => {
+        await page.goto("/portal/repairs", { waitUntil: "domcontentloaded" });
+        await expect(page).toHaveURL(/\/portal\/repairs/);
+    });
+
+    test("the old tickets address still lands on repairs", async ({ page }) => {
         await page.goto("/portal/tickets", { waitUntil: "domcontentloaded" });
-        await expect(page).toHaveURL(/\/portal\/tickets/);
+        await expect(page).toHaveURL(/\/portal\/repairs/);
     });
 });
