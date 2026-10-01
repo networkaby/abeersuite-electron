@@ -10,7 +10,7 @@
 // NOT folded in here. All shared state + bill math lives in usePosBilling; the
 // shared render tree lives in PosScreenShell.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import axios from "axios";
@@ -29,6 +29,8 @@ import { formatInr, todayIso } from "@/shared/lib/format";
 import { cleanLineNote, composeLineDescription, readLineText } from "@/shared/lib/print/lineDescription";
 import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearchAndCreate";
+import { usePosDraftStore } from "@/store/posDraftStore";
+import type { EditSource } from "@/modules/pos/components/PosTopBar";
 
 type QuoteMode = "order" | "estimate";
 const QUOTE_CFG = {
@@ -75,6 +77,32 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
         cashTenderedRef,
     });
 
+    // The voucher open in edit mode — its number, and the voucher it was already
+    // converted into (if any). Feeds the ⇄ options in the mode dropdown.
+    const [loaded, setLoaded] = useState<{ ref: string; convertedTo: { id: number; ref: string } | null } | null>(null);
+
+    // ⇄ convert: keep the cart (the draft store survives the navigation), mark it
+    // as coming from this voucher, and open the target mode as a NEW voucher.
+    // The target's save carries the link back, so this one shows "Converted".
+    const convertTo = (target: "sale" | "order") => {
+        if (!isEdit || !loaded) return;
+        b.setConvertFrom({ id: editId, ref: loaded.ref, kind: mode });
+        router.push(target === "sale" ? "/vouchers/pos/new" : "/vouchers/pos/order");
+    };
+    const editSource: EditSource | undefined = isEdit && loaded
+        ? { ref: loaded.ref, convertedTo: loaded.convertedTo, onConvert: convertTo }
+        : undefined;
+
+    // A new voucher here only keeps a ⇄ link it can carry: an Order from an
+    // estimate. Anything else left over (e.g. a convert to Sale abandoned by
+    // switching to Estimate) is dropped so it never links the wrong bill.
+    useEffect(() => {
+        if (isEdit) return;
+        if (mode === "estimate" || b.convertFrom?.kind !== "estimate") b.setConvertFrom(null);
+        // Mount-only check of the carried draft.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     // ── Edit mode: hydrate an existing order on mount ───────────────────────────
     // Reopen the order in this very screen — load its customer (so the tier discount
     // re-derives) and rebuild the cart from its lines. Only New / Under-Review orders
@@ -88,6 +116,8 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                 const { data } = await axios.get<{
                     accountId: number | null;
                     editable: boolean;
+                    ref: string;
+                    convertedTo: { id: number; ref: string } | null;
                     lines: { productId: number; sku: string; name: string; description: string | null; note: string | null; quantity: number; rate: number; taxRate: number; mrpPaise: number | null; savedSalePricePaise: number | null }[];
                     services?: { serviceId: number; name: string; quantity: number; rate: number; taxRate: number; description: string | null }[];
                 }>(`/api/orders/inv/${editId}`);
@@ -97,6 +127,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                     router.push(listHref);
                     return;
                 }
+                setLoaded({ ref: data.ref, convertedTo: data.convertedTo });
                 if (data.accountId != null) await b.fetchSnapshot(data.accountId);
                 if (cancelled) return;
                 b.setCart([
@@ -131,7 +162,11 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                 router.push(listHref);
             }
         })();
-        return () => { cancelled = true; b.resetDraft(); };
+        return () => {
+            cancelled = true;
+            // Leaving for a ⇄ convert keeps the cart; any other exit clears it.
+            if (usePosDraftStore.getState().convertFrom?.id !== editId) b.resetDraft();
+        };
         // One-shot hydration keyed on the voucher id; the helpers it calls are stable.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEdit, editId]);
@@ -250,6 +285,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                         + (advance > 0 ? ` | Advance ${formatInr(advance)}` : ""),
                     lines,
                     payments: paymentsList,
+                    refVoucherId: b.convertFrom?.id,   // ⇄ from an estimate → it shows "Converted"
                 }
                 : {
                     ...party,
@@ -287,6 +323,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
             b={b}
             headerClass={cfg.header}
             active={mode}
+            editSource={editSource}
             partySearchRef={partySearchRef}
             productSearchRef={productSearchRef}
             checkoutSlot={

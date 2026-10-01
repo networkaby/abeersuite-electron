@@ -13,8 +13,10 @@ import { useState } from "react";
 import {
     ArrowLeft, X, UserPlus, ExternalLink, RotateCcw,
     MoreVertical, RefreshCw, LayoutDashboard, Monitor,
-    ShoppingCart, ClipboardList, FileText, Users,
+    ShoppingCart, ClipboardList, FileText, Users, ArrowLeftRight,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { usePosDraftStore } from "@/store/posDraftStore";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
@@ -39,11 +41,26 @@ const tint = {
     violet:  "border-violet-300/60 bg-violet-50/40 text-violet-800 hover:bg-violet-100/70 dark:border-violet-500/40 dark:bg-violet-950/30 dark:text-violet-300 dark:hover:bg-violet-950/50",
 } as const;
 
+const MODES = [
+    { key: "sale",     label: "Sale",     href: "/vouchers/pos/new",      Icon: ShoppingCart },
+    { key: "order",    label: "Order",    href: "/vouchers/pos/order",    Icon: ClipboardList },
+    { key: "estimate", label: "Estimate", href: "/vouchers/pos/estimate", Icon: FileText },
+] as const;
+
+/** An existing estimate / order open for edit — the mode dropdown converts it. */
+export type EditSource = {
+    ref: string;
+    /** Already converted → the ⇄ options are shown disabled. */
+    convertedTo: { id: number; ref: string } | null;
+    onConvert: (target: "sale" | "order") => void;
+};
+
 export type PosTopBarProps = {
     /** Colour tint for the bar — each screen passes its own (emerald/indigo/amber). */
     headerClass: string;
     /** Which mode is active (shown in the mode dropdown). */
     active: "sale" | "order" | "estimate";
+    editSource?: EditSource;
 
     // ── Party search ────────────────────────────────────────────────────────
     partySearchRef: React.Ref<PartySearchAndCreateHandle>;
@@ -73,7 +90,7 @@ export type PosTopBarProps = {
 };
 
 export function PosTopBar({
-    headerClass, active,
+    headerClass, active, editSource,
     partySearchRef, onPartyPicked, locked, onDialogOpenChange,
     showClear, onClear, onNewCustomer, changeMode,
     onReturn,
@@ -82,6 +99,15 @@ export function PosTopBar({
 }: PosTopBarProps) {
     // Quick "Hand over" beside the shift pill — same dialog as the shift bar's button.
     const [handoverOpen, setHandoverOpen] = useState(false);
+    // ⇄ convert in progress — shown as a chip; × drops it and reopens the source.
+    const router = useRouter();
+    const convertFrom = usePosDraftStore((s) => s.convertFrom);
+    const setConvertFrom = usePosDraftStore((s) => s.setConvertFrom);
+    const cancelConvert = () => {
+        if (!convertFrom) return;
+        setConvertFrom(null);
+        router.push(`/vouchers/pos/${convertFrom.kind}?id=${convertFrom.id}`);
+    };
     return (
         <header className={`flex shrink-0 items-center gap-3 border-b-2 px-4 py-3 ${headerClass}`}>
             <Link href="/office" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground" title="Back to office">
@@ -100,23 +126,57 @@ export function PosTopBar({
                 <DropdownMenuContent align="start" className="text-xs">
                     <DropdownMenuLabel>Voucher type</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                        <Link href="/vouchers/pos/new" className={active === "sale" ? "font-semibold" : ""}>
-                            <ShoppingCart size={12} /> Sale
-                        </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                        <Link href="/vouchers/pos/order" className={active === "order" ? "font-semibold" : ""}>
-                            <ClipboardList size={12} /> Order
-                        </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                        <Link href="/vouchers/pos/estimate" className={active === "estimate" ? "font-semibold" : ""}>
-                            <FileText size={12} /> Estimate
-                        </Link>
-                    </DropdownMenuItem>
+                    {editSource ? (
+                        // An existing estimate / order is open: the other modes CONVERT it
+                        // (the new voucher links back), they never start an unrelated bill.
+                        // An order converts to Sale only; nothing converts back to Estimate.
+                        <>
+                            {editSource.convertedTo && (
+                                <DropdownMenuLabel className="font-normal text-muted-foreground">
+                                    Converted → {editSource.convertedTo.ref}
+                                </DropdownMenuLabel>
+                            )}
+                            {MODES.filter((m) => m.key === active || m.key === "sale" || (m.key === "order" && active === "estimate")).map((m) => (
+                                m.key === active ? (
+                                    <DropdownMenuItem key={m.key} disabled className="font-semibold opacity-100">
+                                        <m.Icon size={12} /> {m.label} ({editSource.ref})
+                                    </DropdownMenuItem>
+                                ) : (
+                                    <DropdownMenuItem
+                                        key={m.key}
+                                        disabled={!!editSource.convertedTo}
+                                        onSelect={() => editSource.onConvert(m.key as "sale" | "order")}
+                                    >
+                                        <ArrowLeftRight size={12} /> {m.label}
+                                    </DropdownMenuItem>
+                                )
+                            ))}
+                        </>
+                    ) : MODES.map((m) => (
+                        <DropdownMenuItem key={m.key} asChild>
+                            <Link href={m.href} className={active === m.key ? "font-semibold" : ""}>
+                                <m.Icon size={12} /> {m.label}
+                            </Link>
+                        </DropdownMenuItem>
+                    ))}
                 </DropdownMenuContent>
             </DropdownMenu>
+            {convertFrom && !editSource && (
+                <span
+                    className={`flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium ${convertFrom.kind === "order" ? tint.indigo : tint.amber}`}
+                    title="Saving this links it to the source, which then shows Converted"
+                >
+                    <ArrowLeftRight size={12} /> Converting from {convertFrom.ref}
+                    <button
+                        type="button"
+                        onClick={cancelConvert}
+                        className="ml-1 rounded p-0.5 hover:bg-black/10"
+                        title={`Cancel — reopen ${convertFrom.ref}`}
+                    >
+                        <X size={12} />
+                    </button>
+                </span>
+            )}
             {/* Plain field at rest, same as the voucher screens. Only "change the
                 customer" keeps a ring — it is a temporary mode the cashier must
                 see they are in. */}

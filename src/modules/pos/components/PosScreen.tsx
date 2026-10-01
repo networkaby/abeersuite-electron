@@ -48,9 +48,6 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
     // gift-card rows are preserved and the GL re-posts faithfully. A reduced total
     // over the unchanged payment lands as a credit on the customer's account.
     const isEdit = editId != null;
-    // Convert-to-sale: source estimate/order id whose customer + cart pre-fill a
-    // NEW sale; sent as sourceVoucherId on checkout so the source flips to "Converted".
-    const convertFromRef = useRef<number | null>(null);
     const editMeta = useRef<EditMeta | null>(null);
 
     // Focus/handle refs — owned here, shared with the hook and the shell.
@@ -149,10 +146,12 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             try {
                 const { data } = await axios.get<{
                     accountId: number | null;
+                    type: string | null;
+                    reference: string;
                     lines: { productId: number; description: string | null; note: string | null; quantity: string | number; rate: string | number; taxRate: string | number; mrpPaise: number | null; savedSalePricePaise: number | null; product: { sku: string; name: string } }[];
                 }>(`/api/inventory/vouchers/${fromId}`);
                 if (cancelled) return;
-                convertFromRef.current = fromId;
+                b.setConvertFrom({ id: fromId, ref: data.reference, kind: data.type === "POS_ESTIMATE" ? "estimate" : "order" });
                 if (data.accountId != null) await b.fetchSnapshot(data.accountId);
                 if (cancelled) return;
                 b.setCart(data.lines.map((l) => ({
@@ -324,7 +323,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 freeAutoApply: !b.appliedFree && !!b.autoFree,
                 giftCardCode: b.giftCard?.code ?? undefined,     // server draws min(balance, total) as a tender
                 collectSurplus: b.overpaid > 0.01,               // accept extra → Receipt voucher (clears dues FIFO, leftover = advance)
-                sourceVoucherId: convertFromRef.current ?? undefined,   // convert-to-sale link → source flips to "Converted"
+                sourceVoucherId: b.convertFrom?.id,              // ⇄ convert link → source flips to "Converted"
                 ticketId: b.ticketId ?? undefined,               // repair-ticket link → bill shows on the ticket + timeline
                 charges: validCharges.map((c) => ({
                     accountId: c.accountId as number,
@@ -354,8 +353,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             void qrDisplay.thankyou({ amount: b.total });
             b.setDisplayHold("thankyou");
             setTimeout(() => b.setDisplayHold(null), 4500);
-            b.resetAfterSubmit();
-            convertFromRef.current = null;   // conversion completed
+            b.resetAfterSubmit();   // also ends the ⇄ conversion
             if (printAfter) {
                 if (await bridgeOk("thermal", 1000)) {
                     // Customer "Today's discount" ladder for the thermal slip (B

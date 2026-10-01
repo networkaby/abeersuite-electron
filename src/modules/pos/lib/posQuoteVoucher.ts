@@ -25,6 +25,7 @@ import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { cleanLineNote } from "@/shared/lib/print/lineDescription";
 import { resolveServiceCharges, chargesNetTotal, ServiceLineError, type ServiceLineInput } from "@/shared/lib/accountancy/serviceCharges";
+import { convertSourceError, ConvertSourceError } from "@/modules/pos/lib/convertSource";
 
 export type PosQuoteType = "POS_ESTIMATE" | "POS_ORDER";
 
@@ -67,6 +68,9 @@ export type PosQuoteBody = {
     /// and become real GL legs when the quote is turned into a sale. `unitPrice`
     /// is GST-exclusive, like every other line on the way in.
     services?: ServiceLineInput[];
+    /// ⇄ convert from the till: the estimate this order was made from. Stored as
+    /// refVoucherId so the estimate shows "Converted". Orders only.
+    refVoucherId?: number | null;
 };
 
 const LABEL: Record<PosQuoteType, string> = {
@@ -94,6 +98,12 @@ export async function createPosQuoteVoucher(opts: {
     }
     for (const s of services) {
         if (!s.serviceId || !(s.quantity > 0)) throw new Error("Each service line needs a service and quantity > 0");
+    }
+    // Only an order converts from a quote, and only from a not-yet-converted estimate.
+    const refVoucherId = type === "POS_ORDER" && body.refVoucherId ? Number(body.refVoucherId) : null;
+    if (refVoucherId) {
+        const convertErr = await convertSourceError(prisma, refVoucherId, ["POS_ESTIMATE"]);
+        if (convertErr) throw new ConvertSourceError(convertErr);
     }
     // Ledger + GST re-resolved from the catalogue, never taken from the screen.
     const resolvedServices = await resolveServiceCharges(prisma, services);
@@ -202,6 +212,7 @@ export async function createPosQuoteVoucher(opts: {
                 // 5D-8: status "issued"/POSTED set on the spine above (no GL lines → gate-neutral).
                 // 5D-5: postedAt + 5D-6 reference (voucherNo) live on the spine.
                 universalVoucherId: spineId,
+                refVoucherId,
                 // 5D-5/5D-10: description + 5D-4 party + date live on the spine (engineCreateSpine set it).
                 partyJson: buildPartyJson({ name: body.partyName, phone: body.partyPhone }) ?? Prisma.DbNull,
                 partyType: body.partyType || null,

@@ -7,6 +7,7 @@ import { readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/ac
 import { canConvert } from "@/modules/accountancy/lib/convertMap";
 import { editFormUrl } from "@/modules/inventory/lib/voucherFormUrls";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
+import { convertSourceError } from "@/modules/pos/lib/convertSource";
 
 // POST /api/inventory/vouchers/[id]/convert   body: { targetKind }
 //
@@ -70,18 +71,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         // Restrict double conversion — block if a LIVE voucher already references
         // this source. Soft-deleting / cancelling that target drops the count to 0,
         // which re-opens conversion (per "delete the conversion → allow again").
-        const liveTargets = await prisma.voucherDetail.count({
-            where: {
-                refVoucherId:     sourceId,
-                universalVoucher: { status: { not: "CANCELLED" } },
-            },
-        });
-        if (liveTargets > 0) {
-            return NextResponse.json(
-                { error: "Already converted. Delete the converted voucher to convert this again." },
-                { status: 409 },
-            );
-        }
+        const convertErr = await convertSourceError(prisma, sourceId);
+        if (convertErr) return NextResponse.json({ error: convertErr }, { status: 409 });
 
         // Goods lines hang off the spine (Phase 5 5C).
         const lines = await prisma.voucherInventoryLine.findMany({

@@ -56,6 +56,7 @@ import {
 import { resolveProductTax } from "@/modules/inventory/lib/gstResolver";
 import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
 import { touchPosShift } from "@/modules/pos/lib/touchShift";
+import { convertSourceError } from "@/modules/pos/lib/convertSource";
 import { loadPartyPricing } from "@/modules/pricing-strategy/lib/groupPricingServer";
 import { groupRebatesExcl, rebatedRate, ruleForGroup } from "@/modules/pricing-strategy/lib/groupPricing";
 // Note: branch context comes from the cashier's active shift, NOT from the
@@ -248,6 +249,12 @@ export async function POST(req: Request) {
             { error: "Open a shift before billing.", code: "NO_OPEN_SHIFT" },
             { status: 400 },
         );
+    }
+    // Convert-to-sale: refuse a source that is already converted (another till,
+    // or the Daybook ⋮ convert, got there first).
+    if (body.sourceVoucherId) {
+        const convertErr = await convertSourceError(prisma, body.sourceVoucherId);
+        if (convertErr) return NextResponse.json({ error: convertErr, code: "ALREADY_CONVERTED" }, { status: 409 });
     }
     const tillAccountId = shift.counter.tillAccountId;
     const activeBranchId = shift.branchId;

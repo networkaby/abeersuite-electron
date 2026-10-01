@@ -147,6 +147,8 @@ export function usePosBilling(opts: {
     const resetDraft = usePosDraftStore((s) => s.reset);
     const ticketId = usePosDraftStore((s) => s.ticketId);
     const setTicketId = usePosDraftStore((s) => s.setTicketId);
+    const convertFrom = usePosDraftStore((s) => s.convertFrom);
+    const setConvertFrom = usePosDraftStore((s) => s.setConvertFrom);
 
     // ── Active POS shift ────────────────────────────────────────────────────
     // Mount order:
@@ -1449,6 +1451,7 @@ export function usePosBilling(opts: {
         setCharges([]);
         setCartSelectedId(null);
         setTicketId(null);
+        setConvertFrom(null);   // emptied or saved — the ⇄ conversion is over
         setAdjustmentsOpen(false);
         setCheckoutOpen(false);
         setClearCartDialogOpen(false);
@@ -1480,6 +1483,7 @@ export function usePosBilling(opts: {
         setCharges([]);
         setCartSelectedId(null);
         setTicketId(null);
+        setConvertFrom(null);   // emptied or saved — the ⇄ conversion is over
         setAdjustmentsOpen(false);
         setCheckoutOpen(false);
         // Auto-clear customer after successful bill so the next sale starts fresh.
@@ -1593,7 +1597,7 @@ export function usePosBilling(opts: {
         autoFree, setAutoFree,
         giftCard, setGiftCard, giftCardCodeStr, setGiftCardCodeStr, gcBusy, applyGiftCard,
         roundOff, autoRoundOff, roundOffStr, setRoundOffStr, roundOffManuallyEdited, setRoundOffManuallyEdited,
-        charges, setCharges, resetDraft, resetAfterSubmit, ticketId,
+        charges, setCharges, resetDraft, resetAfterSubmit, ticketId, convertFrom, setConvertFrom,
         // shift
         activeShift, setActiveShift, takeover, setTakeover, openTakeover, shiftLoaded,
         shiftOpenDialogOpen, setShiftOpenDialogOpen, returnDialogOpen, setReturnDialogOpen,

@@ -29,7 +29,7 @@ import { ShiftCloseDialog } from "@/modules/pos/components/ShiftCloseDialog";
 import { PosReturnDialog } from "@/modules/pos/components/PosReturnDialog";
 import { PosExpenditureDialog } from "@/modules/pos/components/PosExpenditureDialog";
 import { PosReceiptDialog } from "@/modules/pos/components/PosReceiptDialog";
-import { PosTopBar } from "@/modules/pos/components/PosTopBar";
+import { PosTopBar, type EditSource } from "@/modules/pos/components/PosTopBar";
 import { PosActionRail } from "@/modules/pos/components/PosActionRail";
 import { PosCustomerPanel } from "@/modules/pos/components/PosCustomerPanel";
 import { PosUpsellDrawer } from "@/modules/pos/components/PosUpsellDrawer";
@@ -58,6 +58,7 @@ export function PosScreenShell({
     b,
     headerClass,
     active,
+    editSource,
     partySearchRef,
     productSearchRef,
     checkoutSlot,
@@ -68,6 +69,8 @@ export function PosScreenShell({
     /** Header tint for the mode (emerald = Sale, indigo = Order, amber = Estimate). */
     headerClass: string;
     active: "sale" | "order" | "estimate";
+    /** An existing estimate / order open for edit — offers ⇄ convert in the mode dropdown. */
+    editSource?: EditSource;
     /** The same refs handed to usePosBilling — owned by the screen. */
     partySearchRef: React.RefObject<PartySearchAndCreateHandle | null>;
     productSearchRef: React.RefObject<HTMLInputElement | null>;
@@ -186,6 +189,7 @@ export function PosScreenShell({
                 <PosTopBar
                     headerClass={headerClass}
                     active={active}
+                    editSource={editSource}
                     partySearchRef={partySearchRef}
                     onPartyPicked={b.onPartyPicked}
                     locked={!!b.snapshot}

@@ -10,6 +10,7 @@ import { readSettlement, buildSettlementJson } from "@/shared/lib/accountancy/se
 import { resolveServiceCharges, chargesNetTotal, type ServiceLineInput } from "@/shared/lib/accountancy/serviceCharges";
 import { Prisma } from "@/generated/prisma/client";
 import { cleanLineNote } from "@/shared/lib/print/lineDescription";
+import { findLiveConversion } from "@/modules/pos/lib/convertSource";
 
 // GET  /api/orders/[source]/[id]      → order detail (lines) for the detail/edit view
 // PATCH/api/orders/[source]/[id]      → edit the order's lines (G2): drop a damaged
@@ -57,8 +58,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
         }
 
         const orderStatusId = v.universalVoucher?.links[0]?.targetId ?? null;
+        // The till's ⇄ convert reads this: a converted source offers no convert.
+        const convertedTo = await findLiveConversion(prisma, v.id);
         return NextResponse.json({
             id: v.id, ref: v.universalVoucher?.voucherNo ?? "", customer: readPartyName(v.partyJson), statusId: orderStatusId, accountId: partyAccountId,
+            type: v.universalVoucher?.type ?? null, convertedTo,
             address,
             // Estimates are GL-silent quotes → always editable; orders only at New / Under-Review.
             editable: v.universalVoucher?.type === "POS_ESTIMATE" ? true : (orderStatusId != null && EDITABLE_STAGES.includes(orderStatusId)),

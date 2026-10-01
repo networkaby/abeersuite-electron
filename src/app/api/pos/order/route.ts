@@ -7,6 +7,7 @@ import { branchAccessResponse } from "@/shared/lib/api/branchAccessResponse";
 import { handleApiError } from "@/shared/lib/api";
 import { createPosQuoteVoucher, type PosQuoteBody } from "@/modules/pos/lib/posQuoteVoucher";
 import { ServiceLineError } from "@/shared/lib/accountancy/serviceCharges";
+import { ConvertSourceError } from "@/modules/pos/lib/convertSource";
 import { syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
@@ -138,6 +139,7 @@ export async function POST(req: NextRequest) {
         // A service switched off since the screen loaded is the cashier's to fix
         // (remove the line), not a server fault — say so instead of "Failed to save order".
         if (e instanceof ServiceLineError) return NextResponse.json({ error: e.message, code: e.code }, { status: 422 });
+        if (e instanceof ConvertSourceError) return NextResponse.json({ error: e.message, code: "ALREADY_CONVERTED" }, { status: 409 });
         return handleApiError(e, "Failed to save order");
     }
 }

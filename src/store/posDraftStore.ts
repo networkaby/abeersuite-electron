@@ -27,6 +27,8 @@ function applyAction<T>(prev: T, action: SetStateAction<T>): T {
     return typeof action === "function" ? (action as (p: T) => T)(prev) : action;
 }
 
+export type ConvertFrom = { id: number; ref: string; kind: "order" | "estimate" };
+
 type PosDraftState = {
     snapshot: Snapshot | null;
     cart: CartLine[];
@@ -38,6 +40,11 @@ type PosDraftState = {
     // to /api/pos/sale so the resulting voucher links back to the ticket. Cleared
     // by reset() and on a manual customer change (see usePosBilling).
     ticketId: number | null;
+    // ⇄ convert: the existing estimate / order this draft was opened from. The
+    // next Sale (or Order, from an estimate) saves with a link back to it, so
+    // the source shows "Converted". Cleared by reset() and after every save.
+    convertFrom: ConvertFrom | null;
+    setConvertFrom: (v: SetStateAction<ConvertFrom | null>) => void;
     setSnapshot: (v: SetStateAction<Snapshot | null>) => void;
     setTicketId: (v: SetStateAction<number | null>) => void;
     setCart: (v: SetStateAction<CartLine[]>) => void;
@@ -53,7 +60,7 @@ type PosDraftState = {
 
 const initialDraft: Pick<
     PosDraftState,
-    "snapshot" | "cart" | "shippingAmtStr" | "roundOffStr" | "roundOffManuallyEdited" | "charges" | "ticketId"
+    "snapshot" | "cart" | "shippingAmtStr" | "roundOffStr" | "roundOffManuallyEdited" | "charges" | "ticketId" | "convertFrom"
 > = {
     snapshot: null,
     cart: [],
@@ -62,12 +69,14 @@ const initialDraft: Pick<
     roundOffManuallyEdited: false,
     charges: [],
     ticketId: null,
+    convertFrom: null,
 };
 
 export const usePosDraftStore = create<PosDraftState>((set) => ({
     ...initialDraft,
     setSnapshot: (v) => set((s) => ({ snapshot: applyAction(s.snapshot, v) })),
     setTicketId: (v) => set((s) => ({ ticketId: applyAction(s.ticketId, v) })),
+    setConvertFrom: (v) => set((s) => ({ convertFrom: applyAction(s.convertFrom, v) })),
     setCart: (v) => set((s) => ({ cart: applyAction(s.cart, v) })),
     setShippingAmtStr: (v) => set((s) => ({ shippingAmtStr: applyAction(s.shippingAmtStr, v) })),
     setRoundOffStr: (v) => set((s) => ({ roundOffStr: applyAction(s.roundOffStr, v) })),
