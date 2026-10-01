@@ -132,6 +132,9 @@ async function main() {
         }
 
         if (SHOW_KEYS || DEEP || REPAIR) {
+            // A repaired ledger row notes the totals it moves in `_sync_dirty`, on the
+            // same transaction (lib/rebuildTotals.js), so the table must exist first.
+            if (REPAIR) await totals.ensure(local);
             for (const b of bad) {
                 if (!b.entry || b.error) continue;
 
@@ -176,6 +179,9 @@ async function main() {
                 repairedRows += removed + added + refreshed;
                 console.log(`  ${b.model}: repaired -${removed} +${added} ~${refreshed}`);
             }
+            // Re-sum what the repairs moved, as a sync cycle would — left alone, the
+            // worker's next cycle would do it from the same list.
+            if (REPAIR && repairedTables > 0) await totals.rebuildTouched(local, console.log);
         }
     } finally {
         source.release();
@@ -192,7 +198,7 @@ async function main() {
             : "Replica matches the source exactly.");
         // Keys agreeing is not the same claim as rows agreeing, and saying so plainly
         // is the point: this tool used to report a content divergence as clean.
-        if (!DEEP) console.log("Keys only — re-run with --deep to compare row contents.");
+        if (!DEEP) console.log("Keys (and watermark stamps) only — re-run with --deep to compare row contents.");
         process.exit(0);
     }
     console.log(`${bad.length} table(s) disagree.`);

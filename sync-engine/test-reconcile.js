@@ -26,8 +26,9 @@
  * test writes to the replica the same way the worker does.
  */
 
-const { pool } = require("./lib/db");
+const { pool, inReplicaTransaction } = require("./lib/db");
 const reconcile = require("./lib/reconcile");
+const totals = require("./lib/rebuildTotals");
 const { pullByKeys, refreshByKeys, recheckBehindCursor, deleteByKeys } = require("./lib/pull");
 const { repairReferencing } = require("./sync-once.js");
 
@@ -317,6 +318,44 @@ async function main() {
         check("a cursor older than the horizon costs no query at all",
             await recheckBehindCursor({ query: () => { throw new Error("queried"); } }, local, tables.Person, stale, "9200"),
             { pulled: 0, ids: [] });
+
+        console.log("\n7. A cycle killed after a ledger page landed, before the totals were re-summed");
+
+        // The few columns rebuildTotals' account SQL reads, on both sides.
+        const LEDGER = `
+            DROP TABLE IF EXISTS "VoucherGlLine", "UniversalVoucher", "Account", "AccountGroup", "_sync_dirty";
+            CREATE TABLE "AccountGroup" (id int PRIMARY KEY, type text);
+            CREATE TABLE "Account" (id int PRIMARY KEY, "groupId" int, "normalBalance" text, balance numeric NOT NULL DEFAULT 0);
+            CREATE TABLE "UniversalVoucher" (id int PRIMARY KEY, status text);
+            CREATE TABLE "VoucherGlLine" (id int PRIMARY KEY, "universalVoucherId" int, "accountId" int, type text, amount numeric);
+            INSERT INTO "Account" (id, "normalBalance") VALUES (50, 'DEBIT');
+            INSERT INTO "UniversalVoucher" VALUES (7, 'POSTED');
+        `;
+        await source.query(LEDGER);
+        await local.query(LEDGER);
+        await source.query(`INSERT INTO "VoucherGlLine" VALUES (1, 7, 50, 'DEBIT', 100)`);
+        await totals.ensure(local);
+
+        const glLine = { n: 6, table: "VoucherGlLine", pk: ["id"], strategy: "child", parent: "UniversalVoucher", fk: "universalVoucherId" };
+        await pullByKeys(source, local, glLine, ["1"]);
+        // The process dies here. Nothing in memory survives; only the database does.
+        check("the page and its note landed together",
+            (await local.query(`SELECT kind, id FROM "_sync_dirty"`)).rows, [{ kind: "accounts", id: 50 }]);
+        check("...and the balance is still stale", Number((await local.query(`SELECT balance FROM "Account" WHERE id = 50`)).rows[0].balance), 0);
+
+        // A page that rolls back takes its note with it — no rebuild for a row never landed.
+        await inReplicaTransaction(local, async () => {
+            await totals.noteRows(local, "VoucherGlLine", [{ accountId: 51 }]);
+            throw new Error("page failed");
+        }).catch(() => {});
+        check("a rolled-back page leaves no note",
+            (await local.query(`SELECT count(*)::int AS c FROM "_sync_dirty" WHERE id = 51`)).rows[0].c, 0);
+
+        // The next cycle's pass 4, in a fresh process: it pulled nothing itself.
+        const resummed = await totals.rebuildTouched(local);
+        check("the next cycle re-sums what the killed one left", resummed, 1);
+        check("...the balance is right", Number((await local.query(`SELECT balance FROM "Account" WHERE id = 50`)).rows[0].balance), 100);
+        check("...and the list is cleared", (await local.query(`SELECT count(*)::int AS c FROM "_sync_dirty"`)).rows[0].c, 0);
     } finally {
         local.release();
         source.release();

@@ -158,6 +158,30 @@ Pass 2 keeps its ordering by running one depth at a time: a depth-2 child filter
 ids its depth-1 parent has only just finished writing. Pass 3 is unchanged (already
 budgeted). `__SYNC_APPLIED__` still prints once, after every lane has committed.
 
+**Pass 4 - running totals.** Pulled rows never overwrite `Account.balance`, stock or
+`GiftCard.balance` (`cacheColumns`); this pass re-sums the ones the cycle's ledger rows
+moved, from the local ledger (`lib/rebuildTotals.js`). The ids are noted in
+`_sync_dirty` **on the same transaction as the page** that moved them and cleared only
+after the rebuild (2026-10-01). Until then they lived in the cycle's memory: a cycle
+killed after a ledger page committed — the app closed mid-sync, a Windows shutdown, the
+cycle timeout, a relay pre-empting it — had already moved that table's cursor, so no
+later cycle saw those rows again and the totals stayed wrong until something else
+touched the same ids. Now the next cycle finishes the job (and announces it, so a
+balance screen re-reads even when that cycle pulled nothing).
+
+### The engine's own tables
+
+`_sync_state` (cursors and verify proofs), `_sync_status` (readiness) and `_sync_dirty`
+(totals owed) are created by the engine, as `smx_sync`, from one column list each
+(`lib/bookkeeping.js` `ensureTable`). Every column is re-declared with
+`ADD COLUMN IF NOT EXISTS` on each cycle, so a column added in a later build reaches a
+till that already has the table — `CREATE TABLE IF NOT EXISTS` alone skips the whole
+statement once the table exists, and until 2026-10-01 `_sync_status` had nothing else, so
+`publish()` would have failed every cycle on the first new column. A new column must be
+nullable or carry a DEFAULT. They stay out of `resources/local-schema.sql` on purpose: the
+provisioner applies that file as the database owner before `smx_sync` exists, and the
+engine could then no longer alter its own tables.
+
 ### Two things that keep it cheap
 
 **A `full` table is fingerprinted before it is copied.** Replacing 22 reference
@@ -416,10 +440,11 @@ node test-reconcile.js   # needs TEST_SOURCE_URL and TEST_LOCAL_URL — two empt
 
 Reproduces every fault above against a throwaway pair of databases — the FK-rewritten
 row, the child row edited in place, the replica whose schema is behind, the unpushed
-row that is not an upstream delete, the edit stamped behind the cursor and the late
-commit — and asserts that a key hash calls each one clean while the new machinery finds
-it, repairs what is repairable, holds what this counter still owes the office, and
-refuses to "repair" a schema gap. 35 checks. The header explains
+row that is not an upstream delete, the edit stamped behind the cursor, the late
+commit, and the cycle killed before its totals were re-summed — and asserts that a key
+hash calls each one clean while the new machinery finds it, repairs what is repairable,
+holds what this counter still owes the office, and refuses to "repair" a schema gap.
+41 checks. The header explains
 how to make a scratch cluster from the binaries the app already ships.
 
 ### Verifying row contents: `--deep`
@@ -554,6 +579,17 @@ fight over the same tables and watermarks.
 
 Schema drift backs off hard (3x interval) instead of retrying on the usual schedule:
 it is a fault only a deploy can fix, so retrying quickly would just bury the log.
+
+**Stopping (2026-10-01).** The desktop app asks over IPC (`{ type: "shutdown", graceMs }`,
+`electron/syncManager.ts stopSyncWorker`); SIGINT / SIGTERM do the same by hand. A cycle in
+flight gets the grace to finish, then the worker ends it and exits — it never leaves one
+behind. On Windows a signal from the app is a hard kill that never reached the handler, so
+the old "let the cycle finish" left it running as an orphan: still writing after the app
+had stopped syncing (before a restore's wipe, too), and still connected when PostgreSQL
+was stopped under it. Ending a cycle loses nothing — every page is its own transaction and
+the totals it owed wait in `_sync_dirty`. Verified with a source that never answers: asked
+mid-cycle with a 2 s grace, the cycle was ended at 2.0 s and the worker exited with it, no
+`sync-once` process left.
 
 Verified live: published a `ledger` signal and the service began a cycle 1.3s later.
 

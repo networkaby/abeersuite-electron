@@ -104,10 +104,10 @@ export function startSyncWorker(syncUrl: string): void {
 
     // ELECTRON_RUN_AS_NODE makes the Electron binary behave as plain Node, so the
     // worker needs no separate Node runtime installed on the counter — the whole point
-    // of shipping one box.
-    worker = spawn(process.execPath, [entry], {
+    // of shipping one box. The `ipc` channel is how it is asked to stop (stopSyncWorker).
+    const proc = spawn(process.execPath, [entry], {
         cwd: dir,
-        stdio: ["ignore", "pipe", "pipe"],
+        stdio: ["ignore", "pipe", "pipe", "ipc"],
         env: {
             ...process.env,
             ELECTRON_RUN_AS_NODE: "1",
@@ -130,20 +130,23 @@ export function startSyncWorker(syncUrl: string): void {
             else if (line.includes("cycle ok")) noteSchemaDrift(false);
         }
     };
-    worker.stdout?.on("data", relay);
-    worker.stderr?.on("data", relay);
+    worker = proc;
+    proc.stdout?.on("data", relay);
+    proc.stderr?.on("data", relay);
 
-    worker.on("error", (err) => {
+    // `worker === proc`: a worker stopped and replaced (restore, counter reset) exits
+    // after its successor has started, and must not clear the successor's slot.
+    proc.on("error", (err) => {
         console.error("[SyncManager] Sync worker failed to start:", err);
-        worker = null;
+        if (worker === proc) worker = null;
     });
 
-    worker.on("exit", (code, sig) => {
+    proc.on("exit", (code, sig) => {
         // Deliberately not restarted here. The worker already retries internally and
         // backs off hard on schema drift (a fault only a deploy can fix); a restart loop
         // in this process would just hide that and hammer the source.
         console.log(`[SyncManager] Sync worker exited (code ${code}, signal ${sig}).`);
-        worker = null;
+        if (worker === proc) worker = null;
     });
 
     console.log("[SyncManager] Sync worker started.");
@@ -176,16 +179,42 @@ function notifyIfApplied(line: string): void {
 }
 
 /**
- * Asks the worker to stop. It leaves a cycle in flight to finish — cycles are
- * transactional, so killing one mid-write buys nothing a rollback would not.
+ * Stops the worker, and resolves once it has gone.
+ *
+ * Asked over IPC first: the worker gives a cycle in flight `graceMs - 1000` to finish,
+ * then ends it itself and exits (sync-engine/index.js). That order matters on Windows,
+ * where `kill()` is a hard TerminateProcess — killing the worker outright used to leave
+ * its running cycle behind as an orphan, still writing into the replica after the app
+ * had "stopped syncing", and still connected when PostgreSQL was stopped under it.
+ * Ending a cycle loses nothing: every page is its own transaction, and the totals it
+ * owed wait in `_sync_dirty` for the next one. Past `graceMs` the worker is ended anyway.
  */
-export function stopSyncWorker(): void {
-    if (!worker || worker.killed) return;
+export async function stopSyncWorker(graceMs = 5000): Promise<void> {
+    const proc = worker;
+    worker = null;
+    if (!proc || proc.killed || proc.exitCode !== null) return;
     console.log("[SyncManager] Stopping the sync worker…");
+    if (proc.connected) {
+        await new Promise<void>((resolve) => {
+            const timer = setTimeout(() => {
+                console.warn(`[SyncManager] Sync worker still running after ${graceMs} ms — ending it.`);
+                resolve();
+            }, graceMs);
+            proc.once("exit", () => {
+                clearTimeout(timer);
+                resolve();
+            });
+            try {
+                proc.send({ type: "shutdown", graceMs: Math.max(0, graceMs - 1000) });
+            } catch {
+                clearTimeout(timer);
+                resolve();
+            }
+        });
+    }
     try {
-        worker.kill();
+        if (proc.exitCode === null) proc.kill();
     } catch (err) {
         console.error("[SyncManager] Error stopping the sync worker:", err);
     }
-    worker = null;
 }

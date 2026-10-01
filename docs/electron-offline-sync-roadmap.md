@@ -322,7 +322,11 @@ it from its own ledger after ledger rows land.** One list, `cacheColumns` in
 ships no outbox row when only a total (and `updatedAt`) changed; `push.ts` leaves the
 columns out of the UPDATE half of its upsert and re-sums the touched accounts / products /
 gift cards on Supabase after the flush (`rebuildTotals.ts`); the engine does the same on
-the replica in pass 4 of every cycle (`sync-engine/lib/rebuildTotals.js`). Totals still
+the replica in pass 4 of every cycle (`sync-engine/lib/rebuildTotals.js`). The ids to
+re-sum are noted in `_sync_dirty` on the same transaction as the page that moved them and
+cleared only after the rebuild, so a cycle killed in between is finished by the next one
+(2026-10-01; until then the list lived in memory and a killed cycle left those totals
+wrong for good). Totals still
 ride a row's CREATE (the columns are NOT NULL). `verify-replica.js --totals` proves each
 side against its own ledger; `pnpm recompute:caches` is the one-shot repair.
 

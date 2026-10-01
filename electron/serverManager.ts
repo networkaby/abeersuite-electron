@@ -211,16 +211,45 @@ export function warmRoutes(baseUrl: string, routePaths: readonly string[]): void
 }
 
 /**
- * Gracefully stops the forked Next.js server process on app exit.
+ * Stops the forked Next.js server on app exit.
+ *
+ * Asks first, over the channel `fork` opens: the server stops its outbox flusher once
+ * the batch on the wire has finished and answers (src/instrumentation.ts). On Windows
+ * `kill()` is a hard TerminateProcess, so asking is the only way it finishes anything.
+ * The process is ended after `graceMs` whether it answered or not.
  */
-export function stopNextServer(): void {
-    if (nextProcess && !nextProcess.killed) {
-        console.log("[NextServer] Stopping Next.js server process...");
-        try {
-            nextProcess.kill();
-        } catch (err) {
-            console.error("[NextServer] Error stopping server:", err);
-        }
-        nextProcess = null;
+export async function stopNextServer(graceMs = 3000): Promise<void> {
+    const proc = nextProcess;
+    nextProcess = null;
+    if (!proc || proc.killed || proc.exitCode !== null) return;
+    console.log("[NextServer] Stopping Next.js server process...");
+    if (proc.connected) {
+        await new Promise<void>((resolve) => {
+            const done = () => {
+                clearTimeout(timer);
+                proc.off("message", onMessage);
+                proc.off("exit", done);
+                resolve();
+            };
+            const onMessage = (msg: { type?: string } | null) => {
+                if (msg?.type === "shutdown-done") done();
+            };
+            const timer = setTimeout(() => {
+                console.warn(`[NextServer] No answer to shutdown within ${graceMs} ms — ending it.`);
+                done();
+            }, graceMs);
+            proc.on("message", onMessage);
+            proc.once("exit", done);
+            try {
+                proc.send({ type: "shutdown" });
+            } catch {
+                done();
+            }
+        });
+    }
+    try {
+        if (proc.exitCode === null) proc.kill();
+    } catch (err) {
+        console.error("[NextServer] Error stopping server:", err);
     }
 }

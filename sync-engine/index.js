@@ -255,18 +255,38 @@ stopLocalSignal = localSignal.listen(cfg, onRelayPull, log);
 log(`counter-sync started (interval ${INTERVAL_MS / 60000}m)`);
 runCycle("startup");
 
-function shutdown(sig) {
+/** How long a cycle in flight may run on after a stop is asked, unless told otherwise. */
+const SHUTDOWN_GRACE_MS = 4000;
+
+function shutdown(why, graceMs = SHUTDOWN_GRACE_MS) {
     if (shuttingDown) return;
     shuttingDown = true;
-    log(`${sig} - shutting down`);
+    log(`${why} - shutting down`);
     if (timer) clearTimeout(timer);
     try { stopSignal(); } catch { /* going away anyway */ }
     try { stopLocalSignal(); } catch { /* going away anyway */ }
-    // Waiting targeted pulls are not answered: the process exits on the next line, so
-    // a NOTIFY could not be sent anyway. The app's own timeout releases them.
-    // A cycle in flight is left to finish: it is transactional, and killing it mid
-    // write buys nothing that a rollback would not already give us.
-    process.exit(0);
+    // Waiting targeted pulls are not answered: the process is going, so a NOTIFY could
+    // not be relied on anyway. The app's own timeout releases them.
+    const cycle = child;
+    if (!cycle) process.exit(0);
+    // A cycle in flight gets `graceMs` to finish on its own; past that it is ended. It
+    // is never left behind: an orphaned cycle kept writing into the replica after the
+    // app had stopped syncing, and was still connected when PostgreSQL was stopped under
+    // it. Ending one loses nothing — every page is its own transaction, and the totals
+    // it owed are in `_sync_dirty` for the next cycle (lib/rebuildTotals.js).
+    const force = setTimeout(() => {
+        log("cycle still running - ending it; the next start redoes what it had left");
+        cycle.kill("SIGKILL");
+    }, graceMs);
+    cycle.once("exit", () => {
+        clearTimeout(force);
+        process.exit(0);
+    });
 }
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
+// The desktop app asks over IPC (electron/syncManager.ts stopSyncWorker): on Windows a
+// signal from it is a hard kill, which would never reach the handlers above.
+process.on("message", (msg) => {
+    if (msg && msg.type === "shutdown") shutdown("app asked", msg.graceMs);
+});

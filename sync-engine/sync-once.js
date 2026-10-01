@@ -251,6 +251,8 @@ async function main() {
     let skipped = 0;
     let verified = 0;
     let repaired = 0;
+    /** Totals re-summed in pass 4 — possibly a killed cycle's, with no row pulled now. */
+    let rebuilt = 0;
 
     try {
         try {
@@ -280,6 +282,7 @@ async function main() {
         }
 
         await status.ensure(local);
+        await totals.ensure(local);
 
         // Checked before anything is written: syncing into a replica of the wrong
         // shape produces rows that are quietly incomplete rather than an error.
@@ -658,10 +661,12 @@ async function main() {
         // Pulled rows leave Account.balance / stock / GiftCard.balance alone (see
         // rebuildTotals.js); this is where the replica's own copies catch up. Runs
         // after every pass, including reconcile repairs, so a repaired GL line is
-        // counted the same cycle it arrives.
-        if (!DRY && totals.pending() > 0) {
+        // counted the same cycle it arrives — and it also finishes what a cycle killed
+        // before this point left in `_sync_dirty`.
+        if (!DRY) {
             try {
                 const changed = await totals.rebuildTouched(local, console.log);
+                rebuilt = changed;
                 // A changed total changes what a balance screen shows, exactly as a
                 // pulled row does — and only the models a screen can name are useful.
                 if (changed > 0) {
@@ -743,8 +748,8 @@ async function main() {
     // re-read the replica in parallel with this process and routinely beat it there.
     // Silent when nothing moved, so a no-op cycle wakes nobody. Rows repaired by the
     // reconcile pass count: they change what the replica serves exactly as a pull does.
-    if (!DRY && pulledTotal + repaired > 0) {
-        console.log(`__SYNC_APPLIED__ ${JSON.stringify({ rows: pulledTotal + repaired, models: [...changedModels] })}`);
+    if (!DRY && pulledTotal + repaired + rebuilt > 0) {
+        console.log(`__SYNC_APPLIED__ ${JSON.stringify({ rows: pulledTotal + repaired + rebuilt, models: [...changedModels] })}`);
     }
     process.exit(failed === 0 ? 0 : 1);
 }

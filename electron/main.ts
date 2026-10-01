@@ -680,8 +680,9 @@ async function resetCounter(reason: string): Promise<boolean> {
         console.log(`[main] Resetting this PC's counter — ${reason}.`);
         const file = counterSetupFilePath();
         if (fs.existsSync(file)) fs.unlinkSync(file);
-        // No counter, no sync — the mirror image of the boot gate.
-        stopSyncWorker();
+        // No counter, no sync — the mirror image of the boot gate. Awaited: the wipe
+        // below must not race a cycle still writing into the replica.
+        await stopSyncWorker();
         currentSyncStatus = "";
         currentConnectionStatus = "";
         mainWindow?.setTitle(APP_TITLE);
@@ -993,22 +994,22 @@ ipcMain.handle("backup:restore-from-disk", async (event, confirm: string): Promi
     // A restore replaces Supabase. Three things on THIS machine keep writing straight
     // through one, and each of them undoes it:
     //
-    //   1. The sync worker pulls Supabase into the replica. Stopping the scheduler is
-    //      necessary but not sufficient — `stopSyncWorker()` sends SIGTERM and returns,
-    //      and sync-engine/index.js deliberately lets a cycle already in flight finish.
+    //   1. The sync worker pulls Supabase into the replica. `stopSyncWorker()` resolves
+    //      only once the worker AND its cycle are gone — it ends a cycle in flight
+    //      rather than leave it writing behind the restore.
     //   2. The outbox flusher pushes this PC's pending writes UP. It lives inside the
-    //      forked Next server (instrumentation.ts) and main has no channel to it, so it
+    //      forked Next server (instrumentation.ts) and stops only with it, so it
     //      would push pre-restore rows back over the restore within the minute.
     //   3. The replica itself keeps the pre-restore values for ever: restored rows
     //      carry an OLDER updatedAt than the watermark, and the pull's last-write-wins
     //      guard refuses to apply them.
     //
-    // Relaunching answers all three with what already exists. `app.quit()` runs the
-    // will-quit handler, which stops the Next server and takes the flusher and any
-    // in-flight sync child down with it; the wipe before it empties `_sync_state` so
+    // Relaunching answers the other two with what already exists. `app.quit()` runs the
+    // will-quit handler, which stops the Next server and its flusher before
+    // PostgreSQL; the wipe before it empties `_sync_state` so
     // the next boot's worker sees a never-synced replica and pulls the restored data
     // in full, with the readiness gate closed until it has.
-    stopSyncWorker();
+    await stopSyncWorker();
 
     const result = await runRestore(picked.filePaths[0], (line) => {
         if (!event.sender.isDestroyed()) event.sender.send("backup:progress", line);
@@ -1656,6 +1657,8 @@ function createShellWindow(initiallyHidden = false): BrowserWindow {
         }
     });
     win.on("closed", () => { if (mainWindow === win) mainWindow = null; });
+    // Windows only: sign-out, restart or shutdown. Fired on a hidden window too.
+    win.on("session-end", stopHelpersNow);
     win.loadFile(shellPath(), { query: shellQuery() }).catch((err) => {
         // ERR_ABORTED here is the routine case: loadApp() below already navigated on to
         // the real page before this promise settled. That is a race won, not a failure.
@@ -1968,16 +1971,55 @@ app.on("before-quit", () => {
     persistVisitedRoutes();
 });
 
-app.on("will-quit", () => {
-    stopAutoUpdater();
-    stopNextServer();
-    stopSyncWorker();
+/** The helpers below are down, so the quit that follows may go through. */
+let helpersStopped = false;
+let helpersStopping: Promise<void> | null = null;
+
+/**
+ * Stops everything this app started, in an order that leaves nothing half-done: the
+ * Next server and the sync worker first — each asked, then ended, side by side since
+ * neither waits on the other — then the bridge, then PostgreSQL under them. Bounded:
+ * at most 5 s for the two asks (usually well under one), 5 s for pg_ctl.
+ */
+async function stopHelpers(): Promise<void> {
+    await Promise.all([stopNextServer(3000), stopSyncWorker(5000)]);
     stopHardwareBridge();
     stopEmbeddedPostgres();
+}
+
+/**
+ * Windows is signing out or shutting down. There is no time for the polite path — the
+ * OS ends this process soon after the handler returns — so PostgreSQL, the part that
+ * matters (a clean stop means no crash recovery at the next boot), is stopped
+ * synchronously and the rest is told to go.
+ */
+function stopHelpersNow(): void {
+    helpersStopped = true;
+    void stopNextServer(0);
+    void stopSyncWorker(0);
+    stopHardwareBridge();
+    stopEmbeddedPostgres();
+}
+
+app.on("will-quit", (event) => {
+    stopAutoUpdater();
     if (tray && !tray.isDestroyed()) {
         tray.destroy();
         tray = null;
     }
+    if (helpersStopped) return;
+    // Held until the helpers are down. On Windows `kill()` is a hard TerminateProcess,
+    // so a synchronous sweep here could only ever kill them: the flusher mid-batch, the
+    // sync worker with its cycle orphaned and still writing, and PostgreSQL stopped
+    // only when this launch had started it.
+    event.preventDefault();
+    if (helpersStopping) return;
+    helpersStopping = stopHelpers()
+        .catch((err) => console.error("[main] Stopping the helpers failed:", err))
+        .finally(() => {
+            helpersStopped = true;
+            app.quit();
+        });
 });
 
 app.on("window-all-closed", () => {

@@ -127,7 +127,7 @@ async function upsert(client, table, pk, rows, jsonCols, cacheCols, force) {
         await client.query(sql, params);
         written += batch.length;
     }
-    totals.noteRows(table, rows);
+    await totals.noteRows(client, table, rows);
     return written;
 }
 

@@ -279,7 +279,13 @@ export function startOutboxFlusher(localUrl: string): void {
     startListener(localUrl);
 }
 
-export function stopOutboxFlusher(): void {
+/**
+ * Stops the flusher and resolves once no batch is on the wire. A batch already pushed
+ * gets to mark its rows pushed, so the next boot does not send them again — harmless
+ * (last-write-wins drops an equal stamp) but avoidable. The desktop app asks for this on
+ * quit (instrumentation.ts) and bounds the wait itself.
+ */
+export async function stopOutboxFlusher(): Promise<void> {
     S.stopped = true;
     S.queued = false;
     if (S.listenRetry) {
@@ -291,7 +297,9 @@ export function stopOutboxFlusher(): void {
         S.listener = null;
         client.end().catch(() => { });
     }
-    if (!S.timer) return;
-    clearInterval(S.timer);
-    S.timer = null;
+    if (S.timer) {
+        clearInterval(S.timer);
+        S.timer = null;
+    }
+    while (S.inFlight) await new Promise((r) => setTimeout(r, 50));
 }

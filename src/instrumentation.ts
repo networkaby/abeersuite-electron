@@ -17,9 +17,24 @@ export async function register() {
     // the Supabase client, which is here — see flusher.ts for the 401 that made the
     // previous cross-process arrangement never work once.
     const localUrl = process.env.LOCAL_DATABASE_URL;
+    let stopFlusher: (() => Promise<void>) | null = null;
     if (localUrl && parseCounterPc(process.env.COUNTER_PC) === true) {
-      const { startOutboxFlusher } = await import("@/shared/lib/sync/flusher");
+      const { startOutboxFlusher, stopOutboxFlusher } = await import("@/shared/lib/sync/flusher");
       startOutboxFlusher(localUrl);
+      stopFlusher = stopOutboxFlusher;
+    }
+
+    // The desktop app forks this server with an IPC channel and, on quit, asks it to
+    // stop before stopping PostgreSQL under it (electron/serverManager.ts
+    // stopNextServer). Answered once the flusher's batch on the wire has finished — at
+    // once where there is no flusher; the app bounds the wait and ends the process
+    // either way. Absent on Vercel and under `next dev`: nothing forked them.
+    if (typeof process.send === "function") {
+      process.on("message", (msg: { type?: string } | null) => {
+        if (msg?.type !== "shutdown") return;
+        void (stopFlusher ? stopFlusher() : Promise.resolve())
+          .finally(() => process.send?.({ type: "shutdown-done" }));
+      });
     }
   }
 

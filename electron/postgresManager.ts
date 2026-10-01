@@ -25,6 +25,10 @@ const READY_BUDGET_MS = 90_000;
 
 let pgProcess: ChildProcess | null = null;
 
+/** This launch is running on the embedded cluster — started it, or found it already up
+ *  from an earlier launch. Either way it is ours to stop on quit (stopEmbeddedPostgres). */
+let clusterInUse = false;
+
 /**
  * Per-machine opt-in for the local replica, persisted in userData so it survives
  * upgrades without needing `COUNTER_PC` baked into the shared installer (every
@@ -483,8 +487,11 @@ export async function ensurePostgresRunning(): Promise<string | null> {
             console.warn("[PostgresManager] The running embedded PostgreSQL never became ready — staying in live mode.");
             return null;
         }
+        clusterInUse = true;
     } else if (!await startEmbeddedPostgres()) {
         return null;
+    } else {
+        clusterInUse = true;
     }
 
     // 2. The cluster is up, but a fresh one holds no `smx` database.
@@ -502,30 +509,44 @@ export async function ensurePostgresRunning(): Promise<string | null> {
 }
 
 /**
- * Gracefully terminates the embedded PostgreSQL process on app exit.
+ * Stops the embedded cluster on app exit, the way PostgreSQL wants to be stopped.
  *
- * On Windows `SIGTERM` is not supported by Node.js — the process receives
- * `SIGKILL` instead, which means an unclean shutdown and possible `pgdata`
- * corruption.  We therefore use `pg_ctl stop -m fast` on Windows, which sends
- * the proper shutdown signal through PostgreSQL's own mechanism.
+ * `pg_ctl stop -m fast`, by data folder: it ends the connections, writes a checkpoint
+ * and closes its files, so the next start needs no crash recovery. Never `kill()` — on
+ * Windows that is TerminateProcess, an unclean shutdown every time.
+ *
+ * By data folder, not by "did this launch start it": a cluster found already running at
+ * boot (an earlier launch that crashed, or quit before stopping it) was left running on
+ * every quit after that, so it stayed unclean for good. `-D` reaches only the cluster
+ * that owns this folder, never another PostgreSQL on the PC.
+ *
+ * Synchronous on purpose — the Windows session-end path (main.ts) has no time for a
+ * promise. `-t 3` bounds only how long pg_ctl WAITS: the server finishes stopping on
+ * its own after that, so a slow checkpoint costs nothing but the confirmation.
  */
 export function stopEmbeddedPostgres(): void {
-    if (pgProcess && !pgProcess.killed) {
-        console.log("[PostgresManager] Stopping embedded PostgreSQL...");
-        try {
-            if (process.platform === "win32") {
-                const pgCtl = path.join(getEmbeddedBinPath(), "pg_ctl.exe");
-                const dataDir = getEmbeddedDataPath();
-                spawnSync(pgCtl, ["stop", "-D", dataDir, "-m", "fast"], {
-                    timeout: 10_000,
-                    stdio: "ignore",
-                });
-            } else {
-                pgProcess.kill("SIGTERM");
-            }
-        } catch (err) {
-            console.error("[PostgresManager] Error stopping postgres:", err);
-        }
-        pgProcess = null;
+    if (!clusterInUse && !pgProcess) return;
+    clusterInUse = false;
+    pgProcess = null;
+    const pgCtl = path.join(getEmbeddedBinPath(), process.platform === "win32" ? "pg_ctl.exe" : "pg_ctl");
+    if (!fs.existsSync(pgCtl)) {
+        console.warn(`[PostgresManager] No pg_ctl at ${pgCtl} — cannot stop the embedded PostgreSQL cleanly.`);
+        return;
+    }
+    console.log("[PostgresManager] Stopping embedded PostgreSQL...");
+    const res = spawnSync(pgCtl, ["stop", "-D", getEmbeddedDataPath(), "-m", "fast", "-w", "-t", "3"], {
+        timeout: 5_000,
+        encoding: "utf8",
+        windowsHide: true,
+    });
+    const said = `${res.stdout ?? ""}${res.stderr ?? ""}`.trim().replace(/\s+/g, " ");
+    if (res.error) {
+        console.error("[PostgresManager] pg_ctl stop could not run:", res.error.message);
+    } else if (res.status === 0) {
+        console.log("[PostgresManager] Embedded PostgreSQL stopped cleanly.");
+    } else {
+        // Non-zero is also "no server running" (already gone) and "still stopping after
+        // -t" (it carries on by itself). Logged with pg_ctl's own words either way.
+        console.warn(`[PostgresManager] pg_ctl stop exited ${res.status}: ${said}`);
     }
 }

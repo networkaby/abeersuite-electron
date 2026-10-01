@@ -15,9 +15,14 @@
  * fine once, not every ten minutes. The pull already has the rows in hand, so noting
  * `accountId` / `productId` / `giftCardId` as they go by costs nothing.
  *
- * The collector is module state: pull.js notes rows as it writes them, sync-once.js
- * runs the rebuild once at the end. A cycle is one process (index.js spawns
- * sync-once.js per cycle), so nothing leaks between cycles.
+ * ── Why the ids are kept in a table, `_sync_dirty` ──────────────────────────
+ * pull.js notes them on the SAME transaction that lands the page, and the rebuild at
+ * the end of the cycle (sync-once.js, pass 4) clears only what it has re-summed. A
+ * cycle killed in between — the app closed mid-sync, Windows shutting down, the
+ * worker's own cycle timeout — leaves the list behind, and the next cycle finishes
+ * the job. The list used to live in this module's memory: the ledger page was
+ * committed and its cursor had moved, so no later cycle saw those rows again, and the
+ * totals stayed wrong until something else happened to touch the same ids.
  *
  * Runs OUTSIDE replica mode, deliberately: the outbox trigger then fires on the
  * UPDATEs and suppresses them itself (only a total changed), which is the same
@@ -25,6 +30,19 @@
  */
 
 const { q } = require("./db");
+const { ensureTable } = require("./bookkeeping");
+
+const DIRTY = "_sync_dirty";
+
+/** `kind` is a bucket of TOUCH below (accounts, products, giftCards, vouchers). */
+const DIRTY_COLUMNS = [
+    ["kind", "text NOT NULL"],
+    ["id", "integer NOT NULL"],
+];
+
+async function ensure(client) {
+    await ensureTable(client, DIRTY, DIRTY_COLUMNS, ['PRIMARY KEY ("kind", "id")']);
+}
 
 /** Physical table -> which column names a total. Tables not listed touch nothing. */
 const TOUCH = {
@@ -36,22 +54,22 @@ const TOUCH = {
     UniversalVoucher: { vouchers: "id" },
 };
 
-const touched = { accounts: new Set(), products: new Set(), giftCards: new Set(), vouchers: new Set() };
-
 function asInt(v) {
     const n = typeof v === "number" ? v : Number(v);
     return Number.isInteger(n) ? n : null;
 }
 
-/** Note the totals a batch of pulled rows can move. */
-function noteRows(table, rows) {
+/** Note the totals a batch of rows can move, on `client` — the transaction writing them. */
+async function noteRows(client, table, rows) {
     const spec = TOUCH[table];
     if (!spec || !rows || rows.length === 0) return;
-    for (const [bucket, col] of Object.entries(spec)) {
-        for (const row of rows) {
-            const id = asInt(row[col]);
-            if (id != null) touched[bucket].add(id);
-        }
+    for (const [kind, col] of Object.entries(spec)) {
+        const ids = [...new Set(rows.map((r) => asInt(r[col])).filter((id) => id != null))];
+        if (ids.length === 0) continue;
+        await client.query(
+            `INSERT INTO ${q(DIRTY)} (kind, id) SELECT $1, unnest($2::int[]) ON CONFLICT DO NOTHING`,
+            [kind, ids],
+        );
     }
 }
 
@@ -65,11 +83,7 @@ async function noteBeforeDelete(client, table, whereSql, params) {
     if (!spec) return;
     const cols = Object.values(spec).map(q).join(", ");
     const res = await client.query(`SELECT ${cols} FROM ${q(table)} WHERE ${whereSql}`, params);
-    noteRows(table, res.rows);
-}
-
-function pending() {
-    return touched.accounts.size + touched.products.size + touched.giftCards.size + touched.vouchers.size;
+    await noteRows(client, table, res.rows);
 }
 
 const ACCOUNTS_SQL = `
@@ -147,41 +161,51 @@ UPDATE "GiftCard" g
                                           ELSE g.status END)`;
 
 /**
- * Rebuild everything noted this cycle. Returns how many total rows changed.
+ * Rebuild everything noted and not yet re-summed — this cycle's rows, plus whatever a
+ * killed cycle left behind. Returns how many total rows changed.
  * Throws on a database error so the cycle reports it like any other failure.
  */
 async function rebuildTouched(local, log) {
-    if (pending() === 0) return 0;
+    const { rows: noted } = await local.query(
+        `SELECT kind, array_agg(id) AS ids FROM ${q(DIRTY)} GROUP BY kind`,
+    );
+    if (noted.length === 0) return 0;
+    const ids = (kind) => (noted.find((r) => r.kind === kind) || { ids: [] }).ids;
 
-    if (touched.vouchers.size > 0) {
+    const accounts = new Set(ids("accounts"));
+    if (ids("vouchers").length > 0) {
         const res = await local.query(
             `SELECT DISTINCT "accountId" FROM "VoucherGlLine" WHERE "universalVoucherId" = ANY($1::int[])`,
-            [[...touched.vouchers]],
+            [ids("vouchers")],
         );
-        for (const r of res.rows) touched.accounts.add(r.accountId);
+        for (const r of res.rows) accounts.add(r.accountId);
     }
+    const products = ids("products");
+    const giftCards = ids("giftCards");
 
     let changed = 0;
-    if (touched.accounts.size > 0) {
-        changed += (await local.query(ACCOUNTS_SQL, [[...touched.accounts]])).rowCount || 0;
+    if (accounts.size > 0) {
+        changed += (await local.query(ACCOUNTS_SQL, [[...accounts]])).rowCount || 0;
     }
-    if (touched.products.size > 0) {
-        const ids = [[...touched.products]];
-        changed += (await local.query(PRODUCT_SQL, ids)).rowCount || 0;
-        changed += (await local.query(BRANCH_UPSERT_SQL, ids)).rowCount || 0;
-        changed += (await local.query(BRANCH_ZERO_SQL, ids)).rowCount || 0;
+    if (products.length > 0) {
+        changed += (await local.query(PRODUCT_SQL, [products])).rowCount || 0;
+        changed += (await local.query(BRANCH_UPSERT_SQL, [products])).rowCount || 0;
+        changed += (await local.query(BRANCH_ZERO_SQL, [products])).rowCount || 0;
     }
-    if (touched.giftCards.size > 0) {
-        changed += (await local.query(GIFT_CARD_SQL, [[...touched.giftCards]])).rowCount || 0;
+    if (giftCards.length > 0) {
+        changed += (await local.query(GIFT_CARD_SQL, [giftCards])).rowCount || 0;
+    }
+    // Cleared only now, and only what was read: a cycle killed above leaves every id for
+    // the next one. Re-summing is idempotent, so an id done twice costs a query, never a
+    // wrong total. Nothing else writes this table while a cycle runs — one worker, one
+    // cycle at a time (index.js).
+    for (const r of noted) {
+        await local.query(`DELETE FROM ${q(DIRTY)} WHERE kind = $1 AND id = ANY($2::int[])`, [r.kind, r.ids]);
     }
     if (log) {
-        log(`  totals re-summed: ${touched.accounts.size} account(s), ${touched.products.size} product(s), ` +
-            `${touched.giftCards.size} gift card(s) — ${changed} value(s) changed`);
+        log(`  totals re-summed: ${accounts.size} account(s), ${products.length} product(s), ` +
+            `${giftCards.length} gift card(s) — ${changed} value(s) changed`);
     }
-    touched.accounts.clear();
-    touched.products.clear();
-    touched.giftCards.clear();
-    touched.vouchers.clear();
     return changed;
 }
 
@@ -231,4 +255,4 @@ async function driftReport(client) {
     };
 }
 
-module.exports = { noteRows, noteBeforeDelete, rebuildTouched, driftReport, pending, TOUCH };
+module.exports = { ensure, noteRows, noteBeforeDelete, rebuildTouched, driftReport, TOUCH };
