@@ -19,6 +19,7 @@ import { resolvePartyAccountId } from "@/shared/lib/parties/partyLinkServer";
 import { readSettlement, buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { resolveServiceCharges, chargesNetTotal, SERVICE_VOUCHER_TYPES } from "@/shared/lib/accountancy/serviceCharges";
 import { assertVoucherDate } from "@/shared/lib/accountancy/booksPeriodServer";
+import { cleanLineNote } from "@/shared/lib/print/lineDescription";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -294,7 +295,7 @@ export async function PATCH(req: Request, { params }: Params) {
     // Recompute totals if lines provided.
     let totals: { subtotal: number; taxAmount: number; totalAmount: number } | undefined;
     let computedLines: ({
-        productId: number; description?: string; quantity: number; freeQty?: number; rate: number;
+        productId: number; description?: string; note?: string | null; quantity: number; freeQty?: number; rate: number;
         mrpPaise?: number | null; savedSalePricePaise?: number | null; discountPct?: number; discountAmt: number; taxRate?: number; taxAmount: number; amount: number;
         direction?: "CONSUME" | "PRODUCE";
     })[] | undefined;
@@ -513,6 +514,7 @@ export async function PATCH(req: Request, { params }: Params) {
                         universalVoucherId: existing.universalVoucherId!,
                         productId:   l.productId,
                         description: l.description || null,
+                        note:        cleanLineNote(l.note),
                         direction:   isManufacturingJournal ? l.direction ?? null : null,
                         quantity:    l.quantity,
                         freeQty:     l.freeQty ?? null,

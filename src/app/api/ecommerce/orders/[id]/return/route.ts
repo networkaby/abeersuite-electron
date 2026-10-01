@@ -219,6 +219,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                     universalVoucherId: spineId,
                     productId: l.line.productId,
                     description: l.line.description,
+                    note: l.line.note,
                     quantity: l.qty,
                     rate: l.rate,
                     taxRate: l.taxRate,

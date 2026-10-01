@@ -29,6 +29,7 @@ import * as Sentry from "@sentry/nextjs";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { GlPostFailedError, postVoucherInTx } from "@/modules/inventory/lib/postVoucherInTx";
 import { CreditLimitError } from "@/shared/lib/accountancy/checkCreditLimit";
+import { cleanLineNote } from "@/shared/lib/print/lineDescription";
 
 // GET /api/inventory/vouchers?type=PURCHASE|SALE&status=DRAFT|POSTED|CANCELLED&branchId=BR-HQ|all
 //
@@ -292,6 +293,8 @@ export async function POST(req: NextRequest) {
         lines: {
             productId:   number;
             description?: string;
+            /// The line's Note box (serial no., colour) — its own column.
+            note?:       string | null;
             quantity:    number;
             /// Free / complimentary qty — flows out of stock, ₹0 revenue
             freeQty?:    number;
@@ -656,6 +659,7 @@ export async function POST(req: NextRequest) {
                 universalVoucherId,
                 productId:   l.productId,
                 description: l.description || null,
+                note:        cleanLineNote(l.note),
                 direction:   isManufacturingJournal ? l.direction ?? null : null,
                 quantity:    l.quantity,
                 freeQty:     l.freeQty != null && l.freeQty > 0 ? l.freeQty : null,

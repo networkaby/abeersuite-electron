@@ -86,7 +86,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         // Goods lines hang off the spine (Phase 5 5C).
         const lines = await prisma.voucherInventoryLine.findMany({
             where:  { universalVoucherId: source.universalVoucherId ?? -1 },
-            select: { productId: true, description: true, quantity: true, rate: true, taxRate: true, mrpPaise: true, discountPct: true },
+            select: { productId: true, description: true, note: true, quantity: true, rate: true, taxRate: true, mrpPaise: true, discountPct: true },
         });
         if (lines.length === 0) {
             return NextResponse.json({ error: "Source voucher has no lines to convert." }, { status: 400 });
@@ -137,6 +137,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             lines: lines.map((l) => ({
                 productId:   l.productId,
                 description: l.description ?? undefined,
+                note: l.note,
                 quantity:    toNumber(l.quantity),
                 rate:        toNumber(l.rate),
                 taxRate:     toNumber(l.taxRate),

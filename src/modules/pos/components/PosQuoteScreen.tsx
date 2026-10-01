@@ -26,7 +26,7 @@ import { usePosBilling } from "@/modules/pos/hooks/usePosBilling";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { extractApiError } from "@/shared/lib/api";
 import { formatInr, todayIso } from "@/shared/lib/format";
-import { composeLineDescription, splitLineDescription } from "@/shared/lib/print/lineDescription";
+import { cleanLineNote, composeLineDescription, readLineText } from "@/shared/lib/print/lineDescription";
 import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearchAndCreate";
 
@@ -88,7 +88,7 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                 const { data } = await axios.get<{
                     accountId: number | null;
                     editable: boolean;
-                    lines: { productId: number; sku: string; name: string; description: string | null; quantity: number; rate: number; taxRate: number; mrpPaise: number | null; savedSalePricePaise: number | null }[];
+                    lines: { productId: number; sku: string; name: string; description: string | null; note: string | null; quantity: number; rate: number; taxRate: number; mrpPaise: number | null; savedSalePricePaise: number | null }[];
                     services?: { serviceId: number; name: string; quantity: number; rate: number; taxRate: number; description: string | null }[];
                 }>(`/api/orders/inv/${editId}`);
                 if (cancelled) return;
@@ -106,8 +106,8 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                         name: l.name,
                         qty: l.quantity,
                         unitPrice: l.rate,
-                        // The server stores "sku — name · note"; keep only the cashier's note.
-                        description: splitLineDescription(l.description, { sku: l.sku, name: l.name }).note ?? "",
+                        // The cashier's note: its own column, or the old "sku — name · note" text.
+                        description: readLineText(l, { sku: l.sku, name: l.name }).note ?? "",
                         taxRate: l.taxRate,
                         mrpPaise: l.mrpPaise,
                         barcodePaise: l.savedSalePricePaise,
@@ -206,7 +206,8 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
             const today = todayIso();
             const lines = goodsCart.map((l) => ({
                 productId: l.productId,
-                description: composeLineDescription({ sku: l.sku, name: l.name, note: l.description }),
+                description: composeLineDescription({ sku: l.sku, name: l.name }),
+                note: cleanLineNote(l.description),
                 quantity: l.qty,
                 unitPrice: l.unitPrice,
                 taxRate: l.taxRate,

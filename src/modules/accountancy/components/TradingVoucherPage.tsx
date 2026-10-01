@@ -77,6 +77,7 @@ import { parseDecimalInput, round2, todayIso, gridRowClass } from "@/shared/lib/
 import { useActiveRow } from "@/shared/hooks/useActiveRow";
 import { useEscape } from "@/shared/hooks/useEscape";
 import { useFormChanges } from "@/shared/hooks/useFormChanges";
+import { cleanLineNote, readLineText } from "@/shared/lib/print/lineDescription";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { BillLinkDialog } from "@/modules/accountancy/components/BillLinkDialog";
@@ -425,6 +426,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             taxRate?: number | string;
             taxAmount?: number | string;
             description?: string | null;
+            note?: string | null;
             product?: { id: number; sku: string; name: string; unit?: { code: string; label: string } };
         };
         const srcLines = dup.lines as SrcLine[];
@@ -459,8 +461,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     taxRate: fmtNum(l.taxRate),
                     taxAmount: fmtNum(l.taxAmount),
                     amountInput: "",
-                    description: l.description ?? "",
-                    showDescription: !!l.description,
+                    description: readLineText(l, l.product).note ?? "",
+                    showDescription: !!readLineText(l, l.product).note,
                 })));
         }
 
@@ -536,6 +538,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 id: number;
                 productId: number;
                 description: string | null;
+                note: string | null;
                 quantity: string | number;
                 freeQty: string | number | null;
                 rate: string | number;
@@ -637,8 +640,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     taxRate: fmtNum(l.taxRate),
                     taxAmount: fmtNum(l.taxAmount),
                     amountInput: "",
-                    description: l.description ?? "",
-                    showDescription: !!l.description,
+                    description: readLineText(l, l.product).note ?? "",
+                    showDescription: !!readLineText(l, l.product).note,
                 }));
 
                 setPayMode(v.paymentMode === "CASH" ? "CASH" : "CREDIT");
@@ -1342,7 +1345,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                         : undefined;
                     return {
                         productId: l.product!.id,
-                        description: prefs.lineDescription ? (l.description.trim() || undefined) : undefined,
+                        note: prefs.lineDescription ? cleanLineNote(l.description) : null,
                         quantity: parseFloat(l.quantity) || 1,
                         freeQty: prefs.freeQty ? (parseFloat(l.freeQty) || 0) : 0,
                         rate: exclusiveRate,

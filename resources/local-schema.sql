@@ -2699,6 +2699,7 @@ CREATE TABLE IF NOT EXISTS "VoucherInventoryLine" (
     "universalVoucherId" INTEGER NOT NULL,
     "productId" INTEGER NOT NULL,
     "description" TEXT,
+    "note" TEXT,
     "direction" TEXT,
     "quantity" DECIMAL(10,3) NOT NULL,
     "freeQty" DECIMAL(10,3),
@@ -2718,6 +2719,8 @@ ALTER TABLE "VoucherInventoryLine" ADD COLUMN IF NOT EXISTS "universalVoucherId"
 ALTER TABLE "VoucherInventoryLine" ADD COLUMN IF NOT EXISTS "productId" INTEGER NOT NULL;
 ALTER TABLE "VoucherInventoryLine" ADD COLUMN IF NOT EXISTS "description" TEXT;
 ALTER TABLE "VoucherInventoryLine" ALTER COLUMN "description" DROP NOT NULL;
+ALTER TABLE "VoucherInventoryLine" ADD COLUMN IF NOT EXISTS "note" TEXT;
+ALTER TABLE "VoucherInventoryLine" ALTER COLUMN "note" DROP NOT NULL;
 ALTER TABLE "VoucherInventoryLine" ADD COLUMN IF NOT EXISTS "direction" TEXT;
 ALTER TABLE "VoucherInventoryLine" ALTER COLUMN "direction" DROP NOT NULL;
 ALTER TABLE "VoucherInventoryLine" ADD COLUMN IF NOT EXISTS "quantity" DECIMAL(10,3) NOT NULL;

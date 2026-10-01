@@ -130,6 +130,7 @@ export async function GET(req: Request) {
             productName: l.product.name,
             productSku:  l.product.sku,
             description: l.description,
+            note:        l.note,
             quantity:    Number(l.quantity),
             rate:        Number(l.rate),
             amount:      Number(l.amount),

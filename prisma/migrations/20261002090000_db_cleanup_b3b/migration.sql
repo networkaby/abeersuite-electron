@@ -28,3 +28,49 @@ DO $$ BEGIN
     END IF;
 END $$;
 ALTER TABLE "VoucherSeries" DROP COLUMN IF EXISTS "nextSeq";
+
+-- 3. The line note gets its own column. Until now POS stored a goods line as
+-- "<sku> — <name> · <note>" and the office form stored the note alone in
+-- `description`; every reader split the text back apart, and a product whose
+-- name contains " · " lost part of its name into the note.
+ALTER TABLE "VoucherInventoryLine" ADD COLUMN IF NOT EXISTS "note" TEXT;
+
+-- One-time split of existing lines - only where it is certain, which is exactly
+-- what the print-time split (`splitLineDescription`) already showed:
+--   a) POS text that starts with the product's own "<sku> — <name> · ": the rest
+--      is the note and the text keeps "<sku> — <name>";
+--   b) text that is not the "<sku> — " form and is not the product name: the
+--      whole text was the note (office form, free-item marker).
+-- Anything else (a product renamed since the sale, a name split elsewhere) is
+-- left as it is and still reads through the old split. Lines already carrying a
+-- note are never touched, so a re-run changes nothing.
+WITH cand AS (
+    SELECT l.id, l."universalVoucherId", btrim(l."description") AS d,
+           coalesce(p."sku", '') || ' — '                          AS item_prefix,
+           coalesce(p."sku", '') || ' — ' || p."name"              AS item_text,
+           coalesce(p."sku", '') || ' — ' || p."name" || ' · '     AS note_prefix,
+           btrim(p."name")                                         AS pname
+    FROM "VoucherInventoryLine" l
+    JOIN "InvProduct" p ON p.id = l."productId"
+    WHERE l."note" IS NULL AND btrim(coalesce(l."description", '')) <> ''
+), plan AS (
+    -- Exact prefix tests, not LIKE: a product name may contain % or _.
+    SELECT id, "universalVoucherId",
+           CASE WHEN left(d, length(note_prefix)) = note_prefix AND length(d) > length(note_prefix)
+                THEN btrim(substr(d, length(note_prefix) + 1)) ELSE d END          AS new_note,
+           CASE WHEN left(d, length(note_prefix)) = note_prefix AND length(d) > length(note_prefix)
+                THEN item_text ELSE NULL END                                         AS new_description
+    FROM cand
+    WHERE (left(d, length(note_prefix)) = note_prefix AND length(d) > length(note_prefix))
+       OR (left(d, length(item_prefix)) <> item_prefix AND d <> pname)
+), split AS (
+    UPDATE "VoucherInventoryLine" l
+    SET "note" = plan.new_note, "description" = plan.new_description
+    FROM plan
+    WHERE l.id = plan.id AND plan.new_note <> ''
+    RETURNING l."universalVoucherId"
+)
+-- VoucherInventoryLine has no updatedAt; tills re-pull a voucher's lines when
+-- its spine moves.
+UPDATE "UniversalVoucher" SET "updatedAt" = CURRENT_TIMESTAMP
+WHERE id IN (SELECT DISTINCT "universalVoucherId" FROM split);

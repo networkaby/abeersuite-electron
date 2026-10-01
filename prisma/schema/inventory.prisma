@@ -654,7 +654,12 @@ model VoucherInventoryLine {
   universalVoucher    UniversalVoucher @relation("SpineInventoryLines", fields: [universalVoucherId], references: [id], onDelete: Cascade)
   productId           Int
   product             InvProduct       @relation(fields: [productId], references: [id])
+  /// The item text as billed (POS: "<sku> — <name>"). Before B3b it also carried
+  /// the line note after " · " — read lines through `readLineText`.
   description         String?
+  /// What the cashier / clerk typed in the line's Note box (serial no., colour,
+  /// IMEI). Its own column since B3b; older lines were split once by migration.
+  note                String?
   /// "CONSUME" | "PRODUCE" for MANUFACTURING_JOURNAL lines; null for every
   /// other voucher type. Drives the stock IN/OUT direction on post.
   direction           String?

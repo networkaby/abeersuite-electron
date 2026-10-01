@@ -19,7 +19,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { splitLineDescription } from "@/shared/lib/print/lineDescription";
+import { readLineText } from "@/shared/lib/print/lineDescription";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { hasPermission, requireAuth } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -65,7 +65,9 @@ export async function GET(req: Request) {
         const [lines, tickets] = await Promise.all([
             prisma.voucherInventoryLine.findMany({
                 where: {
-                    description: has,
+                    // The note column; a line from before it kept the note in
+                    // its text ("<sku> — <name> · <note>").
+                    OR: [{ note: has }, { description: has }],
                     universalVoucher: {
                         status: "POSTED",
                         // Filtered in the query, not after it, so the page still fills.
@@ -79,6 +81,7 @@ export async function GET(req: Request) {
                 select: {
                     id: true,
                     description: true,
+                    note: true,
                     quantity: true,
                     product: { select: { name: true, sku: true } },
                     universalVoucher: {
@@ -139,9 +142,9 @@ export async function GET(req: Request) {
         ]);
 
         const billLines = lines
-            // The note part only: the POS saves "<sku> — <name> · <note>", so matching the
-            // whole text would also hit a SKU or a word in the product name.
-            .map((l) => ({ ...l, note: splitLineDescription(l.description, l.product).note ?? "" }))
+            // The note part only — matching the item text would also hit a SKU or a
+            // word in the product name.
+            .map((l) => ({ ...l, note: readLineText(l, l.product).note ?? "" }))
             .filter((l) => l.note.toLowerCase().includes(needle))
             .slice(0, BILL_LIMIT);
 

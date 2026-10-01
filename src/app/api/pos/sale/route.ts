@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, after } from "next/server";
 import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { cleanLineNote } from "@/shared/lib/print/lineDescription";
 import { invNextRef, calcVoucherTotals, calcLineTotals, resolveShippingGstRate } from "@/modules/inventory/lib/stock";
 import { recordStockMovementsBatch } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
@@ -86,6 +87,8 @@ import { groupRebatesExcl, rebatedRate, ruleForGroup } from "@/modules/pricing-s
 const lineSchema = z.object({
     productId: z.number().int().positive(),
     description: z.string().trim().min(1),
+    /** The cashier's line note (serial no., colour) — its own column. */
+    note: z.string().trim().max(500).nullish(),
     quantity: z.number().positive(),
     // Pre-tax rate BEFORE any customer-group rebate — the server works the
     // rebate out itself and posts the line at the lower rate.
@@ -657,7 +660,7 @@ export async function POST(req: Request) {
         })), billDiscountIncl);
     }
     const computedLines: Array<{
-        productId: number; description: string; quantity: number; freeQty: number;
+        productId: number; description: string; note: string | null; quantity: number; freeQty: number;
         unitPrice: number; taxRate: number; discountAmt: number; discountPct: number;
         taxAmount: number; amount: number; mrpPaise: number | null; savedSalePricePaise: number | null;
     }> = body.lines.map((l, i) => {
@@ -669,6 +672,7 @@ export async function POST(req: Request) {
         return {
             productId: l.productId,
             description: l.description,
+            note: cleanLineNote(l.note),
             quantity: l.quantity,
             freeQty: 0,
             unitPrice,
@@ -706,6 +710,7 @@ export async function POST(req: Request) {
         computedLines.push({
             productId: grant.productId,
             description: `FREE · ${couponName}`,
+            note: null,
             quantity: 0,
             freeQty: grant.freeQty,
             unitPrice: 0,
@@ -969,6 +974,7 @@ export async function POST(req: Request) {
                     universalVoucherId: spineId,
                     productId: l.productId,
                     description: l.description,
+                    note: l.note,
                     quantity: l.quantity,
                     // Free-grant lines carry quantity 0 + freeQty — the receipt
                     // prints them as "1 × Fanta FREE" and the ledger moves qty+free.

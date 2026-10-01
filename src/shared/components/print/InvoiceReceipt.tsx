@@ -16,7 +16,7 @@ import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { round2 } from "@/shared/lib/format";
 import { loadBillSettlementPrint } from "@/modules/accountancy/lib/billSettlementPrint";
-import { splitLineDescription } from "@/shared/lib/print/lineDescription";
+import { readLineText } from "@/shared/lib/print/lineDescription";
 
 // Shared invoice-print body for InvVoucher-shaped sales. Extracted so both
 // the staff print surface (`/receipt/invoice/[id]`, any voucher, full paper/
@@ -92,7 +92,7 @@ export default async function InvoiceReceipt({
 
     // Customer receipt shows the clean product name, with the line's note
     // (serial no. / colour the cashier typed) as its own field under it.
-    const lineText = (l: (typeof voucher.lines)[number]) => splitLineDescription(l.description, l.product);
+    const lineText = (l: (typeof voucher.lines)[number]) => readLineText(l, l.product);
 
     const templateP = getVoucherTemplate(kind);
     const [template, org, loyaltyConfig, couponConfig, taxByProduct, spendTiers, paid] = await Promise.all([

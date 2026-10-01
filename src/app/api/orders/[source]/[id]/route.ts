@@ -9,6 +9,7 @@ import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { readSettlement, buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { resolveServiceCharges, chargesNetTotal, type ServiceLineInput } from "@/shared/lib/accountancy/serviceCharges";
 import { Prisma } from "@/generated/prisma/client";
+import { cleanLineNote } from "@/shared/lib/print/lineDescription";
 
 // GET  /api/orders/[source]/[id]      → order detail (lines) for the detail/edit view
 // PATCH/api/orders/[source]/[id]      → edit the order's lines (G2): drop a damaged
@@ -40,7 +41,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
         // Phase 5 5C: goods lines hang off the spine.
         const lines = await prisma.voucherInventoryLine.findMany({
             where:   { universalVoucherId: v.universalVoucherId ?? -1 },
-            select:  { id: true, productId: true, description: true, quantity: true, rate: true, taxRate: true, mrpPaise: true, savedSalePricePaise: true, amount: true, product: { select: { sku: true, name: true, stock: true, reserved: true } } },
+            select:  { id: true, productId: true, description: true, note: true, quantity: true, rate: true, taxRate: true, mrpPaise: true, savedSalePricePaise: true, amount: true, product: { select: { sku: true, name: true, stock: true, reserved: true } } },
         });
 
         // Customer delivery address for the Review popup's "address deliverable?" flag.
@@ -80,7 +81,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ source:
                 // are deliverable when available-to-sell (stock − reserved) covers the line.
                 const available = l.product.stock == null ? null : toNumber(l.product.stock) - l.product.reserved;
                 return {
-                    id: l.id, productId: l.productId, sku: l.product.sku, name: l.product.name, description: l.description,
+                    id: l.id, productId: l.productId, sku: l.product.sku, name: l.product.name, description: l.description, note: l.note,
                     quantity: qty, rate: toNumber(l.rate), taxRate: toNumber(l.taxRate),
                     mrpPaise: l.mrpPaise, savedSalePricePaise: l.savedSalePricePaise, amount: toNumber(l.amount),
                     available, deliverable: available == null ? true : available >= qty,
@@ -101,7 +102,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ source
 
     try {
         const body = (await req.json()) as {
-            lines: { productId: number; description?: string | null; quantity: number; rate: number; taxRate?: number; mrpPaise?: number | null; savedSalePricePaise?: number | null }[];
+            lines: { productId: number; description?: string | null; note?: string | null; quantity: number; rate: number; taxRate?: number; mrpPaise?: number | null; savedSalePricePaise?: number | null }[];
             services?: ServiceLineInput[];
             discountAmt?: number | null; discountPct?: number | null; shippingAmt?: number | null; roundOff?: number | null;
         };
@@ -172,7 +173,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ source
             if (computed.length > 0) await tx.voucherInventoryLine.createMany({
                 data: computed.map((l) => ({
                     universalVoucherId: spineId,
-                    productId: l.productId, description: l.description || null,
+                    productId: l.productId, description: l.description || null, note: cleanLineNote(l.note),
                     quantity: l.quantity, rate: l.rate, mrpPaise: l.mrpPaise ?? null, savedSalePricePaise: l.savedSalePricePaise ?? null,
                     discountPct: 0, discountAmt: l.discountAmt, taxRate: l.taxRate ?? 0, taxAmount: l.taxAmount, amount: l.amount,
                 })),

@@ -19,7 +19,7 @@ import { buildPartyDepositSlip, loadSlipDenominations } from "@/modules/accounta
 import { paymentInstrumentText } from "@/shared/lib/constants/accounting";
 import { partyBalanceAroundVoucher } from "@/shared/lib/accountancy/partyLedgerBalance";
 import { getThermalTemplate } from "@/shared/lib/print/voucherTemplate";
-import { splitLineDescription } from "@/shared/lib/print/lineDescription";
+import { readLineText } from "@/shared/lib/print/lineDescription";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
 import { computeGstSplit, gstinDerivedStateCode } from "@/shared/lib/gst/computeGstSplit";
 import { stateNameForCode } from "@/shared/lib/gst/indianStates";
@@ -138,11 +138,11 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     const v = { ...vRow, lines: invLines, account };
 
     const party = partyFromAccount(v.account);
-    // The item prints as the item and the note (the office form's remark, or the
-    // serial the cashier typed after POS's "<sku> — <name> · ") prints under it.
+    // The item prints as the item and the note (the line's note column, or on an
+    // older line the text after POS's "<sku> — <name> · ") prints under it.
     // Using the note as the name (the old behaviour) silently renamed the item.
-    const itemName = (l: (typeof v.lines)[number]): string => splitLineDescription(l.description, l.product).name;
-    const itemNote = (l: (typeof v.lines)[number]): string | null => splitLineDescription(l.description, l.product).note;
+    const itemName = (l: (typeof v.lines)[number]): string => readLineText(l, l.product).name;
+    const itemNote = (l: (typeof v.lines)[number]): string | null => readLineText(l, l.product).note;
 
     let subtotal  = toNumber(v.subtotal);
     let taxAmount = toNumber(v.taxAmount);

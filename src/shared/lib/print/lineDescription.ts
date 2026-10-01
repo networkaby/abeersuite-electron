@@ -1,10 +1,12 @@
 // A goods line's stored text, read back for printing.
 //
-// POS stores "<sku> — <name> · <note>": the SKU and name for the office's own
-// lists, then whatever the cashier typed in the line's Note box (serial no.,
-// colour, config). The office trading form stores only the note. Every print
-// splits the text here, so the item always prints as the item and the note
-// prints under it (behind the template's showLineNote flag), never as the name.
+// Since B3b (2026-10-02) the line note has its own column (`note`) and
+// `description` holds only the item text (POS: "<sku> — <name>"). Before that,
+// POS stored "<sku> — <name> · <note>" and the office trading form stored only
+// the note in `description`; the migration split those once where it could.
+// `readLineText` reads both: the note column when set, else the old split —
+// so the item always prints as the item and the note under it (behind the
+// template's showLineNote flag), never as the name.
 
 const SKU_SEP  = " — ";
 const NOTE_SEP = " · ";
@@ -12,14 +14,31 @@ const NOTE_SEP = " · ";
 export type LineText = { name: string; note: string | null };
 
 /**
- * The POS's stored form of a goods line: "<sku> — <name>", then " · <note>" when
- * the cashier typed one. The one writer of the format `splitLineDescription`
- * reads back — the POS sale, its edit and the POS order / estimate all save
- * through here, so the two can never drift apart.
+ * The POS's stored item text: "<sku> — <name>". The note goes to its own column
+ * (`note`) — the POS sale, its edit and the POS order / estimate all save
+ * through here.
  */
-export function composeLineDescription(line: { sku: string; name: string; note?: string | null }): string {
-    const note = (line.note ?? "").trim();
-    return `${line.sku}${SKU_SEP}${line.name}${note ? `${NOTE_SEP}${note}` : ""}`;
+export function composeLineDescription(line: { sku: string; name: string }): string {
+    return `${line.sku}${SKU_SEP}${line.name}`;
+}
+
+/** The line note as stored: trimmed, and null when empty. */
+export function cleanLineNote(note: string | null | undefined): string | null {
+    const t = (note ?? "").trim();
+    return t || null;
+}
+
+/**
+ * A goods line's item name and note, for any line old or new. The `note`
+ * column wins when set; a line from before it falls back to splitting the text.
+ */
+export function readLineText(
+    line: { description?: string | null; note?: string | null },
+    product: { sku?: string | null; name?: string | null } | null | undefined,
+): LineText {
+    const split = splitLineDescription(line.description, product);
+    const note = cleanLineNote(line.note);
+    return note ? { name: split.name, note } : split;
 }
 
 /**

@@ -28,7 +28,7 @@ import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplate
 import type { VoucherBridgePayload } from "@/modules/accountancy/lib/voucherReceiptSample";
 import { extractApiError } from "@/shared/lib/api";
 import { formatInr, round2, todayIso, toDateOnly } from "@/shared/lib/format";
-import { composeLineDescription, splitLineDescription } from "@/shared/lib/print/lineDescription";
+import { cleanLineNote, composeLineDescription, readLineText } from "@/shared/lib/print/lineDescription";
 import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearchAndCreate";
 
 // Charge rows carry taxAmount through the edit round-trip — POS-service rows
@@ -93,7 +93,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     accountId: number | null; type: string; status: string;
                     discountAmt: string | number | null; discountPct: string | number | null;
                     shippingAmt: string | number | null; roundOff: string | number | null;
-                    lines: { productId: number; description: string | null; quantity: string | number; rate: string | number; taxRate: string | number; mrpPaise: number | null; savedSalePricePaise: number | null; product: { sku: string; name: string } }[];
+                    lines: { productId: number; description: string | null; note: string | null; quantity: string | number; rate: string | number; taxRate: string | number; mrpPaise: number | null; savedSalePricePaise: number | null; product: { sku: string; name: string } }[];
                     charges: { accountId: number; description: string | null; amount: string | number; taxAmount?: string | number | null }[];
                 }>(`/api/inventory/vouchers/${editId}`);
                 if (cancelled) return;
@@ -120,7 +120,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     name: l.product.name,
                     qty: Number(l.quantity),
                     unitPrice: Number(l.rate),
-                    description: splitLineDescription(l.description, l.product).note ?? "",
+                    description: readLineText(l, l.product).note ?? "",
                     taxRate: Number(l.taxRate),
                     mrpPaise: l.mrpPaise,
                     barcodePaise: l.savedSalePricePaise,
@@ -149,7 +149,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             try {
                 const { data } = await axios.get<{
                     accountId: number | null;
-                    lines: { productId: number; description: string | null; quantity: string | number; rate: string | number; taxRate: string | number; mrpPaise: number | null; savedSalePricePaise: number | null; product: { sku: string; name: string } }[];
+                    lines: { productId: number; description: string | null; note: string | null; quantity: string | number; rate: string | number; taxRate: string | number; mrpPaise: number | null; savedSalePricePaise: number | null; product: { sku: string; name: string } }[];
                 }>(`/api/inventory/vouchers/${fromId}`);
                 if (cancelled) return;
                 convertFromRef.current = fromId;
@@ -161,7 +161,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     name: l.product.name,
                     qty: Number(l.quantity),
                     unitPrice: Number(l.rate),
-                    description: splitLineDescription(l.description, l.product).note ?? "",
+                    description: readLineText(l, l.product).note ?? "",
                     taxRate: Number(l.taxRate),
                     mrpPaise: l.mrpPaise,
                     barcodePaise: l.savedSalePricePaise,
@@ -194,7 +194,8 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 await axios.patch(`/api/inventory/vouchers/${editId}`, {
                     lines: cart.map((l) => ({
                         productId: l.productId,
-                        description: composeLineDescription({ sku: l.sku, name: l.name, note: l.description }),
+                        description: composeLineDescription({ sku: l.sku, name: l.name }),
+                        note: cleanLineNote(l.description),
                         quantity: l.qty,
                         rate: l.unitPrice,
                         taxRate: l.taxRate,
@@ -284,7 +285,8 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 notes: `POS sale (discount ${b.discountPct}%${b.effRedeemPts > 0 ? `, ${b.effRedeemPts} pts redeemed` : ""}${b.appliedCoupon ? `, coupon ${b.appliedCoupon.code ?? b.appliedCoupon.name}` : ""}) | Payments: ${splitSummary}${tail}`,
                 lines: cart.filter((l) => l.kind !== "service").map((l) => ({
                     productId: l.productId,
-                    description: composeLineDescription({ sku: l.sku, name: l.name, note: l.description }),
+                    description: composeLineDescription({ sku: l.sku, name: l.name }),
+                    note: cleanLineNote(l.description),
                     quantity: l.qty,
                     unitPrice: l.unitPrice,
                     taxRate: l.taxRate,

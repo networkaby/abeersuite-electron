@@ -305,6 +305,7 @@ export async function POST(req: Request) {
                     universalVoucherId: spineId,
                     productId:   l.voucherLine.productId!,
                     description: l.voucherLine.description,
+                    note: l.voucherLine.note,
                     quantity:    l.qty,
                     rate:        l.rate,
                     taxRate:     l.taxRate,

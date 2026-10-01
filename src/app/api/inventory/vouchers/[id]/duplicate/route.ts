@@ -96,6 +96,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     universalVoucherId: spineId,
                     productId:   l.productId,
                     description: l.description,
+                    note: l.note,
                     quantity:    l.quantity,
                     freeQty:     l.freeQty,
                     rate:        l.rate,

@@ -23,6 +23,7 @@ import { getDealsPipeline, findOpenDealForParty } from "@/modules/deals/lib/deal
 import { getOrderPipeline, orderEntryStatus } from "@/modules/order/lib/orderPipeline";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
+import { cleanLineNote } from "@/shared/lib/print/lineDescription";
 import { resolveServiceCharges, chargesNetTotal, ServiceLineError, type ServiceLineInput } from "@/shared/lib/accountancy/serviceCharges";
 
 export type PosQuoteType = "POS_ESTIMATE" | "POS_ORDER";
@@ -30,6 +31,8 @@ export type PosQuoteType = "POS_ESTIMATE" | "POS_ORDER";
 export type PosQuoteLine = {
     productId: number;
     description?: string;
+    /** The cashier's line note — its own column. */
+    note?: string | null;
     quantity: number;
     /// Effective (negotiated) unit price in rupees — what the cashier quotes.
     unitPrice: number;
@@ -229,6 +232,7 @@ export async function createPosQuoteVoucher(opts: {
                 universalVoucherId: spineId,
                 productId: l.productId,
                 description: l.description || null,
+                note: cleanLineNote(l.note),
                 quantity: l.quantity,
                 rate: l.rate,
                 mrpPaise: l.mrpPaise ?? null,
