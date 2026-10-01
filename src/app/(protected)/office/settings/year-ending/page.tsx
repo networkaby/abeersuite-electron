@@ -102,7 +102,7 @@ const VOUCHER_GROUPS: { title: string; kinds: string[] }[] = [
     },
     {
         title: "Sales & Billing",
-        kinds: ["SALE", "POS", "ONLINE_INVOICE", "ONLINE_ORDER", "ESTIMATE", "SALE_RETURN", "SALES_ORDER"],
+        kinds: ["SALE", "POS", "ONLINE_INVOICE", "ONLINE_ORDER", "ESTIMATE", "POS_ESTIMATE", "POS_ORDER", "SALE_RETURN", "SALES_ORDER"],
     },
     {
         title: "Purchases & Inward",

@@ -33,7 +33,7 @@ export async function GET() {
         // GL -> Sales -> Purchases -> Inventory -> Services / Repairs
         const ORDER = [
             "CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE", "JOURNAL",
-            "SALE", "POS", "ONLINE_INVOICE", "ONLINE_ORDER", "ESTIMATE", "SALE_RETURN",
+            "SALE", "POS", "ONLINE_INVOICE", "ONLINE_ORDER", "ESTIMATE", "POS_ESTIMATE", "POS_ORDER", "SALE_RETURN",
             "PURCHASE", "PURCHASE_RETURN", "SALES_ORDER", "PURCHASE_ORDER",
             "GRN", "CHALLAN", "MANUFACTURING_JOURNAL", "PHYSICAL_STOCK", "BRANCH_TRANSFER",
             "REJECTION_IN", "REJECTION_OUT",

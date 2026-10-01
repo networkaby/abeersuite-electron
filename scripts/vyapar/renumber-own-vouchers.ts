@@ -163,6 +163,9 @@ async function plan(db: PoolClient, binMustBeEmpty: boolean): Promise<{ changes:
             continue;
         }
 
+        // POS estimates / orders gained a series only in B3a; the numbers they
+        // already carry stay exactly as issued.
+        if (r.type === "POS_ESTIMATE" || r.type === "POS_ORDER") continue;
         const s = series.get(r.type);
         if (!s) {
             if (r.voucherNo) console.warn(`  ! #${r.id} ${r.type} ${r.voucherNo}: no VoucherSeries for this kind — left as it is`);

@@ -134,6 +134,23 @@ Prisma runs one migration per transaction. See the `ADVANCE_FOR` pair.
 - **`prisma/sync-tables.json`** (`pnpm sync:tables`) is regenerated from the
   schema the same way. Both are checked by `pnpm precommit`.
 
+### What a migration cannot hand to a counter
+
+A replica never runs `prisma/migrations`. Three consequences:
+
+- **Data changes reach a till only through the sync pull.** An `UPDATE` / `DELETE`
+  in a migration is seen by a till only when the row (or, for a child table such
+  as `InvStockLedger`, its parent spine) gets a new `"updatedAt"` — or, for a
+  delete, at the next hourly reconcile. Bump it in the same statement.
+- **A rule Prisma cannot declare is server-only** — a CHECK, a partial unique
+  index (`UniversalVoucher_type_voucherNo_posted_key`, B3a). `local-schema.sql`
+  cannot carry it, and a till push that breaks it blocks that till's queue, so
+  the app must already refuse such a write. Note it on the field in the schema so
+  no generated migration drops it.
+- **SET NOT NULL, DROP COLUMN and DROP CONSTRAINT never reach a replica.** The
+  counter push sends the replica's whole row, so a dropped server column blocks
+  every push of that table until push learns to skip it (B3b).
+
 ## Seeds are not migrations
 
 Seeds assert configuration (permissions, catalogs, masters) and are idempotent;

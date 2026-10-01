@@ -3,16 +3,18 @@ import { nextRefFromSeries, numberingCounter } from "@/modules/accountancy/lib/b
 
 // ── Reference number generation ───────────────────────────────────────────────
 
-// Inventory-voucher types that have a configurable VoucherSeries row managed
-// from /office/settings/year-ending (FY rollover, padding, separators, type code).
-// Anything not listed here falls through to the legacy calendar-year scheme.
+// Inventory-voucher types and their VoucherSeries row, managed from
+// /office/settings/year-ending (FY rollover, padding, separators, type code).
+// Every type numbers from its series — one allocator, an atomic counter per till.
 export const SERIES_KINDS: Partial<Record<InvVoucherType, string>> = {
     SALE: "SALE",
     POS: "POS",
+    ONLINE_INVOICE: "ONLINE_INVOICE",
+    ONLINE_ORDER: "ONLINE_ORDER",
     PURCHASE: "PURCHASE",
     ESTIMATE: "ESTIMATE",
-    // POS_ESTIMATE / POS_ORDER deliberately use the legacy PREFIX fallback below
-    // (POSEV-/POSOD- calendar-year) so they need no seeded VoucherSeries row.
+    POS_ESTIMATE: "POS_ESTIMATE",
+    POS_ORDER: "POS_ORDER",
     SALE_RETURN: "SALE_RETURN",
     PURCHASE_RETURN: "PURCHASE_RETURN",
     SALES_ORDER: "SALES_ORDER",
@@ -26,8 +28,9 @@ export const SERIES_KINDS: Partial<Record<InvVoucherType, string>> = {
     REJECTION_OUT: "REJECTION_OUT",
 };
 
-// Legacy prefixes for the fallback path — kept for any voucher types
-// not promoted to the configurable VoucherSeries system.
+// Legacy prefixes for the count-based fallback — used only while a till has not
+// yet pulled a newly added series row (B3a added POS_ESTIMATE / POS_ORDER). Goes
+// in B3b with the count path itself.
 const PREFIX: Record<InvVoucherType, string> = {
     PURCHASE: "PV",
     SALE: "SV",
@@ -51,14 +54,10 @@ const PREFIX: Record<InvVoucherType, string> = {
 };
 
 /**
- * Generate sequential inventory voucher references.
- *
- * SALE / PURCHASE / ESTIMATE route through `nextRefFromSeries` so they pick
- * up the FY-aware convention managed at /office/settings/year-ending — same
- * formatting (FY_SHORT, padding, separators) the GL vouchers use.
- *
- * Other inventory voucher types not in SERIES_KINDS fall back to the legacy
- * calendar-year `${prefix}-YYYY-####` scheme.
+ * Generate sequential inventory voucher references from the type's VoucherSeries
+ * (`nextRefFromSeries`): the format set at /office/settings/year-ending, the
+ * number from an atomic per-till counter. The old count(+1) scheme re-issued a
+ * number whenever a voucher in the middle of the run was deleted.
  *
  * Must be called inside a prisma.$transaction to be safe against races.
  */
@@ -68,7 +67,9 @@ export async function invNextRef(
     ctx?: import("@/modules/accountancy/lib/voucherRef").ReferenceContext,
 ): Promise<string> {
     const seriesKind = SERIES_KINDS[type];
-    if (seriesKind) {
+    // A till that has not pulled a just-added series row yet keeps numbering the
+    // old way for that moment rather than refusing the bill.
+    if (seriesKind && await tx.voucherSeries.findUnique({ where: { kind: seriesKind }, select: { kind: true } })) {
         return nextRefFromSeries(tx, seriesKind, ctx);
     }
     // Legacy fallback — calendar-year prefix scheme.

@@ -76,7 +76,10 @@ model UniversalVoucher {
   // and `GL-` wrongly implied GL-only. The word `reference` is reserved for a
   // FUTURE cross-reference column, never a number. (vocabulary.md)
   // Voucher No — the per-kind user-facing document number (SV-/PMT-/POS-/CV-…)
-  // carried from the source voucher. Not unique (drafts/series may collide).
+  // carried from the source voucher. Unique per type among posted vouchers
+  // (OPENING excluded) through a partial index the B3a migration creates by
+  // hand — Prisma cannot declare it, and a replica does not carry it. Keep it
+  // out of any generated migration's DROP list.
   voucherNo                 String?
   date                      DateTime                   @db.Date
   description               String

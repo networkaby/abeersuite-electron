@@ -88,6 +88,10 @@ export async function ensureVoucherSeries(prisma: PrismaClient) {
         { kind: "ONLINE_ORDER",   label: "Online Order",   typeValue: "OO", nextSeq: onlineOrderCount },
         { kind: "PURCHASE", label: "Purchase Invoice", typeValue: "PV",  nextSeq: purchaseCount },
         { kind: "ESTIMATE", label: "Estimate",         typeValue: "EV", nextSeq: estimateCount },
+        // POS estimates / orders numbered by count(+1) under a different format
+        // until B3a, so their series starts fresh — no number can repeat.
+        { kind: "POS_ESTIMATE", label: "POS Estimate", typeValue: "POSEV", nextSeq: 0 },
+        { kind: "POS_ORDER",    label: "POS Order",    typeValue: "POSOD", nextSeq: 0 },
         { kind: "SALE_RETURN",     label: "Sale Return",     typeValue: "SR", nextSeq: saleReturnCount },
         { kind: "PURCHASE_RETURN", label: "Purchase Return", typeValue: "PR", nextSeq: purchaseReturnCount },
         { kind: "SALES_ORDER",           label: "Sales Order",            typeValue: "SO",   nextSeq: salesOrderCount },

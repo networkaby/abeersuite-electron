@@ -53,3 +53,38 @@ WITH trail AS (
 -- spine moves.
 UPDATE "UniversalVoucher" SET "updatedAt" = CURRENT_TIMESTAMP
 WHERE id IN (SELECT DISTINCT v FROM linked);
+
+-- 3. One numbering method. POS Estimate and POS Order get their own series, in
+-- the shop's house format (copied from the POS series), so every voucher type
+-- numbers from an atomic per-till counter. A brand-new database has no POS row
+-- yet; the seed creates both there.
+INSERT INTO "VoucherSeries" ("kind", "label", "fyStartYear", "typeEnabled", "typeValue", "counterEnabled",
+                             "yearEnabled", "yearFormat", "startFrom", "padWidth", "nextSeq", "resetGen",
+                             "partOrder", "updatedAt")
+SELECT k.kind, k.label, p."fyStartYear", p."typeEnabled", k.code, p."counterEnabled",
+       p."yearEnabled", p."yearFormat", p."startFrom", p."padWidth", 0, p."resetGen",
+       p."partOrder", CURRENT_TIMESTAMP
+FROM "VoucherSeries" p
+CROSS JOIN (VALUES ('POS_ESTIMATE', 'POS Estimate', 'POSEV'), ('POS_ORDER', 'POS Order', 'POSOD')) AS k(kind, label, code)
+WHERE p.kind = 'POS'
+ON CONFLICT ("kind") DO NOTHING;
+
+-- 4. No two posted vouchers of one type share a number. Opening-balance vouchers
+-- are all titled "Opening Balance" by design and stay out. Server-only: a replica
+-- cannot carry a partial index (local-schema.sql), and the Prisma schema does not
+-- declare it - see the note on UniversalVoucher.voucherNo. Created only when the
+-- data already agrees; otherwise a warning, and `pnpm check:voucher-duplicates`
+-- names the rows to fix before a later migration adds it.
+DO $$ BEGIN
+    IF EXISTS (
+        SELECT 1 FROM "UniversalVoucher"
+        WHERE status <> 'DRAFT' AND "voucherNo" IS NOT NULL AND type <> 'OPENING'
+        GROUP BY type, "voucherNo" HAVING count(*) > 1
+    ) THEN
+        RAISE WARNING 'Duplicate voucher numbers exist - unique index not created. Run pnpm check:voucher-duplicates.';
+    ELSE
+        CREATE UNIQUE INDEX IF NOT EXISTS "UniversalVoucher_type_voucherNo_posted_key"
+            ON "UniversalVoucher" ("type", "voucherNo")
+            WHERE status <> 'DRAFT' AND "voucherNo" IS NOT NULL AND type <> 'OPENING';
+    END IF;
+END $$;

@@ -2,8 +2,10 @@
 // numbering (VoucherSeriesCounter). Two machines that shared one series row could
 // mint the same reference; this shows whether any such pair reached the books.
 //
-// Report only; duplicates on printed GST documents need a person's decision. Run it
-// before adding a partial unique index on (type, voucherNo) WHERE status <> 'DRAFT'.
+// Report only; duplicates on printed GST documents need a person's decision. The
+// B3a migration adds the partial unique index on (type, voucherNo) only when this
+// finds nothing — same rule: posted (not DRAFT), and OPENING left out (every
+// opening-balance voucher is titled "Opening Balance" by design).
 //
 //   pnpm check:voucher-duplicates            (exit 1 when any are found)
 
@@ -25,7 +27,7 @@ async function main() {
     const dupes = await prisma.$queryRaw<Array<{ type: string; voucherNo: string; n: number; ids: number[] }>>`
         SELECT type::text AS type, "voucherNo", count(*)::int AS n, array_agg(id ORDER BY id) AS ids
           FROM "UniversalVoucher"
-         WHERE status <> 'DRAFT' AND "deletedAt" IS NULL AND "voucherNo" IS NOT NULL
+         WHERE status <> 'DRAFT' AND "voucherNo" IS NOT NULL AND type <> 'OPENING'
          GROUP BY type, "voucherNo"
         HAVING count(*) > 1
          ORDER BY type, "voucherNo"`;
