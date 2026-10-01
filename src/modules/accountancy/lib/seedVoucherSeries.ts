@@ -112,7 +112,7 @@ export async function ensureVoucherSeries(prisma: PrismaClient) {
         typeValue:       r.typeValue,
         counterEnabled:  true,
         yearEnabled:     true,
-        yearFormat:      "FY_SHORT",
+        yearFormat:      "FY_SHORT_SLASH",
         startFrom:       1,
         padWidth:        4,
         nextSeq:         r.nextSeq,
