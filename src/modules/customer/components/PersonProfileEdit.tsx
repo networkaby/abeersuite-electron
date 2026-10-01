@@ -3,7 +3,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { X, Plus, Check } from "lucide-react";
+import { X, Plus, Check, ShieldCheck, ShieldAlert } from "lucide-react";
 import { phoneError, emailError } from "@/shared/components/PartySearchAndCreate";
 import { extractApiError } from "@/shared/lib/api";
 import { parseAliasInput, formatAliasInput } from "@/modules/accountancy/lib/accountAlias";
@@ -11,8 +11,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-interface PhoneRow { id: number; phone: string; label: string | null; isPrimary: boolean }
-interface EmailRow { id: number; email: string; label: string | null; isPrimary: boolean }
+// verifiedAt: null = a portal self-add the customer has not proved by OTP yet.
+// Optional because some callers' row types predate the field.
+interface PhoneRow { id: number; phone: string; label: string | null; isPrimary: boolean; verifiedAt?: string | null }
+interface EmailRow { id: number; email: string; label: string | null; isPrimary: boolean; verifiedAt?: string | null }
+
+/** Same Verified / Not verified chip the customer sees on /portal/profile. */
+function VerifiedChip({ verified }: { verified: boolean }) {
+    return verified ? (
+        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-emerald-500/40 px-1.5 text-[10px] text-emerald-600 dark:text-emerald-400">
+            <ShieldCheck size={10} /> Verified
+        </span>
+    ) : (
+        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-amber-500/40 px-1.5 text-[10px] text-amber-600 dark:text-amber-400">
+            <ShieldAlert size={10} /> Not verified
+        </span>
+    );
+}
 
 export interface PersonProfile {
     id: number;
@@ -178,6 +193,7 @@ export default function PersonProfileEdit({ profile, onSaved }: Props) {
                 {phones.map(p => (
                     <div key={p.id} className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm">
                         <span className="flex-1 font-medium">{p.phone}</span>
+                        <VerifiedChip verified={p.verifiedAt != null} />
                         {p.isPrimary ? (
                             <span className="shrink-0 text-[10px] text-primary">Primary</span>
                         ) : (
@@ -247,6 +263,7 @@ export default function PersonProfileEdit({ profile, onSaved }: Props) {
                 {emails.map(em => (
                     <div key={em.id} className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm">
                         <span className="flex-1">{em.email}</span>
+                        <VerifiedChip verified={em.verifiedAt != null} />
                         {em.isPrimary ? (
                             <span className="shrink-0 text-[10px] text-primary">Primary</span>
                         ) : (
