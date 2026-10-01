@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
@@ -21,7 +21,8 @@ import {
     LIFECYCLE_META, LIFECYCLES,
     type ContactDto, type ContactsResponse,
 } from "../lib/contactTypes";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { usePagedQuery } from "@/shared/hooks/usePagedQuery";
+import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 
 const ALL = "__all__";
 
@@ -54,15 +55,11 @@ export default function ContactsWorkspace({
     // Owner/seat filter options, from the browser's cached copy — see usePositionPicker.
     const { positions } = usePositionPicker();
 
-    const [items, setItems] = useState<ContactDto[]>([]);
-    const [total, setTotal] = useState(0);
-    const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(50);
-    const [loading, setLoading] = useState(true);
 
     // Filters
     const [q, setQ] = useState("");
-    const [debouncedQ, setDebouncedQ] = useState("");
+    const debouncedQ = useDebouncedValue(q.trim(), 300);
     const [lifecycle, setLifecycle] = useState<string>(ALL);
     const [owner, setOwner] = useState<string>(ALL);
     const [hasDeal, setHasDeal] = useState<string>(ALL);
@@ -73,38 +70,26 @@ export default function ContactsWorkspace({
     const [selected, setSelected] = useState<Set<number>>(new Set());
     const [bulkTag, setBulkTag] = useState("");
 
-    useEffect(() => {
-        const t = setTimeout(() => setDebouncedQ(q.trim()), 300);
-        return () => clearTimeout(t);
-    }, [q]);
-
-    /** `silent` keeps the list on screen while it re-reads — a live update must
-     *  not blank a page someone is reading. Refresh passes nothing. */
-    const load = useCallback(async (silent = false) => {
-        if (!silent) setLoading(true);
-        try {
-            const params = new URLSearchParams({ page: String(page), limit: String(pageSize), sort });
-            if (debouncedQ) params.set("q", debouncedQ);
-            if (lifecycle !== ALL) params.set("lifecycleStage", lifecycle);
-            if (owner !== ALL) params.set("ownerPositionId", owner);
-            if (hasDeal !== ALL) params.set("hasDeal", hasDeal);
-            if (credit !== ALL) params.set("credit", credit);
-            if (tag.trim()) params.set("tag", tag.trim());
-            const res = await axios.get<ContactsResponse>(`/api/contacts?${params.toString()}`);
-            setItems(res.data.items);
-            setTotal(res.data.total);
-        } catch {
-            toast.error("Failed to load contacts");
-        } finally {
-            setLoading(false);
-        }
-    }, [page, pageSize, sort, debouncedQ, lifecycle, owner, hasDeal, credit, tag]);
-
-    useEffect(() => { load(); }, [load]);
-    // A contact added or edited at another counter appears here on its own.
-    useRealtimeTopics(["parties"], () => { void load(true); });
-    // Reset to page 1 when filters change.
-    useEffect(() => { setPage(1); }, [debouncedQ, lifecycle, owner, hasDeal, credit, tag, pageSize, sort]);
+    // Any filter, sort or page-size change starts at page 1 in the same read
+    // (usePagedQuery). A contact added or edited at another counter appears on
+    // its own, the page kept on screen while it re-reads.
+    const { data, loading, error, reload, page, setPage } = usePagedQuery<ContactsResponse>(
+        "/api/contacts",
+        {
+            limit: pageSize,
+            sort,
+            q: debouncedQ,
+            lifecycleStage: lifecycle !== ALL ? lifecycle : null,
+            ownerPositionId: owner !== ALL ? owner : null,
+            hasDeal: hasDeal !== ALL ? hasDeal : null,
+            credit: credit !== ALL ? credit : null,
+            tag: tag.trim(),
+        },
+        { topics: ["parties"] },
+    );
+    useEffect(() => { if (error) toast.error("Failed to load contacts"); }, [error]);
+    const items = useMemo(() => data?.items ?? [], [data]);
+    const total = data?.total ?? 0;
 
     const pageIds = useMemo(() => items.map((c) => c.id), [items]);
     const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
@@ -130,7 +115,7 @@ export default function ContactsWorkspace({
             const res = await axios.post("/api/contacts/bulk", { ids, action });
             toast.success(`Updated ${res.data.affected} contact${res.data.affected === 1 ? "" : "s"}`);
             setSelected(new Set());
-            load();
+            void reload();
         } catch (err) {
             toast.error(extractApiError(err, "Bulk action failed"));
         }
@@ -162,7 +147,7 @@ export default function ContactsWorkspace({
                 </div>
                 <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={exportCsv}><Download className="size-4" /> Export CSV</Button>
-                    <Button variant="outline" size="icon" onClick={() => load()} title="Refresh"><RefreshCw className="size-4" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => { void reload(); }} title="Refresh"><RefreshCw className="size-4" /></Button>
                 </div>
             </div>
 

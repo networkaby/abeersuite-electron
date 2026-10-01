@@ -4,7 +4,7 @@
 // List of all POS sales (InvVoucher type=SALE, status=POSTED).
 // Lives at /vouchers/pos — mirrors SalesRegister at /vouchers/sales.
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
@@ -23,6 +23,8 @@ import { ActiveShiftBar, type ActiveShift } from "@/modules/pos/components/Activ
 import { fetchCurrentShift } from "@/modules/pos/lib/currentShift";
 import { ShiftOpenDialog } from "@/modules/pos/components/ShiftOpenDialog";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { usePagedQuery } from "@/shared/hooks/usePagedQuery";
+import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { EscapeBack } from "@/shared/components/EscapeBack";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -91,13 +93,11 @@ const REFUND_COLORS: Record<string, string> = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+const NO_SALES: PosSale[] = [];
+
 export function PosSalesRegister() {
-    const [items, setItems] = useState<PosSale[]>([]);
-    const [total, setTotal] = useState(0);
-    const [loading, setLoading] = useState(true);
     const [refreshKey, setRefreshKey] = useState(0);
     const [q, setQ] = useState("");
-    const [page, setPage] = useState(1);
     const limit = 50;
 
     // ── Active POS shift — the full status/money bar lives on this overview
@@ -211,51 +211,33 @@ export function PosSalesRegister() {
     }, [tab, activeShift, rangeFrom, rangeTo, todayISO, refreshKey]);
 
     const listKind: "sale" | "returns" = tab === "returns" ? "returns" : "sale";
-    /** Set for a refresh nobody asked for, so the table is not torn down. */
-    const silentRef = useRef(false);
-    const load = useCallback(async (kind: "sale" | "returns", search: string, pg: number, f: string, t: string, counter: number | null) => {
-        // A live refresh must not blank a register someone is reading; a person
-        // pressing Refresh still gets the spinner. Cleared once the read is done.
-        if (!silentRef.current) setLoading(true);
-        try {
-            const params = new URLSearchParams({
-                kind: kind,
-                limit: String(limit),
-                page: String(pg),
-                ...(search ? { q: search } : {}),
-                ...(f ? { from: f } : {}),
-                ...(t ? { to: t } : {}),
-                ...(counter != null ? { counterId: String(counter) } : {}),
-            });
-            const { data } = await axios.get<ApiResponse>(`/api/pos/sales?${params}`);
-            setItems(data.items);
-            setTotal(data.total);
-        } catch {
-            toast.error(kind === "returns" ? "Failed to load POS returns" : "Failed to load POS sales");
-        } finally {
-            setLoading(false);
-            silentRef.current = false;
-        }
-    }, []);
-
-    useEffect(() => { void load(listKind, q, page, rangeFrom, rangeTo, counterFilterId); }, [load, listKind, q, page, rangeFrom, rangeTo, counterFilterId, refreshKey]);
-
-    // Changing the filter changes how many rows there are, so page 2 of the old
-    // list is meaningless against the new one. Back to the first page.
-    useEffect(() => { setPage(1); }, [counterFilterId]);
+    // Changing a filter changes how many rows there are, so page 2 of the old
+    // list is meaningless against the new one: any change starts at page 1 in
+    // the same read, and a reply for filters already left is dropped
+    // (usePagedQuery). A refresh keeps the register on screen while it re-reads.
+    const debouncedQ = useDebouncedValue(q.trim(), 300);
+    const sales = usePagedQuery<ApiResponse>("/api/pos/sales", {
+        kind: listKind, limit, q: debouncedQ, from: rangeFrom, to: rangeTo, counterId: counterFilterId,
+    });
+    const { loading, page, setPage } = sales;
+    const items = sales.data?.items ?? NO_SALES;
+    const total = sales.data?.total ?? 0;
+    useEffect(() => {
+        if (sales.error) toast.error(listKind === "returns" ? "Failed to load POS returns" : "Failed to load POS sales");
+        // Only a new failure toasts — not a tab switch over an old one.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sales.error]);
 
     const totalPages = Math.max(1, Math.ceil(total / limit));
     const refreshCurrentTab = () => {
         setRefreshKey((prev) => prev + 1);
+        void sales.reload();
     };
 
     // A sale or return billed at another counter shows up here on its own. The
     // refresh key drives the list, the POS documents, the cash moves and the till
     // ledger together, so one signal brings the whole register up to date.
-    useRealtimeTopics(["ledger", "stock"], () => {
-        silentRef.current = true;
-        refreshCurrentTab();
-    });
+    useRealtimeTopics(["ledger", "stock"], refreshCurrentTab);
     const anyLoading = loading || posDocsLoading || movesLoading || ledgerLoading;
 
     return (
@@ -369,7 +351,7 @@ export function PosSalesRegister() {
                         className="h-9 pl-8 text-sm"
                         placeholder="Search…"
                         value={tab === "sales" || tab === "returns" ? q : docQuery}
-                        onChange={(e) => { if (tab === "sales" || tab === "returns") { setQ(e.target.value); setPage(1); } else { setDocQuery(e.target.value); } }}
+                        onChange={(e) => { if (tab === "sales" || tab === "returns") { setQ(e.target.value); } else { setDocQuery(e.target.value); } }}
                     />
                 </div>
                 {(tab === "orders" || tab === "estimates") && (

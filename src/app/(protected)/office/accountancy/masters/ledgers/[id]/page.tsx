@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
@@ -14,7 +14,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useEscapeBack } from "@/shared/hooks/useEscapeBack";
 import { formatDrCr } from "@/shared/lib/format/moneyInr";
 import { EditLedgerDialog, type EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { usePagedQuery } from "@/shared/hooks/usePagedQuery";
+import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 
 type GroupType  = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 type NormalBalance = "DEBIT" | "CREDIT";
@@ -71,14 +72,8 @@ export default function GroupLedgersPage() {
 
     const [groupName, setGroupName]   = useState<string>("");
     const [groupType, setGroupType]   = useState<GroupType | null>(null);
-    const [items, setItems]           = useState<LedgerItem[]>([]);
-    const [total, setTotal]           = useState(0);
-    const [page, setPage]             = useState(1);
     const [search, setSearch]         = useState("");
-    const [loading, setLoading]       = useState(true);
     const [editTarget, setEditTarget] = useState<LedgerItem | null>(null);
-
-    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEscapeBack();
 
@@ -94,42 +89,17 @@ export default function GroupLedgersPage() {
             .catch(() => { /* silent */ });
     }, [id]);
 
-    const load = useCallback((p: number, q: string) => {
-        setLoading(true);
-        const params = new URLSearchParams({
-            groupId:    id,
-            page:       String(p),
-            limit:      String(LIMIT),
-            activeOnly: "false",
-            ...(q ? { search: q } : {}),
-        });
-        axios.get<{ items: LedgerItem[]; total: number }>(`/api/accountancy/ledgers?${params}`)
-            .then((r) => {
-                setItems(r.data.items);
-                setTotal(r.data.total);
-            })
-            .catch(() => toast.error("Failed to load accounts"))
-            .finally(() => setLoading(false));
-    }, [id]);
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(() => { load(1, ""); }, [load]);
-    // Balances move with every voucher; re-read the page the user is on.
-    useRealtimeTopics(["ledger"], () => load(page, search));
-
-    const handleSearch = (value: string) => {
-        setSearch(value);
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => {
-            setPage(1);
-            load(1, value);
-        }, 400);
-    };
-
-    const goPage = (p: number) => {
-        setPage(p);
-        load(p, search);
-    };
+    // A new search starts at page 1 in the same read (usePagedQuery). Balances
+    // move with every voucher; the page the user is on re-reads in place.
+    const debouncedSearch = useDebouncedValue(search.trim(), 400);
+    const { data, loading, error, reload, page, setPage } = usePagedQuery<{ items: LedgerItem[]; total: number }>(
+        "/api/accountancy/ledgers",
+        { groupId: id, limit: LIMIT, activeOnly: "false", search: debouncedSearch },
+        { topics: ["ledger"] },
+    );
+    useEffect(() => { if (error) toast.error("Failed to load accounts"); }, [error]);
+    const items = data?.items ?? [];
+    const total = data?.total ?? 0;
 
     const totalPages = Math.max(1, Math.ceil(total / LIMIT));
 
@@ -184,7 +154,7 @@ export default function GroupLedgersPage() {
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
                     value={search}
-                    onChange={(e) => handleSearch(e.target.value)}
+                    onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search by name or keyword…"
                     className="pl-9"
                 />
@@ -281,7 +251,7 @@ export default function GroupLedgersPage() {
                     <div className="flex items-center gap-2">
                         <Button
                             variant="outline" size="sm"
-                            onClick={() => goPage(page - 1)}
+                            onClick={() => setPage(page - 1)}
                             disabled={page <= 1}
                         >
                             <ChevronLeft size={14} /> Prev
@@ -291,7 +261,7 @@ export default function GroupLedgersPage() {
                         </span>
                         <Button
                             variant="outline" size="sm"
-                            onClick={() => goPage(page + 1)}
+                            onClick={() => setPage(page + 1)}
                             disabled={page >= totalPages}
                         >
                             Next <ChevronRightIcon size={14} />
@@ -305,7 +275,7 @@ export default function GroupLedgersPage() {
                 open={editTarget !== null}
                 onOpenChange={(v) => { if (!v) setEditTarget(null); }}
                 ledger={editTarget as EditableLedger | null}
-                onSaved={() => load(page, search)}
+                onSaved={() => { void reload(); }}
             />
         </ScrollArea>
     );

@@ -5,7 +5,7 @@
 // whose refReturns has no active (non-CANCELLED) settling voucher.
 // See plan: voucher taxonomy + per-type settlement rules.
 
-import { useEffect, useState, useCallback, useRef, Fragment } from "react";
+import { useEffect, useState, Fragment } from "react";
 import { partyProfileHref, type PartyLinkKind } from "@/shared/lib/parties";
 import { useRouter } from "next/navigation";
 import { GatedLink } from "@/shared/components/GatedLink";
@@ -25,7 +25,9 @@ import {
 } from "@/components/ui/dialog";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useApiResource } from "@/shared/hooks/useApiResource";
+import { usePagedQuery } from "@/shared/hooks/usePagedQuery";
+import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { useEscape } from "@/shared/hooks/useEscape";
 
 type PendingType = "CHALLAN" | "GRN" | "REJECTION_IN" | "REJECTION_OUT";
@@ -352,6 +354,8 @@ function SettleDialog({
 
 // ── Main page ────────────────────────────────────────────────────────────────
 
+const NO_STOCK: StockRow[] = [];
+
 export default function PendingVouchersPage() {
     const router = useRouter();
 
@@ -365,16 +369,14 @@ export default function PendingVouchersPage() {
     // ── Vouchers tab state ────────────────────────────────────────────────────
     const [search, setSearch] = useState("");
     const [typeFilter, setTypeFilter] = useState<TypeFilter>("All");
-    const [page, setPage] = useState(1);
-    const [data, setData] = useState<Data | null>(null);
-    const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
     const [settleTarget, setSettleTarget] = useState<Row | null>(null);
-    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // The dates the lists were last asked for — the boxes apply on Refresh.
+    const [range, setRange] = useState({ from: "", to: "" });
 
     // ── Stock tab state ───────────────────────────────────────────────────────
-    const [stockRows, setStockRows] = useState<StockRow[]>([]);
-    const [stockLoading, setStockLoading] = useState(false);
+    // Read once the tab is first opened, then it follows the filters.
+    const [stockOpened, setStockOpened] = useState(false);
     const [stockExpanded, setStockExpanded] = useState<Set<number>>(new Set());
 
     useEffect(() => {
@@ -399,67 +401,47 @@ export default function PendingVouchersPage() {
     });
 
     // ── Vouchers fetch ────────────────────────────────────────────────────────
-    const load = useCallback((p: number, q: string, t: TypeFilter, f: string, x: string, b: string, silent = false) => {
-        // A realtime refresh must not blank a report the user is reading.
-        if (!silent) setLoading(true);
-        const params = new URLSearchParams({ page: String(p), limit: "50" });
-        if (f) params.set("from", f);
-        if (x) params.set("to", x);
-        if (q) params.set("search", q);
-        if (t !== "All") params.set("type", t);
-        if (b !== "all") params.set("branchId", b);
-        axios.get<Data>(`/api/accountancy/reports/pending-vouchers?${params}`)
-            .then((r) => setData(r.data))
-            .catch(() => toast.error("Failed to load pending vouchers"))
-            .finally(() => setLoading(false));
-    }, []);
+    // Each list is asked for from what the boxes say, so a reply for filters
+    // the screen has moved away from is dropped, and any filter change starts
+    // at page 1 in one read (usePagedQuery). Only the visible tab follows the
+    // books live; a realtime refresh keeps the rows on screen.
+    const debouncedSearch = useDebouncedValue(search, 400);
+    const branchParam = branchId !== "all" ? branchId : null;
+    const {
+        data = null, loading, error, reload, page, setPage,
+    } = usePagedQuery<Data>(
+        "/api/accountancy/reports/pending-vouchers",
+        {
+            limit: 50, from: range.from, to: range.to, search: debouncedSearch,
+            type: typeFilter !== "All" ? typeFilter : null, branchId: branchParam,
+        },
+        { topics: tab === "vouchers" ? ["ledger"] : [] },
+    );
+    useEffect(() => { if (error) toast.error("Failed to load pending vouchers"); }, [error]);
 
     // ── Stock fetch ───────────────────────────────────────────────────────────
-    const loadStock = useCallback((f: string, x: string, b: string, silent = false) => {
-        if (!silent) setStockLoading(true);
-        const params = new URLSearchParams();
-        if (f) params.set("from", f);
-        if (x) params.set("to", x);
-        if (b !== "all") params.set("branchId", b);
-        axios.get<{ rows: StockRow[] }>(`/api/accountancy/reports/pending-stock?${params}`)
-            .then((r) => setStockRows(r.data.rows))
-            .catch(() => toast.error("Failed to load pending stock"))
-            .finally(() => setStockLoading(false));
-    }, []);
+    const stockQuery = new URLSearchParams();
+    if (range.from) stockQuery.set("from", range.from);
+    if (range.to) stockQuery.set("to", range.to);
+    if (branchParam) stockQuery.set("branchId", branchParam);
+    const stock = useApiResource<{ rows: StockRow[] }>(
+        stockOpened ? `/api/accountancy/reports/pending-stock?${stockQuery}` : null,
+        { topics: tab === "stock" ? ["ledger"] : [] },
+    );
+    useEffect(() => { if (stock.error) toast.error("Failed to load pending stock"); }, [stock.error]);
+    const stockRows = stock.data?.rows ?? NO_STOCK;
+    const stockLoading = stock.loading;
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(() => { load(1, "", "All", "", "", "all"); }, []);
-
-    // Only the visible tab is refreshed; the other reloads when it is opened.
-    useRealtimeTopics(["ledger"], () => {
-        if (tab === "vouchers") load(page, search, typeFilter, from, to, branchId, true);
-        else                    loadStock(from, to, branchId, true);
-    });
-
-    const handleSearch = (v: string) => {
-        setSearch(v);
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => { setPage(1); load(1, v, typeFilter, from, to, branchId); }, 400);
-    };
-    const handleType = (t: TypeFilter) => { setTypeFilter(t); setPage(1); load(1, search, t, from, to, branchId); };
-    const handleBranch = (b: string) => {
-        setBranchId(b);
-        setPage(1);
-        if (tab === "vouchers") load(1, search, typeFilter, from, to, b);
-        else loadStock(from, to, b);
-    };
+    // Refresh applies the dates; with the dates unchanged it re-reads the tab.
     const handleRange = () => {
-        setPage(1);
-        if (tab === "vouchers") load(1, search, typeFilter, from, to, branchId);
-        else loadStock(from, to, branchId);
+        if (range.from !== from || range.to !== to) setRange({ from, to });
+        else if (tab === "vouchers") void reload();
+        else void stock.reload();
     };
-    const goPage = (p: number) => { setPage(p); load(p, search, typeFilter, from, to, branchId); };
 
     const switchTab = (t: "vouchers" | "stock") => {
         setTab(t);
-        if (t === "stock" && stockRows.length === 0 && !stockLoading) {
-            loadStock(from, to, branchId);
-        }
+        if (t === "stock") setStockOpened(true);
     };
 
     const totalPages = data ? Math.max(1, Math.ceil(data.total / data.limit)) : 1;
@@ -490,7 +472,7 @@ export default function PendingVouchersPage() {
                         {branches.length > 1 && (
                             <div className="space-y-1">
                                 <Label>Branch</Label>
-                                <Select value={branchId} onValueChange={handleBranch}>
+                                <Select value={branchId} onValueChange={setBranchId}>
                                     <SelectTrigger className="h-9 w-36">
                                         <SelectValue placeholder="All branches" />
                                     </SelectTrigger>
@@ -536,7 +518,7 @@ export default function PendingVouchersPage() {
                                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                                 <Input
                                     value={search}
-                                    onChange={(e) => handleSearch(e.target.value)}
+                                    onChange={(e) => setSearch(e.target.value)}
                                     placeholder="Search by reference, narration or party…"
                                     className="pl-9"
                                 />
@@ -547,7 +529,7 @@ export default function PendingVouchersPage() {
                                         key={t}
                                         variant={typeFilter === t ? "default" : "outline"}
                                         size="sm"
-                                        onClick={() => handleType(t)}
+                                        onClick={() => setTypeFilter(t)}
                                         className="text-xs"
                                     >
                                         {t === "All" ? "All" : TYPE_LABEL[t]}
@@ -675,11 +657,11 @@ export default function PendingVouchersPage() {
                                     <div className="flex items-center justify-between text-sm text-muted-foreground">
                                         <span>Showing {(data.page - 1) * data.limit + 1}–{Math.min(data.page * data.limit, data.total)} of {data.total.toLocaleString()}</span>
                                         <div className="flex items-center gap-2">
-                                            <Button variant="outline" size="sm" onClick={() => goPage(page - 1)} disabled={page <= 1}>
+                                            <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page <= 1}>
                                                 <ChevronLeft size={14} /> Prev
                                             </Button>
                                             <span className="text-xs px-2">Page {page} of {totalPages}</span>
-                                            <Button variant="outline" size="sm" onClick={() => goPage(page + 1)} disabled={page >= totalPages}>
+                                            <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page >= totalPages}>
                                                 Next <ChevronRightIcon size={14} />
                                             </Button>
                                         </div>
@@ -691,7 +673,7 @@ export default function PendingVouchersPage() {
                         <SettleDialog
                             target={settleTarget}
                             onClose={() => setSettleTarget(null)}
-                            onLinked={() => load(page, search, typeFilter, from, to, branchId)}
+                            onLinked={() => { void reload(); }}
                         />
                     </>
                 )}

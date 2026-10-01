@@ -18,6 +18,7 @@ export { useTicketsDelta, type TicketRow, type TicketsQuery, type UseTicketsDelt
 export { useRealtimeTopics } from "./useRealtimeTopics";
 export { useReplicaUpdate, subscribeReplicaUpdate } from "./useReplicaUpdate";
 export { useProductCatalog, loadProductCatalog, invalidateProductCatalog } from "./useProductCatalog";
+export { usePagedQuery } from "./usePagedQuery";
 export { useGlAccounts, loadGlAccounts, warmGlAccounts, invalidateGlAccounts } from "./useGlAccounts";
 export { usePartyBrowseList, type BrowseListRow } from "./usePartyBrowseList";
 export { useFieldSave, type FieldSaveState } from "./useFieldSave";

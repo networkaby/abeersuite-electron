@@ -19,7 +19,7 @@ import {
     Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
     BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { useEscape } from "@/shared/hooks";
+import { useApiResource, useEscape } from "@/shared/hooks";
 import { BookOpen, Loader2, RefreshCw, Printer, Pencil, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -178,8 +178,6 @@ export function AccountLedgerExplorer({
         const id = params.get("accountId");
         return id ? Number(id) : null;
     });
-    const [detail, setDetail] = useState<LedgerDetail | null>(null);
-    const [detailLoading, setDetailLoading] = useState(false);
     // Date params on the URL come from a drill-in (P&L, Balance Sheet, Trial Balance, …
     // pass ?accountId=&from=&to=). Honour them instead of always defaulting.
     const [from, setFrom] = useState(params.get("from") ?? toIsoDate(indianFiscalYearStart()));
@@ -229,23 +227,18 @@ export function AccountLedgerExplorer({
         return allAccounts.filter((a) => a.group && wantedGroupIds.has(a.group.id));
     }, [allAccounts, wantedGroupIds]);
 
-    const loadDetail = useCallback((id: number, f: string, t: string) => {
-        setDetailLoading(true);
-        axios
-            .get<LedgerDetail>(`/api/accountancy/reports/ledger/${id}?from=${f}&to=${t}`)
-            .then((r) => setDetail(r.data))
-            .catch(() => toast.error("Failed to load ledger"))
-            .finally(() => setDetailLoading(false));
-    }, []);
-
-    useEffect(() => {
-        if (!selectedId) {
-            setDetail(null);
-            return;
-        }
-        loadDetail(selectedId, from, to);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedId]);
+    // The open ledger's statement for the dates in the boxes. Asked for from
+    // the selection and the dates themselves, so a reply for a ledger or a range
+    // the screen has already left is dropped — pick A then B, or change the
+    // dates twice, and only the last ask can land.
+    const {
+        data: detailData, loading: detailLoading, error: detailError, reload: reloadDetail,
+    } = useApiResource<LedgerDetail>(
+        selectedId ? `/api/accountancy/reports/ledger/${selectedId}?from=${from}&to=${to}` : null,
+    );
+    const detail = selectedId ? detailData ?? null : null;
+    useEffect(() => { if (detailError) toast.error("Failed to load ledger"); }, [detailError]);
+    const refreshDetail = useCallback(() => { if (selectedId) void reloadDetail(); }, [selectedId, reloadDetail]);
 
     // Keep ?accountId=… in sync with selection so links/refresh preserve state.
     useEffect(() => {
@@ -255,9 +248,7 @@ export function AccountLedgerExplorer({
         window.history.replaceState(null, "", url.toString());
     }, [selectedId]);
 
-    const handleRefresh = useCallback(() => {
-        if (selectedId) loadDetail(selectedId, from, to);
-    }, [selectedId, from, to, loadDetail]);
+    const handleRefresh = refreshDetail;
 
     // Stable identity — BookPage keys its data-loading effect off this, so an
     // inline arrow here would refetch the trial balance on every render.
@@ -461,7 +452,7 @@ export function AccountLedgerExplorer({
                                             reconciledAt={detail.account.reconciledAt}
                                             onSaved={() => {
                                                 reloadAccounts();
-                                                if (selectedId) loadDetail(selectedId, from, to);
+                                                refreshDetail();
                                             }}
                                         />
                                         <Button
@@ -516,13 +507,13 @@ export function AccountLedgerExplorer({
                                         <label className="text-xs text-muted-foreground">From</label>
                                         <TallyDateInput
                                             value={from}
-                                            onValueChange={(v) => { setFrom(v); if (selectedId) loadDetail(selectedId, v, to); }}
+                                            onValueChange={setFrom}
                                             className="h-7 w-36 text-xs"
                                         />
                                         <label className="text-xs text-muted-foreground">To</label>
                                         <TallyDateInput
                                             value={to}
-                                            onValueChange={(v) => { setTo(v); if (selectedId) loadDetail(selectedId, from, v); }}
+                                            onValueChange={setTo}
                                             monthMode="end"
                                             className="h-7 w-36 text-xs"
                                         />
@@ -637,7 +628,7 @@ export function AccountLedgerExplorer({
                                                             source={voucherSourceForType(row.voucherType)}
                                                             kind={row.voucherType}
                                                             reference={row.reference}
-                                                            onChanged={() => { if (selectedId) loadDetail(selectedId, from, to); }}
+                                                            onChanged={refreshDetail}
                                                         />
                                                     </td>
                                                 </tr>
@@ -688,7 +679,7 @@ export function AccountLedgerExplorer({
                 ledger={editTarget}
                 onSaved={() => {
                     reloadAccounts();
-                    if (selectedId) loadDetail(selectedId, from, to);
+                    refreshDetail();
                 }}
             />
         </div>
