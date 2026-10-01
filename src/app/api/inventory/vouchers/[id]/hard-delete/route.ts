@@ -126,11 +126,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             });
 
             // Physically remove everything. The spine row goes in ALL cases (its snapshot
-            // is safe in AuditLog) so nothing orphans — cancel no longer writes counter-
-            // postings, so deleting a cancelled spine leaves no dangling reversal.
-            // VoucherGlLine + AdditionalCostAllocation cascade off the spine;
-            // VoucherInventoryLine cascades off the voucher; InvStockLedger has no
-            // cascade so wipe it explicitly.
+            // is safe in AuditLog) so nothing orphans. VoucherGlLine, AdditionalCostAllocation
+            // and InvStockLedger (a cancel's reversal rows included) cascade off the spine;
+            // the explicit stock wipe covers a detail whose spine is already gone.
             if (origJe) await tx.universalVoucher.delete({ where: { id: origJe.id } });
             await tx.invStockLedger.deleteMany({ where: { universalVoucherId: voucher.universalVoucherId ?? -1 } });
             await tx.voucherDetail.delete({ where: { id: voucher.id } });

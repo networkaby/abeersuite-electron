@@ -24,7 +24,7 @@ import { auth } from "@/auth";
 //   JournalEntry + JournalLine     (mirror, audit)
 //   Account.balance                (per-line delta)
 // And, if any stockItems:
-//   InvVoucher (type=MANUFACTURING_JOURNAL) + InvVoucherLine  ← carrier for FK on InvStockLedger
+//   VoucherInventoryLine           (on the journal's own spine)
 //   InvStockLedger                 (inQty for Dr-side items, outQty for Cr-side items)
 //   InvProduct.stock               (cached running balance)
 //
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
             // previews via /api/accountancy/vouchers/next-ref?type=JOURNAL. The
             // mirror JE + balance deltas (incl. the null-normalBalance fallback)
             // now live in the engine. GL JE lines stay branch-less (org-level),
-            // exactly as before — branch context rides only the stock carrier below.
+            // exactly as before — branch context rides only the stock rows below.
             const voucher = await engineCreateVoucher(tx, {
                 type:            body.type,
                 date:            new Date(body.date),
@@ -143,24 +143,9 @@ export async function POST(req: NextRequest) {
                     })),
                 );
 
-                // Phase 5 5C: the JV's stock + goods lines hang off ITS spine
-                // (voucher.universalVoucherId). The carrier InvVoucher is kept as a
-                // thin sidecar pointing at the same spine.
+                // The JV's goods lines and stock rows hang off ITS spine — a
+                // financial voucher has no VoucherDetail of its own.
                 const jvSpineId = (voucher as { universalVoucherId: number | null }).universalVoucherId!;
-                const carrier = await tx.voucherDetail.create({
-                    data: {
-                        // 5D-11: type lives on the spine. NOTE: this carrier previously
-                        // tagged itself MANUFACTURING_JOURNAL while its (shared) spine
-                        // carried body.type (e.g. JOURNAL) — a pre-existing divergence.
-                        // It now reflects the spine's single type. (Behaviour to confirm:
-                        // stock-bearing journals are no longer typed MANUFACTURING_JOURNAL.)
-                        // 5D-5/5D-8/5D-10/5D-12: description + postedAt + status + date + branch live on the spine.
-                        subtotal:    flatItems.reduce((s, i) => s + i.amount, 0),
-                        totalAmount: flatItems.reduce((s, i) => s + i.amount, 0),
-                        // 5D-2: creator lives on the spine.
-                    },
-                });
-                void carrier;
                 await tx.voucherInventoryLine.createMany({
                     data: flatItems.map((i) => ({
                         universalVoucherId: jvSpineId,
@@ -197,8 +182,6 @@ export async function POST(req: NextRequest) {
                         updateBranchBalance: false,
                     });
                 }
-                // Phase 5 5C: the carrier's stock rows + lines belong to the journal
-                // voucher — link them onto its spine (the carrier has no spine of its own).
             }
 
             return { voucherId: voucher.id, reference: voucher.reference, posted: true };
