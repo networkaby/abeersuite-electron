@@ -33,9 +33,8 @@ type Tx = Prisma.TransactionClient;
 
 // The VoucherSeries a purged snapshot's number came out of, or null when that kind
 // is not series-numbered. Inventory kinds route through the SAME map the allocator
-// uses (`invNextRef`), so the legacy prefix kinds — POS_ESTIMATE, POS_ORDER and
-// friends, which count their own surviving rows and therefore re-use a freed number
-// by themselves — are excluded by construction. A GL voucher type IS its series kind.
+// uses (`invNextRef`) — every one of them since B3b. A GL voucher type IS its
+// series kind.
 export function seriesKindOf(entityType: string, subtype: string | null): string | null {
     // Legacy JOURNAL_ENTRY rows carry no subtype — the entity type WAS the kind back
     // then, and every one of them is a journal voucher.

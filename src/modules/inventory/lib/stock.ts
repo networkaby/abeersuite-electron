@@ -1,12 +1,13 @@
 import { InvVoucherType, type Prisma } from "@/generated/prisma/client";
-import { nextRefFromSeries, numberingCounter } from "@/modules/accountancy/lib/balance";
+import { nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 
 // ── Reference number generation ───────────────────────────────────────────────
 
 // Inventory-voucher types and their VoucherSeries row, managed from
 // /office/settings/year-ending (FY rollover, padding, separators, type code).
 // Every type numbers from its series — one allocator, an atomic counter per till.
-export const SERIES_KINDS: Partial<Record<InvVoucherType, string>> = {
+// A full Record: a new voucher type does not compile until it has a series.
+export const SERIES_KINDS: Record<InvVoucherType, string> = {
     SALE: "SALE",
     POS: "POS",
     ONLINE_INVOICE: "ONLINE_INVOICE",
@@ -28,31 +29,6 @@ export const SERIES_KINDS: Partial<Record<InvVoucherType, string>> = {
     REJECTION_OUT: "REJECTION_OUT",
 };
 
-// Legacy prefixes for the count-based fallback — used only while a till has not
-// yet pulled a newly added series row (B3a added POS_ESTIMATE / POS_ORDER). Goes
-// in B3b with the count path itself.
-const PREFIX: Record<InvVoucherType, string> = {
-    PURCHASE: "PV",
-    SALE: "SV",
-    POS: "POS",
-    ONLINE_INVOICE: "OI",
-    ONLINE_ORDER: "OO",
-    ESTIMATE: "EV",
-    POS_ESTIMATE: "POSEV",
-    POS_ORDER: "POSOD",
-    SALE_RETURN: "SR",
-    PURCHASE_RETURN: "PR",
-    MANUFACTURING_JOURNAL: "MJ",
-    PHYSICAL_STOCK: "PS",
-    BRANCH_TRANSFER: "BT",
-    GRN: "GRN",
-    CHALLAN: "DC",
-    REJECTION_IN: "RIN",
-    REJECTION_OUT: "ROUT",
-    SALES_ORDER: "SO",
-    PURCHASE_ORDER: "PO",
-};
-
 /**
  * Generate sequential inventory voucher references from the type's VoucherSeries
  * (`nextRefFromSeries`): the format set at /office/settings/year-ending, the
@@ -66,32 +42,7 @@ export async function invNextRef(
     type: InvVoucherType,
     ctx?: import("@/modules/accountancy/lib/voucherRef").ReferenceContext,
 ): Promise<string> {
-    const seriesKind = SERIES_KINDS[type];
-    // A till that has not pulled a just-added series row yet keeps numbering the
-    // old way for that moment rather than refusing the bill.
-    if (seriesKind && await tx.voucherSeries.findUnique({ where: { kind: seriesKind }, select: { kind: true } })) {
-        return nextRefFromSeries(tx, seriesKind, ctx);
-    }
-    // Legacy fallback — calendar-year prefix scheme.
-    const year = new Date().getFullYear();
-    const prefix = PREFIX[type];
-    // The SAME counter the series path numbers under — not a second derivation.
-    // This used to default to 1 whenever the caller passed no context, which is every
-    // POS_ESTIMATE and POS_ORDER (posQuoteVoucher.ts passes none): two tills each
-    // counted the same `startsWith` on their own replica and both minted
-    // `01-POSEV-2026-0001`. `numberingCounter` answers with the counter the bill is
-    // raised at — this PC's own, or a relayed till's — so the prefix separates the
-    // counters the way it always claimed to, and the office still numbers as 1.
-    const counterNumber = await numberingCounter(tx, ctx);
-    const startsWith = `${String(counterNumber).padStart(2, "0")}-${prefix}-${year}-`;
-    // count(+1) is not atomic under READ COMMITTED: two transactions counting the same
-    // prefix at once both mint the same number. The prefix used to be per till, so only
-    // one machine ever counted it; a v_live till relays this to the office, where every
-    // till shares counter 1's prefix. One transaction-scoped advisory lock per prefix
-    // serialises the count and the insert that follows it, and costs nothing otherwise.
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${startsWith}))`;
-    const count = await tx.voucherDetail.count({ where: { universalVoucher: { voucherNo: { startsWith } } } });   // 5D-6: ref on spine
-    return `${startsWith}${String(count + 1).padStart(4, "0")}`;
+    return nextRefFromSeries(tx, SERIES_KINDS[type], ctx);
 }
 
 // The voucher arithmetic moved to voucherMath.ts so client code can use it without
