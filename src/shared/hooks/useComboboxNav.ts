@@ -1,16 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { KeyboardEvent, RefObject } from "react";
+import type { FocusEvent, KeyboardEvent, MouseEvent, RefObject } from "react";
 import { useEscapeLayer } from "./useEscape";
 
 /**
  * Generic dropdown/combobox keyboard navigation. Owns `open`, `highlighted`,
  * `dropdownWidth`, and the wrapper/list/input refs. Returns a `handleKeyDown`
- * for ArrowUp/Down/Enter, plus `handleBlur` (close after 150ms so
- * onMouseDown on a list item can fire first) and `clear`. Esc closes the open
- * list through `useEscapeLayer` — before a dialog around it or the page behind
- * it can see the press.
+ * for ArrowUp/Down/Enter, plus `handleBlur`, `dropdownMouseDown` and `clear`.
+ * Esc closes the open list through `useEscapeLayer` — before a dialog around it
+ * or the page behind it can see the press.
+ *
+ * Closing on blur, without a timer. The dropdown puts `dropdownMouseDown` on
+ * its outermost element, so a press anywhere in it — a row, "+ create", the
+ * scrollbar — never takes focus off the input. A blur therefore always means
+ * the user really left, and the list closes at once. (It used to close 150 ms
+ * after ANY blur, so dragging the scrollbar, or clicking back into the box
+ * quickly, shut the list under the mouse.)
  *
  * Consumers handle their own Tab behaviour (some commit selection on Tab,
  * others just close) by wrapping the returned `handleKeyDown` and inspecting
@@ -26,13 +32,12 @@ import { useEscapeLayer } from "./useEscape";
  *     onBlur={cb.handleBlur}
  *     onKeyDown={cb.handleKeyDown}
  *   />
- *   {cb.open && <ul ref={cb.listRef}>...</ul>}
+ *   {cb.open && <div onMouseDown={cb.dropdownMouseDown}><ul ref={cb.listRef}>...</ul></div>}
  */
 export function useComboboxNav(opts: {
     count: number;
     onSelect: (index: number) => void;
     onClear?: () => void;
-    blurDelayMs?: number;
 }): {
     open: boolean;
     setOpen: (v: boolean) => void;
@@ -44,10 +49,11 @@ export function useComboboxNav(opts: {
     inputRef: RefObject<HTMLInputElement | null>;
     listRef: RefObject<HTMLUListElement | null>;
     handleKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
-    handleBlur: () => void;
+    handleBlur: (e?: FocusEvent<HTMLInputElement>) => void;
+    dropdownMouseDown: (e: MouseEvent) => void;
     clear: () => void;
 } {
-    const { count, onSelect, onClear, blurDelayMs = 150 } = opts;
+    const { count, onSelect, onClear } = opts;
     const [open, setOpen] = useState(false);
     const [highlighted, setHighlighted] = useState(0);
     const [dropdownWidth, setDropdownWidth] = useState<number | null>(null);
@@ -89,9 +95,21 @@ export function useComboboxNav(opts: {
         [open, highlighted, count, onSelect],
     );
 
-    const handleBlur = useCallback(() => {
-        setTimeout(() => setOpen(false), blurDelayMs);
-    }, [blurDelayMs]);
+    // Focus moving to something inside the box (its clear button) is not leaving.
+    const handleBlur = useCallback((e?: FocusEvent<HTMLInputElement>) => {
+        const next = e?.relatedTarget as Node | null | undefined;
+        if (next && wrapperRef.current?.contains(next)) return;
+        setOpen(false);
+    }, []);
+
+    // On the dropdown's outermost element. preventDefault keeps focus in the
+    // input (rows select on mousedown, the scrollbar just scrolls); the
+    // dropdown is portalled, so stopPropagation keeps the press from reading
+    // as an outside click to a dialog the box sits in.
+    const dropdownMouseDown = useCallback((e: MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+    }, []);
 
     const clear = useCallback(() => {
         setOpen(false);
@@ -104,6 +122,6 @@ export function useComboboxNav(opts: {
         highlighted, setHighlighted,
         dropdownWidth, setDropdownWidth,
         wrapperRef, inputRef, listRef,
-        handleKeyDown, handleBlur, clear,
+        handleKeyDown, handleBlur, dropdownMouseDown, clear,
     };
 }

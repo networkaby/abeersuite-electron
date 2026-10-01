@@ -160,7 +160,7 @@ export function GroupCombobox({
                         maxHeight: pos.maxHeight,
                         transform: pos.flipUp ? "translateY(calc(-100% - 0.25rem))" : undefined,
                     }}
-                    onMouseDown={(e) => e.stopPropagation()}
+                    onMouseDown={cb.dropdownMouseDown}
                 >
                     {items.length === 0 ? (
                         <div className="px-3 py-3 text-muted-foreground text-center">

@@ -354,7 +354,7 @@ export function GlAccountCombobox({
                     cb.setOpen(true);
                     e.target.select();    // immediate typing replaces the label
                 }}
-                onBlur={() => { setFocused(false); cb.handleBlur(); }}
+                onBlur={(e) => { setFocused(false); cb.handleBlur(e); }}
                 onKeyDown={onKeyDown}
             />
 
@@ -378,12 +378,11 @@ export function GlAccountCombobox({
                         transform: pos.flipUp ? "translateY(calc(-100% - 0.25rem))" : undefined,
                     }}
                     // Prevent the click landing on the underlying dialog backdrop
-                    onMouseDown={(e) => e.stopPropagation()}
+                    onMouseDown={cb.dropdownMouseDown}
                 >
                     {/* New-ledger CTA at the TOP — closest to the cursor, and
-                        the only thing on screen when nothing matched.
-                        onMouseDown (not onClick) so it beats the input's blur,
-                        which would otherwise shut the dropdown first. */}
+                        the only thing on screen when nothing matched. Acts
+                        on mousedown, like the rows. */}
                     {allowCreate && (
                         <button
                             type="button"
