@@ -46,8 +46,10 @@ model Account {
   // partyJson at creation, so those legitimately never drift. See Branch.updatedAt.
   updatedAt     DateTime       @default(now()) @updatedAt
 
-  // Per-customer credit limit (future use; null = no limit). Lives on Account
-  // because every Person and every Company gets exactly one Account row.
+  // Per-party credit limit, checked on SALES only (checkCreditLimit): empty or 0
+  // = no credit (an auto limit from Settings may still apply); purchases are never
+  // limited by it. Lives on Account because every Person and every Company gets
+  // exactly one Account row.
   creditLimit Decimal? @db.Decimal(14, 2)
 
   // Bank-ledger details — set only on ledgers under the "Bank Accounts" /

@@ -167,8 +167,9 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
                 <Stat
                     icon={<CreditCard size={14} />}
                     label="Avail. credit"
-                    value={snapshot.availableCredit != null ? formatInr(snapshot.availableCredit) : "Unlimited"}
-                    sub={snapshot.creditLimit != null ? `limit ${formatInr(snapshot.creditLimit)}` : "no limit set"}
+                    value={formatInr(snapshot.availableCredit)}
+                    // An empty limit is no credit on a sale (checkCreditLimit), never "unlimited".
+                    sub={snapshot.creditLimit > 0 ? `limit ${formatInr(snapshot.creditLimit)}` : "no credit"}
                     tint="emerald"
                 />
                 {/* Due — sign-aware: flips to "Advance" (green) when the ledger is

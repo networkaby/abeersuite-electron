@@ -36,10 +36,10 @@ export type Snapshot = {
         maxRedeemPctOfBill: number | null;
     } | null;
     customerLevel: string; // admin-defined spend-tier name ("" when no tier reached)
-    creditLimit: number | null;    // deny-by-default: 0 = no credit, >0 = cap (server maps legacy NULL→0)
+    creditLimit: number;           // deny-by-default: 0 = no credit, >0 = cap (the account's empty limit reads as 0)
     balanceDue: number;
     balanceOverdue: number;
-    availableCredit: number | null; // = max(0, creditLimit − signed ledger balance), so an advance adds headroom
+    availableCredit: number;       // = max(0, creditLimit − signed ledger balance), so an advance adds headroom
     rating: number | null;
     // Customer Quality staff timeline (ratings + behaviour comments). The POS
     // panel shows recent entries and appends new ones via /api/customer-quality.
