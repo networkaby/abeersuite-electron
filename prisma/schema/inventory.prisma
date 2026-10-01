@@ -708,6 +708,13 @@ model InvStockLedger {
   outQty             Decimal          @default(0) @db.Decimal(10, 3)
   rate               Decimal          @db.Decimal(14, 2)
   amount             Decimal          @db.Decimal(14, 2)
+  /// Set on the counter-row a CANCEL writes: the row it reverses. Null on every
+  /// original. A restore deletes exactly these; a cancel reverses only rows
+  /// without it — no telling them apart by sign or position (a ₹0 free-issue
+  /// reversal has amount 0, same as its original).
+  reversalOfId       Int?             @unique
+  reversalOf         InvStockLedger?  @relation("StockReversal", fields: [reversalOfId], references: [id], onDelete: Cascade)
+  reversal           InvStockLedger?  @relation("StockReversal")
 
   @@index([productId, date])
   @@index([universalVoucherId])

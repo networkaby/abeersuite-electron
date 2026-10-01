@@ -58,10 +58,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             // and it covers PHYSICAL_STOCK / MANUFACTURING_JOURNAL / BRANCH_TRANSFER
             // (whose two rows net to zero org-wide) without special cases.
             //
-            // `amount >= 0` selects the ORIGINAL rows — counter-entries carry a
-            // negated amount, so a re-run can never reverse a reversal.
+            // Only ORIGINAL rows — a counter-entry names the row it reverses
+            // (`reversalOfId`), so a re-run can never reverse a reversal, ₹0 lines included.
             const origRows = await tx.invStockLedger.findMany({
-                where:  { universalVoucherId: voucher.universalVoucherId ?? -1, amount: { gte: 0 } },
+                where:  { universalVoucherId: voucher.universalVoucherId ?? -1, reversalOfId: null },
                 select: { id: true, productId: true, branchId: true, universalVoucherId: true, inQty: true, outQty: true, rate: true, amount: true },
             });
             const now = new Date();

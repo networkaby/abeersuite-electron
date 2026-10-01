@@ -2756,6 +2756,7 @@ CREATE TABLE IF NOT EXISTS "InvStockLedger" (
     "outQty" DECIMAL(10,3) NOT NULL DEFAULT 0,
     "rate" DECIMAL(14,2) NOT NULL,
     "amount" DECIMAL(14,2) NOT NULL,
+    "reversalOfId" INTEGER,
 
     CONSTRAINT "InvStockLedger_pkey" PRIMARY KEY ("id")
 );
@@ -2768,6 +2769,8 @@ ALTER TABLE "InvStockLedger" ADD COLUMN IF NOT EXISTS "inQty" DECIMAL(10,3) NOT 
 ALTER TABLE "InvStockLedger" ADD COLUMN IF NOT EXISTS "outQty" DECIMAL(10,3) NOT NULL DEFAULT 0;
 ALTER TABLE "InvStockLedger" ADD COLUMN IF NOT EXISTS "rate" DECIMAL(14,2) NOT NULL;
 ALTER TABLE "InvStockLedger" ADD COLUMN IF NOT EXISTS "amount" DECIMAL(14,2) NOT NULL;
+ALTER TABLE "InvStockLedger" ADD COLUMN IF NOT EXISTS "reversalOfId" INTEGER;
+ALTER TABLE "InvStockLedger" ALTER COLUMN "reversalOfId" DROP NOT NULL;
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "InvBom" (
@@ -5122,6 +5125,9 @@ CREATE INDEX IF NOT EXISTS "VoucherInventoryLine_universalVoucherId_idx" ON "Vou
 CREATE INDEX IF NOT EXISTS "VoucherInventoryLine_productId_idx" ON "VoucherInventoryLine"("productId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "InvStockLedger_reversalOfId_key" ON "InvStockLedger"("reversalOfId");
+
+-- CreateIndex
 CREATE INDEX IF NOT EXISTS "InvStockLedger_productId_date_idx" ON "InvStockLedger"("productId", "date");
 
 -- CreateIndex
@@ -6113,6 +6119,13 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "InvStockLedger" ADD CONSTRAINT "InvStockLedger_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "Branch"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "InvStockLedger" ADD CONSTRAINT "InvStockLedger_reversalOfId_fkey" FOREIGN KEY ("reversalOfId") REFERENCES "InvStockLedger"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
