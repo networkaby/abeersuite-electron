@@ -5,6 +5,7 @@ import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
+import { resetReconciliationOnOpening } from "@/modules/accountancy/lib/reconciliation";
 import { z } from "zod";
 import { validateRequest, handleApiError, pickDefined } from "@/shared/lib/api";
 
@@ -154,6 +155,10 @@ export async function PATCH(req: Request, { params }: Params) {
     }
 
     try {
+        // A new opening reaches every day the ledger has — its lock starts over.
+        if (openingPatch) {
+            await resetReconciliationOnOpening(prisma, accountId, { amount: openingPatch.openingBalance, type: openingPatch.openingBalanceType });
+        }
         const updated = await prisma.account.update({
             where: { id: accountId },
             data: pickDefined({ creditLimit: data.creditLimit, groupId, ...openingPatch }),

@@ -59,3 +59,109 @@ export async function retreatReconciliation(
         data: { reconciledThrough: dayBeforeUtc(date) },
     });
 }
+
+// ── What dirties a window, and how far ───────────────────────────────────────
+//
+// The owner's rules (2026-10-01):
+//   • a voucher edit pulls the lock back only on a ledger whose amounts in that
+//     voucher changed — or on every ledger in it when the date moved, since the
+//     amount then leaves one day for another;
+//   • a change to a ledger's opening balance, and a merge into it, clear its
+//     lock outright — they reach every day the ledger has.
+
+type Leg = { accountId: number; type: "DEBIT" | "CREDIT"; amount: unknown };
+
+/** One ledger's legs in a voucher, as a comparable signature. */
+function legSignature(legs: Leg[], accountId: number): string {
+    return legs
+        .filter((l) => l.accountId === accountId)
+        .map((l) => ((l.type === "DEBIT" ? 1 : -1) * Number(l.amount)).toFixed(2))
+        .sort()
+        .join("|");
+}
+
+/**
+ * The ledgers a voucher edit actually changed: a different set of amounts on
+ * the ledger, or — when the date moved — every ledger the voucher touches,
+ * before or after.
+ */
+export function changedLedgers(before: Leg[], after: Leg[], dateMoved: boolean): number[] {
+    const ids = [...new Set([...before, ...after].map((l) => l.accountId))];
+    return dateMoved ? ids : ids.filter((id) => legSignature(before, id) !== legSignature(after, id));
+}
+
+/** Clear the lock outright on every one of `accountIds` that has one. */
+export async function resetReconciliation(tx: Prisma.TransactionClient, accountIds: number[]): Promise<void> {
+    const ids = [...new Set(accountIds)];
+    if (ids.length === 0) return;
+    await tx.account.updateMany({
+        where: { id: { in: ids }, reconciledThrough: { not: null } },
+        data:  { reconciledThrough: null },
+    });
+}
+
+function signedOpening(amount: unknown, type: string | null | undefined): number {
+    if (amount == null || type == null) return 0;
+    const n = Number(amount);
+    return type === "DEBIT" ? n : -n;
+}
+
+/**
+ * Call BEFORE writing a ledger's opening balance: clears its lock when the
+ * figure is really changing. `undefined` = that half is not being written.
+ * Outside a transaction, a write that then fails has merely cleared the lock
+ * early — the safe side.
+ */
+export async function resetReconciliationOnOpening(
+    tx: Prisma.TransactionClient,
+    accountId: number,
+    next: { amount?: number | null; type?: "DEBIT" | "CREDIT" | null },
+): Promise<void> {
+    const cur = await tx.account.findUnique({
+        where:  { id: accountId },
+        select: { openingBalance: true, openingBalanceType: true, reconciledThrough: true },
+    });
+    if (!cur || cur.reconciledThrough == null) return;
+    const amount = next.amount === undefined ? cur.openingBalance : next.amount;
+    const type = next.type === undefined ? cur.openingBalanceType : next.type;
+    if (Math.abs(signedOpening(cur.openingBalance, cur.openingBalanceType) - signedOpening(amount, type)) >= 0.005) {
+        await resetReconciliation(tx, [accountId]);
+    }
+}
+
+/**
+ * Keep bank ticks across a voucher's line rewrite. The edit paths delete and
+ * re-create a voucher's GL lines, minting fresh ids, and a tick
+ * (BankStatementMatch) points at the old id — so without this every edit, even
+ * one that changes nothing on the bank, leaves the tick stale; and on a
+ * statement line before the lock, stale for good. Each ticked old line is
+ * re-pointed at the new line with the same ledger, side and amount. One that
+ * no longer has a twin stays stale — its amount changed, so the lock has moved
+ * back and the line can be ticked again.
+ */
+export async function carryStatementMatches(
+    tx: Prisma.TransactionClient,
+    universalVoucherId: number,
+    before: Array<Leg & { id: number }>,
+): Promise<void> {
+    if (before.length === 0) return;
+    const ticked = new Set((await tx.bankStatementMatch.findMany({
+        where:  { glLineId: { in: before.map((l) => l.id) } },
+        select: { glLineId: true },
+    })).map((m) => m.glLineId));
+    if (ticked.size === 0) return;
+    const fresh = await tx.voucherGlLine.findMany({
+        where:  { universalVoucherId },
+        select: { id: true, accountId: true, type: true, amount: true },
+    });
+    const claimed = new Set<number>();
+    for (const old of before) {
+        if (!ticked.has(old.id)) continue;
+        const twin = fresh.find((n) => !claimed.has(n.id)
+            && n.accountId === old.accountId && n.type === old.type
+            && Math.abs(Number(n.amount) - Number(old.amount)) < 0.005);
+        if (!twin) continue;
+        claimed.add(twin.id);
+        await tx.bankStatementMatch.updateMany({ where: { glLineId: old.id }, data: { glLineId: twin.id } });
+    }
+}

@@ -18,7 +18,7 @@ import { GlBuildError, type PostVoucherInput } from "./postInvVoucher";
 import { recomputeAccountBalances } from "./aggregateLedger";
 import { assertGlBalanced, glLineRow } from "./transactionEngine";
 import { recordStockMovement, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
-import { retreatReconciliation } from "./reconciliation";
+import { carryStatementMatches, changedLedgers, retreatReconciliation } from "./reconciliation";
 
 export async function reapplyTradingVoucherInPlace(
     tx: Prisma.TransactionClient,
@@ -63,10 +63,10 @@ export async function reapplyTradingVoucherInPlace(
     // `journalEntryId` carries the spine id (self-ref since G5); receipts
     // allocated against it stay linked because we keep the same header.
     if (journalEntryId != null && spec.glLines.length > 0) {
-        const oldAccountIds = (await tx.voucherGlLine.findMany({
+        const oldLines = await tx.voucherGlLine.findMany({
             where:  { universalVoucherId: journalEntryId },
-            select: { accountId: true },
-        })).map((l) => l.accountId);
+            select: { id: true, accountId: true, type: true, amount: true },
+        });
 
         assertGlBalanced(spec.glLines);
         await tx.voucherGlLine.deleteMany({ where: { universalVoucherId: journalEntryId } });
@@ -83,17 +83,21 @@ export async function reapplyTradingVoucherInPlace(
                 ...glLineRow(l, idx, branchId),
             })),
         });
+        // The lines were just re-minted: carry each bank tick to its twin.
+        await carryStatementMatches(tx, journalEntryId, oldLines);
 
-        const touched = [...new Set([...oldAccountIds, ...spec.glLines.map((l) => l.accountId)])];
-        await recomputeAccountBalances(tx, touched);
+        await recomputeAccountBalances(tx, [...new Set([...oldLines.map((l) => l.accountId), ...spec.glLines.map((l) => l.accountId)])]);
 
-        // A backdated edit dirties the reconciled window of every ledger it
-        // touches — and the lines were just re-minted, so any bank tick on the
-        // old ones is stale and must be re-made, which a frozen line cannot be.
-        // Retreat from the earlier of the old and new dates, as every other
-        // voucher edit does (see reconciliation.ts).
+        // A backdated edit pulls the lock back only on the ledgers whose amounts
+        // it changed — all of them when the date moved — from the earlier of the
+        // old and new dates, as every other voucher edit does (see reconciliation.ts).
         const newDate = new Date(voucher.date);
-        await retreatReconciliation(tx, touched, previousDate < newDate ? previousDate : newDate);
+        const dateMoved = newDate.toISOString().slice(0, 10) !== previousDate.toISOString().slice(0, 10);
+        await retreatReconciliation(
+            tx,
+            changedLedgers(oldLines, spec.glLines, dateMoved),
+            previousDate < newDate ? previousDate : newDate,
+        );
     }
 
     // ── Stock: replace this voucher's ledger rows, then recompute on-hand ─────

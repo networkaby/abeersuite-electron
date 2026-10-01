@@ -13,7 +13,7 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { assertLinksSurviveEdit, BillLinkError } from "@/modules/accountancy/lib/billLink";
 import { assertVoucherDate } from "@/shared/lib/accountancy/booksPeriodServer";
-import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
+import { carryStatementMatches, changedLedgers, retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 
 // Phase 5 5E: the UniversalVoucher spine IS the financial voucher (Voucher table
 // dropped). `id` is the spine id; lines are VoucherGlLine. The spine is scalar/
@@ -158,6 +158,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     seq:         idx,
                 })),
             });
+            await carryStatementMatches(tx, voucherId, existing.lines);
 
             if (wasPosted) {
                 // Apply the new GL impact.
@@ -189,17 +190,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 partyAfter:  body.partyAccountId ?? null,
             });
 
-            // An edit dirties a reconciled window exactly as much as a posting
-            // does — the amounts moved, and the date may have moved too. Retreat
-            // at the EARLIER of the old and new dates; the watermark only ever
-            // travels backwards, so one call covers both.
+            // An edit dirties a reconciled window only where it changed
+            // something: the ledgers whose amounts moved, or all of them when
+            // the date did. Retreat at the EARLIER of the old and new dates; the
+            // watermark only ever travels backwards, so one call covers both.
             if (wasPosted) {
                 const newDate = new Date(body.date);
-                const from = newDate < existing.date ? newDate : existing.date;
+                const dateMoved = newDate.toISOString().slice(0, 10) !== existing.date.toISOString().slice(0, 10);
                 await retreatReconciliation(
                     tx,
-                    [...existing.lines.map((l) => l.accountId), ...body.lines.map((l) => l.accountId)],
-                    from,
+                    changedLedgers(existing.lines, body.lines, dateMoved),
+                    newDate < existing.date ? newDate : existing.date,
                 );
             }
         }, { timeout: 30_000, maxWait: 10_000 });

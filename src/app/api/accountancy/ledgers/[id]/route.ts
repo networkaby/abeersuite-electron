@@ -9,6 +9,7 @@ import { parseIdParam } from "@/shared/lib/api";
 import { pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
+import { resetReconciliationOnOpening } from "@/modules/accountancy/lib/reconciliation";
 import { effectiveAccountBalance, toNumber } from "@/modules/accountancy/lib/balance";
 import { toDateOnly } from "@/shared/lib/format/formatDate";
 import { ALIAS_MAX_LENGTH, aliasRows } from "@/modules/accountancy/lib/accountAlias";
@@ -144,6 +145,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     try {
+        // A new opening reaches every day the ledger has — its lock starts over.
+        if (body.openingBalance !== undefined) {
+            await resetReconciliationOnOpening(prisma, id, { amount: body.openingBalance, type: body.openingBalanceType ?? null });
+        }
         const account = await prisma.account.update({
             where: { id },
             data: {

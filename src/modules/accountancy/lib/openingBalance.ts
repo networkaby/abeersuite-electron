@@ -6,6 +6,7 @@
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { businessToday } from "@/shared/lib/format/formatDate";
+import { resetReconciliationOnOpening } from "@/modules/accountancy/lib/reconciliation";
 
 const SUSPENSE_NAME = "Difference in Opening Balances";
 
@@ -36,6 +37,11 @@ export async function reconcileOpeningSuspense(): Promise<void> {
     // Convention: more Dr than Cr → park residual as a Cr in suspense (acts as a credit
     // until the user adds the missing capital / loan).
     const diff = drTotal - crTotal;
+    // The suspense ledger's opening is about to move with everyone else's —
+    // when it really does, its lock starts over like any ledger's.
+    await resetReconciliationOnOpening(prisma, suspense.id, Math.abs(diff) < 0.005
+        ? { amount: null, type: null }
+        : { amount: Math.abs(diff), type: diff > 0 ? "CREDIT" : "DEBIT" });
     if (Math.abs(diff) < 0.005) {
         await prisma.account.update({
             where: { id: suspense.id },

@@ -44,7 +44,7 @@ import { systemBranchId } from "@/shared/lib/org/systemBranch";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import { indianFyStartYear } from "./voucherRef";
 import { ledgerStatusFilterUv } from "./ledgerStatus";
-import { retreatReconciliation } from "./reconciliation";
+import { resetReconciliation } from "./reconciliation";
 
 /** The voucher type an opening bill is posted as. */
 export const OPENING_TYPE = "OPENING";
@@ -201,7 +201,7 @@ export async function saveOpeningBills(
 
     const account = await tx.account.findUnique({
         where:  { id: args.accountId },
-        select: { id: true, name: true },
+        select: { id: true, name: true, openingBalance: true, openingBalanceType: true },
     });
     if (!account) throw new OpeningBillError("Ledger not found.");
 
@@ -235,9 +235,12 @@ export async function saveOpeningBills(
             `${blockedRemove.map((b) => b.ref).join(", ")} ${blockedRemove.length === 1 ? "has" : "have"} money settled against ${blockedRemove.length === 1 ? "it" : "them"} — unlink first, then remove.`,
         );
     }
-    // Every date an opening bill leaves, lands on, or changes its amount on.
-    // The earliest pulls the reconciliation lock back on both legs' ledgers.
-    const dirty: string[] = removed.map((b) => b.date);
+    // The opening as it stands — the scalar plus any bills — to compare with
+    // the bills being saved. Only a change in that total is an opening change.
+    const signed = (amount: number, type: "DEBIT" | "CREDIT" | null) => (type === "CREDIT" ? -amount : amount);
+    const openingBefore = (account.openingBalance != null && account.openingBalanceType
+        ? signed(Number(account.openingBalance), account.openingBalanceType) : 0)
+        + existing.reduce((s, b) => s + signed(b.amount, b.type), 0);
     if (removed.length > 0) {
         const ids = removed.map((b) => b.universalVoucherId);
         // Balances first: these postings are being withdrawn.
@@ -260,9 +263,6 @@ export async function saveOpeningBills(
             where: { id: b.universalVoucherId },
             data:  { voucherNo: b.ref.trim() || DEFAULT_OPENING_REF, date: new Date(`${b.date}T00:00:00.000Z`) },
         });
-        if (Math.abs(b.amount - was.amount) > EPS || was.type !== args.type || was.date !== b.date) {
-            dirty.push(was.date, b.date);
-        }
         if (Math.abs(b.amount - was.amount) > EPS || was.type !== args.type) {
             await reverseOpeningBalances(tx, [b.universalVoucherId]);
             await tx.voucherGlLine.deleteMany({ where: { universalVoucherId: b.universalVoucherId } });
@@ -282,7 +282,6 @@ export async function saveOpeningBills(
     const created: number[] = [];
     for (const b of bills) {
         if (b.universalVoucherId != null) continue;
-        dirty.push(b.date);
         const uv = await tx.universalVoucher.create({
             data: {
                 type:           OPENING_TYPE,
@@ -324,8 +323,12 @@ export async function saveOpeningBills(
         data:  { openingBalance: null, openingBalanceType: null, openingBalanceDate: null },
     });
 
-    if (dirty.length > 0) {
-        await retreatReconciliation(tx, [args.accountId, suspense], dirty.reduce((a, b) => (b < a ? b : a)));
+    // A changed opening reaches every day the ledger has — its reconciliation,
+    // and the suspense ledger's on the other leg, start over. Re-splitting the
+    // same total into bills (or converting the scalar) changes nothing.
+    const openingAfter = bills.reduce((s, b) => s + signed(b.amount, args.type), 0);
+    if (Math.abs(openingAfter - openingBefore) > EPS) {
+        await resetReconciliation(tx, [args.accountId, suspense]);
     }
 
     return {

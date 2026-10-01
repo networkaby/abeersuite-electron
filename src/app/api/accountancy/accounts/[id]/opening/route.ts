@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
+import { resetReconciliationOnOpening } from "@/modules/accountancy/lib/reconciliation";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -25,6 +26,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (error) return error;
 
     try {
+        // A new opening reaches every day the ledger has — its lock starts over.
+        await resetReconciliationOnOpening(prisma, Number(id), { amount: data.amount, type: data.type });
         const account = await prisma.account.update({
             where: { id: Number(id) },
             data: {

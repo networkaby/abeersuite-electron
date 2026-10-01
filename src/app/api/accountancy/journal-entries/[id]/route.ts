@@ -6,7 +6,7 @@ import { isBalanced, applyLineBalances } from "@/modules/accountancy/lib/balance
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { assertLinksSurviveEdit, BillLinkError } from "@/modules/accountancy/lib/billLink";
-import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
+import { carryStatementMatches, changedLedgers, retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 
 const lineSchema = z.object({
     accountId: z.number().int().positive(),
@@ -114,6 +114,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         seq:                idx,
                     })),
                 });
+                await carryStatementMatches(tx, entryId, existing.lines);
             }
 
             // ── POSTED: apply the new GL impact ─────────────────────────
@@ -139,14 +140,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 partyAfter:  existing.partyAccountId,
             });
 
-            // New lines or a new date dirty every ledger the entry touches, before
-            // and after — retreat from the earlier of the old and new dates, the
-            // same rule as the voucher edit (see reconciliation.ts).
+            // Only the ledgers whose amounts changed — or all of them when the
+            // date moved — pull their lock back, from the earlier of the old and
+            // new dates; the same rule as the voucher edit (see reconciliation.ts).
             if (existing.status === "POSTED" && (body.lines || body.date)) {
                 const newDate = body.date ? new Date(body.date) : existing.date;
+                const dateMoved = newDate.toISOString().slice(0, 10) !== existing.date.toISOString().slice(0, 10);
                 await retreatReconciliation(
                     tx,
-                    [...existing.lines.map((l) => l.accountId), ...(body.lines ?? []).map((l) => l.accountId)],
+                    changedLedgers(existing.lines, body.lines ?? existing.lines, dateMoved),
                     newDate < existing.date ? newDate : existing.date,
                 );
             }

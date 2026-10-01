@@ -6,6 +6,8 @@ import {
     aggregateClosingAsOf, loadNormalBalanceMap,
 } from "@/modules/accountancy/lib/aggregateLedger";
 import { validateRequest } from "@/shared/lib/api";
+import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
+import { resetReconciliationOnOpening } from "@/modules/accountancy/lib/reconciliation";
 import { handleApiError } from "@/shared/lib/api";
 
 const updateSchema = z.object({
@@ -64,6 +66,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     try {
         const b = data;
+        const openingTouched = b.openingBalance !== undefined || b.openingBalanceType !== undefined;
+        // A new opening reaches every day the ledger has — its lock starts over.
+        if (openingTouched) {
+            await resetReconciliationOnOpening(prisma, Number(id), { amount: b.openingBalance, type: b.openingBalanceType });
+        }
         const updated = await prisma.account.update({
             where: { id: Number(id) },
             data: {
@@ -76,6 +83,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(b.openingBalance !== undefined ? { openingBalanceDate: null } : {}),
             },
         });
+        // Every other opening write re-balances the suspense ledger; this one did not.
+        if (openingTouched) await reconcileOpeningSuspense();
         return NextResponse.json(updated);
     } catch (e) {
         return handleApiError(e, "Failed to update");

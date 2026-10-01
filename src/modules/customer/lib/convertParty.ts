@@ -17,7 +17,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
 import { readSettlement, buildSettlementJson } from "@/shared/lib/accountancy/settlement";
-import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
+import { resetReconciliation } from "@/modules/accountancy/lib/reconciliation";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 type PartyKind = "person" | "company";
@@ -546,15 +546,6 @@ export async function mergeParty(
     return prisma.$transaction(async (tx) => {
         const partyCounts = await countPartyRefs(tx, loserAt);
 
-        // The loser's earliest entry — once re-pointed it lands in the winner's
-        // books on its own date, dirtying any window the winner was reconciled
-        // through (see reconciliation.ts).
-        const firstMoved = await tx.voucherGlLine.findFirst({
-            where:   { accountId: loserAccountId },
-            orderBy: { universalVoucher: { date: "asc" } },
-            select:  { universalVoucher: { select: { date: true } } },
-        });
-
         // 1. Re-point every Account FK from loser's Account → winner's Account.
         const [vp, gll, t, d] = await Promise.all([
             tx.universalVoucher.updateMany({ where: { partyAccountId: loserAccountId }, data: { partyAccountId: winnerAccountId } }),
@@ -563,7 +554,9 @@ export async function mergeParty(
             tx.ticket.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
             tx.device.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
         ]);
-        if (firstMoved) await retreatReconciliation(tx, [winnerAccountId], firstMoved.universalVoucher.date);
+        // The winner takes the loser's entries and its opening: every day it has
+        // changes, so its reconciliation starts over (see reconciliation.ts).
+        await resetReconciliation(tx, [winnerAccountId]);
 
         // Tender/charge input inside settlementJson (drafts + posted echo).
         const settlementRows = await tx.voucherDetail.findMany({ where: { settlementJson: { not: Prisma.DbNull } }, select: { id: true, settlementJson: true } });
