@@ -59,6 +59,7 @@ import { round2 } from "@/shared/lib/format/moneyInr";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { useGlAccounts } from "@/shared/hooks/useGlAccounts";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
+import { useFormChanges } from "@/shared/hooks/useFormChanges";
 import { getOrgDefaults } from "@/shared/lib/orgDefaults";
 import { parseDenomJson, type DenomJson } from "@/shared/lib/accountancy/denomJson";
 
@@ -285,6 +286,14 @@ type RowDenom = { counts: Record<number, string> };  // denomination → count (
 const emptyRowDenom = (): RowDenom => ({ counts: {} });
 const FALLBACK_DENOMS = [500, 200, 100, 50, 20, 10, 5, 2, 1];
 
+/** The notes actually counted, as a stable key — a box typed "0" or emptied
+ *  again is no count at all. */
+const countedNotes = (d: RowDenom | undefined): [string, number][] =>
+    Object.entries(d?.counts ?? {})
+        .map(([den, c]): [string, number] => [den, parseInt(c || "0", 10) || 0])
+        .filter(([, n]) => n > 0)
+        .sort(([a], [b]) => Number(a) - Number(b));
+
 const rowDenomTotal = (d: RowDenom): number =>
     Object.entries(d.counts).reduce((s, [den, c]) => s + Number(den) * (parseInt(c || "0", 10) || 0), 0);
 
@@ -435,14 +444,6 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
         ro.observe(el);
         return () => ro.disconnect();
     }, []);
-    const isDirtyRef = useRef(false);
-    const [closeDialogOpen, setCloseDialogOpen] = useState(false);
-    const handleClose = () => {
-        if (isDirtyRef.current) { setCloseDialogOpen(true); } else { closeForm(); }
-    };
-    // Esc = Back. The discard prompt, a bill-link dialog or an open list take their
-    // own Esc first; hosted in GlVoucherDialog, this owns the dialog's Esc.
-    useEscape(handleClose);
 
     // Accounts loaded once on mount; particulars combobox picks from rowFilter,
     // top picker from topFilter.
@@ -565,6 +566,27 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     // they belong to, so a change of party simply starts from no ticks; handed
     // to the link popup after posting so it opens ticked the same way.
     const [billPickState, setBillPickState] = useState<{ partyId: number; picks: BillPicks }>({ partyId: 0, picks: {} });
+
+    // "Unsaved changes" asks only while the voucher really differs from where
+    // the user started — a ledger or party pick and a note count count, typing
+    // a figure and deleting it again does not (useFormChanges).
+    const { changed, markClean, startProps } = useFormChanges({
+        date, narration, topLedgerId, denomOn,
+        party: topParty ? [topParty.kind, topParty.id] : null,
+        rows: rows.map((r) => [
+            r.accountId, r.amount, r.note, r.method ?? "", r.reference ?? "", r.chequeNo ?? "",
+            countedNotes(rowDenoms[r.id]),
+        ]),
+        payDenom: countedNotes(payDenom),
+        picks: billPickState.picks,
+    });
+    const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+    const handleClose = () => {
+        if (changed) { setCloseDialogOpen(true); } else { closeForm(); }
+    };
+    // Esc = Back. The discard prompt, a bill-link dialog or an open list take their
+    // own Esc first; hosted in GlVoucherDialog, this owns the dialog's Esc.
+    useEscape(handleClose);
 
     const accountById = new Map<number, GlAccount>(accounts.map((a) => [a.id, a]));
     const topAccounts = accounts.filter(copy.topFilter);
@@ -900,7 +922,6 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
         setRowDenoms((prev) => ({ ...prev, [rowId]: next }));
         const total = rowDenomTotal(next);
         updateRow(rowId, { amount: total > 0 ? String(round2(total)) : "" });
-        isDirtyRef.current = true;
     };
 
     // Checkbox toggle: turning capture ON re-locks every cash row's amount to
@@ -1115,7 +1136,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
             setRowDenoms({});
             setPayDenom(emptyRowDenom());
             setDate(toIsoDate(new Date()));
-            isDirtyRef.current = false;
+            markClean();
             // Refresh the voucher-number preview so the next entry shows the
             // freshly-incremented reference (otherwise nextRef stays stale).
             axios.get<{ reference: string }>(`/api/accountancy/vouchers/next-ref?type=${kind}`)
@@ -1130,7 +1151,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     };
 
     return (
-        <div className="flex flex-col flex-1 min-h-0 bg-background" onChange={() => { isDirtyRef.current = true; }}>
+        <div className="flex flex-col flex-1 min-h-0 bg-background" {...startProps}>
             {/* Breadcrumb bar */}
             <VoucherTopBar
                 title={copy.title}
@@ -1533,7 +1554,6 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                                     const next = updater(payDenom);
                                     setPayDenom(next);
                                     lockPayeeAmount(next);
-                                    isDirtyRef.current = true;
                                 }}
                                 target={rowsTotal}
                             />
@@ -1609,8 +1629,8 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>Stay</Button>
-                        <Button variant="outline" onClick={async () => { setCloseDialogOpen(false); isDirtyRef.current = false; await submit(false); }}>Save Draft</Button>
-                        <Button variant="destructive" onClick={() => { isDirtyRef.current = false; setCloseDialogOpen(false); closeForm(); }}>Discard &amp; Close</Button>
+                        <Button variant="outline" onClick={async () => { setCloseDialogOpen(false); await submit(false); }}>Save Draft</Button>
+                        <Button variant="destructive" onClick={() => { setCloseDialogOpen(false); closeForm(); }}>Discard &amp; Close</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

@@ -76,6 +76,7 @@ import { extractApiError, creditLimitDetailOf } from "@/shared/lib/api";
 import { parseDecimalInput, round2, todayIso, gridRowClass } from "@/shared/lib/format";
 import { useActiveRow } from "@/shared/hooks/useActiveRow";
 import { useEscape } from "@/shared/hooks/useEscape";
+import { useFormChanges } from "@/shared/hooks/useFormChanges";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { BillLinkDialog } from "@/modules/accountancy/components/BillLinkDialog";
@@ -163,49 +164,6 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         }
     };
 
-    // Browser-level guard for tab close / refresh / external navigations.
-    // Triggers the OS-native "leave site?" prompt when the form is dirty.
-    // Our in-app close paths (Cancel button, top-bar X / back arrow, Esc)
-    // continue to use the friendlier Stay / Save Draft / Discard dialog.
-    useEffect(() => {
-        const onBeforeUnload = (e: BeforeUnloadEvent) => {
-            if (isDirtyRef.current) {
-                e.preventDefault();
-                e.returnValue = "";
-            }
-        };
-        window.addEventListener("beforeunload", onBeforeUnload);
-        return () => window.removeEventListener("beforeunload", onBeforeUnload);
-    }, []);
-
-    // Dirty tracking via native `input` + `change` events on the container.
-    // React's onChange on a <div> isn't reliable — synthetic onChange is
-    // designed for form elements, not arbitrary ancestors. A native listener
-    // on the form root catches every descendant input/textarea/select edit
-    // via DOM bubbling and flips the dirty flag once.
-    useEffect(() => {
-        const el = containerRef.current;
-        if (!el) return;
-        const markDirty = () => { isDirtyRef.current = true; };
-        el.addEventListener("input", markDirty);
-        el.addEventListener("change", markDirty);
-        return () => {
-            el.removeEventListener("input", markDirty);
-            el.removeEventListener("change", markDirty);
-        };
-        // Mount-once native listener on the stable form-root ref.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-    const isDirtyRef = useRef(false);
-    const [closeDialogOpen, setCloseDialogOpen] = useState(false);
-    const handleClose = () => {
-        if (isDirtyRef.current) { setCloseDialogOpen(true); } else { closeForm(); }
-    };
-    // Esc = Back, from anywhere in the form — inputs included, so the unsaved-
-    // changes prompt can fire mid-typing. The prompt itself, a party / product
-    // dialog or an open list take their own Esc first (see useEscape), so one
-    // press never both closes the prompt and leaves the page.
-    useEscape(handleClose, { inInputs: true });
 
     // Edit mode: /sale?voucherId=4 → fetch the voucher, prefill the form,
     // PATCH on save. Set once on mount and locked in; subsequent param
@@ -378,6 +336,46 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // Invoice number preview (race-safe ±1 at concurrent save). In edit
     // mode the voucher's own reference is shown instead — see editingRef.
     const [nextRef, setNextRef] = useState("");
+
+    // "Unsaved changes" asks only while the bill really differs from where the
+    // user started — a party, product or ledger pick counts, typing a figure
+    // and deleting it again does not (useFormChanges). Display values (stock,
+    // computed tax, the party's balance) are left out on purpose.
+    const { changed, markClean, startProps } = useFormChanges({
+        header, payMode, walkInName, walkInPhone,
+        party: party ? [party.kind, party.id] : null,
+        parent: parentLink?.id ?? null,
+        paidInto: paymentAccount?.id ?? null,
+        lines: lines.map((l) => [
+            l.product?.id ?? null, l.service?.id ?? null, l.quantity, l.freeQty, l.rate, l.mrpRupees,
+            l.discountPct, l.discountAmt, l.taxRate, l.amountInput, l.description,
+        ]),
+        tenders: tenders.map((t) => [t.accountId, t.amount, t.method, t.reference]),
+        charges: charges.map((c) => [c.accountId, c.description, c.amount]),
+    });
+    const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+    const handleClose = () => {
+        if (changed) { setCloseDialogOpen(true); } else { closeForm(); }
+    };
+    // Esc = Back, from anywhere in the form — inputs included, so the unsaved-
+    // changes prompt can fire mid-typing. The prompt itself, a party / product
+    // dialog or an open list take their own Esc first (see useEscape), so one
+    // press never both closes the prompt and leaves the page.
+    useEscape(handleClose, { inInputs: true });
+
+    // Browser-level guard for tab close / refresh / external navigations: the
+    // OS-native "leave site?" prompt while the bill has changes. Our in-app
+    // close paths (Cancel, the top-bar X / back arrow, Esc) use the friendlier
+    // Stay / Save Draft / Discard dialog.
+    useEffect(() => {
+        if (!changed) return;
+        const onBeforeUnload = (e: BeforeUnloadEvent) => {
+            e.preventDefault();
+            e.returnValue = "";
+        };
+        window.addEventListener("beforeunload", onBeforeUnload);
+        return () => window.removeEventListener("beforeunload", onBeforeUnload);
+    }, [changed]);
     useEffect(() => {
         if (isEditing) return;
         axios.get<{ reference: string }>(`/api/inventory/vouchers/next-ref?type=${copy.nextRefType}`)
@@ -1256,6 +1254,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         setRoundOffManuallyEdited(false);
         setParentLink(null);
         setShowPricesOnPrint(true);
+        // The next bill starts from here — its first press takes a new start.
+        markClean();
     };
 
     const submit = async (andPost = false, andPrint = false) => {
@@ -1507,6 +1507,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         <div
             ref={containerRef}
             onKeyDown={onFormKeyDown}
+            {...startProps}
             className="flex flex-col flex-1 min-h-0 bg-background"
         >
             {/* Breadcrumb bar */}
@@ -2605,7 +2606,6 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     // Enter clicks it (keep editing).
                     onEscapeKeyDown={(e) => {
                         e.preventDefault();
-                        isDirtyRef.current = false;
                         setCloseDialogOpen(false);
                         closeForm();
                     }}
@@ -2620,8 +2620,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>Stay</Button>
-                        <Button variant="outline" onClick={async () => { setCloseDialogOpen(false); isDirtyRef.current = false; await submit(false); }}>Save Draft</Button>
-                        <Button variant="destructive" onClick={() => { isDirtyRef.current = false; setCloseDialogOpen(false); closeForm(); }}>Discard &amp; Close</Button>
+                        <Button variant="outline" onClick={async () => { setCloseDialogOpen(false); await submit(false); }}>Save Draft</Button>
+                        <Button variant="destructive" onClick={() => { setCloseDialogOpen(false); closeForm(); }}>Discard &amp; Close</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

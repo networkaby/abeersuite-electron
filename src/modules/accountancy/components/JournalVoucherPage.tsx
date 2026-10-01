@@ -15,6 +15,7 @@ import axios from "axios";
 import { useRouter } from "next/navigation";
 import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import { useEscape } from "@/shared/hooks/useEscape";
+import { useFormChanges } from "@/shared/hooks/useFormChanges";
 import { NO_ACCESS_HOME } from "@/shared/lib/auth/pageAccess";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
@@ -181,14 +182,6 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
         }
     };
 
-    const isDirtyRef = useRef(false);
-    const [closeDialogOpen, setCloseDialogOpen] = useState(false);
-    const handleClose = () => {
-        if (isDirtyRef.current) { setCloseDialogOpen(true); } else { closeForm(); }
-    };
-    // Esc = Back. An open dialog or list takes its own Esc first; hosted in
-    // GlVoucherDialog, this owns the dialog's Esc.
-    useEscape(handleClose);
 
     const isEditing = voucherId != null && Number.isFinite(voucherId);
     const { accounts: sharedAccounts } = useGlAccounts({ onError: () => toast.error("Failed to load accounts") });
@@ -205,6 +198,21 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
     const [printAfterSave, setPrintAfterSave] = useState(() => printAfterSaveDefault("JOURNAL"));
     const [thermal, setThermal] = useState(() => thermalDefault("JOURNAL"));
     const [lines, setLines]         = useState<Line[]>([newLine("DEBIT"), newLine("CREDIT")]);
+
+    // "Unsaved changes" asks only while the entry really differs from where the
+    // user started — a ledger or product pick counts, typing a figure and
+    // deleting it again does not (useFormChanges).
+    const { changed, startProps } = useFormChanges({
+        date, narration,
+        lines: lines.map((l) => [l.side, l.accountId, l.amount, l.stockItems.map((s) => [s.productId, s.qty, s.rate])]),
+    });
+    const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+    const handleClose = () => {
+        if (changed) { setCloseDialogOpen(true); } else { closeForm(); }
+    };
+    // Esc = Back. An open dialog or list takes its own Esc first; hosted in
+    // GlVoucherDialog, this owns the dialog's Esc.
+    useEscape(handleClose);
 
     useEffect(() => {
         if (!isEditing) {
@@ -457,7 +465,7 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
     };
 
     return (
-        <div className="flex flex-col flex-1 min-h-0 bg-background" onChange={() => { isDirtyRef.current = true; }}>
+        <div className="flex flex-col flex-1 min-h-0 bg-background" {...startProps}>
             {/* Breadcrumb bar */}
             <VoucherTopBar
                 title="Journal Voucher"
@@ -717,8 +725,8 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>Stay</Button>
-                        <Button variant="outline" onClick={async () => { setCloseDialogOpen(false); isDirtyRef.current = false; await submit(false); }}>Save Draft</Button>
-                        <Button variant="destructive" onClick={() => { isDirtyRef.current = false; setCloseDialogOpen(false); closeForm(); }}>Discard &amp; Close</Button>
+                        <Button variant="outline" onClick={async () => { setCloseDialogOpen(false); await submit(false); }}>Save Draft</Button>
+                        <Button variant="destructive" onClick={() => { setCloseDialogOpen(false); closeForm(); }}>Discard &amp; Close</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

@@ -16,7 +16,7 @@
 //   • Optional "Current at source" column shows the per-branch on-hand at
 //     the source so the operator knows what's available to move.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -45,6 +45,7 @@ import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { useEscape } from "@/shared/hooks/useEscape";
+import { useFormChanges } from "@/shared/hooks/useFormChanges";
 
 type Branch = { id: string; name: string; isActive?: boolean };
 type SessionUser = { branchIds?: string[]; permissions?: string[] } | null;
@@ -114,11 +115,18 @@ export function BranchTransferPage() {
         if (window.history.length > 1) router.back();
         else window.close();
     }, [router]);
-    const isDirtyRef = useRef(false);
+    // "Unsaved changes" asks only while the voucher really differs from where
+    // the user started — a pick from a list counts, typing a letter and
+    // deleting it again does not (useFormChanges).
+    const { changed, markClean, startProps } = useFormChanges({
+        date: form.date, description: form.description,
+        from: sourceBranchId, to: destinationBranchId,
+        lines: form.lines.map((l) => [l.productId, l.quantity]),
+    });
     const [closeDialogOpen, setCloseDialogOpen] = useState(false);
     const handleClose = useCallback(() => {
-        if (isDirtyRef.current) { setCloseDialogOpen(true); } else { closeForm(); }
-    }, [closeForm]);
+        if (changed) { setCloseDialogOpen(true); } else { closeForm(); }
+    }, [changed, closeForm]);
     // Esc = Back; an open dialog or list takes its own Esc first (see useEscape).
     useEscape(handleClose);
 
@@ -271,7 +279,7 @@ export function BranchTransferPage() {
                 closeForm();
             } else {
                 setForm((f) => ({ ...f, lines: [] }));
-                isDirtyRef.current = false;
+                markClean();
             }
         } catch (err: unknown) {
             toast.error(extractApiError(err, "Failed"));
@@ -289,7 +297,7 @@ export function BranchTransferPage() {
     }
 
     return (
-        <div className="flex flex-col h-screen overflow-hidden bg-background" onChange={() => { isDirtyRef.current = true; }}>
+        <div className="flex flex-col h-screen overflow-hidden bg-background" {...startProps}>
             {/* Breadcrumb bar */}
             <VoucherTopBar
                 title="Branch Transfer"
@@ -466,8 +474,8 @@ export function BranchTransferPage() {
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>Stay</Button>
-                        <Button variant="outline" onClick={async () => { setCloseDialogOpen(false); isDirtyRef.current = false; await submit(false); }}>Save Draft</Button>
-                        <Button variant="destructive" onClick={() => { isDirtyRef.current = false; setCloseDialogOpen(false); closeForm(); }}>Discard &amp; Close</Button>
+                        <Button variant="outline" onClick={async () => { setCloseDialogOpen(false); await submit(false); }}>Save Draft</Button>
+                        <Button variant="destructive" onClick={() => { setCloseDialogOpen(false); closeForm(); }}>Discard &amp; Close</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

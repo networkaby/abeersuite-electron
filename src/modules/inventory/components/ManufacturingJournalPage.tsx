@@ -12,7 +12,7 @@
 //   5. Charges (GL) table — labour, electricity, etc. Each row debits an
 //      EXPENSE Account; total credits paymentAccountId at post time.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useApiResource } from "@/shared/hooks/useApiResource";
 import { extractApiError } from "@/shared/lib/api";
@@ -45,6 +45,7 @@ import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { useEscape } from "@/shared/hooks/useEscape";
+import { useFormChanges } from "@/shared/hooks/useFormChanges";
 
 type LineForm = {
     productId: number;
@@ -119,13 +120,6 @@ export function ManufacturingJournalPage() {
         if (window.history.length > 1) router.back();
         else window.close();
     }, [router]);
-    const isDirtyRef = useRef(false);
-    const [closeDialogOpen, setCloseDialogOpen] = useState(false);
-    const handleClose = useCallback(() => {
-        if (isDirtyRef.current) { setCloseDialogOpen(true); } else { closeForm(); }
-    }, [closeForm]);
-    // Esc = Back; an open dialog or list takes its own Esc first (see useEscape).
-    useEscape(handleClose);
     const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
 
     const [form, setForm] = useState({
@@ -140,6 +134,22 @@ export function ManufacturingJournalPage() {
         produce:            [] as LineForm[],
         charges:            [] as ExpenseForm[],
     });
+    // "Unsaved changes" asks only while the voucher really differs from where
+    // the user started — a pick from a list counts, typing a letter and
+    // deleting it again does not (useFormChanges).
+    const { changed, markClean, startProps } = useFormChanges({
+        date: form.date, description: form.description, branch: selectedBranchId,
+        bomId: form.bomId, target: form.targetOutputQty, paidFrom: form.paymentAccountId,
+        consume: form.consume.map((l) => [l.productId, l.quantity, l.rate]),
+        produce: form.produce.map((l) => [l.productId, l.quantity, l.rate]),
+        charges: form.charges.map((c) => [c.accountId, c.description, c.amount]),
+    });
+    const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+    const handleClose = useCallback(() => {
+        if (changed) { setCloseDialogOpen(true); } else { closeForm(); }
+    }, [changed, closeForm]);
+    // Esc = Back; an open dialog or list takes its own Esc first (see useEscape).
+    useEscape(handleClose);
 
     // Preload chart of accounts so the GlAccountCombobox is instant. Reference
     // data only — re-read when the books move elsewhere, or when a ledger is
@@ -420,7 +430,7 @@ export function ManufacturingJournalPage() {
                 // Reset for the next run; keep date / BOM template — operator may
                 // be running the same recipe again with fresh material counts.
                 setForm((f) => ({ ...f, consume: [], produce: [], charges: [] }));
-                isDirtyRef.current = false;
+                markClean();
             }
         } catch (err: unknown) {
             toast.error(extractApiError(err, "Failed"));
@@ -442,7 +452,7 @@ export function ManufacturingJournalPage() {
 
     return (
         <BranchRequired action="post this manufacturing journal">
-        <div className="flex flex-col h-screen overflow-hidden bg-background" onChange={() => { isDirtyRef.current = true; }}>
+        <div className="flex flex-col h-screen overflow-hidden bg-background" {...startProps}>
             {/* Breadcrumb bar */}
             <VoucherTopBar
                 title="Manufacturing Journal"
@@ -677,8 +687,8 @@ export function ManufacturingJournalPage() {
                     </DialogHeader>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>Stay</Button>
-                        <Button variant="outline" onClick={async () => { setCloseDialogOpen(false); isDirtyRef.current = false; await submit(false); }}>Save Draft</Button>
-                        <Button variant="destructive" onClick={() => { isDirtyRef.current = false; setCloseDialogOpen(false); closeForm(); }}>Discard &amp; Close</Button>
+                        <Button variant="outline" onClick={async () => { setCloseDialogOpen(false); await submit(false); }}>Save Draft</Button>
+                        <Button variant="destructive" onClick={() => { setCloseDialogOpen(false); closeForm(); }}>Discard &amp; Close</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
