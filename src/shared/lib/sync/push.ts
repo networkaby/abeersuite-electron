@@ -428,7 +428,9 @@ export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcom
                 throw new PermanentPushError(`Prisma has no delegate '${entry.delegate}' for ${entry.model}`);
             }
 
-            let payload = withZonedDates(rec.payload, entry.dates);
+            // Only the columns the office has: a replica keeps a column the office has
+            // since dropped, and Prisma would refuse the whole row for that one key.
+            let payload = onlyColumns(withZonedDates(rec.payload, entry.dates), entry.columns);
             const where = whereFor(entry, rec.row_key);
 
             // Last-write-wins for models that carry a timestamp. A counter that was
@@ -558,6 +560,14 @@ export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcom
 
     await rebuildTotalsAfterPush(touches);
     return { pushedIds, failure: null };
+}
+
+/** The payload limited to the model's own columns (see SyncRegistryEntry.columns). */
+function onlyColumns(payload: Record<string, unknown>, columns: readonly string[]): Record<string, unknown> {
+    const keep = new Set(columns);
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(payload)) if (keep.has(key)) out[key] = value;
+    return out;
 }
 
 /** The payload minus its running-total columns, for the UPDATE half of an upsert. */

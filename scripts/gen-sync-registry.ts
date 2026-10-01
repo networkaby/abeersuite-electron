@@ -100,17 +100,41 @@ function renderTsMirror(tables: Record<string, TableEntry>, models: Model[]): st
             .sort();
     };
 
+    /**
+     * Every column the model has — scalar and enum fields, not relations.
+     *
+     * A counter's replica keeps every column it was ever given (local-schema.sql can
+     * add a column, never drop one), and its capture trigger ships the whole row. So
+     * once the office drops a column, an old replica still sends it, and Prisma refuses
+     * the whole upsert ("Unknown argument") — the till's queue stops at that row. The
+     * push path keeps only these keys, which is what makes a DROP COLUMN safe once the
+     * tills run a build that has it.
+     */
+    const modelNames = new Set(models.map((x) => x.name));
+    const columnsFor = (modelName: string): string[] => {
+        const m = byName.get(modelName);
+        if (!m) return [];
+        return m.fields
+            .filter((f) => {
+                const base = f.type.replace(/[?[\]]/g, "");
+                return !modelNames.has(base) && !base.startsWith("Unsupported");
+            })
+            .map((f) => f.name)
+            .sort();
+    };
+
     const rows = Object.entries(tables)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([model, t]) => {
             const pk = t.pk.map((c) => JSON.stringify(c)).join(", ");
+            const columns = columnsFor(model).map((c) => JSON.stringify(c)).join(", ");
             const exact = exactFieldsFor(model).map((c) => JSON.stringify(c)).join(", ");
             const dates = dateFieldsFor(model).map((c) => JSON.stringify(c)).join(", ");
             const cache = (t.cacheColumns ?? []).map((c) => JSON.stringify(c)).join(", ");
             const local = t.localAuthority ? ", localAuthority: true" : "";
             return `    ${JSON.stringify(t.table)}: { model: ${JSON.stringify(model)}, `
                 + `delegate: ${JSON.stringify(model.charAt(0).toLowerCase() + model.slice(1))}, `
-                + `pk: [${pk}], exact: [${exact}], dates: [${dates}], cache: [${cache}]${local} },`;
+                + `pk: [${pk}], columns: [${columns}], exact: [${exact}], dates: [${dates}], cache: [${cache}]${local} },`;
         });
 
     return `// GENERATED FILE — DO NOT EDIT BY HAND.
@@ -128,6 +152,9 @@ export interface SyncRegistryEntry {
     delegate: string;
     /** Primary-key column names, in order. Compound keys have more than one. */
     pk: string[];
+    /** Every column the model has. A push sends only these — a replica may still
+     *  carry a column the office has dropped. */
+    columns: string[];
     /** Decimal/BigInt fields — must be parsed as strings to keep their value. */
     exact: string[];
     /** DateTime fields — stored without a zone, so the push path stamps a Z on them. */
