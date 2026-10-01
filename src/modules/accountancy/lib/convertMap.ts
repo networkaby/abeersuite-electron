@@ -1,7 +1,8 @@
 // Generic voucher-conversion map — the single source of truth for which voucher
 // kind may convert into which. Adding a conversion is a one-line data change;
 // no engine code changes. Pure data (no prisma / no React), so both the client
-// (Orders & Estimates page, Convert button) and the server (convert API) import it.
+// (the Day Book / register ⋮ menu, DayBookActionsMenu) and the server (convert
+// API) import it.
 //
 // Conversion is accountancy-only: it creates a DRAFT of the target kind pre-filled
 // from the source, linked back via refVoucherId. It never touches the pipeline.
