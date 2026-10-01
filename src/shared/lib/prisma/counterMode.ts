@@ -116,10 +116,39 @@ export const IS_COUNTER_PC = parseCounterPc(process.env.COUNTER_PC) === true;
 /** How long to wait before re-probing a live database we believe is down. */
 const REPROBE_INTERVAL_MS = 15_000;
 
-let mode: CounterMode = "LIVE";
-let lastDemotedAt = 0;
-let probing: Promise<void> | null = null;
-let liveProbe: (() => Promise<boolean>) | null = null;
+// ── State: one per server PROCESS, not per module copy ───────────────────────
+//
+// The bundler gives instrumentation (the outbox flusher, which reports a failed push
+// with `reportLiveDown`), the proxy and each route handler their OWN copy of this
+// module. With module-level state, a demotion recorded by one copy was invisible to
+// the others — the flusher's "cloud unreachable" never reached /api/counter/status,
+// so the shell badge could stay green through an outage. Parked on `globalThis`, the
+// process has one mode, as it always meant to. Same pattern as replicaPull.ts.
+type ModeState = {
+    mode: CounterMode;
+    lastDemotedAt: number;
+    probing: Promise<void> | null;
+    liveProbe: (() => Promise<boolean>) | null;
+    /** See the note on readiness below. */
+    replicaReady: boolean;
+    replicaSchemaOk: boolean;
+    readyCheckedAt: number;
+    lastHeartbeatAt: number;
+    heartbeat: Promise<void> | null;
+};
+
+const globalForMode = globalThis as unknown as { __counterMode?: ModeState };
+const S: ModeState = (globalForMode.__counterMode ??= {
+    mode: "LIVE",
+    lastDemotedAt: 0,
+    probing: null,
+    liveProbe: null,
+    replicaReady: false,
+    replicaSchemaOk: true,
+    readyCheckedAt: 0,
+    lastHeartbeatAt: 0,
+    heartbeat: null,
+});
 
 /**
  * Has the replica finished seeding and passed its first reconciliation?
@@ -131,9 +160,7 @@ let liveProbe: (() => Promise<boolean>) | null = null;
  * we only fall back to local when live is genuinely unreachable, where stale-but-
  * partial still beats a dead page.
  */
-let replicaReady = false;
-let replicaSchemaOk = true;
-let readyCheckedAt = 0;
+// (state: `S.replicaReady`, `S.replicaSchemaOk`, `S.readyCheckedAt` above)
 
 /** How long a readiness answer is trusted before asking the replica again. */
 const READY_TTL_MS = 30_000;
@@ -149,27 +176,27 @@ const READY_TTL_MS = 30_000;
  * "still catching up" rather than accusing a deploy that may be fine.
  */
 export function setReplicaReady(ready: boolean, schemaOk: boolean = true): void {
-    replicaReady = ready;
-    replicaSchemaOk = schemaOk;
-    readyCheckedAt = Date.now();
+    S.replicaReady = ready;
+    S.replicaSchemaOk = schemaOk;
+    S.readyCheckedAt = Date.now();
 }
 
 /** True when the cached readiness answer is old enough to be worth refreshing. */
 export function readyIsStale(): boolean {
-    return Date.now() - readyCheckedAt > READY_TTL_MS;
+    return Date.now() - S.readyCheckedAt > READY_TTL_MS;
 }
 
 export function isReplicaReady(): boolean {
-    return replicaReady;
+    return S.replicaReady;
 }
 
 /** Lets prismaClient supply a cheap `SELECT 1` against the live database. */
 export function registerLiveProbe(fn: () => Promise<boolean>): void {
-    liveProbe = fn;
+    S.liveProbe = fn;
 }
 
 export function getMode(): CounterMode {
-    return mode;
+    return S.mode;
 }
 
 /**
@@ -178,16 +205,16 @@ export function getMode(): CounterMode {
  * retries are exhausted.
  */
 export function reportLiveDown(): void {
-    if (mode === "LOCAL") return;
-    mode = "LOCAL";
-    lastDemotedAt = Date.now();
+    if (S.mode === "LOCAL") return;
+    S.mode = "LOCAL";
+    S.lastDemotedAt = Date.now();
     console.warn("[counter] live database unreachable — serving reads from the local replica");
 }
 
 /** A live query succeeded, so we are back. Called on any successful live operation. */
 export function reportLiveUp(): void {
-    if (mode === "LIVE") return;
-    mode = "LIVE";
+    if (S.mode === "LIVE") return;
+    S.mode = "LIVE";
     console.info("[counter] live database reachable again — reads restored to live");
 }
 
@@ -208,22 +235,20 @@ export function reportLiveUp(): void {
  * saves. Fire-and-forget; never awaited on a request path.
  */
 const LIVE_HEARTBEAT_MS = 20_000;
-let lastHeartbeatAt = 0;
-let heartbeat: Promise<void> | null = null;
 
 export function maybeHeartbeatLive(): void {
-    if (mode !== "LIVE" || !liveProbe) return;
-    if (Date.now() - lastHeartbeatAt < LIVE_HEARTBEAT_MS) return;
-    if (heartbeat) return;
+    if (S.mode !== "LIVE" || !S.liveProbe) return;
+    if (Date.now() - S.lastHeartbeatAt < LIVE_HEARTBEAT_MS) return;
+    if (S.heartbeat) return;
 
-    lastHeartbeatAt = Date.now();
-    heartbeat = liveProbe()
+    S.lastHeartbeatAt = Date.now();
+    S.heartbeat = S.liveProbe()
         .then((ok) => {
             if (!ok) reportLiveDown();
         })
         .catch(() => reportLiveDown())
         .finally(() => {
-            heartbeat = null;
+            S.heartbeat = null;
         });
 }
 
@@ -232,12 +257,12 @@ export function maybeHeartbeatLive(): void {
  * write to fail. Fire-and-forget; never awaited on a request path.
  */
 export function maybeReprobe(): void {
-    if (mode !== "LOCAL" || !liveProbe) return;
-    if (Date.now() - lastDemotedAt < REPROBE_INTERVAL_MS) return;
-    if (probing) return;
+    if (S.mode !== "LOCAL" || !S.liveProbe) return;
+    if (Date.now() - S.lastDemotedAt < REPROBE_INTERVAL_MS) return;
+    if (S.probing) return;
 
-    lastDemotedAt = Date.now();
-    probing = liveProbe()
+    S.lastDemotedAt = Date.now();
+    S.probing = S.liveProbe()
         .then((ok) => {
             if (ok) reportLiveUp();
         })
@@ -245,7 +270,7 @@ export function maybeReprobe(): void {
             /* still down — the next tick tries again */
         })
         .finally(() => {
-            probing = null;
+            S.probing = null;
         });
 }
 
@@ -257,8 +282,8 @@ export function maybeReprobe(): void {
  * ready (see `replicaReady`).
  */
 export function shouldReadLocal(): boolean {
-    if (mode === "LOCAL") return true;
-    if (!replicaReady) return false;
+    if (S.mode === "LOCAL") return true;
+    if (!S.replicaReady) return false;
     return READ_PREFERENCE === "local" || READ_PREFERENCE === "shadow";
 }
 
@@ -289,7 +314,7 @@ export function parseSince(raw: string | null): Date | null {
  * only while Supabase is unreachable, which is the fallback the outbox exists for.
  */
 export function shouldWriteLocal(): boolean {
-    return WRITE_PREFERENCE === "local" || mode === "LOCAL";
+    return WRITE_PREFERENCE === "local" || S.mode === "LOCAL";
 }
 
 /** Snapshot for `/api/counter/status` and the shell badge. */
@@ -310,11 +335,11 @@ export function counterStatus(): {
 } {
     const source = process.env.LOCAL_DATABASE_SOURCE;
     return {
-        mode,
+        mode: S.mode,
         preference: READ_PREFERENCE,
         writePreference: WRITE_PREFERENCE,
-        replicaReady,
-        replicaSchemaOk,
+        replicaReady: S.replicaReady,
+        replicaSchemaOk: S.replicaSchemaOk,
         isCounter: IS_COUNTER_PC,
         replicaSource: source === "installed" || source === "embedded" ? source : null,
     };

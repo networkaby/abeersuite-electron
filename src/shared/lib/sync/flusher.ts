@@ -68,37 +68,58 @@ const CHANNEL = "outbox_changed";
 const LISTEN_RETRY_MS = 5_000;
 
 // ── State ────────────────────────────────────────────────────────────────────
+//
+// One flusher per server PROCESS, not per module copy. The bundler gives
+// instrumentation (which starts the flusher) and each route handler (which reads
+// its health — /api/counter/status) their OWN copy of this module, so module-level
+// state meant the status route read a copy that never ran: "reachable, never
+// flushed", however long uploads had been failing. Parked on `globalThis`, every
+// copy shares the one that runs — and a second copy can never start a second
+// flusher or a second LISTEN. Same pattern as replicaPull.ts.
 
-let timer: NodeJS.Timeout | null = null;
-let listener: InstanceType<typeof PgClient> | null = null;
-let listenRetry: NodeJS.Timeout | null = null;
-let stopped = true;
-let inFlight = false;
-/** A notification arrived while a flush was running: go once more when it ends. */
-let queued = false;
+type FlusherState = {
+    timer: NodeJS.Timeout | null;
+    listener: InstanceType<typeof PgClient> | null;
+    listenRetry: NodeJS.Timeout | null;
+    stopped: boolean;
+    inFlight: boolean;
+    /** A notification arrived while a flush was running: go once more when it ends. */
+    queued: boolean;
+    /**
+     * Whether the last flush reached Supabase.
+     *
+     * With reads and writes both served locally, a failing push is the only remaining
+     * evidence that the cloud is unreachable — nothing else on the request path touches
+     * it. The status endpoint reports this rather than running a separate heartbeat.
+     */
+    cloudReachable: boolean;
+    lastFlushAt: number | null;
+    /**
+     * Whether this process has swept the outage dead letters an older build left behind
+     * (see `requeueUnreachableDeadLetters`). Set only when the sweep actually ran: the
+     * first attempt comes as the app boots, when the replica is at its busiest, and a
+     * one-shot there failed on a real till and left the red badge standing.
+     */
+    strandedSwept: boolean;
+};
 
-/**
- * Whether the last flush reached Supabase.
- *
- * With reads and writes both served locally, a failing push is the only remaining
- * evidence that the cloud is unreachable — nothing else on the request path touches
- * it. The status endpoint reports this rather than running a separate heartbeat.
- */
-let cloudReachable = true;
-let lastFlushAt: number | null = null;
-
-/**
- * Whether this process has swept the outage dead letters an older build left behind
- * (see `requeueUnreachableDeadLetters`). Set only when the sweep actually ran: the
- * first attempt comes as the app boots, when the replica is at its busiest, and a
- * one-shot there failed on a real till and left the red badge standing.
- */
-let strandedSwept = false;
+const globalForFlusher = globalThis as unknown as { __outboxFlusher?: FlusherState };
+const S: FlusherState = (globalForFlusher.__outboxFlusher ??= {
+    timer: null,
+    listener: null,
+    listenRetry: null,
+    stopped: true,
+    inFlight: false,
+    queued: false,
+    cloudReachable: true,
+    lastFlushAt: null,
+    strandedSwept: false,
+});
 
 export function getPushHealth(): { cloudReachable: boolean; lastFlushAt: string | null } {
     return {
-        cloudReachable,
-        lastFlushAt: lastFlushAt ? new Date(lastFlushAt).toISOString() : null,
+        cloudReachable: S.cloudReachable,
+        lastFlushAt: S.lastFlushAt ? new Date(S.lastFlushAt).toISOString() : null,
     };
 }
 
@@ -115,18 +136,18 @@ export function getPushHealth(): { cloudReachable: boolean; lastFlushAt: string 
  * parallel (two passes would push the same rows), it queues exactly one more.
  */
 export async function flushOnce(localUrl: string): Promise<number> {
-    if (inFlight) {
-        queued = true;
+    if (S.inFlight) {
+        S.queued = true;
         return 0;
     }
-    inFlight = true;
+    S.inFlight = true;
     try {
         // Before the first pass, and every pass until it gets through. It runs inside the
         // flush so the rows it re-queues are pushed by this very pass, in id order.
-        if (!strandedSwept) {
+        if (!S.strandedSwept) {
             const swept = await requeueUnreachableDeadLetters(localUrl);
             if (swept) {
-                strandedSwept = true;
+                S.strandedSwept = true;
                 if (swept.requeued > 0 || swept.superseded > 0) {
                     console.log(
                         `[OutboxFlusher] re-queued ${swept.requeued} row(s) dead-lettered by an outage` +
@@ -148,8 +169,8 @@ export async function flushOnce(localUrl: string): Promise<number> {
             const refused = await rejectAllPending(localUrl, "rejected: counter released by admin");
             console.warn(`[OutboxFlusher] rejected ${refused} pending mutation(s): this counter was released by admin.`);
             // Supabase answered, so the cloud IS reachable — the badge must not go red.
-            cloudReachable = true;
-            lastFlushAt = Date.now();
+            S.cloudReachable = true;
+            S.lastFlushAt = Date.now();
             return 0;
         }
 
@@ -164,8 +185,8 @@ export async function flushOnce(localUrl: string): Promise<number> {
 
         // A push that got a real answer from Supabase — success or a rejection it
         // generated — proves the connection. Only a transport failure means offline.
-        cloudReachable = pushedIds.length > 0 || !failure?.unreachable;
-        lastFlushAt = Date.now();
+        S.cloudReachable = pushedIds.length > 0 || !failure?.unreachable;
+        S.lastFlushAt = Date.now();
 
         if (pushedIds.length > 0) {
             console.log(`[OutboxFlusher] pushed ${pushedIds.length} mutation(s).`);
@@ -184,19 +205,19 @@ export async function flushOnce(localUrl: string): Promise<number> {
         }
         // A full batch means there is probably more behind it; do not wait for a
         // notification that already fired, or for the interval.
-        if (pending.length === BATCH_SIZE && pushedIds.length > 0) queued = true;
+        if (pending.length === BATCH_SIZE && pushedIds.length > 0) S.queued = true;
         return pushedIds.length;
     } catch (err) {
         // Normal while offline. Logged once per pass rather than swallowed entirely —
         // the previous version's empty catch is why a 401 on every single push went
         // unnoticed for the life of the feature.
-        cloudReachable = false;
+        S.cloudReachable = false;
         console.warn("[OutboxFlusher] flush failed:", err instanceof Error ? err.message : err);
         return 0;
     } finally {
-        inFlight = false;
-        if (queued && !stopped) {
-            queued = false;
+        S.inFlight = false;
+        if (S.queued && !S.stopped) {
+            S.queued = false;
             setImmediate(() => { void flushOnce(localUrl); });
         }
     }
@@ -210,22 +231,22 @@ export async function flushOnce(localUrl: string): Promise<number> {
  * pushing meanwhile.
  */
 function startListener(localUrl: string): void {
-    if (stopped || listener) return;
+    if (S.stopped || S.listener) return;
 
     const client = new PgClient({ connectionString: localUrl, connectionTimeoutMillis: 5_000 });
-    listener = client;
+    S.listener = client;
 
     const dropAndRetry = (why: string) => {
-        if (listener !== client) return; // already replaced or stopped
-        listener = null;
+        if (S.listener !== client) return; // already replaced or stopped
+        S.listener = null;
         client.end().catch(() => { });
-        if (stopped) return;
+        if (S.stopped) return;
         console.warn(`[OutboxFlusher] listener ${why}; reconnecting in ${LISTEN_RETRY_MS / 1000}s.`);
-        listenRetry = setTimeout(() => {
-            listenRetry = null;
+        S.listenRetry = setTimeout(() => {
+            S.listenRetry = null;
             startListener(localUrl);
         }, LISTEN_RETRY_MS);
-        listenRetry.unref?.();
+        S.listenRetry.unref?.();
     };
 
     client.on("notification", (msg) => {
@@ -245,32 +266,32 @@ function startListener(localUrl: string): void {
 }
 
 export function startOutboxFlusher(localUrl: string): void {
-    if (timer) return;
-    stopped = false;
+    if (S.timer) return;
+    S.stopped = false;
     console.log("[OutboxFlusher] starting in-process outbox flusher.");
 
-    timer = setInterval(() => {
+    S.timer = setInterval(() => {
         void flushOnce(localUrl);
     }, FLUSH_INTERVAL_MS);
     // Must not hold the process open on its own.
-    timer.unref?.();
+    S.timer.unref?.();
 
     startListener(localUrl);
 }
 
 export function stopOutboxFlusher(): void {
-    stopped = true;
-    queued = false;
-    if (listenRetry) {
-        clearTimeout(listenRetry);
-        listenRetry = null;
+    S.stopped = true;
+    S.queued = false;
+    if (S.listenRetry) {
+        clearTimeout(S.listenRetry);
+        S.listenRetry = null;
     }
-    if (listener) {
-        const client = listener;
-        listener = null;
+    if (S.listener) {
+        const client = S.listener;
+        S.listener = null;
         client.end().catch(() => { });
     }
-    if (!timer) return;
-    clearInterval(timer);
-    timer = null;
+    if (!S.timer) return;
+    clearInterval(S.timer);
+    S.timer = null;
 }
