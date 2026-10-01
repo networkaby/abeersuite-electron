@@ -17,7 +17,6 @@ export type Snapshot = {
     tierPeriods: TierPeriodInput[];
     tierCapPct: number | null;
     tierTitles: TierTitle[];
-    badgePeriodId: number | null;
     rawTierPct: number;
     cappedByGuard: boolean;
     discountPct: number;

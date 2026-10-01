@@ -51,10 +51,22 @@ export interface TierResult {
     discountPct: number;
     capPct: number | null;
     cappedByGuard: boolean;
-    /** Title shown on the customer badge — see badge ordering below. */
-    badgePeriodId: number | null;
+    /** Rank score — Σ the % of every title held (scored periods only). */
+    score: number;
+    /** Best score the current settings allow — Σ each scored period's top level %. */
+    maxScore: number;
+    /** Overall rank from score ÷ maxScore, "" when no title is held. See RANK_BANDS. */
     badgeLevelName: string;
 }
+
+// Overall rank bands, as a share of maxScore. A share (not fixed numbers) so the
+// ladder follows the settings page: delete or retune a level and the bands move too.
+const RANK_BANDS = [
+    { name: "Platinum", from: 0.75 },
+    { name: "Gold",     from: 0.5 },
+    { name: "Silver",   from: 0.25 },
+    { name: "Bronze",   from: 0 },
+] as const;
 
 /**
  * Does this period count the bill on the counter for this customer?
@@ -123,12 +135,19 @@ export function resolveTierTitles(args: {
     // rupees — no bill total needed here. Coupons are clamped later against what is left.
     const discountPct = Math.min(100, capPct ?? 100, rawPct);
 
-    // Badge = the tightest bracket held. Ranked by toDay, never by sortOrder, so
-    // re-ordering the settings page cannot move a customer's badge.
-    const badge = titles.reduce<TierTitle | null>(
-        (best, t) => (best === null || t.toDay < best.toDay ? t : best),
-        null,
-    );
+    // Rank = weighted score: each title counts its own %, so recent brackets (which
+    // pay more) weigh more. A currentSaleOnly period is a first-bill offer, not
+    // history, so it is left out of both sides of the ratio.
+    const scored = periods.filter((p) => !p.currentSaleOnly);
+    const scoredIds = new Set(scored.map((p) => p.id));
+    const score = round2(titles.filter((t) => scoredIds.has(t.periodId)).reduce((sum, t) => sum + t.discountPct, 0));
+    const maxScore = round2(scored.reduce((sum, p) => sum + Math.max(0, ...p.levels.map((l) => l.discountPct)), 0));
+    const share = maxScore > 0 ? score / maxScore : 0;
+    const rank = score > 0 ? RANK_BANDS.find((b) => share >= b.from)!.name : "";
+
+    // Medals — newest bracket first, so they read as history left to right. By
+    // fromDay, never sortOrder, so re-ordering the settings page moves nothing.
+    titles.sort((a, b) => a.fromDay - b.fromDay);
 
     return {
         titles,
@@ -136,7 +155,8 @@ export function resolveTierTitles(args: {
         discountPct,
         capPct,
         cappedByGuard: discountPct < rawPct,
-        badgePeriodId: badge?.periodId ?? null,
-        badgeLevelName: badge?.levelName ?? "",
+        score,
+        maxScore,
+        badgeLevelName: rank,
     };
 }

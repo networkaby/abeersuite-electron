@@ -237,7 +237,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
             // History-only view (no bill). The POS recomputes all of this from
             // `tierPeriods` as items are scanned; other callers can use it as-is.
             tierTitles:    benefits.tier ? tier.titles : [],
-            badgePeriodId: benefits.tier ? tier.badgePeriodId : null,
             rawTierPct:    benefits.tier ? tier.rawPct : 0,
             cappedByGuard: benefits.tier ? tier.cappedByGuard : false,
             loyaltyPoints: benefits.loyalty ? loyaltyPoints : 0,

@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import {
     User, Building2, Phone, Mail, MapPin,
     CreditCard, Wallet, TrendingDown, AlertCircle, Sparkles, ChevronRight,
-    TrendingUp, Award, Clock, Star, Tag, Crown, MessageSquarePlus,
+    TrendingUp, Award, Clock, Star, Tag, Crown, Medal, MessageSquarePlus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -133,10 +133,11 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
     };
 
     const level = tier.badgeLevelName;
-    const levelColor =
-        level === "Platinum" ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" :
-            level === "Gold" ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" :
-                level === "Silver" ? "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
+    // Level names are admin-defined; anything not Platinum/Gold/Silver wears bronze.
+    const levelColor = (name: string) =>
+        name === "Platinum" ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" :
+            name === "Gold" ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" :
+                name === "Silver" ? "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
                     "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300";
     return (
         <div className="space-y-2">
@@ -146,8 +147,26 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
                     {c.kind === "company" ? <Building2 size={14} className="shrink-0 text-muted-foreground" /> : <User size={14} className="shrink-0 text-muted-foreground" />}
                     <h2 className="truncate text-sm font-semibold">{c.name}</h2>
                     {isWalkIn && <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300">Walk-in</Badge>}
-                    {level && <Badge className={`text-[10px] ${levelColor}`}>{level}</Badge>}
+                    {level && (
+                        <Badge className={`text-[10px] ${levelColor(level)}`} title="Overall rank — every title's % added up, against the best the settings allow">
+                            {level} · <span className="tabular-nums">{tier.score}/{tier.maxScore}</span>
+                        </Badge>
+                    )}
                 </div>
+                {/* Medals — one per period held, newest bracket first, so the row reads as history. */}
+                {tier.titles.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                        {tier.titles.map((t) => (
+                            <span
+                                key={t.periodId}
+                                title={`${formatInr(t.spend)} spent ${t.fromDay}–${t.toDay} days ago${t.includesCurrentSale ? " (incl. this bill)" : ""} · +${t.discountPct}%`}
+                                className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${levelColor(t.levelName)}`}
+                            >
+                                <Medal size={10} /> {t.periodName} {t.levelName}
+                            </span>
+                        ))}
+                    </div>
+                )}
                 <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
                     {c.phone && <span className="inline-flex items-center gap-1"><Phone size={10} /> {c.phone}</span>}
                     {c.email && <span className="inline-flex items-center gap-1"><Mail size={10} /> {c.email}</span>}
@@ -239,40 +258,21 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
                 )}
             </button>
 
-            {/* Titles held — one per period whose bracket of spend cleared a level. */}
+            {/* Tier discount — the medals above carry the per-period detail. */}
             {tier.titles.length > 0 && (
-                <div className="rounded-md border border-amber-300/40 bg-amber-500/5 p-2">
-                    <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
-                        <Crown size={10} /> Titles held
-                    </div>
-                    <ul className="space-y-1">
-                        {tier.titles.map((t) => (
-                            <li key={t.periodId} className="flex items-center gap-1.5 text-xs">
-                                <span className="min-w-0 flex-1 truncate">
-                                    <span className="font-medium">{t.levelName}</span>
-                                    <span className="text-muted-foreground"> · {t.periodName}</span>
-                                </span>
-                                <span className="shrink-0 tabular-nums text-[10px] text-muted-foreground">
-                                    {formatInr(t.spend)} · {t.fromDay}–{t.toDay}d{t.includesCurrentSale ? " + bill" : ""}
-                                </span>
-                                <Badge variant="secondary" className="shrink-0 tabular-nums text-[10px]">+{t.discountPct}%</Badge>
-                            </li>
-                        ))}
-                    </ul>
-                    {(tier.titles.length > 1 || tier.cappedByGuard) && (
-                        <div className="mt-1 flex items-center justify-between border-t border-amber-300/40 pt-1 text-[10px]">
-                            <span className="text-muted-foreground">Total discount</span>
-                            <span className="flex items-center gap-1">
-                                {tier.cappedByGuard && (
-                                    <span className="text-muted-foreground line-through tabular-nums">{tier.rawPct}%</span>
-                                )}
-                                <span className="font-medium tabular-nums">{tier.discountPct}%</span>
-                                {tier.cappedByGuard && (
-                                    <span className="text-amber-700 dark:text-amber-400">capped at {tier.capPct}%</span>
-                                )}
-                            </span>
-                        </div>
-                    )}
+                <div className="flex items-center justify-between rounded-md border border-amber-300/40 bg-amber-500/5 px-2 py-1 text-[10px]">
+                    <span className="flex items-center gap-1 font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                        <Crown size={10} /> Tier discount
+                    </span>
+                    <span className="flex items-center gap-1">
+                        {tier.cappedByGuard && (
+                            <span className="text-muted-foreground line-through tabular-nums">{tier.rawPct}%</span>
+                        )}
+                        <span className="font-medium tabular-nums">{tier.discountPct}%</span>
+                        {tier.cappedByGuard && (
+                            <span className="text-amber-700 dark:text-amber-400">capped at {tier.capPct}%</span>
+                        )}
+                    </span>
                 </div>
             )}
 
