@@ -32,10 +32,25 @@ import {
 } from "@/modules/accountancy/lib/groupOptions";
 import { parseAliasInput } from "@/modules/accountancy/lib/accountAlias";
 
+/**
+ * The ledger just made: the Account row the create API returns, plus the aliases
+ * typed here (the API does not send them back). Complete on purpose — a picker
+ * hands this straight to the edit box (Ctrl+Enter), and EditLedgerDialog saves
+ * every particular, so a partial row would post the missing ones back as blank.
+ */
 export interface CreatedLedger {
     id: number;
     name: string;
     groupId: number | null;
+    aliases?: string[];
+    openingBalance?: number | string | null;
+    openingBalanceType?: "DEBIT" | "CREDIT" | null;
+    bankJson?: unknown;
+    loanJson?: unknown;
+    creditCardJson?: unknown;
+    bnplJson?: unknown;
+    walletJson?: unknown;
+    gatewayJson?: unknown;
 }
 
 export function CreateLedgerDialog({
@@ -121,9 +136,10 @@ export function CreateLedgerDialog({
         try {
             // normalBalance is left unset → inherited from the group's nature
             // (loadNormalBalanceMap infers it from group.type at read time).
+            const aliases = parseAliasInput(form.aliases);
             const payload: Record<string, unknown> = {
                 name: form.name.trim(),
-                aliases: parseAliasInput(form.aliases),
+                aliases,
                 groupId: form.groupId,
                 description: form.description.trim() || null,
                 ...particularsPayload(selectedGroup?.name, particulars),
@@ -134,7 +150,7 @@ export function CreateLedgerDialog({
             }
             const r = await axios.post<CreatedLedger>("/api/accountancy/ledgers", payload);
             toast.success("Ledger created");
-            onCreated(r.data);
+            onCreated({ ...r.data, aliases });
             onOpenChange(false);
         } catch (err: unknown) {
             toast.error(extractApiError(err, "Failed to create ledger"));

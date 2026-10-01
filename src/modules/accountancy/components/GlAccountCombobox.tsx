@@ -478,7 +478,9 @@ export function GlAccountCombobox({
                     onOpenChange={setCreateOpen}
                     defaultName={typedName}
                     onCreated={(acc) => {
-                        const made: GlAccount = { id: acc.id, name: acc.name, groupId: acc.groupId };
+                        // The whole new ledger, particulars and opening included, so
+                        // Ctrl+Enter on it opens the edit box complete.
+                        const made: GlAccount = { ...acc };
                         setJustCreated((xs) => [...xs.filter((x) => x.id !== made.id), made]);
                         setQuery(made.name);
                         onChange(made);
