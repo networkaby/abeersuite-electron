@@ -780,7 +780,9 @@ export function BankReconciliationPage() {
 // row up to the last day books and bank are proven to agree — same closing
 // balance AND every row ticked (see agreementRun). Where the colour stops is
 // where the mismatch starts.
-const AGREED_CELL = "bg-emerald-400/45 font-medium text-emerald-950 dark:bg-emerald-500/30 dark:text-emerald-50";
+// Orange: it has to stand out on rows already tinted green (ticked), sky and
+// violet, and amber is taken by the same-date marks and the reference hint.
+const AGREED_CELL = "bg-orange-300 font-semibold text-orange-950 dark:bg-orange-600/60 dark:text-orange-50";
 const AGREED_TITLE = "Books and bank agree up to here, and every row is ticked";
 
 function isAgreed(date: string, through: string | null) {
@@ -797,7 +799,7 @@ function AgreedLegend({ summary }: { summary: ReconPayload["summary"] }) {
         ].filter(Boolean).join(", ")}.`;
     return (
         <span className="inline-flex items-center gap-1 font-normal normal-case" title={why}>
-            <span className="h-3 w-3 rounded-sm bg-emerald-400/70 dark:bg-emerald-500/50" />
+            <span className="h-3 w-3 rounded-sm bg-orange-300 dark:bg-orange-600/60" />
             {summary.agreedThrough
                 ? <>books = bank, all ticked · through {formatDate(summary.agreedThrough)}</>
                 : <>books = bank, all ticked · not from the first day</>}
