@@ -141,7 +141,7 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
                 <DialogHeader>
                     <DialogTitle>Edit customer</DialogTitle>
                 </DialogHeader>
@@ -158,7 +158,7 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
                         <Label htmlFor="pec-name">Name</Label>
                         <Input id="pec-name" value={form.name} onChange={set("name")} disabled={loading} autoFocus />
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid gap-2 sm:grid-cols-3">
                         <div className="space-y-1">
                             <Label htmlFor="pec-phone">Phone</Label>
                             <Input id="pec-phone" type="tel" inputMode="tel" value={form.phone} onChange={set("phone")} disabled={loading} />
@@ -167,10 +167,10 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
                             <Label htmlFor="pec-email">Email</Label>
                             <Input id="pec-email" type="email" value={form.email} onChange={set("email")} disabled={loading} />
                         </div>
-                    </div>
-                    <div className="space-y-1">
-                        <Label htmlFor="pec-gstin">GSTIN</Label>
-                        <Input id="pec-gstin" value={form.gstin} onChange={set("gstin")} disabled={loading} className="font-mono uppercase" maxLength={15} />
+                        <div className="space-y-1">
+                            <Label htmlFor="pec-gstin">GSTIN</Label>
+                            <Input id="pec-gstin" value={form.gstin} onChange={set("gstin")} disabled={loading} className="font-mono uppercase" maxLength={15} />
+                        </div>
                     </div>
                     <div className="space-y-1">
                         <Label htmlFor="pec-address">Address</Label>
@@ -189,7 +189,7 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
                     </DialogFooter>
                 </form>
                 </TabsContent>
-                <TabsContent value="advanced" className="space-y-3">
+                <TabsContent value="advanced" className="grid items-start gap-3 md:grid-cols-2">
                     {canCredit && !loading && (
                         <AccountCreditLimitCard
                             key={`cl-${accountId}`}
@@ -199,6 +199,8 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
                             onSaved={refreshAdvanced}
                         />
                     )}
+                    {/* Right column — group and password are short; credit limit runs tall. */}
+                    <div className="space-y-3">
                     {canCredit && !loading && (
                         <CustomerGroupCard
                             key={`cg-${party.kind}-${party.id}`}
@@ -208,6 +210,7 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
                         />
                     )}
                     {canPassword && <CustomerEmergencyPasswordResetCard customerId={party.id} />}
+                    </div>
                 </TabsContent>
                 </Tabs>
             </DialogContent>
