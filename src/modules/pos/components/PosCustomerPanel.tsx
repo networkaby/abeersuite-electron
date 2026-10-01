@@ -132,7 +132,6 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
         }
     };
 
-    const level = tier.badgeLevelName;
     // Level names are admin-defined; anything not Platinum/Gold/Silver wears bronze.
     const levelColor = (name: string) =>
         name === "Platinum" ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" :
@@ -147,11 +146,6 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
                     {c.kind === "company" ? <Building2 size={14} className="shrink-0 text-muted-foreground" /> : <User size={14} className="shrink-0 text-muted-foreground" />}
                     <h2 className="truncate text-sm font-semibold">{c.name}</h2>
                     {isWalkIn && <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300">Walk-in</Badge>}
-                    {level && (
-                        <Badge className={`text-[10px] ${levelColor(level)}`} title="Overall rank — every title's % added up, against the best the settings allow">
-                            {level} · <span className="tabular-nums">{tier.score}/{tier.maxScore}</span>
-                        </Badge>
-                    )}
                 </div>
                 {/* Medals — one per period held, newest bracket first, so the row reads as history. */}
                 {tier.titles.length > 0 && (
