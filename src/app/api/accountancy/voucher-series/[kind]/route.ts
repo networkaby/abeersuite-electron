@@ -11,7 +11,7 @@ const updateSchema = z.object({
     typeValue:       z.string().max(10).optional(),
     counterEnabled:  z.boolean().optional(),
     yearEnabled:     z.boolean().optional(),
-    yearFormat:      z.enum(["CALENDAR", "CALENDAR_SHORT", "FY_SHORT", "FY_LONG"]).optional(),
+    yearFormat:      z.enum(["CALENDAR", "CALENDAR_SHORT", "FY_SHORT", "FY_SHORT_SLASH", "FY_LONG"]).optional(),
     startFrom:       z.number().int().min(1).optional(),
     padWidth:        z.number().int().min(1).max(10).optional(),
     // CSV of reserved tokens (type/counter/year/number) and arbitrary literals

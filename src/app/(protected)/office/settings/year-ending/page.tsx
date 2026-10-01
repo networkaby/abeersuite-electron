@@ -74,6 +74,7 @@ const YEAR_FORMATS: { value: YearFormat; label: string; example: string }[] = [
     { value: "CALENDAR", label: "Calendar (2026)", example: "2026" },
     { value: "CALENDAR_SHORT", label: "Calendar short (26)", example: "26" },
     { value: "FY_SHORT", label: "Fiscal short (26-27)", example: "26-27" },
+    { value: "FY_SHORT_SLASH", label: "Fiscal short (26/27)", example: "26/27" },
     { value: "FY_LONG", label: "Fiscal long (2026-27)", example: "2026-27" },
 ];
 

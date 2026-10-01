@@ -3,7 +3,7 @@
 
 import { businessToday } from "@/shared/lib/format/formatDate";
 
-export type YearFormat = "CALENDAR" | "CALENDAR_SHORT" | "FY_SHORT" | "FY_LONG";
+export type YearFormat = "CALENDAR" | "CALENDAR_SHORT" | "FY_SHORT" | "FY_SHORT_SLASH" | "FY_LONG";
 export type PartName = "type" | "counter" | "year" | "number";
 
 const RESERVED: ReadonlySet<string> = new Set(["type", "counter", "year", "number", "user"]);
@@ -30,6 +30,7 @@ export function formatYear(fyStartYear: number, format: string): string {
         case "CALENDAR": return String(start);
         case "CALENDAR_SHORT": return ss;
         case "FY_SHORT": return `${ss}-${es}`;
+        case "FY_SHORT_SLASH": return `${ss}/${es}`;
         case "FY_LONG": return `${start}-${es}`;
         default: return String(start);
     }

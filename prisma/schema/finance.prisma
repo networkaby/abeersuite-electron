@@ -352,7 +352,7 @@ model VoucherSeries {
 
   // Year part
   yearEnabled Boolean @default(true)
-  // CALENDAR (2026) | CALENDAR_SHORT (26) | FY_SHORT (26-27) | FY_LONG (2026-27)
+  // CALENDAR (2026) | CALENDAR_SHORT (26) | FY_SHORT (26-27) | FY_SHORT_SLASH (26/27) | FY_LONG (2026-27)
   yearFormat  String  @default("FY_SHORT")
 
   // Number part (always part of the reference — it's the actual counter)
