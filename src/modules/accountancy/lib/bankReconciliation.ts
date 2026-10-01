@@ -19,10 +19,10 @@ import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
-import { startOfDayUtc, endOfDayUtc, toDateOnly, toDateOnlyUtc } from "@/shared/lib/format/formatDate";
+import { startOfDayUtc, endOfDayUtc, toDateOnly, toDateOnlyUtc, formatDate } from "@/shared/lib/format/formatDate";
 import {
     checkContinuity, fingerprintSource, occurrenceIndexes, sameAccountNumber, money2,
-    extractReferenceTokens, type StatementRow, type StatementMeta,
+    referenceTokensOf, type StatementRow, type StatementMeta,
 } from "@/shared/lib/import/bankStatement";
 import { accountIdsUnderGroup } from "./accountGroups";
 import { ledgerStatusFilterUv } from "./ledgerStatus";
@@ -654,31 +654,18 @@ export async function removeImport(accountId: number, importId: number): Promise
 type GlCandidate = { id: number; date: string; type: "DEBIT" | "CREDIT"; amount: number; text: string; tokens: Set<string> };
 type StCandidate = { id: number; date: string; deposit: number | null; withdrawal: number | null; tokens: string[] };
 
-function daysBetween(a: string, b: string): number {
-    return Math.abs((startOfDayUtc(a).getTime() - startOfDayUtc(b).getTime()) / 86400000);
-}
-
 /**
- * Pure pairing: for each statement line, the one book entry that fits — same
- * direction, same amount, and then ONE of these two, never anything looser:
+ * Pure pairing: for each statement line, the one book entry on the SAME DAY for
+ * the SAME AMOUNT, same direction. Nothing else is ever a match: a book entry
+ * must carry the date the bank shows (owner, 2026-10-01 — "we must entry on
+ * same day same amount strictly"). When the book date is wrong, the screen
+ * points at it by a shared reference instead, and the date is corrected.
  *
- *   • the SAME DAY. The overwhelming majority of a bank's lines are the same
- *     day as the entry that explains them.
- *   • a DIFFERENT day inside the window, but only when the two sides share a
- *     reference token — a UTR, a UPI id, a cheque number, an IMPS ref. That
- *     token is what makes a late-clearing cheque or transfer provable rather
- *     than guessed.
- *
- * A different day with nothing in common is NOT a match, however lonely the
- * candidate. It used to be: the reference was only a tie-breaker, so a ₹100
- * debit sitting by itself in the window was taken 28 days away from a payment
- * it had nothing to do with. Measured on the live SBI ledger, 96 of 97 auto
- * matches were same-day and the single cross-day one was that mistake.
- *
- * A tie on both reference and distance is still left alone: guessing wrong is
- * worse than leaving it for a person.
+ * Two same-day entries for the same amount: a shared reference token (UTR,
+ * UPI/IMPS ref, cheque number) picks between them. A tie on that too is left
+ * alone — guessing wrong is worse than leaving it for a person.
  */
-export function planAutoMatch(statement: StCandidate[], gl: GlCandidate[], windowDays: number): Array<[number, number]> {
+export function planAutoMatch(statement: StCandidate[], gl: GlCandidate[]): Array<[number, number]> {
     const claimed = new Set<number>();
     const pairs: Array<[number, number]> = [];
     const sorted = [...statement].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
@@ -687,27 +674,21 @@ export function planAutoMatch(statement: StCandidate[], gl: GlCandidate[], windo
         if (amount == null) continue;
         const wantType = s.deposit != null ? "DEBIT" : "CREDIT";
         const cands = gl
-            .filter((g) => !claimed.has(g.id) && g.type === wantType && Math.abs(g.amount - amount) < EPS && daysBetween(g.date, s.date) <= windowDays)
-            .map((g) => {
-                const ref = s.tokens.some((t) => g.tokens.has(t) || g.text.includes(t.toLowerCase())) ? 1 : 0;
-                return { g, ref, dist: daysBetween(g.date, s.date) };
-            })
-            // Off a shared reference, the date has to agree exactly.
-            .filter((c) => c.dist === 0 || c.ref === 1)
-            .sort((a, b) => b.ref - a.ref || a.dist - b.dist);
+            .filter((g) => !claimed.has(g.id) && g.type === wantType && Math.abs(g.amount - amount) < EPS && g.date === s.date)
+            .map((g) => ({ g, ref: s.tokens.some((t) => g.tokens.has(t) || g.text.includes(t.toLowerCase())) ? 1 : 0 }))
+            .sort((a, b) => b.ref - a.ref);
         if (cands.length === 0) continue;
-        if (cands.length > 1 && cands[0].ref === cands[1].ref && cands[0].dist === cands[1].dist) continue;
+        if (cands.length > 1 && cands[0].ref === cands[1].ref) continue;
         claimed.add(cands[0].g.id);
         pairs.push([s.id, cands[0].g.id]);
     }
     return pairs;
 }
 
-export async function runAutoMatch(accountId: number, userId: number, fromIso: string, toIso: string, windowDays: number) {
+export async function runAutoMatch(accountId: number, userId: number, fromIso: string, toIso: string) {
     const account = await loadBankLedger(accountId);
     const from = startOfDayUtc(fromIso);
     const to = endOfDayUtc(toIso);
-    const pad = windowDays * 86400000;
 
     return prisma.$transaction(async (tx) => {
         // Stale matches go first — their statement lines are open again.
@@ -727,7 +708,7 @@ export async function runAutoMatch(accountId: number, userId: number, fromIso: s
             tx.voucherGlLine.findMany({
                 where: {
                     accountId,
-                    universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: new Date(from.getTime() - pad), lte: new Date(to.getTime() + pad) } },
+                    universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: from, lte: to } },
                 },
                 select: glLineSelect(),
             }),
@@ -742,23 +723,23 @@ export async function runAutoMatch(accountId: number, userId: number, fromIso: s
                 date: toDateOnlyUtc(s.date),
                 deposit: s.deposit != null ? toNumber(s.deposit) : null,
                 withdrawal: s.withdrawal != null ? toNumber(s.withdrawal) : null,
-                tokens: [...new Set([s.reference ?? "", ...extractReferenceTokens(`${s.reference ?? ""} ${s.narration}`)])].filter((t) => t.length >= 6),
+                tokens: referenceTokensOf(s.reference, s.narration),
             }));
         const gl: GlCandidate[] = glVisible
             .filter((g) => !matchedGl.has(g.id) && !isLocked(toDateOnly(g.universalVoucher.date), account.lock))
             .map((g) => {
-                const text = `${g.reference ?? ""} ${g.universalVoucher.description ?? ""} ${g.universalVoucher.narration ?? ""}`;
+                const text = `${g.universalVoucher.description ?? ""} ${g.universalVoucher.narration ?? ""}`;
                 return {
                     id: g.id,
                     date: toDateOnly(g.universalVoucher.date),
                     type: g.type,
                     amount: toNumber(g.amount),
-                    text: text.toLowerCase(),
-                    tokens: new Set([g.reference ?? "", ...extractReferenceTokens(text)].filter((t) => t.length >= 6)),
+                    text: `${g.reference ?? ""} ${text}`.toLowerCase(),
+                    tokens: new Set(referenceTokensOf(g.reference, text)),
                 };
             });
 
-        const pairs = planAutoMatch(statement, gl, windowDays);
+        const pairs = planAutoMatch(statement, gl);
         if (pairs.length) {
             await tx.bankStatementMatch.createMany({
                 data: pairs.map(([statementLineId, glLineId]) => ({
@@ -782,7 +763,7 @@ export async function createMatch(accountId: number, userId: number, statementLi
             }),
             tx.voucherGlLine.findMany({
                 where: { id: { in: glLineIds }, accountId, universalVoucher: { ...ledgerStatusFilterUv() } },
-                select: { id: true, type: true, amount: true, universalVoucher: { select: { date: true } } },
+                select: { id: true, type: true, amount: true, universalVoucher: { select: { id: true, date: true, voucherNo: true } } },
             }),
             tx.bankStatementMatch.findMany({
                 where: { OR: [{ statementLineId: { in: statementLineIds } }, { glLineId: { in: glLineIds } }] },
@@ -795,6 +776,17 @@ export async function createMatch(accountId: number, userId: number, statementLi
         for (const s of st) if (isLocked(toDateOnlyUtc(s.date), account.lock)) throw new BankReconError("A statement line is before the reconciled lock.");
         for (const s of st) if (inOpening(toDateOnlyUtc(s.date), cover)) throw new BankReconError("A statement line is already inside the opening balance — there is nothing in the books to match it to.");
         for (const g of gl) if (isLocked(toDateOnly(g.universalVoucher.date), account.lock)) throw new BankReconError("A book entry is before the reconciled lock.");
+
+        // Same day, strictly: a book entry carries the date the bank shows it on.
+        const bankDays = [...new Set(st.map((s) => toDateOnlyUtc(s.date)))];
+        if (bankDays.length > 1) throw new BankReconError("These statement lines are on different days — match one day at a time.");
+        const offDay = gl.filter((g) => toDateOnly(g.universalVoucher.date) !== bankDays[0]);
+        if (offDay.length) {
+            const g = offDay[0];
+            throw new BankReconError(
+                `The bank shows this on ${formatDate(bankDays[0])}, but ${g.universalVoucher.voucherNo ?? formatUvNo(g.universalVoucher.id)} is dated ${formatDate(toDateOnly(g.universalVoucher.date))}. Set the book entry's date to ${formatDate(bankDays[0])} first.`,
+            );
+        }
 
         // Already matched? Only a stale match may be replaced.
         if (taken.length) {

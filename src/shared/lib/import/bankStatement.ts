@@ -165,13 +165,18 @@ export function money2(n: number): number {
  *   CHQ 483920 / Chq No 000123          → 483920 / 000123
  * Returns the tokens in order of confidence; the first is stored as the line's
  * reference when the bank has no ref column of its own.
+ *
+ * Never a counterparty's account number ("TRANSFER FROM 4698313162099"): it
+ * names WHO, is the same on every transfer from them, and so proves nothing
+ * about WHICH transfer.
  */
 export function extractReferenceTokens(text: string): string[] {
     const out: string[] = [];
+    const skip = counterpartyAccounts(text);
     const push = (t: string | undefined) => {
         if (!t) return;
         const v = t.trim();
-        if (v.length >= 6 && !out.includes(v)) out.push(v);
+        if (v.length >= 6 && !skip.has(v) && !out.includes(v)) out.push(v);
     };
     // UTR forms: 16-char alnum starting with the bank code (SBIN2..., AXNGG2...).
     for (const m of text.matchAll(/\b([A-Z]{4}[A-Z0-9]{8,18})\b/g)) {
@@ -186,6 +191,25 @@ export function extractReferenceTokens(text: string): string[] {
     // Any bare long digit run as a last resort.
     for (const m of text.matchAll(/\b(\d{12,16})\b/g)) push(m[1]);
     return out;
+}
+
+/** Account numbers a narration names as the other side — who, not which transaction. */
+function counterpartyAccounts(text: string): Set<string> {
+    const out = new Set<string>();
+    for (const m of text.matchAll(/\b(?:TRANSFER\s+(?:FROM|TO)|A\/C(?:\s*NO)?\.?|ACCOUNT(?:\s*NO)?\.?)\s*[:#-]?\s*(\d{6,18})\b/gi)) out.add(m[1]);
+    return out;
+}
+
+/**
+ * The references a statement line or a book entry can be proven by: its own
+ * reference cell, plus what its text carries — never a counterparty account
+ * number, even one the import stored as the reference.
+ */
+export function referenceTokensOf(reference: string | null | undefined, text: string): string[] {
+    const ref = (reference ?? "").trim();
+    const skip = counterpartyAccounts(`${ref} ${text}`);
+    const own = ref.length >= 6 && !skip.has(ref) ? [ref] : [];
+    return [...new Set([...own, ...extractReferenceTokens(`${ref} ${text}`)])];
 }
 
 // ── Header detection & column guessing ───────────────────────────────────────
