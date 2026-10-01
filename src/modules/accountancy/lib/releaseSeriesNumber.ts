@@ -76,14 +76,7 @@ export async function releaseSeriesNumber(
 
     const rows = await tx.voucherSeriesCounter.findMany({ where: { kind: seriesKind } });
 
-    // Counter 1 predates the per-counter table: if the office has no row of its own
-    // yet, its running number is still the legacy `VoucherSeries.nextSeq`, which is
-    // exactly what the allocator would seed that row from.
-    const candidates = rows.some((r) => r.counterNumber === 1)
-        ? rows
-        : [...rows, { kind: seriesKind, counterNumber: 1, nextSeq: series.nextSeq, fyStartYear: series.fyStartYear }];
-
-    for (const row of candidates) {
+    for (const row of rows) {
         if (row.nextSeq < 1) continue;
         const fyStartYear = row.fyStartYear ?? series.fyStartYear;
         const tip = assembleReference({ ...series, nextSeq: row.nextSeq, fyStartYear }, row.counterNumber);
@@ -92,20 +85,7 @@ export async function releaseSeriesNumber(
         // This row's tip IS the purged voucher — step it back one so the next
         // voucher on that counter re-issues the number.
         const key = { kind_counterNumber: { kind: seriesKind, counterNumber: row.counterNumber } };
-        const rolled = await tx.voucherSeriesCounter.upsert({
-            where:  key,
-            create: { kind: seriesKind, counterNumber: row.counterNumber, nextSeq: row.nextSeq - 1, fyStartYear, resetGen: series.resetGen },
-            update: { nextSeq: row.nextSeq - 1 },
-        });
-
-        // Same mirror the allocator keeps: the Year Ending page still reads the
-        // legacy column for counter 1, so it must not drift behind the real row.
-        if (row.counterNumber === 1) {
-            await tx.voucherSeries.update({
-                where: { kind: seriesKind },
-                data:  { nextSeq: rolled.nextSeq, fyStartYear: rolled.fyStartYear },
-            });
-        }
+        await tx.voucherSeriesCounter.update({ where: key, data: { nextSeq: row.nextSeq - 1 } });
         return reference;
     }
 

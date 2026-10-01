@@ -269,14 +269,14 @@ export async function nextRefFromSeries(
     const counterNumber = await numberingCounter(tx, ctx);
     const key = { kind_counterNumber: { kind, counterNumber } };
 
-    // One row per (kind, counter). Counter 1 (the office) inherits the legacy `VoucherSeries.nextSeq` the first time so numbering
-    // continues; every other counter starts its own run at `startFrom`.
+    // One row per (kind, counter); a counter's first voucher starts its run at
+    // `startFrom`. (Counter 1's running number moved here from the series row in B3b.)
     const row = await tx.voucherSeriesCounter.upsert({
         where: key,
         create: {
             kind,
             counterNumber,
-            nextSeq: counterNumber === 1 ? current.nextSeq : 0,
+            nextSeq: 0,
             fyStartYear: current.fyStartYear,
             // A fresh row has nothing to reset: it is born at the current generation.
             resetGen: current.resetGen,
@@ -322,12 +322,12 @@ export async function nextRefFromSeries(
         data: { nextSeq: { increment: 1 } },
     });
 
-    // The Year Ending page still reads the legacy column for counter 1. Mirrored,
-    // not read: allocation never depends on it, and only the office writes it.
-    if (counterNumber === 1) {
+    // The series row carries the office's financial year for the Year Ending page;
+    // only the office writes it.
+    if (counterNumber === 1 && advanced.fyStartYear !== current.fyStartYear) {
         await tx.voucherSeries.update({
             where: { kind },
-            data: { nextSeq: advanced.nextSeq, fyStartYear: advanced.fyStartYear },
+            data: { fyStartYear: advanced.fyStartYear },
         });
     }
 

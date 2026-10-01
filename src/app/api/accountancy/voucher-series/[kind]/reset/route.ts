@@ -4,9 +4,8 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 
 // POST /api/accountancy/voucher-series/[kind]/reset
 //
-// Restarts the series from `startFrom`. The office is counter 1, so its own row (and
-// the legacy `VoucherSeries.nextSeq` the Year Ending page reads) is zeroed here and
-// now. Every OTHER counter's row is never written from here: each `(kind, counter)`
+// Restarts the series from `startFrom`. The office is counter 1, so its own row is
+// zeroed here and now. Every OTHER counter's row is never written from here: each `(kind, counter)`
 // row has exactly one writer — the machine numbering on it — and an office write
 // would land on top of an offline till's queued increments under last-write-wins,
 // re-issuing numbers already printed. Instead the series' `resetGen` is bumped, and
@@ -24,7 +23,7 @@ export async function POST(
         const series = await prisma.$transaction(async (tx) => {
             const bumped = await tx.voucherSeries.update({
                 where: { kind },
-                data: { nextSeq: 0, resetGen: { increment: 1 } },
+                data: { resetGen: { increment: 1 } },
                 select: { resetGen: true },
             });
             // Counter 1 only. `updateMany` so a series that has never numbered (no row

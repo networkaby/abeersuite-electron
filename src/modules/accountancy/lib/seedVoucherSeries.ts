@@ -66,7 +66,7 @@ export async function ensureVoucherSeries(prisma: PrismaClient) {
     const rejectionOutCount       = await prisma.universalVoucher.count({ where: { type: "REJECTION_OUT", voucherNo: { not: null } } });
     const repairTicketCount       = await prisma.ticketRepair.count();
 
-    const rows = [
+    const plan = [
         ...KINDS.map(({ kind, label, typeValue }) => ({
             kind,
             label,
@@ -104,7 +104,8 @@ export async function ensureVoucherSeries(prisma: PrismaClient) {
         { kind: "REJECTION_IN",          label: "Rejection In",           typeValue: "RIN",  nextSeq: rejectionInCount },
         { kind: "REJECTION_OUT",         label: "Rejection Out",          typeValue: "ROUT", nextSeq: rejectionOutCount },
         { kind: "REPAIR_TICKET",         label: "Service Repair Ticket",  typeValue: "RT",   nextSeq: repairTicketCount },
-    ].map((r) => ({
+    ];
+    const rows = plan.map((r) => ({
         kind:            r.kind,
         label:           r.label,
         fyStartYear:     fyStart,
@@ -115,18 +116,17 @@ export async function ensureVoucherSeries(prisma: PrismaClient) {
         yearFormat:      "FY_SHORT_SLASH",
         startFrom:       1,
         padWidth:        4,
-        nextSeq:         r.nextSeq,
         partOrder:       "type,-,year,-,counter,number",
     }));
 
     await prisma.voucherSeries.createMany({ data: rows, skipDuplicates: true });
 
     // The number lives per counter (VoucherSeriesCounter). Counter 1 — the office —
-    // takes over the legacy `nextSeq` so numbering continues; other counters create
-    // their own row on first use. Idempotent: existing rows are never touched.
-    const existing = await prisma.voucherSeries.findMany({ select: { kind: true, nextSeq: true, fyStartYear: true } });
+    // starts after the vouchers already numbered so numbering continues; other
+    // counters create their own row on first use. Idempotent: existing rows are
+    // never touched.
     await prisma.voucherSeriesCounter.createMany({
-        data: existing.map((r) => ({ kind: r.kind, counterNumber: 1, nextSeq: r.nextSeq, fyStartYear: r.fyStartYear })),
+        data: plan.map((r) => ({ kind: r.kind, counterNumber: 1, nextSeq: r.nextSeq, fyStartYear: fyStart })),
         skipDuplicates: true,
     });
 

@@ -31,10 +31,9 @@ export async function GET(req: Request) {
 
     const counterParam = searchParams.get("counterNumber") ?? searchParams.get("counter");
     const counterNumber = resolveCounterNumber(counterParam ? Number(counterParam) : null);
-    // The number is per counter; a counter with no row yet starts where the
-    // allocator will start it (counter 1 inherits the legacy column).
+    // The number is per counter; a counter with no row yet starts at `startFrom`.
     const own = await prisma.voucherSeriesCounter.findUnique({ where: { kind_counterNumber: { kind, counterNumber } } });
-    const nextSeq = own ? own.nextSeq : counterNumber === 1 ? series.nextSeq : 0;
+    const nextSeq = own?.nextSeq ?? 0;
     const fyStartYear = own?.fyStartYear ?? series.fyStartYear;
 
     // Mirror what nextRefFromSeries does at save time: it post-increments

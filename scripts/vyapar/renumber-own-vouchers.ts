@@ -225,10 +225,6 @@ async function apply(db: PoolClient, changes: Change[], seriesRows: Array<{ kind
             values ($1, $2, $3, $4, $5, now())
             on conflict (kind, "counterNumber") do update set "nextSeq" = excluded."nextSeq", "updatedAt" = now()
         `, [s.kind, s.counterNumber, s.nextSeq, cur.fyStartYear, cur.resetGen]);
-        // The Year Ending page still reads the legacy column for counter 1.
-        if (s.counterNumber === 1) {
-            await db.query(`update "VoucherSeries" set "nextSeq" = $2 where kind = $1`, [s.kind, s.nextSeq]);
-        }
     }
 }
 

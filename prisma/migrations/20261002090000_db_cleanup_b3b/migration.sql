@@ -12,3 +12,19 @@ DROP INDEX IF EXISTS "UniversalVoucher_deletedAt_idx";
 ALTER TABLE "UniversalVoucher" DROP COLUMN IF EXISTS "deletedAt";
 ALTER TABLE "UniversalVoucher" DROP COLUMN IF EXISTS "deletedById";
 ALTER TABLE "UniversalVoucher" DROP COLUMN IF EXISTS "deleteReason";
+
+-- 2. The series-level running number. The number has lived per counter in
+-- VoucherSeriesCounter since 2026-09; the series row only mirrored counter 1's
+-- for the Year Ending page, which now reads the counter rows. A series the office
+-- numbered before its counter-1 row existed carries the number across first.
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'VoucherSeries' AND column_name = 'nextSeq') THEN
+        INSERT INTO "VoucherSeriesCounter" ("kind", "counterNumber", "nextSeq", "fyStartYear", "resetGen", "updatedAt")
+        SELECT s."kind", 1, s."nextSeq", s."fyStartYear", s."resetGen", CURRENT_TIMESTAMP
+        FROM "VoucherSeries" s
+        WHERE s."nextSeq" > 0
+        ON CONFLICT ("kind", "counterNumber") DO NOTHING;
+    END IF;
+END $$;
+ALTER TABLE "VoucherSeries" DROP COLUMN IF EXISTS "nextSeq";

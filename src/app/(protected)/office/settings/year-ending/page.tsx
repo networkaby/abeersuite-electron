@@ -46,10 +46,31 @@ import {
 } from "@/modules/accountancy/lib/voucherRef";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 
-interface SeriesRow extends SeriesShape {
+/** The running number of one series on one counter (VoucherSeriesCounter). */
+interface SeriesCounter {
+    counterNumber: number;
+    nextSeq: number;
+    fyStartYear: number | null;
+}
+
+interface SeriesRow extends Omit<SeriesShape, "nextSeq"> {
     kind: string;
     label: string;
     updatedAt: string;
+    counters?: SeriesCounter[];
+}
+
+/** Numbers the office (counter 1) has issued in this series. */
+function officeIssued(row: SeriesRow): number {
+    return row.counters?.find((c) => c.counterNumber === 1)?.nextSeq ?? 0;
+}
+
+/** Every counter's issued count, for the Issued badge's tooltip. */
+function issuedByCounter(row: SeriesRow): string {
+    const list = row.counters ?? [];
+    return list.length === 0
+        ? "Nothing issued yet"
+        : list.map((c) => `Counter ${c.counterNumber}: ${c.nextSeq}`).join(" · ");
 }
 
 interface BooksConfig {
@@ -118,8 +139,8 @@ const VOUCHER_GROUPS: { title: string; kinds: string[] }[] = [
     },
 ];
 
-function previewNext(row: SeriesShape, sampleCounter = 24): string {
-    return assembleReference({ ...row, nextSeq: row.nextSeq + 1 }, sampleCounter);
+function previewNext(row: SeriesRow, sampleCounter = 24): string {
+    return assembleReference({ ...row, nextSeq: officeIssued(row) + 1 }, sampleCounter);
 }
 
 /** API datetime → the ISO yyyy-mm-dd TallyDateInput binds. "" when unset. */
@@ -463,7 +484,7 @@ export default function YearEndingPage() {
                                                             <code className="text-xs text-muted-foreground">{row.partOrder}</code>
                                                         </TableCell>
                                                         <TableCell className="text-right">
-                                                            <Badge variant="secondary">{row.nextSeq}</Badge>
+                                                            <Badge variant="secondary" title={issuedByCounter(row)}>{officeIssued(row)}</Badge>
                                                         </TableCell>
                                                         <TableCell>
                                                             <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{next}</code>
@@ -537,7 +558,7 @@ export default function YearEndingPage() {
                                                             <code className="text-xs text-muted-foreground">{row.partOrder}</code>
                                                         </TableCell>
                                                         <TableCell className="text-right">
-                                                            <Badge variant="secondary">{row.nextSeq}</Badge>
+                                                            <Badge variant="secondary" title={issuedByCounter(row)}>{officeIssued(row)}</Badge>
                                                         </TableCell>
                                                         <TableCell>
                                                             <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{next}</code>
@@ -690,7 +711,7 @@ export default function YearEndingPage() {
                                                 </div>
                                                 <div className="space-y-1">
                                                     <Label className="text-xs">Issued</Label>
-                                                    <Input className="h-8" value={draft.nextSeq} disabled />
+                                                    <Input className="h-8" value={officeIssued(draft)} title={issuedByCounter(draft)} disabled />
                                                 </div>
                                             </div>
                                             <p className="text-[10px] text-muted-foreground mt-1.5">
