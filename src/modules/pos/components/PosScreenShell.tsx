@@ -777,7 +777,7 @@ function PriceInput({
             value={draft}
             inputMode="decimal"
             placeholder="₹"
-            className="h-7 w-16 text-right text-xs"
+            className="h-7 w-24 text-right text-xs"
             onFocus={() => { setFocused(true); }}
             onBlur={() => { setFocused(false); setDraft(fmt(inclusive)); }}
             onKeyDown={onKeyDown}
