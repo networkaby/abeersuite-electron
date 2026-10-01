@@ -392,6 +392,7 @@ function AccountOpeningSection({
                             value={form.accountId || null}
                             onChange={(a) => setForm((f) => ({ ...f, accountId: a?.id ?? 0 }))}
                             accounts={allAccounts}
+                            onMastersChanged={onAccountListChanged}
                             placeholder="Search name, alias or mobile…"
                         />
                     </div>

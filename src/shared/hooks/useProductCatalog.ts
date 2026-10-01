@@ -101,6 +101,24 @@ export function useProductCatalog<T extends Row = LocalProductRow>(
     return { products: rows as unknown as T[], loading: eager && !hydrated };
 }
 
+/**
+ * Sync now — after a product is made from a picker, so every picker on the page
+ * can find it, not only the one it came from. Realtime will not do it: this tab
+ * never hears its own write back (the broadcast does not echo to the sender), so
+ * the rest of the page would wait for somebody else's write to trigger a sync.
+ *
+ * Waits out a sync that is ALREADY running first. It may have asked the server
+ * before the product existed, and joining it would answer without it — at the
+ * one moment someone is sure to look for it.
+ *
+ * The server's row, never the picker's: the catalogue feeds the till too, and a
+ * row carrying only what a quick-create form knows (no tax rate) must not bill.
+ */
+export async function invalidateProductCatalog(): Promise<void> {
+    if (inFlight) await inFlight.catch(() => { /* sync again either way */ });
+    await ensureSynced().catch(() => { /* the next realtime signal syncs */ });
+}
+
 /** Imperative one-off read for call sites outside a component's render (event
  *  handlers, non-hook helpers) — syncs if needed and returns the current rows.
  *  Also what a `eager: false` picker calls to trigger its first load. */

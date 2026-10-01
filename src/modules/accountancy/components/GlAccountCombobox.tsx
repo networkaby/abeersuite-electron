@@ -21,7 +21,7 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { Plus } from "lucide-react";
 import { useComboboxNav } from "@/shared/hooks";
-import { loadGlAccounts } from "@/shared/hooks/useGlAccounts";
+import { invalidateGlAccounts } from "@/shared/hooks/useGlAccounts";
 import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
 import type { EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
 
@@ -89,8 +89,11 @@ type Props = {
     /** Ctrl+Enter opens the edit-ledger dialog. Default on. */
     allowEdit?: boolean;
     /** Re-read the caller's own account list after a ledger is made or
-     *  changed. Left out, the shared chart of accounts is refreshed instead —
-     *  which is what every voucher page reads. */
+     *  changed here. Needed whenever `accounts` is the caller's own fetch
+     *  rather than the shared chart (useGlAccounts, which this box refreshes
+     *  itself): this tab never hears its own write over realtime, so nothing
+     *  else would tell that list — and the page's other rows could not find
+     *  the new ledger. */
     onMastersChanged?: () => void;
 };
 
@@ -114,8 +117,8 @@ export function GlAccountCombobox({
     const [createOpen, setCreateOpen] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
     const [editTarget, setEditTarget] = useState<EditableLedger | null>(null);
-    // A ledger made from this box shows up INSTANTLY, before the shared chart
-    // of accounts has re-read. It also stays reachable when the caller's list
+    // A ledger made from this box shows up INSTANTLY, before the page's list
+    // has re-read (refreshMasters). It also stays reachable when the caller's list
     // is a filtered slice (Payment's expense-only rows) that would never
     // carry it — the user asked for it in this row, so this row keeps it.
     const [justCreated, setJustCreated] = useState<GlAccount[]>([]);
@@ -245,13 +248,11 @@ export function GlAccountCombobox({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cb.open, cb.wrapperRef, cb.setDropdownWidth, portalTarget]);
 
-    // A master was made or changed: re-read whichever list this box is showing.
+    // A master was made or changed: every list on the page that could show it
+    // re-reads — the caller's own, and the shared chart when a screen holds it.
     const refreshMasters = () => {
-        if (onMastersChanged) { onMastersChanged(); return; }
-        // Every voucher page reads the shared chart of accounts. The realtime
-        // "ledger" topic would fetch it eventually anyway; this just makes the
-        // new name and its group visible at once.
-        void loadGlAccounts().catch(() => { /* the next nudge picks it up */ });
+        onMastersChanged?.();
+        void invalidateGlAccounts();
     };
 
     const startCreate = () => { cb.setOpen(false); setCreateOpen(true); };

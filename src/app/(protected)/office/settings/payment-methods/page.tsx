@@ -166,13 +166,14 @@ export default function PaymentMethodsSettingsPage() {
     // Current Assets (party ledgers already excluded by the API flag). Bank OD
     // A/c is added explicitly: it is a normal current account for money
     // movement even though it reports as a liability (see moneyAccount.ts).
-    useEffect(() => {
+    const loadGlAccounts = useCallback(() => {
         axios
             .get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=false")
             .then((r) => setGlAccounts(r.data.filter((a) =>
                 a.group?.type === "ASSET" || isOdGroupName(a.group?.name))))
             .catch(() => setGlAccounts([]));
     }, []);
+    useEffect(loadGlAccounts, [loadGlAccounts]);
 
     const accountName = useCallback(
         (id: number | null) => (id ? (glAccounts.find((a) => a.id === id)?.name ?? null) : null),
@@ -522,6 +523,7 @@ export default function PaymentMethodsSettingsPage() {
                                 value={form.settlementAccountId}
                                 onChange={(acc) => setForm((f) => ({ ...f, settlementAccountId: acc?.id ?? null }))}
                                 accounts={glAccounts}
+                                onMastersChanged={loadGlAccounts}
                                 placeholder="Cash / Bank ledger money settles into…"
                             />
                             <p className="text-muted-foreground text-[11px]">

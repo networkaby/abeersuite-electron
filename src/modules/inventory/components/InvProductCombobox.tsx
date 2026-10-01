@@ -18,7 +18,7 @@
 import { useEffect, useMemo, useState, useCallback, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Plus } from "lucide-react";
-import { useComboboxNav, useProductCatalog } from "@/shared/hooks";
+import { useComboboxNav, useProductCatalog, invalidateProductCatalog } from "@/shared/hooks";
 import { primaryBarcode, searchProducts, findByExactCode } from "@/shared/lib/inventory";
 import { NewProductDialog, type AdvancedDefaults, type CreatedProductOption } from "./NewProductDialog";
 import { InvProductDialog, type InvProductCreatedRow } from "./InvProductDialog";
@@ -103,9 +103,9 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
     // Shared IndexedDB-backed catalogue — same array every picker on the page
     // reads, kept fresh by delta sync + realtime (see useProductCatalog).
     const { products: catalogProducts, loading } = useProductCatalog<ProductOption>();
-    // A just-created product shows up here INSTANTLY (before the realtime
-    // round trip merges it into the shared catalogue) so the cashier can
-    // select it without waiting.
+    // A product made from this box shows up here INSTANTLY, before the catalogue
+    // sync it triggers (invalidateProductCatalog) lands — that sync is what
+    // brings it to every other picker on the page.
     const [justCreated, setJustCreated] = useState<ProductOption[]>([]);
     // Memoised: a fresh array every render would re-run the ranked search below
     // on every keystroke's re-render, not just when the query or catalogue moved.
@@ -426,6 +426,7 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                     initialName={query.trim()}
                     onCreated={(np: CreatedProductOption) => {
                         setJustCreated((ps) => [...ps, np]);
+                        void invalidateProductCatalog();
                         setQuery(np.name);
                         onChange(toSelected(np));
                     }}
@@ -465,6 +466,7 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
                             barcode1: primaryBarcode(raw.codes),
                         };
                         setJustCreated((ps) => [...ps, np]);
+                        void invalidateProductCatalog();
                         setQuery(np.name);
                         onChange(toSelected(np));
                     }}

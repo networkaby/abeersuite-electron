@@ -526,6 +526,7 @@ export default function CountersAdminPage() {
                                                                     value={p.accountId}
                                                                     onChange={(acc) => updatePayAcct(idx, { accountId: acc?.id ?? null })}
                                                                     accounts={glAccounts}
+                                                                    onMastersChanged={() => { void loadGlAccounts(); void loadExpenseAccounts(); }}
                                                                     placeholder="Linked bank ledger…"
                                                                     className="h-8 text-xs"
                                                                 />

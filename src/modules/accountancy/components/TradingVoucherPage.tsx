@@ -789,11 +789,17 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // re-read: the lines, party and totals being entered are never touched, and
     // the edit-mode prefill is keyed separately so it cannot re-run.
     const [refDataKey, setRefDataKey] = useState(0);
-    useRealtimeTopics(["ledger", "catalogue"], () => { setRefDataKey((n) => n + 1); });
+    const refreshRefData = () => setRefDataKey((n) => n + 1);
+    useRealtimeTopics(["ledger", "catalogue"], refreshRefData);
 
     useEffect(() => {
+        // A newer read (the books moved again, or a ledger was just made from
+        // one of this page's pickers) supersedes this one — never let the
+        // older answer land last.
+        let cancelled = false;
         axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=false")
             .then((r) => {
+                if (cancelled) return;
                 const cb = r.data.filter((a) => isMoneyGroupName(a.group?.name));
                 setCashBankAccounts(cb);
                 // chargeAccounts = Income/Expense ledgers only (those are
@@ -815,7 +821,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 // Balance row picks up the remainder until they type.
                 setTenders((rows) => rows.length === 0 ? [newTender(cash)] : rows);
             })
-            .catch(() => { setCashBankAccounts([]); setChargeAccounts([]); });
+            .catch(() => { if (!cancelled) { setCashBankAccounts([]); setChargeAccounts([]); } });
+        return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [refDataKey]);
 
@@ -823,9 +830,11 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // counter and the office always offer the identical list.
     useEffect(() => {
         if (!canCarryServices) return;
+        let cancelled = false;
         axios.get<SelectedService[]>("/api/pos/services")
-            .then((r) => setAllServices(r.data))
-            .catch(() => setAllServices([]));
+            .then((r) => { if (!cancelled) setAllServices(r.data); })
+            .catch(() => { if (!cancelled) setAllServices([]); });
+        return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [refDataKey]);
 
@@ -2160,6 +2169,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                         value={c.accountId}
                                         onChange={(acc) => setCharges((rows) => rows.map((r, i) => i === idx ? { ...r, account: acc, accountId: acc?.id ?? null } : r))}
                                         accounts={chargeAccounts}
+                                        onMastersChanged={refreshRefData}
                                         placeholder="Ledger (e.g. Packing Income)"
                                         className="h-8 text-xs"
                                     />
@@ -2441,6 +2451,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                     }
                                                 }}
                                                 accounts={cashBankAccounts}
+                                                onMastersChanged={refreshRefData}
                                                 placeholder="Cash / Bank"
                                                 className="h-8 text-xs"
                                             />

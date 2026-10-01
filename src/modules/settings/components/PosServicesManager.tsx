@@ -160,6 +160,7 @@ export function PosServicesManager() {
                             value={row.accountId}
                             onChange={(acc) => { if (acc) void patchService(row.id, { accountId: acc.id }); }}
                             accounts={incomeAccounts}
+                            onMastersChanged={() => load(true)}
                             placeholder="Income ledger"
                             className="h-8 text-sm"
                         />
@@ -211,6 +212,7 @@ export function PosServicesManager() {
                         value={draftAccountId}
                         onChange={(acc) => setDraftAccountId(acc?.id ?? null)}
                         accounts={incomeAccounts}
+                        onMastersChanged={() => load(true)}
                         placeholder="Income ledger (e.g. Service Charges)"
                         className="h-8 text-sm"
                     />

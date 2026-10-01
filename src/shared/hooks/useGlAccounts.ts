@@ -83,3 +83,19 @@ export function useGlAccounts(opts: { onError?: () => void } = {}): { accounts: 
 
     return { accounts: rows, loading: !hydrated };
 }
+
+/**
+ * Re-read now — after a ledger is made or altered from a picker, so every picker
+ * on the page shows it, not only the one it came from. Realtime will not do it:
+ * this tab never hears its own write back (the broadcast does not echo to the
+ * sender), so the rest of the page would wait for somebody else's write.
+ *
+ * Waits out a read that is ALREADY on the wire first. It may have left before
+ * the ledger existed, and joining it would answer without it. With no screen
+ * holding the chart there is nothing to correct: the next one to mount reads it.
+ */
+export async function invalidateGlAccounts(): Promise<void> {
+    if (subscribers === 0) return;
+    if (inFlight) await inFlight.catch(() => { /* read again either way */ });
+    await loadGlAccounts().catch(() => { /* the next "ledger" signal re-reads */ });
+}

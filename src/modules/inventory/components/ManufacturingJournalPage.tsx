@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useApiResource } from "@/shared/hooks/useApiResource";
 import { extractApiError } from "@/shared/lib/api";
 import { http } from "@/shared/lib/http";
 import { BranchRequired } from "@/shared/components/BranchRequired";
@@ -102,7 +102,6 @@ export function ManufacturingJournalPage() {
     const [loading, setLoading] = useState(editing);
     const [voucherRef, setVoucherRef] = useState<string | null>(null);
     const [loadedVoucher, setLoadedVoucher] = useState<LifecycleVoucher | null>(null);
-    const [accounts, setAccounts] = useState<GlAccount[]>([]);
 
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
@@ -142,18 +141,12 @@ export function ManufacturingJournalPage() {
         charges:            [] as ExpenseForm[],
     });
 
-    // Preload chart of accounts so the GlAccountCombobox is instant.
-    const loadAccounts = useCallback(() => {
-        axios.get<GlAccount[]>("/api/accountancy/gl-accounts")
-            .then((r) => setAccounts(r.data))
-            .catch(() => setAccounts([]));
-    }, []);
-
-    useEffect(() => { loadAccounts(); }, [loadAccounts]);
-
-    // Reference data only — a ledger created while this journal is being written
-    // becomes selectable. The journal's own lines are untouched.
-    useRealtimeTopics(["ledger"], loadAccounts);
+    // Preload chart of accounts so the GlAccountCombobox is instant. Reference
+    // data only — re-read when the books move elsewhere, or when a ledger is
+    // made from one of this page's pickers, so every row can pick it. The
+    // journal's own lines are untouched.
+    const { data: accounts = [], reload: reloadAccounts } =
+        useApiResource<GlAccount[]>("/api/accountancy/gl-accounts", { topics: ["ledger"] });
 
 
     // Edit-mode prefill
@@ -567,6 +560,7 @@ export function ManufacturingJournalPage() {
                                     value={form.paymentAccountId}
                                     onChange={(acc) => setForm((f) => ({ ...f, paymentAccountId: acc?.id ?? null }))}
                                     accounts={paymentAccounts}
+                                    onMastersChanged={reloadAccounts}
                                     placeholder="Cash / Bank / Sundry Creditors"
                                 />
                                 <p className="text-[11px] text-muted-foreground">All charges debits credit this account at post time.</p>
@@ -593,6 +587,7 @@ export function ManufacturingJournalPage() {
                                                     value={c.accountId || null}
                                                     onChange={(acc) => updateCharge(i, { accountId: acc?.id ?? 0 })}
                                                     accounts={expenseAccounts}
+                                                    onMastersChanged={reloadAccounts}
                                                     placeholder="Labour / Power & Fuel / …"
                                                 />
                                             </td>
