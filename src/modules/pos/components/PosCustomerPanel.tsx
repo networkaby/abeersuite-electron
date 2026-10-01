@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import {
     User, Building2, Phone, Mail, MapPin,
     CreditCard, Wallet, TrendingDown, AlertCircle, Sparkles, ChevronRight,
-    TrendingUp, Award, Clock, Star, Tag, Crown, Medal, MessageSquarePlus,
+    TrendingUp, Award, Clock, Star, Tag, Crown, Medal, Pencil, MessageSquarePlus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { formatInr } from "@/shared/lib/format";
 import { extractApiError } from "@/shared/lib/api";
 import { type Snapshot } from "@/modules/pos/lib/posDraftTypes";
+import { PosEditCustomerDialog } from "@/modules/pos/components/PosEditCustomerDialog";
 import { type TierResult } from "@/shared/lib/pricing";
 import { StarRating, QualityTimeline } from "@/modules/customer/components/CustomerQualityTab";
 import { latestRating, type QualityLogEntry } from "@/modules/customer/lib/customerQuality";
@@ -111,6 +112,7 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
     const [log, setLog] = useState<QualityLogEntry[]>(snapshot.qualityLog ?? []);
     const [note, setNote] = useState("");
     const [qualityBusy, setQualityBusy] = useState(false);
+    const [editOpen, setEditOpen] = useState(false);
     const rating = latestRating(log);
     const comments = log.filter((e) => e.type === "comment");
 
@@ -140,12 +142,18 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
                     "border-orange-300 bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300";
     return (
         <div className="space-y-2">
+            {!isWalkIn && <PosEditCustomerDialog party={c} accountId={snapshot.account?.id ?? null} open={editOpen} onOpenChange={setEditOpen} />}
             {/* Identity */}
             <div>
                 <div className="flex items-center gap-1.5">
                     {c.kind === "company" ? <Building2 size={14} className="shrink-0 text-muted-foreground" /> : <User size={14} className="shrink-0 text-muted-foreground" />}
                     <h2 className="truncate text-sm font-semibold">{c.name}</h2>
                     {isWalkIn && <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300">Walk-in</Badge>}
+                    {!isWalkIn && (
+                        <Button variant="ghost" size="icon-xs" className="ml-auto shrink-0" onClick={() => setEditOpen(true)} title="Edit customer — spelling, address, phone">
+                            <Pencil size={12} />
+                        </Button>
+                    )}
                 </div>
                 {/* Medals — one per period held, newest bracket first, so the row reads as history. */}
                 {tier.titles.length > 0 && (

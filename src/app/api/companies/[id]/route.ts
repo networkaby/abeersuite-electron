@@ -173,23 +173,30 @@ export async function PUT(
     }
 
     try {
-        const company = await prisma.company.update({
-            where: { id: Number(id) },
-            data: {
-                ...(body.name !== undefined && { name: body.name }),
-                ...(body.address !== undefined && { address: body.address }),
-                ...(body.companyReg !== undefined && { companyReg: body.companyReg }),
-                ...(body.taxId !== undefined && { taxId: body.taxId }),
-                ...(gstinPatch ?? {}),
-                ...(body.shippingStateCode !== undefined && {
-                    shippingStateCode: body.shippingStateCode || null,
-                }),
-                ...(body.noDiscount !== undefined && { noDiscount: body.noDiscount }),
-                ...(body.customerGroupId !== undefined && { customerGroupId: body.customerGroupId }),
-                ...(body.isActive !== undefined && { isActive: body.isActive }),
-                ...(bankPatch ?? {}),
-            },
-        });
+        // A rename carries to the ledger in the same write — the Day Book and GL
+        // reports read Account.name, so the two must never drift apart.
+        const [company] = await prisma.$transaction([
+            prisma.company.update({
+                where: { id: Number(id) },
+                data: {
+                    ...(body.name !== undefined && { name: body.name }),
+                    ...(body.address !== undefined && { address: body.address }),
+                    ...(body.companyReg !== undefined && { companyReg: body.companyReg }),
+                    ...(body.taxId !== undefined && { taxId: body.taxId }),
+                    ...(gstinPatch ?? {}),
+                    ...(body.shippingStateCode !== undefined && {
+                        shippingStateCode: body.shippingStateCode || null,
+                    }),
+                    ...(body.noDiscount !== undefined && { noDiscount: body.noDiscount }),
+                    ...(body.customerGroupId !== undefined && { customerGroupId: body.customerGroupId }),
+                    ...(body.isActive !== undefined && { isActive: body.isActive }),
+                    ...(bankPatch ?? {}),
+                },
+            }),
+            ...(body.name !== undefined
+                ? [prisma.account.updateMany({ where: { companyId: Number(id) }, data: { name: body.name } })]
+                : []),
+        ]);
         return NextResponse.json(company);
     } catch (e) {
         return handleApiError(e, "Failed to update company");
