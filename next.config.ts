@@ -18,7 +18,9 @@ const nextConfig: NextConfig = {
   // `localhost` as its own origin, so under `pnpm electron:dev` the HMR socket was
   // refused and the dev client reloaded the page every ~45 s without ever hydrating.
   // Dev-only: `next start` has no such check.
-  allowedDevOrigins: ["127.0.0.1"],
+  // `192.168.*.*` lets a phone on the shop Wi-Fi open the dev server by the PC's LAN
+  // address (http://192.168.x.x:3000) — wildcarded because DHCP moves that address.
+  allowedDevOrigins: ["127.0.0.1", "192.168.*.*"],
   // Standalone traces the server and its deps into one folder we can copy onto the
   // counter — no `pnpm install` on a shop machine, no node_modules to keep in sync
   // with the build.
