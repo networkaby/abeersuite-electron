@@ -4,27 +4,14 @@ import { formatInr } from "@/shared/lib/format/moneyInr";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import MobileHeader from "./MobileHeader";
 import { balanceLabel } from "./partyBalance";
+import Link from "next/link";
 import { useMobileResource } from "./useMobileResource";
-
-type PartyDetail = {
-    accountId: number;
-    name: string;
-    /** + they owe us, − we owe them. */
-    balance: number;
-    bills: {
-        key: string;
-        ref: string;
-        billDate: string;
-        totalAmount: number;
-        /** Unsigned; `side` says which way it runs (+1 they owe us, −1 we owe them). */
-        outstanding: number;
-        side: 1 | -1;
-        daysOverdue: number;
-    }[];
-};
+import type { PartyDetail, PaySetup } from "./types";
 
 /** One party's balance and unpaid bills (/api/mobile/parties/[accountId]). `back` is
- *  the list the party was opened from (party search, receivables, payables). */
+ *  the list the party was opened from (party search, receivables, payables).
+ *  Pay / Receive show for whoever holds the Payment / Receipt create + post ticks;
+ *  the one matching the balance's direction is the main button. */
 export default function MobilePartyBills({ accountId, userId, name, back }: {
     accountId: number;
     userId: string;
@@ -34,6 +21,7 @@ export default function MobilePartyBills({ accountId, userId, name, back }: {
     const { data, loading, error, refresh } = useMobileResource<PartyDetail>(
         `/api/mobile/parties/${accountId}`, `party:${accountId}`, userId,
     );
+    const setup = useMobileResource<PaySetup>("/api/mobile/pay-setup", "pay-setup", userId).data;
 
     const billsNet = data ? data.bills.reduce((s, b) => s + b.side * b.outstanding, 0) : 0;
     // Money received / paid on account — moves the balance, settles no bill.
@@ -58,6 +46,26 @@ export default function MobilePartyBills({ accountId, userId, name, back }: {
                             <p className="text-sm text-muted-foreground">
                                 Not against any bill: {formatInr(Math.abs(onAccount))} {onAccount > 0 ? "they owe" : "we owe"}
                             </p>
+                        )}
+                        {(setup?.canPay || setup?.canReceive) && (
+                            <div className="flex gap-2 pt-3">
+                                {setup.canReceive && (
+                                    <Link
+                                        href={`/m/parties/${accountId}/receive?from=${back}`}
+                                        className={`flex-1 rounded-lg py-2.5 text-center font-medium ${data.balance > 0 ? "bg-primary text-primary-foreground" : "border"}`}
+                                    >
+                                        Receive
+                                    </Link>
+                                )}
+                                {setup.canPay && (
+                                    <Link
+                                        href={`/m/parties/${accountId}/pay?from=${back}`}
+                                        className={`flex-1 rounded-lg py-2.5 text-center font-medium ${data.balance < 0 ? "bg-primary text-primary-foreground" : "border"}`}
+                                    >
+                                        Pay
+                                    </Link>
+                                )}
+                            </div>
                         )}
                     </div>
                     {data.bills.length === 0 ? (
