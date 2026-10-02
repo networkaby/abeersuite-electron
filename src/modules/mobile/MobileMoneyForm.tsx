@@ -13,7 +13,9 @@ import { settleFromPicks } from "@/modules/accountancy/lib/settleFromPicks";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import MobileHeader from "./MobileHeader";
 import { useMobileResource } from "./useMobileResource";
-import { mobileKey } from "./mobileCache";
+import { dropAnswers, mobileKey } from "./mobileCache";
+import { forgetPartyBalances } from "./usePartyBalances";
+import { MOBILE_SETUP_FRESH_MS } from "@/shared/lib/constants/polling";
 import type { PartyDetail, PaySetup } from "./types";
 
 export type MoneyKind = "PAYMENT" | "RECEIPT";
@@ -59,8 +61,8 @@ export default function MobileMoneyForm({ kind, accountId, userId, back }: {
     back: string;
 }) {
     const copy = COPY[kind];
-    const party = useMobileResource<PartyDetail>(`/api/mobile/parties/${accountId}`, `party:${accountId}`, userId);
-    const setup = useMobileResource<PaySetup>("/api/mobile/pay-setup", "pay-setup", userId);
+    const party = useMobileResource<PartyDetail>(`/api/mobile/parties/${accountId}`, `party:${accountId}`, userId, { since: true });
+    const setup = useMobileResource<PaySetup>("/api/mobile/pay-setup", "pay-setup", userId, { freshMs: MOBILE_SETUP_FRESH_MS });
     const lastLedgerKey = mobileKey(`last-ledger:${kind}`, userId);
 
     // Bills this voucher can settle, oldest first.
@@ -170,6 +172,10 @@ export default function MobileMoneyForm({ kind, accountId, userId, back }: {
                     settleError = extractApiError(e, "Saved, but the bills could not be settled — use Link to bills in the office.");
                 }
             }
+            // What this voucher moved must not be shown from a saved copy: the party,
+            // the receivable / payable lists, the Day Book, the balances held.
+            forgetPartyBalances();
+            await dropAnswers(`party:${accountId}:`, "outstanding:", "/api/mobile/daybook");
             setSaved({ reference: created.reference ?? `UV-${created.id}`, settled, settleError });
         } catch (e) {
             setError(extractApiError(e, "Could not save."));

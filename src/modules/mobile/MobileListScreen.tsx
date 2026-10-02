@@ -16,8 +16,9 @@ type ListState = {
 /**
  * The frame every searched list on the phone shares: header with back + refresh,
  * a search box that stays put while the list scrolls, the error line, the rows,
- * the "nothing found" note and "Load more". A list screen supplies only its rows
- * (pair it with `useMobileList`).
+ * the "nothing found" note and "Load more". A list screen supplies only its rows —
+ * filtered on the device for a catalogue it holds (products, parties), or paged
+ * from the server with `useMobileList` (the Day Book).
  */
 export default function MobileListScreen({ title, back, placeholder, query, onQuery, list, emptyText, summary, children }: {
     title: string;

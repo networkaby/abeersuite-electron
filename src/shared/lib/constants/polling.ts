@@ -178,3 +178,22 @@ export const COUNTER_STATUS_IDLE_POLL_MS = 86_400_000;   // 24 hours
  * pays it — every read pushes the deadline out.
  */
 export const SCREEN_HEARTBEAT_MS = 5 * 60 * 1000;   // 5 minutes
+
+// ── Phone app (/m) ──────────────────────────────────────────────────────────
+// The phone keeps each screen's last server answer on the device (Dexie
+// `answers`). These decide when it asks again — and when it does, it sends the
+// answer's `computedAt` back as `?since=`, so a quiet book costs one indexed
+// probe instead of a recompute (see `isUnchangedSince`).
+
+/** A saved answer younger than this is shown without asking the server at all.
+ *  Pull-to-refresh (the ↻ button) always asks. */
+export const MOBILE_FRESH_MS = 60_000;   // 1 minute
+
+/** The Pay / Receive form's cash-bank ledgers and branches — configuration,
+ *  rarely edited, so it is asked for far less often. */
+export const MOBILE_SETUP_FRESH_MS = 600_000;   // 10 minutes
+
+/** How long the server trusts a phone's `?since=` "nothing posted since" before
+ *  recomputing anyway. Bounds what that check cannot see — the day rolling over
+ *  (bills age a day with nothing written), or a change that touches no voucher. */
+export const MOBILE_SINCE_TRUST_MS = 1_800_000;   // 30 minutes

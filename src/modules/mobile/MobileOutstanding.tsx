@@ -40,7 +40,7 @@ const SIDE = {
 export default function MobileOutstanding({ side, userId }: { side: keyof typeof SIDE; userId: string }) {
     const meta = SIDE[side];
     const { data, loading, error, refresh } = useMobileResource<OutstandingList>(
-        `/api/mobile/outstanding/${side}`, `outstanding:${side}`, userId,
+        `/api/mobile/outstanding/${side}`, `outstanding:${side}`, userId, { since: true },
     );
     const [query, setQuery] = useState("");
     const [age, setAge] = useState<AgeingBucket | null>(null);

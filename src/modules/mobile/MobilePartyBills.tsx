@@ -6,6 +6,7 @@ import MobileHeader from "./MobileHeader";
 import { balanceLabel } from "./partyBalance";
 import Link from "next/link";
 import { useMobileResource } from "./useMobileResource";
+import { MOBILE_SETUP_FRESH_MS } from "@/shared/lib/constants/polling";
 import type { PartyDetail, PaySetup } from "./types";
 
 /** One party's balance and unpaid bills (/api/mobile/parties/[accountId]). `back` is
@@ -19,9 +20,9 @@ export default function MobilePartyBills({ accountId, userId, name, back }: {
     back: string;
 }) {
     const { data, loading, error, refresh } = useMobileResource<PartyDetail>(
-        `/api/mobile/parties/${accountId}`, `party:${accountId}`, userId,
+        `/api/mobile/parties/${accountId}`, `party:${accountId}`, userId, { since: true },
     );
-    const setup = useMobileResource<PaySetup>("/api/mobile/pay-setup", "pay-setup", userId).data;
+    const setup = useMobileResource<PaySetup>("/api/mobile/pay-setup", "pay-setup", userId, { freshMs: MOBILE_SETUP_FRESH_MS }).data;
 
     const billsNet = data ? data.bills.reduce((s, b) => s + b.side * b.outstanding, 0) : 0;
     // Money received / paid on account — moves the balance, settles no bill.

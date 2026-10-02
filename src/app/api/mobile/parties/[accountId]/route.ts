@@ -7,6 +7,8 @@ import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
 import { businessToday } from "@/shared/lib/format/formatDate";
 import { buildPartyUpiLink, parsePartyBank } from "@/shared/lib/parties/partyBank";
 import { partyBalances } from "@/modules/mobile/partyBalances";
+import { booksUnchangedSince } from "@/modules/mobile/booksUnchanged";
+import { parseSince } from "@/shared/lib/prisma/counterMode";
 
 // GET /api/mobile/parties/[accountId]
 //
@@ -19,7 +21,10 @@ import { partyBalances } from "@/modules/mobile/partyBalances";
 // Also what the Pay / Receive form needs from the party: each bill's spine id
 // (what a bill-wise settlement links to) and the party's own UPI link, when its
 // Bank tab carries a UPI ID (the same link the office scan-to-pay QR encodes).
-export async function GET(_req: Request, { params }: { params: Promise<{ accountId: string }> }) {
+//
+// `?since=`: `{ unchanged: true }` when nothing in the books (booksUnchangedSince) and not
+// this party's own record (its UPI ID) has changed since — no recompute.
+export async function GET(req: Request, { params }: { params: Promise<{ accountId: string }> }) {
     // Opened from party search, receivables or payables — any of their ticks.
     const { response } = await requireAnyPermission(...PARTY_DETAIL_PERMISSIONS);
     if (response) return response;
@@ -28,6 +33,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ account
     if (!Number.isInteger(accountId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
     try {
+        const now = new Date();
+        const sinceParam = new URL(req.url).searchParams.get("since");
+        if (await booksUnchangedSince(sinceParam, now)) {
+            const since = parseSince(sinceParam)!;
+            const edited = await prisma.account.findFirst({
+                where: {
+                    id: accountId,
+                    OR: [{ person: { updatedAt: { gt: since } } }, { company: { updatedAt: { gt: since } } }],
+                },
+                select: { id: true },
+            });
+            if (!edited) return NextResponse.json({ unchanged: true, computedAt: now.toISOString() });
+        }
+
         const asOf = businessToday();
         asOf.setHours(23, 59, 59, 999);
         const [outstanding, balances, owner] = await Promise.all([
@@ -43,6 +62,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ account
         const bank = parsePartyBank(owner?.person?.bankJson ?? owner?.company?.bankJson ?? null);
 
         return NextResponse.json({
+            computedAt: now.toISOString(),
             accountId,
             name: outstanding.accountName,
             balance: balances.get(accountId) ?? 0,

@@ -25,6 +25,11 @@
  *                       it came from so Deals' view can't collide with Help's.
  *                       Splitting the index off the data is what lets two
  *                       views hold the same ticket once.
+ *   • `answers`       — the phone app's last answer per screen (a party's bills,
+ *                       receivables, a Day Book date…), keyed by screen + user,
+ *                       with the server's `computedAt` so the next open can ask
+ *                       "anything changed since?" instead of re-reading it all.
+ *                       See modules/mobile/mobileCache.ts.
  *
  * All trusted machines (any that can log in) may cache business data locally.
  * The login gate (auth:login:outside-counter) ensures only authorised machines
@@ -130,6 +135,16 @@ export type LocalDayBookView = {
     savedAt: number;
 };
 
+/** One saved server answer for a phone screen (modules/mobile/mobileCache.ts). */
+export type LocalAnswer = {
+    key: string;
+    data: unknown;
+    /** The server's clock when it computed `data` — sent back as `?since=`. */
+    computedAt: string;
+    /** This device's clock when saved — for "is it fresh enough to skip asking?". */
+    savedAt: number;
+};
+
 type LocalDb = Dexie & {
     products:     EntityTable<LocalProductRow, "id">;
     productMeta:  EntityTable<LocalProductMeta, "key">;
@@ -139,6 +154,7 @@ type LocalDb = Dexie & {
     tickets:      EntityTable<LocalTicketRow, "id">;
     ticketViews:  EntityTable<LocalView<number>, "key">;
     dayBookViews: EntityTable<LocalDayBookView, "key">;
+    answers:      EntityTable<LocalAnswer, "key">;
 };
 
 let db: LocalDb | null = null;
@@ -308,6 +324,9 @@ export function localDb(): LocalDb | null {
     // till. Dropping the stores here is what stops the old partial rows being
     // mistaken for the list.
     db.version(5).stores({ parties: null, partyMeta: null });
+
+    // v6 adds the phone app's saved answers — a new store, nothing to migrate.
+    db.version(6).stores({ answers: "key, savedAt" });
 
     // The pre-Dexie database is dead weight the moment this one opens. Deleting
     // it is best-effort: it holds only rebuildable caches, so a failure here

@@ -9,7 +9,8 @@
  *                     counter PIN clocks, customer OTP timings
  *   hr.ts             duty hours, full-day length, late grace, full/half-day shares,
  *                     pay days a month, leave year, off-counter tracking switch
- *   polling.ts        how often each screen re-reads the server (the DB-cost dial)
+ *   polling.ts        how often each screen re-reads the server (the DB-cost dial),
+ *                     the phone app's saved-answer freshness included
  *   paging.ts         rows per API page / per directory page
  *   inventory.ts      Reorder classifier ladder, FSN fast-mover turnover
  *   accounting.ts     standard group / ledger names, payment instruments, bill due days

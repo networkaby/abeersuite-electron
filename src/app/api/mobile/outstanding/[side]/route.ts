@@ -6,6 +6,7 @@ import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { handleApiError } from "@/shared/lib/api";
 import { businessToday } from "@/shared/lib/format/formatDate";
 import { getOutstandings } from "@/modules/accountancy/lib/outstandings";
+import { booksUnchangedSince } from "@/modules/mobile/booksUnchanged";
 
 // Same aggregation as the office Receivables / Payables reports.
 export const maxDuration = 60;
@@ -21,7 +22,11 @@ const SIDES = {
 // (`getOutstandings`), sent as the party list only — the flat bill list is the big
 // half of that report and a phone opens one party's bills on demand
 // (/api/mobile/parties/[accountId]). Each side checks its own tick.
-export async function GET(_req: Request, { params }: { params: Promise<{ side: string }> }) {
+//
+// `?since=<computedAt of the copy the phone holds>`: when nothing in the books has
+// moved since (booksUnchangedSince), the answer is `{ unchanged: true }` —
+// the open-bills scan and the payload are both skipped.
+export async function GET(req: Request, { params }: { params: Promise<{ side: string }> }) {
     const side = SIDES[(await params).side as keyof typeof SIDES];
     if (!side) return NextResponse.json({ error: "Unknown list" }, { status: 404 });
 
@@ -29,6 +34,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ side: s
     if (response) return response;
 
     try {
+        // Captured BEFORE the read, so a voucher written mid-request is still
+        // "since" on the next ask.
+        const now = new Date();
+        if (await booksUnchangedSince(new URL(req.url).searchParams.get("since"), now)) {
+            return NextResponse.json({ unchanged: true, computedAt: now.toISOString() });
+        }
+
         const asOf = businessToday();
         asOf.setHours(23, 59, 59, 999);
         const report = await getOutstandings(side.group, asOf);
@@ -53,6 +65,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ side: s
         }
 
         return NextResponse.json({
+            computedAt: now.toISOString(),
             asOf: report.asOf,
             total: report.totalOutstanding,
             buckets: report.buckets,

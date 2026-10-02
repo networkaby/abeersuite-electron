@@ -155,10 +155,15 @@ export async function loadMasterOpeningBalances(
  *     midnight. Capping the trust window keeps that bounded to one tick instead
  *     of a figure that silently never refreshes.
  */
-export async function isUnchangedSince(sinceParam: string | null, now: Date): Promise<boolean> {
+export async function isUnchangedSince(
+    sinceParam: string | null,
+    now: Date,
+    /** The trust window — the top bar's poll by default; the phone passes its own. */
+    maxAgeMs: number = FINANCE_BAR_POLL_MS,
+): Promise<boolean> {
     const since = parseSince(sinceParam);
     if (!since) return false;
-    if (now.getTime() - since.getTime() >= FINANCE_BAR_POLL_MS) return false;
+    if (now.getTime() - since.getTime() >= maxAgeMs) return false;
 
     const row = await prisma.universalVoucher.findFirst({
         where: { updatedAt: { gt: since } },
