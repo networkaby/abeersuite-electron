@@ -5,17 +5,32 @@ import axios from "axios";
 import { formatInr } from "@/shared/lib/format/moneyInr";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
-import { readCache, userScopedKey, writeCache } from "@/shared/lib/browser/pollCache";
-import type { LedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
 import MobileHeader from "./MobileHeader";
 import { balanceLabel } from "./partyBalance";
+import { mobileKey, readMobileCache, writeMobileCache } from "./mobileCache";
 
-/** One party's unpaid bills — the same engine as the Receivables report
- *  (/api/accountancy/outstandings/[accountId]). Cached per party, so the next
- *  visit shows the last figures at once while the fresh ones load. */
+type PartyDetail = {
+    accountId: number;
+    name: string;
+    /** + they owe us, − we owe them. */
+    balance: number;
+    bills: {
+        key: string;
+        ref: string;
+        billDate: string;
+        totalAmount: number;
+        /** Unsigned; `side` says which way it runs (+1 they owe us, −1 we owe them). */
+        outstanding: number;
+        side: 1 | -1;
+        daysOverdue: number;
+    }[];
+};
+
+/** One party's balance and unpaid bills (/api/mobile/parties/[accountId]). Cached per
+ *  party, so the next visit shows the last figures at once while fresh ones load. */
 export default function MobilePartyBills({ accountId, userId, name }: { accountId: number; userId: string; name: string | null }) {
-    const key = userScopedKey(`m:outstanding:${accountId}`, userId);
-    const [data, setData] = useState<LedgerOutstanding | null>(() => readCache<LedgerOutstanding>(key)?.data ?? null);
+    const key = mobileKey(`party:${accountId}`, userId);
+    const [data, setData] = useState<PartyDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -23,40 +38,54 @@ export default function MobilePartyBills({ accountId, userId, name }: { accountI
         setLoading(true);
         setError(null);
         try {
-            const { data: fresh } = await axios.get<LedgerOutstanding>(`/api/accountancy/outstandings/${accountId}`);
+            const { data: fresh } = await axios.get<PartyDetail>(`/api/mobile/parties/${accountId}`);
             setData(fresh);
-            writeCache(key, fresh, new Date().toISOString());
+            writeMobileCache(key, fresh, userId);
         } catch (e) {
-            setError(extractApiError(e, "Could not load bills."));
+            setError(extractApiError(e, "Could not load this party."));
         } finally {
             setLoading(false);
         }
-    }, [accountId, key]);
+    }, [accountId, key, userId]);
 
-    useEffect(() => { void load(); }, [load]);
+    useEffect(() => {
+        // Read in the effect, not the first render — see useMobileList.
+        const cached = readMobileCache<PartyDetail>(key);
+        if (cached) setData(cached);
+        void load();
+    }, [key, load]);
 
-    // A bill's `outstanding` is unsigned; `side` says which way it runs.
-    const net = data ? data.bills.reduce((s, b) => s + b.side * b.outstanding, 0) : 0;
-    const total = balanceLabel(net);
+    const billsNet = data ? data.bills.reduce((s, b) => s + b.side * b.outstanding, 0) : 0;
+    // Money received / paid on account — moves the balance, settles no bill.
+    const onAccount = data ? Math.round((data.balance - billsNet) * 100) / 100 : 0;
+    const balance = balanceLabel(data?.balance ?? 0);
 
     return (
         <>
-            <MobileHeader title={data?.accountName ?? name ?? "Party"} back="/m/parties" onRefresh={() => void load()} busy={loading} />
+            <MobileHeader title={data?.name ?? name ?? "Party"} back="/m/parties" onRefresh={() => void load()} busy={loading} />
 
             {error && <p className="px-3 pt-2 text-sm text-destructive">{error}</p>}
 
             {data && (
                 <>
-                    <div className="border-b px-3 py-4">
-                        <p className="text-xs text-muted-foreground">Unpaid bills ({data.bills.length})</p>
-                        <p className={`text-2xl font-semibold ${total.tone}`}>{total.text}</p>
+                    <div className="space-y-1 border-b px-3 py-4">
+                        <p className="text-xs text-muted-foreground">Balance</p>
+                        <p className={`text-2xl font-semibold ${balance.tone}`}>{balance.text}</p>
+                        <p className="text-sm text-muted-foreground">
+                            Unpaid bills ({data.bills.length}): {formatInr(Math.abs(billsNet))}
+                        </p>
+                        {onAccount !== 0 && (
+                            <p className="text-sm text-muted-foreground">
+                                Not against any bill: {formatInr(Math.abs(onAccount))} {onAccount > 0 ? "they owe" : "we owe"}
+                            </p>
+                        )}
                     </div>
                     {data.bills.length === 0 ? (
                         <p className="p-6 text-center text-sm text-muted-foreground">No unpaid bills.</p>
                     ) : (
                         <ul className="divide-y">
                             {data.bills.map((b) => (
-                                <li key={`${b.kind}:${b.id}`} className="flex items-start gap-3 px-3 py-3">
+                                <li key={b.key} className="flex items-start gap-3 px-3 py-3">
                                     <div className="min-w-0 flex-1">
                                         <p className="font-medium">{b.ref}</p>
                                         <p className="text-xs text-muted-foreground">

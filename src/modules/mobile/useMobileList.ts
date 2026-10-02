@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
-import { readCache, userScopedKey, writeCache } from "@/shared/lib/browser/pollCache";
+import { mobileKey, readMobileCache, writeMobileCache } from "./mobileCache";
 
 type Page<T> = { items: T[]; hasMore: boolean };
 
@@ -15,12 +15,16 @@ type Page<T> = { items: T[]; hasMore: boolean };
  * reopening the app or repeating a search shows the last answer at once and
  * refreshes underneath — no blank screen on a weak signal. "More" pages are not
  * cached; they are a scroll away from the cached first page.
+ *
+ * The saved copy is read in an effect, never in the first render: the server has
+ * no localStorage, so a first render that used it would not match the server's
+ * HTML (a hydration error).
  */
 export function useMobileList<T>(endpoint: string, query: string, userId: string | number) {
     const q = useDebouncedValue(query.trim(), 300);
-    const key = userScopedKey(`m:${endpoint}:${q.toLowerCase()}`, userId);
+    const key = mobileKey(`${endpoint}:${q.toLowerCase()}`, userId);
 
-    const [items, setItems] = useState<T[]>(() => readCache<Page<T>>(key)?.data.items ?? []);
+    const [items, setItems] = useState<T[]>([]);
     const [hasMore, setHasMore] = useState(false);
     const [page, setPage] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -37,19 +41,23 @@ export function useMobileList<T>(endpoint: string, query: string, userId: string
             setItems((was) => (pageNo === 0 ? data.items : [...was, ...data.items]));
             setHasMore(data.hasMore);
             setPage(pageNo);
-            if (pageNo === 0) writeCache(asked, data, new Date().toISOString());
+            if (pageNo === 0) writeMobileCache(asked, data, userId);
         } catch (e) {
             if (latest.current === asked) setError(extractApiError(e, "Could not load. Showing the last saved list."));
         } finally {
             if (latest.current === asked) setLoading(false);
         }
-    }, [endpoint, key, q]);
+    }, [endpoint, key, q, userId]);
 
     useEffect(() => {
         latest.current = key;
-        const cached = readCache<Page<T>>(key);
-        setItems(cached?.data.items ?? []);
-        setHasMore(cached?.data.hasMore ?? false);
+        // A saved answer for this search shows at once; without one, the previous
+        // search's rows stay up until the new ones land rather than blanking.
+        const cached = readMobileCache<Page<T>>(key);
+        if (cached) {
+            setItems(cached.items);
+            setHasMore(cached.hasMore);
+        }
         void load(0);
     }, [key, load]);
 

@@ -4,8 +4,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { hasPermission, requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
-import { aggregateClosingAsOf, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
-import { round2 } from "@/shared/lib/format/moneyInr";
+import { partyBalances } from "@/modules/mobile/partyBalances";
 
 const PAGE_SIZE = 30;
 
@@ -17,10 +16,8 @@ const phones = { select: { phone: true }, orderBy: [{ isPrimary: "desc" as const
 // accounts) matching the name or a phone number, each with its balance summed
 // from the ledger — a bounded set, so no reliance on the Account.balance cache.
 //
-// `balance` is signed the party's way round: positive = they owe us (Dr),
-// negative = we owe them (Cr), whatever group the ledger sits in. Unpaid bills
-// come from /api/accountancy/outstandings/[accountId], the engine the
-// Receivables report uses.
+// `balance` is signed the party's way round (see partyBalances). One party's
+// balance and unpaid bills: /api/mobile/parties/[accountId].
 //
 // Suppliers are left out unless the person holds "Show suppliers (creditors)",
 // the same rule the Contacts lists follow.
@@ -75,21 +72,16 @@ export async function GET(req: NextRequest) {
         });
 
         const shown = rows.slice(0, PAGE_SIZE);
-        const ids = shown.map((r) => r.id);
-        const nbMap = await loadNormalBalanceMap(ids);
-        const closing = await aggregateClosingAsOf(null, nbMap, ids);
+        const balances = await partyBalances(shown.map((r) => r.id));
 
         return NextResponse.json({
-            items: shown.map((r) => {
-                const raw = closing.get(r.id) ?? 0;
-                return {
-                    accountId: r.id,
-                    name: r.name,
-                    group: r.group?.name ?? null,
-                    phone: r.person?.phones[0]?.phone ?? r.company?.phones[0]?.phone ?? null,
-                    balance: round2(nbMap.get(r.id) === "CREDIT" ? -raw : raw),
-                };
-            }),
+            items: shown.map((r) => ({
+                accountId: r.id,
+                name: r.name,
+                group: r.group?.name ?? null,
+                phone: r.person?.phones[0]?.phone ?? r.company?.phones[0]?.phone ?? null,
+                balance: balances.get(r.id) ?? 0,
+            })),
             hasMore: rows.length > PAGE_SIZE,
         });
     } catch (e) {
