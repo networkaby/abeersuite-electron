@@ -46,10 +46,11 @@ export type TenderSplit = {
     paymentAccountId: number | null;
     amount: number;
     reference: string;
-    /** UPI on a splitting method: take it as ONE payment anyway (carries MDR). */
+    /** UPI on a splitting method: take the rest as ONE payment anyway (carries MDR). */
     oneGo?: boolean;
-    /** UPI parts the cashier has ticked as received, in order (0 = none yet). */
-    received?: number;
+    /** UPI parts already received, in order — bank credits, so fixed: the row's
+     *  amount never drops below their sum, and its method cannot change. */
+    receivedParts?: number[];
 };
 export type TenderAccount = { id: number; channel: string; label: string; vpa: string | null; defaultVisible?: boolean };
 
@@ -77,25 +78,20 @@ export function seedTenderSplit(accounts: TenderAccount[], remaining = 0, includ
 }
 
 export function TenderSplitInput({
-    accounts, value, onChange, onShare, includeCash = false, onEnter, onFill, partsOf, canSplit,
+    accounts, value, onChange, onShare, includeCash = false, onEnter, onFill,
 }: {
     accounts: TenderAccount[];
     value: TenderSplit[];
     onChange: (v: TenderSplit[]) => void;
     /** When provided, UPI/gateway rows show a Share button instead of the ref
-     *  input. `amount` is set when the row is taken in parts — the part due now. */
-    onShare?: (acct: TenderAccount, amount?: number) => void;
+     *  input. The row comes along so a UPI taken in parts shares the part due. */
+    onShare?: (acct: TenderAccount, row: TenderSplit) => void;
     /** Add a "Cash (drawer)" option (paymentAccountId = null) to the picker. */
     includeCash?: boolean;
     onEnter?: (e: React.KeyboardEvent) => void;
     /** When provided, each row shows a ✓ that fills it with the remaining unpaid
      *  balance (same helper as the Cash row). Omitted where there is no bill total. */
     onFill?: (s: TenderSplit) => void;
-    /** The payments a row is taken as (paymentMdr.ts) — more than one = UPI parts,
-     *  shown under the row with a "received" tick each. Omitted = no parts. */
-    partsOf?: (s: TenderSplit) => number[];
-    /** Whether a row's method would split it — offers "Split" on a one-payment row. */
-    canSplit?: (s: TenderSplit) => boolean;
 }) {
     const byId = new Map(accounts.map((a) => [a.id, a]));
     const patch = (id: string, p: Partial<TenderSplit>) => onChange(value.map((x) => (x.id === id ? { ...x, ...p } : x)));
@@ -106,19 +102,16 @@ export function TenderSplitInput({
             {value.map((s) => {
                 const acct = s.paymentAccountId == null ? null : byId.get(s.paymentAccountId);
                 const canShare = !!onShare && !!acct?.vpa && (acct.channel === "UPI" || acct.channel === "GATEWAY");
-                const parts = partsOf?.(s) ?? [];
-                const inParts = parts.length > 1;
-                const received = inParts ? Math.min(s.received ?? 0, parts.length) : 0;
-                // Once a part is in, the amount is fixed — the parts already paid
-                // were cut from it.
-                const locked = received > 0;
+                // UPI parts already in are bank credits: the method stays, the row
+                // stays, and the amount cannot go below them (UpiPartsPanel).
+                const receivedSum = (s.receivedParts ?? []).reduce((sum, p) => sum + p, 0);
+                const locked = receivedSum > 0;
                 return (
-                    <React.Fragment key={s.id}>
-                    <div className="grid grid-cols-[170px_1fr_1fr_auto] items-center gap-2">
+                    <div key={s.id} className="grid grid-cols-[170px_1fr_1fr_auto] items-center gap-2">
                         <Select
                             value={s.paymentAccountId == null ? CASH : String(s.paymentAccountId)}
                             disabled={locked}
-                            onValueChange={(v) => patch(s.id, { paymentAccountId: v === CASH ? null : Number(v), received: 0 })}
+                            onValueChange={(v) => patch(s.id, { paymentAccountId: v === CASH ? null : Number(v) })}
                         >
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
@@ -135,7 +128,7 @@ export function TenderSplitInput({
                             </SelectContent>
                         </Select>
                         <div className="flex items-center gap-1">
-                            {onFill && !locked && (
+                            {onFill && (
                                 <button
                                     type="button"
                                     title="Fill remaining amount here"
@@ -148,8 +141,8 @@ export function TenderSplitInput({
                             <TenderAmountInput
                                 amount={s.amount}
                                 onAmount={(amount) => patch(s.id, { amount })}
-                                readOnly={locked}
-                                title={locked ? "Parts already received — undo them to change the amount" : undefined}
+                                onBlur={() => { if (s.amount < receivedSum) patch(s.id, { amount: receivedSum }); }}
+                                title={locked ? `₹${receivedSum.toLocaleString("en-IN")} already received by UPI — the amount cannot go below it` : undefined}
                                 data-tender-field
                                 data-tender-amount
                                 data-tender-split={s.id}
@@ -164,7 +157,7 @@ export function TenderSplitInput({
                                 variant="outline"
                                 size="sm"
                                 title={`Share ${acct?.label} QR with the customer`}
-                                onClick={() => onShare!(acct!, inParts && received < parts.length ? parts[received] : undefined)}
+                                onClick={() => onShare!(acct!, s)}
                             >
                                 <QrCode size={14} /> Share
                             </Button>
@@ -182,82 +175,8 @@ export function TenderSplitInput({
                             <Trash2 size={12} className="text-destructive" />
                         </Button>
                     </div>
-                    {inParts && (
-                        <TenderParts
-                            parts={parts}
-                            received={received}
-                            onReceived={(n) => patch(s.id, { received: n })}
-                            onOneGo={() => patch(s.id, { oneGo: true, received: 0 })}
-                        />
-                    )}
-                    {!inParts && s.oneGo && canSplit?.({ ...s, oneGo: false }) && (
-                        <div className="pl-[178px] text-[11px] text-muted-foreground">
-                            One UPI payment — the bank&apos;s charge applies.{" "}
-                            <button
-                                type="button"
-                                className="font-medium text-primary underline-offset-2 hover:underline"
-                                onClick={() => patch(s.id, { oneGo: false, received: 0 })}
-                            >
-                                Split into parts
-                            </button>
-                        </div>
-                    )}
-                    </React.Fragment>
                 );
             })}
         </>
-    );
-}
-
-/// The parts a UPI row is taken in, under the row: each part's amount, the one due
-/// now highlighted (the customer display shows its QR), a tick for each part as
-/// the money comes in, Undo, and "One payment" before anything is received.
-function TenderParts({ parts, received, onReceived, onOneGo }: {
-    parts: number[];
-    received: number;
-    onReceived: (n: number) => void;
-    onOneGo: () => void;
-}) {
-    const done = received >= parts.length;
-    return (
-        <div className="space-y-1 pl-[178px]">
-            <div className="flex flex-wrap gap-1">
-                {parts.map((p, i) => (
-                    <span
-                        key={i}
-                        className={`rounded border px-1.5 py-0.5 text-[11px] tabular-nums ${
-                            i < received
-                                ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300"
-                                : i === received
-                                  ? "border-primary bg-primary/10 font-semibold text-foreground"
-                                  : "border-border text-muted-foreground"
-                        }`}
-                    >
-                        {i < received && <Check size={10} className="mr-0.5 inline" />}
-                        {i + 1}/{parts.length} · ₹{p.toLocaleString("en-IN")}
-                    </span>
-                ))}
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-                {!done && (
-                    <Button type="button" size="sm" className="h-7 text-xs" onClick={() => onReceived(received + 1)}>
-                        <Check size={12} /> Part {received + 1} received
-                    </Button>
-                )}
-                {received > 0 && (
-                    <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onReceived(received - 1)}>
-                        Undo
-                    </Button>
-                )}
-                {received === 0 && (
-                    <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={onOneGo}>
-                        One payment
-                    </Button>
-                )}
-                <span className="text-[11px] text-muted-foreground">
-                    {done ? "All parts received." : `Customer scans part ${received + 1} of ${parts.length}.`}
-                </span>
-            </div>
-        </div>
     );
 }

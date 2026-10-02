@@ -30,6 +30,7 @@ import { resolveTierTitles } from "@/shared/lib/pricing";
 import { groupRebatesExcl, groupStartPricePaise, rebatedRate, ruleForGroup } from "@/modules/pricing-strategy/lib/groupPricing";
 import { mdrRecovery, tenderPayAmounts, upliftedRates, type UpliftLine } from "@/modules/pos/lib/paymentMdr";
 import { CHANNEL_LABEL } from "@/modules/pos/lib/counterTenders";
+import { type UpiPanelState } from "@/modules/pos/components/UpiPartsPanel";
 import { usePosDraftStore } from "@/store/posDraftStore";
 import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type OnTopHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
 import { searchProducts, readCachedProducts, syncProducts } from "@/shared/lib/inventory";
@@ -323,9 +324,10 @@ export function usePosBilling(opts: {
                 const cashNet = Math.max(0, pay.cashTendered - pay.cashReturn);
                 if (splitId != null) {
                     const row = splits.find((x) => x.id === splitId);
-                    // A row whose UPI parts are already coming in keeps its amount.
-                    if (row && !(row.received ?? 0)) {
-                        const remaining = coverAmountRef.current(splits, splitId, cashNet);
+                    if (row) {
+                        // Never below the UPI parts already received on the row.
+                        const inAlready = (row.receivedParts ?? []).reduce((sum, p) => sum + p, 0);
+                        const remaining = Math.max(inAlready, coverAmountRef.current(splits, splitId, cashNet));
                         setSplits((prev) => prev.map((x) => (x.id === splitId ? { ...x, amount: remaining } : x)));
                     }
                 } else {
@@ -635,13 +637,16 @@ export function usePosBilling(opts: {
             fixed: l.kind === "service" || lineProtected(l),
         }))
         : null;
-    // The payments one checkout row is taken as — its UPI parts, or itself.
+    // The payments one checkout row is taken as — the UPI parts already received,
+    // then the rest in fresh parts (or as one payment), or simply the row itself.
+    const receivedOf = (s: TenderSplit): number[] => s.receivedParts ?? [];
     const partsOf = (s: TenderSplit): number[] => {
         const a = payAccountById.get(s.paymentAccountId ?? -1);
-        return tenderPayAmounts(s.amount, a?.mdr, opts.paymentMdr ? a?.split : null, !!s.oneGo);
+        return tenderPayAmounts(s.amount, a?.mdr, opts.paymentMdr ? a?.split : null, !!s.oneGo, receivedOf(s));
     };
-    // Whether a row's method would take it in parts (offers "Split" on a one-payment row).
-    const canSplit = (s: TenderSplit): boolean => opts.paymentMdr === true && partsOf({ ...s, oneGo: false }).length > 1;
+    // Whether the row's method would take its rest in more than one part.
+    const canSplit = (s: TenderSplit): boolean =>
+        opts.paymentMdr === true && partsOf({ ...s, oneGo: false }).length > receivedOf(s).length + 1;
     // Bank charge a set of checkout rows costs (whole rupees). Cash never costs any.
     const mdrOf = (rows: TenderSplit[]): number => !mdrLines ? 0 : mdrRecovery(rows.flatMap((s) => {
         const rule = payAccountById.get(s.paymentAccountId ?? -1)?.mdr;
@@ -726,8 +731,10 @@ export function usePosBilling(opts: {
         }
         return amount;
     };
-    const fillAmountFor = (s: TenderSplit) =>
-        coverAmount(splits, s.id, Math.max(0, pay.cashTendered - pay.cashReturn));
+    const fillAmountFor = (s: TenderSplit) => Math.max(
+        receivedOf(s).reduce((sum, p) => sum + p, 0),
+        coverAmount(splits.map((x) => (x.id === s.id ? s : x)), s.id, Math.max(0, pay.cashTendered - pay.cashReturn)),
+    );
     // Refresh the refs the early-bound shortcuts read (they bind above this block).
     useEffect(() => {
         payableTotalRef.current = payableTotal;
@@ -1414,7 +1421,7 @@ export function usePosBilling(opts: {
                 // All on option-2 (first account row, usually UPI); adds the
                 // row when the counter has accounts but none was pre-shown.
                 // UPI parts already coming in → leave the payment rows alone.
-                if (splits.some((s) => (s.received ?? 0) > 0)) return;
+                if (splits.some((s) => receivedOf(s).length > 0)) return;
                 setPay({ cashTendered: 0, cashReturn: 0 });
                 setSplits((prev) => {
                     const rows = prev.length > 0
@@ -1604,29 +1611,81 @@ export function usePosBilling(opts: {
     // Money math derived from pay — Cash net = tendered − return.
     const cashNet = Math.max(0, pay.cashTendered - pay.cashReturn);
     const splitsSum = splits.reduce((s, x) => s + x.amount, 0);
-    // A UPI row taken in parts: the part due now (the first not yet received) —
-    // the customer display shows only its QR, one part at a time.
+    // A UPI row is TRACKED once it is taken in parts or any part of it is in:
+    // every payment of it is then ticked as received, one at a time.
     const isUpiRow = (x: TenderSplit) => payAccountById.get(x.paymentAccountId ?? -1)?.channel === "UPI";
+    const isTracked = (x: TenderSplit) => receivedOf(x).length > 0 || partsOf(x).length > 1;
+    // The payment due now on the first tracked UPI row — the customer display
+    // shows only its QR, one part at a time.
     const upiPart = (() => {
         for (const x of splits) {
-            if (!isUpiRow(x)) continue;
+            if (!isUpiRow(x) || !isTracked(x)) continue;
             const parts = partsOf(x);
-            const received = x.received ?? 0;
-            if (parts.length > 1 && received < parts.length) {
+            const received = receivedOf(x).length;
+            if (received < parts.length) {
                 return { amount: parts[received], index: received + 1, count: parts.length, vpa: payAccountById.get(x.paymentAccountId ?? -1)?.vpa ?? null };
             }
         }
         return null;
     })();
     // UPI parts not all ticked as received yet — Confirm waits for them.
-    const upiPartsPending = splits.some((x) => {
-        const parts = partsOf(x);
-        return parts.length > 1 && (x.received ?? 0) < parts.length;
-    });
+    const upiPartsPending = splits.some((x) => isTracked(x) && receivedOf(x).length < partsOf(x).length);
+
+    // The "UPI in parts" panel beside the checkout (UpiPartsPanel) — for the
+    // first UPI row that is tracked, or that one scan would take above the free
+    // limit (so the cashier can still choose parts). New sale only.
+    const upiPanel: UpiPanelState | null = (() => {
+        if (!opts.paymentMdr || !checkoutOpen) return null;
+        const cash = Math.max(0, pay.cashTendered - pay.cashReturn);
+        for (const x of splits) {
+            if (!isUpiRow(x) || x.amount <= 0) continue;
+            if (!isTracked(x) && !(x.oneGo && canSplit(x))) continue;
+            const received = receivedOf(x);
+            const parts = partsOf(x);
+            const amountAs = (oneGo: boolean) => Math.max(
+                received.reduce((sum, p) => sum + p, 0),
+                coverAmount(splits.map((y) => (y.id === x.id ? { ...y, oneGo } : y)), x.id, cash),
+            );
+            return {
+                rowId: x.id,
+                label: payAccountById.get(x.paymentAccountId ?? -1)?.label ?? "UPI",
+                received,
+                pending: parts.slice(received.length),
+                oneGo: !!x.oneGo,
+                inPartsAmount: amountAs(false),
+                oneScanAmount: amountAs(true),
+            };
+        }
+        return null;
+    })();
+    const patchRow = (id: string, next: (x: TenderSplit) => TenderSplit) =>
+        setSplits((prev) => prev.map((x) => (x.id === id ? next(x) : x)));
+    // Tick the payment due now as received — its amount is fixed from here on.
+    const tickUpiPart = () => {
+        if (!upiPanel || upiPanel.pending.length === 0) return;
+        const due = upiPanel.pending[0];
+        patchRow(upiPanel.rowId, (x) => ({ ...x, receivedParts: [...receivedOf(x), due] }));
+    };
+    const undoUpiPart = () => {
+        if (!upiPanel) return;
+        patchRow(upiPanel.rowId, (x) => ({ ...x, receivedParts: receivedOf(x).slice(0, -1) }));
+    };
+    // Parts ⇄ one scan. The row moves to what that choice comes to, so the bill
+    // stays covered (one scan carries the bank charge in the price).
+    const setUpiOneGo = (oneGo: boolean) => {
+        if (!upiPanel) return;
+        const amount = oneGo ? upiPanel.oneScanAmount : upiPanel.inPartsAmount;
+        patchRow(upiPanel.rowId, (x) => ({ ...x, oneGo, amount }));
+    };
+    // The payment due now on a row — what its Share QR asks for.
+    const duePartOf = (s: TenderSplit): number | null => {
+        if (!isTracked(s)) return null;
+        return partsOf(s)[receivedOf(s).length] ?? null;
+    };
     // Total entered against UPI-channel accounts — drives the customer-display QR.
     // With parts, only the part due now; a row whose parts are all in shows none.
     const upiEntered = upiPart ? upiPart.amount : splits.reduce(
-        (s, x) => s + (isUpiRow(x) && partsOf(x).length <= 1 ? x.amount : 0),
+        (s, x) => s + (isUpiRow(x) && !isTracked(x) ? x.amount : 0),
         0,
     );
     // VPA of the UPI account the cashier is collecting into — the per-counter payee
@@ -1736,7 +1795,8 @@ export function usePosBilling(opts: {
         refreshActiveShift, shiftOpenedAt,
         payAccounts, payAccountById,
         // payment-method MDR + UPI parts (paymentMdr.ts)
-        partsOf, canSplit, fillAmountFor, methodTotals, upiPartsPending,
+        partsOf, fillAmountFor, methodTotals, upiPartsPending,
+        upiPanel, tickUpiPart, undoUpiPart, setUpiOneGo, duePartOf,
         mdrRecovery: opts.paymentMdr ? mdrRecoveryNow : undefined,
         // bill math
         // lineRows / subtotal / tax / effDiscountAmount are the BILL's figures —

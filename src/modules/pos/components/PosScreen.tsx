@@ -16,6 +16,7 @@ import { ReceiptIndianRupee } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PaymentLinkDialog } from "@/modules/pos/components/PaymentLinkDialog";
 import { CheckoutDialog } from "@/modules/pos/components/CheckoutDialog";
+import { UpiPartsPanel } from "@/modules/pos/components/UpiPartsPanel";
 import { ClearBillDialog } from "@/modules/pos/components/ClearBillDialog";
 import { PosScreenShell } from "@/modules/pos/components/PosScreenShell";
 import { movesCash } from "@/modules/pos/components/TenderEntry";
@@ -577,13 +578,19 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 setSplits={b.setSplits}
                 submitting={b.submitting}
                 onConfirm={generateInvoice}
-                onShare={(a, amount) => { setShareProvider("upi"); setShareAmount(amount ?? null); b.setShareVpa(a.vpa); b.setShareOpen(true); }}
-                methodTotals={b.methodTotals}
+                onShare={(a, row) => { setShareProvider("upi"); setShareAmount(b.duePartOf(row)); b.setShareVpa(a.vpa); b.setShareOpen(true); }}
                 fillAmountFor={b.fillAmountFor}
-                partsOf={b.partsOf}
-                canSplit={b.canSplit}
+                // UPI parts still to come in — the panel beside says so.
                 confirmDisabled={b.upiPartsPending}
-                blockedNote={b.upiPartsPending ? "Tick each UPI part as it is received to confirm." : null}
+                sidePanel={b.upiPanel ? (
+                    <UpiPartsPanel
+                        panel={b.upiPanel}
+                        onReceived={b.tickUpiPart}
+                        onUndo={b.undoUpiPart}
+                        onOneGo={() => b.setUpiOneGo(true)}
+                        onSplit={() => b.setUpiOneGo(false)}
+                    />
+                ) : undefined}
             />
 
             {/* ── Mid-bill clear confirmation (Shift+Esc) ────────────────────── */}

@@ -22,6 +22,10 @@
 //              edit. Only the title and the two CTAs; the caller names them.
 //              The dialog itself takes Enter / Ctrl+Enter (no amount field to
 //              hang them on), so it confirms exactly like the Sale.
+//
+// `sidePanel` opens beside the body, widening the dialog to the right instead of
+// covering it — the UPI-in-parts panel (UpiPartsPanel), so the cashier can still
+// move money between the rows while the customer scans.
 
 import React from "react";
 import {
@@ -50,7 +54,7 @@ export function CheckoutDialog({
     submitting, onConfirm, onShare,
     topSlot, bottomSlot, confirmDisabled = false,
     title, confirmLabel, confirmPrintLabel,
-    methodTotals, blockedNote, fillAmountFor, partsOf, canSplit,
+    fillAmountFor, sidePanel,
 }: {
     open: boolean;
     onOpenChange: (v: boolean) => void;
@@ -85,15 +89,7 @@ export function CheckoutDialog({
     // Actions
     submitting: boolean;
     onConfirm: (printAfter: boolean) => void;
-    onShare?: (acct: TenderAccount, amount?: number) => void;
-    /** Sale: what the whole bill comes to by each way of paying, for the cashier
-     *  to tell the customer (payment-method MDR — usePosBilling). */
-    methodTotals?: { label: string; amount: number; note?: string }[];
-    /** Why Confirm is held (e.g. UPI parts not all received) — shown by the CTAs. */
-    blockedNote?: string | null;
-    fillAmountFor?: (s: TenderSplit) => number;
-    partsOf?: (s: TenderSplit) => number[];
-    canSplit?: (s: TenderSplit) => boolean;
+    onShare?: (acct: TenderAccount, row: TenderSplit) => void;
     // "receipt" mode chrome — a party picker above the tenders and a note below.
     topSlot?: React.ReactNode;
     bottomSlot?: React.ReactNode;
@@ -102,6 +98,11 @@ export function CheckoutDialog({
     title?: string;
     confirmLabel?: string;
     confirmPrintLabel?: string;
+    /** The amount a row needs to settle the bill when the bill moves with it
+     *  (payment-method MDR — usePosBilling). Absent = bill − everything else. */
+    fillAmountFor?: (s: TenderSplit) => number;
+    /** Opens beside the body (the dialog widens to the right) — never over it. */
+    sidePanel?: React.ReactNode;
 }) {
     const isSale = mode === "sale";
     const isOrder = mode === "order";
@@ -123,7 +124,12 @@ export function CheckoutDialog({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                className="sm:max-w-lg"
+                // With the side panel the dialog grows to the RIGHT: its left edge
+                // stays where the plain checkout's was (half of max-w-lg left of
+                // centre), pulled back only when the screen is too narrow for both.
+                className={sidePanel
+                    ? "sm:left-[clamp(1rem,calc(50%-16rem),calc(100%-55rem))] sm:max-w-[min(54rem,calc(100%-2rem))] sm:translate-x-0"
+                    : "sm:max-w-lg"}
                 // No amount field in "confirm" mode — the dialog takes the keys.
                 onKeyDown={isConfirm ? enterToSubmit : undefined}
             >
@@ -134,6 +140,7 @@ export function CheckoutDialog({
                     </DialogTitle>
                 </DialogHeader>
 
+                <div className={sidePanel ? "grid items-start gap-4 sm:grid-cols-[minmax(0,1fr)_19rem]" : undefined}>
                 <div className="space-y-3">
                     {/* Receipt: the party picker sits where the bill header would be. */}
                     {isReceipt && topSlot}
@@ -153,19 +160,6 @@ export function CheckoutDialog({
                             <div className={`font-semibold ${onCredit > 0 ? "text-amber-600" : "text-emerald-600"}`}>{formatInr(onCredit)}</div>
                         </div>
                     </div>
-                    )}
-
-                    {/* By way of paying — the totals the cashier reads out. */}
-                    {isSale && methodTotals && methodTotals.length > 1 && (
-                        <div className="flex flex-wrap gap-x-3 gap-y-1 rounded-md border border-border px-3 py-2 text-xs">
-                            {methodTotals.map((m) => (
-                                <span key={`${m.label}·${m.note ?? ""}`} className="whitespace-nowrap">
-                                    <span className="text-muted-foreground">{m.label}</span>{" "}
-                                    <span className="font-semibold tabular-nums">{formatInr(m.amount)}</span>
-                                    {m.note && <span className="text-muted-foreground"> ({m.note})</span>}
-                                </span>
-                            ))}
-                        </div>
                     )}
 
                     {!isReceipt && !isConfirm && giftCardApplied > 0.005 && (
@@ -218,8 +212,6 @@ export function CheckoutDialog({
                             onShare={onShare}
                             onEnter={enterToSubmit}
                             fillAmountFor={fillAmountFor}
-                            partsOf={partsOf}
-                            canSplit={canSplit}
                         />
                         )}
 
@@ -285,12 +277,6 @@ export function CheckoutDialog({
                             </div>
                         )}
 
-                        {blockedNote && (
-                            <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
-                                <AlertCircle size={12} className="shrink-0" /> {blockedNote}
-                            </p>
-                        )}
-
                         {/* Inline confirm CTAs — final amount + actions sit close to the payment-line entry */}
                         <SavePrintButtons
                             className="pt-1"
@@ -304,6 +290,8 @@ export function CheckoutDialog({
                             title={underpayTitle}
                         />
                     </div>
+                </div>
+                {sidePanel}
                 </div>
 
                 <DialogFooter>

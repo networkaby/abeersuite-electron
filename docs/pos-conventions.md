@@ -263,8 +263,10 @@ When option-2's method carries a bank charge (MDR — Settings → Payment
 Methods), the amount `F10` puts there is the bill **at that method's price**:
 the line prices rise toward their tags by the charge, so the amount is solved
 for that row ([`paymentMdr.ts`](../src/modules/pos/lib/paymentMdr.ts)). A UPI
-row on a splitting method shows its parts underneath, one QR at a time. Once a
-part is ticked as received, `F10` leaves the payment rows alone.
+amount above the free limit on a splitting method opens the **UPI in parts**
+panel beside the checkout ([`UpiPartsPanel`](../src/modules/pos/components/UpiPartsPanel.tsx))
+— one QR at a time, a tick per part. Once a part is ticked as received, `F10`
+leaves the payment rows alone.
 
 ### `F9` — Quick cash (option-1 / Cash)
 
@@ -316,7 +318,7 @@ role (focus the scan box).
 
 On a line whose method carries a bank charge (MDR), "the rest" is solved with
 the bill at that method's price — the same as the line's ✓ helper. A UPI line
-whose parts are already coming in keeps its amount.
+never drops below the parts already received on it.
 
 ### `↑` / `↓` inside checkout — jump between payment lines
 
