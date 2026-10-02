@@ -59,6 +59,8 @@ import { touchPosShift } from "@/modules/pos/lib/touchShift";
 import { convertSourceError } from "@/modules/pos/lib/convertSource";
 import { loadPartyPricing } from "@/modules/pricing-strategy/lib/groupPricingServer";
 import { groupRebatesExcl, rebatedRate, ruleForGroup } from "@/modules/pricing-strategy/lib/groupPricing";
+import { payAccountMdr } from "@/modules/pos/lib/paymentGateways";
+import { mdrRecovery, upliftedRates } from "@/modules/pos/lib/paymentMdr";
 // Note: branch context comes from the cashier's active shift, NOT from the
 // session cookie. This allows multiple browsers / users to bill in parallel
 // from different counters without their active-branch cookie interfering.
@@ -185,6 +187,12 @@ const createSchema = z.object({
     // Convert-to-sale: the source estimate/order this POS sale was rung up from.
     // Stored as refVoucherId so the source flips to "Converted".
     sourceVoucherId: z.number().int().positive().optional(),
+    // Bank charge (MDR, whole ₹) the POS worked out from these payments with the
+    // method rules it loaded (paymentMdr.ts). Absent = a client that does not do
+    // MDR, so none is applied; present but different from the server's own figure
+    // = the rules changed under the counter → refused, so the bill is never
+    // silently short.
+    mdrRecovery: z.number().min(0).optional(),
     // Repair ticket this bill was raised from (Generate Bill on the ticket). The
     // voucher is linked to it (VoucherLink kind=TICKET) so it shows in the
     // ticket's Invoices panel, and a timeline entry is written on the ticket.
@@ -225,7 +233,7 @@ export async function POST(req: Request) {
                         tillAccountId: true,
                         paymentAccounts: {
                             where: { isActive: true },
-                            select: { id: true, channel: true, accountId: true, label: true },
+                            select: { id: true, channel: true, accountId: true, label: true, gatewayId: true },
                         },
                     },
                 },
@@ -666,13 +674,45 @@ export async function POST(req: Request) {
             rule: ruleForGroup(groupPricing, tax.get(l.productId)?.groupId ?? null),
         })), billDiscountIncl);
     }
+    // ── Payment-method MDR (Settings → Payment Methods) ─────────────────────
+    // What the counter rang is the CASH price. A payment on a method with a bank
+    // charge (card; UPI above its free limit) raises the line rates toward each
+    // line's public tag by that charge, so the customer's "Today's discount"
+    // comes out smaller — never past a tag; no room left and the shop bears it.
+    // Worked out last, after the rebate, and by the same paymentMdr.ts helpers
+    // the POS screen runs on the same payments, so the total collected is the
+    // total posted. A UPI payment taken in parts arrives as one payment line per
+    // part, each under the free limit, so it costs nothing here.
+    // A cash-only bill, or a client that does not do MDR, never reads the methods.
+    const methodRows = body.mdrRecovery !== undefined && body.payments.some((p) => p.paymentAccountId != null)
+        ? await prisma.paymentGateway.findMany({ select: { id: true, provider: true, configJson: true } })
+        : [];
+    const mdrRecoveryRs = mdrRecovery(body.payments.flatMap((p) => {
+        const acct = p.paymentAccountId == null ? undefined : payAcctById.get(p.paymentAccountId);
+        return acct ? [{ amount: p.amount, rule: payAccountMdr(acct, methodRows).mdr }] : [];
+    }));
+    if (body.mdrRecovery !== undefined && Math.abs(body.mdrRecovery - mdrRecoveryRs) > 0.005) {
+        return NextResponse.json(
+            { error: "The bank-charge (MDR) settings changed since this counter loaded them. Close checkout and open it again.", code: "MDR_RULES_CHANGED" },
+            { status: 409 },
+        );
+    }
+    const lineRates = mdrRecoveryRs > 0
+        ? upliftedRates(body.lines.map((l, i) => ({
+            quantity: l.quantity,
+            rate: rebatedRate(l.unitPrice, l.quantity, lineRebateExcl[i]),
+            taxRate: l.taxRate,
+            tagPaise: l.savedSalePricePaise ?? l.mrpPaise ?? null,
+            fixed: protectedProductIds.has(l.productId),
+        })), mdrRecoveryRs)
+        : null;
     const computedLines: Array<{
         productId: number; description: string; note: string | null; quantity: number; freeQty: number;
         unitPrice: number; taxRate: number; discountAmt: number; discountPct: number;
         taxAmount: number; amount: number; mrpPaise: number | null; savedSalePricePaise: number | null;
     }> = body.lines.map((l, i) => {
         const discountAmt = round2(lineTierDiscAfterCoupon[i]);
-        const unitPrice = rebatedRate(l.unitPrice, l.quantity, lineRebateExcl[i]);
+        const unitPrice = lineRates?.[i] ?? rebatedRate(l.unitPrice, l.quantity, lineRebateExcl[i]);
         const { taxAmount: lineTax, amount } = calcLineTotals({
             quantity: l.quantity, rate: unitPrice, discountPct: 0, discountAmt, taxRate: l.taxRate,
         });
@@ -696,10 +736,13 @@ export async function POST(req: Request) {
         };
     });
     // Customer-facing rupees of the group rebate (GST included) — earns no points.
-    const groupRebateIncl = body.lines.reduce((s, l, i) => s + (lineRebateExcl[i] > 0
-        ? calcLineTotals({ quantity: l.quantity, rate: l.unitPrice, discountPct: 0, discountAmt: round2(lineTierDiscAfterCoupon[i]), taxRate: l.taxRate }).amount
-            - computedLines[i].amount
-        : 0), 0);
+    // Measured at the rebated rate itself, not the posted one, so an MDR rise on
+    // the same line does not eat into it.
+    const groupRebateIncl = body.lines.reduce((s, l, i) => {
+        if (lineRebateExcl[i] <= 0) return s;
+        const lineAt = (rate: number) => calcLineTotals({ quantity: l.quantity, rate, discountPct: 0, discountAmt: round2(lineTierDiscAfterCoupon[i]), taxRate: l.taxRate }).amount;
+        return s + lineAt(l.unitPrice) - lineAt(rebatedRate(l.unitPrice, l.quantity, lineRebateExcl[i]));
+    }, 0);
     // Free-grant lines (rule 1 on-top grant + rule 3 money-grant): the granted
     // item rides the bill as a zero-price line — quantity 0 + freeQty, so stock
     // and COGS move (the margin engine counts free units as real cost given

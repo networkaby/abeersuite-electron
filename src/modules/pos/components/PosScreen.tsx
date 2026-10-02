@@ -68,13 +68,17 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
         productSearchRef,
         cashTenderedRef,
         // A new sale works the customer group's silent rebate into the bill; an
-        // edit re-sends rates that already carry it.
+        // edit re-sends rates that already carry it. Same for the payment-method
+        // bank charge (MDR) and the UPI parts.
         groupRebate: !isEdit,
+        paymentMdr: !isEdit,
     });
 
     // Which rail the share dialog opens locked to — set by the Share button on a
     // UPI/gateway payment-split row. (Sale-only; quote screens lock to "upi".)
     const [shareProvider, setShareProvider] = useState<string>("upi");
+    // The UPI part due now, when the Share came from a row taken in parts.
+    const [shareAmount, setShareAmount] = useState<number | null>(null);
 
     // ── Edit mode: hydrate a posted POS sale on mount ───────────────────────────
     // Editing an existing voucher is NOT a carried draft: clear the shared draft on
@@ -220,6 +224,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
         }
 
         if (b.creditLimitBreached) return;   // guard against keyboard shortcut bypass
+        if (b.upiPartsPending) return;       // UPI parts not all received yet — same
         // Build the summary from the named pay fields. Cash net = tendered − return.
         const summaryParts: string[] = [];
         if (b.cashNet > 0) {
@@ -264,9 +269,15 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             type PayLine = { paymentAccountId: number | null; amount: number; reference?: string };
             const paymentsList: PayLine[] = [];
             if (b.cashNet > 0) paymentsList.push({ paymentAccountId: null, amount: b.cashNet });
+            // A UPI row taken in parts goes as one payment per part — each its own
+            // bank credit (and, under the free limit, no bank charge).
             for (const s of splits) {
-                if (s.amount <= 0) continue;
-                paymentsList.push({ paymentAccountId: s.paymentAccountId, amount: s.amount, reference: s.reference || undefined });
+                const parts = b.partsOf(s);
+                parts.forEach((amount, i) => paymentsList.push({
+                    paymentAccountId: s.paymentAccountId,
+                    amount,
+                    reference: parts.length > 1 ? `Part ${i + 1}/${parts.length}` : (s.reference || undefined),
+                }));
             }
             // Under-pay (including collecting nothing at all) IS allowed: the
             // shortfall goes on the customer's account. The credit limit is the
@@ -325,6 +336,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 collectSurplus: b.overpaid > 0.01,               // accept extra → Receipt voucher (clears dues FIFO, leftover = advance)
                 sourceVoucherId: b.convertFrom?.id,              // ⇄ convert link → source flips to "Converted"
                 ticketId: b.ticketId ?? undefined,               // repair-ticket link → bill shows on the ticket + timeline
+                mdrRecovery: b.mdrRecovery,                      // bank charge this screen worked in — the server re-checks it
                 charges: validCharges.map((c) => ({
                     accountId: c.accountId as number,
                     description: c.description.trim() || undefined,
@@ -462,6 +474,9 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             }
         } catch (e: unknown) {
             toast.error(extractApiError(e, "Failed to generate invoice"));
+            // The bank-charge rules changed under this counter — reload them with
+            // the shift so the next try works the bill out the server's way.
+            if (axios.isAxiosError(e) && e.response?.data?.code === "MDR_RULES_CHANGED") b.refreshActiveShift();
         } finally {
             b.setSubmitting(false);
         }
@@ -525,7 +540,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             <PaymentLinkDialog
                 open={b.shareOpen}
                 onOpenChange={b.setShareOpen}
-                defaultAmount={b.onCredit > 0.01 ? b.onCredit : b.total}
+                defaultAmount={shareAmount ?? (b.onCredit > 0.01 ? b.onCredit : b.total)}
                 partyName={b.snapshot?.party.name}
                 partyPhone={b.snapshot?.party.phone ?? null}
                 upiVpa={b.shareVpa}
@@ -562,7 +577,13 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 setSplits={b.setSplits}
                 submitting={b.submitting}
                 onConfirm={generateInvoice}
-                onShare={(a) => { setShareProvider("upi"); b.setShareVpa(a.vpa); b.setShareOpen(true); }}
+                onShare={(a, amount) => { setShareProvider("upi"); setShareAmount(amount ?? null); b.setShareVpa(a.vpa); b.setShareOpen(true); }}
+                methodTotals={b.methodTotals}
+                fillAmountFor={b.fillAmountFor}
+                partsOf={b.partsOf}
+                canSplit={b.canSplit}
+                confirmDisabled={b.upiPartsPending}
+                blockedNote={b.upiPartsPending ? "Tick each UPI part as it is received to confirm." : null}
             />
 
             {/* ── Mid-bill clear confirmation (Shift+Esc) ────────────────────── */}

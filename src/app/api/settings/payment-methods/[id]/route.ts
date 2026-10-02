@@ -6,6 +6,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError, pickDefined } from "@/shared/lib/api";
 import {
     getGatewayProvider,
+    sanitizeMdrKeys,
     validateGatewayConfigJson,
     PAY_ON_DELIVERY_PROVIDER_ID,
 } from "@/modules/pos/lib/paymentGateways";
@@ -61,7 +62,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             const sid = Number((data.configJson as { settlementAccountId?: unknown }).settlementAccountId);
             if (Number.isInteger(sid) && sid > 0) base.settlementAccountId = sid;
             else delete base.settlementAccountId;
-            nextConfigJson = base as Prisma.InputJsonValue;
+            // Bank charge (MDR) + UPI split — clamped, kept only where they apply.
+            nextConfigJson = sanitizeMdrKeys(existing.provider, base) as Prisma.InputJsonValue;
         }
         if (data.configJson !== undefined && !isPod) {
             const configError = validateGatewayConfigJson(existing.provider, data.configJson);

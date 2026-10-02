@@ -647,6 +647,7 @@ export function PosScreenShell({
                                 roundOffManuallyEdited={b.roundOffManuallyEdited}
                                 setRoundOffManuallyEdited={b.setRoundOffManuallyEdited}
                                 cart={b.cart}
+                                methodTotals={b.methodTotals}
                                 checkoutSlot={checkoutSlot}
                             />
                         </div>

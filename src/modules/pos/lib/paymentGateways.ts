@@ -297,6 +297,94 @@ export function isKeylessMethod(providerId: string): boolean {
     return !!p && p.envVars.test.length === 0 && p.envVars.live.length === 0 && p.kind === "MANUAL";
 }
 
+// ── Bank charge (MDR) + UPI split, per method ────────────────────────────────
+// Both live on the method's own configJson, which already syncs to every counter,
+// so they need no column of their own. The money math that uses them is in
+// paymentMdr.ts.
+
+/// The bank charge (MDR) a counter payment on this method costs the shop
+/// (configJson.mdr). Nothing on a payment of up to `freeUpToRupees`; above it,
+/// `ratePct` of the whole payment, at most `capRupees` (0 = no cap). UPI from
+/// 15 Oct 2026: 0.4% above ₹2,000, max ₹300 — the shop keeps the limit at ₹1,999.
+export type MdrRule = { ratePct: number; freeUpToRupees: number; capRupees: number };
+
+/// Split a big UPI payment into parts of at most the UPI free limit, so no part
+/// carries MDR (configJson.split, UPI method only). Beyond `maxParts` the last
+/// part takes the rest.
+export type SplitRule = { enabled: boolean; maxParts: number };
+
+export const DEFAULT_SPLIT_MAX_PARTS = 5;
+
+const clampNum = (v: unknown, min: number, max: number, fallback: number): number => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+};
+
+/// The method's MDR rule, or null when none is set (no charge).
+export function mdrRuleOf(configJson: unknown): MdrRule | null {
+    const m = (configJson as { mdr?: unknown } | null | undefined)?.mdr;
+    if (!m || typeof m !== "object") return null;
+    const r = m as Record<string, unknown>;
+    return {
+        ratePct: clampNum(r.ratePct, 0, 10, 0),
+        freeUpToRupees: Math.floor(clampNum(r.freeUpToRupees, 0, 10_000_000, 0)),
+        capRupees: clampNum(r.capRupees, 0, 10_000_000, 0),
+    };
+}
+
+/// The UPI split rule, or null when none is set (no split).
+export function splitRuleOf(configJson: unknown): SplitRule | null {
+    const s = (configJson as { split?: unknown } | null | undefined)?.split;
+    if (!s || typeof s !== "object") return null;
+    const r = s as Record<string, unknown>;
+    return {
+        enabled: r.enabled === true,
+        maxParts: Math.floor(clampNum(r.maxParts, 2, 50, DEFAULT_SPLIT_MAX_PARTS)),
+    };
+}
+
+/// Clean the MDR + split keys of a method's configJson before it is saved — junk
+/// dropped, numbers clamped. MDR belongs to counter methods; split to UPI alone.
+export function sanitizeMdrKeys(providerId: string, configJson: Record<string, unknown>): Record<string, unknown> {
+    const out = { ...configJson };
+    const provider = getGatewayProvider(providerId);
+    const mdr = provider?.supportsCounter ? mdrRuleOf(configJson) : null;
+    if (mdr) out.mdr = mdr;
+    else delete out.mdr;
+    const split = provider?.supportsCounter && provider.channel === "UPI" ? splitRuleOf(configJson) : null;
+    if (split) out.split = split;
+    else delete out.split;
+    return out;
+}
+
+/// The Settings → Payment Methods row a counter payment account collects
+/// through — a gateway rail by its own id, a plain method (UPI, Card…) by its
+/// channel. The same pairing the counters page saves.
+export function methodRowFor<T extends { id: number; provider: string }>(
+    account: { channel: PosPayChannel; gatewayId: number | null },
+    rows: T[],
+): T | undefined {
+    if (account.channel === "GATEWAY") {
+        return account.gatewayId == null ? undefined : rows.find((r) => r.id === account.gatewayId);
+    }
+    const id = PLAIN_COUNTER_METHODS.find((m) => m.channel === account.channel)?.id;
+    return id ? rows.find((r) => r.provider === id) : undefined;
+}
+
+/// A counter payment account's MDR + split rules, read off its method row.
+export type PayAccountMdr = { mdr: MdrRule | null; split: SplitRule | null };
+
+export function payAccountMdr(
+    account: { channel: PosPayChannel; gatewayId: number | null },
+    rows: { id: number; provider: string; configJson: unknown }[],
+): PayAccountMdr {
+    const row = methodRowFor(account, rows);
+    return {
+        mdr: row ? mdrRuleOf(row.configJson) : null,
+        split: row && account.channel === "UPI" ? splitRuleOf(row.configJson) : null,
+    };
+}
+
 /// Validate the non-secret configJson against a provider's declared config fields.
 /// Returns an error message, or null when valid. Pure — shared by POST and PATCH.
 export function validateGatewayConfigJson(

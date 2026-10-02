@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Check, X, Pencil, Globe, Monitor, KeyRound, ChevronDown, MapPin } from "lucide-react";
+import { Check, X, Pencil, Globe, Monitor, KeyRound, ChevronDown, MapPin, Percent, Split } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -33,12 +33,17 @@ import {
     DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
 import {
+    DEFAULT_SPLIT_MAX_PARTS,
     getGatewayProvider,
     isKeylessMethod,
+    mdrRuleOf,
     PAY_ON_DELIVERY_PROVIDER_ID,
     settlementAccountIdOf,
+    splitRuleOf,
+    type MdrRule,
     type PaymentGatewayProvider,
 } from "@/modules/pos/lib/paymentGateways";
+import { NumericInput } from "@/shared/components/NumericInput";
 import { INDIA_STATE_NAMES } from "@/modules/delivery/lib/deliveryMethodConfig";
 import { sanitizePodArea, type PodAreaMode } from "@/shared/lib/payments/payOnDelivery";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
@@ -85,6 +90,13 @@ type FormState = {
     podMode: PodAreaMode;
     podStates: string[];
     podPincodes: string; // prefixes, one per line / comma-separated
+    // Bank charge (MDR) at the counter — configJson.mdr. Strings while typing.
+    mdrRate: string;
+    mdrFreeUpTo: string;
+    mdrCap: string;
+    // UPI only — take a big UPI payment in parts (configJson.split).
+    splitEnabled: boolean;
+    splitMaxParts: string;
 };
 
 const EMPTY_FORM: FormState = {
@@ -97,7 +109,22 @@ const EMPTY_FORM: FormState = {
     podMode: "except",
     podStates: [],
     podPincodes: "",
+    mdrRate: "",
+    mdrFreeUpTo: "",
+    mdrCap: "",
+    splitEnabled: false,
+    splitMaxParts: String(DEFAULT_SPLIT_MAX_PARTS),
 };
+
+// configJson keys with their own form fields — kept out of the flat string map.
+const OWN_FIELD_KEYS = new Set(["mdr", "split"]);
+
+/** "MDR 0.4% > ₹1,999" — the card badge for a method with a bank charge. */
+function mdrSummary(rule: MdrRule): string {
+    const free = rule.freeUpToRupees > 0 ? ` > ₹${rule.freeUpToRupees.toLocaleString("en-IN")}` : "";
+    const cap = rule.capRupees > 0 ? `, max ₹${rule.capRupees.toLocaleString("en-IN")}` : "";
+    return `MDR ${rule.ratePct}%${free}${cap}`;
+}
 
 /** One-line summary of the POD rail's area rule, for its card badge. */
 function podAreaSummary(g: Gateway): string {
@@ -217,21 +244,31 @@ export default function PaymentMethodsSettingsPage() {
     const openEdit = (g: Gateway) => {
         const isPod = g.provider === PAY_ON_DELIVERY_PROVIDER_ID;
         const area = isPod ? sanitizePodArea((g.configJson as { area?: unknown })?.area) : null;
+        const mdr = mdrRuleOf(g.configJson);
+        const split = splitRuleOf(g.configJson);
         setForm({
             id: g.id,
             provider: g.provider,
             displayName: g.displayName,
             environment: g.environment,
-            // POD's configJson holds a nested area object, not flat string fields.
+            // POD's configJson holds a nested area object, not flat string fields;
+            // MDR + split are objects with fields of their own below.
             config: isPod
                 ? {}
                 : Object.fromEntries(
-                      Object.entries(g.configJson ?? {}).map(([k, v]) => [k, String(v ?? "")]),
+                      Object.entries(g.configJson ?? {})
+                          .filter(([k]) => !OWN_FIELD_KEYS.has(k))
+                          .map(([k, v]) => [k, String(v ?? "")]),
                   ),
             settlementAccountId: settlementAccountIdOf(g.configJson),
             podMode: area?.mode ?? "except",
             podStates: area?.states ?? [],
             podPincodes: (area?.pincodePrefixes ?? []).join("\n"),
+            mdrRate: mdr && mdr.ratePct > 0 ? String(mdr.ratePct) : "",
+            mdrFreeUpTo: mdr && mdr.freeUpToRupees > 0 ? String(mdr.freeUpToRupees) : "",
+            mdrCap: mdr && mdr.capRupees > 0 ? String(mdr.capRupees) : "",
+            splitEnabled: split?.enabled ?? false,
+            splitMaxParts: String(split?.maxParts ?? DEFAULT_SPLIT_MAX_PARTS),
         });
         setDialogOpen(true);
     };
@@ -247,6 +284,31 @@ export default function PaymentMethodsSettingsPage() {
             await axios.patch(`/api/settings/payment-methods/${g.id}`, { [flag]: value });
         } catch (e) {
             put(!value);
+            toast.error(
+                axios.isAxiosError(e) ? (e.response?.data?.error ?? "Failed to save") : "Failed to save",
+            );
+        }
+    };
+
+    // The UPI card's Split switch — same at-once save, but it lives on configJson,
+    // so the whole configJson goes back with only split.enabled flipped.
+    const toggleSplit = async (g: Gateway, value: boolean) => {
+        if (value && !(mdrRuleOf(g.configJson)?.freeUpToRupees ?? 0)) {
+            toast.error("Set the UPI free limit first (Edit → Bank charge, e.g. ₹1,999) — parts are cut at it.");
+            return;
+        }
+        const before = g.configJson;
+        const next = {
+            ...before,
+            split: { enabled: value, maxParts: splitRuleOf(before)?.maxParts ?? DEFAULT_SPLIT_MAX_PARTS },
+        };
+        const put = (configJson: Record<string, unknown>) =>
+            setGateways((list) => list.map((x) => (x.id === g.id ? { ...x, configJson } : x)));
+        put(next);
+        try {
+            await axios.patch(`/api/settings/payment-methods/${g.id}`, { configJson: next });
+        } catch (e) {
+            put(before);
             toast.error(
                 axios.isAxiosError(e) ? (e.response?.data?.error ?? "Failed to save") : "Failed to save",
             );
@@ -273,9 +335,24 @@ export default function PaymentMethodsSettingsPage() {
                           .filter(Boolean),
                   },
               }
-            : form.config;
+            : { ...form.config };
         // The settlement ledger is common to every method — layer it onto configJson.
         if (form.settlementAccountId) configJson.settlementAccountId = form.settlementAccountId;
+        // Bank charge (MDR) — kept while a rate or a free limit is set (the UPI
+        // free limit also cuts the split parts); cleared otherwise.
+        if (provider.supportsCounter) {
+            const ratePct = Number(form.mdrRate) || 0;
+            const freeUpToRupees = Number(form.mdrFreeUpTo) || 0;
+            if (ratePct > 0 || freeUpToRupees > 0) {
+                configJson.mdr = { ratePct, freeUpToRupees, capRupees: Number(form.mdrCap) || 0 };
+            }
+            if (provider.channel === "UPI") {
+                configJson.split = {
+                    enabled: form.splitEnabled,
+                    maxParts: Number(form.splitMaxParts) || DEFAULT_SPLIT_MAX_PARTS,
+                };
+            }
+        }
         const payload = {
             provider: form.provider,
             displayName: form.displayName.trim(),
@@ -336,6 +413,7 @@ export default function PaymentMethodsSettingsPage() {
                     <div className="grid gap-3">
                         {gateways.map((g) => {
                             const prov = getGatewayProvider(g.provider);
+                            const mdr = prov?.supportsCounter ? mdrRuleOf(g.configJson) : null;
                             return (
                                 <Card key={g.id} className="max-w-3xl">
                                     <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-2 py-4">
@@ -387,6 +465,23 @@ export default function PaymentMethodsSettingsPage() {
                                                 <Landmark className="mr-1 size-3" /> No ledger
                                             </Badge>
                                         ) : null}
+
+                                        {mdr && mdr.ratePct > 0 && (
+                                            <Badge className="bg-violet-100 text-violet-700">
+                                                <Percent className="mr-1 size-3" /> {mdrSummary(mdr)}
+                                            </Badge>
+                                        )}
+
+                                        {/* Take a big UPI payment in parts under the free limit. */}
+                                        {prov?.supportsCounter && prov.channel === "UPI" && (
+                                            <FlagSwitch
+                                                id={`pm-${g.id}-split`}
+                                                label="Split"
+                                                icon={<Split className="size-3" />}
+                                                checked={splitRuleOf(g.configJson)?.enabled ?? false}
+                                                onChange={(v) => void toggleSplit(g, v)}
+                                            />
+                                        )}
 
                                         {prov?.supportsCounter && (
                                             <FlagSwitch
@@ -581,6 +676,85 @@ export default function PaymentMethodsSettingsPage() {
                                       : "Online payments via this gateway post a Receipt debiting this ledger."}
                             </p>
                         </div>
+
+                        {/* Bank charge (MDR) at the counter. The bill is the cash price;
+                            a payment on this method raises the line prices toward their
+                            tag by this charge — never above the tag (paymentMdr.ts). */}
+                        {provider?.supportsCounter && (
+                            <div className="rounded-md border border-border p-3 space-y-3">
+                                <div className="flex items-center gap-1.5 text-sm font-medium">
+                                    <Percent className="size-3.5" /> Bank charge (MDR) at the counter
+                                </div>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div className="grid gap-1">
+                                        <Label htmlFor="pm-mdr-rate" className="text-xs text-muted-foreground">MDR %</Label>
+                                        <NumericInput
+                                            id="pm-mdr-rate"
+                                            mode="decimal"
+                                            min={0}
+                                            max={10}
+                                            value={form.mdrRate}
+                                            placeholder="none"
+                                            onValueChange={(v) => setForm((f) => ({ ...f, mdrRate: v }))}
+                                        />
+                                    </div>
+                                    <div className="grid gap-1">
+                                        <Label htmlFor="pm-mdr-free" className="text-xs text-muted-foreground">Free up to ₹</Label>
+                                        <NumericInput
+                                            id="pm-mdr-free"
+                                            min={0}
+                                            value={form.mdrFreeUpTo}
+                                            placeholder="0"
+                                            onValueChange={(v) => setForm((f) => ({ ...f, mdrFreeUpTo: v }))}
+                                        />
+                                    </div>
+                                    <div className="grid gap-1">
+                                        <Label htmlFor="pm-mdr-cap" className="text-xs text-muted-foreground">Max ₹ per payment</Label>
+                                        <NumericInput
+                                            id="pm-mdr-cap"
+                                            mode="decimal"
+                                            min={0}
+                                            value={form.mdrCap}
+                                            placeholder="no cap"
+                                            onValueChange={(v) => setForm((f) => ({ ...f, mdrCap: v }))}
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-muted-foreground text-[11px]">
+                                    Per payment: nothing up to the free limit, above it this % of the
+                                    whole payment. The bill stays the cash price; a payment by this
+                                    method raises the line prices toward their tag by the charge, never
+                                    above the tag — no room left and the shop bears it.
+                                    {provider.channel === "UPI" && " UPI from 15 Oct 2026: 0.4% above ₹2,000 (free up to ₹1,999), max ₹300."}
+                                </p>
+                                {provider.channel === "UPI" && (
+                                    <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
+                                        <FlagSwitch
+                                            id="pm-split"
+                                            label="Split big UPI payments into parts"
+                                            icon={<Split className="size-3" />}
+                                            checked={form.splitEnabled}
+                                            onChange={(v) => setForm((f) => ({ ...f, splitEnabled: v }))}
+                                        />
+                                        <div className="flex items-center gap-1.5">
+                                            <Label htmlFor="pm-split-max" className="text-xs text-muted-foreground">Max parts</Label>
+                                            <NumericInput
+                                                id="pm-split-max"
+                                                className="h-8 w-16"
+                                                min={2}
+                                                max={50}
+                                                value={form.splitMaxParts}
+                                                onValueChange={(v) => setForm((f) => ({ ...f, splitMaxParts: v }))}
+                                            />
+                                        </div>
+                                        <p className="text-muted-foreground w-full text-[11px]">
+                                            Each part stays within the free limit and has its own amount, one
+                                            QR at a time. Past the max, the last part takes the rest and pays MDR.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* Non-secret provider config fields (e.g. manual UPI VPA). */}
                         {provider?.configFields.map((field) => (

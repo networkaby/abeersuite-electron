@@ -104,6 +104,9 @@ export type PosBillSummaryProps = {
 
     // Cart + the mode-specific checkout button
     cart: CartLine[];
+    /** What the whole bill comes to by each way of paying (payment-method MDR) —
+     *  the figures the cashier reads out. Empty = no method costs anything. */
+    methodTotals?: { label: string; amount: number; note?: string }[];
     checkoutSlot: React.ReactNode;
 };
 
@@ -119,6 +122,7 @@ export function PosBillSummary({
     shippingAmtStr, setShippingAmtStr,
     autoRoundOff, roundOffStr, setRoundOffStr, roundOffManuallyEdited,
     setRoundOffManuallyEdited,
+    methodTotals,
     checkoutSlot,
 }: PosBillSummaryProps) {
     return (
@@ -416,6 +420,19 @@ export function PosBillSummary({
                 <div className="flex items-center justify-between text-xs font-medium">
                     <span className="text-muted-foreground">Pay (after gift card)</span>
                     <span className="tabular-nums">{formatInr(payableTotal)}</span>
+                </div>
+            )}
+
+            {/* By way of paying — the totals the cashier reads out. */}
+            {methodTotals && methodTotals.length > 1 && (
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
+                    {methodTotals.map((m) => (
+                        <span key={`${m.label}·${m.note ?? ""}`} className="whitespace-nowrap">
+                            <span className="text-muted-foreground">{m.label}</span>{" "}
+                            <span className="font-medium tabular-nums">{formatInr(m.amount)}</span>
+                            {m.note && <span className="text-muted-foreground"> ({m.note})</span>}
+                        </span>
+                    ))}
                 </div>
             )}
 

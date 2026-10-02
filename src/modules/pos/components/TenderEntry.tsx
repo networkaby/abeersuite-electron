@@ -29,6 +29,7 @@ export function TenderEntry({
     pay, setPay, cashTenderedRef,
     targetTotal, showTotal = false,
     onShare, onEnter,
+    fillAmountFor, partsOf, canSplit,
 }: {
     accounts: TenderAccount[];
     splits: TenderSplit[];
@@ -41,8 +42,14 @@ export function TenderEntry({
     targetTotal?: number;
     /** Show a "Total" strip (Rcv — where the tenders define the total). */
     showTotal?: boolean;
-    onShare?: (acct: TenderAccount) => void;
+    onShare?: (acct: TenderAccount, amount?: number) => void;
     onEnter?: (e: React.KeyboardEvent) => void;
+    /** The amount a row needs to settle the bill when the bill itself moves with
+     *  it (payment-method MDR — usePosBilling). Absent = bill − everything else. */
+    fillAmountFor?: (s: TenderSplit) => number;
+    /** UPI parts — see TenderSplitInput. */
+    partsOf?: (s: TenderSplit) => number[];
+    canSplit?: (s: TenderSplit) => boolean;
 }) {
     const cashNet = Math.max(0, pay.cashTendered - pay.cashReturn);
     const splitsSum = splits.reduce((s, x) => s + x.amount, 0);
@@ -54,7 +61,7 @@ export function TenderEntry({
     const fillSplit = targetTotal != null
         ? (s: TenderSplit) => {
             const others = cashNet + (splitsSum - s.amount);
-            const remaining = Math.max(0, +(targetTotal - others).toFixed(2));
+            const remaining = fillAmountFor ? fillAmountFor(s) : Math.max(0, +(targetTotal - others).toFixed(2));
             setSplits((prev) => prev.map((x) => (x.id === s.id ? { ...x, amount: remaining } : x)));
         }
         : undefined;
@@ -115,6 +122,8 @@ export function TenderEntry({
                 onShare={onShare}
                 onEnter={onEnter}
                 onFill={fillSplit}
+                partsOf={partsOf}
+                canSplit={canSplit}
             />
 
             <div className="flex items-center justify-between gap-2">

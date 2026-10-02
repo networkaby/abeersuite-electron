@@ -28,6 +28,8 @@ import { DEFAULT_PAYEE_NAME } from "@/modules/pos/lib/paymentLink";
 import { formatInr, parseDigitsInput, round2 } from "@/shared/lib/format";
 import { resolveTierTitles } from "@/shared/lib/pricing";
 import { groupRebatesExcl, groupStartPricePaise, rebatedRate, ruleForGroup } from "@/modules/pricing-strategy/lib/groupPricing";
+import { mdrRecovery, tenderPayAmounts, upliftedRates, type UpliftLine } from "@/modules/pos/lib/paymentMdr";
+import { CHANNEL_LABEL } from "@/modules/pos/lib/counterTenders";
 import { usePosDraftStore } from "@/store/posDraftStore";
 import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type OnTopHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
 import { searchProducts, readCachedProducts, syncProducts } from "@/shared/lib/inventory";
@@ -60,6 +62,10 @@ export function usePosBilling(opts: {
      *  same rebate out server-side. Orders, estimates and an edited sale (whose
      *  stored rates already carry it) leave it off. */
     groupRebate?: boolean;
+    /** Work each payment method's bank charge (MDR) into the bill and take big
+     *  UPI payments in parts (paymentMdr.ts). A NEW POS sale only — /api/pos/sale
+     *  works the same out server-side; orders, estimates and edits leave it off. */
+    paymentMdr?: boolean;
 }) {
     const { partySearchRef, productSearchRef, cashTenderedRef } = opts;
     // Router for the help-page fallback when the browser blocks the new tab.
@@ -288,6 +294,9 @@ export function usePosBilling(opts: {
     // (it lives above the computed totals). A ref, so the listener never
     // needs re-binding; the value is refreshed after every render.
     const payableTotalRef = useRef(0);
+    // Same, for the amount a payment row needs to settle the bill (coverAmount
+    // below — the bill moves with a row that carries a bank charge).
+    const coverAmountRef = useRef<(rows: TenderSplit[], id: string, cash: number) => number>(() => 0);
 
     // "/" — two roles:
     //   • Checkout open → fill the REST of the bill into the focused payment
@@ -314,9 +323,9 @@ export function usePosBilling(opts: {
                 const cashNet = Math.max(0, pay.cashTendered - pay.cashReturn);
                 if (splitId != null) {
                     const row = splits.find((x) => x.id === splitId);
-                    if (row) {
-                        const others = cashNet + (splitsSum - row.amount);
-                        const remaining = Math.max(0, +(bill - others).toFixed(2));
+                    // A row whose UPI parts are already coming in keeps its amount.
+                    if (row && !(row.received ?? 0)) {
+                        const remaining = coverAmountRef.current(splits, splitId, cashNet);
                         setSplits((prev) => prev.map((x) => (x.id === splitId ? { ...x, amount: remaining } : x)));
                     }
                 } else {
@@ -333,7 +342,7 @@ export function usePosBilling(opts: {
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
-    }, [checkoutOpen, payableTotalRef, setPay, setSplits, createDialogOpen, productSearchRef, pay, splits]);
+    }, [checkoutOpen, payableTotalRef, coverAmountRef, setPay, setSplits, createDialogOpen, productSearchRef, pay, splits]);
 
     // F2 from anywhere → focus the party / customer picker.
     // Standard POS convention: F2 = customer lookup, / = product scan.
@@ -607,39 +616,76 @@ export function usePosBilling(opts: {
         }), billDiscountIncl);
         goodsIdx.forEach((i, k) => { lineRebateExcl[i] = rebates[k]; });
     }
-    const anyRebate = lineRebateExcl.some((r) => r > 0);
-    // The bill's own rows — each line at its rate after the rebate. Without a
-    // rebate they ARE lineRows, and the tier stays effDiscountAmount untouched.
-    const billLineRows = !anyRebate ? lineRows : cart.map((l, i) => {
-        if (lineRebateExcl[i] <= 0) return lineRows[i];
-        const rate = rebatedRate(l.unitPrice, l.qty, lineRebateExcl[i]);
-        const { taxAmount, amount } = calcLineTotals({ quantity: l.qty, rate, discountPct: 0, discountAmt: 0, taxRate: l.taxRate });
-        return { amount, taxAmount, gross: l.qty * rate };
-    });
-    // Tier discount re-measured on the rebated rows (the server nets it per line
-    // at the rebated rate) — identical to effDiscountAmount when nothing moved.
-    const billTierDiscount = !anyRebate ? effDiscountAmount : cart.reduce((sum, l, i) => {
-        const rate = rebatedRate(l.unitPrice, l.qty, lineRebateExcl[i]);
-        const net = calcLineTotals({ quantity: l.qty, rate, discountPct: 0, discountAmt: round2(lineTierAfterCoupon[i]), taxRate: l.taxRate }).amount;
-        return sum + (billLineRows[i].amount - net);
-    }, 0);
-    const billSubtotal = !anyRebate ? subtotal : billLineRows.reduce((sum, r) => sum + r.gross, 0);
-    const billTax = !anyRebate ? tax : billLineRows.reduce((sum, r) => sum + r.taxAmount, 0);
-    // Auto round-off: figure out the round-off that lands Total on a whole
-    // rupee by computing the pre-round total first, then deriving the delta.
-    // If the cashier has manually typed a value, that override wins.
-    const naturalTotal = calcVoucherTotals(billLineRows, shippingAmt, billTierDiscount, 0, chargesNet).totalAmount;
+    // Each line's rate after the rebate — what the bill posts at before any
+    // payment-method MDR moves it.
+    const rebatedRates = cart.map((l, i) => rebatedRate(l.unitPrice, l.qty, lineRebateExcl[i]));
+
+    // ── Payment-method MDR (mirrors /api/pos/sale — paymentMdr.ts) ──────────────
+    // What the counter rings is the CASH price. A payment on a method with a bank
+    // charge (card; UPI above its free limit) raises the line rates toward each
+    // line's tag by that charge — the customer's "Today's discount" comes out
+    // smaller, never past a tag. A new sale only; the inputs are the ones the
+    // server builds from the same payments.
+    const mdrLines: UpliftLine[] | null = opts.paymentMdr
+        ? cart.map((l, i) => ({
+            quantity: l.qty,
+            rate: rebatedRates[i],
+            taxRate: l.taxRate,
+            tagPaise: l.barcodePaise ?? l.mrpPaise ?? null,
+            fixed: l.kind === "service" || lineProtected(l),
+        }))
+        : null;
+    // The payments one checkout row is taken as — its UPI parts, or itself.
+    const partsOf = (s: TenderSplit): number[] => {
+        const a = payAccountById.get(s.paymentAccountId ?? -1);
+        return tenderPayAmounts(s.amount, a?.mdr, opts.paymentMdr ? a?.split : null, !!s.oneGo);
+    };
+    // Whether a row's method would take it in parts (offers "Split" on a one-payment row).
+    const canSplit = (s: TenderSplit): boolean => opts.paymentMdr === true && partsOf({ ...s, oneGo: false }).length > 1;
+    // Bank charge a set of checkout rows costs (whole rupees). Cash never costs any.
+    const mdrOf = (rows: TenderSplit[]): number => !mdrLines ? 0 : mdrRecovery(rows.flatMap((s) => {
+        const rule = payAccountById.get(s.paymentAccountId ?? -1)?.mdr;
+        return partsOf(s).map((amount) => ({ amount, rule }));
+    }));
+
+    // The whole bill for a given MDR recovery: line rows, tier, round-off, total.
+    // Recovery 0 is today's bill exactly (the rebate alone moves the rows).
+    const billFor = (recovery: number) => {
+        const rates = mdrLines && recovery > 0 ? upliftedRates(mdrLines, recovery) : rebatedRates;
+        const moved = rates.some((r, i) => r !== cart[i].unitPrice);
+        // Lines that did not move ARE lineRows, and the tier stays untouched.
+        const rows = !moved ? lineRows : cart.map((l, i) => {
+            if (rates[i] === l.unitPrice) return lineRows[i];
+            const { taxAmount, amount } = calcLineTotals({ quantity: l.qty, rate: rates[i], discountPct: 0, discountAmt: 0, taxRate: l.taxRate });
+            return { amount, taxAmount, gross: l.qty * rates[i] };
+        });
+        // Tier discount re-measured on the moved rows (the server nets it per line
+        // at the posted rate) — identical to effDiscountAmount when nothing moved.
+        const tierDiscount = !moved ? effDiscountAmount : cart.reduce((sum, l, i) => {
+            const net = calcLineTotals({ quantity: l.qty, rate: rates[i], discountPct: 0, discountAmt: round2(lineTierAfterCoupon[i]), taxRate: l.taxRate }).amount;
+            return sum + (rows[i].amount - net);
+        }, 0);
+        // Auto round-off: lands Total on a whole rupee; a typed value wins.
+        const natural = calcVoucherTotals(rows, shippingAmt, tierDiscount, 0, chargesNet).totalAmount;
+        const ro = roundOffManuallyEdited ? parseAmt(roundOffStr) : Math.round(natural) - natural;
+        // Single source of truth — matches /api/inventory/vouchers SALE math via
+        // calcVoucherTotals, so server-side validation cannot disagree.
+        const t = calcVoucherTotals(rows, shippingAmt, tierDiscount, ro, chargesNet).totalAmount;
+        return { rows, moved, tierDiscount, natural, roundOff: ro, total: t };
+    };
+    // Outside checkout the bill is always the cash price — rows left from a
+    // cancelled checkout must not move it. The sale sends this figure, and the
+    // server checks it against its own (paymentMdr.ts on the same payments).
+    const mdrRecoveryNow = checkoutOpen ? mdrOf(splits) : 0;
+    const bill = billFor(mdrRecoveryNow);
+    const billLineRows = bill.rows;
+    const billTierDiscount = bill.tierDiscount;
+    const billSubtotal = !bill.moved ? subtotal : billLineRows.reduce((sum, r) => sum + r.gross, 0);
+    const billTax = !bill.moved ? tax : billLineRows.reduce((sum, r) => sum + r.taxAmount, 0);
+    const naturalTotal = bill.natural;
     const autoRoundOff = Math.round(naturalTotal) - naturalTotal;
-    const roundOff = roundOffManuallyEdited ? parseAmt(roundOffStr) : autoRoundOff;
-    // Single source of truth — matches /api/inventory/vouchers SALE math via
-    // calcVoucherTotals, so server-side validation cannot disagree.
-    const { totalAmount: total } = calcVoucherTotals(
-        billLineRows,              // each row's `amount` is tax-inclusive
-        shippingAmt,
-        billTierDiscount,
-        roundOff,
-        chargesNet,
-    );
+    const roundOff = bill.roundOff;
+    const total = bill.total;
 
     // Tax-inclusive voucher total the customer pays — goods (incl. GST) + shipping
     // + charges − tier discount + round-off, BEFORE the money coupon / loyalty —
@@ -657,10 +703,64 @@ export function usePosBilling(opts: {
     // Gift card is a TENDER, not a discount — it doesn't change `total`, it covers
     // part of it. The cashier collects `payableTotal` in cash/UPI; the server draws
     // the same min(balance, total) from the card and posts it as a Dr-Liability tender.
-    const giftCardApplied = giftCard ? Math.min(giftCard.balance, total) : 0;
+    const giftFor = (t: number) => (giftCard ? Math.min(giftCard.balance, t) : 0);
+    const giftCardApplied = giftFor(total);
     const payableTotal = Math.max(0, +(total - giftCardApplied).toFixed(2));
-    // Refresh the ref the "/" shortcut reads (it binds above this block).
-    useEffect(() => { payableTotalRef.current = payableTotal; });
+
+    // The amount row `id` needs so the tenders settle the bill exactly, every
+    // other row and `cash` as they stand. A row with a bank charge raises the
+    // price it pays, so the rest of the bill moves with it — a few passes settle
+    // it (the charge only grows with the amount, the total lands on whole
+    // rupees). With no charge this is just bill − everything else.
+    const coverAmount = (rows: TenderSplit[], id: string, cash: number): number => {
+        const others = cash + rows.reduce((sum, x) => sum + (x.id === id ? 0 : x.amount), 0);
+        const dueAt = (amount: number) => {
+            const t = billFor(mdrOf(rows.map((x) => (x.id === id ? { ...x, amount } : x)))).total;
+            return Math.max(0, round2(t - giftFor(t) - others));
+        };
+        let amount = dueAt(0);
+        for (let pass = 0; pass < 5; pass++) {
+            const next = dueAt(amount);
+            if (Math.abs(next - amount) < 0.005) break;
+            amount = next;
+        }
+        return amount;
+    };
+    const fillAmountFor = (s: TenderSplit) =>
+        coverAmount(splits, s.id, Math.max(0, pay.cashTendered - pay.cashReturn));
+    // Refresh the refs the early-bound shortcuts read (they bind above this block).
+    useEffect(() => {
+        payableTotalRef.current = payableTotal;
+        coverAmountRef.current = coverAmount;
+    });
+
+    // What the whole bill comes to by each way of paying — the figures the
+    // cashier reads out ("cash ₹5,000, card ₹5,102"). Only methods that cost
+    // something (or split) are listed; the rest come to the cash figure.
+    const methodTotals: { label: string; amount: number; note?: string }[] = [];
+    if (mdrLines && cart.length > 0 && payAccounts.some((a) => (a.mdr?.ratePct ?? 0) > 0 || a.split?.enabled)) {
+        const cashBill = billFor(0).total;
+        methodTotals.push({ label: "Cash", amount: Math.max(0, round2(cashBill - giftFor(cashBill))) });
+        const seen = new Set<string>();
+        for (const a of payAccounts) {
+            if (!((a.mdr?.ratePct ?? 0) > 0 || a.split?.enabled)) continue;
+            const label = a.channel === "GATEWAY" ? a.label : CHANNEL_LABEL[a.channel];
+            const key = `${label}|${JSON.stringify(a.mdr)}|${JSON.stringify(a.split)}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const quote = (oneGo: boolean) => {
+                const row: TenderSplit = { id: "quote", paymentAccountId: a.id, amount: 0, reference: "", oneGo };
+                const amount = coverAmount([row], row.id, 0);
+                return { amount, parts: partsOf({ ...row, amount }).length };
+            };
+            const split = quote(false);
+            if (split.parts > 1) methodTotals.push({ label, amount: split.amount, note: `${split.parts} scans` });
+            const one = quote(true);
+            if (split.parts <= 1 || one.amount !== split.amount) {
+                methodTotals.push({ label, amount: one.amount, note: split.parts > 1 ? "one scan" : undefined });
+            }
+        }
+    }
 
     // Bill-level adjustments shown on the customer ladder (print + display) so the
     // breakdown reconciles: manual charges + shipping + round-off (signed). Loyalty
@@ -1283,17 +1383,19 @@ export function usePosBilling(opts: {
         // total − gift card). F10 → option-2 (first account row, usually UPI);
         // a counter with no default-visible non-cash row falls back to option-1
         // (cash), as does the explicit cash prefill.
+        // The amount is solved for the fresh rows (a card row raises the price it
+        // pays — see coverAmount); with no bank charge it is the payable total.
         let cashTendered = 0;
         if (prefill?.tender === "split" && splits.length > 0) {
-            splits[0] = { ...splits[0], amount: payableTotal };
+            splits[0] = { ...splits[0], amount: coverAmountRef.current(splits, splits[0].id, 0) };
         } else if (prefill?.tender === "cash" || (prefill?.tender === "split" && splits.length === 0)) {
-            cashTendered = payableTotal;
+            cashTendered = coverAmountRef.current([], "", 0);
         }
         setPay({ cashTendered, cashReturn: 0 });
         setSplits(splits);
         setCheckoutOpen(true);
         setTimeout(() => cashTenderedRef.current?.focus(), 50);
-    }, [snapshot, cart, payAccounts, payableTotal, cashTenderedRef]);
+    }, [snapshot, cart, payAccounts, coverAmountRef, cashTenderedRef]);
 
     // F10 → quick pay on option-2: opens checkout with the full payable amount
     // (total − gift card, no change) seeded on the FIRST payment-account row —
@@ -1311,11 +1413,18 @@ export function usePosBilling(opts: {
             if (checkoutOpen) {
                 // All on option-2 (first account row, usually UPI); adds the
                 // row when the counter has accounts but none was pre-shown.
+                // UPI parts already coming in → leave the payment rows alone.
+                if (splits.some((s) => (s.received ?? 0) > 0)) return;
                 setPay({ cashTendered: 0, cashReturn: 0 });
                 setSplits((prev) => {
-                    if (prev.length > 0) return prev.map((s, i) => ({ ...s, amount: i === 0 ? payableTotal : 0 }));
-                    if (payAccounts.length === 0) return prev; // cash-only counter
-                    return [{ id: crypto.randomUUID(), paymentAccountId: payAccounts[0].id, amount: payableTotal, reference: "" }];
+                    const rows = prev.length > 0
+                        ? prev.map((s) => ({ ...s, amount: 0 }))
+                        : payAccounts.length > 0
+                            ? [{ id: crypto.randomUUID(), paymentAccountId: payAccounts[0].id, amount: 0, reference: "" }]
+                            : null;
+                    if (!rows) return prev; // cash-only counter
+                    const first = rows[0];
+                    return rows.map((s) => (s.id === first.id ? { ...s, amount: coverAmountRef.current(rows, first.id, 0) } : s));
                 });
                 return;
             }
@@ -1323,7 +1432,7 @@ export function usePosBilling(opts: {
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
-    }, [createDialogOpen, checkoutOpen, openCheckout, payableTotal, payAccounts, setPay, setSplits]);
+    }, [createDialogOpen, checkoutOpen, openCheckout, splits, coverAmountRef, payAccounts, setPay, setSplits]);
 
     // F9 → quick cash: opens checkout with the full payable amount seeded on
     // the CASH row (option-1) — the one-key "customer pays cash" flow. Kept
@@ -1495,15 +1604,35 @@ export function usePosBilling(opts: {
     // Money math derived from pay — Cash net = tendered − return.
     const cashNet = Math.max(0, pay.cashTendered - pay.cashReturn);
     const splitsSum = splits.reduce((s, x) => s + x.amount, 0);
+    // A UPI row taken in parts: the part due now (the first not yet received) —
+    // the customer display shows only its QR, one part at a time.
+    const isUpiRow = (x: TenderSplit) => payAccountById.get(x.paymentAccountId ?? -1)?.channel === "UPI";
+    const upiPart = (() => {
+        for (const x of splits) {
+            if (!isUpiRow(x)) continue;
+            const parts = partsOf(x);
+            const received = x.received ?? 0;
+            if (parts.length > 1 && received < parts.length) {
+                return { amount: parts[received], index: received + 1, count: parts.length, vpa: payAccountById.get(x.paymentAccountId ?? -1)?.vpa ?? null };
+            }
+        }
+        return null;
+    })();
+    // UPI parts not all ticked as received yet — Confirm waits for them.
+    const upiPartsPending = splits.some((x) => {
+        const parts = partsOf(x);
+        return parts.length > 1 && (x.received ?? 0) < parts.length;
+    });
     // Total entered against UPI-channel accounts — drives the customer-display QR.
-    const upiEntered = splits.reduce(
-        (s, x) => s + (payAccountById.get(x.paymentAccountId ?? -1)?.channel === "UPI" ? x.amount : 0),
+    // With parts, only the part due now; a row whose parts are all in shows none.
+    const upiEntered = upiPart ? upiPart.amount : splits.reduce(
+        (s, x) => s + (isUpiRow(x) && partsOf(x).length <= 1 ? x.amount : 0),
         0,
     );
     // VPA of the UPI account the cashier is collecting into — the per-counter payee
     // for the DQ11 pay QR. First UPI split with a configured VPA wins (a counter
     // usually has one). Same per-counter source as the Share QR; no relay fallback.
-    const upiVpa = splits
+    const upiVpa = upiPart?.vpa ?? splits
         .map((x) => payAccountById.get(x.paymentAccountId ?? -1))
         .find((a) => a?.channel === "UPI" && a.vpa)?.vpa ?? null;
     const collected = cashNet + splitsSum;
@@ -1540,6 +1669,7 @@ export function usePosBilling(opts: {
     // in each screen's submit routine; only this live coordinator is shared.
     usePosCustomerDisplay({
         displayHold, checkoutOpen, upiEntered, upiVpa, upiPayeeName: DEFAULT_PAYEE_NAME,
+        upiCaption: upiPart ? `Part ${upiPart.index} of ${upiPart.count} · Pay ₹${upiPart.amount.toFixed(2)} via UPI` : null,
         cashNet, splitsSum, payableTotal, collected,
         cart, lineRows: billLineRows, snapshot, subtotal: billSubtotal, discountAmount, total, totalDiscount,
         effDiscountAmount: billTierDiscount, effRedemptionRupees, couponRupees, posExtraCharges, posTierLabel,
@@ -1605,6 +1735,9 @@ export function usePosBilling(opts: {
         shiftDropOpen, setShiftDropOpen, shiftCloseOpen, setShiftCloseOpen,
         refreshActiveShift, shiftOpenedAt,
         payAccounts, payAccountById,
+        // payment-method MDR + UPI parts (paymentMdr.ts)
+        partsOf, canSplit, fillAmountFor, methodTotals, upiPartsPending,
+        mdrRecovery: opts.paymentMdr ? mdrRecoveryNow : undefined,
         // bill math
         // lineRows / subtotal / tax / effDiscountAmount are the BILL's figures —
         // after any customer-group rebate — so the summary, the customer display

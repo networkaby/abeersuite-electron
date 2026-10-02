@@ -259,6 +259,13 @@ toggle partner of `/` below.
 Like `F2`, `F10` is a function key — it works from any context, including
 inside inputs, and is only blocked while a dialog is open.
 
+When option-2's method carries a bank charge (MDR — Settings → Payment
+Methods), the amount `F10` puts there is the bill **at that method's price**:
+the line prices rise toward their tags by the charge, so the amount is solved
+for that row ([`paymentMdr.ts`](../src/modules/pos/lib/paymentMdr.ts)). A UPI
+row on a splitting method shows its parts underneath, one QR at a time. Once a
+part is ticked as received, `F10` leaves the payment rows alone.
+
 ### `F9` — Quick cash (option-1 / Cash)
 
 Opens checkout with the full payable amount (`payableTotal` — the total minus
@@ -306,6 +313,10 @@ remaining" helper on whichever line the cashier is on:
 Other lines are left untouched — it's a fill-the-rest action, not a
 "move everything here" one. Outside the checkout, `/` keeps its product-search
 role (focus the scan box).
+
+On a line whose method carries a bank charge (MDR), "the rest" is solved with
+the bill at that method's price — the same as the line's ✓ helper. A UPI line
+whose parts are already coming in keeps its amount.
 
 ### `↑` / `↓` inside checkout — jump between payment lines
 

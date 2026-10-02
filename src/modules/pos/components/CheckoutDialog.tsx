@@ -50,6 +50,7 @@ export function CheckoutDialog({
     submitting, onConfirm, onShare,
     topSlot, bottomSlot, confirmDisabled = false,
     title, confirmLabel, confirmPrintLabel,
+    methodTotals, blockedNote, fillAmountFor, partsOf, canSplit,
 }: {
     open: boolean;
     onOpenChange: (v: boolean) => void;
@@ -84,7 +85,15 @@ export function CheckoutDialog({
     // Actions
     submitting: boolean;
     onConfirm: (printAfter: boolean) => void;
-    onShare?: (acct: TenderAccount) => void;
+    onShare?: (acct: TenderAccount, amount?: number) => void;
+    /** Sale: what the whole bill comes to by each way of paying, for the cashier
+     *  to tell the customer (payment-method MDR — usePosBilling). */
+    methodTotals?: { label: string; amount: number; note?: string }[];
+    /** Why Confirm is held (e.g. UPI parts not all received) — shown by the CTAs. */
+    blockedNote?: string | null;
+    fillAmountFor?: (s: TenderSplit) => number;
+    partsOf?: (s: TenderSplit) => number[];
+    canSplit?: (s: TenderSplit) => boolean;
     // "receipt" mode chrome — a party picker above the tenders and a note below.
     topSlot?: React.ReactNode;
     bottomSlot?: React.ReactNode;
@@ -146,6 +155,19 @@ export function CheckoutDialog({
                     </div>
                     )}
 
+                    {/* By way of paying — the totals the cashier reads out. */}
+                    {isSale && methodTotals && methodTotals.length > 1 && (
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 rounded-md border border-border px-3 py-2 text-xs">
+                            {methodTotals.map((m) => (
+                                <span key={`${m.label}·${m.note ?? ""}`} className="whitespace-nowrap">
+                                    <span className="text-muted-foreground">{m.label}</span>{" "}
+                                    <span className="font-semibold tabular-nums">{formatInr(m.amount)}</span>
+                                    {m.note && <span className="text-muted-foreground"> ({m.note})</span>}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+
                     {!isReceipt && !isConfirm && giftCardApplied > 0.005 && (
                         <div className="flex items-center justify-between rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-sm dark:border-teal-500/30 dark:bg-teal-500/10">
                             <span className="flex items-center gap-1.5 text-teal-700 dark:text-teal-300"><CreditCard size={14} /> Gift card {giftCardCode} − {formatInr(giftCardApplied)}</span>
@@ -195,6 +217,9 @@ export function CheckoutDialog({
                             showTotal={isReceipt}
                             onShare={onShare}
                             onEnter={enterToSubmit}
+                            fillAmountFor={fillAmountFor}
+                            partsOf={partsOf}
+                            canSplit={canSplit}
                         />
                         )}
 
@@ -258,6 +283,12 @@ export function CheckoutDialog({
                                     </p>
                                 )}
                             </div>
+                        )}
+
+                        {blockedNote && (
+                            <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                                <AlertCircle size={12} className="shrink-0" /> {blockedNote}
+                            </p>
                         )}
 
                         {/* Inline confirm CTAs — final amount + actions sit close to the payment-line entry */}

@@ -22,6 +22,7 @@ import { POS_LIVE_POLL_MS } from "@/shared/lib/constants/polling";
 import CounterStatusBadge from "@/shared/components/CounterStatusBadge";
 import SyncStatusBadge from "@/shared/components/SyncStatusBadge";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import type { MdrRule, SplitRule } from "@/modules/pos/lib/paymentGateways";
 
 export type ActiveShift = {
     id: number;
@@ -46,6 +47,12 @@ export type ActiveShift = {
             account: { id: number; name: string } | null;
             vpa: string | null;
             defaultVisible: boolean;
+            // Bank charge (MDR) + UPI split rule of the account's payment method
+            // (Settings → Payment Methods) — null = none. Drives the MDR price rise
+            // and the UPI parts at checkout (paymentMdr.ts). Absent on a shift
+            // cached before they existed.
+            mdr?: MdrRule | null;
+            split?: SplitRule | null;
         }[];
     };
     branch: { id: string; name: string };

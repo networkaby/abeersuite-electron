@@ -31,6 +31,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { tillBalancePaise } from "@/modules/pos/lib/shiftMath";
+import { payAccountMdr } from "@/modules/pos/lib/paymentGateways";
 
 export async function GET() {
     const { user, response } = await requireAuth();
@@ -53,6 +54,7 @@ export async function GET() {
                             orderBy: { sortOrder: "asc" },
                             select: {
                                 id: true, channel: true, label: true, accountId: true, vpa: true, defaultVisible: true,
+                                gatewayId: true,
                                 account: { select: { id: true, name: true } },
                             },
                         },
@@ -84,10 +86,18 @@ export async function GET() {
         // drawer. One indexed groupBy on the counter's own replica.
         const tillPaise = await tillBalancePaise(prisma, shift.counter.tillAccountId);
 
+        // Each payment account's bank charge (MDR) + UPI split rule, read off its
+        // Settings → Payment Methods row — the checkout works the bill out with
+        // them (paymentMdr.ts) and /api/pos/sale re-reads the same rows.
+        const methodRows = shift.counter.paymentAccounts.length > 0
+            ? await prisma.paymentGateway.findMany({ select: { id: true, provider: true, configJson: true } })
+            : [];
+
         return NextResponse.json({
             ...shift,
             counter: {
                 ...shift.counter,
+                paymentAccounts: shift.counter.paymentAccounts.map((a) => ({ ...a, ...payAccountMdr(a, methodRows) })),
                 tillAccount: {
                     ...shift.counter.tillAccount,
                     balance: String(Number(tillPaise) / 100),

@@ -21,6 +21,9 @@ export type PosCustomerDisplayParams = {
     upiVpa: string | null;
     /** Payee name shown above the pay QR (company-level). */
     upiPayeeName: string;
+    /** Caption under the pay QR when the UPI is taken in parts ("Part 2 of 3 ·
+     *  Pay ₹1,667 via UPI"). null = the plain "Pay ₹X via UPI". */
+    upiCaption?: string | null;
     cashNet: number;
     splitsSum: number;
     payableTotal: number;
@@ -62,7 +65,7 @@ const UPI_SETTLE_MS = 1000;
 // sent mid-typing is scannable (₹3 on screen while the cashier types ₹32).
 // Fire-and-forget; relay-down never blocks POS.
 export function usePosCustomerDisplay({
-    displayHold, checkoutOpen, upiEntered, upiVpa, upiPayeeName,
+    displayHold, checkoutOpen, upiEntered, upiVpa, upiPayeeName, upiCaption,
     cashNet, splitsSum, payableTotal, collected,
     cart, lineRows, snapshot, subtotal, discountAmount, total, totalDiscount,
     effDiscountAmount, effRedemptionRupees, couponRupees, posExtraCharges, posTierLabel,
@@ -81,7 +84,7 @@ export function usePosCustomerDisplay({
                     amount: upiEntered,
                     vpa: upiVpa ?? undefined,
                     payeeName: upiPayeeName,
-                    caption: `Pay ₹${upiEntered.toFixed(2)} via UPI`,
+                    caption: upiCaption ?? `Pay ₹${upiEntered.toFixed(2)} via UPI`,
                 });
             } else if (checkoutOpen && (cashNet > 0 || splitsSum > 0)) {
                 void qrDisplay.payment({
@@ -162,7 +165,7 @@ export function usePosCustomerDisplay({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         displayHold, checkoutOpen, cart, snapshot,
-        cashNet, upiEntered, upiVpa, splitsSum, collected,
+        cashNet, upiEntered, upiVpa, upiCaption, splitsSum, collected,
         subtotal, discountAmount, total,
         totalDiscount, effDiscountAmount, effRedemptionRupees, couponRupees,
         hoverPreview,
