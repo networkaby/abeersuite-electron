@@ -32,6 +32,8 @@ export type PaySetup = {
     canPay: boolean;
     canReceive: boolean;
     moneyLedgers: { id: number; name: string; group: string | null }[];
+    /** Ledgers a payment can go straight to — Direct / Indirect Expenses and below. */
+    expenseLedgers: { id: number; name: string; group: string | null }[];
     branches: { id: string; name: string }[];
     defaultBranchId: string | null;
 };

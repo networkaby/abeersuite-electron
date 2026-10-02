@@ -6,6 +6,8 @@ import { COMBINED_BRANCH, resolveActiveBranchId } from "@/shared/lib/auth/active
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { MONEY_ACCOUNT_GROUPS } from "@/modules/accountancy/lib/moneyAccount";
+import { accountIdsUnderGroup } from "@/modules/accountancy/lib/accountGroups";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { PARTY_DETAIL_PERMISSIONS } from "@/modules/mobile/mobileAccess";
 
 // GET /api/mobile/pay-setup
@@ -16,6 +18,8 @@ import { PARTY_DETAIL_PERMISSIONS } from "@/modules/mobile/mobileAccess";
 //     that API, so these only decide whether to show the buttons);
 //   • the cash / bank / OD ledgers money can be paid from or received in — the
 //     office "Paid from" picker's own rule (MONEY_ACCOUNT_GROUPS);
+//   • the expense ledgers a payment can go straight to (quick Pay: rent, tea…) —
+//     every ledger under Direct / Indirect Expenses, sub-groups included;
 //   • the branches this person may post in, and which one the voucher would take.
 // The same for every party, so the phone keeps one copy.
 export async function GET(req: Request) {
@@ -25,14 +29,25 @@ export async function GET(req: Request) {
     const canPay = userCanVoucher(user, "PAYMENT", "create") && userCanVoucher(user, "PAYMENT", "post");
     const canReceive = userCanVoucher(user, "RECEIPT", "create") && userCanVoucher(user, "RECEIPT", "post");
     if (!canPay && !canReceive) {
-        return NextResponse.json({ canPay, canReceive, moneyLedgers: [], branches: [], defaultBranchId: null });
+        return NextResponse.json({ canPay, canReceive, moneyLedgers: [], expenseLedgers: [], branches: [], defaultBranchId: null });
     }
 
     try {
         const isAdmin = user.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
-        const [moneyLedgers, branches] = await Promise.all([
+        const expenseIds = canPay
+            ? (await Promise.all([
+                accountIdsUnderGroup(ACCOUNT_GROUPS.DIRECT_EXPENSES),
+                accountIdsUnderGroup(ACCOUNT_GROUPS.INDIRECT_EXPENSES),
+            ])).flat()
+            : [];
+        const [moneyLedgers, expenseLedgers, branches] = await Promise.all([
             prisma.account.findMany({
                 where: { isActive: true, group: { name: { in: [...MONEY_ACCOUNT_GROUPS] } } },
+                select: { id: true, name: true, group: { select: { name: true } } },
+                orderBy: { name: "asc" },
+            }),
+            expenseIds.length === 0 ? Promise.resolve([]) : prisma.account.findMany({
+                where: { id: { in: expenseIds }, isActive: true },
                 select: { id: true, name: true, group: { select: { name: true } } },
                 orderBy: { name: "asc" },
             }),
@@ -56,6 +71,7 @@ export async function GET(req: Request) {
             canPay,
             canReceive,
             moneyLedgers: moneyLedgers.map((a) => ({ id: a.id, name: a.name, group: a.group?.name ?? null })),
+            expenseLedgers: expenseLedgers.map((a) => ({ id: a.id, name: a.name, group: a.group?.name ?? null })),
             branches,
             defaultBranchId,
         });

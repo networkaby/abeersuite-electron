@@ -1,13 +1,15 @@
 import Link from "next/link";
+import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { mobileUser } from "@/modules/mobile/mobileAccess";
-import { screensFor } from "@/modules/mobile/mobileScreens";
+import { quickEntryFor, screensFor } from "@/modules/mobile/mobileScreens";
 import MobileHeader from "@/modules/mobile/MobileHeader";
 
 /** Home: every screen this person holds, as a tile. Sign out lives in the side menu. */
 export default async function MobileHome() {
     const user = await mobileUser();
     const tiles = screensFor(user.permissions);
+    const quick = quickEntryFor(user.permissions);
 
     return (
         <>
@@ -17,6 +19,21 @@ export default async function MobileHome() {
                     <p className="text-xs text-muted-foreground">Signed in as</p>
                     <p className="text-lg font-semibold">{user.name}</p>
                 </div>
+
+                {(quick.receive || quick.pay) && (
+                    <div className="grid grid-cols-2 gap-3">
+                        {quick.receive && (
+                            <Link href="/m/quick/receive" className="flex items-center gap-2 rounded-xl bg-emerald-600 p-4 font-medium text-white active:opacity-90">
+                                <ArrowDownLeft className="size-6" /> Receive
+                            </Link>
+                        )}
+                        {quick.pay && (
+                            <Link href="/m/quick/pay" className="flex items-center gap-2 rounded-xl bg-primary p-4 font-medium text-primary-foreground active:opacity-90">
+                                <ArrowUpRight className="size-6" /> Pay
+                            </Link>
+                        )}
+                    </div>
+                )}
 
                 {tiles.length === 0 ? (
                     <p className="rounded-lg border p-4 text-sm text-muted-foreground">

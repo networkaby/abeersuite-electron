@@ -3,10 +3,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, X } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Home, Plus, X } from "lucide-react";
 import MobileNav from "./MobileNav";
 import MobileSignOut from "./MobileSignOut";
-import { MOBILE_GROUPS, isOnScreen, screensFor } from "./mobileScreens";
+import { MOBILE_GROUPS, isOnScreen, quickEntryFor, screensFor } from "./mobileScreens";
 
 const MenuContext = createContext<{ openMenu: () => void }>({ openMenu: () => { } });
 
@@ -19,8 +19,9 @@ export type ShellUser = { name: string; roleLabel: string | null; permissions: s
 
 /**
  * Everything around a phone screen: the side menu (every screen this person holds,
- * grouped, with Sign out at the bottom) and the bottom tab bar (the first few).
- * Both read the one screen list in mobileScreens.ts.
+ * grouped, with Sign out at the bottom), the bottom tab bar (the first few) — both
+ * from the one screen list in mobileScreens.ts — and the + button for quick
+ * Receive / Pay (quickEntryFor).
  */
 export default function MobileShell({ user, children }: { user: ShellUser; children: ReactNode }) {
     const [open, setOpen] = useState(false);
@@ -42,6 +43,7 @@ export default function MobileShell({ user, children }: { user: ShellUser; child
                 {children}
             </div>
             <MobileNav permissions={user.permissions} />
+            <QuickEntryButton permissions={user.permissions} />
             <SideMenu user={user} open={open} onClose={close} />
         </MenuContext.Provider>
     );
@@ -102,5 +104,51 @@ function SideMenu({ user, open, onClose }: { user: ShellUser; open: boolean; onC
                 </div>
             </nav>
         </div>
+    );
+}
+
+/** The + over the tab bar: quick Receive / Pay from any screen — but not over the
+ *  entry screens themselves, where it would only cover the Save button. */
+function QuickEntryButton({ permissions }: { permissions: string[] }) {
+    const pathname = usePathname();
+    const [open, setOpen] = useState(false);
+    const quick = quickEntryFor(permissions);
+    const onEntry = pathname.startsWith("/m/quick") || /\/(pay|receive)$/.test(pathname);
+    if ((!quick.pay && !quick.receive) || onEntry) return null;
+
+    const choice = "flex items-center gap-3 rounded-xl border bg-background px-4 py-4 text-left font-medium shadow-sm active:bg-muted";
+    return (
+        <>
+            <button
+                type="button"
+                onClick={() => setOpen(true)}
+                aria-label="Quick receive or pay"
+                className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-30 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95"
+            >
+                <Plus className="size-7" />
+            </button>
+            {open && (
+                <div className="fixed inset-0 z-40 flex items-end bg-black/40" onClick={() => setOpen(false)}>
+                    <div
+                        className="mx-auto w-full max-w-xl space-y-2 rounded-t-2xl bg-background p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {quick.receive && (
+                            <Link href="/m/quick/receive" onClick={() => setOpen(false)} className={choice}>
+                                <ArrowDownLeft className="size-6 text-emerald-600" />
+                                <span>Receive money<span className="block text-xs font-normal text-muted-foreground">From a customer</span></span>
+                            </Link>
+                        )}
+                        {quick.pay && (
+                            <Link href="/m/quick/pay" onClick={() => setOpen(false)} className={choice}>
+                                <ArrowUpRight className="size-6 text-destructive" />
+                                <span>Make payment<span className="block text-xs font-normal text-muted-foreground">To a supplier, or an expense</span></span>
+                            </Link>
+                        )}
+                        <button type="button" onClick={() => setOpen(false)} className="w-full rounded-xl py-3 text-sm text-muted-foreground">Cancel</button>
+                    </div>
+                </div>
+            )}
+        </>
     );
 }

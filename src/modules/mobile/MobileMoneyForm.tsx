@@ -62,16 +62,31 @@ function readLastLedger(key: string): number | null {
  *
  * A supplier with a UPI ID on its Bank tab gets "Open UPI app" with the amount
  * filled in; the money moves in the UPI app, and Save records it here.
+ *
+ * `expense`: `accountId` is an expense ledger, not a party (quick Pay — rent,
+ * electricity, tea): no bills, no UPI, no party on the voucher; the expense is
+ * debited and the cash / bank credited, exactly as the office Payment screen
+ * posts a payment to an expense head.
+ *
+ * Opened from quick entry (`back` under /m/quick), the saved screen offers
+ * "New entry" — straight back to the picker, with the cash / bank and mode the
+ * next entry remembers.
  */
-export default function MobileMoneyForm({ kind, accountId, userId, back }: {
+export default function MobileMoneyForm({ kind, accountId, userId, back, expense = false }: {
     kind: MoneyKind;
     accountId: number;
     userId: string;
     back: string;
+    expense?: boolean;
 }) {
     const copy = COPY[kind];
-    const party = useMobileResource<PartyDetail>(`/api/mobile/parties/${accountId}`, `party:${accountId}`, userId, { since: true });
+    const quick = back.startsWith("/m/quick");
+    const party = useMobileResource<PartyDetail>(
+        expense ? null : `/api/mobile/parties/${accountId}`, `party:${accountId}`, userId, { since: true },
+    );
     const setup = useMobileResource<PaySetup>("/api/mobile/pay-setup", "pay-setup", userId, { freshMs: MOBILE_SETUP_FRESH_MS });
+    const expenseLedger = expense ? setup.data?.expenseLedgers.find((l) => l.id === accountId) ?? null : null;
+    const targetName = expense ? expenseLedger?.name ?? null : party.data?.name ?? null;
     const lastLedgerKey = mobileKey(`last-ledger:${kind}`, userId);
 
     // Bills this voucher can settle, in the order money is put on them.
@@ -124,7 +139,7 @@ export default function MobileMoneyForm({ kind, accountId, userId, back }: {
     const branchName = branches.find((b) => b.id === branchId)?.name ?? null;
 
     const allowed = kind === "PAYMENT" ? setup.data?.canPay : setup.data?.canReceive;
-    const upiHref = kind === "PAYMENT" && party.data?.upiLink && amount > 0
+    const upiHref = !expense && kind === "PAYMENT" && party.data?.upiLink && amount > 0
         ? `${party.data.upiLink}&am=${amount.toFixed(2)}${note.trim() ? `&tn=${encodeURIComponent(note.trim())}` : ""}`
         : null;
 
@@ -153,7 +168,7 @@ export default function MobileMoneyForm({ kind, accountId, userId, back }: {
 
     const fullCount = placedBills.filter((b) => (placed.get(b.id) ?? 0) >= b.outstanding - 0.005).length;
     const partBill = placedBills.find((b) => (placed.get(b.id) ?? 0) < b.outstanding - 0.005);
-    const settleNote = placedBills.length === 0
+    const settleNote = expense ? "" : placedBills.length === 0
         ? (bills.length > 0
             ? "No bill ticked — the oldest bills are settled first, as the office does."
             : advance > 0 ? `No open bill — ${formatInr(advance)} stays as advance.` : "")
@@ -165,7 +180,7 @@ export default function MobileMoneyForm({ kind, accountId, userId, back }: {
         ].filter(Boolean).join("; ") + ".";
 
     async function save() {
-        if (!ledger || !branchId || !party.data || amount <= 0) return;
+        if (!ledger || !branchId || (expense ? !expenseLedger : !party.data) || amount <= 0) return;
         setStep("saving");
         setError(null);
         // The voucher API stamps the branch from this store (stampRequestContext).
@@ -184,7 +199,8 @@ export default function MobileMoneyForm({ kind, accountId, userId, back }: {
                 type: kind,
                 date,
                 narration: note.trim() || undefined,
-                partyAccountId: accountId,
+                // An expense head is not a party — no party on the voucher, no bills.
+                ...(expense ? {} : { partyAccountId: accountId }),
                 lines: [moneyLine, partyLine],
                 post: true,
                 ...(settlesTicks ? { autoLink: false } : {}),
@@ -209,8 +225,8 @@ export default function MobileMoneyForm({ kind, accountId, userId, back }: {
             }
             // What this voucher moved must not be shown from a saved copy: the party,
             // the receivable / payable lists, the Day Book, the balances held.
-            forgetPartyBalances();
-            await dropAnswers(`party:${accountId}:`, "outstanding:", "/api/mobile/daybook");
+            if (!expense) forgetPartyBalances();
+            await dropAnswers(...(expense ? [] : [`party:${accountId}:`, "outstanding:"]), "/api/mobile/daybook");
             setSaved({ reference: created.reference ?? `UV-${created.id}`, settled, settleError });
         } catch (e) {
             setError(extractApiError(e, "Could not save."));
@@ -226,28 +242,35 @@ export default function MobileMoneyForm({ kind, accountId, userId, back }: {
                     <CheckCircle2 className="size-12 text-emerald-600" />
                     <p className="text-lg font-semibold">{copy.done} {saved.reference} saved</p>
                     <p className="text-sm text-muted-foreground">
-                        {formatInr(amount)} {copy.to} {party.data?.name} · {ledger?.name}
+                        {formatInr(amount)} {copy.to} {targetName} · {ledger?.name}
                     </p>
                     {saved.settled && (
                         <p className="text-sm">Settled {saved.settled.bills} bill{saved.settled.bills === 1 ? "" : "s"} — {formatInr(saved.settled.placed)}</p>
                     )}
                     {saved.settleError && <p className="text-sm text-destructive">{saved.settleError}</p>}
                     <Link href={back} className="mt-2 w-full rounded-lg bg-primary py-3 font-medium text-primary-foreground">
-                        Back to {party.data?.name ?? "party"}
+                        {quick ? "New entry" : `Back to ${targetName ?? "party"}`}
                     </Link>
+                    {quick && (
+                        <Link href="/m" className="w-full rounded-lg border py-3 text-sm">Done</Link>
+                    )}
                 </div>
             </>
         );
     }
 
-    const loading = !party.data || !setup.data;
+    const loading = !setup.data || (!expense && !party.data);
 
     return (
         <>
-            <MobileHeader title={`${copy.title} ${copy.to} ${party.data?.name ?? "party"}`} back={back} />
+            <MobileHeader title={`${copy.title} ${copy.to} ${targetName ?? (expense ? "expense" : "party")}`} back={back} />
             {(party.error || setup.error) && <p className="px-3 pt-2 text-sm text-destructive">{party.error ?? setup.error}</p>}
             {loading ? (
                 <p className="p-6 text-center text-sm text-muted-foreground">Loading…</p>
+            ) : expense && !expenseLedger ? (
+                <p className="m-4 rounded-lg border p-4 text-sm text-muted-foreground">
+                    This ledger is not under Direct or Indirect Expenses, so it cannot be paid from here.
+                </p>
             ) : !allowed ? (
                 <p className="m-4 rounded-lg border p-4 text-sm text-muted-foreground">
                     Your role cannot {kind === "PAYMENT" ? "make payments" : "take receipts"}. Ask admin for the{" "}
@@ -405,7 +428,7 @@ export default function MobileMoneyForm({ kind, accountId, userId, back }: {
                 <div className="space-y-4 p-4">
                     <div className="space-y-2 rounded-lg border p-4">
                         <p className="text-lg font-semibold">
-                            {copy.verb} {formatInr(amount)} {copy.to} {party.data!.name}
+                            {copy.verb} {formatInr(amount)} {copy.to} {targetName}
                         </p>
                         <p className="text-sm">
                             {copy.ledgerLabel} <b>{ledger!.name}</b> · {MODES.find((m) => m.value === effectiveMode)?.label}

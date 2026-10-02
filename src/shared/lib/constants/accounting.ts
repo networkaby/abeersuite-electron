@@ -26,6 +26,10 @@ export const ACCOUNT_GROUPS = {
     // See isStockEligibleAccount() for the rule and exceptions.
     SALES_ACCOUNTS:    "Sales Accounts",
     PURCHASE_ACCOUNTS: "Purchase Accounts",
+    // Expense groups a payment can go straight to (rent, electricity, tea…) —
+    // the phone's quick Pay lists every ledger under these two, sub-groups included.
+    DIRECT_EXPENSES:   "Direct Expenses",
+    INDIRECT_EXPENSES: "Indirect Expenses",
     // HR & People — every staff member's own ledger lives here (LIABILITY under
     // Current Liabilities). Salary accrues INTO it, advances and payments go
     // OUT of it, so its balance reads "owed to them" or "advance outstanding".

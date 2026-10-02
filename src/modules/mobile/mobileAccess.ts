@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { PARTY_TICKS } from "./mobileScreens";
 
 export type MobileUser = { id: string; name: string; permissions: string[] };
 
@@ -22,8 +23,4 @@ export async function mobileUser(permissionId?: string | readonly string[]): Pro
 
 /** One party's balance and bills open from any of the party lists — party search,
  *  receivables or payables — so any one of their ticks opens it. */
-export const PARTY_DETAIL_PERMISSIONS = [
-    PERMISSIONS.MOBILE_PARTIES_VIEW,
-    PERMISSIONS.MOBILE_RECEIVABLES_VIEW,
-    PERMISSIONS.MOBILE_PAYABLES_VIEW,
-] as const;
+export const PARTY_DETAIL_PERMISSIONS = PARTY_TICKS;

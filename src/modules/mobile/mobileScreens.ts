@@ -1,5 +1,7 @@
 import { BookOpen, Boxes, HandCoins, Users, Wallet, type LucideIcon } from "lucide-react";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 
 /** Side-menu headings, in the order they are listed. */
 export const MOBILE_GROUPS = ["Stock", "Parties", "Accounts"] as const;
@@ -102,4 +104,27 @@ export function screensFor(permissions: readonly string[]): MobileScreen[] {
 /** Is `pathname` this screen or one of its detail pages? */
 export function isOnScreen(pathname: string, href: string): boolean {
     return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/** Any one of these opens a party's bills (and so the Pay / Receive forms, which
+ *  read them) — party search, receivables or payables. */
+export const PARTY_TICKS = [
+    PERMISSIONS.MOBILE_PARTIES_VIEW,
+    PERMISSIONS.MOBILE_RECEIVABLES_VIEW,
+    PERMISSIONS.MOBILE_PAYABLES_VIEW,
+] as const;
+
+/**
+ * Who sees quick Receive / Pay (the + button, the Home tiles): the Role page's
+ * Receipt / Payment CREATE and POST ticks — the two the voucher API itself checks
+ * — plus a party tick, since the forms read the party's bills. Read through the
+ * CRUD ladder (`hasPermissionWithScope`): a session carries only the highest rung.
+ */
+export function quickEntryFor(permissions: string[]): { pay: boolean; receive: boolean } {
+    const can = (type: string) => (["create", "post"] as const).every((action) => {
+        const id = requiredVoucherPermission(type, action);
+        return id != null && hasPermissionWithScope(permissions, id);
+    });
+    const party = PARTY_TICKS.some((t) => permissions.includes(t)) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+    return { pay: party && can("PAYMENT"), receive: party && can("RECEIPT") };
 }

@@ -16,8 +16,11 @@ export function moneyFormPage(kind: MoneyKind) {
         const accountId = Number((await params).accountId);
         if (!Number.isInteger(accountId)) notFound();
         const { from } = await searchParams;
-        // Back to the party, which itself goes back to the list it came from.
+        // From quick entry: back to its picker. Otherwise back to the party, which
+        // itself goes back to the list it came from.
+        const quick = from && /^\/m\/quick\/(pay|receive)$/.test(from) ? from : null;
         const listFrom = from && /^\/m\/[a-z-]+$/.test(from) ? `?from=${from}` : "";
-        return <MobileMoneyForm kind={kind} accountId={accountId} userId={user.id} back={`/m/parties/${accountId}${listFrom}`} />;
+        const back = quick ?? `/m/parties/${accountId}${listFrom}`;
+        return <MobileMoneyForm kind={kind} accountId={accountId} userId={user.id} back={back} />;
     };
 }
