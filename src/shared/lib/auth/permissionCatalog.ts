@@ -31,6 +31,11 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     { id: "admin:bypass", label: "Bypass all permission checks", module: "core", description: "Grants full access. Only usable by the env super admin — never grant this to a role.", systemOnly: true },
     { id: "auth:login:outside-counter", label: "Can login outside counter", module: "core", description: "Allow login from a non-counter machine (without bridge). Without this permission, login is restricted to counter machines only." },
 
+    // mobile — the phone app at /m. One tick per screen; signing in on a phone still
+    // needs "Can login outside counter".
+    { id: "mobile:stock:view", label: "Mobile: stock & price", module: "mobile", description: "Phone app: search products and see available quantity (total and per branch) and sale price." },
+    { id: "mobile:parties:view", label: "Mobile: party balance", module: "mobile", description: "Phone app: search parties and see their balance and unpaid bills." },
+
     // customers — Contacts (Person + Company) share ONE flat set. Contacts carry no
     // branch, so there is no radius to enforce: any branch may CRUD (gated only by
     // holding the write id). The old own/department/branch/org ladder and the

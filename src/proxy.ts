@@ -29,6 +29,7 @@ function isPublicPath(pathname: string): boolean {
 function wantsStaffSignIn(pathname: string): boolean {
     return (
         pathname.startsWith("/office") ||
+        pathname === "/m" || pathname.startsWith("/m/") ||
         pathname.startsWith("/vouchers") ||
         pathname.startsWith("/receipt") ||
         pathname.startsWith("/shipping-") ||

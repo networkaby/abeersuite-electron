@@ -18,6 +18,11 @@ export const PERMISSIONS = {
     // see src/shared/lib/bridge/bridgeHealth.ts).
     AUTH_LOGIN_OUTSIDE_COUNTER: "auth:login:outside-counter",
 
+    // Mobile app (/m) — one tick per phone screen. The sign-in itself still needs
+    // AUTH_LOGIN_OUTSIDE_COUNTER: a phone is never a counter.
+    MOBILE_STOCK_VIEW: "mobile:stock:view",
+    MOBILE_PARTIES_VIEW: "mobile:parties:view",
+
     // Accountancy Masters — the chart of accounts (Account Groups, Ledgers, Chart
     // of Accounts), gated together. Read access rides the accountancy sidebar nav.
     ACCOUNTANCY_MASTERS_CREATE: "accountancy:masters:create",

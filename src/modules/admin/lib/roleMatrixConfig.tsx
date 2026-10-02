@@ -80,6 +80,8 @@ export const QUICK_ACTION_OPTIONS: { permission: string; ids: string[]; label: s
 export const POOL_EXEMPT_PERMISSION_IDS = new Set<string>([
     "quick-actions:more",
     "auth:login:outside-counter",
+    "mobile:stock:view",
+    "mobile:parties:view",
 ]);
 
 export interface Permission {
@@ -696,6 +698,22 @@ export const MODULE_EXTRA_TOGGLE: Record<string, {
         showWhenAnyLinkId: [],
         global: true,
         globalDescription: "When granted, this user can log in from any machine. Without it, login is restricted to counter machines (with bridge) only.",
+    },
+    // The phone app (/m) — one tick per screen. Signing in on a phone still needs
+    // "Can login outside counter" above.
+    mobileStock: {
+        id: "mobile:stock:view",
+        label: "Mobile: stock & price",
+        showWhenAnyLinkId: [],
+        global: true,
+        globalDescription: "Phone app (/m): search products, see available quantity per branch and sale price. Needs 'Can login outside counter' to sign in.",
+    },
+    mobileParties: {
+        id: "mobile:parties:view",
+        label: "Mobile: party balance",
+        showWhenAnyLinkId: [],
+        global: true,
+        globalDescription: "Phone app (/m): search parties, see balance and unpaid bills. Needs 'Can login outside counter' to sign in.",
     },
 };
 

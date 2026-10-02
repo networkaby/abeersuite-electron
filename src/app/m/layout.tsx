@@ -1,0 +1,35 @@
+import type { Metadata } from "next";
+import { Toaster } from "sonner";
+import { auth } from "@/auth";
+import { redirect } from "next/navigation";
+import { redirectIfPcWithoutCounter } from "@/shared/lib/auth/permissions";
+import SessionWrapper from "@/shared/components/SessionWrapper";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+
+export const metadata: Metadata = {
+    title: "Mobile",
+    manifest: "/m/manifest.webmanifest",
+    appleWebApp: { capable: true, title: COMPANY_DETAILS.brandName },
+};
+
+/**
+ * The phone app — a few read-only screens for staff away from a counter.
+ *
+ * Same sign-in as the office site, and so the same rule: a phone is never a
+ * counter, so only someone with "Can login outside counter" gets in (enforced at
+ * sign-in, authorizeStaff.ts). Each screen then needs its own `mobile:*` tick,
+ * checked by its page and again by its API.
+ */
+export default async function MobileLayout({ children }: { children: React.ReactNode }) {
+    const session = await auth();
+    if (!session?.user) redirect("/staff/login?callbackUrl=/m");
+    if ((session.user as { kind?: string }).kind === "customer") redirect("/portal");
+    redirectIfPcWithoutCounter();
+
+    return (
+        <SessionWrapper session={session}>
+            <div className="mx-auto flex min-h-dvh w-full max-w-xl flex-col bg-background">{children}</div>
+            <Toaster position="top-center" />
+        </SessionWrapper>
+    );
+}
