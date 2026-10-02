@@ -4,13 +4,15 @@
 // The "UPI in parts" panel that opens BESIDE the checkout (CheckoutDialog's
 // sidePanel) — never over it, so the cashier can still move money between the
 // rows while the customer scans. It shows the part due now (its QR is on the
-// customer display), the parts already received, a tick per part as the money
-// comes in, and the choice between parts (no bank charge) and one scan (MDR in
-// the price). Presentational only: the parts and the figures come from
+// customer display), a checkbox on every part — ticked as the money comes in —
+// and the choice between parts (no bank charge) and one scan (MDR in the price).
+// Parts are paid in order (one QR at a time), so ticking a part ticks the ones
+// before it, and un-ticking one clears it and the ones after. Presentational only: the parts and the figures come from
 // usePosBilling (paymentMdr.ts), the buttons call back into it.
 
-import { Check, Smartphone, Split, Undo2 } from "lucide-react";
+import { Check, Smartphone, Split } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatInr } from "@/shared/lib/format";
 
 export type UpiPanelState = {
@@ -28,10 +30,13 @@ export type UpiPanelState = {
     oneScanAmount: number;
 };
 
-export function UpiPartsPanel({ panel, onReceived, onUndo, onOneGo, onSplit }: {
+export function UpiPartsPanel({ panel, onReceived, onToggle, onOneGo, onSplit }: {
     panel: UpiPanelState;
+    /** Tick the part due now. */
     onReceived: () => void;
-    onUndo: () => void;
+    /** A part's checkbox — `on` ticks it (and the ones before), off clears it
+     *  (and the ones after). */
+    onToggle: (index: number, on: boolean) => void;
     onOneGo: () => void;
     onSplit: () => void;
 }) {
@@ -67,43 +72,41 @@ export function UpiPartsPanel({ panel, onReceived, onUndo, onOneGo, onSplit }: {
                 </div>
             )}
 
-            {tracked && (
-                <div className="flex gap-2">
-                    {due != null && (
-                        <Button type="button" size="sm" className="flex-1" onClick={onReceived}>
-                            <Check size={14} /> {all.length > 1 ? `Part ${received.length + 1} received` : "Received"}
-                        </Button>
-                    )}
-                    {received.length > 0 && (
-                        <Button type="button" size="sm" variant="outline" onClick={onUndo} title="Un-tick the last part received">
-                            <Undo2 size={14} /> Undo
-                        </Button>
-                    )}
-                </div>
+            {tracked && due != null && (
+                <Button type="button" size="sm" className="w-full" onClick={onReceived}>
+                    <Check size={14} /> {all.length > 1 ? `Part ${received.length + 1} received` : "Received"}
+                </Button>
             )}
 
-            {/* Every part, in the order the customer pays them. */}
-            {all.length > 1 && (
+            {/* Every part, in the order the customer pays them — a checkbox each. */}
+            {tracked && (
                 <ol className="space-y-1">
                     {all.map((p, i) => {
                         const isIn = i < received.length;
                         const isNow = i === received.length;
                         return (
-                            <li
-                                key={i}
-                                className={`flex items-center justify-between rounded px-2 py-1 text-xs tabular-nums ${
-                                    isIn
-                                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-                                        : isNow
-                                          ? "bg-primary/10 font-semibold"
-                                          : "text-muted-foreground"
-                                }`}
-                            >
-                                <span>Part {i + 1}</span>
-                                <span className="flex items-center gap-1.5">
-                                    {formatInr(p)}
-                                    {isIn ? <Check size={12} /> : isNow ? <span className="text-[10px] font-normal">now</span> : null}
-                                </span>
+                            <li key={i}>
+                                <label
+                                    className={`flex cursor-pointer items-center gap-2.5 rounded-md border px-2 py-1.5 text-xs tabular-nums ${
+                                        isIn
+                                            ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300"
+                                            : isNow
+                                              ? "border-primary/40 bg-primary/10 font-semibold"
+                                              : "border-transparent text-muted-foreground"
+                                    }`}
+                                >
+                                    <Checkbox
+                                        checked={isIn}
+                                        onCheckedChange={(v) => onToggle(i, v === true)}
+                                        aria-label={`Part ${i + 1} received`}
+                                        className="size-5 data-[state=checked]:border-emerald-600 data-[state=checked]:bg-emerald-600"
+                                    />
+                                    <span>Part {i + 1}</span>
+                                    <span className="ml-auto flex items-center gap-1.5">
+                                        {formatInr(p)}
+                                        {isIn ? <span className="text-[10px] font-normal">received</span> : isNow ? <span className="text-[10px] font-normal">now</span> : null}
+                                    </span>
+                                </label>
                             </li>
                         );
                     })}

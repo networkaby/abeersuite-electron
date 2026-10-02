@@ -586,7 +586,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     <UpiPartsPanel
                         panel={b.upiPanel}
                         onReceived={b.tickUpiPart}
-                        onUndo={b.undoUpiPart}
+                        onToggle={b.setUpiPartReceived}
                         onOneGo={() => b.setUpiOneGo(true)}
                         onSplit={() => b.setUpiOneGo(false)}
                     />

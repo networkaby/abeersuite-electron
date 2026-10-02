@@ -1660,16 +1660,16 @@ export function usePosBilling(opts: {
     })();
     const patchRow = (id: string, next: (x: TenderSplit) => TenderSplit) =>
         setSplits((prev) => prev.map((x) => (x.id === id ? next(x) : x)));
-    // Tick the payment due now as received — its amount is fixed from here on.
-    const tickUpiPart = () => {
-        if (!upiPanel || upiPanel.pending.length === 0) return;
-        const due = upiPanel.pending[0];
-        patchRow(upiPanel.rowId, (x) => ({ ...x, receivedParts: [...receivedOf(x), due] }));
-    };
-    const undoUpiPart = () => {
+    // A part's checkbox. Parts are paid in order (one QR at a time), so ticking
+    // part i fixes parts 0…i as received; un-ticking it clears it and the ones
+    // after (the rest is then split afresh).
+    const setUpiPartReceived = (index: number, on: boolean) => {
         if (!upiPanel) return;
-        patchRow(upiPanel.rowId, (x) => ({ ...x, receivedParts: receivedOf(x).slice(0, -1) }));
+        const all = [...upiPanel.received, ...upiPanel.pending];
+        patchRow(upiPanel.rowId, (x) => ({ ...x, receivedParts: all.slice(0, on ? index + 1 : index) }));
     };
+    // Tick the payment due now.
+    const tickUpiPart = () => { if (upiPanel?.pending.length) setUpiPartReceived(upiPanel.received.length, true); };
     // Parts ⇄ one scan. The row moves to what that choice comes to, so the bill
     // stays covered (one scan carries the bank charge in the price).
     const setUpiOneGo = (oneGo: boolean) => {
@@ -1796,7 +1796,7 @@ export function usePosBilling(opts: {
         payAccounts, payAccountById,
         // payment-method MDR + UPI parts (paymentMdr.ts)
         partsOf, fillAmountFor, methodTotals, upiPartsPending,
-        upiPanel, tickUpiPart, undoUpiPart, setUpiOneGo, duePartOf,
+        upiPanel, tickUpiPart, setUpiPartReceived, setUpiOneGo, duePartOf,
         mdrRecovery: opts.paymentMdr ? mdrRecoveryNow : undefined,
         // bill math
         // lineRows / subtotal / tax / effDiscountAmount are the BILL's figures —
