@@ -10,6 +10,8 @@ import { businessTodayIso, formatDate } from "@/shared/lib/format/formatDate";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { ACCOUNT_GROUPS, PAYMENT_INSTRUMENTS, type PaymentInstrument } from "@/shared/lib/constants/accounting";
 import { settleFromPicks } from "@/modules/accountancy/lib/settleFromPicks";
+import { autoLinkOrder } from "@/modules/accountancy/lib/billLinkPlan";
+import { placeOnBills } from "./moneyPlacement";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import MobileHeader from "./MobileHeader";
 import { useMobileResource } from "./useMobileResource";
@@ -46,10 +48,17 @@ function readLastLedger(key: string): number | null {
  * ticked bills with the office's own `settleFromPicks`, so a phone payment is in
  * every way the one the office Payment screen would have made.
  *
- * Bills on the side being settled start ticked (oldest first) and the amount
- * follows them until typed over. Paying more than the ticked bills leaves the rest
- * as an advance; less settles the oldest ticked bills first. With no bill ticked
- * the server settles the oldest bills itself, as the office does.
+ * The money goes on the bills oldest due first — the order the settling step
+ * itself fills them (`autoLinkOrder`), so what the screen shows is what is saved:
+ *   • untouched: every bill ticked, the amount is their total;
+ *   • an amount typed: the ticks FOLLOW the amount — the oldest bills it covers,
+ *     the last one in part ("₹100 of ₹320"); an advance only once every open bill
+ *     is full (owner: "the 100 should be adjusted to next bill");
+ *   • a tick changed after typing: the hand-picked bills win and the amount
+ *     stays; what they cannot take is the advance;
+ *   • the amount cleared: back to the ticked bills' total.
+ * With no bill ticked at all the server settles the oldest bills itself, as the
+ * office does.
  *
  * A supplier with a UPI ID on its Bank tab gets "Open UPI app" with the amount
  * filled in; the money moves in the UPI app, and Save records it here.
@@ -65,17 +74,19 @@ export default function MobileMoneyForm({ kind, accountId, userId, back }: {
     const setup = useMobileResource<PaySetup>("/api/mobile/pay-setup", "pay-setup", userId, { freshMs: MOBILE_SETUP_FRESH_MS });
     const lastLedgerKey = mobileKey(`last-ledger:${kind}`, userId);
 
-    // Bills this voucher can settle, oldest first.
+    // Bills this voucher can settle, in the order money is put on them.
     const bills = useMemo(
-        () => (party.data?.bills ?? [])
+        () => autoLinkOrder((party.data?.bills ?? [])
             .filter((b) => b.side === copy.side && b.universalVoucherId != null)
-            .sort((a, b) => b.daysOverdue - a.daysOverdue),
+            .map((b) => ({ ...b, id: b.universalVoucherId!, universalVoucherId: b.universalVoucherId!, dueDate: b.dueDate ?? b.billDate, open: b.outstanding }))),
         [party.data, copy.side],
     );
 
-    // null = untouched: every bill ticked, the amount follows the ticks.
+    // Ticks chosen by hand (null = every bill); the amount as typed (null = follow
+    // the ticks); `handPicked` = a tick was changed AFTER an amount was typed.
     const [ticks, setTicks] = useState<Set<number> | null>(null);
     const [typedAmount, setTypedAmount] = useState<string | null>(null);
+    const [handPicked, setHandPicked] = useState(false);
     const [ledgerId, setLedgerId] = useState<number | null>(null);
     const [mode, setMode] = useState<PaymentInstrument | null>(null);
     const [reference, setReference] = useState("");
@@ -86,11 +97,18 @@ export default function MobileMoneyForm({ kind, accountId, userId, back }: {
     const [error, setError] = useState<string | null>(null);
     const [saved, setSaved] = useState<Saved | null>(null);
 
-    const ticked = ticks ?? new Set(bills.map((b) => b.universalVoucherId!));
-    const tickedBills = bills.filter((b) => ticked.has(b.universalVoucherId!));
-    const tickedTotal = round2(tickedBills.reduce((s, b) => s + b.outstanding, 0));
-    const amountText = typedAmount ?? (tickedTotal > 0 ? String(tickedTotal) : "");
+    const allIds = bills.map((b) => b.id);
+    const handTicks = ticks ?? new Set(allIds);
+    // An amount typed and no tick changed since: the amount decides the ticks.
+    const byAmount = typedAmount != null && !handPicked;
+    const pool = byAmount ? new Set(allIds) : handTicks;
+    const poolTotal = round2(bills.filter((b) => pool.has(b.id)).reduce((s, b) => s + b.outstanding, 0));
+    const amountText = typedAmount ?? (poolTotal > 0 ? String(poolTotal) : "");
     const amount = round2(Number(amountText) || 0);
+    const { placed, advance } = placeOnBills(bills, pool, amount);
+    const ticked = byAmount ? new Set(placed.keys()) : handTicks;
+    const placedBills = bills.filter((b) => placed.has(b.id));
+    const unpaidTicked = round2(bills.filter((b) => ticked.has(b.id)).reduce((s, b) => s + b.outstanding - (placed.get(b.id) ?? 0), 0));
 
     const ledgers = setup.data?.moneyLedgers ?? [];
     const remembered = ledgerId == null && ledgers.length > 0 ? readLastLedger(lastLedgerKey) : null;
@@ -114,6 +132,18 @@ export default function MobileMoneyForm({ kind, accountId, userId, back }: {
         const next = new Set(ticked);
         if (next.has(id)) next.delete(id); else next.add(id);
         setTicks(next);
+        if (typedAmount != null) setHandPicked(true);
+    };
+
+    const onAmount = (v: string) => {
+        if (v.trim() === "") {
+            // Cleared: back to the ticked bills' total.
+            setTicks(new Set(ticked));
+            setTypedAmount(null);
+        } else {
+            setTypedAmount(v);
+        }
+        setHandPicked(false);
     };
 
     const problem = !ledger ? "No cash or bank ledger to use."
@@ -121,13 +151,18 @@ export default function MobileMoneyForm({ kind, accountId, userId, back }: {
             : amount <= 0 ? "Enter the amount."
                 : null;
 
-    const settleNote = tickedBills.length === 0
-        ? "No bill ticked — the oldest bills are settled first, as the office does."
-        : amount > tickedTotal + 0.005
-            ? `Settles ${tickedBills.length} bill${tickedBills.length === 1 ? "" : "s"}; ${formatInr(amount - tickedTotal)} stays as advance.`
-            : amount < tickedTotal - 0.005
-                ? `Settles the oldest ticked bills first; ${formatInr(tickedTotal - amount)} of them stays unpaid.`
-                : `Settles ${tickedBills.length} bill${tickedBills.length === 1 ? "" : "s"} in full.`;
+    const fullCount = placedBills.filter((b) => (placed.get(b.id) ?? 0) >= b.outstanding - 0.005).length;
+    const partBill = placedBills.find((b) => (placed.get(b.id) ?? 0) < b.outstanding - 0.005);
+    const settleNote = placedBills.length === 0
+        ? (bills.length > 0
+            ? "No bill ticked — the oldest bills are settled first, as the office does."
+            : advance > 0 ? `No open bill — ${formatInr(advance)} stays as advance.` : "")
+        : [
+            fullCount > 0 ? `Settles ${fullCount} bill${fullCount === 1 ? "" : "s"} in full` : null,
+            partBill ? `${formatInr(placed.get(partBill.id)!)} on ${partBill.ref} (part)` : null,
+            advance > 0 ? `${formatInr(advance)} stays as advance` : null,
+            !byAmount && unpaidTicked > 0.005 && !partBill ? `${formatInr(unpaidTicked)} of the ticked bills stays unpaid` : null,
+        ].filter(Boolean).join("; ") + ".";
 
     async function save() {
         if (!ledger || !branchId || !party.data || amount <= 0) return;
@@ -143,7 +178,7 @@ export default function MobileMoneyForm({ kind, accountId, userId, back }: {
             ...(reference.trim() ? { reference: reference.trim() } : {}),
         };
         const moneyLine = { accountId: ledger.id, type: kind === "PAYMENT" ? "CREDIT" : "DEBIT", amount };
-        const settlesTicks = tickedBills.length > 0;
+        const settlesTicks = placedBills.length > 0;
         try {
             const { data: created } = await axios.post<{ id: number; reference: string | null }>("/api/accountancy/vouchers", {
                 type: kind,
@@ -164,7 +199,7 @@ export default function MobileMoneyForm({ kind, accountId, userId, back }: {
                         accountId,
                         voucherId: created.id,
                         side: copy.side,
-                        picks: Object.fromEntries(tickedBills.map((b) => [b.universalVoucherId!, b.outstanding])),
+                        picks: Object.fromEntries(placed),
                         maxOwn: amount,
                     });
                     if (done) settled = { bills: done.bills, placed: done.placed };
@@ -230,14 +265,21 @@ export default function MobileMoneyForm({ kind, accountId, userId, back }: {
                                             <input
                                                 type="checkbox"
                                                 className="size-5"
-                                                checked={ticked.has(b.universalVoucherId!)}
-                                                onChange={() => toggle(b.universalVoucherId!)}
+                                                checked={ticked.has(b.id)}
+                                                onChange={() => toggle(b.id)}
                                             />
                                             <span className="min-w-0 flex-1">
                                                 <span className="block text-sm font-medium">{b.ref}</span>
                                                 <span className="block text-xs text-muted-foreground">{formatDate(b.billDate)} · {b.daysOverdue} days</span>
                                             </span>
-                                            <span className="text-sm font-semibold">{formatInr(b.outstanding)}</span>
+                                            <span className="text-right text-sm font-semibold">
+                                                {ticked.has(b.id) && (placed.get(b.id) ?? 0) < b.outstanding - 0.005 ? (
+                                                    <>
+                                                        {formatInr(placed.get(b.id) ?? 0)}
+                                                        <span className="block text-xs font-normal text-muted-foreground">of {formatInr(b.outstanding)} (part)</span>
+                                                    </>
+                                                ) : formatInr(b.outstanding)}
+                                            </span>
                                         </label>
                                     </li>
                                 ))}
@@ -251,7 +293,7 @@ export default function MobileMoneyForm({ kind, accountId, userId, back }: {
                             mode="decimal"
                             min={0}
                             value={amountText}
-                            onValueChange={setTypedAmount}
+                            onValueChange={onAmount}
                             className="h-12 text-lg font-semibold"
                             placeholder="0.00"
                         />
@@ -371,8 +413,10 @@ export default function MobileMoneyForm({ kind, accountId, userId, back }: {
                         </p>
                         <p className="text-sm">{formatDate(date)} · {branchName}</p>
                         <p className="text-sm text-muted-foreground">{settleNote}</p>
-                        {tickedBills.length > 0 && (
-                            <p className="text-xs text-muted-foreground">{tickedBills.map((b) => b.ref).join(", ")}</p>
+                        {placedBills.length > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                                {placedBills.map((b) => `${b.ref} ${formatInr(placed.get(b.id)!)}${placed.get(b.id)! < b.outstanding - 0.005 ? " (part)" : ""}`).join(", ")}
+                            </p>
                         )}
                         {note.trim() && <p className="text-sm text-muted-foreground">“{note.trim()}”</p>}
                     </div>

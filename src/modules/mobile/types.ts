@@ -6,6 +6,9 @@ export type PartyBill = {
     universalVoucherId: number | null;
     ref: string;
     billDate: string;
+    /** When it falls due — the order money is placed on bills (oldest due first).
+     *  Absent on a copy saved before it was sent; read the bill date then. */
+    dueDate?: string;
     totalAmount: number;
     /** Unsigned; `side` says which way it runs (+1 they owe us, −1 we owe them). */
     outstanding: number;

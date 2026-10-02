@@ -72,6 +72,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
                 universalVoucherId: b.universalVoucherId,
                 ref: b.ref,
                 billDate: b.billDate,
+                dueDate: b.dueDate,
                 totalAmount: b.totalAmount,
                 outstanding: b.outstanding,
                 side: b.side,
