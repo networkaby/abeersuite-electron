@@ -5,17 +5,8 @@
 
 import type { PosPayChannel, PaymentMethod } from "@/generated/prisma/client";
 
-/// The channels offered in the counter "method" dropdown, in display order.
-export const POS_PAY_CHANNELS: PosPayChannel[] = [
-    "UPI",
-    "CARD",
-    "CHEQUE",
-    "WALLET",
-    "BANK_TRANSFER",
-    "GATEWAY",
-];
-
-/// Cashier/admin-facing channel names.
+/// Cashier/admin-facing channel names. The counter "method" dropdown itself is
+/// built from Settings → Payment Methods (PAYMENT_METHOD_DEFAULTS), not from here.
 export const CHANNEL_LABEL: Record<PosPayChannel, string> = {
     UPI: "UPI",
     CARD: "Card",

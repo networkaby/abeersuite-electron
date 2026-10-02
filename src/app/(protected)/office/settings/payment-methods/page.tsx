@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
     getGatewayProvider,
+    isKeylessMethod,
     PAY_ON_DELIVERY_PROVIDER_ID,
     settlementAccountIdOf,
     type PaymentGatewayProvider,
@@ -76,10 +77,7 @@ type FormState = {
     provider: string;
     displayName: string;
     environment: "TEST" | "LIVE";
-    enabledForCounter: boolean;
-    enabledForOnline: boolean;
     config: Record<string, string>;
-    isActive: boolean;
     // The GL ledger money collected via this method settles into (Cash/Bank asset
     // ledger). Stored on configJson.settlementAccountId. null = not set yet.
     settlementAccountId: number | null;
@@ -94,10 +92,7 @@ const EMPTY_FORM: FormState = {
     provider: PAY_ON_DELIVERY_PROVIDER_ID, // overwritten by openEdit; never created fresh
     displayName: "",
     environment: "TEST",
-    enabledForCounter: true,
-    enabledForOnline: false,
     config: {},
-    isActive: true,
     settlementAccountId: null,
     podMode: "except",
     podStates: [],
@@ -128,6 +123,30 @@ function CredentialBadge({ status }: { status: CredentialStatus }) {
         <Badge className="bg-red-100 text-red-600">
             <X className="mr-1 size-3" /> Keys missing
         </Badge>
+    );
+}
+
+function FlagSwitch({
+    id,
+    label,
+    icon,
+    checked,
+    onChange,
+}: {
+    id: string;
+    label: string;
+    icon?: React.ReactNode;
+    checked: boolean;
+    onChange: (v: boolean) => void;
+}) {
+    return (
+        <div className="flex items-center gap-1.5">
+            <Switch id={id} checked={checked} onCheckedChange={onChange} />
+            <Label htmlFor={id} className="flex items-center gap-1 text-xs font-normal">
+                {icon}
+                {label}
+            </Label>
+        </div>
     );
 }
 
@@ -203,21 +222,35 @@ export default function PaymentMethodsSettingsPage() {
             provider: g.provider,
             displayName: g.displayName,
             environment: g.environment,
-            enabledForCounter: g.enabledForCounter,
-            enabledForOnline: g.enabledForOnline,
             // POD's configJson holds a nested area object, not flat string fields.
             config: isPod
                 ? {}
                 : Object.fromEntries(
                       Object.entries(g.configJson ?? {}).map(([k, v]) => [k, String(v ?? "")]),
                   ),
-            isActive: g.isActive,
             settlementAccountId: settlementAccountIdOf(g.configJson),
             podMode: area?.mode ?? "except",
             podStates: area?.states ?? [],
             podPincodes: (area?.pincodePrefixes ?? []).join("\n"),
         });
         setDialogOpen(true);
+    };
+
+    // The Counter / Online / Active switches live on each card and save at once —
+    // optimistic, put back if the server refuses.
+    type Flag = "enabledForCounter" | "enabledForOnline" | "isActive";
+    const toggle = async (g: Gateway, flag: Flag, value: boolean) => {
+        const put = (v: boolean) =>
+            setGateways((list) => list.map((x) => (x.id === g.id ? { ...x, [flag]: v } : x)));
+        put(value);
+        try {
+            await axios.patch(`/api/settings/payment-methods/${g.id}`, { [flag]: value });
+        } catch (e) {
+            put(!value);
+            toast.error(
+                axios.isAxiosError(e) ? (e.response?.data?.error ?? "Failed to save") : "Failed to save",
+            );
+        }
     };
 
     const save = async () => {
@@ -247,10 +280,7 @@ export default function PaymentMethodsSettingsPage() {
             provider: form.provider,
             displayName: form.displayName.trim(),
             environment: form.environment,
-            enabledForCounter: provider.supportsCounter ? form.enabledForCounter : false,
-            enabledForOnline: provider.supportsOnline ? form.enabledForOnline : false,
             configJson,
-            isActive: form.isActive,
         };
         try {
             // Fixed catalog — always an edit; the provider itself never changes.
@@ -276,12 +306,12 @@ export default function PaymentMethodsSettingsPage() {
                 <div>
                     <h1 className="text-xl font-semibold">Payment Methods</h1>
                     <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
-                        A fixed set of payment methods — configure each, but you can’t add or
-                        remove them (a new gateway is added in code). A counter picks one for its
-                        rails under <span className="font-medium">Admin → POS Counters</span>;
-                        online checkout uses the one marked “Online”. API keys live in environment
-                        variables — this page only shows whether they’re detected, never their
-                        values.
+                        A fixed set of payment methods — switch each on or off, but you can’t add
+                        or remove them (a new one is added in code). Methods switched on for
+                        “Counter” are what <span className="font-medium">Admin → POS Counters</span>{" "}
+                        offers in its method list; online checkout offers the ones on for “Online”.
+                        API keys live in environment variables — this page only shows whether
+                        they’re detected, never their values.
                     </p>
                 </div>
 
@@ -323,8 +353,8 @@ export default function PaymentMethodsSettingsPage() {
                                             </span>
                                         </div>
 
-                                        {/* Environment is meaningless for the keyless Pay-on-Delivery rail. */}
-                                        {g.provider !== PAY_ON_DELIVERY_PROVIDER_ID && (
+                                        {/* Environment is meaningless for keyless methods. */}
+                                        {!isKeylessMethod(g.provider) && (
                                             <Badge
                                                 className={
                                                     g.environment === "LIVE"
@@ -336,23 +366,15 @@ export default function PaymentMethodsSettingsPage() {
                                             </Badge>
                                         )}
 
-                                        {g.enabledForCounter && (
-                                            <Badge className="bg-teal-100 text-teal-700">
-                                                <Monitor className="mr-1 size-3" /> Counter
-                                            </Badge>
-                                        )}
-                                        {g.enabledForOnline && (
-                                            <Badge className="bg-indigo-100 text-indigo-700">
-                                                <Globe className="mr-1 size-3" /> Online
-                                            </Badge>
-                                        )}
                                         {g.provider === PAY_ON_DELIVERY_PROVIDER_ID && (
                                             <Badge className="bg-amber-100 text-amber-700">
                                                 <MapPin className="mr-1 size-3" /> {podAreaSummary(g)}
                                             </Badge>
                                         )}
 
-                                        <CredentialBadge status={g.credentialStatus} />
+                                        {!isKeylessMethod(g.provider) && (
+                                            <CredentialBadge status={g.credentialStatus} />
+                                        )}
 
                                         {/* Settlement ledger — warn when a payable online gateway has none. */}
                                         {settlementAccountIdOf(g.configJson) ? (
@@ -365,6 +387,31 @@ export default function PaymentMethodsSettingsPage() {
                                                 <Landmark className="mr-1 size-3" /> No ledger
                                             </Badge>
                                         ) : null}
+
+                                        {prov?.supportsCounter && (
+                                            <FlagSwitch
+                                                id={`pm-${g.id}-counter`}
+                                                label="Counter"
+                                                icon={<Monitor className="size-3" />}
+                                                checked={g.enabledForCounter}
+                                                onChange={(v) => void toggle(g, "enabledForCounter", v)}
+                                            />
+                                        )}
+                                        {prov?.supportsOnline && (
+                                            <FlagSwitch
+                                                id={`pm-${g.id}-online`}
+                                                label="Online"
+                                                icon={<Globe className="size-3" />}
+                                                checked={g.enabledForOnline}
+                                                onChange={(v) => void toggle(g, "enabledForOnline", v)}
+                                            />
+                                        )}
+                                        <FlagSwitch
+                                            id={`pm-${g.id}-active`}
+                                            label="Active"
+                                            checked={g.isActive}
+                                            onChange={(v) => void toggle(g, "isActive", v)}
+                                        />
 
                                         <Button
                                             type="button"
@@ -408,7 +455,7 @@ export default function PaymentMethodsSettingsPage() {
 
                         {/* Environment picks which env-var set is checked — irrelevant for
                             keyless Pay on delivery, so hidden for it. */}
-                        {form.provider !== PAY_ON_DELIVERY_PROVIDER_ID && (
+                        {!isKeylessMethod(form.provider) && (
                             <div className="grid gap-1.5">
                                 <Label>Environment</Label>
                                 <Select
@@ -529,7 +576,9 @@ export default function PaymentMethodsSettingsPage() {
                             <p className="text-muted-foreground text-[11px]">
                                 {form.provider === PAY_ON_DELIVERY_PROVIDER_ID
                                     ? "Where collected-on-delivery cash is booked when remitted."
-                                    : "Online payments via this gateway post a Receipt debiting this ledger."}
+                                    : provider?.kind === "MANUAL"
+                                      ? "The default ledger this method books into. Each counter row picks its own."
+                                      : "Online payments via this gateway post a Receipt debiting this ledger."}
                             </p>
                         </div>
 
@@ -595,52 +644,6 @@ export default function PaymentMethodsSettingsPage() {
                             </div>
                         )}
 
-                        <div className="space-y-2">
-                            {provider?.supportsCounter && (
-                                <div className="flex items-center justify-between rounded-md border border-border px-3 py-2.5">
-                                    <Label htmlFor="pm-counter" className="font-normal">
-                                        Available at the counter
-                                    </Label>
-                                    <Switch
-                                        id="pm-counter"
-                                        checked={form.enabledForCounter}
-                                        onCheckedChange={(v) =>
-                                            setForm((f) => ({ ...f, enabledForCounter: v }))
-                                        }
-                                    />
-                                </div>
-                            )}
-                            {provider?.supportsOnline && (
-                                <div className="flex items-center justify-between rounded-md border border-border px-3 py-2.5">
-                                    <div>
-                                        <Label htmlFor="pm-online" className="font-normal">
-                                            Use for online checkout
-                                        </Label>
-                                        <p className="text-muted-foreground text-[11px]">
-                                            You can enable several — the customer picks one at
-                                            checkout.
-                                        </p>
-                                    </div>
-                                    <Switch
-                                        id="pm-online"
-                                        checked={form.enabledForOnline}
-                                        onCheckedChange={(v) =>
-                                            setForm((f) => ({ ...f, enabledForOnline: v }))
-                                        }
-                                    />
-                                </div>
-                            )}
-                            <div className="flex items-center justify-between rounded-md border border-border px-3 py-2.5">
-                                <Label htmlFor="pm-active" className="font-normal">
-                                    Active
-                                </Label>
-                                <Switch
-                                    id="pm-active"
-                                    checked={form.isActive}
-                                    onCheckedChange={(v) => setForm((f) => ({ ...f, isActive: v }))}
-                                />
-                            </div>
-                        </div>
                     </div>
 
                     <DialogFooter>

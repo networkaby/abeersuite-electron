@@ -23,7 +23,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
-import { CHANNEL_LABEL, POS_PAY_CHANNELS, channelNeedsVpa } from "@/modules/pos/lib/counterTenders";
+import { CHANNEL_LABEL, channelNeedsVpa } from "@/modules/pos/lib/counterTenders";
+import { getGatewayProvider } from "@/modules/pos/lib/paymentGateways";
 import type { PosPayChannel } from "@/generated/prisma/client";
 import { splitExtensions } from "@/shared/lib/counter/idRange";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
@@ -32,7 +33,28 @@ type Branch = { id: string; number: number; name: string; isActive: boolean };
 
 // A configured gateway from the Settings → Payment Methods catalog, filtered to
 // the ones available at the counter. The counter picks one for a GATEWAY rail.
-type CounterGateway = { id: number; displayName: string; provider: string };
+type CounterGateway = { id: number; displayName: string; provider: string; enabledForCounter: boolean; isActive: boolean };
+
+// One entry of the counter "method" dropdown, built from Settings → Payment
+// Methods. A gateway (Razorpay, PayU…) is its own entry and saves as
+// GATEWAY + its id; a plain method (UPI, Card…) saves as its channel.
+type MethodOption = { key: string; label: string; channel: PosPayChannel; gatewayId: number | null; on: boolean };
+
+const methodKey = (channel: PosPayChannel, gatewayId: number | null) =>
+    channel === "GATEWAY" ? `g:${gatewayId ?? "none"}` : `c:${channel}`;
+
+function methodOptions(rows: CounterGateway[]): MethodOption[] {
+    const out: MethodOption[] = [];
+    for (const g of rows) {
+        const prov = getGatewayProvider(g.provider);
+        if (!prov?.supportsCounter) continue;
+        const gatewayId = prov.channel === "GATEWAY" ? g.id : null;
+        const key = methodKey(prov.channel, gatewayId);
+        if (out.some((o) => o.key === key)) continue;
+        out.push({ key, label: g.displayName, channel: prov.channel, gatewayId, on: g.enabledForCounter && g.isActive });
+    }
+    return out;
+}
 
 // A counter payment account as returned by the API.
 type PaymentAccount = {
@@ -123,15 +145,12 @@ export default function CountersAdminPage() {
         }
     };
 
-    // Gateways configured under Settings → Payment Methods, available at the counter.
+    // Every method under Settings → Payment Methods; the dropdown offers the ones
+    // switched on for the counter.
     const loadGateways = async () => {
         try {
-            const { data } = await axios.get<{ gateways: (CounterGateway & { enabledForCounter: boolean; isActive: boolean })[] }>("/api/settings/payment-methods");
-            setGateways(
-                data.gateways
-                    .filter((g) => g.enabledForCounter && g.isActive)
-                    .map((g) => ({ id: g.id, displayName: g.displayName, provider: g.provider })),
-            );
+            const { data } = await axios.get<{ gateways: CounterGateway[] }>("/api/settings/payment-methods");
+            setGateways(data.gateways);
         } catch {
             setGateways([]);
         }
@@ -211,10 +230,14 @@ export default function CountersAdminPage() {
     const cancel = () => { setAddingNew(false); setEditId(null); };
 
     // Payment-account row editors (operate on editForm.paymentAccounts).
-    const addPayAcct = () => setEditForm((f) => ({
-        ...f,
-        paymentAccounts: [...f.paymentAccounts, { channel: "UPI" as PosPayChannel, label: "", accountId: null, vpa: "", defaultVisible: true, gatewayId: null }],
-    }));
+    const options = methodOptions(gateways);
+    const addPayAcct = () => {
+        const first = options.find((o) => o.on);
+        setEditForm((f) => ({
+            ...f,
+            paymentAccounts: [...f.paymentAccounts, { channel: first?.channel ?? "UPI", label: "", accountId: null, vpa: "", defaultVisible: true, gatewayId: first?.gatewayId ?? null }],
+        }));
+    };
     const updatePayAcct = (idx: number, patch: Partial<EditPayAcct>) => setEditForm((f) => ({
         ...f,
         paymentAccounts: f.paymentAccounts.map((p, i) => (i === idx ? { ...p, ...patch } : p)),
@@ -503,12 +526,26 @@ export default function CountersAdminPage() {
                                                         {editForm.paymentAccounts.map((p, idx) => (
                                                             <div key={p.id ?? `new-${idx}`} className="rounded-md border border-border bg-muted/20 p-2 space-y-1.5">
                                                                 <div className="grid grid-cols-[130px_1fr_auto] gap-2 items-center">
-                                                                    <Select value={p.channel} onValueChange={(v) => updatePayAcct(idx, { channel: v as PosPayChannel })}>
+                                                                    <Select
+                                                                        value={methodKey(p.channel, p.gatewayId)}
+                                                                        onValueChange={(v) => {
+                                                                            const o = options.find((x) => x.key === v);
+                                                                            if (o) updatePayAcct(idx, { channel: o.channel, gatewayId: o.gatewayId });
+                                                                        }}
+                                                                    >
                                                                         <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                                                                         <SelectContent>
-                                                                            {POS_PAY_CHANNELS.map((ch) => (
-                                                                                <SelectItem key={ch} value={ch}>{CHANNEL_LABEL[ch]}</SelectItem>
-                                                                            ))}
+                                                                            {options
+                                                                                .filter((o) => o.on || o.key === methodKey(p.channel, p.gatewayId))
+                                                                                .map((o) => (
+                                                                                    <SelectItem key={o.key} value={o.key}>
+                                                                                        {o.label}{o.on ? "" : " (off)"}
+                                                                                    </SelectItem>
+                                                                                ))}
+                                                                            {/* An old gateway row with no gateway linked yet. */}
+                                                                            {p.channel === "GATEWAY" && p.gatewayId == null && (
+                                                                                <SelectItem value="g:none">Gateway (choose)</SelectItem>
+                                                                            )}
                                                                         </SelectContent>
                                                                     </Select>
                                                                     <Input
@@ -538,27 +575,6 @@ export default function CountersAdminPage() {
                                                                         className="h-8 text-xs font-mono"
                                                                         maxLength={60}
                                                                     />
-                                                                )}
-                                                                {p.channel === "GATEWAY" && (
-                                                                    <Select
-                                                                        value={p.gatewayId != null ? String(p.gatewayId) : "none"}
-                                                                        onValueChange={(v) => updatePayAcct(idx, { gatewayId: v === "none" ? null : Number(v) })}
-                                                                    >
-                                                                        <SelectTrigger className="h-8 text-xs">
-                                                                            <SelectValue placeholder="Pick a configured gateway…" />
-                                                                        </SelectTrigger>
-                                                                        <SelectContent>
-                                                                            <SelectItem value="none">No gateway selected</SelectItem>
-                                                                            {gateways.map((g) => (
-                                                                                <SelectItem key={g.id} value={String(g.id)}>{g.displayName}</SelectItem>
-                                                                            ))}
-                                                                        </SelectContent>
-                                                                    </Select>
-                                                                )}
-                                                                {p.channel === "GATEWAY" && gateways.length === 0 && (
-                                                                    <p className="text-[10px] text-muted-foreground">
-                                                                        No gateways configured. Add one under Settings → Payment Methods.
-                                                                    </p>
                                                                 )}
                                                                 <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none">
                                                                     <input

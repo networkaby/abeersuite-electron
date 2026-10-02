@@ -1,4 +1,5 @@
 import { isValidVpa } from "@/shared/lib/parties";
+import type { PosPayChannel } from "@/generated/prisma/client";
 // Pure registry of payment-gateway providers (Razorpay, Cashfree, manual UPI, …).
 // No DB, no React, no process.env — safe to import from both server routes and
 // client components (mirrors counterTenders.ts / paymentLink.ts). Deliberately
@@ -42,6 +43,9 @@ export type PaymentGatewayProvider = {
     supportsOnline: boolean;
     /** Can be picked as a counter collection rail. */
     supportsCounter: boolean;
+    /** The counter tender channel a rail of this method is saved as. GATEWAY rows
+     *  also carry the gateway's id; the plain methods map one-to-one. */
+    channel: PosPayChannel;
     /** Non-secret operator-entered fields. */
     configFields: GatewayConfigFieldDescriptor[];
     /** False → provider not wired yet; the UI may still let it be cataloged but flags it. */
@@ -58,6 +62,7 @@ export const razorpayProvider: PaymentGatewayProvider = {
     },
     supportsOnline: true,
     supportsCounter: true,
+    channel: "GATEWAY",
     configFields: [],
     available: true,
 };
@@ -72,6 +77,7 @@ export const cashfreeProvider: PaymentGatewayProvider = {
     },
     supportsOnline: true,
     supportsCounter: true,
+    channel: "GATEWAY",
     configFields: [],
     available: true,
 };
@@ -86,6 +92,7 @@ export const payuProvider: PaymentGatewayProvider = {
     },
     supportsOnline: true,
     supportsCounter: true,
+    channel: "GATEWAY",
     configFields: [],
     available: true,
 };
@@ -97,6 +104,7 @@ export const manualUpiProvider: PaymentGatewayProvider = {
     envVars: { test: [], live: [] },
     supportsOnline: false,
     supportsCounter: true,
+    channel: "UPI",
     configFields: [
         {
             key: "vpa",
@@ -122,6 +130,7 @@ export const demoProvider: PaymentGatewayProvider = {
     envVars: { test: [], live: [] },
     supportsOnline: true,
     supportsCounter: false,
+    channel: "GATEWAY",
     configFields: [],
     available: true,
 };
@@ -142,16 +151,43 @@ export const payOnDeliveryProvider: PaymentGatewayProvider = {
     envVars: { test: [], live: [] },
     supportsOnline: false,
     supportsCounter: false,
+    channel: "GATEWAY",
     // Area rules use a bespoke editor (states + pincode prefixes + mode), not the
     // simple text/vpa configFields — so none are declared here.
     configFields: [],
     available: true,
 };
 
+/// The plain counter methods — no API, no keys, counter only. Listed in the
+/// catalog so Settings → Payment Methods shows the whole set and its Counter
+/// switch decides what the counter dropdown offers.
+function plainCounterMethod(id: string, label: string, channel: PosPayChannel): PaymentGatewayProvider {
+    return {
+        id,
+        label,
+        kind: "MANUAL",
+        envVars: { test: [], live: [] },
+        supportsOnline: false,
+        supportsCounter: true,
+        channel,
+        configFields: [],
+        available: true,
+    };
+}
+
+export const PLAIN_COUNTER_METHODS: PaymentGatewayProvider[] = [
+    plainCounterMethod("upi", "UPI", "UPI"),
+    plainCounterMethod("card", "Card", "CARD"),
+    plainCounterMethod("cheque", "Cheque", "CHEQUE"),
+    plainCounterMethod("wallet", "Wallet", "WALLET"),
+    plainCounterMethod("bank_transfer", "Bank Transfer", "BANK_TRANSFER"),
+];
+
 /// All known providers, in display order. Append PayU / PayPal here later — no
 /// migration needed (PaymentGateway.provider is a plain string keyed to this list).
 export const PAYMENT_GATEWAY_PROVIDERS: PaymentGatewayProvider[] = [
     payOnDeliveryProvider,
+    ...PLAIN_COUNTER_METHODS,
     razorpayProvider,
     payuProvider,
     cashfreeProvider,
@@ -193,6 +229,16 @@ export const PAYMENT_METHOD_DEFAULTS: {
         sortOrder: 0,
         configJson: { area: { mode: "except", states: [], pincodePrefixes: [] } },
     },
+    ...PLAIN_COUNTER_METHODS.map((m, i) => ({
+        provider: m.id,
+        displayName: m.label,
+        environment: "TEST" as const,
+        enabledForCounter: true,
+        enabledForOnline: false,
+        isActive: true,
+        sortOrder: i + 1,
+        configJson: {},
+    })),
     {
         provider: "razorpay",
         displayName: "Razorpay",
@@ -242,6 +288,13 @@ export function settlementAccountIdOf(configJson: unknown): number | null {
 /// The env var names a provider needs for the given environment (TEST/LIVE).
 export function envVarsFor(provider: PaymentGatewayProvider, env: GatewayEnvironment): string[] {
     return env === "LIVE" ? provider.envVars.live : provider.envVars.test;
+}
+
+/// True for a keyless method (Pay on delivery, the plain counter methods) — it has
+/// no TEST/LIVE environment and no credentials to show.
+export function isKeylessMethod(providerId: string): boolean {
+    const p = getGatewayProvider(providerId);
+    return !!p && p.envVars.test.length === 0 && p.envVars.live.length === 0 && p.kind === "MANUAL";
 }
 
 /// Validate the non-secret configJson against a provider's declared config fields.
