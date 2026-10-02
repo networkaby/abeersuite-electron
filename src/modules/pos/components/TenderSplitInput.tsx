@@ -14,6 +14,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { parseDecimalInput } from "@/shared/lib/format";
+import type { UpiPart } from "@/modules/pos/lib/paymentMdr";
 
 /// Rupee box for a tender row. Binds a number but shows what the cashier typed,
 /// so "32." and "32.50" survive the trip through Number(). A change from outside
@@ -48,9 +49,13 @@ export type TenderSplit = {
     reference: string;
     /** UPI on a splitting method: take the rest as ONE payment anyway (carries MDR). */
     oneGo?: boolean;
-    /** UPI parts already received, in order — bank credits, so fixed: the row's
-     *  amount never drops below their sum, and its method cannot change. */
-    receivedParts?: number[];
+    /** UPI parts the cashier is working through (paymentMdr.ts upiPlan): kept
+     *  exactly while they add up to the row, so ticking one never moves another.
+     *  Received parts are bank credits, so fixed — the row's amount never drops
+     *  below them and its method cannot change. */
+    plan?: UpiPart[];
+    /** The part on the customer display now (index into `plan`). */
+    activePart?: number;
 };
 export type TenderAccount = { id: number; channel: string; label: string; vpa: string | null; defaultVisible?: boolean };
 
@@ -104,7 +109,7 @@ export function TenderSplitInput({
                 const canShare = !!onShare && !!acct?.vpa && (acct.channel === "UPI" || acct.channel === "GATEWAY");
                 // UPI parts already in are bank credits: the method stays, the row
                 // stays, and the amount cannot go below them (UpiPartsPanel).
-                const receivedSum = (s.receivedParts ?? []).reduce((sum, p) => sum + p, 0);
+                const receivedSum = (s.plan ?? []).reduce((sum, p) => sum + (p.received ? p.amount : 0), 0);
                 const locked = receivedSum > 0;
                 return (
                     <div key={s.id} className="grid grid-cols-[170px_1fr_1fr_auto] items-center gap-2">

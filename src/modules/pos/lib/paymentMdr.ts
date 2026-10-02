@@ -110,6 +110,30 @@ export function tenderPayAmounts(
     return [...received, ...splitUpiAmount(rest, limit, Math.max(1, split.maxParts - received.length), received)];
 }
 
+/** One UPI part of a checkout row and whether its money is in. */
+export type UpiPart = { amount: number; received: boolean };
+
+/**
+ * A row's UPI parts, in the order shown. The plan the cashier has been working
+ * on (`stored`) is kept exactly while it still adds up to the row — so ticking
+ * one part never changes the amount of another the customer may be scanning.
+ * Once the row's amount changes (or there is no plan yet), the received parts
+ * stay and the rest is split afresh (tenderPayAmounts).
+ */
+export function upiPlan(
+    amount: number,
+    rule: MdrRule | null | undefined,
+    split: SplitRule | null | undefined,
+    oneGo: boolean,
+    stored?: UpiPart[],
+): UpiPart[] {
+    const received = (stored ?? []).filter((p) => p.received).map((p) => p.amount);
+    const effective = round2(Math.max(amount, received.reduce((s, p) => s + p, 0)));
+    if (stored?.length && round2(stored.reduce((s, p) => s + p.amount, 0)) === effective) return stored;
+    return tenderPayAmounts(effective, rule, split, oneGo, received)
+        .map((p, i) => ({ amount: p, received: i < received.length }));
+}
+
 /** MDR the bank takes on ONE payment of `amount` (rupees, unrounded): nothing up
  *  to the free limit, else ratePct of the whole payment, capped. */
 export function mdrFee(amount: number, rule: MdrRule | null | undefined): number {
