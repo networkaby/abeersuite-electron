@@ -7,9 +7,9 @@ import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { MOBILE_FRESH_MS } from "@/shared/lib/constants/polling";
 import { loadAnswer, mobileKey, offlineNote } from "./mobileCache";
 
-/** A server-paged list API's reply. `next`, when the API pages by cursor (the Day
- *  Book), is handed back as `?cursor=` for the next page. */
-type Page<T> = { items: T[]; hasMore: boolean; next?: number | null };
+/** A server-paged list API's reply. `more` is the query to send for the next page
+ *  (a cursor, and whatever else must carry over — a running balance). */
+type Page<T> = { items: T[]; hasMore: boolean; more?: Record<string, string> | null };
 
 /**
  * A searched, server-paged list for the phone app — what a list too big to keep
@@ -22,14 +22,17 @@ type Page<T> = { items: T[]; hasMore: boolean; next?: number | null };
  * demand and not saved.
  *
  * `params` are extra query values (the Day Book's date); a change starts the list
- * over, exactly like a new search.
+ * over, exactly like a new search. `freshMs: 0` asks (with `?since=`) on every
+ * open — for a list whose whole point is "has it landed yet?".
  */
 export function useMobileList<T>(
     endpoint: string,
     query: string,
     userId: string | number,
     params: Record<string, string> = {},
+    opts: { freshMs?: number } = {},
 ) {
+    const freshMs = opts.freshMs ?? MOBILE_FRESH_MS;
     const q = useDebouncedValue(query.trim(), 300);
     const extra = new URLSearchParams(params).toString();
     const key = mobileKey(`${endpoint}:${q.toLowerCase()}${extra ? `?${extra}` : ""}`, userId);
@@ -37,7 +40,7 @@ export function useMobileList<T>(
 
     const [items, setItems] = useState<T[]>([]);
     const [hasMore, setHasMore] = useState(false);
-    const [next, setNext] = useState<number | null>(null);
+    const [more, setMore] = useState<Record<string, string> | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const latest = useRef(key);
@@ -48,37 +51,37 @@ export function useMobileList<T>(
         setLoading(true);
         setError(null);
         try {
-            await loadAnswer<Page<T>>(key, firstUrl, { freshMs: MOBILE_FRESH_MS, since: true, force }, (page, at) => {
+            await loadAnswer<Page<T>>(key, firstUrl, { freshMs, since: true, force }, (page, at) => {
                 if (latest.current !== asked) return;
                 shownAt.current = at;
                 setItems(page.items);
                 setHasMore(page.hasMore);
-                setNext(page.next ?? null);
+                setMore(page.more ?? null);
             });
         } catch (e) {
             if (latest.current === asked) setError(offlineNote(extractApiError(e, "Could not reach the server."), shownAt.current));
         } finally {
             if (latest.current === asked) setLoading(false);
         }
-    }, [key, firstUrl]);
+    }, [key, firstUrl, freshMs]);
 
     const loadMore = useCallback(async () => {
-        if (next == null) return;
+        if (!more) return;
         const asked = key;
         setLoading(true);
         setError(null);
         try {
-            const { data } = await axios.get<Page<T>>(`${firstUrl}&cursor=${next}`);
+            const { data } = await axios.get<Page<T>>(`${firstUrl}&${new URLSearchParams(more)}`);
             if (latest.current !== asked) return;
             setItems((was) => [...was, ...data.items]);
             setHasMore(data.hasMore);
-            setNext(data.next ?? null);
+            setMore(data.more ?? null);
         } catch (e) {
             if (latest.current === asked) setError(extractApiError(e, "Could not load more."));
         } finally {
             if (latest.current === asked) setLoading(false);
         }
-    }, [key, firstUrl, next]);
+    }, [key, firstUrl, more]);
 
     useEffect(() => {
         latest.current = key;
@@ -86,7 +89,7 @@ export function useMobileList<T>(
         // a saved answer for this one comes back from the device in milliseconds.
         setItems([]);
         setHasMore(false);
-        setNext(null);
+        setMore(null);
         shownAt.current = null;
         void loadFirst(false);
     }, [key, loadFirst]);

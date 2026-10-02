@@ -34,7 +34,7 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     // mobile — the phone app at /m. One tick per screen; signing in on a phone still
     // needs "Can login outside counter".
     { id: "mobile:stock:view", label: "Mobile: stock & price", module: "mobile", description: "Phone app: search products and see available quantity (total and per branch) and sale price." },
-    { id: "mobile:parties:view", label: "Mobile: party balance", module: "mobile", description: "Phone app: search parties and see their balance and unpaid bills." },
+    { id: "mobile:parties:view", label: "Mobile: party", module: "mobile", description: "Phone app: search parties and see their balance, vouchers with running balance, and unpaid bills." },
     { id: "mobile:receivables:view", label: "Mobile: receivables", module: "mobile", description: "Phone app: who owes us — total, age, and each party's unpaid bills." },
     { id: "mobile:payables:view", label: "Mobile: payables", module: "mobile", description: "Phone app: whom we owe — total, age, and each supplier's unpaid bills." },
     { id: "mobile:daybook:view", label: "Mobile: day book", module: "mobile", description: "Phone app: every voucher of a chosen day." },

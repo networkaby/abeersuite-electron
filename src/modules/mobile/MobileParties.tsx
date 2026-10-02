@@ -45,7 +45,7 @@ export default function MobileParties() {
 
     return (
         <MobileListScreen
-            title="Party balance"
+            title="Party"
             placeholder="Name, phone, area or keyword"
             query={query}
             onQuery={(q) => { setQuery(q); setLimit(PAGE); }}

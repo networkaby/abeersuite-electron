@@ -69,6 +69,6 @@ export async function GET(req: Request) {
             status: r.status,
         })),
         hasMore: page.nextCursor != null,
-        next: page.nextCursor,
+        more: page.nextCursor != null ? { cursor: String(page.nextCursor) } : null,
     });
 }
