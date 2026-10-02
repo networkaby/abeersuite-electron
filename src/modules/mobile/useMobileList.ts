@@ -63,6 +63,7 @@ export function useMobileList<T>(endpoint: string, query: string, userId: string
 
     return {
         items,
+        empty: items.length === 0,
         hasMore,
         loading,
         error,
