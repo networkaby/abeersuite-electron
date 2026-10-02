@@ -8,7 +8,7 @@ export default function MobileSignOut() {
     return (
         <button
             type="button"
-            className="flex items-center gap-1 rounded-md border px-3 py-2 text-sm"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-3 text-sm active:bg-muted"
             onClick={() => {
                 markDeliberateSignOut();
                 void signOut({ callbackUrl: "/staff/login?callbackUrl=/m" });

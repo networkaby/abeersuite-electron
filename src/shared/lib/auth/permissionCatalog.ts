@@ -35,6 +35,9 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     // needs "Can login outside counter".
     { id: "mobile:stock:view", label: "Mobile: stock & price", module: "mobile", description: "Phone app: search products and see available quantity (total and per branch) and sale price." },
     { id: "mobile:parties:view", label: "Mobile: party balance", module: "mobile", description: "Phone app: search parties and see their balance and unpaid bills." },
+    { id: "mobile:receivables:view", label: "Mobile: receivables", module: "mobile", description: "Phone app: who owes us — total, age, and each party's unpaid bills." },
+    { id: "mobile:payables:view", label: "Mobile: payables", module: "mobile", description: "Phone app: whom we owe — total, age, and each supplier's unpaid bills." },
+    { id: "mobile:daybook:view", label: "Mobile: day book", module: "mobile", description: "Phone app: every voucher of a chosen day." },
 
     // customers — Contacts (Person + Company) share ONE flat set. Contacts carry no
     // branch, so there is no radius to enforce: any branch may CRUD (gated only by

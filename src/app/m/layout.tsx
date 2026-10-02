@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { redirectIfPcWithoutCounter } from "@/shared/lib/auth/permissions";
 import SessionWrapper from "@/shared/components/SessionWrapper";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
-import MobileNav from "@/modules/mobile/MobileNav";
+import MobileShell from "@/modules/mobile/MobileShell";
 
 export const metadata: Metadata = {
     title: "Mobile",
@@ -34,15 +34,13 @@ export default async function MobileLayout({ children }: { children: React.React
     if (!session?.user) redirect("/staff/login?callbackUrl=/m");
     if ((session.user as { kind?: string }).kind === "customer") redirect("/portal");
     redirectIfPcWithoutCounter();
-    const permissions = (session.user as { permissions?: string[] }).permissions ?? [];
+    const user = session.user as { name?: string | null; roleLabel?: string; permissions?: string[] };
 
     return (
         <SessionWrapper session={session}>
-            {/* Bottom padding = the tab bar (h-16) plus the phone's gesture area. */}
-            <div className="mx-auto flex min-h-dvh w-full max-w-xl flex-col bg-background pb-[calc(4rem+env(safe-area-inset-bottom))]">
+            <MobileShell user={{ name: user.name ?? "", roleLabel: user.roleLabel ?? null, permissions: user.permissions ?? [] }}>
                 {children}
-            </div>
-            <MobileNav permissions={permissions} />
+            </MobileShell>
             <Toaster position="top-center" />
         </SessionWrapper>
     );

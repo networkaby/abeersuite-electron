@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home } from "lucide-react";
-import { MAX_SCREEN_TABS, screensFor } from "./mobileScreens";
+import { MAX_SCREEN_TABS, isOnScreen, screensFor } from "./mobileScreens";
 
 /**
  * The phone app's bottom tab bar: Home plus the first screens this person holds
- * (MAX_SCREEN_TABS). A tab stays lit on its own detail pages (a party's bills keep
- * "Parties" lit). Padded by the phone's gesture area so it never sits under it.
+ * (MAX_SCREEN_TABS); every screen is also in the side menu. A tab stays lit on its
+ * own detail pages. Padded by the phone's gesture area so it never sits under it.
  */
 export default function MobileNav({ permissions }: { permissions: string[] }) {
     const pathname = usePathname();
@@ -18,7 +18,7 @@ export default function MobileNav({ permissions }: { permissions: string[] }) {
             href: s.href,
             tab: s.tab,
             icon: s.icon,
-            active: pathname === s.href || pathname.startsWith(`${s.href}/`),
+            active: isOnScreen(pathname, s.href),
         })),
     ];
 

@@ -19,7 +19,7 @@ type ListState = {
  * the "nothing found" note and "Load more". A list screen supplies only its rows
  * (pair it with `useMobileList`).
  */
-export default function MobileListScreen({ title, back, placeholder, query, onQuery, list, emptyText, children }: {
+export default function MobileListScreen({ title, back, placeholder, query, onQuery, list, emptyText, summary, children }: {
     title: string;
     /** Only when the list is a detail screen; main screens go back by the tab bar. */
     back?: string;
@@ -28,6 +28,8 @@ export default function MobileListScreen({ title, back, placeholder, query, onQu
     onQuery: (q: string) => void;
     list: ListState;
     emptyText: string;
+    /** Totals / filter chips shown between the search box and the rows. */
+    summary?: ReactNode;
     /** `<li>` rows. */
     children: ReactNode;
 }) {
@@ -49,6 +51,8 @@ export default function MobileListScreen({ title, back, placeholder, query, onQu
             </div>
 
             {list.error && <p className="px-3 text-sm text-destructive">{list.error}</p>}
+
+            {summary}
 
             <ul className="divide-y">{children}</ul>
 

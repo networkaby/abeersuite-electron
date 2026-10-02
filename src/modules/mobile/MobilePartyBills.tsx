@@ -1,13 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import axios from "axios";
 import { formatInr } from "@/shared/lib/format/moneyInr";
 import { formatDate } from "@/shared/lib/format/formatDate";
-import { extractApiError } from "@/shared/lib/api/extractApiError";
 import MobileHeader from "./MobileHeader";
 import { balanceLabel } from "./partyBalance";
-import { mobileKey, readMobileCache, writeMobileCache } from "./mobileCache";
+import { useMobileResource } from "./useMobileResource";
 
 type PartyDetail = {
     accountId: number;
@@ -26,34 +23,17 @@ type PartyDetail = {
     }[];
 };
 
-/** One party's balance and unpaid bills (/api/mobile/parties/[accountId]). Cached per
- *  party, so the next visit shows the last figures at once while fresh ones load. */
-export default function MobilePartyBills({ accountId, userId, name }: { accountId: number; userId: string; name: string | null }) {
-    const key = mobileKey(`party:${accountId}`, userId);
-    const [data, setData] = useState<PartyDetail | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    const load = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const { data: fresh } = await axios.get<PartyDetail>(`/api/mobile/parties/${accountId}`);
-            setData(fresh);
-            writeMobileCache(key, fresh, userId);
-        } catch (e) {
-            setError(extractApiError(e, "Could not load this party."));
-        } finally {
-            setLoading(false);
-        }
-    }, [accountId, key, userId]);
-
-    useEffect(() => {
-        // Read in the effect, not the first render — see useMobileList.
-        const cached = readMobileCache<PartyDetail>(key);
-        if (cached) setData(cached);
-        void load();
-    }, [key, load]);
+/** One party's balance and unpaid bills (/api/mobile/parties/[accountId]). `back` is
+ *  the list the party was opened from (party search, receivables, payables). */
+export default function MobilePartyBills({ accountId, userId, name, back }: {
+    accountId: number;
+    userId: string;
+    name: string | null;
+    back: string;
+}) {
+    const { data, loading, error, refresh } = useMobileResource<PartyDetail>(
+        `/api/mobile/parties/${accountId}`, `party:${accountId}`, userId,
+    );
 
     const billsNet = data ? data.bills.reduce((s, b) => s + b.side * b.outstanding, 0) : 0;
     // Money received / paid on account — moves the balance, settles no bill.
@@ -62,7 +42,7 @@ export default function MobilePartyBills({ accountId, userId, name }: { accountI
 
     return (
         <>
-            <MobileHeader title={data?.name ?? name ?? "Party"} back="/m/parties" onRefresh={() => void load()} busy={loading} />
+            <MobileHeader title={data?.name ?? name ?? "Party"} back={back} onRefresh={refresh} busy={loading} />
 
             {error && <p className="px-3 pt-2 text-sm text-destructive">{error}</p>}
 

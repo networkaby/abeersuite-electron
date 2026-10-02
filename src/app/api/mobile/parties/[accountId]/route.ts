@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { requirePermission } from "@/shared/lib/auth/permissions";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { requireAnyPermission } from "@/shared/lib/auth/permissions";
+import { PARTY_DETAIL_PERMISSIONS } from "@/modules/mobile/mobileAccess";
 import { handleApiError } from "@/shared/lib/api";
 import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
 import { businessToday } from "@/shared/lib/format/formatDate";
@@ -14,7 +14,8 @@ import { partyBalances } from "@/modules/mobile/partyBalances";
 // a salesman shown ₹47,438 on the list and ₹47,428 on the bills must see why.
 // Bills come from the Receivables engine (`getLedgerOutstanding`), both sides.
 export async function GET(_req: Request, { params }: { params: Promise<{ accountId: string }> }) {
-    const { response } = await requirePermission(PERMISSIONS.MOBILE_PARTIES_VIEW);
+    // Opened from party search, receivables or payables — any of their ticks.
+    const { response } = await requireAnyPermission(...PARTY_DETAIL_PERMISSIONS);
     if (response) return response;
 
     const accountId = Number((await params).accountId);

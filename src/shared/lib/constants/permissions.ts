@@ -22,6 +22,9 @@ export const PERMISSIONS = {
     // AUTH_LOGIN_OUTSIDE_COUNTER: a phone is never a counter.
     MOBILE_STOCK_VIEW: "mobile:stock:view",
     MOBILE_PARTIES_VIEW: "mobile:parties:view",
+    MOBILE_RECEIVABLES_VIEW: "mobile:receivables:view",
+    MOBILE_PAYABLES_VIEW: "mobile:payables:view",
+    MOBILE_DAYBOOK_VIEW: "mobile:daybook:view",
 
     // Accountancy Masters — the chart of accounts (Account Groups, Ledgers, Chart
     // of Accounts), gated together. Read access rides the accountancy sidebar nav.
