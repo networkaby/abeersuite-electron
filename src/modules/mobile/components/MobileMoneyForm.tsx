@@ -73,12 +73,14 @@ function readLastLedger(key: string): number | null {
  * "New entry" — straight back to the picker, with the cash / bank and mode the
  * next entry remembers.
  */
-export default function MobileMoneyForm({ kind, accountId, userId, back, expense = false }: {
+export default function MobileMoneyForm({ kind, accountId, userId, back, expense = false, pickedBills }: {
     kind: MoneyKind;
     accountId: number;
     userId: string;
     back: string;
     expense?: boolean;
+    /** Bills ticked on the party screen — the form starts with only these ticked. */
+    pickedBills?: number[];
 }) {
     const copy = COPY[kind];
     const quick = back.startsWith(`${PHONE_APP_HOME}/quick`);
@@ -100,7 +102,7 @@ export default function MobileMoneyForm({ kind, accountId, userId, back, expense
 
     // Ticks chosen by hand (null = every bill); the amount as typed (null = follow
     // the ticks); `handPicked` = a tick was changed AFTER an amount was typed.
-    const [ticks, setTicks] = useState<Set<number> | null>(null);
+    const [ticks, setTicks] = useState<Set<number> | null>(() => (pickedBills?.length ? new Set(pickedBills) : null));
     const [typedAmount, setTypedAmount] = useState<string | null>(null);
     const [handPicked, setHandPicked] = useState(false);
     const [ledgerId, setLedgerId] = useState<number | null>(null);

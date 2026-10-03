@@ -5,7 +5,7 @@ import { PHONE_APP_HOME, appBack } from "@/shared/lib/device/phone";
 
 type PageProps = {
     params: Promise<{ accountId: string }>;
-    searchParams: Promise<{ from?: string }>;
+    searchParams: Promise<{ from?: string; bills?: string }>;
 };
 
 /** The Pay and Receive pages are the same page in two directions. The Role page's
@@ -16,13 +16,15 @@ export function moneyFormPage(kind: MoneyKind) {
         const user = await mobileUser(PARTY_DETAIL_PERMISSIONS);
         const accountId = Number((await params).accountId);
         if (!Number.isInteger(accountId)) notFound();
-        const { from } = await searchParams;
+        const { from, bills } = await searchParams;
+        // Bills ticked on the party screen (`?bills=12,34`); junk is dropped.
+        const pickedBills = (bills ?? "").split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0);
         // From quick entry: back to its picker. Otherwise back to the party, which
         // itself goes back to the list it came from.
         const ok = appBack(from);
         const quick = ok?.startsWith(`${PHONE_APP_HOME}/quick/`) ? ok : null;
         const listFrom = ok && !quick ? `?from=${ok}` : "";
         const back = quick ?? `${PHONE_APP_HOME}/parties/${accountId}${listFrom}`;
-        return <MobileMoneyForm kind={kind} accountId={accountId} userId={user.id} back={back} />;
+        return <MobileMoneyForm kind={kind} accountId={accountId} userId={user.id} back={back} pickedBills={pickedBills} />;
     };
 }

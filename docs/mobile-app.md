@@ -232,7 +232,11 @@ at `/m-staff-app/parties/[id]/pay` and `/receive` (one page factory,
 - Money goes on the bills in `autoLinkOrder` (due date first — the settling step's own
   order, so the screen is what is saved; the party API sends `dueDate`), worked out by
   [`placeOnBills`](../src/modules/mobile/lib/moneyPlacement.ts):
-  - untouched = every bill ticked, amount = their total;
+  - untouched = every bill ticked, amount = their total — unless bills were ticked on the
+    party screen's Unpaid bills tab (owner, 2026-10-03): the button then reads
+    "Receive ₹110.00 (1 bill)" and carries them as `?bills=<universalVoucherId,…>`, so the
+    form starts with only those ticked. A bill they owe rides on Receive, one we owe on Pay;
+    a bill shows a tick box only when its side's button shows;
   - **an amount typed = the ticks follow it** — the oldest bills it covers, the last in part
     ("₹100 of ₹320"), an advance only once every open bill is full (owner, 2026-10-03:
     *"the 100 should be adjusted to next bill"*);
