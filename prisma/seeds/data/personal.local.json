@@ -10759,6 +10759,26 @@
       "permissionId": "ui:sidebar:settings:screen-size"
     },
     {
+      "departmentId": "DEP-OP",
+      "permissionId": "mobile:stock:view"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "mobile:parties:view"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "mobile:receivables:view"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "mobile:payables:view"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "mobile:daybook:view"
+    },
+    {
       "departmentId": "DEP-SALES",
       "permissionId": "ui:sidebar:settings:screen-size"
     },

@@ -20,20 +20,19 @@ export type MobileScreen = {
     icon: LucideIcon;
     /** The `mobile:*` tick that opens it — page, API, tile, tab and menu all read this one. */
     permission: string;
-    /** What the tick allows, for the Role page's Global section. */
-    roleDescription: string;
 };
 
 /**
  * Every phone-app screen, in order — the first ones held become the bottom tabs.
- * This one list drives the Home tiles, the bottom tab bar, the side menu and the
- * Role page's ticks, so adding a screen is:
+ * This one list drives the Home tiles, the bottom tab bar, the side menu, and the
+ * "Mobile App" module on the Role page (its ticks) and Departments page (its chip —
+ * see MOBILE_APP_MODULE in sidebarModules.ts), so adding a screen is:
  *   1. its `mobile:*` permission in permissions.ts + permissionCatalog.ts (then
  *      seed:sync-permissions),
  *   2. a row here,
- *   3. its page under src/app/m (guarded by `mobileUser(permission)`) and, when the
- *      phone needs its own shape, its API under src/app/api/mobile (guarded by
- *      `requirePermission(permission)`).
+ *   3. its page under src/app/m-staff-app/(app) (guarded by `mobileUser(permission)`)
+ *      and, when the phone needs its own shape, its API under src/app/api/mobile
+ *      (guarded by `requirePermission(permission)`).
  * Nothing else lists screens.
  */
 export const MOBILE_SCREENS: MobileScreen[] = [
@@ -45,7 +44,6 @@ export const MOBILE_SCREENS: MobileScreen[] = [
         hint: "Available qty, sale price",
         icon: Boxes,
         permission: PERMISSIONS.MOBILE_STOCK_VIEW,
-        roleDescription: "Phone app: search products, see available quantity per branch and sale price.",
     },
     {
         href: `${PHONE_APP_HOME}/parties`,
@@ -55,7 +53,6 @@ export const MOBILE_SCREENS: MobileScreen[] = [
         hint: "Balance, vouchers, bills",
         icon: Users,
         permission: PERMISSIONS.MOBILE_PARTIES_VIEW,
-        roleDescription: "Phone app: search parties, see balance, vouchers with running balance, and unpaid bills.",
     },
     {
         href: `${PHONE_APP_HOME}/receivables`,
@@ -65,7 +62,6 @@ export const MOBILE_SCREENS: MobileScreen[] = [
         hint: "Who owes us, by age",
         icon: HandCoins,
         permission: PERMISSIONS.MOBILE_RECEIVABLES_VIEW,
-        roleDescription: "Phone app: who owes us — total, age, and each party's unpaid bills.",
     },
     {
         href: `${PHONE_APP_HOME}/payables`,
@@ -75,7 +71,6 @@ export const MOBILE_SCREENS: MobileScreen[] = [
         hint: "Whom we owe, by age",
         icon: Wallet,
         permission: PERMISSIONS.MOBILE_PAYABLES_VIEW,
-        roleDescription: "Phone app: whom we owe — total, age, and each supplier's unpaid bills.",
     },
     {
         href: `${PHONE_APP_HOME}/daybook`,
@@ -85,7 +80,6 @@ export const MOBILE_SCREENS: MobileScreen[] = [
         hint: "Every voucher of a day",
         icon: BookOpen,
         permission: PERMISSIONS.MOBILE_DAYBOOK_VIEW,
-        roleDescription: "Phone app: every voucher of a chosen day.",
     },
 ];
 

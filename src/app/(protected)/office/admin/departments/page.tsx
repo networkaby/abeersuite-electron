@@ -437,7 +437,7 @@ function PoolEditor({
                                     <PermChip
                                         key={m.key}
                                         label={m.label}
-                                        title={`${m.children.length} link${m.children.length !== 1 ? "s" : ""}`}
+                                        title={m.unit ? `${m.children.length} ${m.unit}` : `${m.children.length} link${m.children.length !== 1 ? "s" : ""}`}
                                         on={on}
                                         onClick={() => onToggleMany(m.childPermissionIds, !on)}
                                     />

@@ -16,7 +16,6 @@ import { POS_VOUCHER_MATRIX, POS_ACTIONS } from "@/shared/lib/auth/posVoucherMat
 import type { LucideIcon } from "lucide-react";
 import { BUTTON_BAR_ACTIONS } from "@/shared/lib/constants/quickActions";
 import { createActionPermission } from "@/utils/module-access";
-import { MOBILE_SCREENS } from "@/modules/mobile/mobileScreens";
 
 // Column tint per voucher action for the GL voucher matrix.
 export const VOUCHER_ACTION_TINT: Record<string, ColumnTint> = {
@@ -81,8 +80,6 @@ export const QUICK_ACTION_OPTIONS: { permission: string; ids: string[]; label: s
 export const POOL_EXEMPT_PERMISSION_IDS = new Set<string>([
     "quick-actions:more",
     "auth:login:outside-counter",
-    // Phone-app screens (mobileScreens.ts) — any role may be given one.
-    ...MOBILE_SCREENS.map((s) => s.permission),
 ]);
 
 export interface Permission {
@@ -700,19 +697,6 @@ export const MODULE_EXTRA_TOGGLE: Record<string, {
         global: true,
         globalDescription: "When granted, this user can log in from any machine. Without it, login is restricted to counter machines (with bridge) only.",
     },
-    // The phone app (/m) — one tick per screen, from the screen list itself
-    // (mobileScreens.ts), so a new screen reaches this page with no edit here.
-    // Signing in on a phone still needs "Can login outside counter" above.
-    ...Object.fromEntries(MOBILE_SCREENS.map((s) => [
-        `mobile:${s.href}`,
-        {
-            id: s.permission,
-            label: `Mobile: ${s.label.toLowerCase()}`,
-            showWhenAnyLinkId: [],
-            global: true,
-            globalDescription: `${s.roleDescription} Needs 'Can login outside counter' to sign in.`,
-        },
-    ])),
 };
 
 /**

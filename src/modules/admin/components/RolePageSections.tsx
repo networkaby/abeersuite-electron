@@ -951,7 +951,7 @@ export function SidebarVisibilitySection({
                         <PanelLeft size={15} /> Sidebar links
                     </h2>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        Pick which navigation links this role sees in the sidebar — including nested sub-nav. Workspace is always available; other modules appear only if the role&rsquo;s department pool offers them.
+                        Pick which navigation links this role sees in the sidebar — including nested sub-nav. Workspace is always available; other modules appear only if the role&rsquo;s department pool offers them. Mobile App lists the staff phone app&rsquo;s screens instead of sidebar links.
                     </p>
                 </div>
 
@@ -967,9 +967,12 @@ export function SidebarVisibilitySection({
                                 <div className="mb-1.5 flex items-center gap-2">
                                     <span className="text-[11px] font-bold uppercase tracking-wider text-foreground">{mod.label}</span>
                                     <span className="text-[10px] text-muted-foreground">
-                                        {countLinks(mod.children)} links
+                                        {countLinks(mod.children)} {mod.unit ?? "links"}
                                     </span>
                                 </div>
+                                {mod.note && (
+                                    <p className="mb-1.5 text-[11px] text-muted-foreground">{mod.note}</p>
+                                )}
                                 {renderLevel(
                                     mod.children,
                                     mod.key,

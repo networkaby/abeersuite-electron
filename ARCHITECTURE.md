@@ -26,6 +26,7 @@ Current implementation of `service-mgmt-experiment` — an internal business OS 
 `repairing` · `deals` · `order` · `delivery` · `refund` — the pipeline/ticket flavours.
 `customer` (contacts) · `admin` · `administration` · `settings` · `home` · `message` · `core` — org, contacts, workspace.
 `ecommerce` (staff shop admin) · `external` (customer-facing shop/store/portal UI).
+`mobile` — the staff phone app (`/m-staff-app`, `src/app/api/mobile/*`): quick views and quick Receive / Pay / Expense for staff away from a counter. A module of the Role and Departments pages like the others (its screens are `mobile:*:view` ticks; see [docs/mobile-app.md](docs/mobile-app.md)).
 
 Cross-cutting code lives in `src/shared/` (see §12). shadcn primitives live in `src/components/ui/`. Accepted legacy homes (leave in place): `src/utils/`, `src/store/`, `src/components/ui/`.
 
@@ -35,6 +36,7 @@ Cross-cutting code lives in `src/shared/` (see §12). shadcn primitives live in 
 
 - **`(protected)/office/*`** — staff app (requires a staff session). Segments mirror URLs 1:1: `accountancy`, `bi` (Business Intelligence reports), `inventory`, `pos` (manager shift reports), `pricing-strategy`, `customer-retention`, `customers` (Contacts), `crm`, `orders`, `repairing`, `ecommerce`, `admin`, `administration`, `settings`, `work-flow-inbox` (post-login landing).
 - **`(protected)/vouchers/pos`** — the POS register (operator surface), opened standalone. `/vouchers/pos/new` is the New Sale screen.
+- **`m-staff-app/*`** — the staff phone app (installable PWA; phones are sent here from every staff page by `proxy.ts`; its `install` page is open without sign-in). Screens sit in the signed-in `(app)` group; their APIs are `src/app/api/mobile/*`. Address in one place: `PHONE_APP_HOME` ([`phone.ts`](src/shared/lib/device/phone.ts)). Full detail: [docs/mobile-app.md](docs/mobile-app.md).
 - **`(external)/*`** — customer-facing: `(store)` marketing homepage, `shop` (catalogue → cart → checkout with courier + payment-method pickers), `portal` (customer self-service), `login` (portal sign-in), `(legal)` (policy pages).
 - **`(external)/(legal)/*`** — the four policy documents at flat URLs `/terms`, `/privacy`, `/refunds`, `/shipping`. Route group only: the group carries the shop chrome, the URLs stay flat because they are the links given to Razorpay activation and the Google OAuth consent screen. Prose lives in `src/shared/lib/legal/legalContent.ts` (never in the components); one renderer, `LegalDocPage`, serves all four. Slugs are declared once in `src/shared/lib/legal/legalPaths.ts`, which `proxy.ts` imports so the pages stay anonymously reachable. Each document states that it covers **both** hostnames — the company site and the store are one legal entity, split only by deployment.
 - **`app/sitemap.ts`** — one sitemap for the whole business, listing the company site and the store together. Cross-hostname entries are valid because both sit under one registrable domain verified as a single Search Console **Domain property**. Hostnames come from `COMPANY_DETAILS.sites`.

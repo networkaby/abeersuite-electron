@@ -1,4 +1,5 @@
 import { WORKSPACE_NAV, MODULE_SECTIONS, ADMIN_NAV, SETTINGS_NAV } from "@/shared/lib/constants/nav";
+import { MOBILE_SCREENS } from "@/modules/mobile/mobileScreens";
 
 /**
  * Sidebar visibility matrix — the single source of truth for who sees what in the
@@ -58,6 +59,15 @@ export interface SidebarModuleRow {
      * picker offers its links directly and enforcement is authoritative (untick = hide).
      */
     pooled: boolean;
+    /** What its links are called in the Role page's count ("5 screens"); default "links". */
+    unit?: string;
+    /** A line the Role page prints under the module's name. */
+    note?: string;
+    /**
+     * `true` → the links carry permission ids that already exist in the catalog under
+     * their own module (not `ui:sidebar:*`), so `sidebarPermissionSeeds()` skips them.
+     */
+    ownIds?: boolean;
 }
 
 // Recursively model a module's nav tree. `seen` is shared across the whole module
@@ -85,6 +95,32 @@ function makeModule(key: string, label: string, items: readonly NavLike[], poole
     return { key, label, children, childPermissionIds: flattenIds(children), pooled };
 }
 
+/**
+ * The staff phone app (/m-staff-app) as a module of the Role and Departments pages.
+ * It has no office menu, so its "links" are the phone screens (mobileScreens.ts —
+ * still the only list of them) and each link's id is the screen's own `mobile:*`
+ * tick, so existing grants carry over. Not in MODULE_SECTIONS: the desktop sidebar
+ * never shows it.
+ */
+const MOBILE_APP_MODULE: SidebarModuleRow = (() => {
+    const children: SidebarChildRow[] = MOBILE_SCREENS.map((s) => ({
+        key: s.href.slice(s.href.lastIndexOf("/") + 1),
+        label: s.label,
+        permissionId: s.permission,
+        paths: [],
+    }));
+    return {
+        key: "mobile",
+        label: "Mobile App",
+        children,
+        childPermissionIds: flattenIds(children),
+        pooled: true,
+        unit: "screens",
+        note: "Signing in on a phone also needs “Can login outside counter” (Global, above). Quick Receive / Pay / Expense use the Receipt and Payment create + post ticks.",
+        ownIds: true,
+    };
+})();
+
 /** Sidebar top-level modules, in sidebar order, each with its nav tree. */
 export const SIDEBAR_MODULES: SidebarModuleRow[] = [
     // Workspace is default-yes (not department-pooled) — the Role picks its contents.
@@ -92,6 +128,7 @@ export const SIDEBAR_MODULES: SidebarModuleRow[] = [
     ...MODULE_SECTIONS.map((m) => makeModule(m.key, m.label, m.children)),
     makeModule("admin", "Admin", ADMIN_NAV),
     makeModule("settings", "Settings", SETTINGS_NAV),
+    MOBILE_APP_MODULE,
 ];
 
 /** Every sidebar-link permission id (all depths) — used to keep them out of the loose pool rows. */
@@ -125,6 +162,8 @@ export function sidebarLinkPermissionIdForLabel(moduleKey: string, label: string
 export function sidebarPermissionSeeds(): { id: string; label: string; module: string; description: string }[] {
     const out: { id: string; label: string; module: string; description: string }[] = [];
     for (const mod of SIDEBAR_MODULES) {
+        // Phone screens already have catalog rows of their own (module "mobile").
+        if (mod.ownIds) continue;
         const walk = (rows: SidebarChildRow[], trail: string) => {
             for (const r of rows) {
                 const path = trail ? `${trail} → ${r.label}` : r.label;
