@@ -1,10 +1,20 @@
 import Link from "next/link";
-import { ArrowDownLeft, ArrowUpRight, Receipt } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ChevronRight, Receipt } from "lucide-react";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import { BUSINESS_TIME_ZONE } from "@/shared/lib/constants/business";
+import { loginGreeting } from "@/shared/lib/constants/loginShowcase";
 import { mobileUser } from "@/modules/mobile/lib/mobileAccess";
 import { quickEntryFor, screensFor } from "@/modules/mobile/lib/mobileScreens";
 import MobileHeader from "@/modules/mobile/components/MobileHeader";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
+
+/** The shop's hour, not the server's — the server runs in UTC. */
+function shopHour(): number {
+    return Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: BUSINESS_TIME_ZONE }).format(new Date()));
+}
+
+const quickButton = "flex h-24 flex-col items-center justify-center gap-2 rounded-2xl text-sm font-semibold shadow-sm active:scale-[.97] transition-transform";
+const quickIcon = "flex size-10 items-center justify-center rounded-full bg-white/20";
 
 /** Home: every screen this person holds, as a tile. Sign out lives in the side menu. */
 export default async function MobileHome() {
@@ -15,47 +25,57 @@ export default async function MobileHome() {
     return (
         <>
             <MobileHeader title={COMPANY_DETAILS.brandName} />
-            <main className="flex flex-1 flex-col gap-4 p-4">
-                <div>
-                    <p className="text-xs text-muted-foreground">Signed in as</p>
-                    <p className="text-lg font-semibold">{user.name}</p>
-                </div>
+            <main className="flex flex-1 flex-col gap-5 p-4">
+                <section className="rounded-2xl bg-primary px-5 py-4 text-primary-foreground shadow-sm">
+                    <p className="text-sm opacity-80">{loginGreeting(shopHour())}</p>
+                    <p className="truncate text-xl font-semibold">{user.name}</p>
+                </section>
 
                 {(quick.receive || quick.pay) && (
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 gap-3">
                         {quick.receive && (
-                            <Link href={`${PHONE_APP_HOME}/quick/receive`} className="flex flex-col items-center gap-1 rounded-xl bg-emerald-600 p-3 text-sm font-medium text-white active:opacity-90">
-                                <ArrowDownLeft className="size-6" /> Receive
+                            <Link href={`${PHONE_APP_HOME}/quick/receive`} className={`${quickButton} bg-emerald-600 text-white`}>
+                                <span className={quickIcon}><ArrowDownLeft className="size-5" /></span> Receive
                             </Link>
                         )}
                         {quick.pay && (
-                            <Link href={`${PHONE_APP_HOME}/quick/pay`} className="flex flex-col items-center gap-1 rounded-xl bg-primary p-3 text-sm font-medium text-primary-foreground active:opacity-90">
-                                <ArrowUpRight className="size-6" /> Pay
+                            <Link href={`${PHONE_APP_HOME}/quick/pay`} className={`${quickButton} bg-sky-600 text-white`}>
+                                <span className={quickIcon}><ArrowUpRight className="size-5" /></span> Pay
                             </Link>
                         )}
                         {quick.pay && (
-                            <Link href={`${PHONE_APP_HOME}/quick/expense`} className="flex flex-col items-center gap-1 rounded-xl bg-amber-600 p-3 text-sm font-medium text-white active:opacity-90">
-                                <Receipt className="size-6" /> Expense
+                            <Link href={`${PHONE_APP_HOME}/quick/expense`} className={`${quickButton} bg-amber-600 text-white`}>
+                                <span className={quickIcon}><Receipt className="size-5" /></span> Expense
                             </Link>
                         )}
                     </div>
                 )}
 
                 {tiles.length === 0 ? (
-                    <p className="rounded-lg border p-4 text-sm text-muted-foreground">
+                    <p className="rounded-2xl border bg-card p-4 text-sm text-muted-foreground">
                         No phone screens are ticked for your role yet. Ask admin to tick one
                         under Role → Global (the &ldquo;Mobile: …&rdquo; ticks).
                     </p>
                 ) : (
-                    <div className="grid grid-cols-2 gap-3">
-                        {tiles.map(({ href, label, hint, icon: Icon }) => (
-                            <Link key={href} href={href} className="flex flex-col gap-2 rounded-xl border bg-card p-4 active:bg-muted">
-                                <Icon className="size-7 text-primary" />
-                                <span className="font-medium">{label}</span>
-                                <span className="text-xs text-muted-foreground">{hint}</span>
-                            </Link>
-                        ))}
-                    </div>
+                    <section>
+                        <h2 className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Open</h2>
+                        <ul className="divide-y overflow-hidden rounded-2xl border bg-card shadow-sm">
+                            {tiles.map(({ href, label, hint, icon: Icon }) => (
+                                <li key={href}>
+                                    <Link href={href} className="flex items-center gap-4 px-4 py-3.5 active:bg-muted">
+                                        <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                            <Icon className="size-5" />
+                                        </span>
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block font-medium">{label}</span>
+                                            <span className="block truncate text-sm text-muted-foreground">{hint}</span>
+                                        </span>
+                                        <ChevronRight className="size-5 text-muted-foreground" />
+                                    </Link>
+                                </li>
+                            ))}
+                        </ul>
+                    </section>
                 )}
             </main>
         </>

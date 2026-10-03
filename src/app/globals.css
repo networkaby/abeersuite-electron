@@ -299,6 +299,30 @@
   }
 }
 
+/* The staff phone app (MobileShell's data-phone-app) behaves like an installed
+   app, not a web page: no pull-to-refresh or rubber-band on the page (each list
+   has its own ⟳), no blue tap flash, no double-tap zoom, and a long press on a
+   button or tab does not select its text. Inputs stay selectable. --m-header is
+   the top bar's height — the one number every sticky row under it reads. */
+@layer base {
+  html:has([data-phone-app]),
+  html:has([data-phone-app]) body {
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  [data-phone-app] {
+    --m-header: calc(3.5rem + env(safe-area-inset-top));
+    touch-action: manipulation;
+  }
+  /* Never on a label or anything else that wraps an input: on iPhone an
+     ancestor's user-select:none stops the box taking typing at all. */
+  [data-phone-app] :is(a, button, nav) {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+}
+
 /* POS fields — the counter screen has no card behind its panels, so a
    transparent input takes the page colour and the box disappears. Lift every
    POS field onto the raised (white) surface, the same tone the voucher cards

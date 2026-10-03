@@ -140,7 +140,7 @@ export default function MobilePartyBills({ accountId, userId, name, back }: {
                             </div>
                         )}
                     </div>
-                    <div className="sticky top-[53px] z-10 flex border-b bg-background">
+                    <div className="sticky top-[var(--m-header)] z-10 flex border-b bg-background">
                         {([["vouchers", "Vouchers"], ["bills", `Unpaid bills (${data.bills.length})`]] as const).map(([key, label]) => (
                             <button
                                 key={key}

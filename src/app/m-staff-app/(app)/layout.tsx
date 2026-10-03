@@ -6,7 +6,7 @@ import { redirectIfPcWithoutCounter } from "@/shared/lib/auth/permissions";
 import SessionWrapper from "@/shared/components/SessionWrapper";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import MobileShell from "@/modules/mobile/components/MobileShell";
-import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
+import { PHONE_APP_HOME, PHONE_APP_THEME } from "@/shared/lib/device/phone";
 
 export const metadata: Metadata = {
     title: "Staff",
@@ -22,6 +22,10 @@ export const viewport: Viewport = {
     width: "device-width",
     initialScale: 1,
     viewportFit: "cover",
+    themeColor: [
+        { media: "(prefers-color-scheme: light)", color: PHONE_APP_THEME.light },
+        { media: "(prefers-color-scheme: dark)", color: PHONE_APP_THEME.dark },
+    ],
 };
 
 /**

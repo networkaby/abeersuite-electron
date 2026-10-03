@@ -149,6 +149,9 @@ async function hasCounterPin(email: string): Promise<boolean> {
     }
 }
 
+/** The phone-app sign-in shows no photograph — it costs mobile data for nothing. */
+const NO_PHOTOS: readonly string[] = [];
+
 /** A PIN box takes digits and nothing else — six of them. */
 const digitsOnly = (value: string) => value.replace(/\D/g, "").slice(0, 6);
 
@@ -156,6 +159,9 @@ function StaffLoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const callbackUrl = searchParams.get("callbackUrl") || "/office/work-flow-inbox";
+    // Signing in for the staff phone app: the light, thumb-sized card (`.phone` in
+    // login.module.css), no photo, no counter tips, no way out to the customer portal.
+    const phoneApp = isPhoneAppPath(callbackUrl.split("?")[0]);
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
@@ -212,7 +218,7 @@ function StaffLoginForm() {
     const spotlight = useRotation(LOGIN_SPOTLIGHTS.length, LOGIN_ROTATE_SECONDS);
     const tip = useRotation(LOGIN_TIPS.length, LOGIN_ROTATE_SECONDS);
     const { greet, clock } = useLocalClock();
-    const backdrop = useBackdropPhoto(LOGIN_BACKGROUNDS);
+    const backdrop = useBackdropPhoto(phoneApp ? NO_PHOTOS : LOGIN_BACKGROUNDS);
 
     /**
      * `kind` picks the provider, and nothing else changes.
@@ -541,7 +547,7 @@ function StaffLoginForm() {
     // hands over the moment this paints. The two look the same on purpose — see the
     // header of `login.module.css`.
     return (
-        <div className={`${styles.root} ${backdrop ? styles.blobsOut : ""}`}>
+        <div className={`${styles.root} ${backdrop ? styles.blobsOut : ""} ${phoneApp ? styles.phone : ""}`}>
             <div className={styles.bg} />
             <div className={`${styles.blob} ${styles.b1}`} />
             <div className={`${styles.blob} ${styles.b2}`} />
@@ -683,8 +689,17 @@ function StaffLoginForm() {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <span className={styles.logo}><img src="/logo.svg" alt={COMPANY_DETAILS.brandName} /></span>
 
-                    <h1 className={styles.greet}>{greet}</h1>
-                    <p className={styles.clock}>{clock || " "}</p>
+                    {phoneApp ? (
+                        <>
+                            <h1 className={styles.greet}>{COMPANY_DETAILS.brandName} Staff</h1>
+                            <p className={styles.clock}>{greet}. Sign in to continue.</p>
+                        </>
+                    ) : (
+                        <>
+                            <h1 className={styles.greet}>{greet}</h1>
+                            <p className={styles.clock}>{clock || " "}</p>
+                        </>
+                    )}
                     <NextOpening />
 
                     <div className={styles.field}>
@@ -695,6 +710,8 @@ function StaffLoginForm() {
                             type="email"
                             placeholder="name@networkservice.in"
                             autoComplete="username"
+                            autoCapitalize="none"
+                            spellCheck={false}
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             required
@@ -752,18 +769,21 @@ function StaffLoginForm() {
                         )}
                     </div>
 
-                    <div className={styles.status}>
-                        <p className={`${styles.tip} ${tip.fading ? "" : styles.tipIn}`}>
-                            {LOGIN_TIPS[tip.index]}
-                        </p>
-                        <p className={styles.shopmsg}>{LOGIN_SHOP_MESSAGE}</p>
-                    </div>
+                    {/* The tips are counter keys and scanners — nothing on a phone. */}
+                    {!phoneApp && (
+                        <div className={styles.status}>
+                            <p className={`${styles.tip} ${tip.fading ? "" : styles.tipIn}`}>
+                                {LOGIN_TIPS[tip.index]}
+                            </p>
+                            <p className={styles.shopmsg}>{LOGIN_SHOP_MESSAGE}</p>
+                        </div>
+                    )}
 
                     <p className={styles.customer}>
                         <Link href="/staff/forgot-password">Forgot password?</Link>
                         {/* Signing in for the staff phone app: no way out to the
                             customer portal from inside the app. */}
-                        {!isPhoneAppPath(callbackUrl.split("?")[0]) && <>{" · "}Customer? <Link href="/login">Sign in here</Link></>}
+                        {!phoneApp && <>{" · "}Customer? <Link href="/login">Sign in here</Link></>}
                     </p>
                 </form>
                 )}

@@ -39,13 +39,17 @@ export default function MobileShell({ user, children }: { user: ShellUser; child
 
     return (
         <MenuContext.Provider value={value}>
-            {/* Bottom padding = the tab bar (h-16) plus the phone's gesture area. */}
-            <div className="mx-auto flex min-h-dvh w-full max-w-xl flex-col bg-background pb-[calc(4rem+env(safe-area-inset-bottom))]">
-                {children}
+            {/* data-phone-app: the app-not-a-web-page rules in globals.css. */}
+            <div data-phone-app className="min-h-dvh bg-background">
+                {/* Bottom padding = the tab bar (h-16) plus the phone's gesture area.
+                    Full width on a phone; a centred column only on a tablet. */}
+                <div className="mx-auto flex min-h-dvh w-full max-w-xl flex-col pb-[calc(4rem+env(safe-area-inset-bottom))]">
+                    {children}
+                </div>
+                <MobileNav permissions={user.permissions} />
+                <QuickEntryButton permissions={user.permissions} />
+                <SideMenu user={user} open={open} onClose={close} />
             </div>
-            <MobileNav permissions={user.permissions} />
-            <QuickEntryButton permissions={user.permissions} />
-            <SideMenu user={user} open={open} onClose={close} />
         </MenuContext.Provider>
     );
 }

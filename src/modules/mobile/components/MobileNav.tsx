@@ -31,11 +31,17 @@ export default function MobileNav({ permissions }: { permissions: string[] }) {
                         <Link
                             href={href}
                             aria-current={active ? "page" : undefined}
-                            className={`flex h-16 flex-col items-center justify-center gap-1 text-xs active:bg-muted ${
+                            className={`group flex h-16 flex-col items-center justify-center gap-1 text-xs ${
                                 active ? "font-semibold text-primary" : "text-muted-foreground"
                             }`}
                         >
-                            <Icon className="size-6" />
+                            {/* The Android-style pill: lit behind the current tab, a
+                                faint press on the others. */}
+                            <span className={`flex h-8 w-16 items-center justify-center rounded-full transition-colors ${
+                                active ? "bg-primary/15" : "group-active:bg-muted"
+                            }`}>
+                                <Icon className="size-6" strokeWidth={active ? 2.25 : 1.75} />
+                            </span>
                             {tab}
                         </Link>
                     </li>

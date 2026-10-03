@@ -1,5 +1,5 @@
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
-import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
+import { PHONE_APP_HOME, PHONE_APP_THEME } from "@/shared/lib/device/phone";
 
 /** "Network Service" → "NS": the name under the home-screen icon. */
 const initials = COMPANY_DETAILS.brandName.split(/\s+/).map((w) => w[0]?.toUpperCase() ?? "").join("");
@@ -27,8 +27,8 @@ export function GET(req: Request) {
             scope: PHONE_APP_HOME,
             display: "standalone",
             orientation: "portrait",
-            background_color: COMPANY_DETAILS.themeColor.light,
-            theme_color: COMPANY_DETAILS.themeColor.light,
+            background_color: PHONE_APP_THEME.light,
+            theme_color: PHONE_APP_THEME.light,
             related_applications: [{ platform: "webapp", url: manifestUrl }],
             icons: [
                 { src: "/m-icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },

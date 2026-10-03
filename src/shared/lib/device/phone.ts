@@ -30,6 +30,11 @@ export function isPhoneRequest(headers: Headers): boolean {
  */
 export const PHONE_APP_HOME = "/m-staff-app";
 
+/** The app's page colour (globals.css --surface-page, light and dark) as hex, for
+ *  the phone's status bar and the install splash — so the top of the screen is one
+ *  colour with the app's top bar instead of a white strip. Change with the theme. */
+export const PHONE_APP_THEME = { light: "#eff4fb", dark: "#101725" } as const;
+
 /** Where the Downloads QR points: the app's install page — open without sign-in,
  *  since installing needs none (the app asks for the sign-in when first opened). */
 export const PHONE_APP_INSTALL = `${PHONE_APP_HOME}/install`;

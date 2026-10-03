@@ -120,7 +120,7 @@ export default function MobileQuickPick({ kind, userId }: { kind: QuickKind; use
                 <p className="m-4 rounded-lg border p-4 text-sm text-muted-foreground">{copy.none}</p>
             ) : (
                 <>
-                    <div className="sticky top-[53px] z-10 bg-background px-3 py-2">
+                    <div className="sticky top-[var(--m-header)] z-10 bg-background px-3 py-2">
                         <label className="flex items-center gap-2 rounded-lg border px-3">
                             <Search className="size-4 text-muted-foreground" />
                             <input
