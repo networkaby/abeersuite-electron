@@ -35,12 +35,16 @@ export default function InstallAppButton({ appName }: { appName: string }) {
     const place = useSyncExternalStore(noSubscribe, readPlace, () => "server");
 
     useEffect(() => {
-        const onPrompt = (e: Event) => { e.preventDefault(); setPrompt(e as InstallPromptEvent); };
+        // The install page's inline script catches Chrome's offer (it may fire before
+        // this runs) and keeps it on window; take it from there, now or when it comes.
+        const w = window as { __installPrompt?: InstallPromptEvent };
+        const take = () => { if (w.__installPrompt) setPrompt(w.__installPrompt); };
         const onInstalled = () => { setInstalled(true); setPrompt(null); };
-        window.addEventListener("beforeinstallprompt", onPrompt);
+        take();
+        window.addEventListener("install-offer", take);
         window.addEventListener("appinstalled", onInstalled);
         return () => {
-            window.removeEventListener("beforeinstallprompt", onPrompt);
+            window.removeEventListener("install-offer", take);
             window.removeEventListener("appinstalled", onInstalled);
         };
     }, []);
@@ -86,7 +90,7 @@ export default function InstallAppButton({ appName }: { appName: string }) {
     return (
         <div className="space-y-3">
             <p className="rounded-xl border p-4 text-sm">
-                Open this page in <b>Chrome</b>, then tap <b>⋮</b> → <b>Install app</b>. (Installing needs the live https address — the shop Wi-Fi test address only opens in the browser.)
+                No install offer here. Open this page in <b>Chrome</b> (not Incognito), then tap <b>⋮</b> → <b>Install app</b>. Installing needs the live https address — the shop Wi-Fi test address only opens in the browser.
             </p>
             {openApp}
         </div>

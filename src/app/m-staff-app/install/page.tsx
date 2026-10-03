@@ -25,6 +25,15 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1 };
  */
 export default function InstallPage() {
     return (
+        <>
+        {/* Catches Chrome's install offer the moment it fires — it can come before the
+            page's React code is running, and a listener added later never sees it.
+            InstallAppButton reads it from here. */}
+        <script
+            dangerouslySetInnerHTML={{
+                __html: "window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__installPrompt=e;window.dispatchEvent(new Event('install-offer'));});",
+            }}
+        />
         <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col items-center justify-center gap-6 bg-background p-6">
             <Image src="/m-icon-192.png" alt="" width={96} height={96} className="rounded-2xl" priority />
             <div className="text-center">
@@ -35,5 +44,6 @@ export default function InstallPage() {
                 <InstallAppButton appName={APP_NAME} />
             </div>
         </main>
+        </>
     );
 }
