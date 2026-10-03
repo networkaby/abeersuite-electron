@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { GatedLink } from "@/shared/components/GatedLink";
-import { Download, MonitorDown, Printer, QrCode } from "lucide-react";
+import { Download, MonitorDown, Printer, QrCode, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { QrSvg } from "@/shared/components/print/QrSvg";
 
 // Shared Downloads hub. The Counter Bridge powers both the thermal printer and
 // the QR display (and may carry other tools later), so its downloads live here
@@ -52,6 +53,9 @@ function DownloadCard({ item }: { item: DownloadItem }) {
 
 export default function DownloadsPage() {
     const [version, setVersion] = useState<string | null>(null);
+    // The phone opens this address from the QR; the origin is whatever site this page was opened on.
+    const [phoneAppUrl, setPhoneAppUrl] = useState("");
+    useEffect(() => setPhoneAppUrl(`${window.location.origin}/m`), []);
 
     useEffect(() => {
         fetch("/combined-bridge.version.json", { cache: "no-store" })
@@ -80,6 +84,21 @@ export default function DownloadsPage() {
 
                     <div className="space-y-2">
                         {APP_DOWNLOADS.map((d) => <DownloadCard key={d.href} item={d} />)}
+                    </div>
+                </section>
+
+                <section className="space-y-3">
+                    <div>
+                        <h2 className="font-semibold flex items-center gap-2">
+                            <Smartphone size={16} /> Staff Phone App
+                        </h2>
+                        <p className="text-xs text-muted-foreground">
+                            Scan with the phone camera, sign in, then choose Install app (Android Chrome) or Share → Add to Home Screen (iPhone).
+                        </p>
+                    </div>
+                    <div className="rounded-lg border border-border bg-card p-4 flex items-center gap-4">
+                        {phoneAppUrl && <QrSvg value={phoneAppUrl} size={160} className="shrink-0 rounded bg-white" />}
+                        <p className="text-xs text-muted-foreground break-all">{phoneAppUrl}</p>
                     </div>
                 </section>
 
