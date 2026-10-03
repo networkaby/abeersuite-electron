@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-    ChevronRight, ChevronDown, Plus, Loader2, ArrowRight, Pencil, Trash2,
+    ChevronRight, ChevronDown, Plus, Loader2, ArrowRight, Pencil, Trash2, Search, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { CreateLedgerDialog } from "@/modules/accountancy/components/CreateLedgerDialog";
 import { EditLedgerDialog, type EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
@@ -119,6 +121,11 @@ export default function LedgersPage() {
     const [tree, setTree] = useState<GroupNode[]>([]);
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
     const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState("");
+    // The server does the matching (the tree only carries 50 ledgers a group),
+    // so wait for a pause in typing before asking.
+    const query = useDebouncedValue(search.trim(), 300);
+    const loadSeq = useRef(0);
 
     // Create and edit both run in dialogs. An inline form would push the rows
     // below it down the page, moving whatever the user was looking at.
@@ -129,8 +136,11 @@ export default function LedgersPage() {
     // first load only. Re-showing it after every save unmounted the whole
     // table (page blink + lost scroll position).
     const load = useCallback(() => {
-        axios.get<GroupNode[]>("/api/accountancy/account-groups?withLedgers=1")
+        const seq = ++loadSeq.current;
+        const qs = query ? `&q=${encodeURIComponent(query)}` : "";
+        axios.get<GroupNode[]>(`/api/accountancy/account-groups?withLedgers=1${qs}`)
             .then((r) => {
+                if (seq !== loadSeq.current) return; // a newer search is in flight
                 setTree(r.data);
                 setExpanded((prev) => {
                     if (prev.size > 0) return prev;
@@ -139,7 +149,7 @@ export default function LedgersPage() {
             })
             .catch(() => toast.error("Failed to load account groups"))
             .finally(() => setLoading(false));
-    }, []);
+    }, [query]);
 
     useEffect(() => { load(); }, [load]);
     // Balances move with every voucher; `load` keeps the spinner off after first paint.
@@ -155,7 +165,8 @@ export default function LedgersPage() {
     const allFlat = allGroupsFlat(tree);
     // Depth-tagged copy for the dialogs' group picker (indents sub-groups).
     const groupOptions = flattenGroups(tree);
-    const flat = flattenVisible(tree, expanded);
+    // While searching, every group opens so the matches are visible.
+    const flat = flattenVisible(tree, query ? new Set(allFlat.map((g) => g.id)) : expanded);
     const ledgerCount = countLedgers(tree);
 
     const deleteLedger = async (l: LedgerRow) => {
@@ -179,12 +190,36 @@ export default function LedgersPage() {
                     <div>
                         <h1 className="text-2xl font-bold text-foreground">Ledgers</h1>
                         <p className="text-sm text-muted-foreground mt-0.5">
-                            {allFlat.length} groups · {ledgerCount} ledgers — expand a group to see its ledgers
+                            {query
+                                ? `${ledgerCount} ledgers match "${query}"`
+                                : `${allFlat.length} groups · ${ledgerCount} ledgers — expand a group to see its ledgers`}
                         </p>
                     </div>
-                    <Button onClick={() => setAddOpen(true)}>
-                        <Plus size={16} /> New Ledger
-                    </Button>
+                    <div className="flex items-center gap-3">
+                        <div className="relative">
+                            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Search ledgers or groups"
+                                aria-label="Search ledgers"
+                                className="h-9 w-64 pl-8 pr-8"
+                            />
+                            {search && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearch("")}
+                                    aria-label="Clear search"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                >
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
+                        <Button onClick={() => setAddOpen(true)}>
+                            <Plus size={16} /> New Ledger
+                        </Button>
+                    </div>
                 </div>
             </div>
 
@@ -397,7 +432,7 @@ export default function LedgersPage() {
                                     {flat.length === 0 && (
                                         <tr>
                                             <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-sm">
-                                                No groups found.
+                                                {query ? `Nothing matches "${query}".` : "No groups found."}
                                             </td>
                                         </tr>
                                     )}

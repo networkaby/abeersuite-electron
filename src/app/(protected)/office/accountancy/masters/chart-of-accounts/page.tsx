@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Pencil, Check, X, Loader2, TrendingUp, TrendingDown, Trash2 } from "lucide-react";
+import { Plus, Pencil, Check, X, Loader2, TrendingUp, TrendingDown, Trash2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -45,6 +46,7 @@ export default function ChartOfAccountsPage() {
     const [editDesc, setEditDesc] = useState("");
     const [editNormalBalance, setEditNormalBalance] = useState<NormalBalance>("DEBIT");
     const [saving, setSaving] = useState(false);
+    const [search, setSearch] = useState("");
 
     // Refetch without flipping `loading` — the full-page spinner is for the
     // first load only. Re-showing it after every save unmounted the whole
@@ -66,11 +68,18 @@ export default function ChartOfAccountsPage() {
     // Group accounts by their parent group's type. Rows with no group fall
     // into a separate "Ungrouped" bucket so they're visible (post-seed there
     // shouldn't be any, but it surfaces orphans during data migrations).
+    const needle = search.trim().toLowerCase();
+    const matches = needle
+        ? accounts.filter((a) =>
+            a.name.toLowerCase().includes(needle)
+            || (a.group?.name.toLowerCase().includes(needle) ?? false)
+            || (a.description?.toLowerCase().includes(needle) ?? false))
+        : accounts;
     const grouped = GL_TYPE_ORDER.map((type) => ({
         type,
-        rows: accounts.filter((a) => a.group?.type === type),
+        rows: matches.filter((a) => a.group?.type === type),
     }));
-    const ungrouped = accounts.filter((a) => !a.group);
+    const ungrouped = matches.filter((a) => !a.group);
 
     const startEdit = (a: GlAccount) => {
         setEditingId(a.id);
@@ -135,11 +144,37 @@ export default function ChartOfAccountsPage() {
                 <div className="mx-auto flex max-w-5xl items-center justify-between">
                     <div>
                         <h1 className="text-2xl font-bold text-foreground">Chart of Accounts</h1>
-                        <p className="text-sm text-muted-foreground mt-0.5">General Ledger master list</p>
+                        <p className="text-sm text-muted-foreground mt-0.5">
+                            {needle
+                                ? `${matches.length} of ${accounts.length} accounts match`
+                                : "General Ledger master list"}
+                        </p>
                     </div>
-                    <Button onClick={() => setAddOpen(true)}>
-                        <Plus size={16} /> New Account
-                    </Button>
+                    <div className="flex items-center gap-3">
+                        <div className="relative">
+                            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Search accounts or groups"
+                                aria-label="Search accounts"
+                                className="h-9 w-64 pl-8 pr-8"
+                            />
+                            {search && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearch("")}
+                                    aria-label="Clear search"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                >
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
+                        <Button onClick={() => setAddOpen(true)}>
+                            <Plus size={16} /> New Account
+                        </Button>
+                    </div>
                 </div>
             </div>
 
@@ -151,6 +186,11 @@ export default function ChartOfAccountsPage() {
                         </div>
                     ) : (
                         <>
+                            {needle && matches.length === 0 && (
+                                <p className="py-8 text-center text-sm text-muted-foreground">
+                                    Nothing matches &quot;{search.trim()}&quot;.
+                                </p>
+                            )}
                             {/* Account groups — each section is its own bounded
                                 table with a sticky header, so scrolling past a
                                 long section keeps its column labels in view. */}

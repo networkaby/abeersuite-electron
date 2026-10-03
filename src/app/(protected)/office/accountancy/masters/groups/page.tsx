@@ -4,9 +4,10 @@ import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-    ChevronRight, ChevronDown, Plus, Pencil, Trash2, Loader2, Check, X,
+    ChevronRight, ChevronDown, Plus, Pencil, Trash2, Loader2, Check, X, Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -53,6 +54,18 @@ function allGroupsFlat(nodes: GroupNode[]): GroupNode[] {
     return result;
 }
 
+// Keep a group when its name matches (with its whole subtree) or when a
+// descendant matches (so the path to it stays visible).
+function pruneToMatches(nodes: GroupNode[], needle: string): GroupNode[] {
+    const result: GroupNode[] = [];
+    for (const n of nodes) {
+        if (n.name.toLowerCase().includes(needle)) { result.push(n); continue; }
+        const kids = pruneToMatches(n.children, needle);
+        if (kids.length > 0) result.push({ ...n, children: kids });
+    }
+    return result;
+}
+
 const TYPE_COLORS: Record<GroupType, string> = {
     ASSET:     "bg-blue-50 text-blue-700 border-blue-200",
     LIABILITY: "bg-purple-50 text-purple-700 border-purple-200",
@@ -72,6 +85,7 @@ export default function AccountGroupsPage() {
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
     const [addOpen, setAddOpen]   = useState(false);
     const [saving, setSaving]     = useState(false);
+    const [search, setSearch]     = useState("");
 
     // Edit state — an inline row editor (widens a few cells, no block push),
     // unlike the old "New Group" form which pushed the whole table down.
@@ -102,8 +116,11 @@ export default function AccountGroupsPage() {
     // `load` never flips `loading`, so this cannot blink the tree.
     useRealtimeTopics(["ledger"], load);
 
-    const flat    = flattenVisible(tree, expanded);
     const allFlat = allGroupsFlat(tree);
+    const needle  = search.trim().toLowerCase();
+    // While searching, show only matches (with their parents) and open them all.
+    const shown   = needle ? pruneToMatches(tree, needle) : tree;
+    const flat    = flattenVisible(shown, needle ? new Set(allGroupsFlat(shown).map((g) => g.id)) : expanded);
 
     const toggle = (id: number) =>
         setExpanded((prev) => {
@@ -161,12 +178,34 @@ export default function AccountGroupsPage() {
                     <div>
                         <h1 className="text-2xl font-bold text-foreground">Account Groups</h1>
                         <p className="text-sm text-muted-foreground mt-0.5">
-                            Multi Group Alteration — {allFlat.length} groups
+                            Multi Group Alteration — {needle ? `${allGroupsFlat(shown).length} of ${allFlat.length}` : allFlat.length} groups
                         </p>
                     </div>
-                    <Button onClick={() => setAddOpen(true)}>
-                        <Plus size={16} /> New Group
-                    </Button>
+                    <div className="flex items-center gap-3">
+                        <div className="relative">
+                            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Search groups"
+                                aria-label="Search groups"
+                                className="h-9 w-64 pl-8 pr-8"
+                            />
+                            {search && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearch("")}
+                                    aria-label="Clear search"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                >
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
+                        <Button onClick={() => setAddOpen(true)}>
+                            <Plus size={16} /> New Group
+                        </Button>
+                    </div>
                 </div>
             </div>
 
@@ -303,7 +342,9 @@ export default function AccountGroupsPage() {
                                     {flat.length === 0 && (
                                         <tr>
                                             <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-sm">
-                                                No groups yet. Click &quot;New Group&quot; to create one.
+                                                {needle
+                                                    ? `No group matches "${search.trim()}".`
+                                                    : <>No groups yet. Click &quot;New Group&quot; to create one.</>}
                                             </td>
                                         </tr>
                                     )}

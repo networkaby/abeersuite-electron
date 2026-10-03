@@ -74,7 +74,7 @@ type GroupNode = FlatGroup & {
     ledgerTotal: number;
 };
 
-function buildTree(flat: FlatGroup[], ledgersByGroup: Map<number, LedgerRow[]>): GroupNode[] {
+function buildTree(flat: FlatGroup[], ledgersByGroup: Map<number, LedgerRow[]>, search?: string): GroupNode[] {
     const map = new Map<number, GroupNode>();
     flat.forEach((g) => map.set(g.id, {
         ...g,
@@ -104,13 +104,29 @@ function buildTree(flat: FlatGroup[], ledgersByGroup: Map<number, LedgerRow[]>):
     };
     roots.forEach(rollup);
 
+    // Search: after rollup so group totals stay the true figures. A ledger
+    // matches on name or alias; a group whose own name matches keeps all its
+    // ledgers. Groups with nothing left under them are dropped.
+    const needle = search?.trim().toLowerCase();
+    const prune = (nodes: GroupNode[]): GroupNode[] => nodes.filter((n) => {
+        n.children = prune(n.children);
+        if (!n.name.toLowerCase().includes(needle!)) {
+            n.ledgers = n.ledgers.filter((l) =>
+                l.name.toLowerCase().includes(needle!)
+                || l.aliases.some((a) => a.toLowerCase().includes(needle!)));
+        }
+        n.ledgerTotal = n.ledgers.length;
+        return n.ledgers.length > 0 || n.children.length > 0 || n.name.toLowerCase().includes(needle!);
+    });
+    const shown = needle ? prune(roots) : roots;
+
     // Cap the displayed ledger list per group (after rollup).
     const cap = (n: GroupNode): void => {
         if (n.ledgers.length > LEDGER_CAP) n.ledgers = n.ledgers.slice(0, LEDGER_CAP);
         n.children.forEach(cap);
     };
-    roots.forEach(cap);
-    return roots;
+    shown.forEach(cap);
+    return shown;
 }
 
 // GET /api/accountancy/account-groups
@@ -119,6 +135,7 @@ function buildTree(flat: FlatGroup[], ledgersByGroup: Map<number, LedgerRow[]>):
 // management, opening balance, chart of accounts, and the ledger drill-down's
 // group picker. Cheap: two queries, no balance walk.
 //
+// ?withLedgers=1&q=text: same tree, only ledgers (name / alias) or groups matching.
 // ?withLedgers=1 (heavy): additionally attaches each group's rolled-up
 // `totalBalance` and its directly-attached ledger accounts (`ledgers`, capped
 // per group) so the masters Ledgers tree can render parent group › sub-group ›
@@ -129,7 +146,10 @@ export async function GET(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;
 
-    const withLedgers = new URL(req.url).searchParams.get("withLedgers") === "1";
+    const params = new URL(req.url).searchParams;
+    const withLedgers = params.get("withLedgers") === "1";
+    // ?q= (with withLedgers) narrows the tree to matching ledgers / groups.
+    const search = params.get("q") ?? undefined;
 
     try {
         const flat = await prisma.accountGroup.findMany({
@@ -195,7 +215,7 @@ export async function GET(req: Request) {
             ledgersByGroup.set(a.groupId, arr);
         }
 
-        return NextResponse.json(buildTree(flatGroups, ledgersByGroup));
+        return NextResponse.json(buildTree(flatGroups, ledgersByGroup, search));
     } catch (e) {
         return handleApiError(e, "Failed to fetch account groups");
     }
