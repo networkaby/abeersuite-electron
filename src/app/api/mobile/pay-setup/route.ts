@@ -42,7 +42,8 @@ export async function GET(req: Request) {
             : [];
         const [moneyLedgers, expenseLedgers, branches] = await Promise.all([
             prisma.account.findMany({
-                where: { isActive: true, group: { name: { in: [...MONEY_ACCOUNT_GROUPS] } } },
+                // Counter tills move only through a POS shift — never offered here.
+                where: { isActive: true, counterTills: { none: {} }, group: { name: { in: [...MONEY_ACCOUNT_GROUPS] } } },
                 select: { id: true, name: true, group: { select: { name: true } } },
                 orderBy: { name: "asc" },
             }),

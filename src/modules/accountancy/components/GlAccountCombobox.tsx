@@ -53,6 +53,9 @@ export interface GlAccount {
      *  so a cash Payment to them prints the party Bank Deposit Slip. Absent on
      *  every other ledger. */
     partyBank?: boolean;
+    /** A POS counter's till cash — only a shift moves it, so office Payment /
+     *  Receipt pickers hide it. Absent on every other ledger. */
+    isTill?: boolean;
     // Carried through so BalanceHint can compute an "Available" figure for
     // Bank OD A/c / Credit Card ledgers — see facilityLimit.ts.
     bankJson?: unknown;

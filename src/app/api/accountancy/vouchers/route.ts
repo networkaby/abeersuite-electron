@@ -176,6 +176,22 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Voucher is not balanced — debits must equal credits" }, { status: 422 });
     }
 
+    // A counter's till cash moves only through a POS shift (those post via their
+    // own routes, not this one). A Payment / Receipt here on a till would throw
+    // the shift's cash count. Contra stays open — that is Vault ↔ Counter.
+    if (body.type === "PAYMENT" || body.type === "RECEIPT") {
+        const till = await prisma.posCounter.findFirst({
+            where:  { tillAccountId: { in: body.lines.map((l) => l.accountId) } },
+            select: { name: true },
+        });
+        if (till) {
+            return NextResponse.json(
+                { error: `${till.name}'s till cash moves only through POS. Use a Contra to move it, or pick another cash / bank ledger.` },
+                { status: 422 },
+            );
+        }
+    }
+
     // Stamp the working branch onto the spine (5D-12). EVERY voucher carries a
     // branch — a blank one silently drops the voucher out of every branch-wise
     // report, which is what "org-level money voucher" used to mean in practice.

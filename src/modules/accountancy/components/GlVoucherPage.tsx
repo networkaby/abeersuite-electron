@@ -546,7 +546,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
         if (topLedgerId != null || accounts.length === 0) return;
         try {
             const saved = Number(window.localStorage.getItem(lastTopKey));
-            if (saved && accounts.some((a) => a.id === saved && copy.topFilter(a))) setTopLedgerId(saved);
+            if (saved && accounts.some((a) => a.id === saved && copy.topFilter(a) && !(isPayRec && a.isTill)))setTopLedgerId(saved);
         } catch { /* storage unavailable — start blank */ }
         // Only on first accounts load; a cleared picker must stay cleared.
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -588,12 +588,18 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     useEscape(handleClose);
 
     const accountById = new Map<number, GlAccount>(accounts.map((a) => [a.id, a]));
-    const topAccounts = accounts.filter(copy.topFilter);
+    // A counter's till cash moves only through a POS shift; outside it, a
+    // Payment or Receipt on the till would throw the shift's cash count. Contra
+    // keeps it (Vault ↔ Counter). A till already on an old voucher stays visible.
+    const inUse = new Set<number | null>([effectiveTopAccountId, ...rows.map((r) => r.accountId)]);
+    const tillAllowed = (a: GlAccount) => !isPayRec || !a.isTill || inUse.has(a.id);
+    const topAccounts = accounts.filter(copy.topFilter).filter(tillAllowed);
     // Sales/Purchase Accounts groups carry inventory-linked trading ledgers
     // (Sales A/c, Purchase A/c, and their Returns) — those belong on
     // sale/purchase vouchers, not a plain expense/income Payment or Receipt.
     const rowAccounts = accounts
         .filter(copy.rowFilter)
+        .filter(tillAllowed)
         .filter((a) => !isPayRec || !incomeExpOnly ||
             (a.group?.type === rowNatureType &&
                 a.group?.name !== ACCOUNT_GROUPS.SALES_ACCOUNTS &&

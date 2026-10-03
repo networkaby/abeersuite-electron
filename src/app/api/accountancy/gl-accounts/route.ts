@@ -63,6 +63,7 @@ export async function GET(req: Request) {
                     company: { select: { phones: { select: { phone: true, isPrimary: true } }, bankJson: true } },
                 } : {}),
                 staffLedgerOf: { select: { bankJson: true } },
+                counterTills:  { select: { id: true } },
             },
         });
         // Truth-path closing from JournalLine (folds in master openings),
@@ -74,7 +75,7 @@ export async function GET(req: Request) {
             // Flatten the party's phones to a plain string[] (primary first) so
             // the client just filters/renders — person & company objects drop out.
             // Aliases flatten the same way — the client only ever wants the strings.
-            const { person, company, staffLedgerOf, aliases, ...rest } = a as typeof a & {
+            const { person, company, staffLedgerOf, aliases, counterTills, ...rest } = a as typeof a & {
                 person?:  { phones: { phone: string; isPrimary: boolean }[]; bankJson: unknown } | null;
                 company?: { phones: { phone: string; isPrimary: boolean }[]; bankJson: unknown } | null;
                 aliases?: { alias: string }[];
@@ -91,6 +92,7 @@ export async function GET(req: Request) {
                 phones,
                 aliases: (aliases ?? []).map((x) => x.alias),
                 balance: closingMap.get(a.id) ?? 0,
+                ...(counterTills.length > 0 ? { isTill: true } : {}),
                 ...(owner ? { partyBank: canDepositToPartyBank(parsePartyBank(owner.bankJson)) } : {}),
             };
         });
