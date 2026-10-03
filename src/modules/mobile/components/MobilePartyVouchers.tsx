@@ -11,12 +11,11 @@ export type PartyVoucher = {
     /** When it was actually saved (a till's own clock), else when it reached the office. */
     savedAt: string;
     by: string | null;
-    status: "POSTED" | "DRAFT" | "CANCELLED";
     amount: number;
     /** + they owe us more, − they owe us less. */
     movement: number;
-    /** The party's balance after this voucher — null when it is not posted. */
-    balanceAfter: number | null;
+    /** The party's balance after this voucher. */
+    balanceAfter: number;
 };
 
 const thisYear = new Date().getFullYear();
@@ -45,42 +44,28 @@ function when(dateIso: string, savedIso: string): string {
         : `${day(date)} · saved ${day(saved)}, ${time}`;
 }
 
-/**
- * One party's vouchers, newest first, with the balance after each — "was the last
- * voucher posted?" at a glance. Drafts and cancelled vouchers are listed and
- * tagged but move no balance (only posted ones count, as in the ledger).
- */
+/** One party's posted vouchers, newest first, with the balance after each.
+ *  Drafts and cancelled ones are not sent — the phone cannot act on them. */
 export default function MobilePartyVouchers({ items }: { items: PartyVoucher[] }) {
     return (
         <ul className="divide-y">
-            {items.map((v) => {
-                const posted = v.status === "POSTED";
-                const bal = v.balanceAfter == null ? null : balanceLabel(v.balanceAfter);
+            {/* A list saved on the phone before drafts were dropped still holds them,
+                with no balance — skip those until the next fresh answer replaces it. */}
+            {items.filter((v) => v.balanceAfter != null).map((v) => {
+                const bal = balanceLabel(v.balanceAfter);
                 return (
-                    <li key={v.id} className={`flex items-start gap-3 px-3 py-3 ${v.status === "CANCELLED" ? "opacity-60" : ""}`}>
+                    <li key={v.id} className="flex items-start gap-3 px-3 py-3">
                         <div className="min-w-0 flex-1">
-                            <p className={`font-medium leading-snug ${v.status === "CANCELLED" ? "line-through" : ""}`}>
+                            <p className="font-medium leading-snug">
                                 {v.kind} <span className="font-normal text-muted-foreground">{v.ref}</span>
-                                {posted && <span className="ml-1 text-emerald-600 dark:text-emerald-400" title="Posted">✓</span>}
                             </p>
                             <p className="text-xs text-muted-foreground">
                                 {when(v.date, v.savedAt)}{v.by ? ` · ${v.by}` : ""}
                             </p>
-                            {!posted && (
-                                <span
-                                    className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${
-                                        v.status === "DRAFT"
-                                            ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                                            : "bg-muted text-muted-foreground"
-                                    }`}
-                                >
-                                    {v.status === "DRAFT" ? "Draft — not posted" : "Cancelled"}
-                                </span>
-                            )}
                         </div>
                         <div className="shrink-0 text-right">
-                            <p className={`font-semibold ${v.status === "CANCELLED" ? "line-through" : ""}`}>{formatInr(v.amount)}</p>
-                            {bal && <p className={`text-xs ${bal.tone}`}>Bal {bal.text}</p>}
+                            <p className="font-semibold">{formatInr(v.amount)}</p>
+                            <p className={`text-xs ${bal.tone}`}>Bal {bal.text}</p>
                         </div>
                     </li>
                 );

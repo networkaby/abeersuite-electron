@@ -187,12 +187,13 @@ Tap a party → the party screen: balance + Pay / Receive, then two tabs.
   [`/api/mobile/parties/[accountId]/vouchers`](../src/app/api/mobile/parties/[accountId]/vouchers/route.ts)
   + [`MobilePartyVouchers`](../src/modules/mobile/components/MobilePartyVouchers.tsx). Every voucher
   of the party (spine party, a leg on its ledger, or a bill made out to the person /
-  company — the office Transactions tab's rule), EVERY status, newest first in the Day
-  Book's order (date, real save time, id), 30 a page. Drafts are tagged "Draft — not
-  posted", cancelled are struck through, posted get a small ✓. Shows the date, the real
+  company — the office Transactions tab's rule), POSTED only, newest first in the Day
+  Book's order (date, real save time, id), 30 a page. Drafts and cancelled vouchers are
+  left out (owner, 2026-10-03: the phone cannot edit or post them — the office Day Book
+  still shows them), so there is no ✓ or status tag. Shows the date, the real
   save time only when there is one (imported rows carry midnight UTC → date alone; a
   back-dated save says "saved 19 Sept, 2:51 pm") and who saved it. The balance after each
-  POSTED voucher is walked back from the party's balance now, the next page carried by
+  voucher is walked back from the party's balance now, the next page carried by
   `more: { cursor, balance }`. Same-day order follows entry order, as the office Account
   Ledger does, so a payment entered before its bill shows a brief "to receive". Asked on
   every open (`useMobileList` `freshMs: 0`, still `?since=`).

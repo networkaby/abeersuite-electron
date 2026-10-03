@@ -14,10 +14,9 @@ const PAGE_SIZE = 30;
 
 // GET /api/mobile/parties/[accountId]/vouchers[?cursor=<id>&balance=<n>][&since=<computedAt>]
 //
-// One party's vouchers, newest first, with the running balance — the phone's
-// "was the last voucher posted?" list. EVERY status is listed (a draft is
-// exactly what that question is looking for), but only POSTED vouchers move the
-// balance, the same rule as the ledger (`ledgerStatusFilterUv`).
+// One party's POSTED vouchers, newest first, with the running balance. Drafts and
+// cancelled vouchers are left out (owner, 2026-10-03): the phone can neither edit
+// nor post them, and they move no balance (`ledgerStatusFilterUv`).
 //
 // A voucher is this party's when its spine names the party, when it has a leg on
 // the party's ledger (a journal), or when it is a bill made out to the person /
@@ -61,6 +60,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ acco
 
         const rows = await prisma.universalVoucher.findMany({
             where: {
+                status: "POSTED",
                 OR: [
                     { partyAccountId: accountId },
                     { lines: { some: { accountId } } },
@@ -73,7 +73,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ acco
             take: PAGE_SIZE + 1,
             ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
             select: {
-                id: true, type: true, voucherNo: true, date: true, status: true,
+                id: true, type: true, voucherNo: true, date: true,
                 sourceCreatedAt: true, createdAt: true, createdById: true,
                 lines: { select: { accountId: true, type: true, amount: true } },
                 voucherDetail: { select: { totalAmount: true } },
@@ -98,9 +98,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ acco
             const movement = round2(v.lines
                 .filter((l) => l.accountId === accountId)
                 .reduce((s, l) => s + (l.type === "DEBIT" ? 1 : -1) * Number(l.amount), 0));
-            const posted = v.status === "POSTED";
-            const balanceAfter = posted ? round2(running) : null;
-            if (posted) running -= movement;
+            const balanceAfter = round2(running);
+            running -= movement;
             return {
                 id: v.id,
                 kind: voucherTypeLabel(v.type) ?? v.type,
@@ -108,7 +107,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ acco
                 date: v.date,
                 savedAt: v.sourceCreatedAt ?? v.createdAt,
                 by: v.createdById != null ? userName.get(v.createdById) ?? null : null,
-                status: v.status,
                 amount: v.voucherDetail
                     ? Number(v.voucherDetail.totalAmount)
                     : round2(v.lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + Number(l.amount), 0)),
