@@ -49,9 +49,7 @@ function when(dateIso: string, savedIso: string): string {
 export default function MobilePartyVouchers({ items }: { items: PartyVoucher[] }) {
     return (
         <ul className="divide-y">
-            {/* A list saved on the phone before drafts were dropped still holds them,
-                with no balance — skip those until the next fresh answer replaces it. */}
-            {items.filter((v) => v.balanceAfter != null).map((v) => {
+            {items.map((v) => {
                 const bal = balanceLabel(v.balanceAfter);
                 return (
                     <li key={v.id} className="flex items-start gap-3 px-3 py-3">

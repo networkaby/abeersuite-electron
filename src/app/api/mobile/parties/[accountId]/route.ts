@@ -10,6 +10,9 @@ import { partyBalances } from "@/modules/mobile/lib/partyBalances";
 import { booksUnchangedSince } from "@/modules/mobile/lib/booksUnchanged";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
 
+/** A party's numbers for the Call button, primary first. */
+const PHONES = { select: { phone: true, label: true }, orderBy: [{ isPrimary: "desc" as const }, { id: "asc" as const }] };
+
 // GET /api/mobile/parties/[accountId]
 //
 // One party for the phone: its ledger balance AND its unpaid bills, in one call.
@@ -21,9 +24,10 @@ import { parseSince } from "@/shared/lib/prisma/counterMode";
 // Also what the Pay / Receive form needs from the party: each bill's spine id
 // (what a bill-wise settlement links to) and the party's own UPI link, when its
 // Bank tab carries a UPI ID (the same link the office scan-to-pay QR encodes).
+// And its phone numbers, primary first, for the Call button.
 //
 // `?since=`: `{ unchanged: true }` when nothing in the books (booksUnchangedSince) and not
-// this party's own record (its UPI ID) has changed since — no recompute.
+// this party's own record (its UPI ID, its phone numbers) has changed since — no recompute.
 export async function GET(req: Request, { params }: { params: Promise<{ accountId: string }> }) {
     // Opened from party search, receivables or payables — any of their ticks.
     const { response } = await requireAnyPermission(...PARTY_DETAIL_PERMISSIONS);
@@ -40,7 +44,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
             const edited = await prisma.account.findFirst({
                 where: {
                     id: accountId,
-                    OR: [{ person: { updatedAt: { gt: since } } }, { company: { updatedAt: { gt: since } } }],
+                    OR: [
+                        { person: { updatedAt: { gt: since } } },
+                        { company: { updatedAt: { gt: since } } },
+                        { person: { phones: { some: { updatedAt: { gt: since } } } } },
+                        { company: { phones: { some: { updatedAt: { gt: since } } } } },
+                    ],
                 },
                 select: { id: true },
             });
@@ -54,7 +63,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
             partyBalances([accountId]),
             prisma.account.findUnique({
                 where: { id: accountId },
-                select: { person: { select: { bankJson: true } }, company: { select: { bankJson: true } } },
+                select: {
+                    person: { select: { bankJson: true, phones: PHONES } },
+                    company: { select: { bankJson: true, phones: PHONES } },
+                },
             }),
         ]);
         if (!outstanding) return NextResponse.json({ error: "Party not found" }, { status: 404 });
@@ -67,6 +79,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
             name: outstanding.accountName,
             balance: balances.get(accountId) ?? 0,
             upiLink: buildPartyUpiLink(bank, outstanding.accountName) || null,
+            phones: owner?.person?.phones ?? owner?.company?.phones ?? [],
             bills: outstanding.bills.map((b) => ({
                 key: `${b.kind}:${b.id}`,
                 universalVoucherId: b.universalVoucherId,

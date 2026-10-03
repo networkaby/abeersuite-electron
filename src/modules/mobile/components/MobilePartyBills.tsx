@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Phone } from "lucide-react";
 import { formatInr } from "@/shared/lib/format/moneyInr";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import MobileHeader from "./MobileHeader";
@@ -19,7 +20,8 @@ import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
  *  (/api/mobile/parties/[accountId]). `back` is the list the party was opened from.
  *  Pay / Receive show for whoever holds the Payment / Receipt create + post ticks;
  *  the one matching the balance's direction is the main button. Bills ticked on the
- *  bills tab ride along (`?bills=`): a bill they owe goes to Receive, one we owe to Pay. */
+ *  bills tab ride along (`?bills=`): a bill they owe goes to Receive, one we owe to Pay.
+ *  Each of the party's numbers is a Call button — the phone's own dialler (`tel:`). */
 export default function MobilePartyBills({ accountId, userId, name, back }: {
     accountId: number;
     userId: string;
@@ -82,6 +84,20 @@ export default function MobilePartyBills({ accountId, userId, name, back }: {
                             <p className="text-sm text-muted-foreground">
                                 Not against any bill: {formatInr(Math.abs(onAccount))} {onAccount > 0 ? "they owe" : "we owe"}
                             </p>
+                        )}
+                        {data.phones.length > 0 && (
+                            <div className="flex flex-wrap gap-2 pt-2">
+                                {data.phones.map((p) => (
+                                    <a
+                                        key={p.phone}
+                                        href={`tel:${p.phone.replace(/[^\d+]/g, "")}`}
+                                        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-600/40 px-3 py-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400"
+                                    >
+                                        <Phone className="size-4" aria-hidden />
+                                        Call {p.phone}{p.label ? ` · ${p.label}` : ""}
+                                    </a>
+                                ))}
+                            </div>
                         )}
                         {(setup?.canPay || setup?.canReceive) && (
                             <div className="flex gap-2 pt-3">

@@ -202,6 +202,11 @@ Tap a party → the party screen: balance + Pay / Receive, then two tabs.
   plus unpaid bills (`getLedgerOutstanding`, the Receivables engine), and the gap between
   them shown as "Not against any bill" — money on account moves the balance but settles no
   bill, so the two figures can differ.
+- **Call** (owner, 2026-10-03) — one button per number the party has (`phones`, primary
+  first, from the same party API), under the balance: a `tel:` link, so the phone's own
+  dialler rings the customer from the staff member's SIM. Shown to anyone who can open the
+  party. Not logged — the PBX Call Log only sees the shop landline. A phone number edited
+  in the office also breaks the `?since=` "unchanged" answer (`Phone.updatedAt`).
 
 ### Receivables / Payables
 [`/api/mobile/outstanding/[side]`](../src/app/api/mobile/outstanding/[side]/route.ts) +
@@ -311,6 +316,11 @@ Cash – Counter 21.
 - A posted payment / receipt drops the party, receivable / payable and Day Book answers
   and the held balances.
 - Saved answers are read in an effect, never the first render (that was a hydration error).
+- **`ANSWER_SHAPE`** (in `mobileCache.ts`) is part of every saved answer's key. Bump it when
+  a phone endpoint starts sending something a screen shows: `?since=` only says "the books
+  have not moved", and each "unchanged" reply moves the saved copy's clock forward, so an
+  old copy missing the new field would otherwise stand until someone posts a voucher —
+  even ↻ sends `?since=`. 2 = party `phones` + vouchers without drafts (2026-10-03).
 - Measured in Chrome: a typed product or party search makes no `/api` request; reopening
   Receivables within a minute makes none.
 - Still per page load and not phone-specific: `/api/sync/status` + `/api/counter/status`

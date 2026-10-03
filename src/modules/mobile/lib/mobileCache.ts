@@ -25,6 +25,20 @@ const MAX_ANSWERS = 60;
 
 const PREFIX = "m:";
 
+/**
+ * The shape of the saved answers. Bump it when a phone endpoint starts sending
+ * something new (a field a screen shows): `?since=` only says "the books have not
+ * moved", so without the bump an old copy — missing that field — would stand
+ * until someone posts a voucher. A bump makes every phone ask once afresh. Old
+ * rows are never read again and age out under MAX_ANSWERS.
+ *   2 — party detail sends `phones` (Call button); party vouchers drop drafts, 2026-10-03.
+ */
+const ANSWER_SHAPE = 2;
+
+/** Where an answer is kept in Dexie — the screen key plus the shape. Still starts
+ *  with the screen key, so `dropAnswers`' prefix match finds it. */
+const answerKey = (key: string) => `${key}#${ANSWER_SHAPE}`;
+
 /** The answers table's key for a screen — always scoped to the signed-in person. */
 export function mobileKey(name: string, userId: string | number): string {
     return userScopedKey(`${PREFIX}${name}`, userId);
@@ -62,7 +76,7 @@ function clearLegacy(): void {
 async function readAnswer(key: string): Promise<LocalAnswer | null> {
     clearLegacy();
     try {
-        return (await localDb()?.answers.get(key)) ?? null;
+        return (await localDb()?.answers.get(answerKey(key))) ?? null;
     } catch {
         return null;
     }
@@ -72,7 +86,7 @@ async function saveAnswer(key: string, data: unknown, computedAt: string): Promi
     const db = localDb();
     if (!db) return;
     try {
-        await db.answers.put({ key, data, computedAt, savedAt: Date.now() });
+        await db.answers.put({ key: answerKey(key), data, computedAt, savedAt: Date.now() });
         const count = await db.answers.count();
         if (count > MAX_ANSWERS) {
             const oldest = await db.answers.orderBy("savedAt").limit(count - MAX_ANSWERS).primaryKeys();
