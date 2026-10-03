@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { hasPermission, requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { handleApiError } from "@/shared/lib/api";
@@ -21,7 +21,8 @@ const SIDES = {
 // Who owes us / whom we owe, for the phone: the office report's engine
 // (`getOutstandings`), sent as the party list only — the flat bill list is the big
 // half of that report and a phone opens one party's bills on demand
-// (/api/mobile/parties/[accountId]). Each side checks its own tick.
+// (/api/mobile/parties/[accountId]). Each side checks its own tick; payables (all
+// suppliers) also needs "Show suppliers (creditors)", as the office hides them.
 //
 // `?since=<computedAt of the copy the phone holds>`: when nothing in the books has
 // moved since (booksUnchangedSince), the answer is `{ unchanged: true }` —
@@ -30,8 +31,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ side: st
     const side = SIDES[(await params).side as keyof typeof SIDES];
     if (!side) return NextResponse.json({ error: "Unknown list" }, { status: 404 });
 
-    const { response } = await requirePermission(side.permission);
+    const { user, response } = await requirePermission(side.permission);
     if (response) return response;
+    if (side.group === ACCOUNT_GROUPS.SUNDRY_CREDITORS && !hasPermission(user, PERMISSIONS.CUSTOMERS_VIEW_CREDITORS)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     try {
         // Captured BEFORE the read, so a voucher written mid-request is still

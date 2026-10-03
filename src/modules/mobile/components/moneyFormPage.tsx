@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { PARTY_DETAIL_PERMISSIONS, mobileUser } from "../lib/mobileAccess";
 import MobileMoneyForm, { type MoneyKind } from "./MobileMoneyForm";
+import { supplierHidden } from "../lib/supplierGuard";
 import { PHONE_APP_HOME, appBack } from "@/shared/lib/device/phone";
 
 type PageProps = {
@@ -15,7 +16,7 @@ export function moneyFormPage(kind: MoneyKind) {
     return async function MoneyFormPage({ params, searchParams }: PageProps) {
         const user = await mobileUser(PARTY_DETAIL_PERMISSIONS);
         const accountId = Number((await params).accountId);
-        if (!Number.isInteger(accountId)) notFound();
+        if (!Number.isInteger(accountId) || (await supplierHidden(accountId, user.permissions))) notFound();
         const { from, bills } = await searchParams;
         // Bills ticked on the party screen (`?bills=12,34`); junk is dropped.
         const pickedBills = (bills ?? "").split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0);

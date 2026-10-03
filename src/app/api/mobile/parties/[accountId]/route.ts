@@ -9,6 +9,7 @@ import { buildPartyUpiLink, parsePartyBank } from "@/shared/lib/parties/partyBan
 import { partyBalances } from "@/modules/mobile/lib/partyBalances";
 import { booksUnchangedSince } from "@/modules/mobile/lib/booksUnchanged";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
+import { supplierHidden } from "@/modules/mobile/lib/supplierGuard";
 
 // GET /api/mobile/parties/[accountId]
 //
@@ -26,11 +27,13 @@ import { parseSince } from "@/shared/lib/prisma/counterMode";
 // this party's own record (its UPI ID) has changed since — no recompute.
 export async function GET(req: Request, { params }: { params: Promise<{ accountId: string }> }) {
     // Opened from party search, receivables or payables — any of their ticks.
-    const { response } = await requireAnyPermission(...PARTY_DETAIL_PERMISSIONS);
+    const { user, response } = await requireAnyPermission(...PARTY_DETAIL_PERMISSIONS);
     if (response) return response;
 
     const accountId = Number((await params).accountId);
     if (!Number.isInteger(accountId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    // A supplier, without "Show suppliers": as if it did not exist.
+    if (await supplierHidden(accountId, user.permissions)) return NextResponse.json({ error: "Party not found" }, { status: 404 });
 
     try {
         const now = new Date();

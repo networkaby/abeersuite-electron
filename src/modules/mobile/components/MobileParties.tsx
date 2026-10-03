@@ -6,7 +6,8 @@ import { useSession } from "next-auth/react";
 import { usePartyList } from "@/shared/hooks/usePartySearch";
 import { browseParties, invalidateParties, type Party } from "@/shared/lib/parties/partyCatalog";
 import { searchPartyRows } from "@/shared/lib/parties/partySearch";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { seesSuppliers } from "../lib/mobileScreens";
 import MobileListScreen from "./MobileListScreen";
 import { balanceLabel } from "../lib/partyBalance";
 import { partyFacts } from "../lib/partyFacts";
@@ -21,17 +22,18 @@ const PAGE = 30;
  * every office party box, so typing costs no server read at all. Only the
  * balances of the rows on screen come from the server (usePartyBalances).
  *
- * Suppliers show only with "Show suppliers (creditors)", like the Contacts lists.
+ * Suppliers (Sundry Creditors) show only with "Show suppliers (creditors)", like the
+ * Contacts lists.
  */
 export default function MobileParties() {
     const [query, setQuery] = useState("");
     const [limit, setLimit] = useState(PAGE);
     const { parties, loading } = usePartyList();
     const permissions = (useSession().data?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const seeSuppliers = permissions.includes(PERMISSIONS.CUSTOMERS_VIEW_CREDITORS) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+    const seeSuppliers = seesSuppliers(permissions);
 
     const pool = useMemo(
-        () => parties.filter((p) => p.accountId != null && (seeSuppliers || p.accountGroupType !== "LIABILITY")),
+        () => parties.filter((p) => p.accountId != null && (seeSuppliers || p.accountGroup !== ACCOUNT_GROUPS.SUNDRY_CREDITORS)),
         [parties, seeSuppliers],
     );
     const { shown, more } = useMemo(() => {

@@ -20,6 +20,8 @@ export type MobileScreen = {
     icon: LucideIcon;
     /** The `mobile:*` tick that opens it — page, API, tile, tab and menu all read this one. */
     permission: string;
+    /** A screen of suppliers only — also needs "Show suppliers (creditors)". */
+    suppliers?: true;
 };
 
 /**
@@ -71,6 +73,7 @@ export const MOBILE_SCREENS: MobileScreen[] = [
         hint: "Whom we owe, by age",
         icon: Wallet,
         permission: PERMISSIONS.MOBILE_PAYABLES_VIEW,
+        suppliers: true,
     },
     {
         href: `${PHONE_APP_HOME}/daybook`,
@@ -87,7 +90,15 @@ export const MOBILE_SCREENS: MobileScreen[] = [
  *  and on Home, so the bar never has to grow as the app does. */
 export const MAX_SCREEN_TABS = 3;
 
+/** "Show suppliers (creditors)" — the office tick that hides Sundry Creditors and
+ *  purchase-side vouchers from Contacts, party pickers and SL Search. The phone app
+ *  hides them the same way (party list, Quick Pay, Payables, party screen, Day Book). */
+export function seesSuppliers(permissions: readonly string[]): boolean {
+    return hasPermissionWithScope([...permissions], PERMISSIONS.CUSTOMERS_VIEW_CREDITORS);
+}
+
 export function holdsScreen(permissions: readonly string[], screen: MobileScreen): boolean {
+    if (screen.suppliers && !seesSuppliers(permissions)) return false;
     return permissions.includes(screen.permission) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
 }
 

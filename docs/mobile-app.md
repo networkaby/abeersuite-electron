@@ -45,6 +45,16 @@ locked to its own screens in `proxy.ts` and at the API.)
   rung) plus a party tick. That is [`quickEntryFor`](../src/modules/mobile/lib/mobileScreens.ts).
 - The permission rows are in `permissionCatalog.ts` (module `mobile`) and
   `permissions.ts` (`MOBILE_*_VIEW`).
+- **"Show suppliers (creditors)"** (`customers:view:creditors`, the office Global tick)
+  hides the supplier side on the phone exactly as the office does (owner, 2026-10-03:
+  "to protect purchase and supplier details"). Without it: no Sundry Creditors in the
+  party list or Quick Pay; no **Payables** tile / tab / menu / page, and its API answers
+  403 (`suppliers: true` on the screen row); a supplier's party screen, its APIs and the
+  Pay / Receive form answer "not found" ([`supplierGuard`](../src/modules/mobile/lib/supplierGuard.ts));
+  the Day Book drops purchase-side kinds (`SUPPLIER_SIDE_TYPES`, shared with SL Search)
+  and any voucher whose party is a Sundry Creditor. One check, `seesSuppliers`
+  ([`mobileScreens.ts`](../src/modules/mobile/lib/mobileScreens.ts)); one rule — the
+  ledger group is **Sundry Creditors**.
 
 ### How admins give it out
 

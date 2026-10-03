@@ -6,7 +6,8 @@ import { useSession } from "next-auth/react";
 import { Receipt, Search, Users } from "lucide-react";
 import { usePartyList } from "@/shared/hooks/usePartySearch";
 import { searchPartyRows } from "@/shared/lib/parties/partySearch";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { seesSuppliers } from "../lib/mobileScreens";
 import { MOBILE_SETUP_FRESH_MS } from "@/shared/lib/constants/polling";
 import MobileHeader from "./MobileHeader";
 import { balanceLabel } from "../lib/partyBalance";
@@ -58,12 +59,12 @@ export default function MobileQuickPick({ kind, userId }: { kind: QuickKind; use
     const { parties } = usePartyList();
     const setup = useMobileResource<PaySetup>("/api/mobile/pay-setup", "pay-setup", userId, { freshMs: MOBILE_SETUP_FRESH_MS });
     const permissions = (useSession().data?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const seeSuppliers = permissions.includes(PERMISSIONS.CUSTOMERS_VIEW_CREDITORS) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+    const seeSuppliers = seesSuppliers(permissions);
     const allowed = kind === "receive" ? setup.data?.canReceive : setup.data?.canPay;
     const withParties = kind !== "expense";
 
     const pool = useMemo(
-        () => parties.filter((p) => p.accountId != null && (seeSuppliers || p.accountGroupType !== "LIABILITY")),
+        () => parties.filter((p) => p.accountId != null && (seeSuppliers || p.accountGroup !== ACCOUNT_GROUPS.SUNDRY_CREDITORS)),
         [parties, seeSuppliers],
     );
     const q = query.trim();

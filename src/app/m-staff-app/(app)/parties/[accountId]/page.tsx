@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { PARTY_DETAIL_PERMISSIONS, mobileUser } from "@/modules/mobile/lib/mobileAccess";
 import MobilePartyBills from "@/modules/mobile/components/MobilePartyBills";
+import { supplierHidden } from "@/modules/mobile/lib/supplierGuard";
 import { PHONE_APP_HOME, appBack } from "@/shared/lib/device/phone";
 
 export default async function MobilePartyPage({ params, searchParams }: {
@@ -9,7 +10,7 @@ export default async function MobilePartyPage({ params, searchParams }: {
 }) {
     const user = await mobileUser(PARTY_DETAIL_PERMISSIONS);
     const accountId = Number((await params).accountId);
-    if (!Number.isInteger(accountId)) notFound();
+    if (!Number.isInteger(accountId) || (await supplierHidden(accountId, user.permissions))) notFound();
     const { name, from } = await searchParams;
     // Back to the list it was opened from — only ever a phone screen.
     const back = appBack(from) ?? `${PHONE_APP_HOME}/parties`;

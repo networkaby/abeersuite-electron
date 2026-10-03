@@ -23,7 +23,7 @@ import { readLineText } from "@/shared/lib/print/lineDescription";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { hasPermission, requireAuth } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { PER_KIND } from "@/modules/accountancy/lib/tradingVoucherKinds";
+import { SUPPLIER_SIDE_TYPES } from "@/modules/accountancy/lib/tradingVoucherKinds";
 import { handleApiError } from "@/shared/lib/api";
 import { readPartyName, readPartyPhone } from "@/shared/lib/accountancy/partySnapshot";
 import { NO_PARTY_LINK, partyLinkFields, type PartyLinkFields } from "@/shared/lib/parties/partyLink";
@@ -32,14 +32,6 @@ import { SL_SEARCH_MIN_CHARS, type SlSearchResult } from "@/shared/lib/search/sl
 
 const BILL_LIMIT = 50;
 const TICKET_LIMIT = 20;
-
-/** Supplier-side documents — purchase, purchase return / order, GRN, rejection
- *  out: every trading kind whose party is a Sundry Creditor. Shown only to a
- *  role holding "Show suppliers", the same tick that hides suppliers from the
- *  Contacts lists and party pickers. */
-const SUPPLIER_SIDE_TYPES = Object.entries(PER_KIND)
-    .filter(([, kind]) => kind.party === "Sundry Creditors")
-    .map(([type]) => type);
 
 /** A ledger Account's party profile. The Account is the LIVE link — a merge or a
  *  conversion moves it onto the surviving record — so no forwarding walk is needed. */

@@ -508,3 +508,11 @@ export const PER_KIND: Record<TradingKind, KindConfig> = {
         showShowPricesToggle: false,
     },
 };
+
+/** Supplier-side documents — purchase, purchase return / order, GRN, rejection
+ *  out: every trading kind whose party is a Sundry Creditor. Shown only to a
+ *  role holding "Show suppliers", the same tick that hides suppliers from the
+ *  Contacts lists and party pickers (SL Search, the phone app). */
+export const SUPPLIER_SIDE_TYPES: string[] = Object.entries(PER_KIND)
+    .filter(([, kind]) => kind.party === "Sundry Creditors")
+    .map(([type]) => type);

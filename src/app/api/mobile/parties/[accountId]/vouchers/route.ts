@@ -9,6 +9,7 @@ import { round2 } from "@/shared/lib/format/moneyInr";
 import { PARTY_DETAIL_PERMISSIONS } from "@/modules/mobile/lib/mobileAccess";
 import { partyBalances } from "@/modules/mobile/lib/partyBalances";
 import { booksUnchangedSince } from "@/modules/mobile/lib/booksUnchanged";
+import { supplierHidden } from "@/modules/mobile/lib/supplierGuard";
 
 const PAGE_SIZE = 30;
 
@@ -30,11 +31,12 @@ const PAGE_SIZE = 30;
 //
 // `?since=` on page one: `{ unchanged: true }` when nothing in the books moved.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ accountId: string }> }) {
-    const { response } = await requireAnyPermission(...PARTY_DETAIL_PERMISSIONS);
+    const { user, response } = await requireAnyPermission(...PARTY_DETAIL_PERMISSIONS);
     if (response) return response;
 
     const accountId = Number((await params).accountId);
     if (!Number.isInteger(accountId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+    if (await supplierHidden(accountId, user.permissions)) return NextResponse.json({ error: "Party not found" }, { status: 404 });
 
     const search = req.nextUrl.searchParams;
     const cursor = Number(search.get("cursor")) || null;
