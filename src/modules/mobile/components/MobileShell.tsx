@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { ArrowDownLeft, ArrowUpRight, Home, Plus, Receipt, X } from "lucide-react";
 import MobileNav from "./MobileNav";
 import MobileSignOut from "./MobileSignOut";
+import DesktopSiteNotice from "./DesktopSiteNotice";
 import { MOBILE_GROUPS, isOnScreen, quickEntryFor, screensFor } from "../lib/mobileScreens";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
@@ -43,6 +44,7 @@ export default function MobileShell({ user, children }: { user: ShellUser; child
             <div data-phone-app className="min-h-dvh bg-background">
                 {/* Bottom padding = the tab bar (h-16) plus the phone's gesture area.
                     Full width on a phone; a centred column only on a tablet. */}
+                <DesktopSiteNotice />
                 <div className="mx-auto flex min-h-dvh w-full max-w-xl flex-col pb-[calc(4rem+env(safe-area-inset-bottom))]">
                     {children}
                 </div>

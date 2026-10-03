@@ -29,6 +29,7 @@ import FaceGrid from "./FaceGrid";
 import TillCard from "./TillCard";
 import NextOpening from "./NextOpening";
 import PinPad from "./PinPad";
+import DesktopSiteNotice from "@/modules/mobile/components/DesktopSiteNotice";
 import { ShiftTakeoverDialog, type CounterTakeover } from "@/modules/pos/components/ShiftTakeoverDialog";
 import { fetchCounterTakeover } from "@/modules/pos/lib/currentShift";
 import { readShellRoster, type ShellRosterEntry } from "@/shared/lib/counter/shellRoster";
@@ -558,6 +559,7 @@ function StaffLoginForm() {
             />
             <div className={styles.scrim} style={{ background: `rgba(2, 6, 23, ${LOGIN_SCRIM})` }} />
             <div className={styles.readscrim} />
+            {phoneApp && <div className={styles.phoneNotice}><DesktopSiteNotice /></div>}
 
             <div className={styles.stage}>
 
