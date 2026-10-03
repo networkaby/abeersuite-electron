@@ -111,9 +111,15 @@ export function resolveLandingPage(mode: AppMode, env: NodeJS.ProcessEnv = proce
  *  original `strip-public-build.mjs`. */
 export const PUBLIC_API_ALLOWLIST = new Set(["auth", "portal", "shop", "upload-signature", "legal"]);
 
-/** Whole subtrees that are office-only regardless of what's under `src/app/api`. Unchanged
- *  from the original `strip-public-build.mjs`. */
-export const OFFICE_ONLY_APP_PATHS = ["(protected)", "staff", "receipt", "shipping-label", "shipping-slip", "preview"];
+/** The staff phone app's route folder — office site only. Never on the shop site
+ *  (customers get their own shop app there), never on a till (its APIs are not in the
+ *  counter build). Must match `PHONE_APP_HOME` in shared/lib/device/phone.ts; written
+ *  out here because this file stays dependency-free. */
+export const PHONE_APP_DIRS = ["m-staff-app"];
+
+/** Whole subtrees that are office-only regardless of what's under `src/app/api`. The
+ *  original `strip-public-build.mjs` set, plus the staff phone app. */
+export const OFFICE_ONLY_APP_PATHS = ["(protected)", "staff", "receipt", "shipping-label", "shipping-slip", "preview", ...PHONE_APP_DIRS];
 
 // ── `office` / `counter` modes — temporary rename, local dev tree (counter-build.ts) ──
 

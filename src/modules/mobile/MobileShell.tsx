@@ -7,6 +7,7 @@ import { ArrowDownLeft, ArrowUpRight, Home, Plus, Receipt, X } from "lucide-reac
 import MobileNav from "./MobileNav";
 import MobileSignOut from "./MobileSignOut";
 import { MOBILE_GROUPS, isOnScreen, quickEntryFor, screensFor } from "./mobileScreens";
+import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 const MenuContext = createContext<{ openMenu: () => void }>({ openMenu: () => { } });
 
@@ -80,7 +81,7 @@ function SideMenu({ user, open, onClose }: { user: ShellUser; open: boolean; onC
                 </div>
 
                 <div className="flex-1 space-y-4 overflow-y-auto p-2">
-                    <Link href="/m" onClick={onClose} className={item(pathname === "/m")}>
+                    <Link href={PHONE_APP_HOME} onClick={onClose} className={item(pathname === PHONE_APP_HOME)}>
                         <Home className="size-5" /> Home
                     </Link>
                     {MOBILE_GROUPS.map((group) => {
@@ -113,7 +114,7 @@ function QuickEntryButton({ permissions }: { permissions: string[] }) {
     const pathname = usePathname();
     const [open, setOpen] = useState(false);
     const quick = quickEntryFor(permissions);
-    const onEntry = pathname.startsWith("/m/quick") || /\/(pay|receive)$/.test(pathname);
+    const onEntry = pathname.startsWith(`${PHONE_APP_HOME}/quick`) || /\/(pay|receive)$/.test(pathname);
     if ((!quick.pay && !quick.receive) || onEntry) return null;
 
     const choice = "flex items-center gap-3 rounded-xl border bg-background px-4 py-4 text-left font-medium shadow-sm active:bg-muted";
@@ -134,19 +135,19 @@ function QuickEntryButton({ permissions }: { permissions: string[] }) {
                         onClick={(e) => e.stopPropagation()}
                     >
                         {quick.receive && (
-                            <Link href="/m/quick/receive" onClick={() => setOpen(false)} className={choice}>
+                            <Link href={`${PHONE_APP_HOME}/quick/receive`} onClick={() => setOpen(false)} className={choice}>
                                 <ArrowDownLeft className="size-6 text-emerald-600" />
                                 <span>Receive money<span className="block text-xs font-normal text-muted-foreground">From a customer</span></span>
                             </Link>
                         )}
                         {quick.pay && (
-                            <Link href="/m/quick/pay" onClick={() => setOpen(false)} className={choice}>
+                            <Link href={`${PHONE_APP_HOME}/quick/pay`} onClick={() => setOpen(false)} className={choice}>
                                 <ArrowUpRight className="size-6 text-destructive" />
                                 <span>Make payment<span className="block text-xs font-normal text-muted-foreground">To a supplier, or an expense</span></span>
                             </Link>
                         )}
                         {quick.pay && (
-                            <Link href="/m/quick/expense" onClick={() => setOpen(false)} className={choice}>
+                            <Link href={`${PHONE_APP_HOME}/quick/expense`} onClick={() => setOpen(false)} className={choice}>
                                 <Receipt className="size-6 text-amber-600" />
                                 <span>Expense<span className="block text-xs font-normal text-muted-foreground">Rent, electricity, tea…</span></span>
                             </Link>

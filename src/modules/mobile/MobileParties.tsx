@@ -11,6 +11,7 @@ import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import MobileListScreen from "./MobileListScreen";
 import { balanceLabel } from "./partyBalance";
 import { recheckPartyBalances, usePartyBalances } from "./usePartyBalances";
+import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 const PAGE = 30;
 
@@ -65,7 +66,7 @@ export default function MobileParties() {
                 return (
                     <li key={`${p.type}:${p.id}`}>
                         <Link
-                            href={`/m/parties/${p.accountId}?name=${encodeURIComponent(p.name)}`}
+                            href={`${PHONE_APP_HOME}/parties/${p.accountId}?name=${encodeURIComponent(p.name)}`}
                             className="flex items-start gap-3 px-3 py-3 active:bg-muted"
                         >
                             <div className="min-w-0 flex-1">

@@ -14,6 +14,7 @@ import { usePartyBalances } from "./usePartyBalances";
 import { useMobileResource } from "./useMobileResource";
 import { mobileKey } from "./mobileCache";
 import type { PaySetup } from "./types";
+import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 export type QuickKind = "pay" | "receive" | "expense";
 
@@ -90,8 +91,8 @@ export default function MobileQuickPick({ kind, userId }: { kind: QuickKind; use
         const next = [t, ...recent.filter((r) => !(r.type === t.type && r.accountId === t.accountId))].slice(0, RECENT_MAX);
         try { localStorage.setItem(recentKey, JSON.stringify(next)); } catch { /* best-effort */ }
         router.push(t.type === "expense"
-            ? `/m/quick/pay/expense/${t.accountId}?from=/m/quick/${kind}`
-            : `/m/parties/${t.accountId}/${kind}?from=/m/quick/${kind}`);
+            ? `${PHONE_APP_HOME}/quick/pay/expense/${t.accountId}?from=${PHONE_APP_HOME}/quick/${kind}`
+            : `${PHONE_APP_HOME}/parties/${t.accountId}/${kind}?from=${PHONE_APP_HOME}/quick/${kind}`);
     };
 
     const row = (t: Target) => {
@@ -113,7 +114,7 @@ export default function MobileQuickPick({ kind, userId }: { kind: QuickKind; use
 
     return (
         <>
-            <MobileHeader title={copy.title} back="/m" />
+            <MobileHeader title={copy.title} back={PHONE_APP_HOME} />
             {setup.data && !allowed ? (
                 <p className="m-4 rounded-lg border p-4 text-sm text-muted-foreground">{copy.none}</p>
             ) : (

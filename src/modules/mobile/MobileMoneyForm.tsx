@@ -19,6 +19,7 @@ import { dropAnswers, mobileKey } from "./mobileCache";
 import { forgetPartyBalances } from "./usePartyBalances";
 import { MOBILE_SETUP_FRESH_MS } from "@/shared/lib/constants/polling";
 import type { PartyDetail, PaySetup } from "./types";
+import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 export type MoneyKind = "PAYMENT" | "RECEIPT";
 
@@ -68,7 +69,7 @@ function readLastLedger(key: string): number | null {
  * debited and the cash / bank credited, exactly as the office Payment screen
  * posts a payment to an expense head.
  *
- * Opened from quick entry (`back` under /m/quick), the saved screen offers
+ * Opened from quick entry (`back` under the app's /quick), the saved screen offers
  * "New entry" — straight back to the picker, with the cash / bank and mode the
  * next entry remembers.
  */
@@ -80,7 +81,7 @@ export default function MobileMoneyForm({ kind, accountId, userId, back, expense
     expense?: boolean;
 }) {
     const copy = COPY[kind];
-    const quick = back.startsWith("/m/quick");
+    const quick = back.startsWith(`${PHONE_APP_HOME}/quick`);
     const party = useMobileResource<PartyDetail>(
         expense ? null : `/api/mobile/parties/${accountId}`, `party:${accountId}`, userId, { since: true },
     );
@@ -252,7 +253,7 @@ export default function MobileMoneyForm({ kind, accountId, userId, back, expense
                         {quick ? "New entry" : `Back to ${targetName ?? "party"}`}
                     </Link>
                     {quick && (
-                        <Link href="/m" className="w-full rounded-lg border py-3 text-sm">Done</Link>
+                        <Link href={PHONE_APP_HOME} className="w-full rounded-lg border py-3 text-sm">Done</Link>
                     )}
                 </div>
             </>

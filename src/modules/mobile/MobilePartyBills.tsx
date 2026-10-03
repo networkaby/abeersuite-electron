@@ -11,6 +11,7 @@ import { MOBILE_SETUP_FRESH_MS } from "@/shared/lib/constants/polling";
 import type { PartyDetail, PaySetup } from "./types";
 import { useMobileList } from "./useMobileList";
 import MobilePartyVouchers, { type PartyVoucher } from "./MobilePartyVouchers";
+import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 /** One party: balance, Pay / Receive, then two tabs — its vouchers, newest first
  *  with the running balance (/api/mobile/parties/[accountId]/vouchers, asked on
@@ -66,7 +67,7 @@ export default function MobilePartyBills({ accountId, userId, name, back }: {
                             <div className="flex gap-2 pt-3">
                                 {setup.canReceive && (
                                     <Link
-                                        href={`/m/parties/${accountId}/receive?from=${back}`}
+                                        href={`${PHONE_APP_HOME}/parties/${accountId}/receive?from=${back}`}
                                         className={`flex-1 rounded-lg py-2.5 text-center font-medium ${data.balance > 0 ? "bg-primary text-primary-foreground" : "border"}`}
                                     >
                                         Receive
@@ -74,7 +75,7 @@ export default function MobilePartyBills({ accountId, userId, name, back }: {
                                 )}
                                 {setup.canPay && (
                                     <Link
-                                        href={`/m/parties/${accountId}/pay?from=${back}`}
+                                        href={`${PHONE_APP_HOME}/parties/${accountId}/pay?from=${back}`}
                                         className={`flex-1 rounded-lg py-2.5 text-center font-medium ${data.balance < 0 ? "bg-primary text-primary-foreground" : "border"}`}
                                     >
                                         Pay

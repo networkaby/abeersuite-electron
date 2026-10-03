@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { PARTY_DETAIL_PERMISSIONS, mobileUser } from "./mobileAccess";
 import MobileMoneyForm, { type MoneyKind } from "./MobileMoneyForm";
+import { PHONE_APP_HOME, appBack } from "@/shared/lib/device/phone";
 
 type PageProps = {
     params: Promise<{ accountId: string }>;
@@ -18,9 +19,10 @@ export function moneyFormPage(kind: MoneyKind) {
         const { from } = await searchParams;
         // From quick entry: back to its picker. Otherwise back to the party, which
         // itself goes back to the list it came from.
-        const quick = from && /^\/m\/quick\/(pay|receive)$/.test(from) ? from : null;
-        const listFrom = from && /^\/m\/[a-z-]+$/.test(from) ? `?from=${from}` : "";
-        const back = quick ?? `/m/parties/${accountId}${listFrom}`;
+        const ok = appBack(from);
+        const quick = ok?.startsWith(`${PHONE_APP_HOME}/quick/`) ? ok : null;
+        const listFrom = ok && !quick ? `?from=${ok}` : "";
+        const back = quick ?? `${PHONE_APP_HOME}/parties/${accountId}${listFrom}`;
         return <MobileMoneyForm kind={kind} accountId={accountId} userId={user.id} back={back} />;
     };
 }

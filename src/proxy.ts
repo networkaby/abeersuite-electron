@@ -4,6 +4,7 @@ import { isLegalPath } from "@/shared/lib/legal/legalPaths";
 import { isStorefrontSlugPath } from "@/shared/lib/shop/storefrontSlugPath";
 import { RELAY_ACTIVE } from "@/shared/lib/counter/relayPolicy";
 import { canOpenPage, NO_ACCESS_HOME, NO_ACCESS_PARAM } from "@/shared/lib/auth/pageAccess";
+import { isPhoneAppPath, isPhoneRequest, PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 function isPublicPath(pathname: string): boolean {
     if (pathname === "/" || pathname === "/login") return true;
@@ -29,12 +30,23 @@ function isPublicPath(pathname: string): boolean {
 function wantsStaffSignIn(pathname: string): boolean {
     return (
         pathname.startsWith("/office") ||
-        pathname === "/m" || pathname.startsWith("/m/") ||
+        isPhoneAppPath(pathname) ||
         pathname.startsWith("/vouchers") ||
         pathname.startsWith("/receipt") ||
         pathname.startsWith("/shipping-") ||
         pathname.startsWith("/preview/")
     );
+}
+
+/**
+ * Where a signed-in staff member lands from a sign-in page: back to the phone app
+ * when that is where they came from (`callbackUrl` under /m) or they are on a
+ * phone, else the office home.
+ */
+function staffHome(req: NextRequest): URL {
+    const back = req.nextUrl.searchParams.get("callbackUrl") ?? "";
+    if (isPhoneAppPath(back.split("?")[0])) return new URL(back, req.url);
+    return new URL(isPhoneRequest(req.headers) ? PHONE_APP_HOME : "/office/work-flow-inbox", req.url);
 }
 
 /**
@@ -70,6 +82,15 @@ const pageProxy = auth((req) => {
         return NextResponse.redirect(new URL("/portal", req.url));
     }
 
+    // A phone stays in the staff phone app: every other staff page — an office
+    // screen, a voucher form, a print — sends it to /m, signed in or not (signed
+    // out, /m then asks for the sign-in and comes back). Shop, portal and the
+    // sign-in pages are not staff pages and are never touched, so a customer on a
+    // phone shops as before. Chrome's "Desktop site" switch turns this off.
+    if (wantsStaffSignIn(pathname) && !isPhoneAppPath(pathname) && isPhoneRequest(req.headers)) {
+        return NextResponse.redirect(new URL(PHONE_APP_HOME, req.url));
+    }
+
     if (!isAuthenticated) {
         if (!isPublicPath(pathname)) {
             const dest = wantsStaffSignIn(pathname)
@@ -81,12 +102,8 @@ const pageProxy = auth((req) => {
         return NextResponse.next();
     }
 
-    if (pathname === "/login") {
-        return NextResponse.redirect(new URL("/office/work-flow-inbox", req.url));
-    }
-
-    if (pathname === "/staff/login") {
-        return NextResponse.redirect(new URL("/office/work-flow-inbox", req.url));
+    if (pathname === "/login" || pathname === "/staff/login") {
+        return NextResponse.redirect(staffHome(req));
     }
 
     // Page lock: an office page opens only on its own sidebar tick (pageAccess.ts), so

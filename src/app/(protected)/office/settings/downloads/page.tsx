@@ -6,6 +6,13 @@ import { Download, MonitorDown, Printer, QrCode, Smartphone } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { QrSvg } from "@/shared/components/print/QrSvg";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
+
+// Always the LIVE office site, wherever this page is opened (a till's localhost
+// would give phones an address they cannot reach): https, so Chrome offers to
+// install it as an app. For a test on the shop Wi-Fi, type the PC's address.
+const PHONE_APP_URL = `${COMPANY_DETAILS.sites.office}${PHONE_APP_HOME}`;
 
 // Shared Downloads hub. The Counter Bridge powers both the thermal printer and
 // the QR display (and may carry other tools later), so its downloads live here
@@ -53,9 +60,6 @@ function DownloadCard({ item }: { item: DownloadItem }) {
 
 export default function DownloadsPage() {
     const [version, setVersion] = useState<string | null>(null);
-    // The phone opens this address from the QR; the origin is whatever site this page was opened on.
-    const [phoneAppUrl, setPhoneAppUrl] = useState("");
-    useEffect(() => setPhoneAppUrl(`${window.location.origin}/m`), []);
 
     useEffect(() => {
         fetch("/combined-bridge.version.json", { cache: "no-store" })
@@ -97,8 +101,8 @@ export default function DownloadsPage() {
                         </p>
                     </div>
                     <div className="rounded-lg border border-border bg-card p-4 flex items-center gap-4">
-                        {phoneAppUrl && <QrSvg value={phoneAppUrl} size={160} className="shrink-0 rounded bg-white" />}
-                        <p className="text-xs text-muted-foreground break-all">{phoneAppUrl}</p>
+                        <QrSvg value={PHONE_APP_URL} size={160} className="shrink-0 rounded bg-white" />
+                        <p className="text-xs text-muted-foreground break-all">{PHONE_APP_URL}</p>
                     </div>
                 </section>
 

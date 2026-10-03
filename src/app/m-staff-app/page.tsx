@@ -4,6 +4,8 @@ import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { mobileUser } from "@/modules/mobile/mobileAccess";
 import { quickEntryFor, screensFor } from "@/modules/mobile/mobileScreens";
 import MobileHeader from "@/modules/mobile/MobileHeader";
+import InstallAppButton from "@/modules/mobile/InstallAppButton";
+import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 /** Home: every screen this person holds, as a tile. Sign out lives in the side menu. */
 export default async function MobileHome() {
@@ -20,20 +22,22 @@ export default async function MobileHome() {
                     <p className="text-lg font-semibold">{user.name}</p>
                 </div>
 
+                <InstallAppButton />
+
                 {(quick.receive || quick.pay) && (
                     <div className="grid grid-cols-3 gap-2">
                         {quick.receive && (
-                            <Link href="/m/quick/receive" className="flex flex-col items-center gap-1 rounded-xl bg-emerald-600 p-3 text-sm font-medium text-white active:opacity-90">
+                            <Link href={`${PHONE_APP_HOME}/quick/receive`} className="flex flex-col items-center gap-1 rounded-xl bg-emerald-600 p-3 text-sm font-medium text-white active:opacity-90">
                                 <ArrowDownLeft className="size-6" /> Receive
                             </Link>
                         )}
                         {quick.pay && (
-                            <Link href="/m/quick/pay" className="flex flex-col items-center gap-1 rounded-xl bg-primary p-3 text-sm font-medium text-primary-foreground active:opacity-90">
+                            <Link href={`${PHONE_APP_HOME}/quick/pay`} className="flex flex-col items-center gap-1 rounded-xl bg-primary p-3 text-sm font-medium text-primary-foreground active:opacity-90">
                                 <ArrowUpRight className="size-6" /> Pay
                             </Link>
                         )}
                         {quick.pay && (
-                            <Link href="/m/quick/expense" className="flex flex-col items-center gap-1 rounded-xl bg-amber-600 p-3 text-sm font-medium text-white active:opacity-90">
+                            <Link href={`${PHONE_APP_HOME}/quick/expense`} className="flex flex-col items-center gap-1 rounded-xl bg-amber-600 p-3 text-sm font-medium text-white active:opacity-90">
                                 <Receipt className="size-6" /> Expense
                             </Link>
                         )}

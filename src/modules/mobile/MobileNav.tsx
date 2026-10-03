@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home } from "lucide-react";
 import { MAX_SCREEN_TABS, isOnScreen, screensFor } from "./mobileScreens";
+import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 /**
  * The phone app's bottom tab bar: Home plus the first screens this person holds
@@ -13,7 +14,7 @@ import { MAX_SCREEN_TABS, isOnScreen, screensFor } from "./mobileScreens";
 export default function MobileNav({ permissions }: { permissions: string[] }) {
     const pathname = usePathname();
     const tabs = [
-        { href: "/m", tab: "Home", icon: Home, active: pathname === "/m" },
+        { href: PHONE_APP_HOME, tab: "Home", icon: Home, active: pathname === PHONE_APP_HOME },
         ...screensFor(permissions).slice(0, MAX_SCREEN_TABS).map((s) => ({
             href: s.href,
             tab: s.tab,

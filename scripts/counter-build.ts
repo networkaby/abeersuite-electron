@@ -52,6 +52,7 @@ import {
     COUNTER_VOUCHERS_MODULE_STRIP,
     COUNTER_SETTINGS_KEEP,
     COUNTER_API_ALLOWLIST,
+    PHONE_APP_DIRS,
 } from "../src/shared/lib/appModeCore";
 
 const COUNTER_BUILD = process.env.COUNTER_BUILD === "1";
@@ -180,6 +181,9 @@ if (flags.isCounter) {
     for (const rel of [...COUNTER_OFFICE_MODULE_STRIP, ...COUNTER_VOUCHERS_MODULE_STRIP]) {
         findRouteFiles(path.join(APP_DIR, "(protected)", ...rel.split("/")), toExcludeFiles);
     }
+    // The staff phone app is not a till's business — and its APIs are not in
+    // COUNTER_API_ALLOWLIST, so its pages would only be dead links here.
+    for (const dir of PHONE_APP_DIRS) findRouteFiles(path.join(APP_DIR, dir), toExcludeFiles);
     // office/settings keeps only the till-relevant sub-pages (see COUNTER_SETTINGS_KEEP).
     const settingsDir = path.join(APP_DIR, "(protected)", "office", "settings");
     if (fs.existsSync(settingsDir)) {

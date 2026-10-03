@@ -6,6 +6,7 @@ import { formatInr } from "@/shared/lib/format/moneyInr";
 import type { AgeingBucket, Buckets } from "@/modules/accountancy/lib/outstandings";
 import MobileListScreen from "./MobileListScreen";
 import { useMobileResource } from "./useMobileResource";
+import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 type OutstandingParty = {
     accountId: number;
@@ -27,8 +28,8 @@ const AGES: { key: AgeingBucket; label: string }[] = [
 ];
 
 const SIDE = {
-    receivables: { title: "Receivables", word: "to receive", tone: "text-destructive", href: "/m/receivables" },
-    payables: { title: "Payables", word: "to pay", tone: "text-emerald-600 dark:text-emerald-400", href: "/m/payables" },
+    receivables: { title: "Receivables", word: "to receive", tone: "text-destructive", href: `${PHONE_APP_HOME}/receivables` },
+    payables: { title: "Payables", word: "to pay", tone: "text-emerald-600 dark:text-emerald-400", href: `${PHONE_APP_HOME}/payables` },
 } as const;
 
 /**
@@ -93,7 +94,7 @@ export default function MobileOutstanding({ side, userId }: { side: keyof typeof
             {shown.map((p) => (
                 <li key={p.accountId}>
                     <Link
-                        href={`/m/parties/${p.accountId}?name=${encodeURIComponent(p.name)}&from=${meta.href}`}
+                        href={`${PHONE_APP_HOME}/parties/${p.accountId}?name=${encodeURIComponent(p.name)}&from=${meta.href}`}
                         className="flex items-start gap-3 px-3 py-3 active:bg-muted"
                     >
                         <div className="min-w-0 flex-1">

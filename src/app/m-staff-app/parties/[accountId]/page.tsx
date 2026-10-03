@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { PARTY_DETAIL_PERMISSIONS, mobileUser } from "@/modules/mobile/mobileAccess";
 import MobilePartyBills from "@/modules/mobile/MobilePartyBills";
+import { PHONE_APP_HOME, appBack } from "@/shared/lib/device/phone";
 
 export default async function MobilePartyPage({ params, searchParams }: {
     params: Promise<{ accountId: string }>;
@@ -11,6 +12,6 @@ export default async function MobilePartyPage({ params, searchParams }: {
     if (!Number.isInteger(accountId)) notFound();
     const { name, from } = await searchParams;
     // Back to the list it was opened from — only ever a phone screen.
-    const back = from && /^\/m\/[a-z-]+$/.test(from) ? from : "/m/parties";
+    const back = appBack(from) ?? `${PHONE_APP_HOME}/parties`;
     return <MobilePartyBills accountId={accountId} userId={user.id} name={name ?? null} back={back} />;
 }

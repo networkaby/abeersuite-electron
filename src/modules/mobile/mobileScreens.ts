@@ -2,6 +2,7 @@ import { BookOpen, Boxes, HandCoins, Users, Wallet, type LucideIcon } from "luci
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 /** Side-menu headings, in the order they are listed. */
 export const MOBILE_GROUPS = ["Stock", "Parties", "Accounts"] as const;
@@ -37,7 +38,7 @@ export type MobileScreen = {
  */
 export const MOBILE_SCREENS: MobileScreen[] = [
     {
-        href: "/m/stock",
+        href: `${PHONE_APP_HOME}/stock`,
         group: "Stock",
         tab: "Stock",
         label: "Stock & price",
@@ -47,7 +48,7 @@ export const MOBILE_SCREENS: MobileScreen[] = [
         roleDescription: "Phone app: search products, see available quantity per branch and sale price.",
     },
     {
-        href: "/m/parties",
+        href: `${PHONE_APP_HOME}/parties`,
         group: "Parties",
         tab: "Parties",
         label: "Party",
@@ -57,7 +58,7 @@ export const MOBILE_SCREENS: MobileScreen[] = [
         roleDescription: "Phone app: search parties, see balance, vouchers with running balance, and unpaid bills.",
     },
     {
-        href: "/m/receivables",
+        href: `${PHONE_APP_HOME}/receivables`,
         group: "Parties",
         tab: "To receive",
         label: "Receivables",
@@ -67,7 +68,7 @@ export const MOBILE_SCREENS: MobileScreen[] = [
         roleDescription: "Phone app: who owes us — total, age, and each party's unpaid bills.",
     },
     {
-        href: "/m/payables",
+        href: `${PHONE_APP_HOME}/payables`,
         group: "Parties",
         tab: "To pay",
         label: "Payables",
@@ -77,7 +78,7 @@ export const MOBILE_SCREENS: MobileScreen[] = [
         roleDescription: "Phone app: whom we owe — total, age, and each supplier's unpaid bills.",
     },
     {
-        href: "/m/daybook",
+        href: `${PHONE_APP_HOME}/daybook`,
         group: "Accounts",
         tab: "Day Book",
         label: "Day Book",

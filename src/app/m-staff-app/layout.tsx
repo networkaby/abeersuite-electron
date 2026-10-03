@@ -6,11 +6,14 @@ import { redirectIfPcWithoutCounter } from "@/shared/lib/auth/permissions";
 import SessionWrapper from "@/shared/components/SessionWrapper";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import MobileShell from "@/modules/mobile/MobileShell";
+import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 export const metadata: Metadata = {
-    title: "Mobile",
-    manifest: "/m/manifest.webmanifest",
-    appleWebApp: { capable: true, title: COMPANY_DETAILS.brandName },
+    title: "Staff",
+    manifest: `${PHONE_APP_HOME}/manifest.webmanifest`,
+    // iPhone has no manifest install: "Add to Home Screen" reads these instead.
+    appleWebApp: { capable: true, title: `${COMPANY_DETAILS.brandName} Staff` },
+    icons: { apple: "/m-icon-192.png" },
 };
 
 // Draw under the phone's gesture bar so the tab bar can pad itself by
@@ -22,7 +25,9 @@ export const viewport: Viewport = {
 };
 
 /**
- * The phone app — a few read-only screens for staff away from a counter.
+ * The staff phone app — quick views and quick Receive / Pay / Expense for staff
+ * away from a counter. It stays in its own area: phones are sent here from any
+ * staff page (proxy.ts), and nothing in it links out.
  *
  * Same sign-in as the office site, and so the same rule: a phone is never a
  * counter, so only someone with "Can login outside counter" gets in (enforced at
@@ -31,7 +36,7 @@ export const viewport: Viewport = {
  */
 export default async function MobileLayout({ children }: { children: React.ReactNode }) {
     const session = await auth();
-    if (!session?.user) redirect("/staff/login?callbackUrl=/m");
+    if (!session?.user) redirect(`/staff/login?callbackUrl=${PHONE_APP_HOME}`);
     if ((session.user as { kind?: string }).kind === "customer") redirect("/portal");
     redirectIfPcWithoutCounter();
     const user = session.user as { name?: string | null; roleLabel?: string; permissions?: string[] };
