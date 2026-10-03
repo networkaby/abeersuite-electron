@@ -7,9 +7,9 @@ import { usePartyList } from "@/shared/hooks/usePartySearch";
 import { browseParties, invalidateParties, type Party } from "@/shared/lib/parties/partyCatalog";
 import { searchPartyRows } from "@/shared/lib/parties/partySearch";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import MobileListScreen from "./MobileListScreen";
 import { balanceLabel } from "../lib/partyBalance";
+import { partyFacts } from "../lib/partyFacts";
 import { recheckPartyBalances, usePartyBalances } from "../hooks/usePartyBalances";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
@@ -63,6 +63,7 @@ export default function MobileParties() {
             {shown.map((p) => {
                 const balance = balances[p.accountId!];
                 const bal = balance === undefined ? null : balanceLabel(balance);
+                const f = partyFacts(p);
                 return (
                     <li key={`${p.type}:${p.id}`}>
                         <Link
@@ -71,8 +72,9 @@ export default function MobileParties() {
                         >
                             <div className="min-w-0 flex-1">
                                 <p className="font-medium leading-snug">{p.name}</p>
-                                <p className="truncate text-xs text-muted-foreground">
-                                    {[p.phones[0], p.accountGroup === ACCOUNT_GROUPS.SUNDRY_DEBTORS ? null : p.accountGroup].filter(Boolean).join(" · ")}
+                                {f.address && <p className="line-clamp-2 text-xs text-muted-foreground">{f.address}</p>}
+                                <p className="text-xs text-muted-foreground">
+                                    {[f.phones.join(", "), ...f.companies, f.group].filter(Boolean).join(" · ")}
                                 </p>
                             </div>
                             <p className={`shrink-0 text-right text-sm font-semibold ${bal?.tone ?? "text-muted-foreground"}`}>

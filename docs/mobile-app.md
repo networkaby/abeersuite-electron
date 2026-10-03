@@ -202,11 +202,16 @@ Tap a party → the party screen: balance + Pay / Receive, then two tabs.
   plus unpaid bills (`getLedgerOutstanding`, the Receivables engine), and the gap between
   them shown as "Not against any bill" — money on account moves the balance but settles no
   bill, so the two figures can differ.
-- **Call** (owner, 2026-10-03) — one button per number the party has (`phones`, primary
-  first, from the same party API), under the balance: a `tel:` link, so the phone's own
-  dialler rings the customer from the staff member's SIM. Shown to anyone who can open the
-  party. Not logged — the PBX Call Log only sees the shop landline. A phone number edited
-  in the office also breaks the `?since=` "unchanged" answer (`Phone.updatedAt`).
+- **Who this is** (owner, 2026-10-03: "same name many customer") — under the balance, and
+  under each name on the party list: address / area, every phone number, linked company,
+  and the group for anyone not a Sundry Debtor
+  ([`partyFacts`](../src/modules/mobile/lib/partyFacts.ts)). Read from the on-device party
+  catalogue (`usePartyList`), so it costs no server read and follows office edits through
+  the catalogue's own `parties` realtime topic.
+- **Call** — only a **Sundry Creditors** party's numbers are Call buttons (`tel:`, the
+  phone's own dialler, the staff member's SIM); a customer's numbers show as plain text
+  (owner, 2026-10-03: no calling customers from the phone app until calls can be logged —
+  the PBX Call Log only sees the shop landline).
 
 ### Receivables / Payables
 [`/api/mobile/outstanding/[side]`](../src/app/api/mobile/outstanding/[side]/route.ts) +
@@ -320,7 +325,8 @@ Cash – Counter 21.
   a phone endpoint starts sending something a screen shows: `?since=` only says "the books
   have not moved", and each "unchanged" reply moves the saved copy's clock forward, so an
   old copy missing the new field would otherwise stand until someone posts a voucher —
-  even ↻ sends `?since=`. 2 = party `phones` + vouchers without drafts (2026-10-03).
+  even ↻ sends `?since=`. 2 = party `phones` + vouchers without drafts; 3 = party `phones`
+  dropped again (2026-10-03).
 - Measured in Chrome: a typed product or party search makes no `/api` request; reopening
   Receivables within a minute makes none.
 - Still per page load and not phone-specific: `/api/sync/status` + `/api/counter/status`

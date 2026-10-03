@@ -12,6 +12,8 @@ import { MOBILE_SETUP_FRESH_MS } from "@/shared/lib/constants/polling";
 import type { PartyDetail, PaySetup } from "../lib/types";
 import { useMobileList } from "../hooks/useMobileList";
 import MobilePartyVouchers, { type PartyVoucher } from "./MobilePartyVouchers";
+import { usePartyList } from "@/shared/hooks/usePartySearch";
+import { partyFacts } from "../lib/partyFacts";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 /** One party: balance, Pay / Receive, then two tabs — its vouchers, newest first
@@ -21,7 +23,9 @@ import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
  *  Pay / Receive show for whoever holds the Payment / Receipt create + post ticks;
  *  the one matching the balance's direction is the main button. Bills ticked on the
  *  bills tab ride along (`?bills=`): a bill they owe goes to Receive, one we owe to Pay.
- *  Each of the party's numbers is a Call button — the phone's own dialler (`tel:`). */
+ *  Under the balance, what tells same-named parties apart (address, numbers, linked
+ *  company), from the on-device party catalogue; a supplier's numbers are Call
+ *  buttons (`tel:`), a customer's plain text. */
 export default function MobilePartyBills({ accountId, userId, name, back }: {
     accountId: number;
     userId: string;
@@ -36,6 +40,9 @@ export default function MobilePartyBills({ accountId, userId, name, back }: {
     // asks, with `?since=`, so a quiet book still costs one tiny reply.
     const vouchers = useMobileList<PartyVoucher>(`/api/mobile/parties/${accountId}/vouchers`, "", userId, {}, { freshMs: 0 });
     const [tab, setTab] = useState<"vouchers" | "bills">("vouchers");
+    const { parties } = usePartyList();
+    const party = parties.find((p) => p.accountId === accountId);
+    const facts = party ? partyFacts(party) : null;
     // Ticked bills, by universalVoucherId — only a bill with one can be settled.
     const [picked, setPicked] = useState<Set<number>>(() => new Set());
 
@@ -85,17 +92,30 @@ export default function MobilePartyBills({ accountId, userId, name, back }: {
                                 Not against any bill: {formatInr(Math.abs(onAccount))} {onAccount > 0 ? "they owe" : "we owe"}
                             </p>
                         )}
-                        {data.phones.length > 0 && (
-                            <div className="flex flex-wrap gap-2 pt-2">
-                                {data.phones.map((p) => (
-                                    <a
-                                        key={p.phone}
-                                        href={`tel:${p.phone.replace(/[^\d+]/g, "")}`}
-                                        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-600/40 px-3 py-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400"
-                                    >
-                                        <Phone className="size-4" aria-hidden />
-                                        Call {p.phone}{p.label ? ` · ${p.label}` : ""}
-                                    </a>
+                        {facts && (
+                            <div className="space-y-1 pt-2 text-sm text-muted-foreground">
+                                {facts.address && <p>{facts.address}</p>}
+                                {(facts.companies.length > 0 || facts.group) && (
+                                    <p>{[...facts.companies, facts.group].filter(Boolean).join(" · ")}</p>
+                                )}
+                                {facts.phones.length > 0 && (facts.callable ? (
+                                    <div className="flex flex-wrap gap-2 pt-1">
+                                        {facts.phones.map((phone) => (
+                                            <a
+                                                key={phone}
+                                                href={`tel:${phone.replace(/[^\d+]/g, "")}`}
+                                                className="inline-flex items-center gap-1.5 rounded-full border border-emerald-600/40 px-3 py-1.5 font-medium text-emerald-700 dark:text-emerald-400"
+                                            >
+                                                <Phone className="size-4" aria-hidden />
+                                                Call {phone}
+                                            </a>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="flex items-center gap-1.5">
+                                        <Phone className="size-3.5 shrink-0" aria-hidden />
+                                        {facts.phones.join(", ")}
+                                    </p>
                                 ))}
                             </div>
                         )}

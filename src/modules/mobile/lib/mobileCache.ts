@@ -32,8 +32,10 @@ const PREFIX = "m:";
  * until someone posts a voucher. A bump makes every phone ask once afresh. Old
  * rows are never read again and age out under MAX_ANSWERS.
  *   2 — party detail sends `phones` (Call button); party vouchers drop drafts, 2026-10-03.
+ *   3 — party detail no longer sends `phones` (the screen reads the on-device party
+ *       catalogue), 2026-10-03.
  */
-const ANSWER_SHAPE = 2;
+const ANSWER_SHAPE = 3;
 
 /** Where an answer is kept in Dexie — the screen key plus the shape. Still starts
  *  with the screen key, so `dropAnswers`' prefix match finds it. */

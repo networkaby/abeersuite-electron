@@ -24,8 +24,6 @@ export type PartyDetail = {
     balance: number;
     /** `upi://pay?…` for the party's own UPI ID, or null when none is saved. */
     upiLink: string | null;
-    /** The party's numbers, primary first — the Call buttons. */
-    phones: { phone: string; label: string | null }[];
     bills: PartyBill[];
 };
 
