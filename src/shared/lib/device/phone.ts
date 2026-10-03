@@ -30,6 +30,10 @@ export function isPhoneRequest(headers: Headers): boolean {
  */
 export const PHONE_APP_HOME = "/m-staff-app";
 
+/** Where the Downloads QR points: the app's install page — open without sign-in,
+ *  since installing needs none (the app asks for the sign-in when first opened). */
+export const PHONE_APP_INSTALL = `${PHONE_APP_HOME}/install`;
+
 export function isPhoneAppPath(pathname: string): boolean {
     return pathname === PHONE_APP_HOME || pathname.startsWith(`${PHONE_APP_HOME}/`);
 }

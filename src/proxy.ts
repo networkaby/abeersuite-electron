@@ -4,12 +4,15 @@ import { isLegalPath } from "@/shared/lib/legal/legalPaths";
 import { isStorefrontSlugPath } from "@/shared/lib/shop/storefrontSlugPath";
 import { RELAY_ACTIVE } from "@/shared/lib/counter/relayPolicy";
 import { canOpenPage, NO_ACCESS_HOME, NO_ACCESS_PARAM } from "@/shared/lib/auth/pageAccess";
-import { isPhoneAppPath, isPhoneRequest, PHONE_APP_HOME } from "@/shared/lib/device/phone";
+import { isPhoneAppPath, isPhoneRequest, PHONE_APP_HOME, PHONE_APP_INSTALL } from "@/shared/lib/device/phone";
 
 function isPublicPath(pathname: string): boolean {
     if (pathname === "/" || pathname === "/login") return true;
     if (pathname === "/staff/login") return true;
     if (pathname === "/staff/forgot-password") return true;
+    // The staff phone app's install page — the Downloads QR opens it on a phone that
+    // is not signed in yet; installing needs no sign-in.
+    if (pathname === PHONE_APP_INSTALL) return true;
     // Policy pages — Razorpay activation and Google OAuth verification fetch
     // these anonymously, so they must never redirect to a sign-in.
     if (isLegalPath(pathname)) return true;

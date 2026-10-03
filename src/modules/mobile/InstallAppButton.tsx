@@ -1,21 +1,16 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { Download } from "lucide-react";
+import Link from "next/link";
+import { CheckCircle2, Download } from "lucide-react";
+import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 /** Chrome's install event — not in the DOM typings. */
 type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 
-/**
- * "Install app" on the phone app's Home — one tap from the QR to an installed app.
- *
- * Android Chrome: it holds Chrome's `beforeinstallprompt` and shows a button that
- * opens Chrome's own Install confirm (only offered over https — the live office
- * site, not the shop Wi-Fi test address). iPhone has no such event, so it shows the
- * two steps instead. Hidden once running as the installed app.
- */
 const noSubscribe = () => () => {};
-/** "browser" | "iphone" | "installed" on the phone; "server" while rendering on the server. */
+
+/** "installed" | "iphone" | "browser" on the phone; "server" while rendering on the server. */
 function readPlace(): string {
     const standalone = window.matchMedia("(display-mode: standalone)").matches
         || (navigator as { standalone?: boolean }).standalone === true;
@@ -23,16 +18,25 @@ function readPlace(): string {
     return /iPhone|iPad|iPod/i.test(navigator.userAgent) ? "iphone" : "browser";
 }
 
-export default function InstallAppButton() {
+/**
+ * The install page's one job — the closest a web page may come to "install from a
+ * QR": phones never let a site install itself, so the best is one tap here and the
+ * phone's own Install confirm.
+ *   • Android Chrome: holds Chrome's `beforeinstallprompt` → "Install NS Staff".
+ *   • iPhone: no such event — the two Share steps.
+ *   • already the installed app, or just installed: "Open app".
+ *   • no install offer (an http test address, another browser): open in Chrome,
+ *     ⋮ → Install app — plus "Open app" to use it in the browser meanwhile.
+ * Used ONLY on the install page; the app itself shows no install prompt (owner).
+ */
+export default function InstallAppButton({ appName }: { appName: string }) {
     const [prompt, setPrompt] = useState<InstallPromptEvent | null>(null);
-    const [justInstalled, setJustInstalled] = useState(false);
+    const [installed, setInstalled] = useState(false);
     const place = useSyncExternalStore(noSubscribe, readPlace, () => "server");
-    const installed = justInstalled || place === "installed" || place === "server";
-    const iphone = place === "iphone";
 
     useEffect(() => {
         const onPrompt = (e: Event) => { e.preventDefault(); setPrompt(e as InstallPromptEvent); };
-        const onInstalled = () => { setJustInstalled(true); setPrompt(null); };
+        const onInstalled = () => { setInstalled(true); setPrompt(null); };
         window.addEventListener("beforeinstallprompt", onPrompt);
         window.addEventListener("appinstalled", onInstalled);
         return () => {
@@ -41,24 +45,50 @@ export default function InstallAppButton() {
         };
     }, []);
 
-    if (installed) return null;
+    const openApp = (
+        <Link href={PHONE_APP_HOME} className="block w-full rounded-xl border py-3 text-center font-medium active:bg-muted">
+            Open app
+        </Link>
+    );
+
+    if (place === "server") return null;
+    if (installed || place === "installed") {
+        return (
+            <div className="space-y-3 text-center">
+                <p className="flex items-center justify-center gap-2 font-medium text-emerald-700 dark:text-emerald-400">
+                    <CheckCircle2 className="size-5" /> Installed — open <b>{appName}</b> from your home screen.
+                </p>
+                {openApp}
+            </div>
+        );
+    }
     if (prompt) {
         return (
             <button
                 type="button"
-                onClick={() => { void prompt.prompt(); void prompt.userChoice.then(() => setPrompt(null)); }}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-primary py-3 font-medium text-primary active:bg-primary/10"
+                onClick={() => { void prompt.prompt(); void prompt.userChoice.then((c) => { if (c.outcome === "accepted") setInstalled(true); setPrompt(null); }); }}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-4 text-lg font-semibold text-primary-foreground active:opacity-90"
             >
-                <Download className="size-5" /> Install app on this phone
+                <Download className="size-6" /> Install {appName}
             </button>
         );
     }
-    if (iphone) {
+    if (place === "iphone") {
         return (
-            <p className="rounded-xl border p-3 text-sm text-muted-foreground">
-                To install: tap <b>Share</b> (the square with an arrow), then <b>Add to Home Screen</b>.
-            </p>
+            <div className="space-y-3">
+                <p className="rounded-xl border p-4 text-sm">
+                    In <b>Safari</b>: tap <b>Share</b> (the square with an arrow), then <b>Add to Home Screen</b>, then <b>Add</b>.
+                </p>
+                {openApp}
+            </div>
         );
     }
-    return null;
+    return (
+        <div className="space-y-3">
+            <p className="rounded-xl border p-4 text-sm">
+                Open this page in <b>Chrome</b>, then tap <b>⋮</b> → <b>Install app</b>. (Installing needs the live https address — the shop Wi-Fi test address only opens in the browser.)
+            </p>
+            {openApp}
+        </div>
+    );
 }

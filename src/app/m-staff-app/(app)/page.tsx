@@ -4,7 +4,6 @@ import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { mobileUser } from "@/modules/mobile/mobileAccess";
 import { quickEntryFor, screensFor } from "@/modules/mobile/mobileScreens";
 import MobileHeader from "@/modules/mobile/MobileHeader";
-import InstallAppButton from "@/modules/mobile/InstallAppButton";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 /** Home: every screen this person holds, as a tile. Sign out lives in the side menu. */
@@ -21,8 +20,6 @@ export default async function MobileHome() {
                     <p className="text-xs text-muted-foreground">Signed in as</p>
                     <p className="text-lg font-semibold">{user.name}</p>
                 </div>
-
-                <InstallAppButton />
 
                 {(quick.receive || quick.pay) && (
                     <div className="grid grid-cols-3 gap-2">

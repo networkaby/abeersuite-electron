@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { QrSvg } from "@/shared/components/print/QrSvg";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
-import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
+import { PHONE_APP_INSTALL } from "@/shared/lib/device/phone";
 
 // Always the LIVE office site, wherever this page is opened (a till's localhost
 // would give phones an address they cannot reach): https, so Chrome offers to
 // install it as an app. For a test on the shop Wi-Fi, type the PC's address.
-const PHONE_APP_URL = `${COMPANY_DETAILS.sites.office}${PHONE_APP_HOME}`;
+const PHONE_APP_URL = `${COMPANY_DETAILS.sites.office}${PHONE_APP_INSTALL}`;
 
 // Shared Downloads hub. The Counter Bridge powers both the thermal printer and
 // the QR display (and may carry other tools later), so its downloads live here
@@ -97,7 +97,7 @@ export default function DownloadsPage() {
                             <Smartphone size={16} /> Staff Phone App
                         </h2>
                         <p className="text-xs text-muted-foreground">
-                            Scan with the phone camera, sign in, then choose Install app (Android Chrome) or Share → Add to Home Screen (iPhone).
+                            Scan with the phone camera and tap Install (Android Chrome). On iPhone: Share → Add to Home Screen. Sign in when the app first opens.
                         </p>
                     </div>
                     <div className="rounded-lg border border-border bg-card p-4 flex items-center gap-4">
