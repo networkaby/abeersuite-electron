@@ -32,6 +32,8 @@ function readPlace(): string {
 export default function InstallAppButton({ appName }: { appName: string }) {
     const [prompt, setPrompt] = useState<InstallPromptEvent | null>(null);
     const [installed, setInstalled] = useState(false);
+    // Already installed on this device, while this page is open in the browser.
+    const [installedHere, setInstalledHere] = useState(false);
     const place = useSyncExternalStore(noSubscribe, readPlace, () => "server");
 
     useEffect(() => {
@@ -41,6 +43,9 @@ export default function InstallAppButton({ appName }: { appName: string }) {
         const take = () => { if (w.__installPrompt) setPrompt(w.__installPrompt); };
         const onInstalled = () => { setInstalled(true); setPrompt(null); };
         take();
+        // Chrome only (manifest `related_applications`): is the app installed here?
+        const nav = navigator as { getInstalledRelatedApps?: () => Promise<unknown[]> };
+        void nav.getInstalledRelatedApps?.().then((apps) => { if (apps.length > 0) setInstalledHere(true); }).catch(() => {});
         window.addEventListener("install-offer", take);
         window.addEventListener("appinstalled", onInstalled);
         return () => {
@@ -56,11 +61,26 @@ export default function InstallAppButton({ appName }: { appName: string }) {
     );
 
     if (place === "server") return null;
+    if (!installed && place !== "installed" && installedHere && !prompt) {
+        return (
+            <div className="space-y-3 text-center">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">You are in the browser</p>
+                <p className="flex items-center justify-center gap-2 font-medium text-emerald-700 dark:text-emerald-400">
+                    <CheckCircle2 className="size-5" /> {appName} is already installed on this device.
+                </p>
+                <p className="text-sm text-muted-foreground">Open it from your home screen (or apps list).</p>
+                {openApp}
+            </div>
+        );
+    }
     if (installed || place === "installed") {
         return (
             <div className="space-y-3 text-center">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    {place === "installed" ? "You are in the installed app" : "Just installed"}
+                </p>
                 <p className="flex items-center justify-center gap-2 font-medium text-emerald-700 dark:text-emerald-400">
-                    <CheckCircle2 className="size-5" /> Installed — open <b>{appName}</b> from your home screen.
+                    <CheckCircle2 className="size-5" /> {place === "installed" ? <>This is <b>{appName}</b>.</> : <>Installed — open <b>{appName}</b> from your home screen.</>}
                 </p>
                 {openApp}
             </div>
@@ -90,7 +110,8 @@ export default function InstallAppButton({ appName }: { appName: string }) {
     return (
         <div className="space-y-3">
             <p className="rounded-xl border p-4 text-sm">
-                No install offer here. Open this page in <b>Chrome</b> (not Incognito), then tap <b>⋮</b> → <b>Install app</b>. Installing needs the live https address — the shop Wi-Fi test address only opens in the browser.
+                <span className="mb-1 block text-xs uppercase tracking-wide text-muted-foreground">You are in the browser</span>
+                Not installed yet? Use <b>Chrome</b> (not Incognito) on the live address, then <b>⋮</b> → <b>Install app</b>.
             </p>
             {openApp}
         </div>

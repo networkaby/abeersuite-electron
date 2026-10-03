@@ -13,7 +13,10 @@ const initials = COMPANY_DETAILS.brandName.split(/\s+/).map((w) => w[0]?.toUpper
 // never shows two identical icons. Chrome installs a real app (full screen, no
 // address bar) only with a 192px AND a 512px icon; the maskable one keeps the
 // round logo inside Android's safe zone on any icon shape.
-export function GET() {
+export function GET(req: Request) {
+    // "Is this app installed here?" — Chrome answers `getInstalledRelatedApps()` for
+    // the install page only when the manifest names itself as a related web app.
+    const manifestUrl = new URL(`${PHONE_APP_HOME}/manifest.webmanifest`, req.url).href;
     return Response.json(
         {
             id: PHONE_APP_HOME,
@@ -26,12 +29,13 @@ export function GET() {
             orientation: "portrait",
             background_color: COMPANY_DETAILS.themeColor.light,
             theme_color: COMPANY_DETAILS.themeColor.light,
+            related_applications: [{ platform: "webapp", url: manifestUrl }],
             icons: [
                 { src: "/m-icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
                 { src: "/m-icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
                 { src: "/m-icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
             ],
         },
-        { headers: { "Content-Type": "application/manifest+json", "Cache-Control": "public, max-age=86400" } },
+        { headers: { "Content-Type": "application/manifest+json", "Cache-Control": "public, max-age=3600" } },
     );
 }
