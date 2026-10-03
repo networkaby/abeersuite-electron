@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { redirectIfPcWithoutCounter } from "@/shared/lib/auth/permissions";
 import SessionWrapper from "@/shared/components/SessionWrapper";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
-import MobileShell from "@/modules/mobile/MobileShell";
+import MobileShell from "@/modules/mobile/components/MobileShell";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 export const metadata: Metadata = {

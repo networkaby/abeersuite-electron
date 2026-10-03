@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { PARTY_DETAIL_PERMISSIONS, mobileUser } from "./mobileAccess";
+import { PARTY_DETAIL_PERMISSIONS, mobileUser } from "../lib/mobileAccess";
 import MobileMoneyForm, { type MoneyKind } from "./MobileMoneyForm";
 import { PHONE_APP_HOME, appBack } from "@/shared/lib/device/phone";
 

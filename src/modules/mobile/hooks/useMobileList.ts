@@ -5,7 +5,7 @@ import axios from "axios";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { MOBILE_FRESH_MS } from "@/shared/lib/constants/polling";
-import { loadAnswer, mobileKey, offlineNote } from "./mobileCache";
+import { loadAnswer, mobileKey, offlineNote } from "../lib/mobileCache";
 
 /** A server-paged list API's reply. `more` is the query to send for the next page
  *  (a cursor, and whatever else must carry over — a running balance). */

@@ -6,9 +6,9 @@ import { handleApiError } from "@/shared/lib/api";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { voucherTypeLabel } from "@/shared/lib/format/voucherTypeLabel";
 import { round2 } from "@/shared/lib/format/moneyInr";
-import { PARTY_DETAIL_PERMISSIONS } from "@/modules/mobile/mobileAccess";
-import { partyBalances } from "@/modules/mobile/partyBalances";
-import { booksUnchangedSince } from "@/modules/mobile/booksUnchanged";
+import { PARTY_DETAIL_PERMISSIONS } from "@/modules/mobile/lib/mobileAccess";
+import { partyBalances } from "@/modules/mobile/lib/partyBalances";
+import { booksUnchangedSince } from "@/modules/mobile/lib/booksUnchanged";
 
 const PAGE_SIZE = 30;
 

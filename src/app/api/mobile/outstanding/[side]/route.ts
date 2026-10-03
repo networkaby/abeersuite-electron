@@ -6,7 +6,7 @@ import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { handleApiError } from "@/shared/lib/api";
 import { businessToday } from "@/shared/lib/format/formatDate";
 import { getOutstandings } from "@/modules/accountancy/lib/outstandings";
-import { booksUnchangedSince } from "@/modules/mobile/booksUnchanged";
+import { booksUnchangedSince } from "@/modules/mobile/lib/booksUnchanged";
 
 // Same aggregation as the office Receivables / Payables reports.
 export const maxDuration = 60;

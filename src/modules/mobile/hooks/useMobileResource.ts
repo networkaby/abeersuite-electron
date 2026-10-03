@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { MOBILE_FRESH_MS } from "@/shared/lib/constants/polling";
-import { loadAnswer, mobileKey, offlineNote } from "./mobileCache";
+import { loadAnswer, mobileKey, offlineNote } from "../lib/mobileCache";
 
 /**
  * One GET for a phone screen, through the saved-answer step (`loadAnswer`): the

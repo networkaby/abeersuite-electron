@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
-import { PARTY_DETAIL_PERMISSIONS, mobileUser } from "@/modules/mobile/mobileAccess";
-import MobileMoneyForm from "@/modules/mobile/MobileMoneyForm";
+import { PARTY_DETAIL_PERMISSIONS, mobileUser } from "@/modules/mobile/lib/mobileAccess";
+import MobileMoneyForm from "@/modules/mobile/components/MobileMoneyForm";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 /** Quick Pay straight to an expense ledger (rent, electricity, tea…). The form

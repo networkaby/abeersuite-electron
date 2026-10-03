@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
-import { PARTY_DETAIL_PERMISSIONS, mobileUser } from "@/modules/mobile/mobileAccess";
-import MobilePartyBills from "@/modules/mobile/MobilePartyBills";
+import { PARTY_DETAIL_PERMISSIONS, mobileUser } from "@/modules/mobile/lib/mobileAccess";
+import MobilePartyBills from "@/modules/mobile/components/MobilePartyBills";
 import { PHONE_APP_HOME, appBack } from "@/shared/lib/device/phone";
 
 export default async function MobilePartyPage({ params, searchParams }: {

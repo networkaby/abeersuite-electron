@@ -2,8 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError } from "@/shared/lib/api";
-import { partyBalances } from "@/modules/mobile/partyBalances";
-import { booksUnchangedSince } from "@/modules/mobile/booksUnchanged";
+import { partyBalances } from "@/modules/mobile/lib/partyBalances";
+import { booksUnchangedSince } from "@/modules/mobile/lib/booksUnchanged";
 
 /** Rows a phone shows at once, with headroom; anything past it is refused. */
 const MAX_IDS = 60;

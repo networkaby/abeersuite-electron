@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { ArrowDownLeft, ArrowUpRight, Receipt } from "lucide-react";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
-import { mobileUser } from "@/modules/mobile/mobileAccess";
-import { quickEntryFor, screensFor } from "@/modules/mobile/mobileScreens";
-import MobileHeader from "@/modules/mobile/MobileHeader";
+import { mobileUser } from "@/modules/mobile/lib/mobileAccess";
+import { quickEntryFor, screensFor } from "@/modules/mobile/lib/mobileScreens";
+import MobileHeader from "@/modules/mobile/components/MobileHeader";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 /** Home: every screen this person holds, as a tile. Sign out lives in the side menu. */

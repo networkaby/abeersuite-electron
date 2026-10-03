@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Image from "next/image";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
-import InstallAppButton from "@/modules/mobile/InstallAppButton";
+import InstallAppButton from "@/modules/mobile/components/InstallAppButton";
 
 const initials = COMPANY_DETAILS.brandName.split(/\s+/).map((w) => w[0]?.toUpperCase() ?? "").join("");
 const APP_NAME = `${initials} Staff`;

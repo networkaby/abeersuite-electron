@@ -5,7 +5,7 @@ import Link from "next/link";
 import { formatInr } from "@/shared/lib/format/moneyInr";
 import type { AgeingBucket, Buckets } from "@/modules/accountancy/lib/outstandings";
 import MobileListScreen from "./MobileListScreen";
-import { useMobileResource } from "./useMobileResource";
+import { useMobileResource } from "../hooks/useMobileResource";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 type OutstandingParty = {

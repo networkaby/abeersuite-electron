@@ -3,7 +3,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { voucherTypeLabel } from "@/shared/lib/format/voucherTypeLabel";
 import { GET as dayBook } from "@/app/api/accountancy/reports/day-book/route";
-import { booksUnchangedSince } from "@/modules/mobile/booksUnchanged";
+import { booksUnchangedSince } from "@/modules/mobile/lib/booksUnchanged";
 
 /** A phone screen holds a day; most days fit in one page. */
 const PAGE_SIZE = 100;

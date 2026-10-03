@@ -1,5 +1,5 @@
 import Link from "next/link";
-import MobileHeader from "@/modules/mobile/MobileHeader";
+import MobileHeader from "@/modules/mobile/components/MobileHeader";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 /** A phone screen that does not exist (an old link, a removed party): stays inside

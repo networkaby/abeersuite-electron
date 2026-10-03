@@ -8,7 +8,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { MONEY_ACCOUNT_GROUPS } from "@/modules/accountancy/lib/moneyAccount";
 import { accountIdsUnderGroup } from "@/modules/accountancy/lib/accountGroups";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
-import { PARTY_DETAIL_PERMISSIONS } from "@/modules/mobile/mobileAccess";
+import { PARTY_DETAIL_PERMISSIONS } from "@/modules/mobile/lib/mobileAccess";
 
 // GET /api/mobile/pay-setup
 //

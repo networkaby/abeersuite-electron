@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home } from "lucide-react";
-import { MAX_SCREEN_TABS, isOnScreen, screensFor } from "./mobileScreens";
+import { MAX_SCREEN_TABS, isOnScreen, screensFor } from "../lib/mobileScreens";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 /**

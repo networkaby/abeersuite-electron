@@ -9,8 +9,8 @@ import { searchPartyRows } from "@/shared/lib/parties/partySearch";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import MobileListScreen from "./MobileListScreen";
-import { balanceLabel } from "./partyBalance";
-import { recheckPartyBalances, usePartyBalances } from "./usePartyBalances";
+import { balanceLabel } from "../lib/partyBalance";
+import { recheckPartyBalances, usePartyBalances } from "../hooks/usePartyBalances";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 const PAGE = 30;

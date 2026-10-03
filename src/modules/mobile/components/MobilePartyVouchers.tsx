@@ -1,7 +1,7 @@
 "use client";
 
 import { formatInr } from "@/shared/lib/format/moneyInr";
-import { balanceLabel } from "./partyBalance";
+import { balanceLabel } from "../lib/partyBalance";
 
 export type PartyVoucher = {
     id: number;

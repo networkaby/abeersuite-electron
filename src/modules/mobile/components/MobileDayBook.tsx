@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { formatInr } from "@/shared/lib/format/moneyInr";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
 import MobileListScreen from "./MobileListScreen";
-import { useMobileList } from "./useMobileList";
+import { useMobileList } from "../hooks/useMobileList";
 
 type DayRow = {
     id: string;

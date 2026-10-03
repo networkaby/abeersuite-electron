@@ -4,12 +4,12 @@ import { useState } from "react";
 import { formatInr } from "@/shared/lib/format/moneyInr";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import MobileHeader from "./MobileHeader";
-import { balanceLabel } from "./partyBalance";
+import { balanceLabel } from "../lib/partyBalance";
 import Link from "next/link";
-import { useMobileResource } from "./useMobileResource";
+import { useMobileResource } from "../hooks/useMobileResource";
 import { MOBILE_SETUP_FRESH_MS } from "@/shared/lib/constants/polling";
-import type { PartyDetail, PaySetup } from "./types";
-import { useMobileList } from "./useMobileList";
+import type { PartyDetail, PaySetup } from "../lib/types";
+import { useMobileList } from "../hooks/useMobileList";
 import MobilePartyVouchers, { type PartyVoucher } from "./MobilePartyVouchers";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 

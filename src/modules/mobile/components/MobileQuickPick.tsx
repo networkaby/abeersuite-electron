@@ -9,11 +9,11 @@ import { searchPartyRows } from "@/shared/lib/parties/partySearch";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { MOBILE_SETUP_FRESH_MS } from "@/shared/lib/constants/polling";
 import MobileHeader from "./MobileHeader";
-import { balanceLabel } from "./partyBalance";
-import { usePartyBalances } from "./usePartyBalances";
-import { useMobileResource } from "./useMobileResource";
-import { mobileKey } from "./mobileCache";
-import type { PaySetup } from "./types";
+import { balanceLabel } from "../lib/partyBalance";
+import { usePartyBalances } from "../hooks/usePartyBalances";
+import { useMobileResource } from "../hooks/useMobileResource";
+import { mobileKey } from "../lib/mobileCache";
+import type { PaySetup } from "../lib/types";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 export type QuickKind = "pay" | "receive" | "expense";

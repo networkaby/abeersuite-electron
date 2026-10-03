@@ -26,7 +26,7 @@ not get in, and there is **no mobile-only sign-in path**. (Owner, Option 1: ride
 salesmen get a narrow mobile-only permission later, on request; that one must then be
 locked to its own screens in `proxy.ts` and at the API.)
 
-**Each screen has its own tick**, checked by the page ([`mobileAccess.ts`](../src/modules/mobile/mobileAccess.ts),
+**Each screen has its own tick**, checked by the page ([`mobileAccess.ts`](../src/modules/mobile/lib/mobileAccess.ts),
 `mobileUser(permission)`) and again by its API (`requirePermission(permission)`):
 
 | Screen | Tick | API |
@@ -42,7 +42,7 @@ locked to its own screens in `proxy.ts` and at the API.)
 - **Quick Receive / Pay / Expense and the Pay / Receive forms use no tick of their
   own**: they need the office Payment / Receipt **create + post** ticks (read through
   the CRUD ladder, `hasPermissionWithScope` — a session carries only the highest
-  rung) plus a party tick. That is [`quickEntryFor`](../src/modules/mobile/mobileScreens.ts).
+  rung) plus a party tick. That is [`quickEntryFor`](../src/modules/mobile/lib/mobileScreens.ts).
 - The permission rows are in `permissionCatalog.ts` (module `mobile`) and
   `permissions.ts` (`MOBILE_*_VIEW`).
 
@@ -115,7 +115,7 @@ lets a site install itself, so the Downloads QR is always `COMPANY_DETAILS.sites
 [`install/page.tsx`](../src/app/m-staff-app/install/page.tsx), open **without** sign-in
 (`isPublicPath`; the app's screens sit in the signed-in `(app)` route group so this page
 is outside it). It shows only the app and
-[`InstallAppButton`](../src/modules/mobile/InstallAppButton.tsx):
+[`InstallAppButton`](../src/modules/mobile/components/InstallAppButton.tsx):
 
 - Android Chrome → "Install NS Staff" (Chrome's `beforeinstallprompt`, then its own confirm);
 - iPhone → Share → Add to Home Screen;
@@ -129,25 +129,25 @@ typed by hand.
 
 ## 4. Screens
 
-One screen list, [`MOBILE_SCREENS`](../src/modules/mobile/mobileScreens.ts), drives the
+One screen list, [`MOBILE_SCREENS`](../src/modules/mobile/lib/mobileScreens.ts), drives the
 Home tiles (`src/app/m-staff-app/(app)/page.tsx`), the side menu, the
 bottom tab bar, and the Role / Departments "Mobile App" module.
 
-- **Side menu** ([`MobileShell`](../src/modules/mobile/MobileShell.tsx)): ☰ in every main
+- **Side menu** ([`MobileShell`](../src/modules/mobile/components/MobileShell.tsx)): ☰ in every main
   screen's header; every screen held, grouped by `MOBILE_GROUPS` (Stock / Parties /
   Accounts); name + role at the top; **Sign out at the bottom** — the only place it
   lives; closes on a link, an outside tap or Escape.
-- **Bottom tab bar** ([`MobileNav`](../src/modules/mobile/MobileNav.tsx)): Home + the first
+- **Bottom tab bar** ([`MobileNav`](../src/modules/mobile/components/MobileNav.tsx)): Home + the first
   `MAX_SCREEN_TABS` = 3 screens held (owner picked "both" over side-menu-only); a tab
   stays lit on its detail pages; padded by the phone's gesture area via
   `viewportFit: "cover"`.
-- A searched list uses [`MobileListScreen`](../src/modules/mobile/MobileListScreen.tsx)
+- A searched list uses [`MobileListScreen`](../src/modules/mobile/components/MobileListScreen.tsx)
   (optional `summary` slot for totals / chips) and supplies only its rows — filtered on
   the device for a catalogue it holds, or server-paged with
-  [`useMobileList`](../src/modules/mobile/useMobileList.ts) (`more` = the next page's
+  [`useMobileList`](../src/modules/mobile/hooks/useMobileList.ts) (`more` = the next page's
   query — cursor, running balance; extra `params` such as the Day Book's date; first page
   saved; `freshMs`) when the list is too big to hold. A single GET uses
-  [`useMobileResource`](../src/modules/mobile/useMobileResource.ts) (`since`, `freshMs`).
+  [`useMobileResource`](../src/modules/mobile/hooks/useMobileResource.ts) (`since`, `freshMs`).
 - Main screens get ☰; detail screens pass `back` (a party's bills go back to the list
   they were opened from via `?from=`).
 
@@ -155,7 +155,7 @@ Reference studied: the Vyapar Android app (left menu of Parties / Items / Report
 dashboard of outstanding, Day Book by date, per-party WhatsApp / SMS reminder).
 
 ### Stock & price
-[`MobileStock`](../src/modules/mobile/MobileStock.tsx) searches the POS product catalogue
+[`MobileStock`](../src/modules/mobile/components/MobileStock.tsx) searches the POS product catalogue
 already on the device (`useProductCatalog` — Dexie `products`, one full download then
 deltas, live on the stock / catalogue signals) with the till's own `searchProducts`
 (name, SKU, any barcode, typos) — **no request per search**, works offline. Shows on-hand,
@@ -166,7 +166,7 @@ without it). Tapping a row asks
 split (`loadLiveStockByBranch`).
 
 ### Party
-[`MobileParties`](../src/modules/mobile/MobileParties.tsx) searches the party list already
+[`MobileParties`](../src/modules/mobile/components/MobileParties.tsx) searches the party list already
 on the device (`usePartyList` / `searchPartyRows` — the same list `PartiesWarmup` loads on
 every page, so no extra download). **There is no party search endpoint**, per the standing
 rule — do not add one. Suppliers are hidden without "Show suppliers (creditors)". Named
@@ -174,9 +174,9 @@ rule — do not add one. Suppliers are hidden without "Show suppliers (creditors
 
 Balances for the rows on screen only:
 [`/api/mobile/parties?ids=…`](../src/app/api/mobile/parties/route.ts) (max 60, the hook
-batches 50), summed from the ledger ([`partyBalances`](../src/modules/mobile/partyBalances.ts)),
+batches 50), summed from the ledger ([`partyBalances`](../src/modules/mobile/lib/partyBalances.ts)),
 held in memory for the session by
-[`usePartyBalances`](../src/modules/mobile/usePartyBalances.ts) — it asks only for ids it
+[`usePartyBalances`](../src/modules/mobile/hooks/usePartyBalances.ts) — it asks only for ids it
 lacks, and after `MOBILE_FRESH_MS` re-checks with `known` + `since` (unchanged books →
 only the new ids are summed).
 
@@ -185,7 +185,7 @@ Tap a party → the party screen: balance + Pay / Receive, then two tabs.
 - **Vouchers** (first tab; owner: *"in party i will see last vouchers so i know if the last
   voucher was posted"*, *"simple voucher list, and running balance"*) —
   [`/api/mobile/parties/[accountId]/vouchers`](../src/app/api/mobile/parties/[accountId]/vouchers/route.ts)
-  + [`MobilePartyVouchers`](../src/modules/mobile/MobilePartyVouchers.tsx). Every voucher
+  + [`MobilePartyVouchers`](../src/modules/mobile/components/MobilePartyVouchers.tsx). Every voucher
   of the party (spine party, a leg on its ledger, or a bill made out to the person /
   company — the office Transactions tab's rule), EVERY status, newest first in the Day
   Book's order (date, real save time, id), 30 a page. Drafts are tagged "Draft — not
@@ -197,21 +197,21 @@ Tap a party → the party screen: balance + Pay / Receive, then two tabs.
   Ledger does, so a payment entered before its bill shows a brief "to receive". Asked on
   every open (`useMobileList` `freshMs: 0`, still `?since=`).
 - **Unpaid bills** — [`/api/mobile/parties/[accountId]`](../src/app/api/mobile/parties/[accountId]/route.ts):
-  balance ([`partyBalances`](../src/modules/mobile/partyBalances.ts), shared with the list)
+  balance ([`partyBalances`](../src/modules/mobile/lib/partyBalances.ts), shared with the list)
   plus unpaid bills (`getLedgerOutstanding`, the Receivables engine), and the gap between
   them shown as "Not against any bill" — money on account moves the balance but settles no
   bill, so the two figures can differ.
 
 ### Receivables / Payables
 [`/api/mobile/outstanding/[side]`](../src/app/api/mobile/outstanding/[side]/route.ts) +
-[`MobileOutstanding`](../src/modules/mobile/MobileOutstanding.tsx): `getOutstandings` (the
+[`MobileOutstanding`](../src/modules/mobile/components/MobileOutstanding.tsx): `getOutstandings` (the
 office report's engine) sent as the party list only (no flat bill list) with primary phone
 and the oldest bill's days; total + age chips (0–30 / 31–60 / 61–90 / 90+, tap to narrow and
 rank by that age); search over the list on the phone (name, phone, GSTIN).
 
 ### Day Book
 [`/api/mobile/daybook`](../src/app/api/mobile/daybook/route.ts) +
-[`MobileDayBook`](../src/modules/mobile/MobileDayBook.tsx): one day (◀ date ▶, the shop's
+[`MobileDayBook`](../src/modules/mobile/components/MobileDayBook.tsx): one day (◀ date ▶, the shop's
 today via `businessTodayIso`), handed to the office Day Book handler itself (`GET` imported
 from its route, 100 a page, cursor) and trimmed to kind / no. / party / narration / amount /
 status. Totals per kind over posted rows on screen ("so far" while more pages remain);
@@ -223,15 +223,15 @@ search passes through as the office `search`.
 
 ### Pay / Receive on a party
 Owner: "both" — record it AND pay by UPI; Receive added too. Buttons on a party's bills
-screen ([`MobilePartyBills`](../src/modules/mobile/MobilePartyBills.tsx)) for whoever holds
+screen ([`MobilePartyBills`](../src/modules/mobile/components/MobilePartyBills.tsx)) for whoever holds
 the Payment / Receipt **create + post** ticks (no new tick; the one matching the balance's
-direction is the main button) → [`MobileMoneyForm`](../src/modules/mobile/MobileMoneyForm.tsx)
+direction is the main button) → [`MobileMoneyForm`](../src/modules/mobile/components/MobileMoneyForm.tsx)
 at `/m-staff-app/parties/[id]/pay` and `/receive` (one page factory,
-[`moneyFormPage`](../src/modules/mobile/moneyFormPage.tsx)).
+[`moneyFormPage`](../src/modules/mobile/components/moneyFormPage.tsx)).
 
 - Money goes on the bills in `autoLinkOrder` (due date first — the settling step's own
   order, so the screen is what is saved; the party API sends `dueDate`), worked out by
-  [`placeOnBills`](../src/modules/mobile/moneyPlacement.ts):
+  [`placeOnBills`](../src/modules/mobile/lib/moneyPlacement.ts):
   - untouched = every bill ticked, amount = their total;
   - **an amount typed = the ticks follow it** — the oldest bills it covers, the last in part
     ("₹100 of ₹320"), an advance only once every open bill is full (owner, 2026-10-03:
@@ -260,9 +260,9 @@ at `/m-staff-app/parties/[id]/pay` and `/receive` (one page factory,
 Owner: *"we need quick payment and received voucher entry"*, *"go + expenses"*. A **+**
 button over the tab bar on every phone screen except the entry screens (`MobileShell`
 `QuickEntryButton`) and Receive / Pay tiles on Home, shown by
-[`quickEntryFor`](../src/modules/mobile/mobileScreens.ts) (ticks: §1).
+[`quickEntryFor`](../src/modules/mobile/lib/mobileScreens.ts) (ticks: §1).
 
-→ [`MobileQuickPick`](../src/modules/mobile/MobileQuickPick.tsx) at
+→ [`MobileQuickPick`](../src/modules/mobile/components/MobileQuickPick.tsx) at
 `/m-staff-app/quick/receive` | `/quick/pay`: searches the party list on the device (no
 request per key) and, for Pay, the expense ledgers — every ledger under
 `ACCOUNT_GROUPS.DIRECT_EXPENSES` / `INDIRECT_EXPENSES`, sub-groups included, sent by
@@ -293,12 +293,12 @@ Cash – Counter 21.
 - Every server answer a phone screen shows (a party's bills, receivables / payables, a Day
   Book date, pay setup) is saved on the device in the shared Dexie database (`localDb` v6
   `answers`, keyed screen + user, capped at 60) by
-  [`mobileCache.ts`](../src/modules/mobile/mobileCache.ts) `loadAnswer`: shown at once; not
+  [`mobileCache.ts`](../src/modules/mobile/lib/mobileCache.ts) `loadAnswer`: shown at once; not
   re-asked while younger than `MOBILE_FRESH_MS` (1 min; pay setup `MOBILE_SETUP_FRESH_MS`
   10 min); after that re-asked with `?since=<computedAt>`.
 - The money APIs then answer `{ unchanged: true }` (58 bytes, no recompute — receivables'
   full answer is ~12 KB plus the open-bills scan) when
-  [`booksUnchangedSince`](../src/modules/mobile/booksUnchanged.ts) finds no voucher written
+  [`booksUnchangedSince`](../src/modules/mobile/lib/booksUnchanged.ts) finds no voucher written
   **or deleted** (recycle-bin `AuditLog`) since, within `MOBILE_SINCE_TRUST_MS` (30 min;
   bounds the day rollover and anything the probe cannot see). `isUnchangedSince` took the
   trust window as a parameter for this.
@@ -326,7 +326,22 @@ Nothing else lists screens.
 
 ---
 
-## 8. Known gaps
+## 8. Code layout
+
+`src/modules/mobile` follows the other modules' layout:
+
+- `components/` — the screens and shell (`MobileShell`, `MobileNav`, `MobileStock`, …) and
+  `moneyFormPage`, the page factory for the Pay / Receive forms.
+- `hooks/` — `useMobileList`, `useMobileResource`, `usePartyBalances`.
+- `lib/` — `mobileScreens` (the screen list + `quickEntryFor`), `mobileAccess` (the page
+  guard), `mobileCache` (saved answers), `booksUnchanged`, `partyBalances` / `partyBalance`,
+  `moneyPlacement`, `types`.
+
+Pages are in `src/app/m-staff-app`, APIs in `src/app/api/mobile`.
+
+---
+
+## 9. Known gaps
 
 - The 512 px icon is upscaled from `build/icon.png`.
 - The narrow rider / salesman permission is not built (§1).

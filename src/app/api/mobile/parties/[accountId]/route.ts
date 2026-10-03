@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAnyPermission } from "@/shared/lib/auth/permissions";
-import { PARTY_DETAIL_PERMISSIONS } from "@/modules/mobile/mobileAccess";
+import { PARTY_DETAIL_PERMISSIONS } from "@/modules/mobile/lib/mobileAccess";
 import { handleApiError } from "@/shared/lib/api";
 import { getLedgerOutstanding } from "@/modules/accountancy/lib/outstandings";
 import { businessToday } from "@/shared/lib/format/formatDate";
 import { buildPartyUpiLink, parsePartyBank } from "@/shared/lib/parties/partyBank";
-import { partyBalances } from "@/modules/mobile/partyBalances";
-import { booksUnchangedSince } from "@/modules/mobile/booksUnchanged";
+import { partyBalances } from "@/modules/mobile/lib/partyBalances";
+import { booksUnchangedSince } from "@/modules/mobile/lib/booksUnchanged";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
 
 // GET /api/mobile/parties/[accountId]

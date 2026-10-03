@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { ArrowDownLeft, ArrowUpRight, Home, Plus, Receipt, X } from "lucide-react";
 import MobileNav from "./MobileNav";
 import MobileSignOut from "./MobileSignOut";
-import { MOBILE_GROUPS, isOnScreen, quickEntryFor, screensFor } from "./mobileScreens";
+import { MOBILE_GROUPS, isOnScreen, quickEntryFor, screensFor } from "../lib/mobileScreens";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 const MenuContext = createContext<{ openMenu: () => void }>({ openMenu: () => { } });
