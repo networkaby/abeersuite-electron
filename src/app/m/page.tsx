@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Receipt } from "lucide-react";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { mobileUser } from "@/modules/mobile/mobileAccess";
 import { quickEntryFor, screensFor } from "@/modules/mobile/mobileScreens";
@@ -21,15 +21,20 @@ export default async function MobileHome() {
                 </div>
 
                 {(quick.receive || quick.pay) && (
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-2">
                         {quick.receive && (
-                            <Link href="/m/quick/receive" className="flex items-center gap-2 rounded-xl bg-emerald-600 p-4 font-medium text-white active:opacity-90">
+                            <Link href="/m/quick/receive" className="flex flex-col items-center gap-1 rounded-xl bg-emerald-600 p-3 text-sm font-medium text-white active:opacity-90">
                                 <ArrowDownLeft className="size-6" /> Receive
                             </Link>
                         )}
                         {quick.pay && (
-                            <Link href="/m/quick/pay" className="flex items-center gap-2 rounded-xl bg-primary p-4 font-medium text-primary-foreground active:opacity-90">
+                            <Link href="/m/quick/pay" className="flex flex-col items-center gap-1 rounded-xl bg-primary p-3 text-sm font-medium text-primary-foreground active:opacity-90">
                                 <ArrowUpRight className="size-6" /> Pay
+                            </Link>
+                        )}
+                        {quick.pay && (
+                            <Link href="/m/quick/expense" className="flex flex-col items-center gap-1 rounded-xl bg-amber-600 p-3 text-sm font-medium text-white active:opacity-90">
+                                <Receipt className="size-6" /> Expense
                             </Link>
                         )}
                     </div>

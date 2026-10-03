@@ -15,7 +15,7 @@ import { useMobileResource } from "./useMobileResource";
 import { mobileKey } from "./mobileCache";
 import type { PaySetup } from "./types";
 
-export type QuickKind = "pay" | "receive";
+export type QuickKind = "pay" | "receive" | "expense";
 
 type Target = { type: "party" | "expense"; accountId: number; name: string; sub?: string | null };
 
@@ -25,6 +25,7 @@ const HITS = 15;
 const COPY = {
     receive: { title: "Receive money", placeholder: "Who paid? Name or phone", none: "Your role cannot take receipts." },
     pay: { title: "Make payment", placeholder: "Pay whom? Party or expense", none: "Your role cannot make payments." },
+    expense: { title: "Expense", placeholder: "Rent, electricity, tea…", none: "Your role cannot make payments." },
 };
 
 /** The last few picked, per person and direction — the device's own convenience. */
@@ -39,6 +40,9 @@ function readRecent(key: string): Target[] {
  * Quick Receive / Pay, step one: whom. Searches the party list already on the
  * device (the same forgiving search as every party box — no request per key);
  * Pay also lists the expense ledgers (rent, electricity, tea… from pay-setup).
+ * `expense` lists ONLY the expense ledgers — all of them before anything is
+ * typed — the cheapest entry there is: the list is the phone's saved pay-setup,
+ * no party balances are asked for, and the voucher it saves has no bills to link.
  * The last few picked sit on top. A pick opens the ordinary Pay / Receive form,
  * which comes back here for the next entry.
  */
@@ -54,7 +58,8 @@ export default function MobileQuickPick({ kind, userId }: { kind: QuickKind; use
     const setup = useMobileResource<PaySetup>("/api/mobile/pay-setup", "pay-setup", userId, { freshMs: MOBILE_SETUP_FRESH_MS });
     const permissions = (useSession().data?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const seeSuppliers = permissions.includes(PERMISSIONS.CUSTOMERS_VIEW_CREDITORS) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
-    const allowed = kind === "pay" ? setup.data?.canPay : setup.data?.canReceive;
+    const allowed = kind === "receive" ? setup.data?.canReceive : setup.data?.canPay;
+    const withParties = kind !== "expense";
 
     const pool = useMemo(
         () => parties.filter((p) => p.accountId != null && (seeSuppliers || p.accountGroupType !== "LIABILITY")),
@@ -62,28 +67,30 @@ export default function MobileQuickPick({ kind, userId }: { kind: QuickKind; use
     );
     const q = query.trim();
     const partyHits: Target[] = useMemo(
-        () => (q ? searchPartyRows(pool, q, { rows: HITS }).rows : []).map((p) => ({
+        () => (q && withParties ? searchPartyRows(pool, q, { rows: HITS }).rows : []).map((p) => ({
             type: "party" as const, accountId: p.accountId!, name: p.name, sub: p.phones[0] ?? p.accountGroup,
         })),
-        [pool, q],
+        [pool, q, withParties],
     );
     const expenseHits: Target[] = useMemo(() => {
-        if (kind !== "pay" || !q) return [];
-        const words = q.toLowerCase().split(/\s+/);
+        // Pay: expenses only once something is typed. Expense: the whole list
+        // until something is typed — a tap without typing.
+        if (kind === "receive" || (kind === "pay" && !q)) return [];
+        const words = q.toLowerCase().split(/\s+/).filter(Boolean);
         return (setup.data?.expenseLedgers ?? [])
             .filter((l) => words.every((w) => l.name.toLowerCase().includes(w)))
-            .slice(0, HITS)
+            .slice(0, q ? HITS : undefined)
             .map((l) => ({ type: "expense" as const, accountId: l.id, name: l.name, sub: l.group }));
     }, [kind, q, setup.data]);
 
-    const shownParties = q ? partyHits : recent.filter((r) => r.type === "party");
+    const shownParties = !withParties ? [] : q ? partyHits : recent.filter((r) => r.type === "party");
     const balances = usePartyBalances(shownParties.map((t) => t.accountId));
 
     const pick = (t: Target) => {
         const next = [t, ...recent.filter((r) => !(r.type === t.type && r.accountId === t.accountId))].slice(0, RECENT_MAX);
         try { localStorage.setItem(recentKey, JSON.stringify(next)); } catch { /* best-effort */ }
         router.push(t.type === "expense"
-            ? `/m/quick/pay/expense/${t.accountId}`
+            ? `/m/quick/pay/expense/${t.accountId}?from=/m/quick/${kind}`
             : `/m/parties/${t.accountId}/${kind}?from=/m/quick/${kind}`);
     };
 
@@ -131,15 +138,17 @@ export default function MobileQuickPick({ kind, userId }: { kind: QuickKind; use
                             <p className="px-3 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Recent</p>
                             <ul className="divide-y">{recent.map(row)}</ul>
                         </>
-                    ) : (
+                    ) : kind !== "expense" && (
                         <p className="p-6 text-center text-sm text-muted-foreground">
                             Type a name or phone{kind === "pay" ? ", or an expense like rent or electricity" : ""}.
                         </p>
                     ))}
 
-                    {q && expenseHits.length > 0 && (
+                    {expenseHits.length > 0 && (
                         <>
-                            <p className="px-3 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Expenses</p>
+                            <p className="px-3 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                {kind === "expense" && !q ? "All expenses" : "Expenses"}
+                            </p>
                             <ul className="divide-y">{expenseHits.map(row)}</ul>
                         </>
                     )}

@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowDownLeft, ArrowUpRight, Home, Plus, X } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Home, Plus, Receipt, X } from "lucide-react";
 import MobileNav from "./MobileNav";
 import MobileSignOut from "./MobileSignOut";
 import { MOBILE_GROUPS, isOnScreen, quickEntryFor, screensFor } from "./mobileScreens";
@@ -143,6 +143,12 @@ function QuickEntryButton({ permissions }: { permissions: string[] }) {
                             <Link href="/m/quick/pay" onClick={() => setOpen(false)} className={choice}>
                                 <ArrowUpRight className="size-6 text-destructive" />
                                 <span>Make payment<span className="block text-xs font-normal text-muted-foreground">To a supplier, or an expense</span></span>
+                            </Link>
+                        )}
+                        {quick.pay && (
+                            <Link href="/m/quick/expense" onClick={() => setOpen(false)} className={choice}>
+                                <Receipt className="size-6 text-amber-600" />
+                                <span>Expense<span className="block text-xs font-normal text-muted-foreground">Rent, electricity, tea…</span></span>
                             </Link>
                         )}
                         <button type="button" onClick={() => setOpen(false)} className="w-full rounded-xl py-3 text-sm text-muted-foreground">Cancel</button>
