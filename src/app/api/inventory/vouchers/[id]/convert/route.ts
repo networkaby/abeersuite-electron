@@ -8,11 +8,14 @@ import { canConvert } from "@/modules/accountancy/lib/convertMap";
 import { editFormUrl } from "@/modules/inventory/lib/voucherFormUrls";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
 import { convertSourceError } from "@/modules/pos/lib/convertSource";
+import { readSettlement } from "@/shared/lib/accountancy/settlement";
+import { SERVICE_VOUCHER_TYPES } from "@/shared/lib/accountancy/serviceCharges";
 
 // POST /api/inventory/vouchers/[id]/convert   body: { targetKind }
 //
 // Generic voucher conversion — accountancy only, NO pipeline. Creates the target
-// document of `targetKind` from the source (party + lines + discounts), links it
+// document of `targetKind` from the source (party + lines + discounts + services
+// / charges), links it
 // back via refVoucherId, and POSTS it so the conversion is real (not a draft):
 // GL invoices (Sale / Purchase) settle to the party ON CREDIT; orders / estimates
 // / GRN / challan issue. POS sales are redirected to the till (can't auto-post a
@@ -47,6 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 id: true,
                 partyJson: true, partyType: true, partyId: true,
                 discountPct: true, discountAmt: true, shippingAmt: true, roundOff: true, totalAmount: true,
+                settlementJson: true,
                 universalVoucherId: true,
                 universalVoucher: { select: { type: true, voucherNo: true, branchId: true, partyAccountId: true, description: true } },
             },
@@ -77,9 +81,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         // Goods lines hang off the spine (Phase 5 5C).
         const lines = await prisma.voucherInventoryLine.findMany({
             where:  { universalVoucherId: source.universalVoucherId ?? -1 },
-            select: { productId: true, description: true, note: true, quantity: true, rate: true, taxRate: true, mrpPaise: true, discountPct: true },
+            select: { productId: true, description: true, note: true, quantity: true, freeQty: true, rate: true, taxRate: true, mrpPaise: true, discountPct: true, discountAmt: true },
         });
-        if (lines.length === 0) {
+
+        // Service lines + "+ Add Account" rows ride settlementJson, not the goods
+        // lines. Leaving them behind made the created total fall short of the
+        // source total the credit tender below is sized to, and the create route
+        // refused the save ("the payment rows come to …"). Carried only onto the
+        // trade documents that take a charge — a Challan / GRN moves stock alone.
+        // A service goes back through `services` so the create route re-resolves
+        // its ledger + GST exactly as when it was typed; a row saved before the
+        // round-trip fields existed falls back to one unit at its net amount.
+        const sourceCharges = SERVICE_VOUCHER_TYPES.has(targetKind) ? readSettlement(source.settlementJson).charges : [];
+        const services = sourceCharges.filter((c) => c.serviceId != null).map((c) => ({
+            serviceId:   c.serviceId!,
+            quantity:    c.quantity ?? 1,
+            unitPrice:   c.rate ?? Number(c.amount),
+            description: c.note ?? undefined,
+        }));
+        const charges = sourceCharges.filter((c) => c.serviceId == null).map((c) => ({
+            accountId:   c.accountId,
+            amount:      Number(c.amount),
+            description: c.description ?? undefined,
+        }));
+
+        if (lines.length === 0 && services.length === 0 && charges.length === 0) {
             return NextResponse.json({ error: "Source voucher has no lines to convert." }, { status: 400 });
         }
 
@@ -107,8 +133,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         // with yesterday's date.
         const today = businessTodayIso();
         const cookie = req.headers.get("cookie") ?? "";
-        // Carry percentage discounts only (they recompute identically); absolute
-        // discounts are left for the operator to re-apply on the editable draft.
+        // Everything that makes up the source total is carried — bill and line
+        // discounts (the saved line ₹ discount wins over its %, as on the form, so
+        // it recomputes to the same paisa), services and charges — because the
+        // credit tender is the source total and must match the recomputed one.
         const payload = {
             type:         targetKind,
             date:         today,
@@ -125,15 +153,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             roundOff:     source.roundOff != null ? Number(source.roundOff) : 0,
             refVoucherId: sourceId,
             tenders,
+            services,
+            charges,
             lines: lines.map((l) => ({
                 productId:   l.productId,
                 description: l.description ?? undefined,
                 note: l.note,
                 quantity:    toNumber(l.quantity),
+                freeQty:     l.freeQty != null ? toNumber(l.freeQty) : undefined,
                 rate:        toNumber(l.rate),
                 taxRate:     toNumber(l.taxRate),
                 mrpPaise:    l.mrpPaise ?? undefined,
                 discountPct: l.discountPct != null ? Number(l.discountPct) : undefined,
+                discountAmt: toNumber(l.discountAmt),
             })),
         };
 
