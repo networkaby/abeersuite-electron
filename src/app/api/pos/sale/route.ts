@@ -975,6 +975,11 @@ export async function POST(req: Request) {
                 partyAccountId: customerAccount.id,
                 branchId: activeBranchId,   // 5D-12: branch primary on the spine
                 userId: user!.id,
+                // The shift whose till took the cash. Left to the request's
+                // counter, a sale rung from a browser with no counter (the office)
+                // got NO shift — missing from that shift's close report, and its
+                // payment could not be re-taken on edit.
+                shiftId: shift.id,
             });
             // Link the bill to the repair ticket it was raised from (if any), so it
             // surfaces in the ticket's Invoices panel (VoucherLink kind=TICKET).
