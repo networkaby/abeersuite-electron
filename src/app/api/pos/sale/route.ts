@@ -14,7 +14,7 @@ import { enginePost, engineCreateSpine } from "@/modules/accountancy/lib/transac
 import { syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
-import { channelToPaymentMethod } from "@/modules/pos/lib/counterTenders";
+import { resolveCounterPayments, giftCardTenderRef } from "@/modules/pos/lib/counterTenders";
 import { Prisma, type PaymentMethod } from "@/generated/prisma/client";
 import { buildPartyJson } from "@/shared/lib/accountancy/partySnapshot";
 import { getOpenSaleBillsForFifo } from "@/modules/accountancy/lib/outstandings";
@@ -885,20 +885,12 @@ export async function POST(req: Request) {
     const METHOD_LABEL: Record<PaymentMethod, string> = {
         CASH: "Cash", MOBILE_PAYMENT: "UPI", CARD: "Card", CHEQUE: "Cheque", BANK_TRANSFER: "Bank Transfer", OTHER: "Wallet",
     };
-    const resolvedPayments: { method: PaymentMethod; accountId: number; amount: number; reference?: string }[] = [];
-    for (const p of body.payments) {
-        if (p.paymentAccountId == null) {
-            resolvedPayments.push({ method: "CASH", accountId: tillAccountId, amount: p.amount, reference: p.reference });
-            continue;
-        }
-        const acct = payAcctById.get(p.paymentAccountId);
-        if (!acct) {
-            return NextResponse.json(
-                { error: `Counter "${counterName}" doesn't have that payment account. Reconfigure under /office/admin/counters.`, code: "PAYMENT_METHOD_NOT_MAPPED" },
-                { status: 422 },
-            );
-        }
-        resolvedPayments.push({ method: channelToPaymentMethod(acct.channel), accountId: acct.accountId, amount: p.amount, reference: p.reference });
+    const resolvedPayments = resolveCounterPayments(body.payments, tillAccountId, payAcctById);
+    if (!resolvedPayments) {
+        return NextResponse.json(
+            { error: `Counter "${counterName}" doesn't have that payment account. Reconfigure under /office/admin/counters.`, code: "PAYMENT_METHOD_NOT_MAPPED" },
+            { status: 422 },
+        );
     }
 
     // Amount that will increase the customer's AR balance (onCredit portion) —
@@ -963,7 +955,7 @@ export async function POST(req: Request) {
                     // Gift-card tender — Dr "Gift Card Liability" (bypasses counterMethodMap;
                     // its ledger is the liability, not the counter wallet).
                     ...(giftCardRedeem > 0.005 && giftCardLiabilityAccountId != null
-                        ? [{ accountId: giftCardLiabilityAccountId, amount: giftCardRedeem, method: "OTHER" as const, reference: `Gift card ${body.giftCardCode}` }]
+                        ? [{ accountId: giftCardLiabilityAccountId, amount: giftCardRedeem, method: "OTHER" as const, reference: giftCardTenderRef(body.giftCardCode ?? "") }]
                         : []),
                     // AR leg for the unpaid portion (on-credit) — the bill then
                     // shows up in the customer's outstandings and ages like any

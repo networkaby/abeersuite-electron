@@ -20,7 +20,10 @@ import { UpiPartsPanel } from "@/modules/pos/components/UpiPartsPanel";
 import { ClearBillDialog } from "@/modules/pos/components/ClearBillDialog";
 import { PosScreenShell } from "@/modules/pos/components/PosScreenShell";
 import { movesCash } from "@/modules/pos/components/TenderEntry";
-import { usePosBilling, parseAmt } from "@/modules/pos/hooks/usePosBilling";
+import { usePosBilling, parseAmt, type EditBill } from "@/modules/pos/hooks/usePosBilling";
+import { isGiftCardTender, type CounterPayment } from "@/modules/pos/lib/counterTenders";
+import { chargesNetTotal } from "@/shared/lib/accountancy/serviceCharges";
+import type { ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { bridgeOk, bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
 import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
@@ -34,7 +37,11 @@ import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearch
 
 // Charge rows carry taxAmount through the edit round-trip — POS-service rows
 // are tax-bearing charges (Cr income net + Cr GST) and must re-post faithfully.
-type EditMeta = { charges: { accountId: number; description?: string; amount: number; taxAmount?: number }[]; discountAmt: number; discountPct: number | null; shippingAmt: number; roundOff: number };
+type EditMeta = { charges: { accountId: number; description?: string; amount: number; taxAmount?: number }[]; discountAmt: number; discountPct: number | null; shippingAmt: number; roundOff: number; description: string };
+
+// The "Payments: …" part of a POS sale's description — rewritten when an edit
+// re-takes the payment, so the register and the receipt name the real method.
+const PAYMENTS_TAG = /\| Payments: [^|]*/;
 
 export default function PosScreen({ editId, fromId }: { editId?: number; fromId?: number }) {
     const router = useRouter();
@@ -43,22 +50,25 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
     const canOpen = useCanOpenPage();
     const salesListHref = canOpen("/office/accountancy/vouchers-registers/sales") ? "/office/accountancy/vouchers-registers/sales" : "/vouchers/pos";
     // Edit mode: reopen a posted POS sale here (instead of the office form, which
-    // drops the POS-specific charge rows → wrong Balance Sheet). We hydrate only the
-    // customer + cart; on save we PATCH the lines and RE-SEND the original
-    // charges/discount while OMITTING tenders — so the payment + loyalty / coupon /
-    // gift-card rows are preserved and the GL re-posts faithfully. A reduced total
-    // over the unchanged payment lands as a credit on the customer's account.
+    // drops the POS-specific charge rows → wrong Balance Sheet). We hydrate the
+    // customer + cart + how the sale was paid; on save we PATCH the lines,
+    // RE-SEND the original charges/discount (loyalty / coupon / service rows
+    // preserved) and the payment as re-taken at checkout — exactly like a fresh
+    // sale: cash moves the till, UPI the bank, the rest goes on credit, and the
+    // shift the sale was rung on follows. A gift card it drew stays as drawn.
+    // A sale with no counter shift behind it keeps its payment as it was.
     const isEdit = editId != null;
     const editMeta = useRef<EditMeta | null>(null);
+    const [editBill, setEditBill] = useState<EditBill | null>(null);
 
     // Focus/handle refs — owned here, shared with the hook and the shell.
     const partySearchRef = useRef<PartySearchAndCreateHandle>(null);
     const productSearchRef = useRef<HTMLInputElement>(null);
     const cashTenderedRef = useRef<HTMLInputElement>(null);
 
-    // Ctrl/Cmd+Enter → the checkout dialog: a new sale collects the money there;
-    // an edit takes none, so it opens in "confirm" mode (Update Sale / Update &
-    // Print Sale). (`b` is bound by the time the key handler can fire.)
+    // Ctrl/Cmd+Enter → the checkout dialog: a sale collects the money there — an
+    // edit too, starting from how it was paid, under Update Sale / Update & Print
+    // Sale. (`b` is bound by the time the key handler can fire.)
     const b = usePosBilling({
         onHotkeyConfirm: () => {
             // Mirror the disabled Checkout button: silently no-op while a
@@ -73,6 +83,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
         // bank charge (MDR) and the UPI parts.
         groupRebate: !isEdit,
         paymentMdr: !isEdit,
+        editBill,
     });
 
     // Which rail the share dialog opens locked to — set by the Share button on a
@@ -96,7 +107,10 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     discountAmt: string | number | null; discountPct: string | number | null;
                     shippingAmt: string | number | null; roundOff: string | number | null;
                     lines: { productId: number; description: string | null; note: string | null; quantity: string | number; rate: string | number; taxRate: string | number; mrpPaise: number | null; savedSalePricePaise: number | null; product: { sku: string; name: string } }[];
-                    charges: { accountId: number; description: string | null; amount: string | number; taxAmount?: string | number | null }[];
+                    charges: { accountId: number; description: string | null; amount: string | number; taxAmount?: string | number | null; serviceId: number | null }[];
+                    tenders: { accountId: number; amount: number; method: string | null; reference: string | null }[];
+                    description: string;
+                    posCounter: { tillAccountId: number; paymentAccounts: ActiveShift["counter"]["paymentAccounts"] } | null;
                 }>(`/api/inventory/vouchers/${editId}`);
                 if (cancelled) return;
                 if (data.type !== "POS" || data.status === "CANCELLED") {
@@ -107,13 +121,43 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 // Preserve the original charges (incl. server-added loyalty / coupon /
                 // gift-card rows) + discount / shipping / round-off — re-sent on save so
                 // the total + GL stay faithful while the cashier only adjusts items.
+                // Service rows are left out: the PATCH keeps the stored ones itself
+                // when no `services` are sent, so re-sending them here as plain
+                // charges counted every service twice.
                 editMeta.current = {
-                    charges: data.charges.map((c) => ({ accountId: c.accountId, description: c.description ?? undefined, amount: Number(c.amount), taxAmount: c.taxAmount != null ? Number(c.taxAmount) : undefined })),
+                    charges: data.charges.filter((c) => c.serviceId == null).map((c) => ({ accountId: c.accountId, description: c.description ?? undefined, amount: Number(c.amount), taxAmount: c.taxAmount != null ? Number(c.taxAmount) : undefined })),
                     discountAmt: data.discountAmt != null ? Number(data.discountAmt) : 0,
                     discountPct: data.discountPct != null ? Number(data.discountPct) : null,
                     shippingAmt: data.shippingAmt != null ? Number(data.shippingAmt) : 0,
                     roundOff: data.roundOff != null ? Number(data.roundOff) : 0,
+                    description: data.description ?? "",
                 };
+                // How it was paid, read back into checkout rows: cash on the
+                // counter's till, each other tender onto the counter account that
+                // posts to its ledger. The customer's own (on-credit) leg is not a
+                // payment, and a gift card's draw is kept as it was.
+                const counter = data.posCounter;
+                if (counter) {
+                    const m = editMeta.current;
+                    const saved: EditBill["savedPayments"] = { cash: 0, splits: [] };
+                    let giftCardPaid = 0;
+                    for (const t of data.tenders) {
+                        const amount = Number(t.amount);
+                        if (isGiftCardTender(t)) { giftCardPaid += amount; continue; }
+                        if (t.accountId === counter.tillAccountId) { saved.cash += amount; continue; }
+                        const acct = counter.paymentAccounts.find((a) => a.accountId === t.accountId);
+                        if (acct) saved.splits.push({ paymentAccountId: acct.id, amount, reference: t.reference ?? "" });
+                    }
+                    setEditBill({
+                        discountAmt: m.discountAmt,
+                        shippingAmt: m.shippingAmt,
+                        roundOff: m.roundOff,
+                        chargesNet: chargesNetTotal(data.charges),
+                        giftCardPaid,
+                        payAccounts: counter.paymentAccounts,
+                        savedPayments: saved,
+                    });
+                }
                 if (data.accountId != null) await b.fetchSnapshot(data.accountId);
                 if (cancelled) return;
                 b.setCart(data.lines.map((l) => ({
@@ -184,49 +228,8 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
         const { snapshot, cart, lineRows, pay, splits, payAccountById } = b;
         if (!snapshot?.account) return;
 
-        // ── Edit mode: PATCH the existing sale's lines, preserving payments + offers ──
-        // Re-send the original charges + discount/shipping/round-off and OMIT tenders, so
-        // the PATCH keeps the loyalty/coupon/gift-card + payment rows and re-posts the GL
-        // faithfully. A reduced total over the unchanged payment becomes a customer
-        // account credit. No tenders / loyalty / coupon flow on an edit; it prints
-        // (like a register reprint) only when asked.
-        if (isEdit && editMeta.current) {
-            if (cart.length === 0) { toast.error("Cart is empty"); return; }
-            if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
-            b.setSubmitting(true);
-            try {
-                await axios.patch(`/api/inventory/vouchers/${editId}`, {
-                    lines: cart.map((l) => ({
-                        productId: l.productId,
-                        description: composeLineDescription({ sku: l.sku, name: l.name }),
-                        note: cleanLineNote(l.description),
-                        quantity: l.qty,
-                        rate: l.unitPrice,
-                        taxRate: l.taxRate,
-                        mrpPaise: l.mrpPaise ?? undefined,
-                    })),
-                    charges: editMeta.current.charges,
-                    discountAmt: editMeta.current.discountAmt,
-                    discountPct: editMeta.current.discountPct ?? undefined,
-                    shippingAmt: editMeta.current.shippingAmt,
-                    roundOff: editMeta.current.roundOff,
-                    // tenders deliberately omitted → preserved; the GL re-post reuses them.
-                });
-                toast.success("Sale updated");
-                b.setCheckoutOpen(false);   // no second Enter while the page navigates away
-                if (printAfter) await printVoucherThermal("inv", editId, "POS");
-                router.push(salesListHref);
-            } catch (e: unknown) {
-                toast.error(extractApiError(e, "Failed to update sale"));
-            } finally {
-                b.setSubmitting(false);
-            }
-            return;
-        }
-
-        if (b.creditLimitBreached) return;   // guard against keyboard shortcut bypass
-        if (b.upiPartsPending) return;       // UPI parts not all received yet — same
-        // Build the summary from the named pay fields. Cash net = tendered − return.
+        // What was collected, as the note the cashier reads back. Cash net =
+        // tendered − return.
         const summaryParts: string[] = [];
         if (b.cashNet > 0) {
             const tenderedNote = pay.cashReturn > 0 ? ` (₹${pay.cashTendered} − ₹${pay.cashReturn} return)` : "";
@@ -245,6 +248,76 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
         if (summaryParts.length === 0) {
             summaryParts.push(b.giftCardApplied > 0.005 ? `Gift card ${formatInr(b.giftCardApplied)}` : "No payment");
         }
+        const splitSummary = summaryParts.join(" + ");
+
+        // The payments array. Each non-cash line carries the chosen counter
+        // paymentAccountId; the server resolves its ledger + method (set under
+        // /office/admin/counters). CASH (paymentAccountId null) auto-routes to
+        // the till.
+        const paymentsList: CounterPayment[] = [];
+        if (b.cashNet > 0) paymentsList.push({ paymentAccountId: null, amount: b.cashNet });
+        // A UPI row taken in parts goes as one payment per part — each its own
+        // bank credit (and, under the free limit, no bank charge).
+        for (const s of splits) {
+            const parts = b.partsOf(s);
+            parts.forEach((amount, i) => paymentsList.push({
+                paymentAccountId: s.paymentAccountId,
+                amount,
+                reference: parts.length > 1 ? `Part ${i + 1}/${parts.length}` : (s.reference || undefined),
+            }));
+        }
+
+        // ── Edit mode: PATCH the existing sale's lines + re-taken payment ──
+        // Re-send the original charges + discount/shipping/round-off (loyalty /
+        // coupon rows kept) and the payment as entered at checkout; the server
+        // routes it like a fresh sale and re-posts the GL, so the till and the
+        // shift move with it. A sale with no counter behind it (no `editBill`)
+        // OMITS the payment, keeping its rows as they were. No loyalty / coupon
+        // flow on an edit; it prints (like a register reprint) only when asked.
+        if (isEdit && editMeta.current) {
+            if (cart.length === 0) { toast.error("Cart is empty"); return; }
+            if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
+            if (editBill && b.overpaid > 0.01) { toast.error("Payment is more than the bill — enter the change returned."); return; }
+            const description = editMeta.current.description;
+            b.setSubmitting(true);
+            try {
+                await axios.patch(`/api/inventory/vouchers/${editId}`, {
+                    lines: cart.map((l) => ({
+                        productId: l.productId,
+                        description: composeLineDescription({ sku: l.sku, name: l.name }),
+                        note: cleanLineNote(l.description),
+                        quantity: l.qty,
+                        rate: l.unitPrice,
+                        taxRate: l.taxRate,
+                        mrpPaise: l.mrpPaise ?? undefined,
+                    })),
+                    charges: editMeta.current.charges,
+                    discountAmt: editMeta.current.discountAmt,
+                    discountPct: editMeta.current.discountPct ?? undefined,
+                    shippingAmt: editMeta.current.shippingAmt,
+                    roundOff: editMeta.current.roundOff,
+                    // No counter → tenders omitted, preserved; the GL re-post reuses them.
+                    ...(editBill ? {
+                        posPayments: paymentsList,
+                        description: PAYMENTS_TAG.test(description)
+                            ? description.replace(PAYMENTS_TAG, `| Payments: ${splitSummary} `).trimEnd()
+                            : `${description} | Payments: ${splitSummary}`.trim(),
+                    } : {}),
+                });
+                toast.success("Sale updated");
+                b.setCheckoutOpen(false);   // no second Enter while the page navigates away
+                if (printAfter) await printVoucherThermal("inv", editId, "POS");
+                router.push(salesListHref);
+            } catch (e: unknown) {
+                toast.error(extractApiError(e, "Failed to update sale"));
+            } finally {
+                b.setSubmitting(false);
+            }
+            return;
+        }
+
+        if (b.creditLimitBreached) return;   // guard against keyboard shortcut bypass
+        if (b.upiPartsPending) return;       // UPI parts not all received yet — same
         if (!b.activeShift) {
             toast.error("Open a shift before billing");
             b.setShiftOpenDialogOpen(true);
@@ -257,29 +330,11 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             // YESTERDAY's date.
             const today = todayIso();
             const due = new Date(); due.setDate(due.getDate() + 30);
-            const splitSummary = summaryParts.join(" + ");
             const tail =
                 b.advanceTaken > 0 ? ` | Advance ${formatInr(b.advanceTaken)}` :
                     b.arrearPaid > 0 ? ` | Cleared arrear ${formatInr(b.arrearPaid)}` :
                         "";
 
-            // Build the payments array. Each non-cash line carries the chosen
-            // counter paymentAccountId; the server resolves its ledger + method
-            // (set under /office/admin/counters). CASH (paymentAccountId null)
-            // auto-routes to the till.
-            type PayLine = { paymentAccountId: number | null; amount: number; reference?: string };
-            const paymentsList: PayLine[] = [];
-            if (b.cashNet > 0) paymentsList.push({ paymentAccountId: null, amount: b.cashNet });
-            // A UPI row taken in parts goes as one payment per part — each its own
-            // bank credit (and, under the free limit, no bank charge).
-            for (const s of splits) {
-                const parts = b.partsOf(s);
-                parts.forEach((amount, i) => paymentsList.push({
-                    paymentAccountId: s.paymentAccountId,
-                    amount,
-                    reference: parts.length > 1 ? `Part ${i + 1}/${parts.length}` : (s.reference || undefined),
-                }));
-            }
             // Under-pay (including collecting nothing at all) IS allowed: the
             // shortfall goes on the customer's account. The credit limit is the
             // only gate, and it is checked twice — `b.creditLimitBreached` above
@@ -548,10 +603,11 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 lockedProviderId={shareProvider}
             />
 
-            {/* ── Checkout dialog — fixed Cash / UPI / Credit rows; an edit takes no
-                money, so it opens in "confirm" mode (title + the two CTAs). ──── */}
+            {/* ── Checkout dialog — fixed Cash / UPI / Credit rows. An edit re-takes
+                the payment like a fresh sale under its own title + CTAs; one with
+                no counter behind it takes none ("confirm" mode). ──── */}
             <CheckoutDialog
-                mode={isEdit ? "confirm" : "sale"}
+                mode={isEdit && !editBill ? "confirm" : "sale"}
                 title={isEdit ? `Update Sale · ${formatInr(b.total)}` : undefined}
                 confirmLabel={isEdit ? "Update Sale" : undefined}
                 confirmPrintLabel={isEdit ? "Update & Print Sale" : undefined}

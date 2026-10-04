@@ -20,6 +20,7 @@ import { readSettlement, buildSettlementJson } from "@/shared/lib/accountancy/se
 import { resolveServiceCharges, chargesNetTotal, SERVICE_VOUCHER_TYPES } from "@/shared/lib/accountancy/serviceCharges";
 import { assertVoucherDate } from "@/shared/lib/accountancy/booksPeriodServer";
 import { cleanLineNote } from "@/shared/lib/print/lineDescription";
+import { resolveCounterPayments, isGiftCardTender, type CounterPayment } from "@/modules/pos/lib/counterTenders";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -36,7 +37,7 @@ export async function GET(_req: Request, { params }: Params) {
             // 5D-5/5D-10: date + description + narration + postedAt live on the spine too —
             // without them the edit form read `v.date === undefined` and silently
             // fell back to TODAY on every old voucher (same for the narration box).
-            universalVoucher: { select: { createdById: true, voucherNo: true, type: true, date: true, description: true, narration: true, postedAt: true, branchId: true, partyAccountId: true, status: true, cancelledAt: true, branch: { select: { id: true, name: true } } } },
+            universalVoucher: { select: { createdById: true, voucherNo: true, type: true, date: true, description: true, narration: true, postedAt: true, branchId: true, partyAccountId: true, status: true, cancelledAt: true, sourceShiftId: true, branch: { select: { id: true, name: true } } } },
             // refVoucher powers parent-link surfaces — "Replaces <old ref>"
             // for a SALE_RETURN against a SALE, or "Linked to PO-…" on a GRN.
             refVoucher: { select: { id: true, universalVoucher: { select: { id: true, voucherNo: true, type: true } } } },   // 5D-11 type on spine
@@ -72,6 +73,26 @@ export async function GET(_req: Request, { params }: Params) {
         ? await prisma.user.findUnique({ where: { id: voucher.universalVoucher.createdById }, select: { name: true } })
         : null;
 
+    // A POS sale's own counter — its till + payment accounts — so an edit can
+    // re-take the payment against the counter the sale was rung on, whoever
+    // edits it and wherever (PATCH `posPayments`).
+    const posShiftId = voucher.universalVoucher?.type === "POS" ? voucher.universalVoucher.sourceShiftId : null;
+    const posCounter = posShiftId == null ? null : (await prisma.posShift.findUnique({
+        where:  { id: posShiftId },
+        select: {
+            counter: {
+                select: {
+                    id: true, name: true, tillAccountId: true,
+                    paymentAccounts: {
+                        where:   { isActive: true },
+                        orderBy: { sortOrder: "asc" },
+                        select:  { id: true, channel: true, label: true, accountId: true, vpa: true, defaultVisible: true, account: { select: { id: true, name: true } } },
+                    },
+                },
+            },
+        },
+    }))?.counter ?? null;
+
     // Derive party display fields from the frozen snapshot so the detail page +
     // form edit-load keep reading partyName / partyPhone / partyAddress.
     return NextResponse.json({
@@ -100,6 +121,7 @@ export async function GET(_req: Request, { params }: Params) {
         createdBy:    creator,
         tenders:      settlement.tenders.map(withAccount),
         charges:      settlement.charges.map(withAccount),
+        posCounter,
         partyName:    readPartyName(voucher.partyJson),
         partyPhone:   readPartyPhone(voucher.partyJson),
         partyAddress: readPartyAddress(voucher.partyJson),
@@ -137,7 +159,7 @@ export async function PATCH(req: Request, { params }: Params) {
     const id = Number(idStr);
     if (!Number.isFinite(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
-    const existing = await prisma.voucherDetail.findUnique({ where: { id }, include: { universalVoucher: { select: { voucherNo: true, status: true, type: true, date: true } } } });   // 5D-6/5D-8/5D-11
+    const existing = await prisma.voucherDetail.findUnique({ where: { id }, include: { universalVoucher: { select: { voucherNo: true, status: true, type: true, date: true, partyAccountId: true, sourceShiftId: true } } } });   // 5D-6/5D-8/5D-11
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
     // Phase 5 5C: capture old line product ids (goods hang off the spine) for the
     // after-commit pricing recompute — the lines themselves are rewritten below.
@@ -178,7 +200,8 @@ export async function PATCH(req: Request, { params }: Params) {
         lines,
         charges,
         services,
-        tenders,
+        tenders: bodyTenders,
+        posPayments,
     } = body as {
         date?:             string;
         description?:      string;
@@ -243,6 +266,10 @@ export async function PATCH(req: Request, { params }: Params) {
             method?:   "CASH" | "BANK_TRANSFER" | "CARD" | "CHEQUE" | "MOBILE_PAYMENT" | "OTHER";
             reference?: string;
         }[];
+        /// POS sale only — the checkout's payments re-taken on an edit, in the
+        /// till's own shape (paymentAccountId null = cash). Resolved below
+        /// against the sale's OWN counter into `tenders`; never sent with them.
+        posPayments?: CounterPayment[];
     };
 
     const isPhysicalStock = existing.universalVoucher?.type === "PHYSICAL_STOCK";
@@ -354,6 +381,47 @@ export async function PATCH(req: Request, { params }: Params) {
             roundOff    ?? Number(existing.roundOff),
             chargesNet,
         );
+    }
+
+    // ── POS sale re-saved with its payments re-taken ─────────────────────
+    // The same routing a fresh sale gets (resolveCounterPayments): cash → the
+    // till of the counter the sale was RUNG on (its shift), UPI / card → that
+    // counter's account ledgers. A gift card drawn at the sale stays as it was;
+    // whatever is not collected rides the customer's ledger (on credit). The
+    // re-post then moves the till and the shift's figures like any sale.
+    let tenders = bodyTenders;
+    if (posPayments !== undefined) {
+        if (existing.universalVoucher?.type !== "POS") {
+            return NextResponse.json({ error: "Only a POS sale takes counter payments." }, { status: 400 });
+        }
+        const shiftId = existing.universalVoucher.sourceShiftId;
+        const counter = shiftId == null ? null : (await prisma.posShift.findUnique({
+            where:  { id: shiftId },
+            select: { counter: { select: { tillAccountId: true, paymentAccounts: { select: { id: true, channel: true, accountId: true } } } } },
+        }))?.counter;
+        if (!counter) {
+            return NextResponse.json({ error: "This sale has no counter shift, so its payments can't be re-taken here." }, { status: 422 });
+        }
+        const resolved = resolveCounterPayments(posPayments, counter.tillAccountId, new Map(counter.paymentAccounts.map((a) => [a.id, a])));
+        if (!resolved) {
+            return NextResponse.json({ error: "That payment account isn't on the counter this sale was rung on.", code: "PAYMENT_METHOD_NOT_MAPPED" }, { status: 422 });
+        }
+        const keptGiftCards = readSettlement(existing.settlementJson).tenders.filter((t) => isGiftCardTender(t));
+        const billTotal = totals?.totalAmount ?? Number(existing.totalAmount);
+        const paid = [...resolved, ...keptGiftCards].reduce((s, t) => s + t.amount, 0);
+        const onCredit = round2(billTotal - paid);
+        if (onCredit < -0.01) {
+            return NextResponse.json({ error: `Payments (₹${paid.toFixed(2)}) are more than the bill (₹${billTotal.toFixed(2)}). Return the change.` }, { status: 422 });
+        }
+        const partyAccountId = existing.universalVoucher.partyAccountId;
+        if (onCredit > 0.005 && partyAccountId == null) {
+            return NextResponse.json({ error: "Part of this bill is unpaid, but the sale has no customer account to carry it." }, { status: 422 });
+        }
+        tenders = [
+            ...resolved,
+            ...keptGiftCards.map((t) => ({ accountId: t.accountId, amount: t.amount, method: t.method ?? undefined, reference: t.reference ?? undefined })),
+            ...(onCredit > 0.005 && partyAccountId != null ? [{ accountId: partyAccountId, amount: onCredit }] : []),
+        ];
     }
 
     // The payment rows must still add up AFTER the edit. This PATCH may change

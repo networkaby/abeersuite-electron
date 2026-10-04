@@ -48,6 +48,21 @@ export function parseAmt(s: string): number {
     return Number.isFinite(n) ? n : 0;
 }
 
+/** A posted POS sale being re-saved — see `editBill` below. */
+export type EditBill = {
+    discountAmt: number;
+    shippingAmt: number;
+    roundOff:    number;
+    /** Net of the saved charge rows, each at gross (amount + its GST). */
+    chargesNet:  number;
+    /** Gift-card draw kept from the original sale. */
+    giftCardPaid: number;
+    /** The payment accounts of the counter the sale was rung on. */
+    payAccounts: ActiveShift["counter"]["paymentAccounts"];
+    /** How the sale was paid — what a plain checkout open starts from. */
+    savedPayments: { cash: number; splits: { paymentAccountId: number; amount: number; reference: string }[] };
+};
+
 export function usePosBilling(opts: {
     /** Ctrl/Cmd+Enter dispatch — called only when the shared guards pass
      * (no dialog open, cart non-empty, customer picked). Each screen decides
@@ -67,6 +82,11 @@ export function usePosBilling(opts: {
      *  UPI payments in parts (paymentMdr.ts). A NEW POS sale only — /api/pos/sale
      *  works the same out server-side; orders, estimates and edits leave it off. */
     paymentMdr?: boolean;
+    /** Re-saving a posted POS sale: the bill is the SAVED one — its own discount,
+     *  shipping, round-off and charge rows (loyalty, coupon, services) over the
+     *  cart — and its payment is re-taken on the counter it was rung on, with
+     *  any gift card it drew kept as drawn. null/absent = a fresh bill. */
+    editBill?: EditBill | null;
 }) {
     const { partySearchRef, productSearchRef, cashTenderedRef } = opts;
     // Router for the help-page fallback when the browser blocks the new tab.
@@ -212,7 +232,11 @@ export function usePosBilling(opts: {
     // The counter's non-cash payment accounts (UPI 1 → HDFC, UPI 2 → SBI, Card…),
     // configured under /office/admin/counters. Each checkout split picks one of
     // these. Cash is always accepted (routes to till) and isn't in this list.
-    const payAccounts = useMemo(() => activeShift?.counter.paymentAccounts ?? [], [activeShift]);
+    const editPayAccounts = opts.editBill?.payAccounts;
+    const payAccounts = useMemo(
+        () => editPayAccounts ?? activeShift?.counter.paymentAccounts ?? [],
+        [editPayAccounts, activeShift],
+    );
     const payAccountById = useMemo(
         () => new Map(payAccounts.map((a) => [a.id, a])),
         [payAccounts],
@@ -661,6 +685,16 @@ export function usePosBilling(opts: {
     // The whole bill for a given MDR recovery: line rows, tier, round-off, total.
     // Recovery 0 is today's bill exactly (the rebate alone moves the rows).
     const billFor = (recovery: number) => {
+        // An edit totals exactly as the PATCH re-posts it: the cart at its saved
+        // rates, the saved bill discount (clamped to the goods), shipping,
+        // round-off and charge rows. Nothing here may drift from the server.
+        const eb = opts.editBill;
+        if (eb) {
+            const goods = lineRows.reduce((sum, r) => sum + r.amount, 0);
+            const disc = round2(Math.min(Math.max(0, eb.discountAmt), goods));
+            const t = calcVoucherTotals(lineRows, eb.shippingAmt, disc, eb.roundOff, eb.chargesNet).totalAmount;
+            return { rows: lineRows, moved: false, tierDiscount: disc, natural: t - eb.roundOff, roundOff: eb.roundOff, total: t };
+        }
         const rates = mdrLines && recovery > 0 ? upliftedRates(mdrLines, recovery) : rebatedRates;
         const moved = rates.some((r, i) => r !== cart[i].unitPrice);
         // Lines that did not move ARE lineRows, and the tier stays untouched.
@@ -714,7 +748,7 @@ export function usePosBilling(opts: {
     // part of it. The cashier collects `payableTotal` in cash/UPI; the server draws
     // the same min(balance, total) from the card and posts it as a Dr-Liability tender.
     const giftFor = (t: number) => (giftCard ? Math.min(giftCard.balance, t) : 0);
-    const giftCardApplied = giftFor(total);
+    const giftCardApplied = opts.editBill ? Math.min(opts.editBill.giftCardPaid, total) : giftFor(total);
     const payableTotal = Math.max(0, +(total - giftCardApplied).toFixed(2));
 
     // The amount row `id` needs so the tenders settle the bill exactly, every
@@ -1390,14 +1424,22 @@ export function usePosBilling(opts: {
         // Pre-show the accounts flagged "default visible" as rows; the rest stay
         // behind "Add payment line".
         const visible = payAccounts.filter((a) => a.defaultVisible);
-        const splits = visible.map((a) => ({ id: crypto.randomUUID(), paymentAccountId: a.id, amount: 0, reference: "" }));
+        // An edit opens on the payment the sale was saved with, so the cashier
+        // changes only what was wrong (UPI → Cash); the other rows still show.
+        const saved = !prefill ? opts.editBill?.savedPayments : undefined;
+        const splits = [
+            ...(saved?.splits ?? []).map((r) => ({ id: crypto.randomUUID(), ...r })),
+            ...visible
+                .filter((a) => !saved?.splits.some((r) => r.paymentAccountId === a.id))
+                .map((a) => ({ id: crypto.randomUUID(), paymentAccountId: a.id, amount: 0, reference: "" })),
+        ];
         // Quick-pay prefill: the whole bill lands on one tender (payableTotal =
         // total − gift card). F10 → option-2 (first account row, usually UPI);
         // a counter with no default-visible non-cash row falls back to option-1
         // (cash), as does the explicit cash prefill.
         // The amount is solved for the fresh rows (a card row raises the price it
         // pays — see coverAmount); with no bank charge it is the payable total.
-        let cashTendered = 0;
+        let cashTendered = saved?.cash ?? 0;
         if (prefill?.tender === "split" && splits.length > 0) {
             splits[0] = { ...splits[0], amount: coverAmountRef.current(splits, splits[0].id, 0) };
         } else if (prefill?.tender === "cash" || (prefill?.tender === "split" && splits.length === 0)) {
@@ -1407,7 +1449,7 @@ export function usePosBilling(opts: {
         setSplits(splits);
         setCheckoutOpen(true);
         setTimeout(() => cashTenderedRef.current?.focus(), 50);
-    }, [snapshot, cart, payAccounts, coverAmountRef, cashTenderedRef]);
+    }, [snapshot, cart, payAccounts, coverAmountRef, cashTenderedRef, opts.editBill]);
 
     // F10 → quick pay on option-2: opens checkout with the full payable amount
     // (total − gift card, no change) seeded on the FIRST payment-account row —
