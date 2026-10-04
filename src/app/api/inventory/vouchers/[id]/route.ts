@@ -20,6 +20,7 @@ import { readSettlement, buildSettlementJson } from "@/shared/lib/accountancy/se
 import { resolveServiceCharges, chargesNetTotal, SERVICE_VOUCHER_TYPES } from "@/shared/lib/accountancy/serviceCharges";
 import { assertVoucherDate } from "@/shared/lib/accountancy/booksPeriodServer";
 import { cleanLineNote } from "@/shared/lib/print/lineDescription";
+import { ratesFromConfig, liveBalance } from "@/modules/loyalty/lib";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -72,6 +73,37 @@ export async function GET(_req: Request, { params }: Params) {
         ? await prisma.user.findUnique({ where: { id: voucher.universalVoucher.createdById }, select: { name: true } })
         : null;
 
+    const branchCounter = voucher.universalVoucher?.branchId && voucher.universalVoucher?.type === "POS"
+        ? await prisma.posCounter.findFirst({
+            where: { branchId: voucher.universalVoucher.branchId, isActive: true },
+            select: { tillAccountId: true },
+        })
+        : null;
+
+    let currentLoyaltyBalance = 0;
+    if (voucher.universalVoucher?.partyAccountId != null) {
+        try {
+            const loyaltyConfig = await prisma.loyaltyConfig.findUnique({ where: { id: 1 } });
+            if (loyaltyConfig?.enabled) {
+                const rates = ratesFromConfig(loyaltyConfig);
+                currentLoyaltyBalance = await liveBalance(prisma, voucher.universalVoucher.partyAccountId, rates);
+            }
+        } catch {
+            currentLoyaltyBalance = 0;
+        }
+    }
+
+    const earnedLot = voucher.universalVoucherId != null
+        ? await prisma.loyaltyLot.findFirst({
+            where: { universalVoucherId: voucher.universalVoucherId },
+            select: { pointsRemaining: true, pointsEarned: true },
+        })
+        : null;
+
+    const fallbackGiftCard = settlement.tenders.find((t) => t.reference?.startsWith("Gift card"));
+    const fallbackLoyaltyCharge = settlement.charges.find((c) => c.description?.startsWith("Loyalty:"));
+    const fallbackCouponCharge = settlement.charges.find((c) => c.description?.startsWith("Coupon:"));
+
     // Derive party display fields from the frozen snapshot so the detail page +
     // form edit-load keep reading partyName / partyPhone / partyAddress.
     return NextResponse.json({
@@ -94,12 +126,24 @@ export async function GET(_req: Request, { params }: Params) {
         // 5D-4: the canonical party ledger lives on the spine — surface it as
         // `accountId` so edit-mode hydration (POS screen, forms) can load the customer.
         accountId:    voucher.universalVoucher?.partyAccountId ?? null,
+        tillAccountId: branchCounter?.tillAccountId ?? null,
         branch:       voucher.universalVoucher?.branch ?? null,
         reference:    voucherDisplayNo(voucher.universalVoucher?.voucherNo, voucher.universalVoucherId),
         refVoucher:   voucher.refVoucher ? { id: voucher.refVoucher.id, type: voucher.refVoucher.universalVoucher?.type, reference: voucherDisplayNo(voucher.refVoucher.universalVoucher?.voucherNo, voucher.refVoucher.universalVoucher?.id) } : null,
         createdBy:    creator,
         tenders:      settlement.tenders.map(withAccount),
         charges:      settlement.charges.map(withAccount),
+        promoSnapshot: settlement.promoSnapshot ?? {
+            tierDiscountPct: voucher.discountPct != null ? Number(voucher.discountPct) : 0,
+            availablePointsBeforeSale: 0,
+            pointsRedeemed: fallbackLoyaltyCharge ? Math.abs(Math.round(Number(fallbackLoyaltyCharge.amount))) : 0,
+            loyaltyRates: null,
+            giftCardUsedAmount: fallbackGiftCard ? Number(fallbackGiftCard.amount) : 0,
+            couponCode: fallbackCouponCharge ? (fallbackCouponCharge.description?.replace(/^Coupon:\s*/, "") || "auto") : null,
+            couponDiscountAmt: fallbackCouponCharge ? Math.abs(Number(fallbackCouponCharge.amount)) : 0,
+        },
+        currentLoyaltyBalance,
+        lotPointsRemaining: earnedLot?.pointsRemaining ?? null,
         partyName:    readPartyName(voucher.partyJson),
         partyPhone:   readPartyPhone(voucher.partyJson),
         partyAddress: readPartyAddress(voucher.partyJson),
@@ -450,6 +494,7 @@ export async function PATCH(req: Request, { params }: Params) {
                 ? buildSettlementJson(
                     tenders !== undefined ? tenders : existingSettlement.tenders,
                     effectiveCharges,
+                    existingSettlement.promoSnapshot,
                 )
                 : undefined;
             // The (possibly updated) party's ledger, resolved through any

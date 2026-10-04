@@ -35,6 +35,7 @@ import { usePosDraftStore } from "@/store/posDraftStore";
 import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type OnTopHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
 import { searchProducts, readCachedProducts, syncProducts } from "@/shared/lib/inventory";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { type PromoSnapshot } from "@/shared/lib/accountancy/settlement";
 
 /** How many rows the product dropdown shows — kept constant so the list does
  *  not change height between a good query and a poor one. */
@@ -67,6 +68,20 @@ export function usePosBilling(opts: {
      *  UPI payments in parts (paymentMdr.ts). A NEW POS sale only — /api/pos/sale
      *  works the same out server-side; orders, estimates and edits leave it off. */
     paymentMdr?: boolean;
+    /** Frozen promotional rates and numbers when editing an existing POS sale.
+     *  Keeps tier %, loyalty rates/caps, gift-card cap locked to the actual sale date. */
+    editSale?: {
+        voucherId: number;
+        originalTotal: number;
+        originalDiscountAmt: number;
+        originalDiscountPct: number | null;
+        originalCharges: { accountId: number; description?: string; amount: number; taxAmount?: number }[];
+        originalShippingAmt: number;
+        originalRoundOff: number;
+        originalLines: { productId: number; qty: number; unitPrice: number }[];
+        promoSnapshot?: PromoSnapshot | null;
+        currentLoyaltyBalance?: number;
+    } | null;
 }) {
     const { partySearchRef, productSearchRef, cashTenderedRef } = opts;
     // Router for the help-page fallback when the browser blocks the new tab.
@@ -465,7 +480,25 @@ export function usePosBilling(opts: {
         .map((l) => ({ value: l.qty * l.unitPrice, taxRate: l.taxRate }));
     const shippingGstRate = shippingAmt > 0 ? resolveShippingGstRate(shippingRateBase) : 0;
     const shippingTaxAmt = (shippingAmt * shippingGstRate) / (100 + shippingGstRate);
-    const manualChargesNet = charges.reduce((s, c) => s + parseAmt(c.amount), 0);
+    const isEditMode = Boolean(opts.editSale);
+    const productsChanged = isEditMode && (() => {
+        const orig = opts.editSale!.originalLines;
+        if (cart.length !== orig.length) return true;
+        const origSorted = [...orig].sort((a, b) => a.productId - b.productId || a.unitPrice - b.unitPrice || a.qty - b.qty);
+        const cartSorted = [...cart].sort((a, b) => a.productId - b.productId || a.unitPrice - b.unitPrice || a.qty - b.qty);
+        return origSorted.some((o, i) => {
+            const c = cartSorted[i];
+            return o.productId !== c.productId || Math.abs(o.qty - c.qty) > 0.0001 || Math.abs(o.unitPrice - c.unitPrice) > 0.0001;
+        });
+    })();
+
+    const origManualCharges = opts.editSale?.originalCharges.filter(
+        (c) => !c.description?.startsWith("Loyalty:") && !c.description?.startsWith("Coupon:")
+    ) ?? [];
+    const origManualChargesNet = origManualCharges.reduce((s, c) => s + Number(c.amount || 0), 0);
+    const manualChargesNet = isEditMode
+        ? origManualChargesNet
+        : charges.reduce((s, c) => s + parseAmt(c.amount), 0);
 
     // ── Spend tiers, resolved live ────────────────────────────────────────────
     // A CURRENT_SALE period scores the bill on the counter, so the discount moves as
@@ -487,7 +520,11 @@ export function usePosBilling(opts: {
         isNewCustomer: (snapshot?.turnover.invoiceCount ?? 0) === 0,
         capPct: snapshot?.tierCapPct ?? null,
     });
-    const discountPct = tier.discountPct;
+    // When editing an existing sale, calculate discount as per the actual sale date.
+    const editTierPct = opts.editSale?.promoSnapshot?.tierDiscountPct ?? opts.editSale?.originalDiscountPct ?? null;
+    const discountPct = isEditMode
+        ? (editTierPct != null ? editTierPct : tier.discountPct)
+        : tier.discountPct;
 
     // ── Spend-tier discount: a % of COST (incl. tax), applied per line BEFORE tax ──
     // Margin is a % of cost-incl (additivePrice), so the discount is too → margin%
@@ -516,24 +553,38 @@ export function usePosBilling(opts: {
     // where the tax saving rides along. Feeding THIS as the voucher-level discount to
     // calcVoucherTotals yields the same total as netting per line (they're equal by
     // construction), so the client total still matches the server's per-line post.
-    const discountAmount = cart.reduce((sum, l, i) => {
+    const computedDiscountAmount = cart.reduce((sum, l, i) => {
         const net = calcLineTotals({ quantity: l.qty, rate: l.unitPrice, discountPct: 0, discountAmt: lineTierDiscExcl[i], taxRate: l.taxRate }).amount;
         return sum + (lineRows[i].amount - net);
     }, 0);
+    // If editing without modifying products, lock to original discount to prevent 1-paisa drift.
+    // If any product dropped/changed, recalculate using actual sale date's tier %.
+    const discountAmount = isEditMode && !productsChanged
+        ? (opts.editSale?.originalDiscountAmt ?? 0)
+        : computedDiscountAmount;
     // Synthetic % for display — the discount as a share of the tag (incl. GST) the
     // customer sees; the configured "% of cost" never leaves admin surfaces.
     const grossIncl = subtotal + tax;
     const synthDiscountPct = grossIncl > 0 ? round2((discountAmount / grossIncl) * 100) : 0;
 
     // ── Loyalty redemption (mirrors the server) ───────────────────────────────
-    // Redemption rides a negative charge to the dedicated "Loyalty Points
-    // Redeemed" ledger, so it folds into chargesNet here exactly as the server
-    // folds it into calcVoucherTotals. We clamp to balance + bill caps client-
-    // side so we only ever send the route a value it will accept.
-    const rates = snapshot?.loyaltyRates ?? null;
+    // When editing, loyalty rates are locked to actual sale date rates.
+    const rates = (isEditMode && opts.editSale?.promoSnapshot?.loyaltyRates)
+        ? opts.editSale.promoSnapshot.loyaltyRates
+        : (snapshot?.loyaltyRates ?? null);
     // Redemption is live only while the programme AND its redeem gate are on.
     const canRedeem = !!rates?.enabled && !!rates?.redeemEnabled;
-    const loyaltyBalance = snapshot?.loyaltyPoints ?? 0;
+
+    // Rule 6: Max loyalty point consumption on edit is:
+    // min(actual day availability before save, current availability including used) @ actual day rate
+    const actualDayAvail = opts.editSale?.promoSnapshot?.availablePointsBeforeSale ?? 0;
+    const currentBal = opts.editSale?.currentLoyaltyBalance ?? snapshot?.loyaltyPoints ?? 0;
+    const pointsRedeemedOnSale = opts.editSale?.promoSnapshot?.pointsRedeemed ?? 0;
+    const effectiveActualDayAvail = Math.max(actualDayAvail, pointsRedeemedOnSale);
+    const currentAvailIncludingUsed = currentBal + pointsRedeemedOnSale;
+    const maxAllowedPointsOnEdit = Math.max(0, Math.min(effectiveActualDayAvail, currentAvailIncludingUsed));
+
+    const loyaltyBalance = isEditMode ? maxAllowedPointsOnEdit : (snapshot?.loyaltyPoints ?? 0);
     const minRedeemPts = rates?.minRedeemPoints ?? 0;
     // Pre-redemption bill — used to enforce the min-invoice-to-redeem floor.
     const billBeforeRedemption = calcVoucherTotals(lineRows, shippingAmt, discountAmount, 0, manualChargesNet).totalAmount;
@@ -560,14 +611,27 @@ export function usePosBilling(opts: {
     const maxRedeemablePts = rates && rates.redeemValue > 0 ? Math.floor(maxRedeemableRupees / rates.redeemValue) : 0;
     const cappedPts = Math.min(requestedPts, loyaltyBalance, maxRedeemablePts);
     const redeemPts = cappedPts >= minRedeemPts ? cappedPts : 0;
-    const redemptionRupees = rates ? redeemPts * rates.redeemValue : 0;
+    const origLoyaltyCharge = opts.editSale?.originalCharges.find((c) => c.description?.startsWith("Loyalty:"));
+    const origRedemptionRupees = origLoyaltyCharge ? Math.abs(Number(origLoyaltyCharge.amount)) : (rates ? redeemPts * rates.redeemValue : 0);
+    const redemptionRupees = (isEditMode && !productsChanged && redeemPts === pointsRedeemedOnSale)
+        ? origRedemptionRupees
+        : (rates ? redeemPts * rates.redeemValue : 0);
 
     // ── Coupon (server-validated) ──────────────────────────────────────────────
     // A non-stackable coupon DROPS the tier discount + BLOCKS loyalty redemption;
     // the validate route already told us which, so mirror it in the bill so the
     // client total matches what the server will post.
-    // Manual coupon wins; otherwise the best auto-apply offer (if any).
-    const effectiveCoupon = appliedCoupon ?? autoCoupon;
+    // In edit mode: do NOT auto-apply today's offers. Only preserve the original coupon or cashier's applied coupon.
+    const effectiveCoupon = isEditMode
+        ? (appliedCoupon ?? (opts.editSale?.promoSnapshot?.couponCode ? {
+            couponId: -1,
+            code: opts.editSale.promoSnapshot.couponCode,
+            name: opts.editSale.promoSnapshot.couponCode,
+            rupees: opts.editSale.promoSnapshot.couponDiscountAmt ?? 0,
+            droppedTier: false,
+            blockedLoyalty: false,
+        } as CouponHit : null))
+        : (appliedCoupon ?? autoCoupon);
     const couponRupees = effectiveCoupon?.rupees ?? 0;
     const couponDroppedTier = !!effectiveCoupon?.droppedTier;
     const couponBlockedLoyalty = !!effectiveCoupon?.blockedLoyalty;
@@ -661,6 +725,22 @@ export function usePosBilling(opts: {
     // The whole bill for a given MDR recovery: line rows, tier, round-off, total.
     // Recovery 0 is today's bill exactly (the rebate alone moves the rows).
     const billFor = (recovery: number) => {
+        // When editing without changing products, lock tier discount, round-off, and total to the original bill
+        if (isEditMode && !productsChanged) {
+            const ro = roundOffManuallyEdited ? parseAmt(roundOffStr) : (opts.editSale!.originalRoundOff ?? 0);
+            const origTotal = opts.editSale!.originalTotal;
+            const finalTotal = roundOffManuallyEdited
+                ? round2(origTotal - opts.editSale!.originalRoundOff + ro)
+                : origTotal;
+            return {
+                rows: lineRows,
+                moved: false,
+                tierDiscount: opts.editSale!.originalDiscountAmt,
+                natural: origTotal - opts.editSale!.originalRoundOff,
+                roundOff: ro,
+                total: finalTotal,
+            };
+        }
         const rates = mdrLines && recovery > 0 ? upliftedRates(mdrLines, recovery) : rebatedRates;
         const moved = rates.some((r, i) => r !== cart[i].unitPrice);
         // Lines that did not move ARE lineRows, and the tier stays untouched.
@@ -713,7 +793,15 @@ export function usePosBilling(opts: {
     // Gift card is a TENDER, not a discount — it doesn't change `total`, it covers
     // part of it. The cashier collects `payableTotal` in cash/UPI; the server draws
     // the same min(balance, total) from the card and posts it as a Dr-Liability tender.
-    const giftFor = (t: number) => (giftCard ? Math.min(giftCard.balance, t) : 0);
+    // User rule 6: "for gift card max(used amount)"
+    const origGiftCardUsed = opts.editSale?.promoSnapshot?.giftCardUsedAmount ?? 0;
+    const giftFor = (t: number) => {
+        if (isEditMode) {
+            const cap = origGiftCardUsed > 0 ? origGiftCardUsed : (giftCard?.balance ?? 0);
+            return Math.min(cap, t);
+        }
+        return giftCard ? Math.min(giftCard.balance, t) : 0;
+    };
     const giftCardApplied = giftFor(total);
     const payableTotal = Math.max(0, +(total - giftCardApplied).toFixed(2));
 
@@ -1382,11 +1470,17 @@ export function usePosBilling(opts: {
     //                         row (normally UPI these days); falls back to cash
     //                         when the counter has no such row.
     //   { tender: "cash" }  → option-1 — the Cash row.
+    //   { preserve: true }  → preserve already loaded/edited tenders (e.g. edit mode)
     // A normal open starts at ₹0 and lets the cashier type the tendered amount.
-    const openCheckout = useCallback((prefill?: { tender: "cash" | "split" }) => {
+    const openCheckout = useCallback((prefill?: { tender?: "cash" | "split"; preserve?: boolean }) => {
         if (!snapshot?.account) { toast.error("Pick a customer first"); return; }
         if (cart.length === 0) { toast.error("Cart is empty"); return; }
         if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
+        if (prefill?.preserve) {
+            setCheckoutOpen(true);
+            setTimeout(() => cashTenderedRef.current?.focus(), 50);
+            return;
+        }
         // Pre-show the accounts flagged "default visible" as rows; the rest stay
         // behind "Add payment line".
         const visible = payAccounts.filter((a) => a.defaultVisible);
@@ -1835,6 +1929,8 @@ export function usePosBilling(opts: {
         // tender math
         cashNet, splitsSum, upiEntered, collected, onCredit, overpaid, balanceDue, ledgerBalance,
         arrearPaid, advanceTaken, creditLimitBreached,
+        // edit sale mode
+        isEditMode, productsChanged: Boolean(productsChanged),
         // customer display
         displayHold, setDisplayHold,
     };

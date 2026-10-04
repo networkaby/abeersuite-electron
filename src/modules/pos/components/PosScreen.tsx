@@ -7,7 +7,7 @@
 // submit (with thermal printing + surplus Receipt handling), edit-mode hydration
 // of a posted POS sale, and the checkout / share dialogs' wiring.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import axios from "axios";
@@ -21,6 +21,8 @@ import { ClearBillDialog } from "@/modules/pos/components/ClearBillDialog";
 import { PosScreenShell } from "@/modules/pos/components/PosScreenShell";
 import { movesCash } from "@/modules/pos/components/TenderEntry";
 import { usePosBilling, parseAmt } from "@/modules/pos/hooks/usePosBilling";
+import { channelToPaymentMethod, CHANNEL_LABEL } from "@/modules/pos/lib/counterTenders";
+import type { TenderAccount, TenderSplit } from "@/modules/pos/components/TenderSplitInput";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { bridgeOk, bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
 import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
@@ -31,10 +33,19 @@ import { extractApiError } from "@/shared/lib/api";
 import { formatInr, round2, todayIso, toDateOnly } from "@/shared/lib/format";
 import { cleanLineNote, composeLineDescription, readLineText } from "@/shared/lib/print/lineDescription";
 import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearchAndCreate";
+import type { PromoSnapshot } from "@/shared/lib/accountancy/settlement";
 
 // Charge rows carry taxAmount through the edit round-trip — POS-service rows
 // are tax-bearing charges (Cr income net + Cr GST) and must re-post faithfully.
-type EditMeta = { charges: { accountId: number; description?: string; amount: number; taxAmount?: number }[]; discountAmt: number; discountPct: number | null; shippingAmt: number; roundOff: number };
+type EditMeta = {
+    charges: { accountId: number; description?: string; amount: number; taxAmount?: number }[];
+    discountAmt: number;
+    discountPct: number | null;
+    shippingAmt: number;
+    roundOff: number;
+    tillAccountId?: number | null;
+    giftCardTender?: { accountId: number; amount: number; method?: "OTHER"; reference?: string } | null;
+};
 
 export default function PosScreen({ editId, fromId }: { editId?: number; fromId?: number }) {
     const router = useRouter();
@@ -50,6 +61,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
     // over the unchanged payment lands as a credit on the customer's account.
     const isEdit = editId != null;
     const editMeta = useRef<EditMeta | null>(null);
+    const [editSaleMeta, setEditSaleMeta] = useState<NonNullable<Parameters<typeof usePosBilling>[0]>["editSale"]>(null);
 
     // Focus/handle refs — owned here, shared with the hook and the shell.
     const partySearchRef = useRef<PartySearchAndCreateHandle>(null);
@@ -63,7 +75,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
         onHotkeyConfirm: () => {
             // Mirror the disabled Checkout button: silently no-op while a
             // require-note item still has a blank line note.
-            if (!b.saleNoteMissing) b.openCheckout();
+            if (!b.saleNoteMissing) b.openCheckout(isEdit ? { preserve: true } : undefined);
         },
         partySearchRef,
         productSearchRef,
@@ -73,6 +85,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
         // bank charge (MDR) and the UPI parts.
         groupRebate: !isEdit,
         paymentMdr: !isEdit,
+        editSale: editSaleMeta,
     });
 
     // Which rail the share dialog opens locked to — set by the Share button on a
@@ -80,6 +93,18 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
     const [shareProvider, setShareProvider] = useState<string>("upi");
     // The UPI part due now, when the Share came from a row taken in parts.
     const [shareAmount, setShareAmount] = useState<number | null>(null);
+
+    // Additional accounts synthesized from the edited bill's tenders (if not in counter's list)
+    const [extraAccounts, setExtraAccounts] = useState<TenderAccount[]>([]);
+    const mergedAccounts = useMemo(() => {
+        const list: TenderAccount[] = [...b.payAccounts];
+        for (const a of extraAccounts) {
+            if (!list.some((existing) => existing.id === a.id)) {
+                list.push(a);
+            }
+        }
+        return list;
+    }, [b.payAccounts, extraAccounts]);
 
     // ── Edit mode: hydrate a posted POS sale on mount ───────────────────────────
     // Editing an existing voucher is NOT a carried draft: clear the shared draft on
@@ -93,10 +118,15 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             try {
                 const { data } = await axios.get<{
                     accountId: number | null; type: string; status: string;
+                    tillAccountId?: number | null;
+                    totalAmount?: string | number | null;
                     discountAmt: string | number | null; discountPct: string | number | null;
                     shippingAmt: string | number | null; roundOff: string | number | null;
                     lines: { productId: number; description: string | null; note: string | null; quantity: string | number; rate: string | number; taxRate: string | number; mrpPaise: number | null; savedSalePricePaise: number | null; product: { sku: string; name: string } }[];
                     charges: { accountId: number; description: string | null; amount: string | number; taxAmount?: string | number | null }[];
+                    tenders?: { accountId: number; amount: string | number; method?: string | null; reference?: string | null; account?: { id: number; name: string } | null }[];
+                    promoSnapshot?: PromoSnapshot | null;
+                    currentLoyaltyBalance?: number;
                 }>(`/api/inventory/vouchers/${editId}`);
                 if (cancelled) return;
                 if (data.type !== "POS" || data.status === "CANCELLED") {
@@ -104,6 +134,38 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     router.push(salesListHref);
                     return;
                 }
+
+                const rawTenders = data.tenders ?? [];
+                const cashTenders = rawTenders.filter((t) => t.method === "CASH");
+                const initialCash = cashTenders.reduce((sum, t) => sum + Number(t.amount), 0);
+                const tillAccountId = cashTenders[0]?.accountId ?? data.tillAccountId ?? null;
+                const giftCardTender = rawTenders.find((t) => t.reference?.startsWith("Gift card"));
+                const isCustomerAr = (t: (typeof rawTenders)[0]) => t.accountId === data.accountId && !t.method;
+                const nonCashTenders = rawTenders.filter((t) => t.method !== "CASH" && t !== giftCardTender && !isCustomerAr(t));
+
+                // Populate frozen promo snapshot and sale details for edit calculations
+                setEditSaleMeta({
+                    voucherId: editId,
+                    originalTotal: Number(data.totalAmount ?? 0),
+                    originalDiscountAmt: data.discountAmt != null ? Number(data.discountAmt) : 0,
+                    originalDiscountPct: data.discountPct != null ? Number(data.discountPct) : null,
+                    originalCharges: data.charges.map((c) => ({
+                        accountId: c.accountId,
+                        description: c.description ?? undefined,
+                        amount: Number(c.amount),
+                        taxAmount: c.taxAmount != null ? Number(c.taxAmount) : undefined,
+                    })),
+                    originalShippingAmt: data.shippingAmt != null ? Number(data.shippingAmt) : 0,
+                    originalRoundOff: data.roundOff != null ? Number(data.roundOff) : 0,
+                    originalLines: data.lines.map((l) => ({
+                        productId: l.productId,
+                        qty: Number(l.quantity),
+                        unitPrice: Number(l.rate),
+                    })),
+                    promoSnapshot: data.promoSnapshot ?? null,
+                    currentLoyaltyBalance: data.currentLoyaltyBalance,
+                });
+
                 // Preserve the original charges (incl. server-added loyalty / coupon /
                 // gift-card rows) + discount / shipping / round-off — re-sent on save so
                 // the total + GL stay faithful while the cashier only adjusts items.
@@ -113,7 +175,24 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     discountPct: data.discountPct != null ? Number(data.discountPct) : null,
                     shippingAmt: data.shippingAmt != null ? Number(data.shippingAmt) : 0,
                     roundOff: data.roundOff != null ? Number(data.roundOff) : 0,
+                    tillAccountId,
+                    giftCardTender: giftCardTender ? {
+                        accountId: giftCardTender.accountId,
+                        amount: Number(giftCardTender.amount),
+                        method: "OTHER",
+                        reference: giftCardTender.reference ?? undefined,
+                    } : null,
                 };
+                if (data.shippingAmt != null && Number(data.shippingAmt) > 0) {
+                    b.setShippingAmtStr(String(data.shippingAmt));
+                }
+                if (data.roundOff != null && Number(data.roundOff) !== 0) {
+                    b.setRoundOffStr(String(data.roundOff));
+                }
+                if (data.promoSnapshot?.pointsRedeemed && data.promoSnapshot.pointsRedeemed > 0) {
+                    b.setRedeemPointsStr(String(data.promoSnapshot.pointsRedeemed));
+                    b.setRedeemOn(true);
+                }
                 if (data.accountId != null) await b.fetchSnapshot(data.accountId);
                 if (cancelled) return;
                 b.setCart(data.lines.map((l) => ({
@@ -127,13 +206,53 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     mrpPaise: l.mrpPaise,
                     barcodePaise: l.savedSalePricePaise,
                 })));
+
+                // Hydrate tender states into the billing hook
+                b.setPay({ cashTendered: initialCash, cashReturn: 0 });
+
+                const newExtraAccounts: TenderAccount[] = [];
+                const loadedSplits: TenderSplit[] = [];
+                for (const t of nonCashTenders) {
+                    const match = b.payAccounts.find((a) => a.accountId === t.accountId);
+                    if (match) {
+                        loadedSplits.push({
+                            id: crypto.randomUUID(),
+                            paymentAccountId: match.id,
+                            amount: Number(t.amount),
+                            reference: t.reference || "",
+                        });
+                    } else {
+                        const synthId = -t.accountId;
+                        const channel = t.method === "MOBILE_PAYMENT" ? "UPI"
+                            : t.method === "CARD" ? "CARD"
+                            : t.method === "CHEQUE" ? "CHEQUE"
+                            : t.method === "BANK_TRANSFER" ? "BANK_TRANSFER"
+                            : "WALLET";
+                        newExtraAccounts.push({
+                            id: synthId,
+                            channel,
+                            label: t.account?.name || (t.method ? CHANNEL_LABEL[t.method as keyof typeof CHANNEL_LABEL] || "Bank" : "Bank"),
+                            vpa: null,
+                        });
+                        loadedSplits.push({
+                            id: crypto.randomUUID(),
+                            paymentAccountId: synthId,
+                            amount: Number(t.amount),
+                            reference: t.reference || "",
+                        });
+                    }
+                }
+                if (newExtraAccounts.length > 0) {
+                    setExtraAccounts(newExtraAccounts);
+                }
+                b.setSplits(loadedSplits);
             } catch (e: unknown) {
                 if (cancelled) return;
                 toast.error(extractApiError(e, "Could not load the sale to edit"));
                 router.push(salesListHref);
             }
         })();
-        return () => { cancelled = true; b.resetDraft(); };
+        return () => { cancelled = true; setEditSaleMeta(null); b.resetDraft(); };
         // One-shot hydration keyed on the voucher id; the helpers it calls are stable.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEdit, editId]);
@@ -184,17 +303,111 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
         const { snapshot, cart, lineRows, pay, splits, payAccountById } = b;
         if (!snapshot?.account) return;
 
-        // ── Edit mode: PATCH the existing sale's lines, preserving payments + offers ──
-        // Re-send the original charges + discount/shipping/round-off and OMIT tenders, so
-        // the PATCH keeps the loyalty/coupon/gift-card + payment rows and re-posts the GL
-        // faithfully. A reduced total over the unchanged payment becomes a customer
-        // account credit. No tenders / loyalty / coupon flow on an edit; it prints
-        // (like a register reprint) only when asked.
+        // ── Edit mode: PATCH the existing sale's lines + updated payment tenders ──
         if (isEdit && editMeta.current) {
             if (cart.length === 0) { toast.error("Cart is empty"); return; }
             if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
+            if (b.creditLimitBreached) return;
+            if (b.upiPartsPending) return;
+
+            // Collected amount cannot exceed total on an edit (server requires tender coverage to balance).
+            if (b.collected > b.payableTotal + 0.005) {
+                toast.error(`Collected amount (${formatInr(b.collected)}) cannot exceed the bill total (${formatInr(b.payableTotal)}). Please adjust the payment rows.`);
+                return;
+            }
+
             b.setSubmitting(true);
             try {
+                // Build the updated tenders for the PATCH payload
+                const patchTenders: { accountId: number; amount: number; method?: any; reference?: string }[] = [];
+
+                // 1. Cash tender
+                if (b.cashNet > 0) {
+                    const tillId = b.activeShift?.counter.tillAccount.id ?? editMeta.current.tillAccountId;
+                    if (!tillId) {
+                        toast.error("Till account not found for cash payment");
+                        b.setSubmitting(false);
+                        return;
+                    }
+                    patchTenders.push({
+                        accountId: tillId,
+                        amount: b.cashNet,
+                        method: "CASH",
+                    });
+                }
+
+                // 2. Non-cash splits (UPI, Card, Bank, etc.)
+                for (const s of b.splits) {
+                    if (s.amount <= 0) continue;
+                    let ledgerAccountId: number | null = null;
+                    let method: any = "OTHER";
+
+                    if (s.paymentAccountId != null && s.paymentAccountId < 0) {
+                        ledgerAccountId = -s.paymentAccountId;
+                        const extra = extraAccounts.find((a) => a.id === s.paymentAccountId);
+                        method = extra?.channel ? channelToPaymentMethod(extra.channel as any) : "OTHER";
+                    } else if (s.paymentAccountId != null) {
+                        const payAcct = b.payAccountById.get(s.paymentAccountId);
+                        if (payAcct) {
+                            ledgerAccountId = payAcct.accountId;
+                            method = channelToPaymentMethod(payAcct.channel);
+                        }
+                    }
+
+                    if (!ledgerAccountId) continue;
+                    patchTenders.push({
+                        accountId: ledgerAccountId,
+                        amount: s.amount,
+                        method,
+                        reference: s.reference || undefined,
+                    });
+                }
+
+                // 3. Gift card (preserve original gift-card tender if applied, capped to b.giftCardApplied)
+                if (b.giftCardApplied > 0.005 && editMeta.current.giftCardTender) {
+                    patchTenders.push({
+                        ...editMeta.current.giftCardTender,
+                        amount: b.giftCardApplied,
+                    });
+                }
+
+                // 4. On-credit remainder (AR leg for customer)
+                if (b.onCredit > 0.005) {
+                    patchTenders.push({
+                        accountId: snapshot.account.id,
+                        amount: b.onCredit,
+                    });
+                }
+
+                // When products have NOT changed, send original charges/discount/roundoff intact.
+                // Only if products changed do we adjust loyalty/coupon charge rows.
+                let effectiveCharges = editMeta.current.charges;
+                if (b.productsChanged) {
+                    const manualCharges = editMeta.current.charges.filter(
+                        (c) => !c.description?.startsWith("Loyalty:") && !c.description?.startsWith("Coupon:")
+                    );
+                    effectiveCharges = [...manualCharges];
+                    if (b.effRedemptionRupees > 0) {
+                        const origLoyaltyCharge = editMeta.current.charges.find((c) => c.description?.startsWith("Loyalty:"));
+                        if (origLoyaltyCharge) {
+                            effectiveCharges.push({
+                                ...origLoyaltyCharge,
+                                amount: -b.effRedemptionRupees,
+                                description: `Loyalty: ${b.effRedeemPts} pts`,
+                            });
+                        }
+                    }
+                    if (b.couponRupees > 0) {
+                        const origCouponCharge = editMeta.current.charges.find((c) => c.description?.startsWith("Coupon:"));
+                        if (origCouponCharge) {
+                            effectiveCharges.push({
+                                ...origCouponCharge,
+                                amount: -b.couponRupees,
+                            });
+                        }
+                    }
+                }
+
                 await axios.patch(`/api/inventory/vouchers/${editId}`, {
                     lines: cart.map((l) => ({
                         productId: l.productId,
@@ -205,12 +418,12 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                         taxRate: l.taxRate,
                         mrpPaise: l.mrpPaise ?? undefined,
                     })),
-                    charges: editMeta.current.charges,
-                    discountAmt: editMeta.current.discountAmt,
-                    discountPct: editMeta.current.discountPct ?? undefined,
+                    charges: effectiveCharges,
+                    discountAmt: b.productsChanged ? b.effDiscountAmount : editMeta.current.discountAmt,
+                    discountPct: b.productsChanged ? (b.discountPct ?? undefined) : (editMeta.current.discountPct ?? undefined),
                     shippingAmt: editMeta.current.shippingAmt,
-                    roundOff: editMeta.current.roundOff,
-                    // tenders deliberately omitted → preserved; the GL re-post reuses them.
+                    roundOff: b.productsChanged ? b.roundOff : editMeta.current.roundOff,
+                    tenders: patchTenders,
                 });
                 toast.success("Sale updated");
                 b.setCheckoutOpen(false);   // no second Enter while the page navigates away
@@ -493,7 +706,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             checkoutSlot={
 
                 <Button
-                    onClick={() => b.openCheckout()}
+                    onClick={() => b.openCheckout(isEdit ? { preserve: true } : undefined)}
                     disabled={
                         b.cart.length === 0 ||
                         !b.snapshot?.account ||
@@ -548,10 +761,10 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 lockedProviderId={shareProvider}
             />
 
-            {/* ── Checkout dialog — fixed Cash / UPI / Credit rows; an edit takes no
-                money, so it opens in "confirm" mode (title + the two CTAs). ──── */}
+            {/* ── Checkout dialog — fixed Cash / UPI / Credit rows; in edit mode,
+                prefilled with the original payments and fully editable. ──── */}
             <CheckoutDialog
-                mode={isEdit ? "confirm" : "sale"}
+                mode="sale"
                 title={isEdit ? `Update Sale · ${formatInr(b.total)}` : undefined}
                 confirmLabel={isEdit ? "Update Sale" : undefined}
                 confirmPrintLabel={isEdit ? "Update & Print Sale" : undefined}
@@ -573,7 +786,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 pay={b.pay}
                 setPay={b.setPay}
                 cashTenderedRef={cashTenderedRef}
-                accounts={b.payAccounts}
+                accounts={mergedAccounts}
                 splits={b.splits}
                 setSplits={b.setSplits}
                 submitting={b.submitting}
@@ -581,7 +794,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 onShare={(a, row) => { setShareProvider("upi"); setShareAmount(b.duePartOf(row)); b.setShareVpa(a.vpa); b.setShareOpen(true); }}
                 fillAmountFor={b.fillAmountFor}
                 // UPI parts still to come in — the panel beside says so.
-                confirmDisabled={b.upiPartsPending}
+                confirmDisabled={b.upiPartsPending || (isEdit && b.collected > b.payableTotal + 0.005)}
                 sidePanel={b.upiPanel ? (
                     <UpiPartsPanel
                         panel={b.upiPanel}

@@ -48,11 +48,29 @@ export type ChargeInput = {
     taxRate?:     number | null;
 };
 
-export type Settlement = { tenders: TenderInput[]; charges: ChargeInput[] };
+import type { LoyaltyRates } from "@/modules/loyalty/lib";
+
+export type PromoSnapshot = {
+    tierDiscountPct?: number;
+    tierName?: string;
+    availablePointsBeforeSale?: number;
+    pointsRedeemed?: number;
+    pointsEarned?: number;
+    loyaltyRates?: LoyaltyRates | null;
+    giftCardUsedAmount?: number;
+    couponCode?: string | null;
+    couponDiscountAmt?: number;
+};
+
+export type Settlement = {
+    tenders: TenderInput[];
+    charges: ChargeInput[];
+    promoSnapshot?: PromoSnapshot | null;
+};
 
 /** Parse `InvVoucher.settlementJson` into typed tender/charge arrays (empty when absent). */
 export function readSettlement(json: Prisma.JsonValue | null | undefined): Settlement {
-    if (!json || typeof json !== "object" || Array.isArray(json)) return { tenders: [], charges: [] };
+    if (!json || typeof json !== "object" || Array.isArray(json)) return { tenders: [], charges: [], promoSnapshot: null };
     const o = json as Record<string, unknown>;
     const tenders = Array.isArray(o.tenders)
         ? (o.tenders as unknown[]).map((t) => {
@@ -72,7 +90,7 @@ export function readSettlement(json: Prisma.JsonValue | null | undefined): Settl
                 accountId:   Number(r.accountId),
                 amount:      Number(r.amount),
                 description: (r.description ?? null) as string | null,
-                taxAmount:   r.taxAmount != null ? Number(r.taxAmount) : null,
+                taxAmount:   r.taxAmount != null && Number(r.taxAmount) !== 0 ? Number(r.taxAmount) : null,
                 serviceId:   r.serviceId != null ? Number(r.serviceId) : null,
                 serviceName: (r.serviceName ?? null) as string | null,
                 note:        (r.note ?? null) as string | null,
@@ -82,15 +100,19 @@ export function readSettlement(json: Prisma.JsonValue | null | undefined): Settl
             };
         })
         : [];
-    return { tenders, charges };
+    const promoSnapshot = (o.promoSnapshot && typeof o.promoSnapshot === "object")
+        ? (o.promoSnapshot as PromoSnapshot)
+        : null;
+    return { tenders, charges, promoSnapshot };
 }
 
 /** Build the `settlementJson` value to store on an InvVoucher. */
 export function buildSettlementJson(
     tenders: TenderInput[],
     charges: ChargeInput[] = [],
+    promoSnapshot?: PromoSnapshot | null,
 ): Prisma.InputJsonValue {
-    return {
+    const res: Record<string, unknown> = {
         tenders: tenders.map((t) => ({
             accountId: t.accountId,
             amount:    Number(t.amount),
@@ -112,4 +134,8 @@ export function buildSettlementJson(
             taxRate:     c.serviceId != null && c.taxRate  != null ? Number(c.taxRate)  : null,
         })),
     };
+    if (promoSnapshot) {
+        res.promoSnapshot = promoSnapshot;
+    }
+    return res as Prisma.InputJsonValue;
 }

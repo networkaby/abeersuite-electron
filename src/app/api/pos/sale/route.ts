@@ -8,7 +8,7 @@ import { recordStockMovementsBatch } from "@/modules/inventory/lib/stockMovement
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveCost";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
-import { buildSettlementJson, type ChargeInput } from "@/shared/lib/accountancy/settlement";
+import { buildSettlementJson, type ChargeInput, type PromoSnapshot } from "@/shared/lib/accountancy/settlement";
 import { resolveServiceCharges, chargesNetTotal } from "@/shared/lib/accountancy/serviceCharges";
 import { enginePost, engineCreateSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
@@ -972,6 +972,15 @@ export async function POST(req: Request) {
                         ? [{ accountId: customerAccount.id, amount: arRemainder, method: null as null, reference: null as null }]
                         : []),
                 ];
+            const promoSnapshot: PromoSnapshot = {
+                tierDiscountPct: tierDiscountAfterCoupon > 0 ? body.discountPct : 0,
+                availablePointsBeforeSale: loyaltyEnabled ? loyaltyBalance : 0,
+                pointsRedeemed: redeemPoints,
+                loyaltyRates: loyaltyEnabled ? loyaltyRates : null,
+                giftCardUsedAmount: giftCardRedeem,
+                couponCode: body.couponCode?.trim() || null,
+            };
+
             // Phase 5 5.0/5C: spine FIRST (the document anchor) so goods lines hang
             // off it; enginePost attaches the GL lines + flips it via existingSpineId.
             const voucherDescription = body.notes?.trim() || `POS sale — ${partyName}`;
@@ -1015,7 +1024,7 @@ export async function POST(req: Request) {
                     // 5D-2: creator lives on the spine (engineCreateSpine set it).
                     // G4b: tender + charge INPUT → settlementJson (the spine's
                     // role=TENDER/CHARGE GL lines are emitted from it on POST).
-                    settlementJson: buildSettlementJson(tenderPayload, allCharges),
+                    settlementJson: buildSettlementJson(tenderPayload, allCharges, promoSnapshot),
                 },
             });
             // Phase 5 5C: goods lines hang off the spine.
@@ -1143,6 +1152,14 @@ export async function POST(req: Request) {
                     taxonomyMaps,
                     createdById: user!.id,
                 });
+
+                if (loyaltyResult.pointsEarned > 0) {
+                    promoSnapshot.pointsEarned = loyaltyResult.pointsEarned;
+                    await tx.voucherDetail.update({
+                        where: { id: voucher.id },
+                        data: { settlementJson: buildSettlementJson(tenderPayload, allCharges, promoSnapshot) },
+                    });
+                }
 
                 // ── Milestone bonus points: award any lifetime-spend tier the
                 // customer has now crossed (one-time per tier). Lifetime spend is
