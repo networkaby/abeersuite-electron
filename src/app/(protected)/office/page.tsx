@@ -1,14 +1,15 @@
 /**
  * /office — Home dashboard.
  *
- * A greeting, then a grid of cards. Each card is one file under
+ * A greeting, then a wrapping row of cards. Each card is one file under
  * `modules/home/cards/` and decides nothing about layout — to add one, write the
- * card and add it to the grid below with its own visibility rule.
+ * card and add it to the row below with its own visibility rule.
  *
  *   My day          — everyone: the person's own work (POS shift for now).
  *   Business health — Purchase voucher ticks: three cards — working capital,
  *                     liquid fund, inventory value — each with its own period
- *                     (default 15 days).
+ *                     (default 15 days); Cash flow; Cash runway; Sales and
+ *                     net profit by month (a full row).
  */
 
 import { auth } from "@/auth";
@@ -17,6 +18,9 @@ import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import LiveRefresh from "@/shared/components/LiveRefresh";
 import MyDayCard from "@/modules/home/cards/MyDayCard";
 import BusinessHealthCard from "@/modules/home/cards/BusinessHealthCard";
+import CashFlowCard from "@/modules/home/cards/CashFlowCard";
+import CashRunwayCard from "@/modules/home/cards/CashRunwayCard";
+import SalesProfitCard from "@/modules/home/cards/SalesProfitCard";
 import { canSeeBusinessHealth } from "@/modules/home/lib/businessHealth";
 
 export default async function OfficePage() {
@@ -55,6 +59,10 @@ export default async function OfficePage() {
                         <BusinessHealthCard metric="workingCapital" />
                         <BusinessHealthCard metric="liquidFund" />
                         <BusinessHealthCard metric="inventory" />
+                        <CashFlowCard />
+                        <CashRunwayCard />
+                        {/* Twelve months need the whole row. */}
+                        <div className="basis-full!"><SalesProfitCard /></div>
                     </>
                 )}
             </div>

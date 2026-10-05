@@ -1,23 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import axios from "axios";
+import { useState } from "react";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ArrowDownRight, ArrowUpRight, TrendingUp } from "lucide-react";
 import { formatInr } from "@/shared/lib/format/moneyInr";
 import { formatDateCompact } from "@/shared/lib/format/formatDate";
+import { DAY_PERIODS, HomeCard, PeriodChips, Stat, dayLabel, short, signedInr, useHomeData } from "./cardKit";
 
 type Point = { date: string; workingCapital: number; liquidFund: number; inventory: number };
 type Metric = "workingCapital" | "liquidFund" | "inventory";
-
-// Mirrors HEALTH_PERIODS in modules/home/lib/businessHealth.ts (server-only).
-const PERIODS = [
-    { days: 7, label: "7 days" },
-    { days: 15, label: "15 days" },
-    { days: 30, label: "30 days" },
-    { days: 90, label: "90 days" },
-    { days: 365, label: "1 year" },
-] as const;
 
 const METRICS = {
     workingCapital: { key: "workingCapital", label: "Working capital", color: "#378ADD" },
@@ -25,98 +16,23 @@ const METRICS = {
     inventory: { key: "inventory", label: "Inventory value", color: "#BA7517" },
 } as const satisfies Record<Metric, { key: Metric; label: string; color: string }>;
 
-// One request per period for the whole page: the three cards share it, so
-// switching all three to "30 days" still costs one call. A failure is dropped
-// so Retry asks again.
-const requests = new Map<number, Promise<Point[]>>();
-function loadPeriod(days: number): Promise<Point[]> {
-    let req = requests.get(days);
-    if (!req) {
-        req = axios
-            .get<{ points: Point[] }>("/api/home/business-health", { params: { days } })
-            .then(({ data }) => data.points);
-        req.catch(() => requests.delete(days));
-        requests.set(days, req);
-    }
-    return req;
-}
-
-/** Lakh / thousand shorthand for the big figure — the tooltip shows the exact amount. */
-function short(n: number): string {
-    const a = Math.abs(n);
-    const sign = n < 0 ? "−" : "";
-    if (a >= 1e7) return `${sign}₹${(a / 1e7).toFixed(2)} Cr`;
-    if (a >= 1e5) return `${sign}₹${(a / 1e5).toFixed(2)} L`;
-    if (a >= 1e3) return `${sign}₹${(a / 1e3).toFixed(1)} k`;
-    return `${sign}₹${Math.round(a)}`;
-}
-
 /** One Business health figure as its own Home card, with its own period. */
 export default function BusinessHealthCard({ metric }: { metric: Metric }) {
     const [days, setDays] = useState<number>(15);
-    // Every period fetched this visit is kept, so switching back paints at once.
-    const [byPeriod, setByPeriod] = useState<Record<number, Point[]>>({});
-    const [failed, setFailed] = useState(false);
-    const [attempt, setAttempt] = useState(0);
-
-    useEffect(() => {
-        let live = true;
-        loadPeriod(days)
-            .then((points) => live && setByPeriod((m) => ({ ...m, [days]: points })))
-            .catch(() => live && setFailed(true));
-        return () => { live = false; };
-    }, [days, attempt]);
-
-    const points = byPeriod[days];
+    const { data, failed, retry } = useHomeData<{ points: Point[] }>(`/api/home/business-health?days=${days}`);
     const m = METRICS[metric];
 
     return (
-        <section className="rounded-xl border border-border bg-card p-5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                    <TrendingUp size={16} style={{ color: m.color }} />
-                    <h2 className="text-sm font-semibold text-foreground">{m.label}</h2>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                    {PERIODS.map((p) => (
-                        <button
-                            key={p.days}
-                            type="button"
-                            onClick={() => { setFailed(false); setDays(p.days); }}
-                            className={[
-                                "rounded-md border px-2 py-0.5 text-[11px] transition-colors",
-                                p.days === days
-                                    ? "border-primary bg-primary/10 text-primary"
-                                    : "border-border text-muted-foreground hover:bg-muted/60",
-                            ].join(" ")}
-                        >
-                            {p.label}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {failed && !points && (
-                <p className="mt-3 text-xs text-red-600">
-                    Couldn&apos;t load the figures.{" "}
-                    <button type="button" onClick={() => { setFailed(false); setAttempt((n) => n + 1); }} className="underline">
-                        Retry
-                    </button>
-                </p>
-            )}
-
-            <MetricTile metric={m} points={points} failed={failed} />
-        </section>
+        <HomeCard
+            icon={<TrendingUp size={16} style={{ color: m.color }} />}
+            title={m.label}
+            control={<PeriodChips options={DAY_PERIODS} value={days} onChange={setDays} />}
+            failed={failed}
+            onRetry={retry}
+        >
+            <MetricTile metric={m} points={data?.points} failed={failed} />
+        </HomeCard>
     );
-}
-
-/** "21 Sep" — compact axis / summary date. */
-function dayLabel(iso: string): string {
-    return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
-}
-
-function signedInr(n: number): string {
-    return `${n >= 0 ? "+" : "−"}${formatInr(Math.abs(n), 0)}`;
 }
 
 function MetricTile({
@@ -236,17 +152,6 @@ function MetricTile({
                     <Stat label="Average" value={short(avg)} />
                 </div>
             )}
-        </div>
-    );
-}
-
-function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
-    return (
-        <div className="rounded bg-muted/40 px-2 py-1">
-            <p className="text-muted-foreground">{label}</p>
-            <p className="font-mono font-semibold text-foreground">
-                {value} {note && <span className="font-sans font-normal text-muted-foreground">{note}</span>}
-            </p>
         </div>
     );
 }
