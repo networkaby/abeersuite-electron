@@ -71,6 +71,7 @@ export default function MobileStock() {
             placeholder="Product name, SKU or barcode"
             query={query}
             onQuery={(q) => { setQuery(q); setLimit(PAGE); }}
+            scan
             list={{
                 loading,
                 error: null,

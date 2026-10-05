@@ -109,6 +109,7 @@ export default function MobilePhotos({ initialKind }: { initialKind: PhotoKind }
             placeholder={kind === "product" ? "Product name, SKU or barcode" : `${PHOTO_KIND_LABEL[kind]} name`}
             query={query}
             onQuery={(q) => { setQuery(q); setLimit(PAGE); }}
+            scan={kind === "product"}
             list={{
                 loading,
                 error: null,

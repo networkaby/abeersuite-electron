@@ -187,9 +187,12 @@ an update.
 - **Camera** (the Photos screen, §4) needs no plugin: a plain `<input type="file"
   capture="environment">` reaches the back camera through Capacitor's own
   `BridgeWebChromeClient.onShowFileChooser`, which writes the shot through the
-  generated **FileProvider** — keep it in the manifest. No `CAMERA` permission is
-  declared; adding one makes Capacitor ask at run time, and a "Deny" then blocks Take
-  photo.
+  generated **FileProvider** — keep it in the manifest. **`CAMERA` is declared** for the
+  barcode scan (Stock & price, Photos): Capacitor asks once at run time and one Allow
+  covers both. A "Deny" blocks **both** scanning and Take photo until the permission is
+  turned on in Android's app settings. The scan itself is web code — the browser's
+  built-in `BarcodeDetector` over a `getUserMedia` back-camera stream — so the manifest
+  line is the only native part; an APK built before it cannot scan.
 
 Owner: *"i want the QR force install instead of just open the website"*. A phone never
 lets a site install itself, so the Downloads QR is always `COMPANY_DETAILS.sites.office`
@@ -249,6 +252,14 @@ does not read it — a future narrow salesman / rider permission must get a slim
 without it). Tapping a row asks
 [`/api/mobile/stock/[id]`](../src/app/api/mobile/stock/[id]/route.ts) for the per-branch
 split (`loadLiveStockByBranch`).
+
+**Barcode scan:** the search box's camera button
+([`MobileBarcodeScan`](../src/modules/mobile/components/MobileBarcodeScan.tsx), turned on by
+`MobileListScreen`'s `scan` prop) opens the back camera, reads one code with the browser's
+built-in `BarcodeDetector` (EAN / UPC / Code-128 / Code-39 / ITF / QR — no library) and drops
+it into the search box, so the same on-device search finds the product. The button is
+hidden where the browser has no `BarcodeDetector` (iPhone Safari, desktop). Photos uses
+the same button on its Product tab.
 
 ### Party
 [`MobileParties`](../src/modules/mobile/components/MobileParties.tsx) searches the party list already

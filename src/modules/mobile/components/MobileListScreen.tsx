@@ -1,9 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { Search } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { ScanBarcode, Search } from "lucide-react";
 import MobileHeader from "./MobileHeader";
 import { MobileSkeletonRows } from "./MobileSkeleton";
+import MobileBarcodeScan, { useCanScanBarcode } from "./MobileBarcodeScan";
 
 type ListState = {
     loading: boolean;
@@ -21,13 +22,15 @@ type ListState = {
  * filtered on the device for a catalogue it holds (products, parties), or paged
  * from the server with `useMobileList` (the Day Book).
  */
-export default function MobileListScreen({ title, back, placeholder, query, onQuery, list, emptyText, summary, children }: {
+export default function MobileListScreen({ title, back, placeholder, query, onQuery, scan, list, emptyText, summary, children }: {
     title: string;
     /** Only when the list is a detail screen; main screens go back by the tab bar. */
     back?: string;
     placeholder: string;
     query: string;
     onQuery: (q: string) => void;
+    /** Show a camera button that fills the search box with a scanned barcode (where the phone can scan). */
+    scan?: boolean;
     list: ListState;
     emptyText: string;
     /** Totals / filter chips shown between the search box and the rows. */
@@ -35,6 +38,8 @@ export default function MobileListScreen({ title, back, placeholder, query, onQu
     /** `<li>` rows. */
     children: ReactNode;
 }) {
+    const canScan = useCanScanBarcode() && !!scan;
+    const [scanning, setScanning] = useState(false);
     return (
         <>
             <MobileHeader title={title} back={back} onRefresh={list.refresh} busy={list.loading} />
@@ -49,8 +54,20 @@ export default function MobileListScreen({ title, back, placeholder, query, onQu
                         className="h-11 flex-1 bg-transparent outline-none"
                         autoComplete="off"
                     />
+                    {canScan && (
+                        <button type="button" onClick={() => setScanning(true)} className="-mr-2 p-2 text-primary" aria-label="Scan barcode">
+                            <ScanBarcode className="size-5" />
+                        </button>
+                    )}
                 </label>
             </div>
+
+            {scanning && (
+                <MobileBarcodeScan
+                    onCode={(code) => { setScanning(false); onQuery(code); }}
+                    onClose={() => setScanning(false)}
+                />
+            )}
 
             {list.error && <p className="px-3 text-sm text-destructive">{list.error}</p>}
 
