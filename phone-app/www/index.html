@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NS Staff</title>
+<style>
+  :root { --bg: #eff4fb; --fg: #0f172a; --muted: #64748b; --primary: #2563eb; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #101725; --fg: #e2e8f0; --muted: #94a3b8; --primary: #3b82f6; } }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font-family: system-ui, sans-serif; }
+  main { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; box-sizing: border-box; text-align: center; }
+  h1 { font-size: 20px; margin: 0; }
+  p { margin: 0; color: var(--muted); font-size: 15px; max-width: 280px; }
+  button { margin-top: 12px; width: 100%; max-width: 280px; padding: 14px; border: 0; border-radius: 12px; background: var(--primary); color: #fff; font-size: 17px; font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>No connection</h1>
+  <p>NS Staff needs the internet to open. Check mobile data or Wi-Fi, then try again.</p>
+  <button type="button" id="retry">Try again</button>
+</main>
+<script>
+  // The app's address lives in capacitor.config.json (server.url); keep this in step.
+  var APP = "https://office.networkservice.in/m-staff-app";
+  document.getElementById("retry").onclick = function () { location.href = APP; };
+  window.addEventListener("online", function () { location.href = APP; });
+  var splash = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SplashScreen;
+  if (splash) splash.hide();
+</script>
+</body>
+</html>

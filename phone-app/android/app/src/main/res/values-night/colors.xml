@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- PHONE_APP_THEME.dark in src/shared/lib/device/phone.ts -->
+    <color name="app_page">#101725</color>
+    <color name="colorPrimary">#101725</color>
+    <color name="colorPrimaryDark">#101725</color>
+    <color name="colorAccent">#3B82F6</color>
+</resources>

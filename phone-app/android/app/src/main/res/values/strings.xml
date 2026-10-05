@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">NS Staff</string>
+    <string name="title_activity_main">NS Staff</string>
+    <string name="package_name">in.networkservice.staff</string>
+    <string name="custom_url_scheme">in.networkservice.staff</string>
+    <!-- The site vouches for this app in /.well-known/assetlinks.json; this is the app
+         vouching back, so Chrome's getInstalledRelatedApps() on the install page sees
+         it as installed. -->
+    <string name="asset_statements" translatable="false">[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://office.networkservice.in\"}}]</string>
+</resources>

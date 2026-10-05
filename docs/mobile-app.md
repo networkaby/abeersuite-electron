@@ -134,32 +134,49 @@ replace it with a sharper source when there is one). Manifest route:
 [`manifest.webmanifest`](../src/app/m-staff-app/manifest.webmanifest/route.ts), scope
 the app path only, so the office site and shop stay plain websites.
 
-### Android APK (sideloaded, 2026-10-05)
+### Android APK (Capacitor, sideloaded, 2026-10-05)
 
-Owner: *"go ahead with TWA, sideload via QR for now"*. [`android/`](../android) is a
-**Trusted Web Activity** made with Bubblewrap from [`twa-manifest.json`](../android/twa-manifest.json):
-a ~2.5 MB APK, package **`in.networkservice.staff`** (`PHONE_APP_ANDROID_PACKAGE` —
-permanent, a new id is a different app), that opens `office…/m-staff-app` full screen
-through the phone's Chrome. **Every screen is still the website**, so a Vercel deploy
-reaches installed phones with no new APK; rebuild only for a new name, icon, colour or
-address, and bump `appVersionCode` when you do, or Android refuses it as "not an update".
+Owner: *"i need full phone access like native app"* — so the first wrapper (a Bubblewrap
+TWA, which is only Chrome and showed Chrome's address bar until the site vouched for it)
+was replaced the same day by [`phone-app/`](../phone-app), a **Capacitor 8** app. Package
+**`in.networkservice.staff`** (`PHONE_APP_ANDROID_PACKAGE` — permanent, a new id is a
+different app), **same signing key**, `versionCode` 2 — so it installs over the TWA as
+an update.
 
+- **It loads the live site** (`server.url` in [`capacitor.config.json`](../phone-app/capacitor.config.json)
+  = `office…/m-staff-app`) in its own WebView — no Chrome, no address bar, ever. **Every
+  screen is still the website**: a Vercel deploy reaches phones with no new APK.
+  Rebuild only when the native side changes (name, icon, a plugin, a permission), and
+  bump `versionCode` in `phone-app/android/app/build.gradle` when you do.
+- **Native features** come as Capacitor plugins added to `phone-app/package.json`; the
+  web screens call them through `window.Capacitor` and must keep working in a plain
+  browser (check `isNativePlatform()`). First batch not chosen yet.
+- **Storage / delta sync:** Dexie, the saved answers and `?since=` all run unchanged —
+  same origin, same code. The WebView keeps its own storage (not Chrome's), so moving
+  from the TWA means **one fresh sign-in and one re-download** of the catalogues; there
+  is no offline write queue on the phone (Receive / Pay / Expense post straight to the
+  server), so nothing can be lost in the move. [`NativeAppReady`](../src/modules/mobile/components/NativeAppReady.tsx)
+  (in [`m-staff-app/layout.tsx`](../src/app/m-staff-app/layout.tsx)) asks for persistent
+  storage and hides the launch screen once the page is drawn.
+- **Look:** launch screen and window are the app's page colour (light/dark,
+  `values-night`), icons drawn from `public/m-icon-*.png` by
+  [`make-icons.cjs`](../phone-app/make-icons.cjs); edge-to-edge with the existing
+  `env(safe-area-inset-*)` padding (`SystemBars.insetsHandling: "css"`). No signal on
+  launch → the bundled [`offline.html`](../phone-app/www/offline.html) with Try again.
+  `tel:`, `wa.me`, `sms:` and other sites hand off to the phone's own apps. The user
+  agent carries `NSStaffApp`.
 - **Served from the site:** `public/ns-staff.apk` (`PHONE_APP_APK`) and
-  `public/.well-known/assetlinks.json`. The second is what hides Chrome's address bar —
-  the site vouching for the APK's signing key. Both carry a file extension, so
-  `proxy.ts` never asks for a sign-in.
-- **Build:** `pwsh -File android/build-apk.ps1` — Bubblewrap build (asks the key's
-  passwords, so the owner runs it), then copies the APK into `public/` and writes
-  `assetlinks.json` from the fingerprint **read off the signed APK**, so the two can't
-  drift. Toolchain on D: (`D:\AndroidTools`: JDK 17, Android SDK, Bubblewrap, Gradle
-  cache); `~/.bubblewrap/config.json` points at it.
-- **Signing key:** `android/ns-staff.keystore`, git-ignored. **Back it up off the PC** —
-  lost key = the app can never be updated in place (every phone uninstalls and
-  reinstalls); leaked key = anyone can push an "update".
-- **Manifest** also names the APK in `related_applications` (`platform: "play"`), so
-  the install page's `getInstalledRelatedApps()` sees it as installed.
-- Same Chrome underneath: cookies, sign-in and the per-site **Desktop site** switch are
-  shared with Chrome on that phone.
+  `public/.well-known/assetlinks.json`; the app vouches back (`asset_statements`), so the
+  install page's `getInstalledRelatedApps()` still sees it as installed. Both files carry
+  an extension, so `proxy.ts` never asks for a sign-in.
+- **Build:** `pwsh -File phone-app/build-apk.ps1` — `cap sync`, asks the key's passwords
+  (owner types them; environment only, never written), Gradle `assembleRelease`, copies
+  the APK to `public/` and writes `assetlinks.json` from the fingerprint **read off the
+  signed APK**. Toolchain in `D:\AndroidTools` (JDK 21, Android SDK, Gradle cache).
+  `phone-app/` is not in the pnpm workspace — `npm install` inside it.
+- **Signing key:** `phone-app/ns-staff.keystore`, git-ignored. **Back it up off the PC** —
+  lost key = no in-place updates ever again; leaked key = anyone can push an "update".
+- Sideloaded only. Play Store would refuse SMS / call-log permissions if those are added.
 
 Owner: *"i want the QR force install instead of just open the website"*. A phone never
 lets a site install itself, so the Downloads QR is always `COMPANY_DETAILS.sites.office`
@@ -172,6 +189,7 @@ is outside it). It shows only the app and
 - Android → **"Download NS Staff"** (the APK) and three steps — open the file, allow
   *Install unknown apps* for Chrome, Install; Chrome's own install offer stays as a
   smaller second button;
+- inside the Android app itself (`window.Capacitor`) → treated as installed;
 - iPhone → Share → Add to Home Screen;
 - already installed → Open app;
 - no offer (http test address / other browser) → Chrome ⋮ → Install app.

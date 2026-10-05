@@ -1,0 +1,28 @@
+{
+  "appId": "in.networkservice.staff",
+  "appName": "NS Staff",
+  "webDir": "www",
+  "appendUserAgent": "NSStaffApp",
+  "backgroundColor": "#eff4fb",
+  "server": {
+    "url": "https://office.networkservice.in/m-staff-app",
+    "errorPath": "offline.html"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "initialViewportFitValueHint": "cover"
+    },
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "launchShowDuration": 4000,
+      "launchFadeOutDuration": 200,
+      "backgroundColor": "#eff4fb",
+      "showSpinner": false
+    }
+  }
+}

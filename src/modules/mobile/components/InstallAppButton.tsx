@@ -14,7 +14,10 @@ const noSubscribe = () => () => {};
 function readPlace(): string {
     const standalone = window.matchMedia("(display-mode: standalone)").matches
         || (navigator as { standalone?: boolean }).standalone === true;
-    if (standalone) return "installed";
+    // The Android app (phone-app/, Capacitor) is a WebView, not "standalone" — it
+    // says so through its own global.
+    const native = (window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
+    if (standalone || native) return "installed";
     if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) return "iphone";
     return /Android/i.test(navigator.userAgent) ? "android" : "browser";
 }

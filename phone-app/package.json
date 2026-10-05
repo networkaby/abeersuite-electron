@@ -1,0 +1,16 @@
+{
+  "name": "ns-staff-phone-app",
+  "private": true,
+  "description": "Android shell (Capacitor) for the staff phone app at /m-staff-app. Not part of the pnpm workspace; install with npm here.",
+  "scripts": {
+    "sync": "cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.2",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/splash-screen": "8.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2"
+  }
+}

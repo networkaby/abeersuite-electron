@@ -216,14 +216,11 @@ hardware-bridge/config.json
 resources/AbeerSuiteUpdateSplash.exe
 resources/7za.exe
 
-# Android wrapper (android/, Bubblewrap). The signing key NEVER goes in git — losing
+# Android app (phone-app/, Capacitor). The signing key NEVER goes in git — losing
 # it means the app can never be updated under the same package id, and leaking it lets
 # anyone ship an "update" to every phone. Keep it backed up off this PC.
-/android/*.keystore
-/android/*.jks
-/android/**/build/
-/android/.gradle/
-/android/*.apk
-/android/*.aab
-/android/*.idsig
-/android/local.properties
+# (/android/ is the retired Bubblewrap TWA; its keystore copy stays ignored until removed.)
+/android/
+/phone-app/node_modules/
+/phone-app/*.keystore
+/phone-app/*.jks
