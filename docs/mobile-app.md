@@ -104,6 +104,7 @@ Owner: *"mobile app should be within its area, not open desktop app or webapp pa
   [`login/page.tsx`](../src/app/m-staff-app/login/page.tsx) (`PHONE_APP_LOGIN`) — the
   staff sign-in form served inside the app's scope. `/staff/login` sits outside it, and an
   installed app leaving its scope makes Chrome draw an address bar with an ✕ on top.
+  Forgot password has its twin, `m-staff-app/forgot-password` (`PHONE_APP_FORGOT`).
 - A signed-in visit to a sign-in page goes back to the app when `callbackUrl` is in it or
   the device is a phone (`staffHome`). Sign out goes through `signOutTo` (NextAuth's own
   redirect could land on shop.*). The sign-in page hides "Customer? Sign in here" when

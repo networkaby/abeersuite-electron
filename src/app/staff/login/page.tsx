@@ -8,7 +8,7 @@ import { refreshCounterStatus } from "@/shared/hooks/useCounterMode";
 import { refreshSyncStatus } from "@/shared/hooks/useSyncStatus";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { OUTSIDE_COUNTER_SIGNIN_CODE } from "@/shared/lib/constants/session";
-import { isPhoneAppPath } from "@/shared/lib/device/phone";
+import { isPhoneAppPath, PHONE_APP_FORGOT } from "@/shared/lib/device/phone";
 import {
     LOGIN_BACKGROUNDS,
     LOGIN_MODULES,
@@ -782,7 +782,7 @@ function StaffLoginForm() {
                     )}
 
                     <p className={styles.customer}>
-                        <Link href="/staff/forgot-password">Forgot password?</Link>
+                        <Link href={phoneApp ? PHONE_APP_FORGOT : "/staff/forgot-password"}>Forgot password?</Link>
                         {/* Signing in for the staff phone app: no way out to the
                             customer portal from inside the app. */}
                         {!phoneApp && <>{" · "}Customer? <Link href="/login">Sign in here</Link></>}

@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { isPhoneAppPath, PHONE_APP_SIGN_IN } from "@/shared/lib/device/phone";
 
 /**
  * Staff password reset. The code goes to the staff address; Cloudflare forwards it to
@@ -15,6 +16,8 @@ import { Label } from "@/components/ui/label";
  */
 export default function StaffForgotPasswordPage() {
     const router = useRouter();
+    // Also served inside the phone app (m-staff-app/forgot-password): go back to its sign-in.
+    const signInPath = isPhoneAppPath(usePathname()) ? PHONE_APP_SIGN_IN : "/staff/login";
     const [email, setEmail] = useState("");
     const [sent, setSent] = useState(false);
     const [code, setCode] = useState("");
@@ -48,7 +51,7 @@ export default function StaffForgotPasswordPage() {
         try {
             await post({ email, code, password });
             toast.success("Password changed. Sign in with the new one.");
-            router.push("/staff/login");
+            router.push(signInPath);
         } catch (err) { setError((err as Error).message); }
         finally { setBusy(false); }
     };
@@ -102,7 +105,7 @@ export default function StaffForgotPasswordPage() {
                     )}
                     {error && <p className="text-sm text-destructive">{error}</p>}
                     <p className="text-center text-sm text-muted-foreground">
-                        <Link href="/staff/login" className="text-primary underline">Back to sign in</Link>
+                        <Link href={signInPath} className="text-primary underline">Back to sign in</Link>
                     </p>
                 </CardContent>
             </Card>

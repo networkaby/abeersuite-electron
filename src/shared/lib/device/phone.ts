@@ -44,6 +44,9 @@ export const PHONE_APP_INSTALL = `${PHONE_APP_HOME}/install`;
  *  Chrome show an address bar with an ✕ over the screen. */
 export const PHONE_APP_LOGIN = `${PHONE_APP_HOME}/login`;
 
+/** The app's own forgot-password page — same reason as `PHONE_APP_LOGIN`. */
+export const PHONE_APP_FORGOT = `${PHONE_APP_HOME}/forgot-password`;
+
 /** Send a signed-out phone-app visitor to the app's sign-in, coming back to Home. */
 export const PHONE_APP_SIGN_IN = `${PHONE_APP_LOGIN}?callbackUrl=${PHONE_APP_HOME}`;
 
