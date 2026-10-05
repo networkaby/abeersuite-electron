@@ -36,6 +36,7 @@ locked to its own screens in `proxy.ts` and at the API.)
 | Receivables | `mobile:receivables:view` | `/api/mobile/outstanding/[side]` |
 | Payables | `mobile:payables:view` | `/api/mobile/outstanding/[side]` |
 | Day Book | `mobile:daybook:view` | `/api/mobile/daybook` |
+| Voucher (opened from a party's Vouchers tab or the Day Book) | any party tick or `mobile:daybook:view` | `/api/mobile/vouchers/[id]` |
 
 - A party's bills open on any of the three party ticks (`PARTY_TICKS` /
   `PARTY_DETAIL_PERMISSIONS`), because receivables and payables open them too.
@@ -211,7 +212,8 @@ Tap a party → the party screen: balance + Pay / Receive, then two tabs.
   voucher is walked back from the party's balance now, the next page carried by
   `more: { cursor, balance }`. Same-day order follows entry order, as the office Account
   Ledger does, so a payment entered before its bill shows a brief "to receive". Asked on
-  every open (`useMobileList` `freshMs: 0`, still `?since=`).
+  every open (`useMobileList` `freshMs: 0`, still `?since=`). A tap opens the voucher
+  (see *Voucher* below).
 - **Unpaid bills** — [`/api/mobile/parties/[accountId]`](../src/app/api/mobile/parties/[accountId]/route.ts):
   balance ([`partyBalances`](../src/modules/mobile/lib/partyBalances.ts), shared with the list)
   plus unpaid bills (`getLedgerOutstanding`, the Receivables engine), and the gap between
@@ -241,7 +243,24 @@ rank by that age); search over the list on the phone (name, phone, GSTIN).
 today via `businessTodayIso`), handed to the office Day Book handler itself (`GET` imported
 from its route, 100 a page, cursor) and trimmed to kind / no. / party / narration / amount /
 status. Totals per kind over posted rows on screen ("so far" while more pages remain);
-search passes through as the office `search`.
+search passes through as the office `search`. Each row carries `uvId` (the office row's
+`sortId`, the spine id); a tap opens the voucher.
+
+### Voucher
+Owner, 2026-10-05: *"i can see customer has a new sale today. but dont know what items"*.
+[`/api/mobile/vouchers/[id]`](../src/app/api/mobile/vouchers/[id]/route.ts) +
+[`MobileVoucherSheet`](../src/modules/mobile/components/MobileVoucherSheet.tsx), view only,
+laid full-screen over the list it was tapped in. `useVoucherSheet` pushes `?voucher=<id>` onto
+history, so the phone's Back closes it and the list keeps its state (the Day Book's day, the
+party's loaded pages). Shows party, date / save time / who, narration, Draft / Cancelled;
+**items** (name and line note via `readLineText`, qty × price per piece **with GST** =
+amount ÷ qty — the stored rate is pre-GST, free qty); **services & charges** from
+`settlementJson` (a service's net + its GST, a coupon as a negative row); the bill's
+discount (off the GST-inclusive total), shipping, round off, total and "GST included"; and
+**Paid** — the tender rows by ledger, or "on credit". A voucher with no trade detail
+(Receipt / Payment / Journal / Contra) shows its ledger legs (Dr / Cr) instead. Without
+"Show suppliers (creditors)" a purchase-side kind or a voucher touching a Sundry Creditor
+answers 404. Saved per voucher on the phone, re-asked with `?since=`.
 
 ---
 

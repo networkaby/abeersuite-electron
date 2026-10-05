@@ -33,7 +33,7 @@ function day(d: Date): string {
  * those show the date alone. A save on another day than the voucher's own date
  * (back-dated) says so.
  */
-function when(dateIso: string, savedIso: string): string {
+export function when(dateIso: string, savedIso: string): string {
     // A DATE column — a calendar day, read as one (never shifted by a time zone).
     const date = new Date(`${dateIso.slice(0, 10)}T00:00:00`);
     const saved = new Date(savedIso);
@@ -45,26 +45,29 @@ function when(dateIso: string, savedIso: string): string {
 }
 
 /** One party's posted vouchers, newest first, with the balance after each.
- *  Drafts and cancelled ones are not sent — the phone cannot act on them. */
-export default function MobilePartyVouchers({ items }: { items: PartyVoucher[] }) {
+ *  Drafts and cancelled ones are not sent — the phone cannot act on them.
+ *  A tap opens the voucher (`onOpen`, the spine id). */
+export default function MobilePartyVouchers({ items, onOpen }: { items: PartyVoucher[]; onOpen: (id: number) => void }) {
     return (
         <ul className="divide-y">
             {items.map((v) => {
                 const bal = balanceLabel(v.balanceAfter);
                 return (
-                    <li key={v.id} className="flex items-start gap-3 px-3 py-3">
-                        <div className="min-w-0 flex-1">
-                            <p className="font-medium leading-snug">
-                                {v.kind} <span className="font-normal text-muted-foreground">{v.ref}</span>
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                                {when(v.date, v.savedAt)}{v.by ? ` · ${v.by}` : ""}
-                            </p>
-                        </div>
-                        <div className="shrink-0 text-right">
-                            <p className="font-semibold">{formatInr(v.amount)}</p>
-                            <p className={`text-xs ${bal.tone}`}>Bal {bal.text}</p>
-                        </div>
+                    <li key={v.id}>
+                        <button type="button" onClick={() => onOpen(v.id)} className="flex w-full items-start gap-3 px-3 py-3 text-left active:bg-muted">
+                            <div className="min-w-0 flex-1">
+                                <p className="font-medium leading-snug">
+                                    {v.kind} <span className="font-normal text-muted-foreground">{v.ref}</span>
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                    {when(v.date, v.savedAt)}{v.by ? ` · ${v.by}` : ""}
+                                </p>
+                            </div>
+                            <div className="shrink-0 text-right">
+                                <p className="font-semibold">{formatInr(v.amount)}</p>
+                                <p className={`text-xs ${bal.tone}`}>Bal {bal.text}</p>
+                            </div>
+                        </button>
                     </li>
                 );
             })}

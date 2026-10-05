@@ -37,3 +37,29 @@ export type PaySetup = {
     branches: { id: string; name: string }[];
     defaultBranchId: string | null;
 };
+
+/** /api/mobile/vouchers/[id] — one voucher, opened from a party's Vouchers tab or the Day Book. */
+export type VoucherView = {
+    id: number;
+    kind: string;
+    ref: string;
+    date: string;
+    /** When it was actually saved (a till's own clock), else when it reached the office. */
+    savedAt: string;
+    by: string | null;
+    status: string;
+    party: string | null;
+    narration: string | null;
+    /** Goods lines; empty on a Receipt / Payment / Journal. `rate` is the price
+     *  per piece with GST and line discount (amount ÷ qty). */
+    items: { name: string; note: string | null; qty: number; freeQty: number; rate: number; amount: number }[];
+    /** Services and "+ Add Account" rows (a coupon is a negative one), with GST. */
+    charges: { name: string; qty: number | null; rate: number | null; amount: number }[];
+    /** Bill figures — null when the voucher is not a bill (no trade detail).
+     *  items + charges − discount + shipping + roundOff = total; `tax` is inside them. */
+    bill: { discount: number; shipping: number; tax: number; roundOff: number; total: number } | null;
+    /** How a bill was paid, ledger by ledger; empty = nothing taken (on credit). */
+    paid: { name: string; amount: number }[];
+    /** The voucher's ledger legs — what a Receipt / Payment / Journal shows. */
+    legs: { name: string; side: "Dr" | "Cr"; amount: number }[];
+};

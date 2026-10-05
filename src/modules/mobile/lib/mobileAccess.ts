@@ -25,3 +25,6 @@ export async function mobileUser(permissionId?: string | readonly string[]): Pro
 /** One party's balance and bills open from any of the party lists — party search,
  *  receivables or payables — so any one of their ticks opens it. */
 export const PARTY_DETAIL_PERMISSIONS = PARTY_TICKS;
+
+/** One voucher opens from a party's Vouchers tab or from the Day Book. */
+export const VOUCHER_VIEW_PERMISSIONS = [...PARTY_TICKS, PERMISSIONS.MOBILE_DAYBOOK_VIEW] as const;

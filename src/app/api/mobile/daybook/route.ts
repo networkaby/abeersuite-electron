@@ -12,6 +12,8 @@ const PAGE_SIZE = 100;
 
 type OfficeRow = {
     id: string;
+    /** The spine id — what the phone's voucher screen opens. */
+    sortId: number;
     kind: string;
     reference: string;
     narration: string | null;
@@ -75,6 +77,7 @@ export async function GET(req: Request) {
         computedAt: now.toISOString(),
         items: rows.map((r) => ({
             id: r.id,
+            uvId: r.sortId,
             kind: voucherTypeLabel(r.kind) ?? r.kind,
             ref: r.reference,
             party: r.party ?? (r.partyAccountId != null ? accountName.get(r.partyAccountId) ?? null : null),

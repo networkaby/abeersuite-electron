@@ -12,13 +12,15 @@ import { MOBILE_SETUP_FRESH_MS } from "@/shared/lib/constants/polling";
 import type { PartyDetail, PaySetup } from "../lib/types";
 import { useMobileList } from "../hooks/useMobileList";
 import MobilePartyVouchers, { type PartyVoucher } from "./MobilePartyVouchers";
+import MobileVoucherSheet, { useVoucherSheet } from "./MobileVoucherSheet";
 import { usePartyList } from "@/shared/hooks/usePartySearch";
 import { partyFacts } from "../lib/partyFacts";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 /** One party: balance, Pay / Receive, then two tabs — its vouchers, newest first
  *  with the running balance (/api/mobile/parties/[accountId]/vouchers, asked on
- *  every open so a voucher just saved shows), and its unpaid bills
+ *  every open so a voucher just saved shows; a tap opens it in the voucher sheet),
+ *  and its unpaid bills
  *  (/api/mobile/parties/[accountId]). `back` is the list the party was opened from.
  *  Pay / Receive show for whoever holds the Payment / Receipt create + post ticks;
  *  the one matching the balance's direction is the main button. Bills ticked on the
@@ -40,6 +42,7 @@ export default function MobilePartyBills({ accountId, userId, name, back }: {
     // asks, with `?since=`, so a quiet book still costs one tiny reply.
     const vouchers = useMobileList<PartyVoucher>(`/api/mobile/parties/${accountId}/vouchers`, "", userId, {}, { freshMs: 0 });
     const [tab, setTab] = useState<"vouchers" | "bills">("vouchers");
+    const sheet = useVoucherSheet();
     const { parties } = usePartyList();
     const party = parties.find((p) => p.accountId === accountId);
     const facts = party ? partyFacts(party) : null;
@@ -154,7 +157,7 @@ export default function MobilePartyBills({ accountId, userId, name, back }: {
                     </div>
                     {tab === "vouchers" ? (
                         <>
-                            <MobilePartyVouchers items={vouchers.items} />
+                            <MobilePartyVouchers items={vouchers.items} onOpen={sheet.open} />
                             {!vouchers.loading && vouchers.empty && (
                                 <p className="p-6 text-center text-sm text-muted-foreground">No vouchers yet.</p>
                             )}
@@ -206,6 +209,7 @@ export default function MobilePartyBills({ accountId, userId, name, back }: {
                 </>
             )}
             {!data && loading && <p className="p-6 text-center text-sm text-muted-foreground">Loading…</p>}
+            {sheet.openId != null && <MobileVoucherSheet id={sheet.openId} userId={userId} onClose={sheet.close} />}
         </>
     );
 }

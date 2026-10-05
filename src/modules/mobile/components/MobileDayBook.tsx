@@ -6,9 +6,12 @@ import { formatInr } from "@/shared/lib/format/moneyInr";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
 import MobileListScreen from "./MobileListScreen";
 import { useMobileList } from "../hooks/useMobileList";
+import MobileVoucherSheet, { useVoucherSheet } from "./MobileVoucherSheet";
 
 type DayRow = {
     id: string;
+    /** The spine id; absent on a day saved on the phone before it was sent. */
+    uvId?: number;
     kind: string;
     ref: string;
     party: string | null;
@@ -28,7 +31,7 @@ function shiftDate(iso: string, days: number): string {
  * One day of the Day Book, newest first: ◀ date ▶ at the top (today to start),
  * a total per voucher kind, then every voucher. Cancelled ones are struck through
  * and left out of the totals; drafts are marked. Search narrows the day by party,
- * voucher number or narration.
+ * voucher number or narration. A tap opens the voucher in the voucher sheet.
  */
 export default function MobileDayBook({ userId }: { userId: string }) {
     // The shop's day, not the device's or the server's clock — so the server's
@@ -37,6 +40,7 @@ export default function MobileDayBook({ userId }: { userId: string }) {
     const [date, setDate] = useState(today);
     const [query, setQuery] = useState("");
     const list = useMobileList<DayRow>("/api/mobile/daybook", query, userId, { date });
+    const sheet = useVoucherSheet();
 
     // Totals per kind over the vouchers on screen (posted only).
     const totals = new Map<string, { count: number; amount: number }>();
@@ -86,35 +90,44 @@ export default function MobileDayBook({ userId }: { userId: string }) {
     );
 
     return (
-        <MobileListScreen
-            title="Day Book"
-            placeholder="Party, voucher no. or narration"
-            query={query}
-            onQuery={setQuery}
-            list={list}
-            emptyText="No vouchers on this day."
-            summary={summary}
-        >
-            {list.items.map((r) => {
-                const cancelled = r.status === "CANCELLED";
-                return (
-                    <li key={r.id} className={`flex items-start gap-3 px-3 py-3 ${cancelled ? "opacity-60" : ""}`}>
-                        <div className="min-w-0 flex-1">
-                            <p className={`font-medium leading-snug ${cancelled ? "line-through" : ""}`}>
-                                {r.kind} <span className="font-normal text-muted-foreground">{r.ref}</span>
-                            </p>
-                            {r.party && <p className="truncate text-sm">{r.party}</p>}
-                            {r.narration && <p className="truncate text-xs text-muted-foreground">{r.narration}</p>}
-                        </div>
-                        <div className="shrink-0 text-right">
-                            <p className={`font-semibold ${cancelled ? "line-through" : ""}`}>{formatInr(r.amount)}</p>
-                            {r.status !== "POSTED" && (
-                                <p className="text-xs text-muted-foreground">{cancelled ? "Cancelled" : "Draft"}</p>
-                            )}
-                        </div>
-                    </li>
-                );
-            })}
-        </MobileListScreen>
+        <>
+            <MobileListScreen
+                title="Day Book"
+                placeholder="Party, voucher no. or narration"
+                query={query}
+                onQuery={setQuery}
+                list={list}
+                emptyText="No vouchers on this day."
+                summary={summary}
+            >
+                {list.items.map((r) => {
+                    const cancelled = r.status === "CANCELLED";
+                    return (
+                        <li key={r.id}>
+                            <button
+                                type="button"
+                                onClick={() => r.uvId != null && sheet.open(r.uvId)}
+                                className={`flex w-full items-start gap-3 px-3 py-3 text-left active:bg-muted ${cancelled ? "opacity-60" : ""}`}
+                            >
+                                <div className="min-w-0 flex-1">
+                                    <p className={`font-medium leading-snug ${cancelled ? "line-through" : ""}`}>
+                                        {r.kind} <span className="font-normal text-muted-foreground">{r.ref}</span>
+                                    </p>
+                                    {r.party && <p className="truncate text-sm">{r.party}</p>}
+                                    {r.narration && <p className="truncate text-xs text-muted-foreground">{r.narration}</p>}
+                                </div>
+                                <div className="shrink-0 text-right">
+                                    <p className={`font-semibold ${cancelled ? "line-through" : ""}`}>{formatInr(r.amount)}</p>
+                                    {r.status !== "POSTED" && (
+                                        <p className="text-xs text-muted-foreground">{cancelled ? "Cancelled" : "Draft"}</p>
+                                    )}
+                                </div>
+                            </button>
+                        </li>
+                    );
+                })}
+            </MobileListScreen>
+            {sheet.openId != null && <MobileVoucherSheet id={sheet.openId} userId={userId} onClose={sheet.close} />}
+        </>
     );
 }
