@@ -29,7 +29,7 @@ next `pnpm build`. Until it is restored the shop / portal / legal half of the ap
 
 ### A1 · Home screen, Accounts briefing card — 4 dead links
 
-`src/modules/home/DeptBriefings.tsx` lines **189, 190, 191, 192**
+`modules/home/DeptBriefings (removed 2026-10-05)` lines **189, 190, 191, 192**
 
 | Label on screen | Link today | Page that actually exists |
 |---|---|---|
@@ -40,7 +40,7 @@ next `pnpm build`. Until it is restored the shop / portal / legal half of the ap
 
 **Verify the links:**
 ```bash
-sed -n '189,192p' src/modules/home/DeptBriefings.tsx
+sed -n '189,192p' modules/home/DeptBriefings (removed 2026-10-05)
 ```
 **Verify no such page exists:**
 ```bash
@@ -52,7 +52,7 @@ ls "src/app/(protected)/office/accountancy/reports/"
 ```
 
 **Verify it is on a live screen** (not dead code): `FinanceBriefing` is exported at
-`src/modules/home/DeptBriefings.tsx:181` and imported by the Home page at
+`modules/home/DeptBriefings (removed 2026-10-05):181` and imported by the Home page at
 `src/app/(protected)/office/page.tsx:32`.
 
 **Click path:** sign in as a user with `finance:*` permission → Home (`/office`) → the Accounts card →

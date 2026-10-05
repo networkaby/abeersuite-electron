@@ -1,40 +1,22 @@
 /**
- * /office — Permission-Aware Home Page
+ * /office — Home dashboard.
  *
- * Layout (departments deferred — see PROJECT_BRAIN "Known gotchas"):
+ * A greeting, then a grid of cards. Each card is one file under
+ * `modules/home/cards/` and decides nothing about layout — to add one, write the
+ * card and add it to the grid below with its own visibility rule.
  *
- *   LAYER 1 — Universal Customer Panel (everyone, always)
- *     Quick product lookup + repair status + 3 log buttons (Sales/Helpdesk/Internal)
- *
- *   LAYER 2 — Branch filter
- *     Data inside widgets is already scoped by session.branchIds + activeBranch.
- *
- *   LAYER 3 — Briefing cards, gated by PERMISSION (not department)
- *     Every user sees the SAME dashboard; each briefing card appears only when
- *     the user holds a representative permission for that area, and admin:bypass
- *     sees all. Action buttons inside each card stay permission-gated.
- *
- *   Department-based layout (one card per department) is deferred until the
- *   department feature ships; until then departments are cosmetic and the
- *   dashboard is common + permission-driven.
+ *   My day          — everyone: the person's own work (POS shift for now).
+ *   Business health — Purchase voucher ticks: working capital, liquid fund,
+ *                     inventory value over a period (default 15 days).
  */
 
 import { auth } from "@/auth";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
-import { hasPermissionWithScope, hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
-import UniversalCustomerPanel from "@/modules/home/UniversalCustomerPanel";
 import LiveRefresh from "@/shared/components/LiveRefresh";
-import {
-    RepairBriefing,
-    ShowroomBriefing,
-    FinanceBriefing,
-    AdminBriefing,
-    DespatchBriefing,
-    HrBriefing,
-    AllClearCard,
-} from "@/modules/home/DeptBriefings";
+import MyDayCard from "@/modules/home/cards/MyDayCard";
+import BusinessHealthCard from "@/modules/home/cards/BusinessHealthCard";
+import { canSeeBusinessHealth } from "@/modules/home/lib/businessHealth";
 
 export default async function OfficePage() {
     const session = await auth();
@@ -43,26 +25,6 @@ export default async function OfficePage() {
     const user = resolvedUserFromSession(session ?? {});
     const name = (session?.user as { name?: string })?.name ?? "there";
 
-    const isAdmin = user.permissions.includes(PERMISSIONS.ADMIN_BYPASS);
-
-    // Which briefing cards to render — gated by PERMISSION, not department.
-    // `hasPermissionWithScope` short-circuits true on admin:bypass and accepts
-    // any scope at or above the one named (e.g. a holder of `users:edit:org`
-    // still matches a `users:edit:own` gate).
-    const can = (permissionId: string) => hasPermissionWithScope(user.permissions, permissionId);
-
-    const showAdmin    = isAdmin || can("users:edit") || can("settings:manage") || can("roles:edit");
-    // Repair permission layer is being rebuilt — gate the card on repair sidebar-nav
-    // access (new visibility model) instead of the removed tickets:* permissions.
-    const showRepair   = hasModuleNavAccess(user.permissions, "repair");
-    const showShowroom = can("pos:shift:open");
-    const showFinance  = hasModuleNavAccess(user.permissions, "accountancy");
-    const showDespatch = hasModuleNavAccess(user.permissions, "inventory");
-    const showHr       = hasModuleNavAccess(user.permissions, "hr") || can("users:edit");
-
-    const anyCard = showAdmin || showRepair || showShowroom || showFinance || showDespatch || showHr;
-
-    // Greeting line (morning / afternoon / evening)
     const hour = new Date().getHours();
     const greeting =
         hour < 12 ? "Good morning" :
@@ -72,9 +34,8 @@ export default async function OfficePage() {
     return (
         <ScrollArea className="h-full" type="always">
         <div className="space-y-6 px-6 pt-3 pb-6">
-            {/* Briefing cards are server-rendered; re-render when the floor moves. */}
-            <LiveRefresh topics={["ledger", "stock", "tickets", "tasks"]} />
-            {/* Greeting */}
+            {/* My day is server-rendered; re-render when a shift opens or closes. */}
+            <LiveRefresh topics={["ledger"]} />
             <div>
                 <h1 className="text-2xl font-bold text-foreground">
                     {greeting}, {name}! 👋
@@ -84,22 +45,10 @@ export default async function OfficePage() {
                 </p>
             </div>
 
-            {/* Layer 1: Universal Customer Panel — shown to everyone */}
-            <UniversalCustomerPanel />
-
-            {/* Layer 3: Permission-gated briefings (common dashboard, department-agnostic) */}
-            {anyCard ? (
-                <div className="space-y-4">
-                    {showAdmin && <AdminBriefing />}
-                    {showRepair && <RepairBriefing userId={user.id} isAdmin={isAdmin} />}
-                    {showShowroom && <ShowroomBriefing />}
-                    {showFinance && <FinanceBriefing />}
-                    {showDespatch && <DespatchBriefing />}
-                    {showHr && <HrBriefing />}
-                </div>
-            ) : (
-                <AllClearCard name={name} />
-            )}
+            <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+                <MyDayCard userId={user.id} permissions={user.permissions} />
+                {canSeeBusinessHealth(user.permissions) && <BusinessHealthCard />}
+            </div>
         </div>
         </ScrollArea>
     );
