@@ -94,6 +94,15 @@ export type ShopProductPublicOptions = {
     groupIndex?: ShopGroupIndex;
 };
 
+/** A product's photos, main one first: `galleryJson`, or the lone `imageUrl` when an
+ *  older row has no gallery. The storefront and the phone Photos screen both read it. */
+export function productGalleryUrls(galleryJson: unknown, imageUrl: string | null): string[] {
+    const urls = Array.isArray(galleryJson)
+        ? galleryJson.filter((x): x is string => typeof x === "string")
+        : [];
+    return urls.length === 0 && imageUrl ? [imageUrl] : urls;
+}
+
 /**
  * Map an InvProduct to its storefront shape.
  *
@@ -110,12 +119,7 @@ export function invProductToPublic(
 ): ShopProductPublic {
     const { bands, avail, groupIndex } = opts;
     const group = p.groupId != null ? groupIndex?.get(p.groupId) : undefined;
-    const rawGal = p.galleryJson;
-    let galleryUrls: string[] = [];
-    if (Array.isArray(rawGal)) {
-        galleryUrls = rawGal.filter((x): x is string => typeof x === "string");
-    }
-    if (galleryUrls.length === 0 && p.imageUrl) galleryUrls = [p.imageUrl];
+    const galleryUrls = productGalleryUrls(p.galleryJson, p.imageUrl);
 
     const rawSpecs = p.specsJson;
     const specs: Record<string, string> = {};

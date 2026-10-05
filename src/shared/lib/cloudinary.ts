@@ -5,8 +5,19 @@ import { createHash } from "crypto";
 // endpoints. Signs an upload to a whitelisted folder; returns null when the
 // Cloudinary env vars aren't configured.
 
-const ALLOWED_FOLDERS = ["avatars", "shop/products"] as const;
-type CloudinaryFolder = (typeof ALLOWED_FOLDERS)[number];
+// Every folder an upload field asks for must be listed — an unlisted one is not
+// refused, it lands in "avatars" (brand logos and banners once did).
+const ALLOWED_FOLDERS = [
+    "avatars",
+    "shop/products",
+    "shop/brands",
+    "shop/groups",
+    "shop/categories",
+    "shop/home/hero",
+    "shop/home/banners",
+    "shop/ads",
+] as const;
+export type CloudinaryFolder = (typeof ALLOWED_FOLDERS)[number];
 
 export interface CloudinarySignature {
     timestamp: number;

@@ -75,6 +75,8 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
     [/^\/api\/(ecommerce|shop)\/products/,          ["catalogue"]],
     [/^\/api\/pos\/services/,                       ["catalogue"]],
     [/^\/api\/ecommerce\/(home-layout|publish-rules|stock-policy)/, ["catalogue"]],
+    // The phone app's Photos screen: a product's gallery or a brand/group/category image.
+    [/^\/api\/mobile\/photos\/(product|master)\//,  ["catalogue"]],
 
     // ── Work pipeline ────────────────────────────────────────────────────────
     [/^\/api\/(tickets|works|workers|work-groups|pipelines|ticket-statuses|help|deals|deliveries|calls|priorities)/, ["tickets"]],

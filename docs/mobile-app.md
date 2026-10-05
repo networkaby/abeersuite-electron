@@ -35,6 +35,12 @@ works.
   Website only: the desktop app with no counter still refuses it, since a PC with no
   counter is there to be set up. A new phone API must be under `/api/mobile` or added
   to that list.
+  Two office **catalogue reads** the device holds are open to a phone-only session only
+  with a screen's tick — `PHONE_ONLY_CATALOGUE_APIS` / `phoneOnlyMayCall` in the same
+  file, read off the token's own ticks: `/api/inventory/products/lookup` (Stock or
+  Photos — it carries the till's purchase cost, so it must not open to every phone
+  sign-in) and `/api/inventory/masters/sync` (Photos). Office sessions pass both on
+  `requireAuth()` as before.
 
 **Each screen has its own tick**, checked by the page ([`mobileAccess.ts`](../src/modules/mobile/lib/mobileAccess.ts),
 `mobileUser(permission)`) and again by its API (`requirePermission(permission)`):
@@ -47,6 +53,7 @@ works.
 | Payables | `mobile:payables:view` | `/api/mobile/outstanding/[side]` |
 | Day Book | `mobile:daybook:view` | `/api/mobile/daybook` |
 | Voucher (opened from a party's Vouchers tab or the Day Book) | any party tick or `mobile:daybook:view` | `/api/mobile/vouchers/[id]` |
+| Photos | `mobile:photos:edit` | `/api/mobile/photos/signature`, `/photos/product/[id]`, `/photos/master/[kind]/[id]` |
 
 - A party's bills open on any of the three party ticks (`PARTY_TICKS` /
   `PARTY_DETAIL_PERMISSIONS`), because receivables and payables open them too.
@@ -177,6 +184,12 @@ an update.
 - **Signing key:** `phone-app/ns-staff.keystore`, git-ignored. **Back it up off the PC** —
   lost key = no in-place updates ever again; leaked key = anyone can push an "update".
 - Sideloaded only. Play Store would refuse SMS / call-log permissions if those are added.
+- **Camera** (the Photos screen, §4) needs no plugin: a plain `<input type="file"
+  capture="environment">` reaches the back camera through Capacitor's own
+  `BridgeWebChromeClient.onShowFileChooser`, which writes the shot through the
+  generated **FileProvider** — keep it in the manifest. No `CAMERA` permission is
+  declared; adding one makes Capacitor ask at run time, and a "Deny" then blocks Take
+  photo.
 
 Owner: *"i want the QR force install instead of just open the website"*. A phone never
 lets a site install itself, so the Downloads QR is always `COMPANY_DETAILS.sites.office`
@@ -318,6 +331,42 @@ discount (off the GST-inclusive total), shipping, round off, total and "GST incl
 "Show suppliers (creditors)" a purchase-side kind or a voucher touching a Sundry Creditor
 answers 404. Saved per voucher on the phone, re-asked with `?since=`.
 
+### Photos
+Owner, 2026-10-05: update the images of products and masters for the shop *"from mobile
+app / mobile camera"*. [`MobilePhotos`](../src/modules/mobile/components/MobilePhotos.tsx)
+at `/m-staff-app/photos?kind=product|brand|group|category`: chips for the four kinds,
+**No photo** on by default (with its count) so the list is the work still to do. Products
+come from the catalogue on the device (`useProductCatalog`, whose rows carry `imageUrl`;
+the till's search), brands / groups / categories from the lookup tables on the device
+([`useShopMasters`](../src/modules/mobile/hooks/useShopMasters.ts) over `masterCatalog.ts`)
+— **no request per search or tab**. The row last in `MOBILE_SCREENS`, so it never takes a
+party screen's bottom tab.
+
+- **Take photo** / **From gallery** ([`PhotoPickButtons`](../src/modules/mobile/components/PhotoPickButtons.tsx))
+  — plain file inputs (§3 Camera). Each photo is shrunk in the browser
+  ([`shrinkImage`](../src/shared/lib/browser/shrinkImage.ts): long side 1600 px, JPEG 0.85,
+  EXIF-upright — a camera photo becomes a few hundred KB; a 3.3 MB worst-case noise image
+  measured 821 KB), then uploaded to Cloudinary with
+  a signature from [`/api/mobile/photos/signature`](../src/app/api/mobile/photos/signature/route.ts)
+  into the office editors' own folders (`shop/products`, `shop/brands`, `shop/groups`,
+  `shop/categories`; [`uploadShopPhoto`](../src/modules/mobile/lib/uploadShopPhoto.ts)).
+- **Product** ([`MobileProductPhotos`](../src/modules/mobile/components/MobileProductPhotos.tsx)):
+  the gallery in the shop card's frame, Main first; add (one at a time, each saved as it
+  lands, failed ones keep a Retry that does not re-upload), **Make main**, **Remove** (tap
+  twice). Up to `MAX_PRODUCT_PHOTOS` (12) from the phone. [`/api/mobile/photos/product/[id]`](../src/app/api/mobile/photos/product/[id]/route.ts)
+  applies `{ add }` / `{ remove }` / `{ makeMain }` to the gallery **as saved now** (never
+  the phone's stale copy) and writes through
+  [`updateShopProduct`](../src/modules/ecommerce/lib/updateShopProduct.ts) — the office
+  product page's own save — so a photo that makes the product shop-ready **lists it**, and
+  removing the last photo unlists it (owner: same as office). The screen says so when the
+  listing moves. Framing (Adjust) stays on the office page.
+- **Brand / group / category** ([`MobileMasterPhoto`](../src/modules/mobile/components/MobileMasterPhoto.tsx)):
+  one image, a new photo replaces it, Remove clears it —
+  [`/api/mobile/photos/master/[kind]/[id]`](../src/app/api/mobile/photos/master/[kind]/[id]/route.ts)
+  sets `imageUrl` only; name, slug and description stay on Ecommerce → Masters.
+- Both APIs accept only links on our own Cloudinary cloud (`isOwnPhotoUrl`). A save
+  announces `catalogue` (`topics.ts`), so office screens and tills pick it up.
+
 ---
 
 ## 5. Recording money — Pay, Receive, Expense
@@ -443,10 +492,10 @@ Nothing else lists screens.
 
 - `components/` — the screens and shell (`MobileShell`, `MobileNav`, `MobileStock`, …) and
   `moneyFormPage`, the page factory for the Pay / Receive forms.
-- `hooks/` — `useMobileList`, `useMobileResource`, `usePartyBalances`.
+- `hooks/` — `useMobileList`, `useMobileResource`, `usePartyBalances`, `useShopMasters`.
 - `lib/` — `mobileScreens` (the screen list + `quickEntryFor`), `mobileAccess` (the page
   guard), `mobileCache` (saved answers), `booksUnchanged`, `partyBalances` / `partyBalance`,
-  `moneyPlacement`, `types`.
+  `moneyPlacement`, `shopPhotos` (photo kinds + folders) / `uploadShopPhoto`, `types`.
 
 Pages are in `src/app/m-staff-app`, APIs in `src/app/api/mobile`.
 

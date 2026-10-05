@@ -63,3 +63,18 @@ export type VoucherView = {
     /** The voucher's ledger legs — what a Receipt / Payment / Journal shows. */
     legs: { name: string; side: "Dr" | "Cr"; amount: number }[];
 };
+
+/** /api/mobile/photos/product/[id] — one product's shop photos, main first. A save
+ *  also sends `wasListedInShop`, so the phone can say the product went live on the
+ *  shop (or came off it) because of the photo. */
+export type ProductPhotos = {
+    id: number;
+    name: string;
+    sku: string;
+    galleryUrls: string[];
+    isListedInShop: boolean;
+    wasListedInShop?: boolean;
+};
+
+/** /api/mobile/photos/master/[kind]/[id] — a brand, group or category after its image changed. */
+export type MasterPhoto = { id: number; name: string; imageUrl: string | null };

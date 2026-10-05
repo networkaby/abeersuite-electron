@@ -27,6 +27,7 @@ export const PERMISSIONS = {
     MOBILE_RECEIVABLES_VIEW: "mobile:receivables:view",
     MOBILE_PAYABLES_VIEW: "mobile:payables:view",
     MOBILE_DAYBOOK_VIEW: "mobile:daybook:view",
+    MOBILE_PHOTOS_EDIT: "mobile:photos:edit",
 
     // Accountancy Masters — the chart of accounts (Account Groups, Ledgers, Chart
     // of Accounts), gated together. Read access rides the accountancy sidebar nav.

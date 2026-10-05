@@ -1,4 +1,4 @@
-import { BookOpen, Boxes, HandCoins, Users, Wallet, type LucideIcon } from "lucide-react";
+import { BookOpen, Boxes, Camera, HandCoins, Users, Wallet, type LucideIcon } from "lucide-react";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
@@ -83,6 +83,17 @@ export const MOBILE_SCREENS: MobileScreen[] = [
         hint: "Every voucher of a day",
         icon: BookOpen,
         permission: PERMISSIONS.MOBILE_DAYBOOK_VIEW,
+    },
+    // Last on purpose: the first screens held become the bottom tabs, and a photo
+    // tick must not push a party screen off them.
+    {
+        href: `${PHONE_APP_HOME}/photos`,
+        group: "Stock",
+        tab: "Photos",
+        label: "Photos",
+        hint: "Shop photos from camera",
+        icon: Camera,
+        permission: PERMISSIONS.MOBILE_PHOTOS_EDIT,
     },
 ];
 

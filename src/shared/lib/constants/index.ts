@@ -12,7 +12,7 @@
  *   polling.ts        how often each screen re-reads the server (the DB-cost dial),
  *                     the phone app's saved-answer freshness included
  *   paging.ts         rows per API page / per directory page
- *   inventory.ts      Reorder classifier ladder, FSN fast-mover turnover
+ *   inventory.ts      Reorder classifier ladder, FSN fast-mover turnover, phone photo cap
  *   accounting.ts     standard group / ledger names, payment instruments, bill due days
  *   business.ts       the shop's time zone
  *

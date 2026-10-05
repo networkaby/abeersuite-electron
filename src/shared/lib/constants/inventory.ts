@@ -22,3 +22,7 @@ export const REORDER_HISTORY_DAYS = 365;
 
 /** BI → FSN: qty turnover (out ÷ avg stock) at or above this = Fast mover. */
 export const FAST_MIN_TURNOVER = 3;
+
+/** Most shop photos the phone app lets one product hold. The office gallery has no
+ *  cap; this stops a phone "pick many" from sending a hundred over mobile data. */
+export const MAX_PRODUCT_PHOTOS = 12;
