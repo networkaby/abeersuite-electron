@@ -23,6 +23,7 @@ import { movesCash } from "@/modules/pos/components/TenderEntry";
 import { usePosBilling, parseAmt, type EditBill } from "@/modules/pos/hooks/usePosBilling";
 import { isGiftCardTender, type CounterPayment } from "@/modules/pos/lib/counterTenders";
 import { chargesNetTotal } from "@/shared/lib/accountancy/serviceCharges";
+import { exactLineRate } from "@/modules/inventory/lib/voucherMath";
 import type { PromoSnapshot } from "@/shared/lib/accountancy/settlement";
 import type { ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
@@ -107,7 +108,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     accountId: number | null; type: string; status: string;
                     discountPct: string | number | null;
                     shippingAmt: string | number | null; roundOff: string | number | null;
-                    lines: { productId: number; description: string | null; note: string | null; quantity: string | number; rate: string | number; taxRate: string | number; discountAmt: string | number; mrpPaise: number | null; savedSalePricePaise: number | null; product: { sku: string; name: string } }[];
+                    lines: { productId: number; description: string | null; note: string | null; quantity: string | number; rate: string | number; taxRate: string | number; discountAmt: string | number; amount: string | number; mrpPaise: number | null; savedSalePricePaise: number | null; product: { sku: string; name: string } }[];
                     charges: { accountId: number; description: string | null; amount: string | number; taxAmount?: string | number | null; serviceId: number | null }[];
                     tenders: { accountId: number; amount: number; method: string | null; reference: string | null }[];
                     description: string;
@@ -151,7 +152,9 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 const couponRow = data.charges.find(isCoupon);
                 const shippingAmt = data.shippingAmt != null ? Number(data.shippingAmt) : 0;
                 setEditBill({
-                    lines: data.lines.map((l) => ({ productId: l.productId, qty: Number(l.quantity), unitPrice: Number(l.rate), discountAmt: Number(l.discountAmt) })),
+                    // At the exact rate each line was totalled from — the 2-decimal rate
+                    // column would re-total a GST-inclusive price a paisa off.
+                    lines: data.lines.map((l) => ({ productId: l.productId, qty: Number(l.quantity), unitPrice: exactLineRate(l), discountAmt: Number(l.discountAmt) })),
                     shippingAmt,
                     roundOff: data.roundOff != null ? Number(data.roundOff) : 0,
                     chargesNet: chargesNetTotal(data.charges.filter((c) => !isLoyalty(c) && !isCoupon(c))),
@@ -176,7 +179,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     sku: l.product.sku,
                     name: l.product.name,
                     qty: Number(l.quantity),
-                    unitPrice: Number(l.rate),
+                    unitPrice: exactLineRate(l),
                     description: readLineText(l, l.product).note ?? "",
                     taxRate: Number(l.taxRate),
                     mrpPaise: l.mrpPaise,

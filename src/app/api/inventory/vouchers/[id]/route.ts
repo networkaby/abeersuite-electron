@@ -23,6 +23,8 @@ import { cleanLineNote } from "@/shared/lib/print/lineDescription";
 import { loadPosEditContext, planRedemption, planSettlement, applyPosEdit, maxRedeemOnEdit, isLoyaltyCharge, type PosEditInput, type PosEditPlan } from "@/modules/pos/lib/posSaleEdit";
 import { LoyaltyBalanceChangedError } from "@/modules/loyalty/lib";
 import { GiftCardBalanceChangedError } from "@/modules/coupons/lib";
+import { correctClosedShiftForEdit, tillPaiseOf } from "@/modules/pos/lib/shiftCloseCorrection";
+import { shouldWriteLocal } from "@/shared/lib/prisma/counterMode";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -467,6 +469,25 @@ export async function PATCH(req: Request, { params }: Params) {
         tenders = plan.tenders;
     }
 
+    // ── The sale's shift already closed? Its close is corrected in this save ─
+    // (shiftCloseCorrection.ts) by the cash the edit moves in its till. That
+    // rewrites the shift's variance Journal, which needs the office connection.
+    let closedShiftCorrection: { shiftId: number; deltaPaise: bigint } | null = null;
+    const saleShiftId = existing.universalVoucher?.sourceShiftId ?? null;
+    if (posPlan && saleShiftId != null) {
+        const saleShift = await prisma.posShift.findUnique({ where: { id: saleShiftId }, select: { status: true, counter: { select: { tillAccountId: true } } } });
+        if (saleShift?.status === "CLOSED") {
+            const deltaPaise = tillPaiseOf(posPlan.tenders, saleShift.counter.tillAccountId)
+                - tillPaiseOf(readSettlement(existing.settlementJson).tenders, saleShift.counter.tillAccountId);
+            if (deltaPaise !== BigInt(0)) {
+                if (shouldWriteLocal()) {
+                    return NextResponse.json({ error: "This sale's shift is already closed, so changing its cash needs the office connection. Try once the counter is back online.", code: "CLOSED_SHIFT_OFFLINE" }, { status: 409 });
+                }
+                closedShiftCorrection = { shiftId: saleShiftId, deltaPaise };
+            }
+        }
+    }
+
     // The payment rows must still add up AFTER the edit. This PATCH may change
     // the lines (and so the total) while saying nothing about tenders, in which
     // case the existing ones stand — and a voucher whose goods moved but whose
@@ -651,6 +672,14 @@ export async function PATCH(req: Request, { params }: Params) {
                     partyAccountId:     existing.universalVoucher?.partyAccountId ?? null,
                     rates:              posCtx?.configRates ?? null,
                     createdById:        userId,
+                });
+            }
+
+            if (closedShiftCorrection) {
+                await correctClosedShiftForEdit(tx, {
+                    ...closedShiftCorrection,
+                    voucherNo: existing.universalVoucher?.voucherNo ?? `#${existing.id}`,
+                    userId,
                 });
             }
 

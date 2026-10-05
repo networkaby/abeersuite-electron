@@ -19,10 +19,6 @@ type SummaryShift = {
     status:            string;
     openingFloatPaise: bigint;
     expectedCashPaise: bigint | null;
-    /** A closed shift's close moment and its own closing vouchers (never "changes"). */
-    closedAt?: Date | null;
-    closingContraVoucherId?: number | null;
-    varianceJournalEntryId?: number | null;
     counter: {
         tillAccountId:   number;
         tillAccount:     { id: number };
@@ -38,10 +34,6 @@ export type ShiftSummaryJson = {
     tillMovementPaise:    string;
     dropsPaise:           string;
     runningExpectedPaise: string;
-    /** A CLOSED shift only: how far its vouchers have moved the till since the
-     *  close, net of correcting Journals posted on it (see shiftCashChangedAfterClose).
-     *  Non-zero = the books no longer match the counted cash. null while not closed. */
-    changedAfterClosePaise: string | null;
     tenderBreakdown:      TenderBreakdownRow[];
     movementBreakdown: {
         cashSalesPaise:    string;
@@ -85,33 +77,19 @@ export async function buildShiftSummary(db: Tx, shift: SummaryShift): Promise<Sh
         buildShiftCollectionsBreakdown(db, { shiftId: shift.id, counter: shift.counter }),
     ]);
 
-    const changed = shift.status === "CLOSED" && shift.closedAt
-        ? await shiftCashChangedAfterClose(db, {
-            shiftId:       shift.id,
-            tillAccountId: shift.counter.tillAccountId,
-            closedAt:      shift.closedAt,
-            ownVoucherIds: [shift.closingContraVoucherId, shift.varianceJournalEntryId].filter((x): x is number => x != null),
-        })
-        : null;
-    // A closed shift's movement is measured against the till the close froze, so
-    // its remainder also holds what goods vouchers changed since; take that back
-    // out and "Other" is again what it was at the close.
-    const otherPaise = changed ? movement.otherPaise + changed.vouchersPaise : movement.otherPaise;
-
     return {
         openingFloatPaise:    shift.openingFloatPaise.toString(),
         tillBookBalancePaise: tillBookBalancePaise.toString(),
         tillMovementPaise:    (tillBookBalancePaise - shift.openingFloatPaise).toString(),
         dropsPaise:           dropsPaise.toString(),
         runningExpectedPaise: computeExpectedCash(tillBookBalancePaise, dropsPaise).toString(),
-        changedAfterClosePaise: changed ? (changed.vouchersPaise + changed.correctionsPaise).toString() : null,
         tenderBreakdown,
         movementBreakdown: {
             cashSalesPaise:    movement.cashSalesPaise.toString(),
             receiptsPaise:     movement.receiptsPaise.toString(),
             expendituresPaise: movement.expendituresPaise.toString(),
             refundsPaise:      movement.refundsPaise.toString(),
-            otherPaise:        otherPaise.toString(),
+            otherPaise:        movement.otherPaise.toString(),
             netMovementPaise:  movement.netMovementPaise.toString(),
         },
         collectionsBreakdown: {
@@ -124,80 +102,4 @@ export async function buildShiftSummary(db: Tx, shift: SummaryShift): Promise<Sh
             netCollectedPaise: collections.netCollectedPaise.toString(),
         },
     };
-}
-
-type GlLineLite = { accountId: unknown; type: unknown; amount: unknown };
-
-/**
- * How far a closed shift's own vouchers have moved its till since the close.
- *
- * Measured voucher by voucher — till lines now, less till lines at the close —
- * so nothing outside the shift (a till entry carrying no shift) can creep in:
- *   • edited after the close  → "at close" is the copy the first such edit saved
- *     (AuditLog PRE_EDIT — an INV voucher keeps its spine as `journalEntry`, a GL
- *     voucher is the spine itself);
- *   • cancelled after it      → "now" is nothing; deleted after it → only the
- *     saved copy is left, and it counts as gone;
- *   • raised after it on this shift → "at close" was nothing. That is how a
- *     correcting Journal (after-close-correction) cancels the difference out —
- *     reported apart as `correctionsPaise`.
- * The close's own Contra and variance Journal are not changes.
- */
-export async function shiftCashChangedAfterClose(db: Tx, args: {
-    shiftId: number; tillAccountId: number; closedAt: Date; ownVoucherIds: number[];
-}): Promise<{ vouchersPaise: bigint; correctionsPaise: bigint }> {
-    const till = (lines: GlLineLite[] | null | undefined): bigint => (lines ?? [])
-        .filter((l) => Number(l.accountId) === args.tillAccountId)
-        .reduce((sum, l) => sum + BigInt(Math.round(Number(l.amount) * 100)) * (l.type === "DEBIT" ? BigInt(1) : BigInt(-1)), BigInt(0));
-
-    const [vouchers, copies] = await Promise.all([
-        db.universalVoucher.findMany({
-            where:  { sourceShiftId: args.shiftId, id: { notIn: args.ownVoucherIds } },
-            select: {
-                id: true, type: true, status: true, createdAt: true, cancelledAt: true,
-                lines: { where: { accountId: args.tillAccountId }, select: { accountId: true, type: true, amount: true } },
-            },
-        }),
-        db.auditLog.findMany({
-            where: {
-                createdAt:  { gt: args.closedAt },
-                entityType: { in: ["INV_VOUCHER", "GL_VOUCHER"] },
-                OR: [
-                    { snapshot: { path: ["journalEntry", "sourceShiftId"], equals: args.shiftId } },
-                    { snapshot: { path: ["sourceShiftId"], equals: args.shiftId } },
-                ],
-            },
-            orderBy: { id: "asc" },
-            select:  { entityType: true, snapshot: true },
-        }),
-    ]);
-
-    // The first copy saved after the close is the voucher as the close saw it.
-    const atCloseById = new Map<number, bigint>();
-    for (const c of copies) {
-        const snap = c.snapshot as Record<string, unknown>;
-        const spine = (c.entityType === "INV_VOUCHER" ? snap.journalEntry : snap) as { id?: unknown; status?: unknown; lines?: GlLineLite[] } | null;
-        const id = Number(spine?.id);
-        if (!id || atCloseById.has(id) || args.ownVoucherIds.includes(id)) continue;
-        atCloseById.set(id, spine?.status === "POSTED" ? till(spine.lines) : BigInt(0));
-    }
-
-    let vouchersPaise = BigInt(0);
-    let correctionsPaise = BigInt(0);
-    const seen = new Set<number>();
-    for (const v of vouchers) {
-        seen.add(v.id);
-        const now = v.status === "POSTED" ? till(v.lines) : BigInt(0);
-        const raisedAfter = v.createdAt > args.closedAt && !atCloseById.has(v.id);
-        const atClose = atCloseById.get(v.id)
-            ?? (raisedAfter ? BigInt(0)
-                : v.cancelledAt && v.cancelledAt > args.closedAt ? till(v.lines)
-                : now);
-        if (raisedAfter && v.type === "JOURNAL") correctionsPaise += now;
-        else vouchersPaise += now - atClose;
-    }
-    for (const [id, atClose] of atCloseById) {
-        if (!seen.has(id)) vouchersPaise -= atClose;   // deleted since the close
-    }
-    return { vouchersPaise, correctionsPaise };
 }

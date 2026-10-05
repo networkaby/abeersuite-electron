@@ -48,5 +48,5 @@ export async function invNextRef(
 // The voucher arithmetic moved to voucherMath.ts so client code can use it without
 // pulling this file's server imports into the browser bundle. Re-exported here so
 // server callers that already import from stock.ts keep working.
-export { calcLineTotals, calcVoucherTotals, resolveShippingGstRate } from "./voucherMath";
+export { calcLineTotals, calcVoucherTotals, resolveShippingGstRate, exactLineRate } from "./voucherMath";
 export type { VoucherLineInput } from "./voucherMath";

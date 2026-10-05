@@ -94,18 +94,22 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
         // Phase 5 5E: the opening/closing contras ARE spines now (Voucher dropped).
         // Resolve them by id to keep the old response shape the UI consumes.
-        const contraIds = [shift.openingContraVoucherId, shift.closingContraVoucherId].filter((x): x is number => x != null);
+        // The variance Journal rides the same lookup — the detail page's "Variance
+        // Journal Entry" card reads it, and was never sent before.
+        const contraIds = [shift.openingContraVoucherId, shift.closingContraVoucherId, shift.varianceJournalEntryId].filter((x): x is number => x != null);
         const contras = contraIds.length === 0 ? [] : await prisma.universalVoucher.findMany({
             where: { id: { in: contraIds } }, select: { id: true, voucherNo: true, date: true },
         });
         const contraById = new Map(contras.map((c) => [c.id, { id: c.id, date: c.date, reference: c.voucherNo ?? formatUvNo(c.id) }]));   // 5D-7
         const openingContraVoucher = shift.openingContraVoucherId != null ? (contraById.get(shift.openingContraVoucherId) ?? null) : null;
         const closingContraVoucher = shift.closingContraVoucherId != null ? (contraById.get(shift.closingContraVoucherId) ?? null) : null;
+        const varianceJournalEntry = shift.varianceJournalEntryId != null ? (contraById.get(shift.varianceJournalEntryId) ?? null) : null;
 
         return NextResponse.json({
             ...shift,
             openingContraVoucher,
             closingContraVoucher,
+            varianceJournalEntry,
             ...summary,
             openingFloatPaise:   shift.openingFloatPaise.toString(),
             carryOverFloatPaise: shift.carryOverFloatPaise.toString(),

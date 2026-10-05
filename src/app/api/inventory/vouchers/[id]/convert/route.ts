@@ -10,6 +10,7 @@ import { businessTodayIso } from "@/shared/lib/format/formatDate";
 import { convertSourceError } from "@/modules/pos/lib/convertSource";
 import { readSettlement } from "@/shared/lib/accountancy/settlement";
 import { SERVICE_VOUCHER_TYPES } from "@/shared/lib/accountancy/serviceCharges";
+import { exactLineRate } from "@/modules/inventory/lib/voucherMath";
 
 // POST /api/inventory/vouchers/[id]/convert   body: { targetKind }
 //
@@ -83,19 +84,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             where:  { universalVoucherId: source.universalVoucherId ?? -1 },
             select: { productId: true, description: true, note: true, quantity: true, freeQty: true, rate: true, taxRate: true, mrpPaise: true, discountPct: true, discountAmt: true, amount: true },
         });
-
-        // The rate column keeps 2 decimals, but a line typed at a GST-inclusive
-        // price (60 × ₹20 at 18%) was totalled from the exact rate (₹16.949…):
-        // saved rate ₹16.95, saved amount ₹1,200. Recomputing from the rounded
-        // rate gives ₹1,200.06, and a few such lines put the created total paise
-        // off the source total — refused. Rebuild the exact rate from the saved
-        // amount instead (amount = (qty × rate − disc) × (1 + GST%)), so every
-        // line, and so the bill, comes out to the paisa the customer was quoted.
-        const exactRate = (l: (typeof lines)[number]) => {
-            const qty = toNumber(l.quantity);
-            if (!(qty > 0)) return toNumber(l.rate);
-            return (toNumber(l.amount) / (1 + toNumber(l.taxRate) / 100) + toNumber(l.discountAmt)) / qty;
-        };
 
         // Service lines + "+ Add Account" rows ride settlementJson, not the goods
         // lines. Leaving them behind made the created total fall short of the
@@ -174,7 +162,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                 note: l.note,
                 quantity:    toNumber(l.quantity),
                 freeQty:     l.freeQty != null ? toNumber(l.freeQty) : undefined,
-                rate:        exactRate(l),
+                rate:        exactLineRate(l),
                 taxRate:     toNumber(l.taxRate),
                 mrpPaise:    l.mrpPaise ?? undefined,
                 discountPct: l.discountPct != null ? Number(l.discountPct) : undefined,

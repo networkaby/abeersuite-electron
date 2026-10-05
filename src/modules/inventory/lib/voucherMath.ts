@@ -43,6 +43,20 @@ export function calcLineTotals(l: VoucherLineInput): {
     return { discountAmt: discAmt, taxAmount, amount };
 }
 
+/** The exact pre-tax rate a saved line was totalled from.
+ *
+ * The rate column keeps 2 decimals, but a line typed at a GST-inclusive price
+ * (60 × ₹20 at 18%) was totalled from the exact rate (₹16.949…): saved rate
+ * ₹16.95, saved amount ₹1,200. Recomputing from the rounded rate gives ₹1,200.06.
+ * Rebuilt from the saved amount instead (amount = (qty × rate − disc) × (1 + GST%)),
+ * so a line re-totalled on Convert or on an edit comes out to the paisa it was
+ * billed at. No quantity → the saved rate as it is. */
+export function exactLineRate(l: { quantity: unknown; rate: unknown; amount: unknown; taxRate: unknown; discountAmt?: unknown }): number {
+    const qty = Number(l.quantity);
+    if (!(qty > 0)) return Number(l.rate);
+    return (Number(l.amount) / (1 + Number(l.taxRate) / 100) + Number(l.discountAmt ?? 0)) / qty;
+}
+
 /** Compute voucher-level totals from computed lines.
  *
  * `chargesNet` is the signed sum of additional GL legs (the "+ Add Account"
