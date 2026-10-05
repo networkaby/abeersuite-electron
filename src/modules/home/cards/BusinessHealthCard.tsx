@@ -87,7 +87,7 @@ export default function BusinessHealthCard() {
                 </p>
             )}
 
-            <div className="mt-3 space-y-2">
+            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
                 {METRICS.map((m) => (
                     <MetricTile key={m.key} metric={m} points={points} failed={failed} />
                 ))}
@@ -124,6 +124,11 @@ function MetricTile({
     const hiIdx = values.length ? values.indexOf(Math.max(...values)) : -1;
     const loIdx = values.length ? values.indexOf(Math.min(...values)) : -1;
     const avg = values.length ? values.reduce((s, v) => s + v, 0) / values.length : null;
+    // A flat line (moved < 1% of its size) would print the same "₹9.42 L" on
+    // every tick — show exact rupees instead.
+    const span = values.length ? Math.max(...values) - Math.min(...values) : 0;
+    const flat = last != null && span < Math.abs(last) * 0.01;
+    const tick = (v: number) => (flat ? formatInr(v, 0) : short(v));
 
     // Each point carries its move from the previous sampled day, for the tooltip.
     const data = points?.map((p, i) => ({ ...p, prev: i > 0 ? p[metric.key] - points[i - 1][metric.key] : null }));
@@ -163,11 +168,11 @@ function MetricTile({
                             />
                             <YAxis
                                 domain={["auto", "auto"]}
-                                tickFormatter={(v) => short(Number(v))}
+                                tickFormatter={(v) => tick(Number(v))}
                                 tick={{ fontSize: 10 }}
                                 tickLine={false}
                                 axisLine={false}
-                                width={64}
+                                width={flat ? 78 : 64}
                             />
                             {first != null && (
                                 <ReferenceLine
@@ -211,7 +216,7 @@ function MetricTile({
             </div>
 
             {points && first != null && avg != null && (
-                <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px] sm:grid-cols-4">
+                <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px]">
                     <Stat label="Start" value={short(first)} />
                     <Stat label="Highest" value={short(values[hiIdx])} note={dayLabel(points[hiIdx].date)} />
                     <Stat label="Lowest" value={short(values[loIdx])} note={dayLabel(points[loIdx].date)} />

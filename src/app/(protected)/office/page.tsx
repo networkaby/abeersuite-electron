@@ -47,7 +47,9 @@ export default async function OfficePage() {
 
             <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
                 <MyDayCard userId={user.id} permissions={user.permissions} />
-                {canSeeBusinessHealth(user.permissions) && <BusinessHealthCard />}
+                {canSeeBusinessHealth(user.permissions) && (
+                    <div className="lg:col-span-2"><BusinessHealthCard /></div>
+                )}
             </div>
         </div>
         </ScrollArea>
