@@ -6,7 +6,7 @@ import { redirectIfPcWithoutCounter } from "@/shared/lib/auth/permissions";
 import SessionWrapper from "@/shared/components/SessionWrapper";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import MobileShell from "@/modules/mobile/components/MobileShell";
-import { PHONE_APP_HOME, PHONE_APP_THEME } from "@/shared/lib/device/phone";
+import { PHONE_APP_HOME, PHONE_APP_SIGN_IN, PHONE_APP_THEME } from "@/shared/lib/device/phone";
 
 export const metadata: Metadata = {
     title: "Staff",
@@ -40,7 +40,7 @@ export const viewport: Viewport = {
  */
 export default async function MobileLayout({ children }: { children: React.ReactNode }) {
     const session = await auth();
-    if (!session?.user) redirect(`/staff/login?callbackUrl=${PHONE_APP_HOME}`);
+    if (!session?.user) redirect(PHONE_APP_SIGN_IN);
     if ((session.user as { kind?: string }).kind === "customer") redirect("/portal");
     redirectIfPcWithoutCounter();
     const user = session.user as { name?: string | null; roleLabel?: string; permissions?: string[] };

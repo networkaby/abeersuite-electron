@@ -39,6 +39,14 @@ export const PHONE_APP_THEME = { light: "#eff4fb", dark: "#101725" } as const;
  *  since installing needs none (the app asks for the sign-in when first opened). */
 export const PHONE_APP_INSTALL = `${PHONE_APP_HOME}/install`;
 
+/** The app's own sign-in page — the staff sign-in form, served inside the app's PWA
+ *  scope. `/staff/login` is outside it, and an installed app leaving its scope makes
+ *  Chrome show an address bar with an ✕ over the screen. */
+export const PHONE_APP_LOGIN = `${PHONE_APP_HOME}/login`;
+
+/** Send a signed-out phone-app visitor to the app's sign-in, coming back to Home. */
+export const PHONE_APP_SIGN_IN = `${PHONE_APP_LOGIN}?callbackUrl=${PHONE_APP_HOME}`;
+
 export function isPhoneAppPath(pathname: string): boolean {
     return pathname === PHONE_APP_HOME || pathname.startsWith(`${PHONE_APP_HOME}/`);
 }

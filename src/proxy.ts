@@ -4,7 +4,7 @@ import { isLegalPath } from "@/shared/lib/legal/legalPaths";
 import { isStorefrontSlugPath } from "@/shared/lib/shop/storefrontSlugPath";
 import { RELAY_ACTIVE } from "@/shared/lib/counter/relayPolicy";
 import { canOpenPage, NO_ACCESS_HOME, NO_ACCESS_PARAM } from "@/shared/lib/auth/pageAccess";
-import { isPhoneAppPath, isPhoneRequest, PHONE_APP_HOME, PHONE_APP_INSTALL } from "@/shared/lib/device/phone";
+import { isPhoneAppPath, isPhoneRequest, PHONE_APP_HOME, PHONE_APP_INSTALL, PHONE_APP_LOGIN } from "@/shared/lib/device/phone";
 
 function isPublicPath(pathname: string): boolean {
     if (pathname === "/" || pathname === "/login") return true;
@@ -13,6 +13,7 @@ function isPublicPath(pathname: string): boolean {
     // The staff phone app's install page — the Downloads QR opens it on a phone that
     // is not signed in yet; installing needs no sign-in.
     if (pathname === PHONE_APP_INSTALL) return true;
+    if (pathname === PHONE_APP_LOGIN) return true;
     // Policy pages — Razorpay activation and Google OAuth verification fetch
     // these anonymously, so they must never redirect to a sign-in.
     if (isLegalPath(pathname)) return true;
@@ -96,7 +97,10 @@ const pageProxy = auth((req) => {
 
     if (!isAuthenticated) {
         if (!isPublicPath(pathname)) {
-            const dest = wantsStaffSignIn(pathname)
+            // The phone app signs in on its own page, inside its PWA scope.
+            const dest = isPhoneAppPath(pathname)
+                ? new URL(PHONE_APP_LOGIN, req.url)
+                : wantsStaffSignIn(pathname)
                 ? new URL("/staff/login", req.url)
                 : new URL("/login", req.url);
             dest.searchParams.set("callbackUrl", pathname + req.nextUrl.search);
@@ -105,7 +109,7 @@ const pageProxy = auth((req) => {
         return NextResponse.next();
     }
 
-    if (pathname === "/login" || pathname === "/staff/login") {
+    if (pathname === "/login" || pathname === "/staff/login" || pathname === PHONE_APP_LOGIN) {
         return NextResponse.redirect(staffHome(req));
     }
 
