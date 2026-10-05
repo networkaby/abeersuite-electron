@@ -19,5 +19,7 @@ export {
     adjustPoints,
     applyMilestones,
     liveBalance,
+    adjustSaleLoyaltyForEdit,
+    LoyaltyBalanceChangedError,
 } from "./applyLoyalty";
-export type { ApplySaleArgs, ReverseReturnArgs, RestoreAfterCancelArgs, MilestoneTier, AwardMilestonesArgs } from "./applyLoyalty";
+export type { ApplySaleArgs, ReverseReturnArgs, RestoreAfterCancelArgs, MilestoneTier, AwardMilestonesArgs, EditSaleLoyaltyArgs } from "./applyLoyalty";

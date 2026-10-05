@@ -44,6 +44,7 @@
     "recompute:caches": "tsx src/scripts/recompute-caches.ts",
     "backfill:receipt-allocations": "tsx src/scripts/backfill-online-receipt-allocations.ts",
     "backfill:voucher-branch": "tsx src/scripts/backfill-voucher-branch.ts",
+    "backfill:pos-promo": "tsx src/scripts/backfill-pos-promo-snapshots.ts",
     "repair:bill-links": "tsx src/scripts/repair-bill-links.ts",
     "reconcile:bill-links": "tsx src/scripts/reconcile-bill-links.ts",
     "verify:bill-links": "tsx src/scripts/verify-bill-links.ts",

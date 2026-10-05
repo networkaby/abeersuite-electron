@@ -23,7 +23,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ account
         const [wallet, lots, ledger] = await Promise.all([
             prisma.loyaltyAccount.findUnique({ where: { accountId } }),
             prisma.loyaltyLot.findMany({
-                where: { accountId, pointsRemaining: { gt: 0 }, ...(cutoff ? { earnedAt: { gt: cutoff } } : {}) },
+                // Owed points (a negative lot, see liveBalance) show too — they never expire.
+                where: {
+                    accountId,
+                    OR: [
+                        { pointsRemaining: { gt: 0 }, ...(cutoff ? { earnedAt: { gt: cutoff } } : {}) },
+                        { pointsRemaining: { lt: 0 } },
+                    ],
+                },
                 orderBy: { earnedAt: "asc" },
                 select: { id: true, pointsRemaining: true, pointsEarned: true, earnedAt: true },
             }),
@@ -44,7 +51,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ account
         // Each in-window lot's display expiry = earnedAt + expiryDays (null if expiry off).
         const lotsOut = lots.map((l) => ({
             ...l,
-            expiresAt: rates.expiryEnabled ? new Date(new Date(l.earnedAt).getTime() + rates.expiryDays * 86_400_000) : null,
+            expiresAt: rates.expiryEnabled && l.pointsRemaining > 0 ? new Date(new Date(l.earnedAt).getTime() + rates.expiryDays * 86_400_000) : null,
         }));
 
         return NextResponse.json({

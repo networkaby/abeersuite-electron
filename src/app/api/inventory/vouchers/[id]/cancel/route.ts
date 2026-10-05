@@ -2,12 +2,12 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
 import { requireAuth, userCanActOnVoucher } from "@/shared/lib/auth/permissions";
-import { applyLineBalances, toNumber } from "@/modules/accountancy/lib/balance";
+import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { reverseStockMovement, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { ensureCancelable, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
-import { reverseCouponRedemption, refundGiftCard } from "@/modules/coupons/lib";
+import { reverseCouponRedemption, refundGiftCard, netDrawsByCard } from "@/modules/coupons/lib";
 import { reverseLoyaltyForReturn, ratesFromConfig } from "@/modules/loyalty/lib";
 import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
@@ -117,11 +117,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                         select: { giftCardId: true },
                     });
                     const alreadyRefunded = new Set(refunded.map((r) => r.giftCardId));
-                    for (const draw of draws) {
-                        if (alreadyRefunded.has(draw.giftCardId)) continue;
-                        const amount = Math.abs(toNumber(draw.amount));   // REDEEM is stored negative
+                    // Net per card — an edited sale carries one REDEEM row per change.
+                    for (const [giftCardId, amount] of netDrawsByCard(draws)) {
+                        if (alreadyRefunded.has(giftCardId)) continue;
                         if (amount <= 0.005) continue;
-                        await refundGiftCard(tx, { giftCardId: draw.giftCardId, amount, universalVoucherId: spineId, createdById: userId });
+                        await refundGiftCard(tx, { giftCardId, amount, universalVoucherId: spineId, createdById: userId });
                     }
                 }
 

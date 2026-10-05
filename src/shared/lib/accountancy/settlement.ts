@@ -6,6 +6,7 @@
 // caller treats the JSON uniformly.
 
 import type { Prisma, PaymentMethod } from "@/generated/prisma/client";
+import type { LoyaltyRates } from "@/modules/loyalty/lib/loyaltyMath";
 
 /** One "Received In" tender row — a cash/bank/card/UPI/AR leg that settled the bill. */
 export type TenderInput = {
@@ -47,12 +48,26 @@ export type ChargeInput = {
     rate?:        number | null;
     taxRate?:     number | null;
 };
+/** The offers a POS sale was billed under, frozen on its sale day, so an edit
+ *  re-bills it at THAT day's terms and never today's. Only the facts that move
+ *  with time live here; what the bill actually used (points redeemed, gift card
+ *  drawn, coupon ₹) is read from its own charge / tender rows and the loyalty
+ *  ledger, so there is no second copy to go stale after an edit. */
+export type PromoSnapshot = {
+    /** Spend-tier % of cost applied on the sale day (0 when a coupon dropped it). */
+    tierDiscountPct: number;
+    /** Customer's spendable points just before the sale. */
+    availablePointsBeforeSale: number;
+    /** Loyalty programme rates on the sale day (null = loyalty off for this sale). */
+    loyaltyRates: LoyaltyRates | null;
+    couponCode: string | null;
+};
 
-export type Settlement = { tenders: TenderInput[]; charges: ChargeInput[] };
+export type Settlement = { tenders: TenderInput[]; charges: ChargeInput[]; promoSnapshot: PromoSnapshot | null };
 
 /** Parse `InvVoucher.settlementJson` into typed tender/charge arrays (empty when absent). */
 export function readSettlement(json: Prisma.JsonValue | null | undefined): Settlement {
-    if (!json || typeof json !== "object" || Array.isArray(json)) return { tenders: [], charges: [] };
+    if (!json || typeof json !== "object" || Array.isArray(json)) return { tenders: [], charges: [], promoSnapshot: null };
     const o = json as Record<string, unknown>;
     const tenders = Array.isArray(o.tenders)
         ? (o.tenders as unknown[]).map((t) => {
@@ -82,15 +97,21 @@ export function readSettlement(json: Prisma.JsonValue | null | undefined): Settl
             };
         })
         : [];
-    return { tenders, charges };
+    const promoSnapshot = o.promoSnapshot && typeof o.promoSnapshot === "object" && !Array.isArray(o.promoSnapshot)
+        ? (o.promoSnapshot as PromoSnapshot)
+        : null;
+    return { tenders, charges, promoSnapshot };
 }
 
-/** Build the `settlementJson` value to store on an InvVoucher. */
+/** Build the `settlementJson` value to store on an InvVoucher. A POS sale's
+ *  `promoSnapshot` rides along; every rewrite must pass the stored one back. */
 export function buildSettlementJson(
     tenders: TenderInput[],
     charges: ChargeInput[] = [],
+    promoSnapshot: PromoSnapshot | null = null,
 ): Prisma.InputJsonValue {
     return {
+        ...(promoSnapshot ? { promoSnapshot: promoSnapshot as unknown as Prisma.InputJsonObject } : {}),
         tenders: tenders.map((t) => ({
             accountId: t.accountId,
             amount:    Number(t.amount),

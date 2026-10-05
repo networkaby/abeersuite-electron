@@ -66,6 +66,42 @@ export async function redeemGiftCard(
     return newBal;
 }
 
+/// What a sale has drawn from each card, net — Σ −amount of its REDEEM rows. An
+/// edited sale carries one REDEEM row per change (see `adjustGiftCardDraw`), so
+/// every reader of a sale's draw sums them rather than reading the first row.
+export function netDrawsByCard(rows: { giftCardId: number; amount: Prisma.Decimal | number | string }[]): Map<number, number> {
+    const out = new Map<number, number>();
+    for (const r of rows) out.set(r.giftCardId, round2((out.get(r.giftCardId) ?? 0) - moneyNumber(r.amount)));
+    return out;
+}
+
+/// Change what an edited POS sale draws from its card by `delta` (₹; positive =
+/// draw more, negative = give some back). Recorded as one more REDEEM row on the
+/// sale's spine, signed like the first, so the sale's net draw stays the sum of
+/// its REDEEM rows and a later cancel or return gives back exactly that.
+export async function adjustGiftCardDraw(
+    tx: Tx, args: { giftCardId: number; delta: number; universalVoucherId: number; createdById: number },
+): Promise<void> {
+    const delta = round2(args.delta);
+    if (Math.abs(delta) <= 0.005) return;
+    if (delta > 0) {
+        await redeemGiftCard(tx, { giftCardId: args.giftCardId, amount: delta, universalVoucherId: args.universalVoucherId, createdById: args.createdById });
+        return;
+    }
+    const gc = await tx.giftCard.update({
+        where:  { id: args.giftCardId },
+        data:   { balance: { increment: -delta } },
+        select: { balance: true, status: true },
+    });
+    const newBal = round2(moneyNumber(gc.balance));
+    if (gc.status === "REDEEMED" && newBal > 0.005) {
+        await tx.giftCard.update({ where: { id: args.giftCardId }, data: { status: "ACTIVE" } });
+    }
+    await tx.giftCardTxn.create({
+        data: { giftCardId: args.giftCardId, type: "REDEEM", amount: -delta, universalVoucherId: args.universalVoucherId, balanceAfter: newBal, createdById: args.createdById },
+    });
+}
+
 /**
  * Rebuild `GiftCard.balance` from the signed `GiftCardTxn` ledger, and keep the one
  * status that follows the balance (ACTIVE ⇄ REDEEMED) in step.
@@ -120,11 +156,12 @@ export async function giftCardRefundableForSale(
     });
     if (draws.length === 0) return null;
 
-    // POS draws at most one card per sale; if that ever changes, the first is the
-    // one we can reason about, so refuse rather than guess.
-    if (draws.length > 1) return null;
+    // POS draws at most one card per sale (an edit adds REDEEM rows on the SAME
+    // card); if that ever changes, refuse rather than guess.
+    const byCard = netDrawsByCard(draws);
+    if (byCard.size > 1) return null;
     const draw = draws[0];
-    const drawn = round2(Math.abs(moneyNumber(draw.amount)));
+    const drawn = byCard.get(draw.giftCardId) ?? 0;
 
     const returns = await tx.voucherDetail.findMany({
         where:  { refVoucherId: args.saleDetailId, universalVoucher: { type: "SALE_RETURN" } },

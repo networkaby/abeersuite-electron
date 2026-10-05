@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { formatInr, parseDecimalInput, parseDigitsInput } from "@/shared/lib/format";
 import { type Snapshot, type CartLine, type CouponHit, type OnTopHit } from "@/modules/pos/lib/posDraftTypes";
 import { type TierResult } from "@/shared/lib/pricing";
+import type { EditBill } from "@/modules/pos/hooks/usePosBilling";
 
 type GiftCardState = { id: number; code: string; balance: number };
 
@@ -86,6 +87,9 @@ export type PosBillSummaryProps = {
     gcBusy: boolean;
     giftCardApplied: number;
     payableTotal: number;
+    /** A posted sale being re-saved: its own coupon and gift card show as they
+     *  are, with no boxes to add new ones (see usePosBilling `editBill`). */
+    editBill?: Pick<EditBill, "coupon" | "gift"> | null;
 
     // Adjustments (shipping / round-off) — always visible, no toggle. Charges
     // moved out to the cart area (PosScreenShell).
@@ -118,7 +122,7 @@ export function PosBillSummary({
     couponBlockedLoyalty, couponCodeStr, setCouponCodeStr, applyCoupon, couponBusy,
     appliedFree, autoFree, clearFreeCoupon,
     giftCard, setGiftCard, giftCardCodeStr, setGiftCardCodeStr, applyGiftCard, gcBusy,
-    giftCardApplied, payableTotal,
+    giftCardApplied, payableTotal, editBill,
     shippingAmtStr, setShippingAmtStr,
     autoRoundOff, roundOffStr, setRoundOffStr, roundOffManuallyEdited,
     setRoundOffManuallyEdited,
@@ -245,7 +249,25 @@ export function PosBillSummary({
                 Code entry; the server validates + owns the ₹ value.
                 A non-stackable coupon replaces the tier discount and
                 blocks loyalty (shown struck-through above). */}
-                {snapshot && (
+                {snapshot && editBill && (editBill.coupon || editBill.gift) && (
+                    <div className="flex flex-wrap items-center gap-2 text-xs" title="Kept from the sale — an edit adds no new coupon or gift card">
+                        {editBill.coupon && (
+                            <span className="inline-flex items-center gap-1.5">
+                                <Tag size={12} className="shrink-0 text-muted-foreground" />
+                                <span className="rounded bg-rose-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">{editBill.coupon.code}</span>
+                                <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">− {formatInr(couponRupees)}</span>
+                            </span>
+                        )}
+                        {editBill.gift && (
+                            <span className="inline-flex items-center gap-1.5">
+                                <CreditCard size={12} className="shrink-0 text-muted-foreground" />
+                                <span className="rounded bg-teal-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-teal-700 dark:bg-teal-500/15 dark:text-teal-300">{editBill.gift.code ?? "Gift card"}</span>
+                                <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">− {formatInr(giftCardApplied)}</span>
+                            </span>
+                        )}
+                    </div>
+                )}
+                {snapshot && !editBill && (
                     <div className="flex items-center gap-2 text-xs">
                         <Tag size={12} className="shrink-0 text-muted-foreground" />
                         {appliedCoupon ? (
@@ -331,7 +353,7 @@ export function PosBillSummary({
                 {/* ── Gift card (payment tender) ─────────────────────
                 Draws min(balance, bill) toward the total; the cashier
                 collects the remaining "Pay" amount in cash/UPI. */}
-                {snapshot && (
+                {snapshot && !editBill && (
                     <div className="flex items-center gap-2 text-xs">
                         <CreditCard size={12} className="shrink-0 text-muted-foreground" />
                         {giftCard ? (

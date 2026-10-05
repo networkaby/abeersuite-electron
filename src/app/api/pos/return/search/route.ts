@@ -122,7 +122,8 @@ export async function GET(req: NextRequest) {
             const amount = Number(t.amount);
             const entry = cardBySaleSpine.get(saleSpine)
                 ?? { giftCardId: t.giftCardId, code: t.giftCard.code, drawn: 0, refunded: 0 };
-            if (t.type === "REDEEM") { entry.giftCardId = t.giftCardId; entry.code = t.giftCard.code; entry.drawn += Math.abs(amount); }
+            // REDEEM is signed (−draw); an edited sale adds one row per change, so net them.
+            if (t.type === "REDEEM") { entry.giftCardId = t.giftCardId; entry.code = t.giftCard.code; entry.drawn -= amount; }
             else                     { entry.refunded += amount; }
             cardBySaleSpine.set(saleSpine, entry);
         }

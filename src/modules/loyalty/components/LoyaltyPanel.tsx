@@ -97,8 +97,10 @@ export function LoyaltyPanel({ accountId, canManage = false }: { accountId: numb
                     <div className="text-sm font-medium">Active points (oldest expire first)</div>
                     <div className="flex flex-wrap gap-2">
                         {wallet.lots.map((l) => (
-                            <Badge key={l.id} variant="outline" className="text-[11px]">
-                                {l.pointsRemaining} pts · {l.expiresAt ? `expires ${fmtDate(l.expiresAt)}` : "no expiry"}
+                            <Badge key={l.id} variant={l.pointsRemaining < 0 ? "destructive" : "outline"} className="text-[11px]">
+                                {l.pointsRemaining < 0
+                                    ? `${-l.pointsRemaining} pts owed · paid from the next points earned`
+                                    : `${l.pointsRemaining} pts · ${l.expiresAt ? `expires ${fmtDate(l.expiresAt)}` : "no expiry"}`}
                             </Badge>
                         ))}
                     </div>

@@ -1012,7 +1012,13 @@ export async function POST(req: Request) {
                     // 5D-2: creator lives on the spine (engineCreateSpine set it).
                     // G4b: tender + charge INPUT → settlementJson (the spine's
                     // role=TENDER/CHARGE GL lines are emitted from it on POST).
-                    settlementJson: buildSettlementJson(tenderPayload, allCharges),
+                    // The offers this bill was rung under, frozen for an edit.
+                    settlementJson: buildSettlementJson(tenderPayload, allCharges, {
+                        tierDiscountPct: tierDiscountAfterCoupon > 0 ? body.discountPct : 0,
+                        availablePointsBeforeSale: loyaltyEnabled ? loyaltyBalance : 0,
+                        loyaltyRates: loyaltyEnabled ? loyaltyRates : null,
+                        couponCode: couponCharge ? (body.couponCode?.trim() || "auto") : null,
+                    }),
                 },
             });
             // Phase 5 5C: goods lines hang off the spine.

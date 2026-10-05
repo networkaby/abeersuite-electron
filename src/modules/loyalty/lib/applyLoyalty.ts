@@ -27,27 +27,62 @@ async function ensureAccount(tx: Tx, accountId: number): Promise<void> {
     await tx.loyaltyAccount.upsert({ where: { accountId }, create: { accountId }, update: {} });
 }
 
-/// Live spendable balance = Σ pointsRemaining of in-window lots. `rates` decides
-/// the window (or no window when expiry is disabled). Exposed for the routes.
+/// Live spendable balance = Σ pointsRemaining of in-window lots, less any owed
+/// points. `rates` decides the window (or no window when expiry is disabled).
+/// Exposed for the routes.
+///
+/// Owed points are a lot with a NEGATIVE pointsRemaining — written when an edited
+/// bill takes back points the customer has already spent (`adjustSaleLoyaltyForEdit`).
+/// They never expire, so the debt cannot lapse with the window, and the next
+/// points the customer earns pay them off first (`addLot`). A balance can
+/// therefore be below zero; nothing redeems while it is.
 export async function liveBalance(tx: Tx, accountId: number, rates: LoyaltyRates): Promise<number> {
     const cutoff = expiryCutoff(new Date(), rates);
     const agg = await tx.loyaltyLot.aggregate({
-        where: { accountId, pointsRemaining: { gt: 0 }, ...(cutoff ? { earnedAt: { gt: cutoff } } : {}) },
+        where: {
+            accountId,
+            OR: [
+                { pointsRemaining: { gt: 0 }, ...(cutoff ? { earnedAt: { gt: cutoff } } : {}) },
+                { pointsRemaining: { lt: 0 } },
+            ],
+        },
         _sum: { pointsRemaining: true },
     });
     return agg._sum.pointsRemaining ?? 0;
 }
 
+/// Put `points` against the customer's owed points, oldest first. Returns what is
+/// left over for a lot to keep.
+async function payOffOwed(tx: Tx, accountId: number, points: number): Promise<number> {
+    if (points <= 0) return points;
+    const owed = await tx.loyaltyLot.findMany({
+        where: { accountId, pointsRemaining: { lt: 0 } },
+        orderBy: [{ earnedAt: "asc" }, { id: "asc" }],
+        select: { id: true, pointsRemaining: true },
+    });
+    let left = points;
+    for (const lot of owed) {
+        if (left <= 0) break;
+        const pay = Math.min(left, -lot.pointsRemaining);
+        await tx.loyaltyLot.update({ where: { id: lot.id }, data: { pointsRemaining: lot.pointsRemaining + pay } });
+        left -= pay;
+    }
+    return left;
+}
+
+/// A new lot of `points`. Owed points are paid off first, so the lot keeps only
+/// what is left (`pointsEarned` still records the whole grant).
 async function addLot(
     tx: Tx,
     args: { accountId: number; universalVoucherId: number | null; points: number; earnedAt: Date },
 ): Promise<void> {
+    const remaining = await payOffOwed(tx, args.accountId, args.points);
     await tx.loyaltyLot.create({
         data: {
             accountId: args.accountId,
             universalVoucherId: args.universalVoucherId,
             pointsEarned: args.points,
-            pointsRemaining: args.points,
+            pointsRemaining: remaining,
             earnedAt: args.earnedAt,
         },
     });
@@ -344,6 +379,115 @@ export async function restoreLoyaltyAfterCancel(
     }
 
     return { pointsClawedBack, pointsRestored, newBalance: await liveBalance(tx, args.accountId, args.rates) };
+}
+
+export type EditSaleLoyaltyArgs = {
+    accountId: number;
+    /// The edited sale's spine — its ledger rows and earn lot hang off it.
+    universalVoucherId: number;
+    /// Points this bill redeems / earns now, against what it did before the edit.
+    redeemedBefore: number;
+    redeemedNow: number;
+    earnedBefore: number;
+    earnedNow: number;
+    rates: LoyaltyRates;
+    createdById: number;
+};
+
+/// Move the customer's points by what an edit changed on a POS sale.
+///
+/// The rows land on the sale's own spine with the sale's own reasons
+/// (REDEEM_SALE / EARN_SALE), so every reader that nets a sale's loyalty —
+/// returns, cancel — sees what the bill redeems and earns AFTER the edit.
+///
+///   • More redeemed → taken from the oldest in-window points. Fewer → given back
+///     as a fresh lot (which pays off owed points first).
+///   • More earned → added to the bill's own earn lot. Fewer → taken from the
+///     bill's earn lot first, then the customer's other points, and whatever the
+///     customer has already spent becomes owed points (a negative lot).
+export async function adjustSaleLoyaltyForEdit(tx: Tx, args: EditSaleLoyaltyArgs): Promise<void> {
+    const redeemDelta = args.redeemedNow - args.redeemedBefore;
+    const earnDelta = args.earnedNow - args.earnedBefore;
+    if (redeemDelta === 0 && earnDelta === 0) return;
+    await ensureAccount(tx, args.accountId);
+    const cutoff = expiryCutoff(new Date(), args.rates);
+    const note = "Bill edited";
+
+    if (redeemDelta > 0) {
+        const taken = await consumeLotsFIFO(tx, args.accountId, redeemDelta, cutoff);
+        if (taken < redeemDelta) throw new LoyaltyBalanceChangedError();
+    } else if (redeemDelta < 0) {
+        await addLot(tx, { accountId: args.accountId, universalVoucherId: null, points: -redeemDelta, earnedAt: new Date() });
+    }
+    if (redeemDelta !== 0) {
+        await postMovement(tx, {
+            accountId: args.accountId,
+            universalVoucherId: args.universalVoucherId,
+            delta: -redeemDelta,
+            reason: "REDEEM_SALE",
+            note,
+            createdById: args.createdById,
+            counters: { totalRedeemed: { increment: redeemDelta } },
+            rates: args.rates,
+        });
+    }
+
+    if (earnDelta !== 0) {
+        // The bill's earn lot — the earliest on its spine, the same pick returns
+        // and cancel make.
+        const lot = await tx.loyaltyLot.findFirst({
+            where: { accountId: args.accountId, universalVoucherId: args.universalVoucherId, pointsEarned: { gt: 0 } },
+            orderBy: { id: "asc" },
+            select: { id: true, pointsEarned: true, pointsRemaining: true },
+        });
+        if (earnDelta > 0) {
+            if (lot) {
+                const keep = await payOffOwed(tx, args.accountId, earnDelta);
+                await tx.loyaltyLot.update({
+                    where: { id: lot.id },
+                    data: { pointsEarned: lot.pointsEarned + earnDelta, pointsRemaining: lot.pointsRemaining + keep },
+                });
+            } else {
+                await addLot(tx, { accountId: args.accountId, universalVoucherId: args.universalVoucherId, points: earnDelta, earnedAt: new Date() });
+            }
+        } else {
+            const take = -earnDelta;
+            const fromLot = Math.min(take, Math.max(0, lot?.pointsRemaining ?? 0));
+            if (lot) {
+                await tx.loyaltyLot.update({
+                    where: { id: lot.id },
+                    data: { pointsEarned: Math.max(0, lot.pointsEarned - take), pointsRemaining: lot.pointsRemaining - fromLot },
+                });
+            }
+            const fromOthers = await consumeLotsFIFO(tx, args.accountId, take - fromLot, cutoff);
+            const owed = take - fromLot - fromOthers;
+            if (owed > 0) {
+                await tx.loyaltyLot.create({
+                    data: { accountId: args.accountId, universalVoucherId: args.universalVoucherId, pointsEarned: 0, pointsRemaining: -owed, earnedAt: new Date() },
+                });
+            }
+        }
+        await postMovement(tx, {
+            accountId: args.accountId,
+            universalVoucherId: args.universalVoucherId,
+            delta: earnDelta,
+            reason: "EARN_SALE",
+            note: earnDelta < 0 ? `${note} — ${-earnDelta} earned points taken back` : note,
+            createdById: args.createdById,
+            counters: { totalEarned: { increment: earnDelta } },
+            rates: args.rates,
+        });
+    }
+}
+
+/// The points an edit wants to redeem are no longer there — spent on another bill
+/// between the cashier opening the edit and saving it.
+export class LoyaltyBalanceChangedError extends Error {
+    readonly code = "LOYALTY_BALANCE_CHANGED";
+    constructor(message = "The customer's loyalty points changed — reopen the bill and try again.") {
+        super(message);
+        this.name = "LoyaltyBalanceChangedError";
+    }
 }
 
 /// A milestone tier, narrowed to what the awarder needs.

@@ -572,6 +572,7 @@ export async function mergeParty(
                 data:  { settlementJson: buildSettlementJson(
                     s.tenders.map((x) => x.accountId === loserAccountId ? { ...x, accountId: winnerAccountId } : x),
                     s.charges.map((x) => x.accountId === loserAccountId ? { ...x, accountId: winnerAccountId } : x),
+                    s.promoSnapshot,
                 ) },
             });
         }

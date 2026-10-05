@@ -638,6 +638,7 @@ export function PosScreenShell({
                                 gcBusy={b.gcBusy}
                                 giftCardApplied={b.giftCardApplied}
                                 payableTotal={b.payableTotal}
+                                editBill={b.editBill}
                                 shippingAmtStr={b.shippingAmtStr}
                                 setShippingAmtStr={b.setShippingAmtStr}
                                 roundOff={b.roundOff}

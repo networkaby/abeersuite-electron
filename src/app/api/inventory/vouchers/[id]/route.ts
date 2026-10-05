@@ -16,16 +16,20 @@ import { GlBuildError, tenderCoverageComplaint, tenderPaisaDrift } from "@/modul
 import { Prisma } from "@/generated/prisma/client";
 import { buildPartyJson, readPartyName, readPartyPhone, readPartyAddress } from "@/shared/lib/accountancy/partySnapshot";
 import { resolvePartyAccountId } from "@/shared/lib/parties/partyLinkServer";
-import { readSettlement, buildSettlementJson } from "@/shared/lib/accountancy/settlement";
+import { readSettlement, buildSettlementJson, type TenderInput } from "@/shared/lib/accountancy/settlement";
 import { resolveServiceCharges, chargesNetTotal, SERVICE_VOUCHER_TYPES } from "@/shared/lib/accountancy/serviceCharges";
 import { assertVoucherDate } from "@/shared/lib/accountancy/booksPeriodServer";
 import { cleanLineNote } from "@/shared/lib/print/lineDescription";
-import { resolveCounterPayments, isGiftCardTender, type CounterPayment } from "@/modules/pos/lib/counterTenders";
+import { loadPosEditContext, planRedemption, planSettlement, applyPosEdit, maxRedeemOnEdit, isLoyaltyCharge, type PosEditInput, type PosEditPlan } from "@/modules/pos/lib/posSaleEdit";
+import { LoyaltyBalanceChangedError } from "@/modules/loyalty/lib";
+import { GiftCardBalanceChangedError } from "@/modules/coupons/lib";
 
 type Params = { params: Promise<{ id: string }> };
 
 // GET /api/inventory/vouchers/[id]
-export async function GET(_req: Request, { params }: Params) {
+//   ?forEdit=1 on a POS sale adds `posCounter` + `posEdit` — what the counter's
+//   Update Sale starts from. Left off for a plain view, which needs neither.
+export async function GET(req: Request, { params }: Params) {
     const { response } = await requireAuth();
     if (response) return response;
 
@@ -73,10 +77,11 @@ export async function GET(_req: Request, { params }: Params) {
         ? await prisma.user.findUnique({ where: { id: voucher.universalVoucher.createdById }, select: { name: true } })
         : null;
 
-    // A POS sale's own counter — its till + payment accounts — so an edit can
-    // re-take the payment against the counter the sale was rung on, whoever
-    // edits it and wherever (PATCH `posPayments`).
-    const posShiftId = voucher.universalVoucher?.type === "POS" ? voucher.universalVoucher.sourceShiftId : null;
+    // A POS sale opened for Update Sale: its own counter — till + payment
+    // accounts — so the payment is re-taken where the sale was rung, and what
+    // the edit may use (sale-day offers, points, gift card; see posSaleEdit.ts).
+    const forPosEdit = voucher.universalVoucher?.type === "POS" && new URL(req.url).searchParams.get("forEdit") === "1";
+    const posShiftId = forPosEdit ? voucher.universalVoucher?.sourceShiftId ?? null : null;
     const posCounter = posShiftId == null ? null : (await prisma.posShift.findUnique({
         where:  { id: posShiftId },
         select: {
@@ -92,6 +97,20 @@ export async function GET(_req: Request, { params }: Params) {
             },
         },
     }))?.counter ?? null;
+    const posCtx = forPosEdit ? await loadPosEditContext(prisma, {
+        settlementJson:     voucher.settlementJson,
+        discountPct:        voucher.discountPct,
+        universalVoucherId: voucher.universalVoucherId,
+        partyAccountId:     voucher.universalVoucher?.partyAccountId ?? null,
+    }) : null;
+    const posEdit = posCtx ? {
+        promo:            posCtx.promo,
+        redeemedBefore:   posCtx.used.redeemed,
+        maxRedeem:        maxRedeemOnEdit(posCtx),
+        giftCard:         posCtx.used.giftUsed > 0
+            ? { code: posCtx.giftCard?.code ?? null, usedBefore: posCtx.used.giftUsed, availableNow: posCtx.giftCard?.availableNow ?? 0 }
+            : null,
+    } : null;
 
     // Derive party display fields from the frozen snapshot so the detail page +
     // form edit-load keep reading partyName / partyPhone / partyAddress.
@@ -122,6 +141,7 @@ export async function GET(_req: Request, { params }: Params) {
         tenders:      settlement.tenders.map(withAccount),
         charges:      settlement.charges.map(withAccount),
         posCounter,
+        posEdit,
         partyName:    readPartyName(voucher.partyJson),
         partyPhone:   readPartyPhone(voucher.partyJson),
         partyAddress: readPartyAddress(voucher.partyJson),
@@ -201,7 +221,7 @@ export async function PATCH(req: Request, { params }: Params) {
         charges,
         services,
         tenders: bodyTenders,
-        posPayments,
+        posEdit,
     } = body as {
         date?:             string;
         description?:      string;
@@ -266,10 +286,12 @@ export async function PATCH(req: Request, { params }: Params) {
             method?:   "CASH" | "BANK_TRANSFER" | "CARD" | "CHEQUE" | "MOBILE_PAYMENT" | "OTHER";
             reference?: string;
         }[];
-        /// POS sale only — the checkout's payments re-taken on an edit, in the
-        /// till's own shape (paymentAccountId null = cash). Resolved below
-        /// against the sale's OWN counter into `tenders`; never sent with them.
-        posPayments?: CounterPayment[];
+        /// POS sale re-saved from the counter (Update Sale): the payment as
+        /// re-taken at checkout, in the till's own shape (paymentAccountId null =
+        /// cash), and the points the bill now redeems. Never sent with `tenders`
+        /// or `discountAmt` — the level discount rides each line, as on the sale.
+        /// See posSaleEdit.ts.
+        posEdit?: PosEditInput;
     };
 
     const isPhysicalStock = existing.universalVoucher?.type === "PHYSICAL_STOCK";
@@ -293,12 +315,36 @@ export async function PATCH(req: Request, { params }: Params) {
     // service rows wholesale — the form sends every one it is showing.
     const existingCharges = readSettlement(existing.settlementJson).charges;
     const chargesTouched = charges !== undefined || services !== undefined;
-    const effectiveCharges = chargesTouched
+    let effectiveCharges = chargesTouched
         ? [
             ...(charges !== undefined ? charges : existingCharges.filter((c) => c.serviceId == null)),
             ...(services !== undefined ? resolvedServices.charges : existingCharges.filter((c) => c.serviceId != null)),
         ]
         : existingCharges;
+
+    // ── POS sale re-saved from the counter ────────────────────────────────
+    // Re-billed on its sale day's terms; the loyalty row is rebuilt here from
+    // the points it redeems now (never taken from the browser).
+    const posCtx = posEdit !== undefined
+        ? (voucherType === "POS" && lines && charges !== undefined
+            ? await loadPosEditContext(prisma, {
+                settlementJson:     existing.settlementJson,
+                discountPct:        existing.discountPct,
+                universalVoucherId: existing.universalVoucherId,
+                partyAccountId:     existing.universalVoucher?.partyAccountId ?? null,
+            })
+            : null)
+        : undefined;
+    if (posCtx === null) {
+        return NextResponse.json({ error: "Only a POS sale, with its items and charges, takes a counter edit." }, { status: 400 });
+    }
+    const posRedeem = posCtx ? planRedemption(posCtx, posEdit!) : null;
+    if (posRedeem && "error" in posRedeem) {
+        return NextResponse.json({ error: posRedeem.error, code: posRedeem.code }, { status: posRedeem.status });
+    }
+    if (posRedeem) {
+        effectiveCharges = [...effectiveCharges.filter((c) => !isLoyaltyCharge(c)), ...(posRedeem.row ? [posRedeem.row] : [])];
+    }
 
     // Preserve the sale's original MRP/barcode snapshots across an edit even if
     // the client omits them on a partial save. This keeps the ladder/receipt
@@ -306,7 +352,7 @@ export async function PATCH(req: Request, { params }: Params) {
     const existingLineSnapshot = lines?.length
         ? await prisma.voucherInventoryLine.findMany({
             where: { universalVoucherId: existing.universalVoucherId ?? -1 },
-            select: { productId: true, mrpPaise: true, savedSalePricePaise: true },
+            select: { productId: true, mrpPaise: true, savedSalePricePaise: true, quantity: true, rate: true, discountAmt: true },
         })
         : [];
     const existingLineByProduct = new Map(existingLineSnapshot.map((l) => [l.productId, l]));
@@ -366,62 +412,59 @@ export async function PATCH(req: Request, { params }: Params) {
         // of the total while leaving it in settlementJson, so the re-posted JE
         // and the payment rows disagreed by exactly the charge.
         const chargesNet = chargesNetTotal(effectiveCharges);
-        // ── Bill-level discount → subtracted AFTER tax ──────────────────────
-        // Same treatment as POST /api/inventory/vouchers (see the note there):
-        // a LINE discount reduces the taxable value, the HEADER discount comes
-        // off the tax-inclusive bottom line. Clamped so an over-typed discount
-        // can't drive totalAmount negative.
-        const lineSubtotal = computedLines.reduce((s, l) => s + l.amount, 0);
-        const requested    = discountAmt ?? (existing.discountAmt != null ? Number(existing.discountAmt) : 0);
-        billDiscIncl = round2(Math.min(Math.max(0, requested), lineSubtotal));
-        totals = calcVoucherTotals(
-            computedLines,
-            shippingAmt ?? Number(existing.shippingAmt),
-            billDiscIncl,
-            roundOff    ?? Number(existing.roundOff),
-            chargesNet,
-        );
+        if (posCtx) {
+            // ── POS: the level discount rides each line, BEFORE tax ──────────
+            // Stored exactly as /api/pos/sale stores it: lines net of their
+            // discount (GST on the reduced value), the discount kept as the
+            // voucher's discountAmt for the "Discount Allowed" leg, and the
+            // subtotal gross of it so the entry still balances. Taking the same
+            // discount off AFTER tax (below) would add its GST back to the bill.
+            const lineDiscount = round2(computedLines.reduce((s, l) => s + l.discountAmt, 0));
+            const net = calcVoucherTotals(computedLines, shippingAmt ?? Number(existing.shippingAmt), 0, roundOff ?? Number(existing.roundOff), chargesNet);
+            if (net.totalAmount < 0) {
+                return NextResponse.json({ error: "Loyalty points cannot come to more than the bill." }, { status: 422 });
+            }
+            totals = { ...net, subtotal: round2(net.subtotal + lineDiscount) };
+            billDiscIncl = lineDiscount;
+        } else {
+            // ── Bill-level discount → subtracted AFTER tax ──────────────────────
+            // Same treatment as POST /api/inventory/vouchers (see the note there):
+            // a LINE discount reduces the taxable value, the HEADER discount comes
+            // off the tax-inclusive bottom line. Clamped so an over-typed discount
+            // can't drive totalAmount negative.
+            const lineSubtotal = computedLines.reduce((s, l) => s + l.amount, 0);
+            const requested    = discountAmt ?? (existing.discountAmt != null ? Number(existing.discountAmt) : 0);
+            billDiscIncl = round2(Math.min(Math.max(0, requested), lineSubtotal));
+            totals = calcVoucherTotals(
+                computedLines,
+                shippingAmt ?? Number(existing.shippingAmt),
+                billDiscIncl,
+                roundOff    ?? Number(existing.roundOff),
+                chargesNet,
+            );
+        }
     }
 
-    // ── POS sale re-saved with its payments re-taken ─────────────────────
-    // The same routing a fresh sale gets (resolveCounterPayments): cash → the
-    // till of the counter the sale was RUNG on (its shift), UPI / card → that
-    // counter's account ledgers. A gift card drawn at the sale stays as it was;
-    // whatever is not collected rides the customer's ledger (on credit). The
-    // re-post then moves the till and the shift's figures like any sale.
-    let tenders = bodyTenders;
-    if (posPayments !== undefined) {
-        if (existing.universalVoucher?.type !== "POS") {
-            return NextResponse.json({ error: "Only a POS sale takes counter payments." }, { status: 400 });
-        }
-        const shiftId = existing.universalVoucher.sourceShiftId;
-        const counter = shiftId == null ? null : (await prisma.posShift.findUnique({
-            where:  { id: shiftId },
-            select: { counter: { select: { tillAccountId: true, paymentAccounts: { select: { id: true, channel: true, accountId: true } } } } },
-        }))?.counter;
-        if (!counter) {
-            return NextResponse.json({ error: "This sale has no counter shift, so its payments can't be re-taken here." }, { status: 422 });
-        }
-        const resolved = resolveCounterPayments(posPayments, counter.tillAccountId, new Map(counter.paymentAccounts.map((a) => [a.id, a])));
-        if (!resolved) {
-            return NextResponse.json({ error: "That payment account isn't on the counter this sale was rung on.", code: "PAYMENT_METHOD_NOT_MAPPED" }, { status: 422 });
-        }
-        const keptGiftCards = readSettlement(existing.settlementJson).tenders.filter((t) => isGiftCardTender(t));
-        const billTotal = totals?.totalAmount ?? Number(existing.totalAmount);
-        const paid = [...resolved, ...keptGiftCards].reduce((s, t) => s + t.amount, 0);
-        const onCredit = round2(billTotal - paid);
-        if (onCredit < -0.01) {
-            return NextResponse.json({ error: `Payments (₹${paid.toFixed(2)}) are more than the bill (₹${billTotal.toFixed(2)}). Return the change.` }, { status: 422 });
-        }
-        const partyAccountId = existing.universalVoucher.partyAccountId;
-        if (onCredit > 0.005 && partyAccountId == null) {
-            return NextResponse.json({ error: "Part of this bill is unpaid, but the sale has no customer account to carry it." }, { status: 422 });
-        }
-        tenders = [
-            ...resolved,
-            ...keptGiftCards.map((t) => ({ accountId: t.accountId, amount: t.amount, method: t.method ?? undefined, reference: t.reference ?? undefined })),
-            ...(onCredit > 0.005 && partyAccountId != null ? [{ accountId: partyAccountId, amount: onCredit }] : []),
-        ];
+    // ── POS sale: payment, gift card and points earned, on the new total ──
+    let tenders: TenderInput[] | undefined = bodyTenders;
+    let posPlan: PosEditPlan | null = null;
+    if (posCtx && posRedeem && computedLines) {
+        const plan = await planSettlement(prisma, posCtx, {
+            input:           posEdit!,
+            redeemedNow:     posRedeem.redeemed,
+            redeemRupeesNow: posRedeem.row ? Math.abs(posRedeem.row.amount) : 0,
+            total:           totals?.totalAmount ?? Number(existing.totalAmount),
+            sourceShiftId:   existing.universalVoucher?.sourceShiftId ?? null,
+            partyAccountId:  existing.universalVoucher?.partyAccountId ?? null,
+            editorUserId:    user!.id,
+            oldLines:        existingLineSnapshot.map((l) => ({ productId: l.productId, quantity: Number(l.quantity), rate: Number(l.rate), discountAmt: Number(l.discountAmt) })),
+            newLines:        computedLines.map((l) => ({ productId: l.productId, quantity: l.quantity, rate: l.rate, discountAmt: l.discountAmt })),
+            oldLineDiscount: existing.discountAmt != null ? Number(existing.discountAmt) : 0,
+            newLineDiscount: billDiscIncl,
+        });
+        if ("error" in plan) return NextResponse.json({ error: plan.error, code: plan.code }, { status: plan.status });
+        posPlan = plan;
+        tenders = plan.tenders;
     }
 
     // The payment rows must still add up AFTER the edit. This PATCH may change
@@ -518,6 +561,9 @@ export async function PATCH(req: Request, { params }: Params) {
                 ? buildSettlementJson(
                     tenders !== undefined ? tenders : existingSettlement.tenders,
                     effectiveCharges,
+                    // A POS sale keeps its sale-day offers — made up once for a
+                    // sale saved before they were recorded (posSaleEdit.ts).
+                    posPlan?.promo ?? existingSettlement.promoSnapshot,
                 )
                 : undefined;
             // The (possibly updated) party's ledger, resolved through any
@@ -551,7 +597,7 @@ export async function PATCH(req: Request, { params }: Params) {
                     ...(discountPct      !== undefined ? { discountPct }     : {}),
                     // Clamped to the bill when the lines were recomputed, so an
                     // over-discount can't drive totalAmount negative.
-                    ...(discountAmt      !== undefined
+                    ...(discountAmt      !== undefined || posCtx
                         ? { discountAmt: computedLines ? (billDiscIncl > 0 ? billDiscIncl : null) : discountAmt }
                         : {}),
                     ...(totals ? totals : {}),
@@ -595,6 +641,16 @@ export async function PATCH(req: Request, { params }: Params) {
                         taxAmount:   l.taxAmount,
                         amount:      l.amount,
                     })),
+                });
+            }
+
+            // The points and gift card follow what the edit changed on the bill.
+            if (posPlan && existing.universalVoucherId != null) {
+                await applyPosEdit(tx, posPlan, {
+                    universalVoucherId: existing.universalVoucherId,
+                    partyAccountId:     existing.universalVoucher?.partyAccountId ?? null,
+                    rates:              posCtx?.configRates ?? null,
+                    createdById:        userId,
                 });
             }
 
@@ -676,6 +732,10 @@ export async function PATCH(req: Request, { params }: Params) {
         // A voucher whose ledger entry cannot be built is the user's to fix (the
         // payment rows do not add up), not a server fault — show it as it is.
         if (e instanceof GlBuildError) return NextResponse.json({ error: e.message }, { status: 422 });
+        // Points or card spent elsewhere between opening the edit and saving it.
+        if (e instanceof LoyaltyBalanceChangedError || e instanceof GiftCardBalanceChangedError) {
+            return NextResponse.json({ error: e.message, code: e.code }, { status: 409 });
+        }
         return handleApiError(e, "Failed to update voucher");
     }
 }
