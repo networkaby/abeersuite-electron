@@ -82,6 +82,8 @@ type ShiftDetail = {
     tillMovementPaise:   string;
     dropsPaise:          string;
     runningExpectedPaise: string;
+    /** Closed shift: till moved by its vouchers since the close, net of corrections (paise; "0" = matches). */
+    changedAfterClosePaise: string | null;
     notes: string | null;
     openingContraVoucher: { id: number; reference: string; date: string } | null;
     closingContraVoucher: { id: number; reference: string; date: string } | null;
@@ -145,6 +147,7 @@ export default function ShiftDetailPage() {
     // The close moment the shift had BEFORE reopen — the re-close dialog offers
     // it back as the default "Closed on", so the correction stays on that day.
     const [originalClosedAt, setOriginalClosedAt] = useState<string | null>(null);
+    const [correcting, setCorrecting] = useState(false);
 
     const load = useCallback(() => {
         axios.get<ShiftDetail>(`/api/pos/shifts/${id}`)
@@ -180,6 +183,20 @@ export default function ShiftDetailPage() {
         }
     };
 
+    const postCorrection = async () => {
+        setBusy(true);
+        try {
+            await axios.post(`/api/pos/shifts/${id}/after-close-correction`);
+            toast.success("Correcting Journal posted");
+            setCorrecting(false);
+            load();
+        } catch (e: unknown) {
+            toast.error(extractApiError(e, "Failed to post the correction"));
+        } finally {
+            setBusy(false);
+        }
+    };
+
     if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-muted-foreground" size={28} /></div>;
     if (!shift)  return <div className="py-20 text-center text-muted-foreground">Shift not found.</div>;
 
@@ -187,6 +204,13 @@ export default function ShiftDetailPage() {
     const isOpen   = shift.status === "OPEN";
     const isHandover = shift.status === "AWAITING_HANDOVER";
     const isClosed = shift.status === "CLOSED";
+    // Cash moved by vouchers changed after the close (a sale edited UPI → cash …),
+    // net of corrections already posted. +ve = the books hold more than was counted.
+    const changedAfterClose = shift.changedAfterClosePaise != null ? Number(shift.changedAfterClosePaise) / 100 : 0;
+    const closeVariance = variance ?? 0;
+    const correctionLines = changedAfterClose > 0
+        ? { dr: closeVariance > 0 ? "Cash Over" : "Cash Short", cr: shift.counter.tillAccount.name }
+        : { dr: shift.counter.tillAccount.name, cr: closeVariance < 0 ? "Cash Short" : "Cash Over" };
 
     // Tender total
     const tenderTotal = (shift.tenderBreakdown ?? []).reduce((s, t) => s + Number(t.amountPaise) / 100, 0);
@@ -513,7 +537,49 @@ export default function ShiftDetailPage() {
                         </div>
                     </div>
                 )}
+
+                {/* Vouchers changed after the close — the books no longer match the count */}
+                {isClosed && changedAfterClose !== 0 && (
+                    <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/30 space-y-2">
+                        <p className="font-medium text-amber-900 dark:text-amber-200">
+                            Cash changed after this shift closed: {signed(changedAfterClose)}
+                        </p>
+                        <p className="text-xs text-amber-800 dark:text-amber-300">
+                            A voucher of this shift was edited, cancelled or deleted after the close, so its expected cash would now be
+                            {" "}₹{fmt(Number(shift.expectedCashPaise ?? 0) / 100 + changedAfterClose)} against ₹{fmt(Number(shift.expectedCashPaise ?? 0) / 100)}{" "}at close.
+                            The counted cash stands, so the till&apos;s books need this correcting Journal:
+                        </p>
+                        <div className="grid grid-cols-[auto_1fr_auto] gap-x-3 font-mono text-xs">
+                            <span>Dr</span><span>{correctionLines.dr}</span><span>₹{fmt(Math.abs(changedAfterClose))}</span>
+                            <span>Cr</span><span>{correctionLines.cr}</span><span>₹{fmt(Math.abs(changedAfterClose))}</span>
+                        </div>
+                        {canManage && (
+                            <Button size="sm" variant="outline" onClick={() => setCorrecting(true)}>
+                                <Calculator size={13} className="mr-1" /> Post correcting Journal
+                            </Button>
+                        )}
+                    </div>
+                )}
             </div>
+
+            <Dialog open={correcting} onOpenChange={(v) => { if (!v && !busy) setCorrecting(false); }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Post the correcting Journal?</DialogTitle>
+                        <DialogDescription>
+                            Dr {correctionLines.dr} / Cr {correctionLines.cr} ₹{fmt(Math.abs(changedAfterClose))}, dated the close day and carried on Shift #{shift.id}.
+                            The counted cash and the vault sweep stay as they are.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setCorrecting(false)} disabled={busy}>Cancel</Button>
+                        <Button onClick={postCorrection} disabled={busy}>
+                            {busy && <Loader2 size={14} className="animate-spin mr-1" />}
+                            Post Journal
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* 3 Comprehensive Breakdown Cards (3-column responsive grid) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
