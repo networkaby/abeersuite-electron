@@ -19,12 +19,22 @@ works.
 
 ## 1. Who can use it
 
-**Sign-in is unchanged.** A phone is never a counter, so only staff holding
-**"Can login outside counter"** (`auth:login:outside-counter`) get in; it is enforced
-at sign-in (`authorizeStaff.ts`). The app is for senior staff — lower-level staff must
-not get in, and there is **no mobile-only sign-in path**. (Owner, Option 1: riders and
-salesmen get a narrow mobile-only permission later, on request; that one must then be
-locked to its own screens in `proxy.ts` and at the API.)
+**Two ways in.** A phone is never a counter, so sign-in (enforced in
+`authorizeStaff.ts`) needs one of:
+
+- **"Can login outside counter"** (`auth:login:outside-counter`) — a full session: the
+  phone app, and the office website on a computer.
+- **"Can use Mobile App"** (`mobile:app:access`, owner 2026-10-05: *"who i want can
+  access mobile but not web"*) — a **phone-only** session. The token carries
+  `phoneOnly: true`, and [`proxy.ts`](../src/proxy.ts) keeps it inside the app on any
+  device: every other staff page redirects to the app's Home, and every API outside
+  `PHONE_ONLY_APIS` ([`phoneOnly.ts`](../src/shared/lib/auth/phoneOnly.ts) — `/api/auth`,
+  `/api/mobile`, `/api/accountancy/vouchers` for the quick entries, `/api/hr/activity`,
+  `/api/counter/status`) answers 403. The API fence lives in the proxy, not the routes,
+  because several routes read `auth()` directly; it decrypts the token (no DB read).
+  Website only: the desktop app with no counter still refuses it, since a PC with no
+  counter is there to be set up. A new phone API must be under `/api/mobile` or added
+  to that list.
 
 **Each screen has its own tick**, checked by the page ([`mobileAccess.ts`](../src/modules/mobile/lib/mobileAccess.ts),
 `mobileUser(permission)`) and again by its API (`requirePermission(permission)`):
@@ -59,15 +69,15 @@ locked to its own screens in `proxy.ts` and at the API.)
 
 ### How admins give it out
 
-- **Role page → "Sidebar links" → "Mobile App"** lists the five screens as ticks, with
-  a note that sign-in still needs "Can login outside counter" (that one stays in the
-  Global card). The section is built from `MOBILE_SCREENS` by `MOBILE_APP_MODULE` in
+- **Role page → "Sidebar links" → "Mobile App"** lists "Can use Mobile App" (the
+  module's gate, first row) and then the five screens as ticks; "Can login outside
+  counter" stays in the Global card. The section is built from `MOBILE_SCREENS` by `MOBILE_APP_MODULE` in
   [`sidebarModules.ts`](../src/shared/lib/auth/sidebarModules.ts); its links carry the
   screens' own `mobile:*` ids (flag `ownIds`, so `sidebarPermissionSeeds()` does not
   mint them a second time as `ui:sidebar:*`).
 - **Departments page → pool chip "Mobile App"**, like any other module. It obeys the
   department pool: a role is offered the screens only if its department carries the
-  chip (a tick a role already holds is always shown). Pooling one id pools all five
+  chip (a tick a role already holds is always shown). Pooling one id pools all six
   (and any screen added later — `expandSidebarModules`).
 - **Taking the chip off a department strips the phone ticks from that department's
   roles** (the ordinary cascade in `PUT /api/departments/[id]/permissions`) and

@@ -20,7 +20,7 @@ import { DEFAULT_IDLE_LIMIT_MINUTES, SESSION_IDLE_MAX_AGE_MS } from "@/shared/li
  * Pinning the name changed it on the web deployment, so every office user signed in
  * once more after that deploy; old `__Secure-` cookies linger harmlessly until expiry.
  */
-const SESSION_COOKIE_NAME = "authjs.session-token";
+export const SESSION_COOKIE_NAME = "authjs.session-token";
 const SECURE_COOKIES =
     !!process.env.VERCEL || /^https:/i.test(process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "");
 
@@ -101,6 +101,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 token.seats = "seats" in user && Array.isArray(user.seats) ? user.seats : [];
                 token.avatarUrl = "avatarUrl" in user ? (user.avatarUrl as string | undefined) : undefined;
                 token.kind = "kind" in user && user.kind === "customer" ? "customer" : "staff";
+                // Phone app only (auth/phoneOnly.ts) — proxy.ts reads it off the token.
+                if ("phoneOnly" in user && user.phoneOnly === true) token.phoneOnly = true;
                 token.customerId =
                     "customerId" in user && typeof user.customerId === "string" ? user.customerId : undefined;
                 token.activeAccountId =
@@ -170,6 +172,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     seats: { title: string; scope: string }[];
                     avatarUrl?: string;
                     kind?: "staff" | "customer";
+                    phoneOnly?: true;
                     customerId?: string;
                     activeAccountId?: string;
                     activeAccountType?: "personal" | "company";
@@ -194,6 +197,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     : [];
                 sessionUser.avatarUrl = typeof token.avatarUrl === "string" ? token.avatarUrl : undefined;
                 sessionUser.kind = token.kind === "customer" ? "customer" : "staff";
+                if (token.phoneOnly === true) sessionUser.phoneOnly = true;
                 sessionUser.customerId =
                     typeof token.customerId === "string" ? token.customerId : undefined;
                 sessionUser.activeAccountId =

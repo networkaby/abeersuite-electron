@@ -31,8 +31,10 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     { id: "admin:bypass", label: "Bypass all permission checks", module: "core", description: "Grants full access. Only usable by the env super admin — never grant this to a role.", systemOnly: true },
     { id: "auth:login:outside-counter", label: "Can login outside counter", module: "core", description: "Allow login from a non-counter machine (without bridge). Without this permission, login is restricted to counter machines only." },
 
-    // mobile — the phone app at /m. One tick per screen; signing in on a phone still
-    // needs "Can login outside counter".
+    // mobile — the phone app at /m-staff-app. "Can use Mobile App" signs a person in
+    // for the phone app only; "Can login outside counter" opens it too, with the
+    // office website. Then one tick per screen.
+    { id: "mobile:app:access", label: "Can use Mobile App", module: "mobile", description: "Sign in to the phone app from anywhere, even without 'Can login outside counter'. Such a sign-in opens the phone app only, never the office website." },
     { id: "mobile:stock:view", label: "Mobile: stock & price", module: "mobile", description: "Phone app: search products and see available quantity (total and per branch) and sale price." },
     { id: "mobile:parties:view", label: "Mobile: party", module: "mobile", description: "Phone app: search parties and see their balance, vouchers with running balance, and unpaid bills." },
     { id: "mobile:receivables:view", label: "Mobile: receivables", module: "mobile", description: "Phone app: who owes us — total, age, and each party's unpaid bills." },

@@ -1,5 +1,6 @@
 import { WORKSPACE_NAV, MODULE_SECTIONS, ADMIN_NAV, SETTINGS_NAV } from "@/shared/lib/constants/nav";
 import { MOBILE_SCREENS } from "@/modules/mobile/lib/mobileScreens";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 /**
  * Sidebar visibility matrix — the single source of truth for who sees what in the
@@ -103,20 +104,23 @@ function makeModule(key: string, label: string, items: readonly NavLike[], poole
  * never shows it.
  */
 const MOBILE_APP_MODULE: SidebarModuleRow = (() => {
-    const children: SidebarChildRow[] = MOBILE_SCREENS.map((s) => ({
+    // First row: the module's own gate — sign in to the app (auth/phoneOnly.ts). Not a
+    // screen, so it is listed here and not in MOBILE_SCREENS.
+    const gate: SidebarChildRow = { key: "access", label: "Can use Mobile App", permissionId: PERMISSIONS.MOBILE_APP_ACCESS, paths: [] };
+    const children: SidebarChildRow[] = [gate, ...MOBILE_SCREENS.map((s) => ({
         key: s.href.slice(s.href.lastIndexOf("/") + 1),
         label: s.label,
         permissionId: s.permission,
         paths: [],
-    }));
+    }))];
     return {
         key: "mobile",
         label: "Mobile App",
         children,
         childPermissionIds: flattenIds(children),
         pooled: true,
-        unit: "screens",
-        note: "Signing in on a phone also needs “Can login outside counter” (Global, above). Quick Receive / Pay / Expense use the Receipt and Payment create + post ticks.",
+        unit: "ticks",
+        note: "“Can use Mobile App” lets them sign in to the phone app only — never the office website. “Can login outside counter” (Global, above) opens the phone app too. Quick Receive / Pay / Expense use the Receipt and Payment create + post ticks.",
         ownIds: true,
     };
 })();

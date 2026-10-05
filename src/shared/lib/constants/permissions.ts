@@ -18,8 +18,10 @@ export const PERMISSIONS = {
     // see src/shared/lib/bridge/bridgeHealth.ts).
     AUTH_LOGIN_OUTSIDE_COUNTER: "auth:login:outside-counter",
 
-    // Mobile app (/m) — one tick per phone screen. The sign-in itself still needs
-    // AUTH_LOGIN_OUTSIDE_COUNTER: a phone is never a counter.
+    // Mobile app (/m-staff-app). MOBILE_APP_ACCESS lets a person sign in off a counter
+    // for the phone app only (auth/phoneOnly.ts); AUTH_LOGIN_OUTSIDE_COUNTER opens it
+    // too, with the office website. Then one tick per phone screen.
+    MOBILE_APP_ACCESS: "mobile:app:access",
     MOBILE_STOCK_VIEW: "mobile:stock:view",
     MOBILE_PARTIES_VIEW: "mobile:parties:view",
     MOBILE_RECEIVABLES_VIEW: "mobile:receivables:view",

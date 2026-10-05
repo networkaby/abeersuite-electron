@@ -8,6 +8,7 @@ import { positionScopeLabel } from "@/shared/lib/org/positionScope";
 import { CredentialsSignin } from "next-auth";
 import { pinClocksExpired, stampCounterPinLogin, thisCounterId } from "@/shared/lib/auth/counterPin";
 import { isThisPcACounter } from "@/shared/lib/counter/releaseGuard";
+import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { OUTSIDE_COUNTER_SIGNIN_CODE } from "@/shared/lib/constants/session";
@@ -43,6 +44,9 @@ export type StaffAuthUser = {
      *  a counter manager and a technician cannot share one number. */
     idleLimitMinutes: number;
     kind: "staff";
+    /** Signed in off a counter on "Can use Mobile App" alone — the session opens the
+     *  phone app and nothing else (auth/phoneOnly.ts, enforced in proxy.ts). */
+    phoneOnly?: true;
 };
 
 // ── Super-admin env bypass ────────────────────────────────────────────────────
@@ -384,8 +388,15 @@ export async function authorizeStaffCredentials(
     // "Can login outside counter" may sign in. Checked here, where the session is
     // minted: the login page's own check runs after the session already exists, so a
     // request that skips the page would skip it too.
+    //
+    // On the website, "Can use Mobile App" alone also gets in, as a phone-only session
+    // (auth/phoneOnly.ts). Never on the desktop app: a PC with no counter is there to
+    // be set up, which is an office action.
     if (!isThisPcACounter() && !hasPermissionWithScope(staff.permissions, PERMISSIONS.AUTH_LOGIN_OUTSIDE_COUNTER)) {
-        throw new OutsideCounterSignin();
+        if (IS_COUNTER_PC || !hasPermissionWithScope(staff.permissions, PERMISSIONS.MOBILE_APP_ACCESS)) {
+            throw new OutsideCounterSignin();
+        }
+        staff.phoneOnly = true;
     }
 
     // Typing the password here is exactly what the 10-day rule asks for — both clocks

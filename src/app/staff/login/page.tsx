@@ -8,7 +8,8 @@ import { refreshCounterStatus } from "@/shared/hooks/useCounterMode";
 import { refreshSyncStatus } from "@/shared/hooks/useSyncStatus";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { OUTSIDE_COUNTER_SIGNIN_CODE } from "@/shared/lib/constants/session";
-import { isPhoneAppPath, PHONE_APP_FORGOT } from "@/shared/lib/device/phone";
+import { isPhoneAppPath, PHONE_APP_FORGOT, PHONE_APP_HOME } from "@/shared/lib/device/phone";
+import { isPhoneOnlySession } from "@/shared/lib/auth/phoneOnly";
 import {
     LOGIN_BACKGROUNDS,
     LOGIN_MODULES,
@@ -40,7 +41,7 @@ import { readShellRoster, type ShellRosterEntry } from "@/shared/lib/counter/she
 function outsideCounterMessage(electron: boolean): string {
     return electron
         ? "This PC is not set up as a counter yet. Only a user with 'Can login outside counter' permission can sign in here to set it up."
-        : "The office website is for office staff only. Sign in on a counter, or ask admin for 'Can login outside counter' permission.";
+        : "The office website is for office staff only. Sign in on a counter, or ask admin for 'Can login outside counter' — or 'Can use Mobile App' for the phone app.";
 }
 
 /**
@@ -323,6 +324,12 @@ function StaffLoginForm() {
             // is cleared. On the desktop app this is also who may onboard a fresh
             // PC — setting up a counter is an office action, not a cashier's.
             if (!isCounter) {
+                // A phone-only sign-in (auth/phoneOnly.ts) — the server let it in for
+                // the phone app alone, so that is where it goes.
+                if (isPhoneOnlySession(session?.user)) {
+                    router.replace(isPhoneAppPath(dest.split("?")[0]) ? dest : PHONE_APP_HOME);
+                    return;
+                }
                 const perms = (session?.user as { permissions?: string[] })?.permissions ?? [];
                 if (!hasPermissionWithScope(perms, PERMISSIONS.AUTH_LOGIN_OUTSIDE_COUNTER)) {
                     await signOut({ redirect: false });

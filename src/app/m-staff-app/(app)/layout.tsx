@@ -33,10 +33,10 @@ export const viewport: Viewport = {
  * away from a counter. It stays in its own area: phones are sent here from any
  * staff page (proxy.ts), and nothing in it links out.
  *
- * Same sign-in as the office site, and so the same rule: a phone is never a
- * counter, so only someone with "Can login outside counter" gets in (enforced at
- * sign-in, authorizeStaff.ts). Each screen then needs its own `mobile:*` tick,
- * checked by its page and again by its API.
+ * Same sign-in as the office site. A phone is never a counter, so it needs "Can
+ * login outside counter", or "Can use Mobile App" for a session that opens this app
+ * only (authorizeStaff.ts, auth/phoneOnly.ts). Each screen then needs its own
+ * `mobile:*` tick, checked by its page and again by its API.
  */
 export default async function MobileLayout({ children }: { children: React.ReactNode }) {
     const session = await auth();

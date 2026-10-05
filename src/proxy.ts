@@ -1,10 +1,13 @@
-import { auth } from "@/auth";
+import { auth, SESSION_COOKIE_NAME } from "@/auth";
+import { getToken } from "next-auth/jwt";
 import { NextResponse, type NextFetchEvent, type NextMiddleware, type NextRequest } from "next/server";
 import { isLegalPath } from "@/shared/lib/legal/legalPaths";
 import { isStorefrontSlugPath } from "@/shared/lib/shop/storefrontSlugPath";
 import { RELAY_ACTIVE } from "@/shared/lib/counter/relayPolicy";
 import { canOpenPage, NO_ACCESS_HOME, NO_ACCESS_PARAM } from "@/shared/lib/auth/pageAccess";
 import { isPhoneAppPath, isPhoneRequest, PHONE_APP_HOME, PHONE_APP_FORGOT, PHONE_APP_INSTALL, PHONE_APP_LOGIN } from "@/shared/lib/device/phone";
+import { isPhoneOnlyApi, isPhoneOnlyPage, isPhoneOnlySession } from "@/shared/lib/auth/phoneOnly";
+import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 
 function isPublicPath(pathname: string): boolean {
     if (pathname === "/" || pathname === "/login") return true;
@@ -47,10 +50,10 @@ function wantsStaffSignIn(pathname: string): boolean {
  * when that is where they came from (`callbackUrl` under /m) or they are on a
  * phone, else the office home.
  */
-function staffHome(req: NextRequest): URL {
+function staffHome(req: NextRequest, phoneOnly: boolean): URL {
     const back = req.nextUrl.searchParams.get("callbackUrl") ?? "";
     if (isPhoneAppPath(back.split("?")[0])) return new URL(back, req.url);
-    return new URL(isPhoneRequest(req.headers) ? PHONE_APP_HOME : "/office/work-flow-inbox", req.url);
+    return new URL(phoneOnly || isPhoneRequest(req.headers) ? PHONE_APP_HOME : "/office/work-flow-inbox", req.url);
 }
 
 /**
@@ -109,8 +112,15 @@ const pageProxy = auth((req) => {
         return NextResponse.next();
     }
 
+    const phoneOnly = isPhoneOnlySession(session?.user);
     if (pathname === "/login" || pathname === "/staff/login" || pathname === PHONE_APP_LOGIN) {
-        return NextResponse.redirect(staffHome(req));
+        return NextResponse.redirect(staffHome(req, phoneOnly));
+    }
+
+    // A phone-only sign-in (auth/phoneOnly.ts) stays in the phone app, on any device.
+    // Public pages — shop, portal, policies — are open to anyone and stay open.
+    if (phoneOnly && !isPublicPath(pathname) && !isPhoneOnlyPage(pathname)) {
+        return NextResponse.redirect(new URL(PHONE_APP_HOME, req.url));
     }
 
     // Page lock: an office page opens only on its own sidebar tick (pageAccess.ts), so
@@ -127,14 +137,36 @@ const pageProxy = auth((req) => {
 }) as unknown as NextMiddleware;
 
 /**
+ * Is this API call from a phone-only sign-in? Checked here once for every route —
+ * several routes read `auth()` directly instead of `requireAuth()`, so a check in
+ * the routes would have holes. Reads the token itself (a decrypt, no database
+ * read), and only when a session cookie is there at all. A counter never mints a
+ * phone-only session (authorizeStaff.ts), so it skips this.
+ */
+async function isPhoneOnlyApiCall(req: NextRequest): Promise<boolean> {
+    if (IS_COUNTER_PC) return false;
+    if (!req.cookies.getAll().some((c) => c.name.startsWith(SESSION_COOKIE_NAME))) return false;
+    const token = await getToken({
+        req,
+        secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+        cookieName: SESSION_COOKIE_NAME,
+        salt: SESSION_COOKIE_NAME,
+    }).catch(() => null);
+    return isPhoneOnlySession(token);
+}
+
+/**
  * `/api` never goes through the session wrapper above: every route runs its own
  * `requireAuth()`, and resolving a session here would charge each call a
- * `tokensValidFrom` read for nothing. The only reason `/api` is in the matcher at all
- * is the `WRITE_MODE=v_live` write relay (see shared/lib/counter/writeRelay.ts); on
- * every other build this branch is a straight pass-through.
+ * `tokensValidFrom` read for nothing. `/api` is in the matcher for two things: the
+ * phone-only fence (`isPhoneOnlyApiCall`, a token decrypt only), and the
+ * `WRITE_MODE=v_live` write relay (see shared/lib/counter/writeRelay.ts).
  */
-export default function proxy(req: NextRequest, event: NextFetchEvent) {
+export default async function proxy(req: NextRequest, event: NextFetchEvent) {
     if (req.nextUrl.pathname.startsWith("/api/")) {
+        if (!isPhoneOnlyApi(req.nextUrl.pathname) && (await isPhoneOnlyApiCall(req))) {
+            return NextResponse.json({ error: "The phone app sign-in opens the phone app only." }, { status: 403 });
+        }
         if (!RELAY_ACTIVE) return NextResponse.next();
         // Loaded only on a relaying counter, and only once: keeps `pg` and the relay
         // out of every other build's proxy, and its first load (the first API call
