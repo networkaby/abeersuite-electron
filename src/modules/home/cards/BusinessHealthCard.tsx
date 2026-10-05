@@ -19,11 +19,27 @@ const PERIODS = [
     { days: 365, label: "1 year" },
 ] as const;
 
-const METRICS: { key: Metric; label: string; color: string }[] = [
-    { key: "workingCapital", label: "Working capital", color: "#378ADD" },
-    { key: "liquidFund", label: "Liquid fund (cash + bank)", color: "#1D9E75" },
-    { key: "inventory", label: "Inventory value", color: "#BA7517" },
-];
+const METRICS = {
+    workingCapital: { key: "workingCapital", label: "Working capital", color: "#378ADD" },
+    liquidFund: { key: "liquidFund", label: "Liquid fund (cash + bank)", color: "#1D9E75" },
+    inventory: { key: "inventory", label: "Inventory value", color: "#BA7517" },
+} as const satisfies Record<Metric, { key: Metric; label: string; color: string }>;
+
+// One request per period for the whole page: the three cards share it, so
+// switching all three to "30 days" still costs one call. A failure is dropped
+// so Retry asks again.
+const requests = new Map<number, Promise<Point[]>>();
+function loadPeriod(days: number): Promise<Point[]> {
+    let req = requests.get(days);
+    if (!req) {
+        req = axios
+            .get<{ points: Point[] }>("/api/home/business-health", { params: { days } })
+            .then(({ data }) => data.points);
+        req.catch(() => requests.delete(days));
+        requests.set(days, req);
+    }
+    return req;
+}
 
 /** Lakh / thousand shorthand for the big figure — the tooltip shows the exact amount. */
 function short(n: number): string {
@@ -35,7 +51,8 @@ function short(n: number): string {
     return `${sign}₹${Math.round(a)}`;
 }
 
-export default function BusinessHealthCard() {
+/** One Business health figure as its own Home card, with its own period. */
+export default function BusinessHealthCard({ metric }: { metric: Metric }) {
     const [days, setDays] = useState<number>(15);
     // Every period fetched this visit is kept, so switching back paints at once.
     const [byPeriod, setByPeriod] = useState<Record<number, Point[]>>({});
@@ -44,38 +61,39 @@ export default function BusinessHealthCard() {
 
     useEffect(() => {
         let live = true;
-        axios
-            .get<{ points: Point[] }>("/api/home/business-health", { params: { days } })
-            .then(({ data }) => live && setByPeriod((m) => ({ ...m, [days]: data.points })))
+        loadPeriod(days)
+            .then((points) => live && setByPeriod((m) => ({ ...m, [days]: points })))
             .catch(() => live && setFailed(true));
         return () => { live = false; };
     }, [days, attempt]);
 
     const points = byPeriod[days];
+    const m = METRICS[metric];
 
     return (
         <section className="rounded-xl border border-border bg-card p-5">
-            <div className="flex items-center gap-2">
-                <TrendingUp size={16} className="text-emerald-600" />
-                <h2 className="text-sm font-semibold text-foreground">Business health</h2>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-1.5">
-                {PERIODS.map((p) => (
-                    <button
-                        key={p.days}
-                        type="button"
-                        onClick={() => { setFailed(false); setDays(p.days); }}
-                        className={[
-                            "rounded-md border px-2.5 py-0.5 text-xs transition-colors",
-                            p.days === days
-                                ? "border-primary bg-primary/10 text-primary"
-                                : "border-border text-muted-foreground hover:bg-muted/60",
-                        ].join(" ")}
-                    >
-                        {p.label}
-                    </button>
-                ))}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                    <TrendingUp size={16} style={{ color: m.color }} />
+                    <h2 className="text-sm font-semibold text-foreground">{m.label}</h2>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                    {PERIODS.map((p) => (
+                        <button
+                            key={p.days}
+                            type="button"
+                            onClick={() => { setFailed(false); setDays(p.days); }}
+                            className={[
+                                "rounded-md border px-2 py-0.5 text-[11px] transition-colors",
+                                p.days === days
+                                    ? "border-primary bg-primary/10 text-primary"
+                                    : "border-border text-muted-foreground hover:bg-muted/60",
+                            ].join(" ")}
+                        >
+                            {p.label}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {failed && !points && (
@@ -87,11 +105,7 @@ export default function BusinessHealthCard() {
                 </p>
             )}
 
-            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
-                {METRICS.map((m) => (
-                    <MetricTile key={m.key} metric={m} points={points} failed={failed} />
-                ))}
-            </div>
+            <MetricTile metric={m} points={points} failed={failed} />
         </section>
     );
 }
@@ -110,7 +124,7 @@ function MetricTile({
     points,
     failed,
 }: {
-    metric: (typeof METRICS)[number];
+    metric: (typeof METRICS)[Metric];
     points: Point[] | undefined;
     failed: boolean;
 }) {
@@ -134,11 +148,10 @@ function MetricTile({
     const data = points?.map((p, i) => ({ ...p, prev: i > 0 ? p[metric.key] - points[i - 1][metric.key] : null }));
 
     return (
-        <div className="rounded-lg bg-muted/40 px-3 py-3">
+        <div className="mt-3">
             <div className="flex items-start justify-between gap-2">
                 <div>
-                    <p className="text-xs text-muted-foreground">{metric.label}</p>
-                    <p className="font-mono text-xl font-semibold text-foreground">
+                                        <p className="font-mono text-xl font-semibold text-foreground">
                         {last != null ? short(last) : failed ? "—" : "…"}
                     </p>
                 </div>
@@ -216,7 +229,7 @@ function MetricTile({
             </div>
 
             {points && first != null && avg != null && (
-                <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px]">
+                <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px] sm:grid-cols-4">
                     <Stat label="Start" value={short(first)} />
                     <Stat label="Highest" value={short(values[hiIdx])} note={dayLabel(points[hiIdx].date)} />
                     <Stat label="Lowest" value={short(values[loIdx])} note={dayLabel(points[loIdx].date)} />
@@ -229,7 +242,7 @@ function MetricTile({
 
 function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
     return (
-        <div className="rounded bg-background/60 px-2 py-1">
+        <div className="rounded bg-muted/40 px-2 py-1">
             <p className="text-muted-foreground">{label}</p>
             <p className="font-mono font-semibold text-foreground">
                 {value} {note && <span className="font-sans font-normal text-muted-foreground">{note}</span>}

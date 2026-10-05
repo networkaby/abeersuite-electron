@@ -6,8 +6,9 @@
  * card and add it to the grid below with its own visibility rule.
  *
  *   My day          — everyone: the person's own work (POS shift for now).
- *   Business health — Purchase voucher ticks: working capital, liquid fund,
- *                     inventory value over a period (default 15 days).
+ *   Business health — Purchase voucher ticks: three cards — working capital,
+ *                     liquid fund, inventory value — each with its own period
+ *                     (default 15 days).
  */
 
 import { auth } from "@/auth";
@@ -45,10 +46,16 @@ export default async function OfficePage() {
                 </p>
             </div>
 
-            <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+            {/* Flex, not grid: each card takes half a row (two across) and wraps to
+                full width when the screen is too narrow for two. */}
+            <div className="flex flex-wrap items-start gap-4 *:min-w-[min(100%,420px)] *:flex-[1_1_calc(50%-0.5rem)]">
                 <MyDayCard userId={user.id} permissions={user.permissions} />
                 {canSeeBusinessHealth(user.permissions) && (
-                    <div className="lg:col-span-2"><BusinessHealthCard /></div>
+                    <>
+                        <BusinessHealthCard metric="workingCapital" />
+                        <BusinessHealthCard metric="liquidFund" />
+                        <BusinessHealthCard metric="inventory" />
+                    </>
                 )}
             </div>
         </div>
