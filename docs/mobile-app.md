@@ -132,8 +132,34 @@ Service Staff" / "NS Staff" (kept apart from the future customer app), 192 + 512
 maskable icons (`public/m-icon-*.png`, from `build/icon.png` — the 512 is upscaled;
 replace it with a sharper source when there is one). Manifest route:
 [`manifest.webmanifest`](../src/app/m-staff-app/manifest.webmanifest/route.ts), scope
-the app path only, so the office site and shop stay plain websites. A `.apk` wrapper
-can come later.
+the app path only, so the office site and shop stay plain websites.
+
+### Android APK (sideloaded, 2026-10-05)
+
+Owner: *"go ahead with TWA, sideload via QR for now"*. [`android/`](../android) is a
+**Trusted Web Activity** made with Bubblewrap from [`twa-manifest.json`](../android/twa-manifest.json):
+a ~2.5 MB APK, package **`in.networkservice.staff`** (`PHONE_APP_ANDROID_PACKAGE` —
+permanent, a new id is a different app), that opens `office…/m-staff-app` full screen
+through the phone's Chrome. **Every screen is still the website**, so a Vercel deploy
+reaches installed phones with no new APK; rebuild only for a new name, icon, colour or
+address, and bump `appVersionCode` when you do, or Android refuses it as "not an update".
+
+- **Served from the site:** `public/ns-staff.apk` (`PHONE_APP_APK`) and
+  `public/.well-known/assetlinks.json`. The second is what hides Chrome's address bar —
+  the site vouching for the APK's signing key. Both carry a file extension, so
+  `proxy.ts` never asks for a sign-in.
+- **Build:** `pwsh -File android/build-apk.ps1` — Bubblewrap build (asks the key's
+  passwords, so the owner runs it), then copies the APK into `public/` and writes
+  `assetlinks.json` from the fingerprint **read off the signed APK**, so the two can't
+  drift. Toolchain on D: (`D:\AndroidTools`: JDK 17, Android SDK, Bubblewrap, Gradle
+  cache); `~/.bubblewrap/config.json` points at it.
+- **Signing key:** `android/ns-staff.keystore`, git-ignored. **Back it up off the PC** —
+  lost key = the app can never be updated in place (every phone uninstalls and
+  reinstalls); leaked key = anyone can push an "update".
+- **Manifest** also names the APK in `related_applications` (`platform: "play"`), so
+  the install page's `getInstalledRelatedApps()` sees it as installed.
+- Same Chrome underneath: cookies, sign-in and the per-site **Desktop site** switch are
+  shared with Chrome on that phone.
 
 Owner: *"i want the QR force install instead of just open the website"*. A phone never
 lets a site install itself, so the Downloads QR is always `COMPANY_DETAILS.sites.office`
@@ -143,7 +169,9 @@ lets a site install itself, so the Downloads QR is always `COMPANY_DETAILS.sites
 is outside it). It shows only the app and
 [`InstallAppButton`](../src/modules/mobile/components/InstallAppButton.tsx):
 
-- Android Chrome → "Install NS Staff" (Chrome's `beforeinstallprompt`, then its own confirm);
+- Android → **"Download NS Staff"** (the APK) and three steps — open the file, allow
+  *Install unknown apps* for Chrome, Install; Chrome's own install offer stays as a
+  smaller second button;
 - iPhone → Share → Add to Home Screen;
 - already installed → Open app;
 - no offer (http test address / other browser) → Chrome ⋮ → Install app.
@@ -410,4 +438,4 @@ Pages are in `src/app/m-staff-app`, APIs in `src/app/api/mobile`.
 
 - The 512 px icon is upscaled from `build/icon.png`.
 - The narrow rider / salesman permission is not built (§1).
-- A `.apk` wrapper and a customer shop app are future work.
+- Play Store listing and a customer shop app are future work; the APK is sideloaded.

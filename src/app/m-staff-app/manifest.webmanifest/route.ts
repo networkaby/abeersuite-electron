@@ -1,5 +1,5 @@
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
-import { PHONE_APP_HOME, PHONE_APP_THEME } from "@/shared/lib/device/phone";
+import { PHONE_APP_ANDROID_PACKAGE, PHONE_APP_HOME, PHONE_APP_THEME } from "@/shared/lib/device/phone";
 
 /** "Network Service" → "NS": the name under the home-screen icon. */
 const initials = COMPANY_DETAILS.brandName.split(/\s+/).map((w) => w[0]?.toUpperCase() ?? "").join("");
@@ -15,7 +15,9 @@ const initials = COMPANY_DETAILS.brandName.split(/\s+/).map((w) => w[0]?.toUpper
 // round logo inside Android's safe zone on any icon shape.
 export function GET(req: Request) {
     // "Is this app installed here?" — Chrome answers `getInstalledRelatedApps()` for
-    // the install page only when the manifest names itself as a related web app.
+    // the install page only when the manifest names the app: itself as a web app, and
+    // the Android wrapper by package id (Chrome trusts that one only because the APK
+    // and /.well-known/assetlinks.json vouch for each other).
     const manifestUrl = new URL(`${PHONE_APP_HOME}/manifest.webmanifest`, req.url).href;
     return Response.json(
         {
@@ -29,7 +31,10 @@ export function GET(req: Request) {
             orientation: "portrait",
             background_color: PHONE_APP_THEME.light,
             theme_color: PHONE_APP_THEME.light,
-            related_applications: [{ platform: "webapp", url: manifestUrl }],
+            related_applications: [
+                { platform: "webapp", url: manifestUrl },
+                { platform: "play", id: PHONE_APP_ANDROID_PACKAGE },
+            ],
             icons: [
                 { src: "/m-icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
                 { src: "/m-icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },

@@ -39,6 +39,19 @@ export const PHONE_APP_THEME = { light: "#eff4fb", dark: "#101725" } as const;
  *  since installing needs none (the app asks for the sign-in when first opened). */
 export const PHONE_APP_INSTALL = `${PHONE_APP_HOME}/install`;
 
+/**
+ * The Android wrapper (a Trusted Web Activity, `android/`): a thin APK that opens the
+ * app full screen through Chrome — every screen is still this website, so a deploy
+ * reaches the phones without a new APK. Sideloaded from the install page for now.
+ * The package id is permanent once phones carry it (Android treats a new id as a
+ * different app); it must match `android/twa-manifest.json` and
+ * `public/.well-known/assetlinks.json`.
+ */
+export const PHONE_APP_ANDROID_PACKAGE = "in.networkservice.staff";
+
+/** The APK, served from `public/` — rebuilt only when the name, icon or address changes. */
+export const PHONE_APP_APK = "/ns-staff.apk";
+
 /** The app's own sign-in page — the staff sign-in form, served inside the app's PWA
  *  scope. `/staff/login` is outside it, and an installed app leaving its scope makes
  *  Chrome show an address bar with an ✕ over the screen. */

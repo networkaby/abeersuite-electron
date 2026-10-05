@@ -215,3 +215,15 @@ hardware-bridge/config.json
 # Built by scripts/build-update-splash.ts on every electron build.
 resources/AbeerSuiteUpdateSplash.exe
 resources/7za.exe
+
+# Android wrapper (android/, Bubblewrap). The signing key NEVER goes in git — losing
+# it means the app can never be updated under the same package id, and leaking it lets
+# anyone ship an "update" to every phone. Keep it backed up off this PC.
+/android/*.keystore
+/android/*.jks
+/android/**/build/
+/android/.gradle/
+/android/*.apk
+/android/*.aab
+/android/*.idsig
+/android/local.properties

@@ -1,0 +1,41 @@
+{
+  "packageId": "in.networkservice.staff",
+  "host": "office.networkservice.in",
+  "name": "Network Service Staff",
+  "launcherName": "NS Staff",
+  "display": "standalone",
+  "orientation": "portrait",
+  "themeColor": "#eff4fb",
+  "themeColorDark": "#101725",
+  "navigationColor": "#eff4fb",
+  "navigationColorDark": "#101725",
+  "navigationDividerColor": "#eff4fb",
+  "navigationDividerColorDark": "#101725",
+  "backgroundColor": "#eff4fb",
+  "enableNotifications": false,
+  "startUrl": "/m-staff-app",
+  "iconUrl": "https://office.networkservice.in/m-icon-512.png",
+  "maskableIconUrl": "https://office.networkservice.in/m-icon-maskable-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./ns-staff.keystore",
+    "alias": "ns-staff"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://office.networkservice.in/m-staff-app/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 21,
+  "fullScopeUrl": "https://office.networkservice.in/m-staff-app",
+  "additionalTrustedOrigins": [],
+  "retainedBundles": []
+}

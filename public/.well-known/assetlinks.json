@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "in.networkservice.staff",
+      "sha256_cert_fingerprints": [
+        "49:36:EA:03:53:13:86:BE:0C:6C:56:0D:C6:CB:4C:4F:E9:43:56:93:B8:E6:4A:3B:06:04:A9:65:FA:C9:A4:07"
+      ]
+    }
+  }
+]

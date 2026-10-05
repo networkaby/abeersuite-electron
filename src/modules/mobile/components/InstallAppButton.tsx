@@ -3,26 +3,28 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { CheckCircle2, Download } from "lucide-react";
-import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
+import { PHONE_APP_APK, PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 /** Chrome's install event — not in the DOM typings. */
 type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 
 const noSubscribe = () => () => {};
 
-/** "installed" | "iphone" | "browser" on the phone; "server" while rendering on the server. */
+/** "installed" | "iphone" | "android" | "browser" on the phone; "server" while rendering on the server. */
 function readPlace(): string {
     const standalone = window.matchMedia("(display-mode: standalone)").matches
         || (navigator as { standalone?: boolean }).standalone === true;
     if (standalone) return "installed";
-    return /iPhone|iPad|iPod/i.test(navigator.userAgent) ? "iphone" : "browser";
+    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) return "iphone";
+    return /Android/i.test(navigator.userAgent) ? "android" : "browser";
 }
 
 /**
  * The install page's one job — the closest a web page may come to "install from a
  * QR": phones never let a site install itself, so the best is one tap here and the
  * phone's own Install confirm.
- *   • Android Chrome: holds Chrome's `beforeinstallprompt` → "Install NS Staff".
+ *   • Android: the APK (the `android/` wrapper) → "Download NS Staff", then the
+ *     phone's own steps; Chrome's `beforeinstallprompt` stays as the second way.
  *   • iPhone: no such event — the two Share steps.
  *   • already the installed app, or just installed: "Open app".
  *   • no install offer (an http test address, another browser): open in Chrome,
@@ -53,6 +55,11 @@ export default function InstallAppButton({ appName }: { appName: string }) {
             window.removeEventListener("appinstalled", onInstalled);
         };
     }, []);
+
+    const installFromChrome = (offer: InstallPromptEvent) => {
+        void offer.prompt();
+        void offer.userChoice.then((c) => { if (c.outcome === "accepted") setInstalled(true); setPrompt(null); });
+    };
 
     const openApp = (
         <Link href={PHONE_APP_HOME} className="block w-full rounded-xl border py-3 text-center font-medium active:bg-muted">
@@ -86,11 +93,38 @@ export default function InstallAppButton({ appName }: { appName: string }) {
             </div>
         );
     }
+    if (place === "android") {
+        return (
+            <div className="space-y-3">
+                <a
+                    href={PHONE_APP_APK}
+                    download
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-4 text-lg font-semibold text-primary-foreground active:opacity-90"
+                >
+                    <Download className="size-6" /> Download {appName}
+                </a>
+                <ol className="list-decimal space-y-1 rounded-xl border p-4 pl-8 text-sm">
+                    <li>Open the downloaded file (Chrome shows <b>Open</b>, or find it in <b>Downloads</b>).</li>
+                    <li>If the phone asks, allow <b>Install unknown apps</b> for Chrome, then go back.</li>
+                    <li>Tap <b>Install</b>, then <b>Open</b>, and sign in.</li>
+                </ol>
+                {prompt && (
+                    <button
+                        type="button"
+                        onClick={() => installFromChrome(prompt)}
+                        className="block w-full rounded-xl border py-3 text-center text-sm active:bg-muted"
+                    >
+                        Or add it from Chrome instead
+                    </button>
+                )}
+            </div>
+        );
+    }
     if (prompt) {
         return (
             <button
                 type="button"
-                onClick={() => { void prompt.prompt(); void prompt.userChoice.then((c) => { if (c.outcome === "accepted") setInstalled(true); setPrompt(null); }); }}
+                onClick={() => installFromChrome(prompt)}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-4 text-lg font-semibold text-primary-foreground active:opacity-90"
             >
                 <Download className="size-6" /> Install {appName}

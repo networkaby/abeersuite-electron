@@ -97,7 +97,7 @@ export default function DownloadsPage() {
                             <Smartphone size={16} /> Staff Phone App
                         </h2>
                         <p className="text-xs text-muted-foreground">
-                            Scan with the phone camera and tap Install (Android Chrome). On iPhone: Share → Add to Home Screen. Sign in when the app first opens.
+                            Scan with the phone camera. Android: tap Download, open the file and Install. iPhone: Share → Add to Home Screen. Sign in when the app first opens.
                         </p>
                     </div>
                     <div className="rounded-lg border border-border bg-card p-4 flex items-center gap-4">
