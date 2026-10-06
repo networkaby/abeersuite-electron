@@ -5,7 +5,7 @@
  *
  * Lazy on purpose: the login page is the only surface that needs Firebase, so
  * nothing is initialised (or downloaded, thanks to the dynamic imports in
- * `portalPasswordless.ts`) until a customer actually chooses OTP or Google.
+ * `portalPasswordless.ts`) until a customer actually chooses Google (the only Firebase use).
  */
 
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
