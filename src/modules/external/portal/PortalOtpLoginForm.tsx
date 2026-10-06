@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Mail, MessageSquareText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -166,6 +167,17 @@ export default function PortalOtpLoginForm({
                     disabled={busy || identifier.trim().length === 0}
                     onClick={() => void send()}
                 >
+                    {!busy && identifier.trim() && (
+                        // Logo of the channel the code will go by. A mobile goes on WhatsApp
+                        // unless the last send fell back to SMS.
+                        asEmail ? (
+                            <Mail className="size-4" />
+                        ) : via === "sms" ? (
+                            <MessageSquareText className="size-4" />
+                        ) : (
+                            <WhatsAppIcon className="size-4" />
+                        )
+                    )}
                     {busy ? "Sending…" : "Send code"}
                 </Button>
             </div>
