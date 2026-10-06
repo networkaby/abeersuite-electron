@@ -213,21 +213,59 @@ export default function PortalOtpLoginForm({
                     onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                     autoFocus
                 />
-                <p className="text-xs text-muted-foreground">
-                    {via === "whatsapp" ? (
-                        <>
-                            Check <WhatsAppIcon className="size-4 align-[-3px]" />{" "}
-                            <span className="font-medium text-foreground">WhatsApp</span> on {maskedIdentity}
-                        </>
-                    ) : via === "sms" ? (
-                        <>
-                            Check your <span className="font-medium text-foreground">text messages (SMS)</span> on{" "}
-                            {maskedIdentity}
-                        </>
+                {/* Resend sits right under the code box, beside where the code went. */}
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
+                    <p className="text-muted-foreground">
+                        {via === "whatsapp" ? (
+                            <>
+                                Check <WhatsAppIcon className="size-4 align-[-3px]" />{" "}
+                                <span className="font-medium text-foreground">WhatsApp</span> on {maskedIdentity}
+                            </>
+                        ) : via === "sms" ? (
+                            <>
+                                Check your <span className="font-medium text-foreground">text messages (SMS)</span> on{" "}
+                                {maskedIdentity}
+                            </>
+                        ) : (
+                            <>Sent to {maskedIdentity} by email</>
+                        )}
+                    </p>
+                    {cooldown > 0 ? (
+                        <span className="text-muted-foreground">Resend in {cooldown}s</span>
+                    ) : asEmail || !smsAvailable ? (
+                        <button
+                            type="button"
+                            className="text-primary underline disabled:text-muted-foreground"
+                            disabled={busy}
+                            onClick={() => void send()}
+                        >
+                            Resend code
+                        </button>
                     ) : (
-                        <>Sent to {maskedIdentity} by email</>
+                        // Second send on: the customer chooses the pipe.
+                        <span className="flex items-center gap-3">
+                            <span className="text-muted-foreground">Resend on</span>
+                            <button
+                                type="button"
+                                className="inline-flex items-center gap-1 text-primary underline disabled:text-muted-foreground"
+                                disabled={busy}
+                                onClick={() => void send()}
+                            >
+                                <WhatsAppIcon className="size-3.5" />
+                                WhatsApp
+                            </button>
+                            <button
+                                type="button"
+                                className="inline-flex items-center gap-1 text-primary underline disabled:text-muted-foreground"
+                                disabled={busy}
+                                onClick={() => void send(true)}
+                            >
+                                <MessageSquareText className="size-3.5" />
+                                SMS
+                            </button>
+                        </span>
                     )}
-                </p>
+                </div>
                 {via === "whatsapp" && RESEND_SECONDS - cooldown >= INTERNET_HINT_AFTER_SECONDS && (
                     <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
                         Not received yet? Turn on mobile data or Wi-Fi — WhatsApp codes arrive only
@@ -239,48 +277,13 @@ export default function PortalOtpLoginForm({
             <Button type="submit" className="w-full" disabled={busy || code.length !== 6}>
                 {busy ? "Verifying…" : verifyLabel}
             </Button>
-            <div className="flex items-center justify-between text-sm">
-                {lockedIdentifier ? <span /> : (
+            {!lockedIdentifier && (
+                <div className="text-sm">
                     <button type="button" className="text-primary underline" onClick={restart}>
                         {asEmail ? "Change email" : "Change number"}
                     </button>
-                )}
-                {cooldown > 0 ? (
-                    <span className="text-muted-foreground">Resend in {cooldown}s</span>
-                ) : asEmail || !smsAvailable ? (
-                    <button
-                        type="button"
-                        className="text-primary underline disabled:text-muted-foreground"
-                        disabled={busy}
-                        onClick={() => void send()}
-                    >
-                        Resend code
-                    </button>
-                ) : (
-                    // Second send on: the customer chooses the pipe.
-                    <span className="flex items-center gap-3">
-                        <span className="text-muted-foreground">Resend on</span>
-                        <button
-                            type="button"
-                            className="inline-flex items-center gap-1 text-primary underline disabled:text-muted-foreground"
-                            disabled={busy}
-                            onClick={() => void send()}
-                        >
-                            <WhatsAppIcon className="size-3.5" />
-                            WhatsApp
-                        </button>
-                        <button
-                            type="button"
-                            className="inline-flex items-center gap-1 text-primary underline disabled:text-muted-foreground"
-                            disabled={busy}
-                            onClick={() => void send(true)}
-                        >
-                            <MessageSquareText className="size-3.5" />
-                            SMS
-                        </button>
-                    </span>
-                )}
-            </div>
+                </div>
+            )}
         </form>
     );
 }
