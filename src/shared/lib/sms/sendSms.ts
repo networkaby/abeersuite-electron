@@ -42,7 +42,7 @@ const KEY_ENV: Record<SmsProvider, string> = {
 };
 
 /** Fixed order — the rotation and the failover both walk this list. */
-const ORDER: SmsProvider[] = ["hanuotp", "minimoth"];
+const ORDER: SmsProvider[] = ["minimoth", "hanuotp"];
 
 /** Providers with a real key, in order. */
 function activeProviders(): { provider: SmsProvider; key: string }[] {

@@ -39,7 +39,7 @@ When WhatsApp cannot deliver (no WhatsApp on the number, template paused), the
 code goes by SMS — `src/shared/lib/sms/sendSms.ts`. Every provider whose key is
 filled in is on (blank or the `your-…` placeholder = off, never tried); with
 none, a WhatsApp failure tells the customer to use email OTP, Google or
-password. Providers take turns in the fixed order HanuOTP → MiniMoth: the code
+password. Providers take turns in the fixed order MiniMoth → HanuOTP (after Meta WhatsApp): the code
 screen sends `smsTry` (SMS already sent on that screen), the server starts at
 provider `smsTry mod count`, and a failed provider (balance out, vendor down)
 hands the same send straight to the next.
