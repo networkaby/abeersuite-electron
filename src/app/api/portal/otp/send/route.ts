@@ -53,7 +53,13 @@ async function sendMobileOtp(mobile: string, code: string): Promise<"whatsapp" |
             if (!isSmsConfigured()) throw new MobileOtpUndeliveredError();
         }
     }
-    await sendOtpSms(mobile, code);
+    try {
+        await sendOtpSms(mobile, code);
+    } catch (e) {
+        // Plan used up, key revoked, vendor down — same polite answer as WhatsApp.
+        console.error("SMS OTP failed:", e);
+        throw new MobileOtpUndeliveredError();
+    }
     return "sms";
 }
 
@@ -137,7 +143,7 @@ export async function POST(req: Request) {
     } catch (e) {
         if (e instanceof MobileOtpUndeliveredError) {
             return NextResponse.json(
-                { error: "We could not send the code on WhatsApp. Please use email OTP, Google or password." },
+                { error: "We could not send the code to this mobile. Please use email OTP, Google or password." },
                 { status: 502 }
             );
         }
