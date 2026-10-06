@@ -30,6 +30,8 @@ import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 const bodySchema = z.object({
     identifier: z.string().trim().min(3, "Enter your mobile number or email"),
+    /** "sms": the customer tapped "Send by SMS instead" — skip WhatsApp. */
+    via: z.enum(["sms"]).optional(),
 });
 
 /**
@@ -43,12 +45,17 @@ const bodySchema = z.object({
  */
 class MobileOtpUndeliveredError extends Error {}
 
-/** `remote`: the SMS provider made its own code (MiniMoth) and must verify it. */
+/**
+ * `remote`: the SMS provider made its own code (MiniMoth) and must verify it.
+ * `smsOnly`: the customer asked for SMS — Meta accepts a WhatsApp message for a
+ * phone with no internet and just holds it, so no automatic fallback happens.
+ */
 async function sendMobileOtp(
     mobile: string,
-    code: string
+    code: string,
+    smsOnly: boolean
 ): Promise<{ via: "whatsapp" | "sms"; remote: boolean }> {
-    if (isWhatsAppConfigured()) {
+    if (!smsOnly && isWhatsAppConfigured()) {
         try {
             await sendOtpWhatsApp(mobile, code);
             return { via: "whatsapp", remote: false };
@@ -102,9 +109,12 @@ export async function POST(req: Request) {
         const channel = asEmail ? "email" : "mobile";
         // Mobile has two pipes: WhatsApp leads, SMS (once a provider is set up)
         // is the fallback for customers WhatsApp cannot reach.
+        const smsOnly = !asEmail && data.via === "sms";
         const configured = asEmail
             ? isEmailConfigured()
-            : isWhatsAppConfigured() || isSmsConfigured();
+            : smsOnly
+              ? isSmsConfigured()
+              : isWhatsAppConfigured() || isSmsConfigured();
         if (!configured) {
             return NextResponse.json(
                 {
@@ -137,10 +147,16 @@ export async function POST(req: Request) {
             });
         } else {
             // Already exactly 10 bare digits, which is what both pipes want.
-            ({ via, remote } = await sendMobileOtp(identity, code));
+            ({ via, remote } = await sendMobileOtp(identity, code, smsOnly));
         }
 
-        const res = NextResponse.json({ ok: true, channel, via });
+        // smsAvailable: whether the code screen may offer "Send by SMS instead".
+        const res = NextResponse.json({
+            ok: true,
+            channel,
+            via,
+            smsAvailable: !asEmail && isSmsConfigured(),
+        });
         res.cookies.set(OTP_COOKIE, packPendingOtp(channel, identity, code, remote), otpCookieOptions);
         // Drop any earlier verified ticket so a new send always re-verifies.
         res.cookies.delete(TICKET_COOKIE);

@@ -7,7 +7,7 @@
  * directly. Each path ends the same way: a verification token that our
  * NextAuth provider checks before minting a session.
  *
- *   mobile → 6-digit code on WhatsApp (our API → Meta delivery; SMS slot unused)
+ *   mobile → 6-digit code on WhatsApp (our API → Meta), SMS as fallback or on request
  *   email  → emailed 6-digit code (our API → Resend delivery)
  *   google → popup              (Firebase — the only remaining Firebase use)
  *
@@ -33,6 +33,8 @@ export type OtpDelivery = "email" | "whatsapp" | "sms";
 export type OtpConfirmation = {
     /** Shown on the code step so the customer knows where to look. */
     via: OtpDelivery;
+    /** A mobile code may be re-sent by SMS — an SMS provider is set up. */
+    smsAvailable: boolean;
     /**
      * Verify the 6-digit code. Resolves to a verification token: our own
      * short-lived portal ticket. The NextAuth provider re-checks it server-side.
@@ -60,9 +62,10 @@ function friendlyFirebaseError(e: unknown): string {
 }
 
 /** Shared verify half — identical for SMS and email. */
-function confirmationFor(via: OtpDelivery): OtpConfirmation {
+function confirmationFor(via: OtpDelivery, smsAvailable: boolean): OtpConfirmation {
     return {
         via,
+        smsAvailable,
         confirm: async (code: string) => {
             const res = await fetch("/api/portal/otp/verify", {
                 method: "POST",
@@ -83,18 +86,22 @@ function confirmationFor(via: OtpDelivery): OtpConfirmation {
 /**
  * Send a 6-digit code to whatever the customer typed — the server works out
  * whether it is a mobile or an email and picks the delivery channel.
+ * `viaSms`: the customer asked for SMS instead of WhatsApp.
  */
-export async function sendOtp(identifier: string): Promise<OtpConfirmation> {
+export async function sendOtp(identifier: string, viaSms = false): Promise<OtpConfirmation> {
     const res = await fetch("/api/portal/otp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier }),
+        body: JSON.stringify(viaSms ? { identifier, via: "sms" } : { identifier }),
     });
-    const body = (await res.json().catch(() => null)) as { error?: string; via?: OtpDelivery } | null;
+    const body = (await res.json().catch(() => null)) as { error?: string; via?: OtpDelivery; smsAvailable?: boolean } | null;
     if (!res.ok) {
         throw new Error(body?.error ?? "Could not send the code. Please try again.");
     }
-    return confirmationFor(body?.via ?? (isLikelyEmail(identifier) ? "email" : "whatsapp"));
+    return confirmationFor(
+        body?.via ?? (isLikelyEmail(identifier) ? "email" : "whatsapp"),
+        body?.smsAvailable ?? false
+    );
 }
 
 /** Google sign-in via popup; resolves to a Firebase ID token. */

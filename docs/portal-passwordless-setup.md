@@ -48,6 +48,13 @@ failure tells the customer to use email OTP, Google or password.
 | Price | Rs 0.30 on plan OTP 1 (Rs 100, 335 codes, no recharge; next plan Rs 3,600) | Rs 0.35, Rs 50 minimum top-up, refunded if undelivered |
 | Who makes the code | We do; HanuOTP only delivers | MiniMoth makes and checks it — the pending cookie stores `remote:minimoth` instead of a hash and verify asks their `/v1/otp/verify` |
 
+Automatic fallback only happens when Meta *refuses* the send. A phone with no
+internet still has WhatsApp, so Meta accepts and holds the message — no SMS.
+For that case the code screen shows **"No internet on your phone? Send by SMS
+instead"** once the 30 s resend wait ends (only when an SMS provider is on);
+it posts `via: "sms"` to the send route, which skips WhatsApp, and a later
+"Resend code" stays on SMS. Same per-number send throttle.
+
 HanuOTP replies HTTP 200 even on errors (`{"status":"error",...}`), so the body
 is checked too. MiniMoth tries its own WhatsApp before SMS, but we only call it
 after Meta WhatsApp has failed. Fast2SMS was removed on 2026-10-06: without our

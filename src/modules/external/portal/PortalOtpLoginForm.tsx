@@ -58,6 +58,9 @@ export default function PortalOtpLoginForm({
     const confirmation = useRef<OtpConfirmation | null>(null);
     // Where the last code went — the server picks WhatsApp or SMS per send.
     const [via, setVia] = useState<OtpDelivery>("whatsapp");
+    // A WhatsApp code to a phone with no internet just waits on Meta's side, so
+    // after the resend wait the customer may ask for the same sign-in by SMS.
+    const [smsAvailable, setSmsAvailable] = useState(false);
 
     const busy = sending || parentBusy;
     const asEmail = isLikelyEmail(identifier);
@@ -81,7 +84,7 @@ export default function PortalOtpLoginForm({
         return () => clearTimeout(t);
     }, [cooldown]);
 
-    const send = async () => {
+    const send = async (viaSms = false) => {
         setError("");
         if (!asEmail && !digits) {
             setError("Enter a valid 10-digit mobile number, or an email address");
@@ -91,8 +94,9 @@ export default function PortalOtpLoginForm({
         try {
             // One endpoint for both channels — the server normalizes the
             // identifier and picks WhatsApp or email.
-            confirmation.current = await sendOtp(identifier.trim());
+            confirmation.current = await sendOtp(identifier.trim(), viaSms);
             setVia(confirmation.current.via);
+            setSmsAvailable(confirmation.current.smsAvailable);
             setStep("code");
             setCode("");
             setCooldown(RESEND_SECONDS);
@@ -216,6 +220,20 @@ export default function PortalOtpLoginForm({
                         <>Sent to {maskedIdentity} by email</>
                     )}
                 </p>
+                {via === "whatsapp" && smsAvailable && cooldown === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                        No internet on your phone?{" "}
+                        <button
+                            type="button"
+                            className="text-primary underline disabled:text-muted-foreground"
+                            disabled={busy}
+                            onClick={() => void send(true)}
+                        >
+                            <MessageSquareText className="mr-1 inline size-3.5 align-[-2px]" />
+                            Send by SMS instead
+                        </button>
+                    </p>
+                )}
             </div>
             {(error || submitError) && <p className="text-sm text-destructive">{error || submitError}</p>}
             <Button type="submit" className="w-full" disabled={busy || code.length !== 6}>
@@ -231,7 +249,7 @@ export default function PortalOtpLoginForm({
                     type="button"
                     className="text-primary underline disabled:text-muted-foreground disabled:no-underline"
                     disabled={busy || cooldown > 0}
-                    onClick={() => void send()}
+                    onClick={() => void send(via === "sms")}
                 >
                     {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
                 </button>
