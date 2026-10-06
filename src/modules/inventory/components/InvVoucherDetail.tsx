@@ -19,6 +19,7 @@ import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActi
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
 import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
+import { BillNotifyStatus } from "@/shared/components/BillNotifyStatus";
 
 type Voucher = {
     id:             number;
@@ -34,6 +35,7 @@ type Voucher = {
     totalAmount:    number;
     showPrices:     boolean;
     journalEntryId: number | null;
+    universalVoucherId?: number | null;
     postedAt:       string | null;
     cancelledAt:    string | null;
     cancelReason:   string | null;
@@ -142,6 +144,7 @@ export function InvVoucherDetail({ basePath, label, formPath }: {
                         <span className={`text-xs px-2 py-0.5 font-medium rounded ${JOURNAL_STATUS_COLORS[voucher.status]}`}>
                             {voucher.status}
                         </span>
+                        {voucher.status === "POSTED" && <BillNotifyStatus universalVoucherId={voucher.universalVoucherId} />}
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">{voucher.description}</p>
                 </div>

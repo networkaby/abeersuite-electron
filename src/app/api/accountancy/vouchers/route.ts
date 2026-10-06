@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
+import { notifyBill } from "@/shared/lib/whatsapp/notifyBill";
 import { auth } from "@/auth";
 import { requireAuth, requireVoucherPermission } from "@/shared/lib/auth/permissions";
 import { requireWritableBranchId } from "@/shared/lib/auth/activeBranch";
@@ -247,6 +248,8 @@ export async function POST(req: Request) {
                 reference: voucher.reference ?? null,
             });
         }
+
+        if ((body.post ?? false) && body.type === "RECEIPT") after(() => notifyBill("RECEIPT", voucher.id));
 
         return NextResponse.json(
             settled

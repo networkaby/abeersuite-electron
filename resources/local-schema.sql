@@ -3031,6 +3031,92 @@ ALTER TABLE "LoyaltyLedger" ADD COLUMN IF NOT EXISTS "createdById" INTEGER NOT N
 ALTER TABLE "LoyaltyLedger" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "WhatsAppTemplate" (
+    "kind" TEXT NOT NULL,
+    "enabled" BOOLEAN NOT NULL DEFAULT false,
+    "body" TEXT NOT NULL,
+    "viewButton" TEXT,
+    "appButton" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "metaName" TEXT,
+    "metaId" TEXT,
+    "rejectReason" TEXT,
+    "version" INTEGER NOT NULL DEFAULT 0,
+    "submittedAt" TIMESTAMP(3),
+    "approvedName" TEXT,
+    "approvedBody" TEXT,
+    "approvedView" TEXT,
+    "approvedApp" TEXT,
+    "approvedAt" TIMESTAMP(3),
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "WhatsAppTemplate_pkey" PRIMARY KEY ("kind")
+);
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "kind" TEXT NOT NULL;
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "enabled" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "body" TEXT NOT NULL;
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "viewButton" TEXT;
+ALTER TABLE "WhatsAppTemplate" ALTER COLUMN "viewButton" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "appButton" TEXT;
+ALTER TABLE "WhatsAppTemplate" ALTER COLUMN "appButton" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'DRAFT';
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "metaName" TEXT;
+ALTER TABLE "WhatsAppTemplate" ALTER COLUMN "metaName" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "metaId" TEXT;
+ALTER TABLE "WhatsAppTemplate" ALTER COLUMN "metaId" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "rejectReason" TEXT;
+ALTER TABLE "WhatsAppTemplate" ALTER COLUMN "rejectReason" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "version" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "submittedAt" TIMESTAMP(3);
+ALTER TABLE "WhatsAppTemplate" ALTER COLUMN "submittedAt" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "approvedName" TEXT;
+ALTER TABLE "WhatsAppTemplate" ALTER COLUMN "approvedName" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "approvedBody" TEXT;
+ALTER TABLE "WhatsAppTemplate" ALTER COLUMN "approvedBody" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "approvedView" TEXT;
+ALTER TABLE "WhatsAppTemplate" ALTER COLUMN "approvedView" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "approvedApp" TEXT;
+ALTER TABLE "WhatsAppTemplate" ALTER COLUMN "approvedApp" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "approvedAt" TIMESTAMP(3);
+ALTER TABLE "WhatsAppTemplate" ALTER COLUMN "approvedAt" DROP NOT NULL;
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "BillNotification" (
+    "id" SERIAL NOT NULL,
+    "kind" TEXT NOT NULL,
+    "refId" INTEGER NOT NULL,
+    "personId" INTEGER,
+    "mobile" TEXT,
+    "pushStatus" TEXT NOT NULL,
+    "pushMessageId" TEXT,
+    "waStatus" TEXT NOT NULL,
+    "waMessageId" TEXT,
+    "waError" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "BillNotification_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "BillNotification" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "BillNotification" ADD COLUMN IF NOT EXISTS "kind" TEXT NOT NULL;
+ALTER TABLE "BillNotification" ADD COLUMN IF NOT EXISTS "refId" INTEGER NOT NULL;
+ALTER TABLE "BillNotification" ADD COLUMN IF NOT EXISTS "personId" INTEGER;
+ALTER TABLE "BillNotification" ALTER COLUMN "personId" DROP NOT NULL;
+ALTER TABLE "BillNotification" ADD COLUMN IF NOT EXISTS "mobile" TEXT;
+ALTER TABLE "BillNotification" ALTER COLUMN "mobile" DROP NOT NULL;
+ALTER TABLE "BillNotification" ADD COLUMN IF NOT EXISTS "pushStatus" TEXT NOT NULL;
+ALTER TABLE "BillNotification" ADD COLUMN IF NOT EXISTS "pushMessageId" TEXT;
+ALTER TABLE "BillNotification" ALTER COLUMN "pushMessageId" DROP NOT NULL;
+ALTER TABLE "BillNotification" ADD COLUMN IF NOT EXISTS "waStatus" TEXT NOT NULL;
+ALTER TABLE "BillNotification" ADD COLUMN IF NOT EXISTS "waMessageId" TEXT;
+ALTER TABLE "BillNotification" ALTER COLUMN "waMessageId" DROP NOT NULL;
+ALTER TABLE "BillNotification" ADD COLUMN IF NOT EXISTS "waError" TEXT;
+ALTER TABLE "BillNotification" ALTER COLUMN "waError" DROP NOT NULL;
+ALTER TABLE "BillNotification" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "BillNotification" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "Branch" (
     "id" TEXT NOT NULL,
     "number" INTEGER NOT NULL,
@@ -5244,6 +5330,12 @@ CREATE INDEX IF NOT EXISTS "LoyaltyLedger_accountId_createdAt_idx" ON "LoyaltyLe
 CREATE INDEX IF NOT EXISTS "LoyaltyLedger_universalVoucherId_idx" ON "LoyaltyLedger"("universalVoucherId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "BillNotification_refId_key" ON "BillNotification"("refId");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "BillNotification_personId_createdAt_idx" ON "BillNotification"("personId", "createdAt");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "Branch_number_key" ON "Branch"("number");
 
 -- CreateIndex
@@ -7366,6 +7458,13 @@ DO $$ BEGIN
     END IF;
 END $$;
 DO $$ BEGIN
+    IF to_regclass('public."BillNotification"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "BillNotification";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "BillNotification"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
     IF to_regclass('public."BooksConfig"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "BooksConfig";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "BooksConfig"
@@ -8156,6 +8255,13 @@ DO $$ BEGIN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "WallPostLike";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "WallPostLike"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."WhatsAppTemplate"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "WhatsAppTemplate";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "WhatsAppTemplate"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('kind');
     END IF;
 END $$;
 DO $$ BEGIN

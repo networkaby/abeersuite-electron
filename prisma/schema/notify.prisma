@@ -1,0 +1,60 @@
+// ── Bill / receipt messages to the customer (WhatsApp + app push) ─────────────
+//
+// WhatsAppTemplate is the WhatsApp twin of VoucherPrintTemplate: one row per
+// message kind, edited at /office/settings/whatsapp-templates. Unlike a print
+// template the wording cannot be used until Meta approves it, so the row keeps
+// the draft AND the last approved copy — bills keep going out on the approved
+// one while an edit waits. See src/shared/lib/whatsapp/billTemplates.ts.
+//
+// BillNotification is one row per bill/receipt we told the customer about:
+// whether the app notification was sent (and shown — PushMessage.shownAt) and
+// whether the WhatsApp went. Owner's call 2026-10-06: BOTH go every time for
+// now; the shown/not-shown numbers decide later whether WhatsApp can be skipped.
+
+/// One WhatsApp message kind ("SALE" | "RECEIPT"). `body` uses friendly fields
+/// ({customer}, {billNo}, …) which billTemplates.ts turns into Meta's {{1}} slots.
+model WhatsAppTemplate {
+  kind          String    @id
+  enabled       Boolean   @default(false)
+  body          String
+  /// Text of the "View bill" URL button; null = no button.
+  viewButton    String?
+  /// Text of the "Get our app" URL button; null = no button.
+  appButton     String?
+  /// DRAFT (edited, not sent) | PENDING (with Meta) | APPROVED | REJECTED
+  status        String    @default("DRAFT")
+  /// Name of the copy last sent to Meta — `<kind>_bill_v<version>`.
+  metaName      String?
+  metaId        String?
+  rejectReason  String?
+  version       Int       @default(0)
+  submittedAt   DateTime?
+  /// The last copy Meta approved — what bills are actually sent with.
+  approvedName  String?
+  approvedBody  String?
+  approvedView  String?
+  approvedApp   String?
+  approvedAt    DateTime?
+  updatedAt     DateTime  @default(now()) @updatedAt
+}
+
+/// One bill or receipt announced to its customer. `refId` is the
+/// UniversalVoucher id; `kind` is the template kind used.
+model BillNotification {
+  id             Int       @id @default(autoincrement())
+  kind           String
+  refId          Int       @unique
+  personId       Int?
+  mobile         String?
+  /// sent | no-subscription | failed | not-configured | no-person
+  pushStatus     String
+  pushMessageId  String?
+  /// sent | failed | not-configured | disabled | no-mobile
+  waStatus       String
+  waMessageId    String?
+  waError        String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now()) @updatedAt
+
+  @@index([personId, createdAt])
+}
