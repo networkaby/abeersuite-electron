@@ -25,8 +25,6 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 
 /** What we trust after verifying a token. */
 export type VerifiedFirebaseIdentity = {
-    /** E.164 phone, present for SMS sign-in. */
-    phone: string | null;
     /** Present for Google sign-in (and only when Google says it is verified). */
     email: string | null;
     /** Firebase's own uid — handy for logs, not used as our identity. */
@@ -52,11 +50,6 @@ function firebaseProjectId(): string | null {
     return process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? null;
 }
 
-/** True once a project id is available to validate tokens against. */
-export function isFirebaseVerifyConfigured(): boolean {
-    return firebaseProjectId() !== null;
-}
-
 /**
  * Verify a browser-minted Firebase ID token.
  * Returns null when the token is invalid — callers must treat that as a refusal.
@@ -76,7 +69,6 @@ export async function verifyFirebaseIdToken(
         });
         if (!payload.sub) return null;
         return {
-            phone: typeof payload.phone_number === "string" ? payload.phone_number : null,
             // Only trust an email Firebase itself marked verified — an
             // unverified one proves nothing about who is signing in.
             email:

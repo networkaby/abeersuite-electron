@@ -26,7 +26,7 @@ export function isLikelyEmail(identifier: string): boolean {
  * `normalizePortalPhone` stays deliberately loose (10–15 digits) because the DB
  * holds numbers staff typed in every shape, international ones included, and
  * tightening it there would stop resolving those customers. The OTP path cannot
- * be that loose: Fast2SMS and Meta both refuse anything but 10 digits, and the
+ * be that loose: Meta's WhatsApp API refuses anything but 10 digits, and the
  * identity baked into the ticket has to be the same 10 digits we later look up
  * — otherwise a customer verifies fine and is then treated as a stranger.
  */

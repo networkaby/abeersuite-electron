@@ -5,7 +5,7 @@ and pasting five values into env. Do them in any order; each unlocks one channel
 
 | Channel | Needs | Works without setup? |
 | --- | --- | --- |
-| Mobile OTP (WhatsApp, falls back to SMS) | Fast2SMS | no — shows "not set up yet" |
+| Mobile OTP (WhatsApp) | Meta WhatsApp Cloud API | no — shows "not set up yet" |
 | Email OTP | Resend (or any email vendor) | no — shows "not set up yet" |
 | Google | Firebase Google | no — shows "not set up yet" |
 | Mobile/email + password | nothing | **yes, works today** |
@@ -20,66 +20,34 @@ The password login keeps working throughout, so the site is never broken while
 you set these up.
 
 **How OTP works here:** *we* generate the 6-digit code and decide whether it is
-correct. Fast2SMS and Resend only *deliver* the message — neither vendor is
-trusted to say who is authenticated. That is why SMS needs no reCAPTCHA, why
+correct. Meta (WhatsApp) and Resend only *deliver* the message — neither vendor is
+trusted to say who is authenticated. That is why mobile OTP needs no reCAPTCHA, why
 both channels behave identically, and why swapping either vendor touches one
 file. Firebase is now used for **Google sign-in only**.
 
 ---
 
-## 1. Fast2SMS — unlocks Mobile OTP
+## 1. WhatsApp (Meta direct) — unlocks Mobile OTP
 
-India's TRAI rules normally require **DLT registration** for commercial SMS, which
-needs a registered entity, PAN/GST and days of approval. **We do not use it.**
-Fast2SMS sells routes that send under *their* registration instead, via a random
-numeric sender ID, to both DND and non-DND numbers.
+Mobile codes go on WhatsApp as an *authentication* template, sent straight
+through Meta's Cloud API: **~Rs 0.115 per code, no monthly fee**, and Meta bills
+only delivered messages. We generate and verify the code ourselves.
 
-Pick a route with `FAST2SMS_ROUTE`:
+### SMS — slot only, no provider yet
 
-| `FAST2SMS_ROUTE` | DLT needed | Template needed | Cost | Use when |
-| --- | --- | --- | --- | --- |
-| `q` *(default)* | no | no | **~Rs 5 per SMS** | starting out, low volume |
-| `otp` | no | yes — set up in the Fast2SMS dashboard | plan rate (much cheaper) | volume grows |
+There is no SMS fallback today. If WhatsApp cannot deliver (no WhatsApp on the
+number, template paused), the customer is told to use email OTP, Google or
+password. Fast2SMS was removed on 2026-10-06: without our own DLT registration
+its only route cost ~Rs 5 per SMS, against a Rs 0.30 ceiling.
 
-Steps:
+To add a provider later, fill in `isSmsConfigured()` and `sendOtpSms()` in
+`src/shared/lib/sms/sendSms.ts` and add its env keys — the send route already
+falls back to SMS, and the code screen and Send code button already show the SMS
+wording and icon. Look for one that sends OTP under its *own* DLT sender and
+template, or register DLT ourselves first. Add the provider to the privacy
+policy (`src/shared/lib/legal/legalContent.ts`) in the same change.
 
-1. Sign up at <https://www.fast2sms.com> and add wallet balance (SMS is prepaid).
-2. **Dev API → API Key** — copy it into `FAST2SMS_API_KEY`.
-3. That is enough to go live on the default `q` route.
-4. When volume justifies it, create an OTP template in the dashboard, put its ID in
-   `FAST2SMS_OTP_TEMPLATE_ID`, and set `FAST2SMS_ROUTE=otp`. No code change.
-
-> **Watch the cost on `q`.** At ~Rs 5 per SMS, the 5-sends-per-identifier-per-15-min
-> throttle is your spend guard — do not loosen it. Email OTP and Google cost nothing
-> per sign-in, so most customers should never trigger an SMS.
-
-The message we send is 91 characters — one SMS segment, so one charge:
-`123456 is your Network Service sign-in code. Valid 10 minutes. Do not share it with anyone.`
-
-Prefer MSG91/Twilio/Gupshup? Only `sendOtpSms()` in
-`src/shared/lib/sms/sendSms.ts` needs rewriting — verification is ours, so no other
-file cares how the code was delivered.
-
-### 1b. WhatsApp — the cheaper pipe for the same mobile OTP
-
-A WhatsApp *authentication* template costs a fraction of an SMS, so once it is
-set up mobile codes go over WhatsApp and **fall back to SMS automatically** if
-WhatsApp cannot deliver. Nothing else in the flow changes: we still generate and
-verify the code ourselves.
-
-**Cost per mobile code — pick the transport deliberately:**
-
-| Transport | Rate | Monthly fee |
-| --- | --- | --- |
-| **Meta Cloud API, direct** | **~Rs 0.115** per authentication message | **none** |
-| Fast2SMS WhatsApp passthrough | Meta's rate + BSP markup | none |
-| Fast2SMS SMS | ~Rs 0.30 | none |
-
-Meta bills **only for delivered messages** — a failed send is free. Going direct
-means you are Meta's own customer, which removes the reseller markup; the code
-supports both and picks direct whenever `META_WA_ACCESS_TOKEN` is set.
-
-#### Option A — direct to Meta (cheapest, recommended)
+### Setup
 
 1. **Meta app.** Go to <https://developers.facebook.com> → *My Apps* → *Create App*
    → type **Business** → add the **WhatsApp** product. Free; no BSP, no monthly fee.
@@ -115,54 +83,15 @@ supports both and picks direct whenever `META_WA_ACCESS_TOKEN` is set.
    | Made for an Android app (one-tap autofill) | match the language | `one_tap` |
 
 > **These two are the whole game.** Get either wrong and Meta rejects every
-> single send — and because we fall back to SMS on failure, sign-in keeps
-> *working* while quietly costing ~Rs 5 a code instead of ~Rs 0.115. Nothing
-> looks broken. Check `WhatsApp OTP failed, falling back to SMS` in the server
-> logs if the bill looks wrong.
+> single send, and every customer who types a mobile is told to use email or
+> Google instead. Check `WhatsApp OTP failed` in the server logs.
 
 **Test it before trusting it.** With the env set, request a code on `/login` with
 a real mobile and watch the server log. Silence means WhatsApp delivered; a
-`WhatsApp send failed via Meta direct (...)` line carries Meta's own reason —
+`WhatsApp send failed (...)` line carries Meta's own reason —
 `template name does not exist in the translation` is the language mismatch,
 `number of parameters does not match` is the button mismatch.
 
-#### Option B — Fast2SMS passthrough (fastest to set up)
-
-Reuses `FAST2SMS_API_KEY`, so there is nothing new to sign up for — but you pay
-Fast2SMS's markup over Meta's rate. Steps:
-
-1. In the Fast2SMS dashboard, complete the **WhatsApp / WABA onboarding** (Meta
-   embedded signup). It asks for a phone number.
-   - **Coexistence:** Meta now lets one number run the WhatsApp Business *app*
-     and the API together, so you can keep chatting from your phone. The
-     trade-off it states on screen is that contacts, chats and chat history get
-     shared with the provider.
-   - **Recommended instead:** use a **separate number** for OTP. Automated
-     high-frequency traffic can drag the number's quality rating down, and on a
-     shared number that also hits your everyday WhatsApp.
-2. Create an **AUTHENTICATION** category template and wait for Meta approval
-   (usually under a day). The body text is Meta's fixed boilerplate — the code is
-   the only variable, so there is nothing to word.
-3. Fetch your ids:
-   `GET https://www.fast2sms.com/dev/dlt_manager/whatsapp?type=number` gives the
-   **phone number id**; `?type=template` lists approved templates. Send the API
-   key in the `Authorization` header.
-4. Fill the env vars below. No code change.
-
-| Variable | What it is |
-| --- | --- |
-| `META_WA_ACCESS_TOKEN` | permanent System User token → **enables direct mode** |
-| `META_WA_PHONE_NUMBER_ID` | phone number id from the Meta app dashboard |
-| `FAST2SMS_WA_PHONE_NUMBER_ID` | passthrough only — from `?type=number` |
-| `WA_OTP_TEMPLATE` | the approved template **name** |
-| `WA_OTP_LANG` | template language **exactly as approved** — usually `en_US`; default `en` |
-| `WA_OTP_BUTTON` | `copy_code` (Meta's default button), `one_tap`, or unset for body-only |
-
-The older `FAST2SMS_WA_OTP_TEMPLATE` / `_LANG` / `_BUTTON` names still work, so an
-existing setup keeps running; the `WA_*` names are preferred because the template
-settings are the same whichever transport sends them.
-
-Leave both phone-number-id vars unset and everything stays on SMS.
 Sender lives in `src/shared/lib/whatsapp/sendWhatsApp.ts`; the pick-a-pipe
 decision is `sendMobileOtp()` in `src/app/api/portal/otp/send/route.ts`.
 
@@ -171,7 +100,7 @@ decision is `sendMobileOtp()` in `src/app/api/portal/otp/send/route.ts`.
 1. Go to <https://console.firebase.google.com> → **Add project** (or pick an existing one).
 2. Inside the project: **Build → Authentication → Get started**.
 3. **Sign-in method** tab → enable **Google**. It asks for a support email; pick yours.
-   (You do **not** need to enable Phone — SMS goes through Fast2SMS.)
+   (You do **not** need to enable Phone — mobile codes go on WhatsApp.)
 4. **Settings → Authorized domains** → add every domain the login page is served from:
    - `localhost` (usually already there)
    - your production domain, e.g. `networkservice.in`
@@ -209,25 +138,9 @@ Prefer a different provider? Only `deliver()` in
 Add to `.env.local` for development:
 
 ```bash
-# SMS OTP via Fast2SMS (SECRET)
-FAST2SMS_API_KEY=your-fast2sms-api-key
-# Route: "q" = no DLT, no template, ~Rs 5/SMS (default if unset)
-#        "otp" = no DLT, needs a dashboard template, much cheaper
-FAST2SMS_ROUTE=q
-# Only needed when FAST2SMS_ROUTE=otp
-# FAST2SMS_OTP_TEMPLATE_ID=your-template-id
-
-# WhatsApp OTP — cheaper than SMS; SMS stays the automatic fallback.
-# Unset both phone-number-id vars to stay on SMS only.
-#
-# Option A: direct to Meta (~Rs 0.115/msg, no markup, no monthly fee)
+# WhatsApp OTP, direct to Meta (~Rs 0.115/msg, no markup, no monthly fee)
 # META_WA_ACCESS_TOKEN=EAA...          # permanent System User token
 # META_WA_PHONE_NUMBER_ID=your-phone-number-id
-#
-# Option B: Fast2SMS passthrough (reuses FAST2SMS_API_KEY, but marked up)
-# FAST2SMS_WA_PHONE_NUMBER_ID=your-phone-number-id
-#
-# Template settings — same either way
 # WA_OTP_TEMPLATE=your_auth_template_name
 # WA_OTP_LANG=en_US
 # WA_OTP_BUTTON=copy_code
@@ -266,9 +179,8 @@ Environment Variables**, then redeploy. Never commit any of them.
 After setting the env vars, restart the dev server (env is read at boot).
 
 - **Mobile OTP** — enter your real mobile on `/login`, press *Send code*. If nothing
-  arrives, check in this order: wallet balance, then (only on `FAST2SMS_ROUTE=otp`)
-  that the template ID matches. The server log carries Fast2SMS's own reason,
-  including which route was used; the customer only ever sees a generic message.
+  arrives, the server log's `WhatsApp send failed (...)` line carries Meta's own
+  reason; the customer only ever sees a generic message.
 - **Email OTP** — enter your email, press *Send code*, check the inbox.
 - **Google** — press *Google*; a popup appears. If it does not, your browser blocked
   popups (the page tells the customer this).
@@ -284,9 +196,9 @@ code reaches the customer, the rest works.
   cash-only account (`creditLimit: 0`) — same as self-registration.
 - **OTP customers have no password.** They cannot use the Password tab until they set
   one from inside the portal. This is intentional; nothing stores a fake password.
-- **Rate limits.** 5 sends per identifier per 15 minutes (SMS *and* email), and 5
-  wrong guesses kills a code. The send throttle is your SMS spend guard — Fast2SMS
-  bills per message, so do not loosen it without thinking about abuse.
+- **Rate limits.** 5 sends per identifier per 15 minutes (mobile *and* email), and 5
+  wrong guesses kills a code. The send throttle is your WhatsApp spend guard — Meta
+  bills per delivered message, so do not loosen it without thinking about abuse.
 - **No database change was needed.** The pending email code lives in a signed,
   httpOnly cookie rather than a table, so there is no schema push and nothing to
   clean up. Only the code's *hash* is ever stored.

@@ -11,7 +11,7 @@ import {
 } from "@/shared/lib/auth/otpChallenge";
 
 /**
- * Check a typed code (SMS or email) against the pending cookie.
+ * Check a typed code (mobile or email) against the pending cookie.
  *
  * On success the pending cookie is cleared and replaced with a short-lived
  * ticket cookie — that ticket is what the NextAuth provider trusts, so the

@@ -7,12 +7,12 @@
  * directly. Each path ends the same way: a verification token that our
  * NextAuth provider checks before minting a session.
  *
- *   mobile → SMS 6-digit code   (our API → Fast2SMS delivery)
+ *   mobile → 6-digit code on WhatsApp (our API → Meta delivery; SMS slot unused)
  *   email  → emailed 6-digit code (our API → Resend delivery)
  *   google → popup              (Firebase — the only remaining Firebase use)
  *
  * Both OTP channels are identical from here down: one send endpoint, one verify
- * endpoint, one ticket. The SMS/email vendors only *deliver* — our own server
+ * endpoint, one ticket. The WhatsApp/email vendors only *deliver* — our own server
  * decides who is verified (see `otpChallenge.ts`). That is why phone sign-in
  * needs no reCAPTCHA and no Firebase SDK in the browser.
  *
@@ -40,12 +40,6 @@ export type OtpConfirmation = {
     confirm: (code: string) => Promise<string>;
 };
 
-export class PortalAuthNotConfiguredError extends Error {
-    constructor(message = "OTP sign-in is not set up yet. Please use mobile/email and password.") {
-        super(message);
-        this.name = "PortalAuthNotConfiguredError";
-    }
-}
 
 /** Firebase errors are `auth/...` codes; turn the common ones into plain English. */
 function friendlyFirebaseError(e: unknown): string {
@@ -100,15 +94,13 @@ export async function sendOtp(identifier: string): Promise<OtpConfirmation> {
     if (!res.ok) {
         throw new Error(body?.error ?? "Could not send the code. Please try again.");
     }
-    return confirmationFor(body?.via ?? (isLikelyEmail(identifier) ? "email" : "sms"));
+    return confirmationFor(body?.via ?? (isLikelyEmail(identifier) ? "email" : "whatsapp"));
 }
 
 /** Google sign-in via popup; resolves to a Firebase ID token. */
 export async function signInWithGoogle(): Promise<string> {
     if (!isFirebaseConfigured()) {
-        throw new PortalAuthNotConfiguredError(
-            "Google sign-in is not set up yet. Please use mobile/email and password."
-        );
+        throw new Error("Google sign-in is not set up yet. Please use mobile/email and password.");
     }
 
     const [{ firebaseAuth }, { GoogleAuthProvider, signInWithPopup }] = await Promise.all([

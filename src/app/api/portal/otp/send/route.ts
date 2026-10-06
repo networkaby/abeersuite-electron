@@ -24,8 +24,8 @@ import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
  * field and we pick the channel.
  *
  * Public by design (signing in is what it's for), so it is throttled per
- * identifier: without that it is a free SMS/email cannon pointed at any
- * number or address, and SMS costs real money per message.
+ * identifier: without that it is a free WhatsApp/email cannon pointed at any
+ * number or address, and every message costs real money.
  */
 
 const bodySchema = z.object({
@@ -36,18 +36,21 @@ const bodySchema = z.object({
  * Deliver a mobile code over the cheapest pipe that is set up.
  *
  * WhatsApp first, SMS second. If WhatsApp refuses — the customer has no
- * WhatsApp, the number is unreachable, the template is paused — we still owe
- * them a code, so we retry over SMS rather than fail the sign-in. Both pipes
- * carry the *same* code, so a customer who somehow gets both can use either.
+ * WhatsApp, the number is unreachable, the template is paused — we retry over
+ * SMS when a provider is set up. None is yet (see `sendSms.ts`), so today a
+ * WhatsApp failure ends in `MobileOtpUndeliveredError`. Both pipes carry the
+ * *same* code, so a customer who somehow gets both can use either.
  */
+class MobileOtpUndeliveredError extends Error {}
+
 async function sendMobileOtp(mobile: string, code: string): Promise<"whatsapp" | "sms"> {
     if (isWhatsAppConfigured()) {
         try {
             await sendOtpWhatsApp(mobile, code);
             return "whatsapp";
         } catch (e) {
-            if (!isSmsConfigured()) throw e;
-            console.error("WhatsApp OTP failed, falling back to SMS:", e);
+            console.error("WhatsApp OTP failed:", e);
+            if (!isSmsConfigured()) throw new MobileOtpUndeliveredError();
         }
     }
     await sendOtpSms(mobile, code);
@@ -87,9 +90,8 @@ export async function POST(req: Request) {
         recordLoginFailure(throttleKey);
 
         const channel = asEmail ? "email" : "mobile";
-        // Mobile has two pipes. WhatsApp is far cheaper per code than the SMS
-        // `q` route, so it leads whenever its WABA is set up; SMS stays as the
-        // fallback for customers WhatsApp cannot reach.
+        // Mobile has two pipes: WhatsApp leads, SMS (once a provider is set up)
+        // is the fallback for customers WhatsApp cannot reach.
         const configured = asEmail
             ? isEmailConfigured()
             : isWhatsAppConfigured() || isSmsConfigured();
@@ -98,7 +100,7 @@ export async function POST(req: Request) {
                 {
                     error: asEmail
                         ? "Email sign-in is not set up yet. Please use mobile OTP or password."
-                        : "SMS sign-in is not set up yet. Please use email OTP or password.",
+                        : "Mobile sign-in is not set up yet. Please use email OTP, Google or password.",
                 },
                 { status: 503 }
             );
@@ -133,6 +135,12 @@ export async function POST(req: Request) {
         res.cookies.delete(TICKET_COOKIE);
         return res;
     } catch (e) {
+        if (e instanceof MobileOtpUndeliveredError) {
+            return NextResponse.json(
+                { error: "We could not send the code on WhatsApp. Please use email OTP, Google or password." },
+                { status: 502 }
+            );
+        }
         return handleApiError(e, "Could not send the code. Please try again.");
     }
 }

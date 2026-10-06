@@ -5,7 +5,7 @@ import { useState } from "react";
 import type { OtpChannel } from "@/shared/lib/auth/portalPasswordless";
 
 /**
- * Shared tail of every passwordless sign-in (SMS OTP, email OTP, Google):
+ * Shared tail of every passwordless sign-in (mobile OTP, email OTP, Google):
  * we hold a verified token and need a portal session.
  *
  * Known customer   → sign in straight away.

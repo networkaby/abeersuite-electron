@@ -11,7 +11,7 @@ import { sendOtp, type OtpChannel, type OtpConfirmation, type OtpDelivery } from
 
 const RESEND_SECONDS = 30;
 
-/** identify → code. Same two steps whether the code came by SMS or email. */
+/** identify → code. Same two steps whether the code came by WhatsApp or email. */
 export type OtpStep = "identify" | "code";
 
 /** Show the last 4 digits only, so the customer can check they typed it right. */
@@ -90,7 +90,7 @@ export default function PortalOtpLoginForm({
         setSending(true);
         try {
             // One endpoint for both channels — the server normalizes the
-            // identifier and picks SMS or email.
+            // identifier and picks WhatsApp or email.
             confirmation.current = await sendOtp(identifier.trim());
             setVia(confirmation.current.via);
             setStep("code");

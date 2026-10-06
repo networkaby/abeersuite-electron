@@ -41,9 +41,6 @@ export function thisCounterId(): number | null {
     return readCounterSetup()?.counterId ?? null;
 }
 
-/** Why a PIN was refused. `wrong` and `stale` must stay distinguishable — see below. */
-export type PinRefusal = "not-a-counter" | "no-pin" | "wrong" | "stale" | "blocked";
-
 /**
  * Are the clocks still good, or is it password time?
  *

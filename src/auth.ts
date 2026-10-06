@@ -317,7 +317,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             },
         }),
         Credentials({
-            // Passwordless portal sign-in: SMS OTP, emailed OTP, or Google.
+            // Passwordless portal sign-in: mobile (WhatsApp) OTP, emailed OTP, or Google.
             // `token` is the only thing that authenticates — a verified Firebase
             // ID token or our own email ticket. `name`/`extraContact` are used
             // only when creating a customer we have never seen before.

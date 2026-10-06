@@ -1,7 +1,7 @@
 import "server-only";
 
 /**
- * OTP challenge — stateless, cookie-backed, shared by SMS and email.
+ * OTP challenge — stateless, cookie-backed, shared by mobile (WhatsApp) and email.
  *
  * Deliberately no DB table. The pending code lives in a signed httpOnly cookie
  * holding `channel . identity . expiry . attempts . hash(code)`, HMAC'd with
@@ -15,7 +15,7 @@ import "server-only";
  * use email sign-in links: a link must survive being opened in a *different*
  * browser, which forces an extra confirm-your-email step.)
  *
- * Both channels share this one path on purpose — SMS via Fast2SMS and email via
+ * Both channels share this one path on purpose — WhatsApp via Meta and email via
  * Resend are pure *delivery*; neither vendor is trusted to decide who is
  * authenticated. A successful verify swaps the pending cookie for a short-lived
  * "ticket" cookie, which the NextAuth provider consumes.

@@ -12,7 +12,7 @@ import type { PortalAuthUser } from "@/shared/lib/auth/authorizePortal";
  * Passwordless portal sign-in: turn a verified token into a session user.
  *
  * Two token flavours, one shape out:
- *   SMS / email OTP → our own ticket (HMAC, issued by /api/portal/otp/verify)
+ *   mobile / email OTP → our own ticket (HMAC, issued by /api/portal/otp/verify)
  *   Google          → Firebase ID token carrying a verified email
  *
  * A ticket is tried first and carries its own channel, so a mobile ticket can
@@ -48,7 +48,7 @@ export type PasswordlessResult =
 export async function resolvePortalIdentity(token: string): Promise<PortalIdentity | null> {
     if (!token) return null;
 
-    // Our own OTP ticket (SMS or email). It carries its own channel, so the
+    // Our own OTP ticket (mobile or email). It carries its own channel, so the
     // client cannot claim a different one than it actually verified.
     const ticket = readTicket(token);
     if (ticket) {
