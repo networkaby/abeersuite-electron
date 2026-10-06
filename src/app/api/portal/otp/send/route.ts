@@ -32,6 +32,8 @@ const bodySchema = z.object({
     identifier: z.string().trim().min(3, "Enter your mobile number or email"),
     /** "sms": the customer tapped "Send by SMS instead" — skip WhatsApp. */
     via: z.enum(["sms"]).optional(),
+    /** How many SMS this screen has already asked for — picks the next provider. */
+    smsTry: z.number().int().min(0).max(100).optional(),
 });
 
 /**
@@ -39,7 +41,7 @@ const bodySchema = z.object({
  *
  * WhatsApp first, SMS second. If WhatsApp refuses — the customer has no
  * WhatsApp, the number is unreachable, the template is paused — we retry over
- * SMS when a provider is chosen (see `sendSms.ts`); without its key a
+ * SMS through every provider that has a key (see `sendSms.ts`); with none a
  * WhatsApp failure ends in `MobileOtpUndeliveredError`. Both pipes carry the
  * *same* code, so a customer who somehow gets both can use either.
  */
@@ -53,7 +55,8 @@ class MobileOtpUndeliveredError extends Error {}
 async function sendMobileOtp(
     mobile: string,
     code: string,
-    smsOnly: boolean
+    smsOnly: boolean,
+    smsTry: number
 ): Promise<{ via: "whatsapp" | "sms"; remote: boolean }> {
     if (!smsOnly && isWhatsAppConfigured()) {
         try {
@@ -65,11 +68,11 @@ async function sendMobileOtp(
         }
     }
     try {
-        const held = await sendOtpSms(mobile, code);
+        const held = await sendOtpSms(mobile, code, smsTry);
         return { via: "sms", remote: held === "remote" };
     } catch (e) {
-        // Plan used up, key revoked, vendor down — same polite answer as WhatsApp.
-        console.error("SMS OTP failed:", e);
+        // Every provider failed (each logged in sendSms) — same polite answer.
+        console.error("SMS OTP failed on every provider:", e);
         throw new MobileOtpUndeliveredError();
     }
 }
@@ -147,7 +150,7 @@ export async function POST(req: Request) {
             });
         } else {
             // Already exactly 10 bare digits, which is what both pipes want.
-            ({ via, remote } = await sendMobileOtp(identity, code, smsOnly));
+            ({ via, remote } = await sendMobileOtp(identity, code, smsOnly, data.smsTry ?? 0));
         }
 
         // smsAvailable: whether the code screen may offer "Send by SMS instead".

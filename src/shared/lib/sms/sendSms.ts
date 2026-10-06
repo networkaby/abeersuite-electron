@@ -2,9 +2,10 @@ import "server-only";
 
 /**
  * SMS OTP delivery — the fallback when Meta WhatsApp cannot reach a customer.
- * Neither provider needs DLT registration of our own. `SMS_OTP_PROVIDER` picks
- * one (`hanuotp` | `minimoth` | `off`), so the owner can switch after a trial
- * without a code change.
+ * Neither provider needs DLT registration of our own. Every provider whose
+ * key is filled in is on (blank / `your-…` placeholder = off, never tried);
+ * both keep a balance, so they take turns: SMS try N starts at provider N, and
+ * a failure moves straight on to the next one.
  *
  *   - HanuOTP: a pipe. We generate the code and verify it ourselves
  *     (see `otpChallenge.ts`). ~Rs 0.30 per code.
@@ -40,31 +41,55 @@ const KEY_ENV: Record<SmsProvider, string> = {
     minimoth: "MINIMOTH_API_KEY",
 };
 
-/** The chosen provider, only when its key is filled in. */
-function activeProvider(): { provider: SmsProvider; key: string } | null {
-    const choice = (process.env.SMS_OTP_PROVIDER || "hanuotp").trim().toLowerCase();
-    if (choice !== "hanuotp" && choice !== "minimoth") return null;
-    const key = envKey(KEY_ENV[choice]);
-    return key ? { provider: choice, key } : null;
+/** Fixed order — the rotation and the failover both walk this list. */
+const ORDER: SmsProvider[] = ["hanuotp", "minimoth"];
+
+/** Providers with a real key, in order. */
+function activeProviders(): { provider: SmsProvider; key: string }[] {
+    return ORDER.flatMap((provider) => {
+        const key = envKey(KEY_ENV[provider]);
+        return key ? [{ provider, key }] : [];
+    });
 }
 
 export function isSmsConfigured(): boolean {
-    return activeProvider() !== null;
+    return activeProviders().length > 0;
 }
 
 /**
- * Send an OTP by SMS to a bare 10-digit Indian mobile number. Returns
- * `"remote"` when the provider made and holds its own code (MiniMoth) — then
- * `code` was not sent and the caller must verify through `verifyOtpSms`.
+ * Send an OTP by SMS to a bare 10-digit Indian mobile number, starting at
+ * provider `smsTry` (mod the number that are on) and falling through the rest
+ * on failure. Returns `"remote"` when the provider that delivered made and
+ * holds its own code (MiniMoth) — then the caller must verify through
+ * `verifyOtpSms`.
  */
-export async function sendOtpSms(mobile: string, code: string): Promise<"local" | "remote"> {
-    const active = activeProvider();
-    if (!active) throw new SmsNotConfiguredError(`SMS_OTP_PROVIDER key missing`);
+export async function sendOtpSms(mobile: string, code: string, smsTry = 0): Promise<"local" | "remote"> {
+    const active = activeProviders();
+    if (active.length === 0) throw new SmsNotConfiguredError("no SMS provider key set");
+    const start = Math.abs(Math.trunc(smsTry)) % active.length;
+    let lastError: unknown;
+    for (let i = 0; i < active.length; i++) {
+        const { provider, key } = active[(start + i) % active.length];
+        try {
+            return await sendVia(provider, key, mobile, code);
+        } catch (e) {
+            console.error(`SMS OTP via ${provider} failed:`, e);
+            lastError = e;
+        }
+    }
+    throw lastError;
+}
 
-    if (active.provider === "minimoth") {
+async function sendVia(
+    provider: SmsProvider,
+    key: string,
+    mobile: string,
+    code: string
+): Promise<"local" | "remote"> {
+    if (provider === "minimoth") {
         const res = await fetch(`${MINIMOTH_URL}/send`, {
             method: "POST",
-            headers: { "X-Api-Key": active.key, "Content-Type": "application/json" },
+            headers: { "X-Api-Key": key, "Content-Type": "application/json" },
             body: JSON.stringify({ phone: mobile }),
             cache: "no-store",
         });
@@ -77,7 +102,7 @@ export async function sendOtpSms(mobile: string, code: string): Promise<"local" 
     const url = new URL(HANU_OTP_URL);
     url.searchParams.set("number", mobile);
     url.searchParams.set("OTP", code);
-    url.searchParams.set("apikey", active.key);
+    url.searchParams.set("apikey", key);
     url.searchParams.set("templatesid", process.env.HANU_OTP_TEMPLATE_ID?.trim() || "default");
 
     const res = await fetch(url, { cache: "no-store" });
@@ -92,7 +117,7 @@ export async function sendOtpSms(mobile: string, code: string): Promise<"local" 
 
 /**
  * Ask MiniMoth whether a typed code matches the one it sent. Uses the key at
- * hand even if `SMS_OTP_PROVIDER` was switched since the send. Their session
+ * hand even if the key was blanked since the send (then this throws). Their session
  * tokens are ignored — we only want the yes/no and keep our own sign-in.
  */
 export async function verifyOtpSms(mobile: string, code: string): Promise<boolean> {

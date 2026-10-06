@@ -10,6 +10,8 @@ import { isLikelyEmail, normalizeMobile10, normalizePortalEmail } from "@/shared
 import { sendOtp, type OtpChannel, type OtpConfirmation, type OtpDelivery } from "@/shared/lib/auth/portalPasswordless";
 
 const RESEND_SECONDS = 30;
+/** A WhatsApp code still missing after this long → remind them to go online. */
+const INTERNET_HINT_AFTER_SECONDS = 10;
 
 /** identify → code. Same two steps whether the code came by WhatsApp or email. */
 export type OtpStep = "identify" | "code";
@@ -59,8 +61,10 @@ export default function PortalOtpLoginForm({
     // Where the last code went — the server picks WhatsApp or SMS per send.
     const [via, setVia] = useState<OtpDelivery>("whatsapp");
     // A WhatsApp code to a phone with no internet just waits on Meta's side, so
-    // after the resend wait the customer may ask for the same sign-in by SMS.
+    // from the second send on the customer picks WhatsApp or SMS.
     const [smsAvailable, setSmsAvailable] = useState(false);
+    // SMS sends so far on this screen — the server rotates providers by it.
+    const smsTries = useRef(0);
 
     const busy = sending || parentBusy;
     const asEmail = isLikelyEmail(identifier);
@@ -94,7 +98,11 @@ export default function PortalOtpLoginForm({
         try {
             // One endpoint for both channels — the server normalizes the
             // identifier and picks WhatsApp or email.
-            confirmation.current = await sendOtp(identifier.trim(), viaSms);
+            confirmation.current = await sendOtp(
+                identifier.trim(),
+                viaSms ? { smsTry: smsTries.current } : undefined
+            );
+            if (confirmation.current.via === "sms") smsTries.current += 1;
             setVia(confirmation.current.via);
             setSmsAvailable(confirmation.current.smsAvailable);
             setStep("code");
@@ -220,18 +228,10 @@ export default function PortalOtpLoginForm({
                         <>Sent to {maskedIdentity} by email</>
                     )}
                 </p>
-                {via === "whatsapp" && smsAvailable && cooldown === 0 && (
-                    <p className="text-xs text-muted-foreground">
-                        No internet on your phone?{" "}
-                        <button
-                            type="button"
-                            className="text-primary underline disabled:text-muted-foreground"
-                            disabled={busy}
-                            onClick={() => void send(true)}
-                        >
-                            <MessageSquareText className="mr-1 inline size-3.5 align-[-2px]" />
-                            Send by SMS instead
-                        </button>
+                {via === "whatsapp" && RESEND_SECONDS - cooldown >= INTERNET_HINT_AFTER_SECONDS && (
+                    <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                        Not received yet? Turn on mobile data or Wi-Fi — WhatsApp codes arrive only
+                        when your phone is online.
                     </p>
                 )}
             </div>
@@ -245,14 +245,41 @@ export default function PortalOtpLoginForm({
                         {asEmail ? "Change email" : "Change number"}
                     </button>
                 )}
-                <button
-                    type="button"
-                    className="text-primary underline disabled:text-muted-foreground disabled:no-underline"
-                    disabled={busy || cooldown > 0}
-                    onClick={() => void send(via === "sms")}
-                >
-                    {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
-                </button>
+                {cooldown > 0 ? (
+                    <span className="text-muted-foreground">Resend in {cooldown}s</span>
+                ) : asEmail || !smsAvailable ? (
+                    <button
+                        type="button"
+                        className="text-primary underline disabled:text-muted-foreground"
+                        disabled={busy}
+                        onClick={() => void send()}
+                    >
+                        Resend code
+                    </button>
+                ) : (
+                    // Second send on: the customer chooses the pipe.
+                    <span className="flex items-center gap-3">
+                        <span className="text-muted-foreground">Resend on</span>
+                        <button
+                            type="button"
+                            className="inline-flex items-center gap-1 text-primary underline disabled:text-muted-foreground"
+                            disabled={busy}
+                            onClick={() => void send()}
+                        >
+                            <WhatsAppIcon className="size-3.5" />
+                            WhatsApp
+                        </button>
+                        <button
+                            type="button"
+                            className="inline-flex items-center gap-1 text-primary underline disabled:text-muted-foreground"
+                            disabled={busy}
+                            onClick={() => void send(true)}
+                        >
+                            <MessageSquareText className="size-3.5" />
+                            SMS
+                        </button>
+                    </span>
+                )}
             </div>
         </form>
     );

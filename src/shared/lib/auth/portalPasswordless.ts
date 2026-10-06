@@ -86,13 +86,14 @@ function confirmationFor(via: OtpDelivery, smsAvailable: boolean): OtpConfirmati
 /**
  * Send a 6-digit code to whatever the customer typed — the server works out
  * whether it is a mobile or an email and picks the delivery channel.
- * `viaSms`: the customer asked for SMS instead of WhatsApp.
+ * `sms`: the customer asked for SMS instead of WhatsApp; `smsTry` is how many
+ * SMS this screen already sent, so the server hands it to the next provider.
  */
-export async function sendOtp(identifier: string, viaSms = false): Promise<OtpConfirmation> {
+export async function sendOtp(identifier: string, sms?: { smsTry: number }): Promise<OtpConfirmation> {
     const res = await fetch("/api/portal/otp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(viaSms ? { identifier, via: "sms" } : { identifier }),
+        body: JSON.stringify(sms ? { identifier, via: "sms", smsTry: sms.smsTry } : { identifier }),
     });
     const body = (await res.json().catch(() => null)) as { error?: string; via?: OtpDelivery; smsAvailable?: boolean } | null;
     if (!res.ok) {

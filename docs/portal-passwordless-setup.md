@@ -36,11 +36,13 @@ only delivered messages. We generate and verify the code ourselves.
 ### SMS fallback — HanuOTP or MiniMoth (no DLT of our own)
 
 When WhatsApp cannot deliver (no WhatsApp on the number, template paused), the
-code goes by SMS through the provider named in `SMS_OTP_PROVIDER`
-(`hanuotp` | `minimoth` | `off`) — `src/shared/lib/sms/sendSms.ts`. Switching
-is that one env line plus a restart. A provider counts only when its key is
-filled in (blank or the `your-…` placeholder = off); with none, a WhatsApp
-failure tells the customer to use email OTP, Google or password.
+code goes by SMS — `src/shared/lib/sms/sendSms.ts`. Every provider whose key is
+filled in is on (blank or the `your-…` placeholder = off, never tried); with
+none, a WhatsApp failure tells the customer to use email OTP, Google or
+password. Providers take turns in the fixed order HanuOTP → MiniMoth: the code
+screen sends `smsTry` (SMS already sent on that screen), the server starts at
+provider `smsTry mod count`, and a failed provider (balance out, vendor down)
+hands the same send straight to the next.
 
 | | HanuOTP | MiniMoth |
 |---|---|---|
@@ -50,10 +52,10 @@ failure tells the customer to use email OTP, Google or password.
 
 Automatic fallback only happens when Meta *refuses* the send. A phone with no
 internet still has WhatsApp, so Meta accepts and holds the message — no SMS.
-For that case the code screen shows **"No internet on your phone? Send by SMS
-instead"** once the 30 s resend wait ends (only when an SMS provider is on);
-it posts `via: "sms"` to the send route, which skips WhatsApp, and a later
-"Resend code" stays on SMS. Same per-number send throttle.
+For that case the code screen, 10 s after a WhatsApp send, reminds the customer
+to turn on mobile data or Wi-Fi; once the 30 s resend wait ends it offers
+**Resend on WhatsApp | SMS** (SMS only when a provider is on). SMS posts
+`via: "sms"`, which skips WhatsApp. Same per-number send throttle.
 
 HanuOTP replies HTTP 200 even on errors (`{"status":"error",...}`), so the body
 is checked too. MiniMoth tries its own WhatsApp before SMS, but we only call it
