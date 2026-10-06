@@ -42,17 +42,7 @@ try {
 $apk = ".\android\app\build\outputs\apk\release\app-release.apk"
 Copy-Item $apk "..\public\ns-staff.apk" -Force
 
-# The fingerprint is read off the signed APK itself, so the site can never vouch
-# for a different key than the one the phones hold.
-$certs = & "$env:ANDROID_HOME\build-tools\36.1.0\apksigner.bat" verify --print-certs $apk
-$hex = ($certs | Select-String "SHA-256 digest: ([0-9a-f]{64})").Matches[0].Groups[1].Value
-if (-not $hex) { throw "Could not read the signing fingerprint from the APK." }
-$fingerprint = (($hex.ToUpper() -split '(..)' | Where-Object { $_ }) -join ':')
-$package = (Get-Content ".\capacitor.config.json" -Raw | ConvertFrom-Json).appId
-$links = @(@{
-    relation = @("delegate_permission/common.handle_all_urls")
-    target = @{ namespace = "android_app"; package_name = $package; sha256_cert_fingerprints = @($fingerprint) }
-})
-New-Item -ItemType Directory -Force "..\public\.well-known" | Out-Null
-ConvertTo-Json -InputObject $links -Depth 5 | Set-Content "..\public\.well-known\assetlinks.json" -Encoding utf8NoBOM
+# Keeps the customer app's entry (shop-app/) — see scripts/set-assetlinks.ps1.
+. "$PSScriptRoot\..\scripts\set-assetlinks.ps1"
+Set-AssetLink -Package (Get-Content ".\capacitor.config.json" -Raw | ConvertFrom-Json).appId -Apk $apk
 Write-Host "Done: public\ns-staff.apk and public\.well-known\assetlinks.json updated."

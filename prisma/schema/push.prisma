@@ -1,0 +1,50 @@
+// ── Customer app push notifications (web push, shop.networkservice.in) ────────
+//
+// The customer app (PWA, and the TWA wrapper in android-shop/) asks for
+// notification permission after sign-in; each phone/browser that says yes is one
+// PushSubscription. Both tables sync to the counters as children of Person
+// (there is no office-only switch), so the migration carries the till gate.
+
+/// One device that agreed to notifications. `endpoint` is the browser push
+/// service address (Google FCM for Chrome / the TWA, Apple for iPhone home-screen
+/// apps); `p256dh` + `auth` are the keys the message is encrypted with.
+/// A dead endpoint (push service answers 404/410) is deleted on the next send.
+model PushSubscription {
+  id         Int      @id @default(autoincrement())
+  personId   Int
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+}
+
+/// One notification sent to a customer (all their devices). The service worker
+/// reports back through /api/push/ack: `shownAt` = the phone put it in the
+/// notification tray (counts as delivered, like WhatsApp's double tick),
+/// `clickedAt` = the customer tapped it. `refType` / `refId` tie it to the bill,
+/// receipt etc. it announced, so the sender can decide on a WhatsApp fallback.
+model PushMessage {
+  id           String    @id @default(cuid())
+  personId     Int
+  title        String
+  body         String
+  url          String
+  tag          String?
+  refType      String?
+  refId        String?
+  reachedCount Int       @default(0)
+  sentAt       DateTime  @default(now())
+  shownAt      DateTime?
+  clickedAt    DateTime?
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId, sentAt])
+  @@index([refType, refId])
+}

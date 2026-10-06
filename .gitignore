@@ -224,3 +224,8 @@ resources/7za.exe
 /phone-app/node_modules/
 /phone-app/*.keystore
 /phone-app/*.jks
+# Customer app (shop-app/, Bubblewrap TWA): only the manifest and build script are
+# source; the Gradle project is regenerated from twa-manifest.json. Same key rule.
+/shop-app/*
+!/shop-app/twa-manifest.json
+!/shop-app/build-apk.ps1

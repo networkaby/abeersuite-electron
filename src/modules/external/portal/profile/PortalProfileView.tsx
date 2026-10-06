@@ -6,6 +6,7 @@ import { UserRound } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import PortalSectionHeader from "@/modules/external/portal/PortalSectionHeader";
 import PortalPasswordCard from "@/modules/external/portal/PortalPasswordCard";
+import PortalPushCard from "@/modules/external/pwa/PortalPushCard";
 import ProfileIdentityCard from "@/modules/external/portal/profile/ProfileIdentityCard";
 import ProfileAccountsCard from "@/modules/external/portal/profile/ProfileAccountsCard";
 import ProfileContactsCard from "@/modules/external/portal/profile/ProfileContactsCard";
@@ -39,6 +40,7 @@ export default function PortalProfileView() {
                     <>
                         <ProfileIdentityCard profile={profile} />
                         <ProfileAccountsCard />
+                        <PortalPushCard />
                         <div className="grid gap-5 lg:grid-cols-[1.3fr_1fr]">
                             <ProfileContactsCard profile={profile} />
                             <PortalPasswordCard />

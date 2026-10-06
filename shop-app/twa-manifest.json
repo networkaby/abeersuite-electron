@@ -1,0 +1,41 @@
+{
+  "packageId": "in.networkservice.shop",
+  "host": "shop.networkservice.in",
+  "name": "Network Service",
+  "launcherName": "Network Service",
+  "display": "standalone",
+  "orientation": "portrait",
+  "themeColor": "#eff4fb",
+  "themeColorDark": "#101725",
+  "navigationColor": "#eff4fb",
+  "navigationColorDark": "#101725",
+  "navigationDividerColor": "#eff4fb",
+  "navigationDividerColorDark": "#101725",
+  "backgroundColor": "#eff4fb",
+  "enableNotifications": true,
+  "startUrl": "/shop",
+  "iconUrl": "https://shop.networkservice.in/shop-icon-512.png",
+  "maskableIconUrl": "https://shop.networkservice.in/shop-icon-maskable-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./ns-shop.keystore",
+    "alias": "ns-shop"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://shop.networkservice.in/shop.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 21,
+  "fullScopeUrl": "https://shop.networkservice.in/",
+  "additionalTrustedOrigins": [],
+  "retainedBundles": []
+}

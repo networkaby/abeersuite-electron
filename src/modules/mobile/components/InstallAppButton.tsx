@@ -32,9 +32,20 @@ function readPlace(): string {
  *   • already the installed app, or just installed: "Open app".
  *   • no install offer (an http test address, another browser): open in Chrome,
  *     ⋮ → Install app — plus "Open app" to use it in the browser meanwhile.
- * Used ONLY on the install page; the app itself shows no install prompt (owner).
+ * Used ONLY on the install pages (staff /m-staff-app/install, customer /app); the
+ * apps themselves show no install prompt (owner).
  */
-export default function InstallAppButton({ appName }: { appName: string }) {
+export default function InstallAppButton({
+    appName,
+    home = PHONE_APP_HOME,
+    apk = PHONE_APP_APK,
+}: {
+    appName: string;
+    /** "Open app" target — the staff app by default; the customer app passes its own. */
+    home?: string;
+    /** Android wrapper download. */
+    apk?: string;
+}) {
     const [prompt, setPrompt] = useState<InstallPromptEvent | null>(null);
     const [installed, setInstalled] = useState(false);
     // Already installed on this device, while this page is open in the browser.
@@ -65,7 +76,7 @@ export default function InstallAppButton({ appName }: { appName: string }) {
     };
 
     const openApp = (
-        <Link href={PHONE_APP_HOME} className="block w-full rounded-xl border py-3 text-center font-medium active:bg-muted">
+        <Link href={home} className="block w-full rounded-xl border py-3 text-center font-medium active:bg-muted">
             Open app
         </Link>
     );
@@ -100,7 +111,7 @@ export default function InstallAppButton({ appName }: { appName: string }) {
         return (
             <div className="space-y-3">
                 <a
-                    href={PHONE_APP_APK}
+                    href={apk}
                     download
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-4 text-lg font-semibold text-primary-foreground active:opacity-90"
                 >

@@ -8,6 +8,7 @@ import { canOpenPage, NO_ACCESS_HOME, NO_ACCESS_PARAM } from "@/shared/lib/auth/
 import { isPhoneAppPath, isPhoneRequest, PHONE_APP_HOME, PHONE_APP_FORGOT, PHONE_APP_INSTALL, PHONE_APP_LOGIN } from "@/shared/lib/device/phone";
 import { isPhoneOnlyApi, isPhoneOnlyPage, isPhoneOnlySession, phoneOnlyMayCall } from "@/shared/lib/auth/phoneOnly";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
+import { SHOP_APP_INSTALL } from "@/shared/lib/device/shopApp";
 
 function isPublicPath(pathname: string): boolean {
     if (pathname === "/" || pathname === "/login") return true;
@@ -25,6 +26,8 @@ function isPublicPath(pathname: string): boolean {
     if (pathname === "/combined-bridge-setup.exe") return true;
     if (pathname === "/combined-bridge-setup-offline.exe") return true;
     if (pathname === "/combined-bridge.version.json") return true;
+    // The customer app's install page — the WhatsApp bill message links here.
+    if (pathname === SHOP_APP_INSTALL) return true;
     if (pathname.startsWith("/portal")) return true;
     if (pathname.startsWith("/shop")) return true;
     if (pathname === "/public/login") return true;

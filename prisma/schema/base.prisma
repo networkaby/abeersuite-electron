@@ -78,6 +78,8 @@ model Person {
   account             Account? // enforced at app level; FK lives on Account.personId
   companies           PersonCompany[]
   portalCredential    PersonPortalCredential?
+  pushSubscriptions   PushSubscription[]
+  pushMessages        PushMessage[]
   socialProfile       CustomerSocialProfile?  @relation("PersonSocialProfile")
   sentConnections     SocialConnection[]      @relation("ConnectionRequester")
   receivedConnections SocialConnection[]      @relation("ConnectionAddressee")

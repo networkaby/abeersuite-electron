@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import PortalPushCard from "@/modules/external/pwa/PortalPushCard";
 import {
     ArrowRight,
     Heart,
@@ -70,6 +71,7 @@ export default async function PortalHomePage({
                     </Link>
                 </Button>
             </div>
+            <PortalPushCard compact />
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <PortalCard href="/portal/orders" icon={ShoppingBag} title="My Orders" desc="Track purchases and statuses." />
                 <PortalCard href="/portal/repairs" icon={Ticket} title="My Repairs" desc="Follow service and repair progress." />

@@ -3789,6 +3789,64 @@ ALTER TABLE "user_counter_pins" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3
 ALTER TABLE "user_counter_pins" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "PushSubscription" (
+    "id" SERIAL NOT NULL,
+    "personId" INTEGER NOT NULL,
+    "endpoint" TEXT NOT NULL,
+    "p256dh" TEXT NOT NULL,
+    "auth" TEXT NOT NULL,
+    "userAgent" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PushSubscription_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "PushSubscription" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "PushSubscription" ADD COLUMN IF NOT EXISTS "personId" INTEGER NOT NULL;
+ALTER TABLE "PushSubscription" ADD COLUMN IF NOT EXISTS "endpoint" TEXT NOT NULL;
+ALTER TABLE "PushSubscription" ADD COLUMN IF NOT EXISTS "p256dh" TEXT NOT NULL;
+ALTER TABLE "PushSubscription" ADD COLUMN IF NOT EXISTS "auth" TEXT NOT NULL;
+ALTER TABLE "PushSubscription" ADD COLUMN IF NOT EXISTS "userAgent" TEXT;
+ALTER TABLE "PushSubscription" ALTER COLUMN "userAgent" DROP NOT NULL;
+ALTER TABLE "PushSubscription" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "PushSubscription" ADD COLUMN IF NOT EXISTS "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "PushMessage" (
+    "id" TEXT NOT NULL,
+    "personId" INTEGER NOT NULL,
+    "title" TEXT NOT NULL,
+    "body" TEXT NOT NULL,
+    "url" TEXT NOT NULL,
+    "tag" TEXT,
+    "refType" TEXT,
+    "refId" TEXT,
+    "reachedCount" INTEGER NOT NULL DEFAULT 0,
+    "sentAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "shownAt" TIMESTAMP(3),
+    "clickedAt" TIMESTAMP(3),
+
+    CONSTRAINT "PushMessage_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "PushMessage" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL;
+ALTER TABLE "PushMessage" ADD COLUMN IF NOT EXISTS "personId" INTEGER NOT NULL;
+ALTER TABLE "PushMessage" ADD COLUMN IF NOT EXISTS "title" TEXT NOT NULL;
+ALTER TABLE "PushMessage" ADD COLUMN IF NOT EXISTS "body" TEXT NOT NULL;
+ALTER TABLE "PushMessage" ADD COLUMN IF NOT EXISTS "url" TEXT NOT NULL;
+ALTER TABLE "PushMessage" ADD COLUMN IF NOT EXISTS "tag" TEXT;
+ALTER TABLE "PushMessage" ALTER COLUMN "tag" DROP NOT NULL;
+ALTER TABLE "PushMessage" ADD COLUMN IF NOT EXISTS "refType" TEXT;
+ALTER TABLE "PushMessage" ALTER COLUMN "refType" DROP NOT NULL;
+ALTER TABLE "PushMessage" ADD COLUMN IF NOT EXISTS "refId" TEXT;
+ALTER TABLE "PushMessage" ALTER COLUMN "refId" DROP NOT NULL;
+ALTER TABLE "PushMessage" ADD COLUMN IF NOT EXISTS "reachedCount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "PushMessage" ADD COLUMN IF NOT EXISTS "sentAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "PushMessage" ADD COLUMN IF NOT EXISTS "shownAt" TIMESTAMP(3);
+ALTER TABLE "PushMessage" ALTER COLUMN "shownAt" DROP NOT NULL;
+ALTER TABLE "PushMessage" ADD COLUMN IF NOT EXISTS "clickedAt" TIMESTAMP(3);
+ALTER TABLE "PushMessage" ALTER COLUMN "clickedAt" DROP NOT NULL;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "Role" (
     "id" TEXT NOT NULL,
     "label" TEXT NOT NULL,
@@ -5279,6 +5337,18 @@ CREATE INDEX IF NOT EXISTS "user_counter_pins_counterId_idx" ON "user_counter_pi
 CREATE UNIQUE INDEX IF NOT EXISTS "user_counter_pins_userId_counterId_key" ON "user_counter_pins"("userId", "counterId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "PushSubscription_endpoint_key" ON "PushSubscription"("endpoint");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "PushSubscription_personId_idx" ON "PushSubscription"("personId");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "PushMessage_personId_sentAt_idx" ON "PushMessage"("personId", "sentAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "PushMessage_refType_refId_idx" ON "PushMessage"("refType", "refId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "UserPermission_userId_permissionId_key" ON "UserPermission"("userId", "permissionId");
 
 -- CreateIndex
@@ -6632,6 +6702,20 @@ END $$;
 
 -- AddForeignKey
 DO $$ BEGIN
+    ALTER TABLE "PushSubscription" ADD CONSTRAINT "PushSubscription_personId_fkey" FOREIGN KEY ("personId") REFERENCES "Person"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "PushMessage" ADD CONSTRAINT "PushMessage_personId_fkey" FOREIGN KEY ("personId") REFERENCES "Person"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
     ALTER TABLE "Role" ADD CONSTRAINT "Role_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "Department"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
@@ -7771,6 +7855,20 @@ DO $$ BEGIN
     IF to_regclass('public."product_protection"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "product_protection";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "product_protection"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."PushMessage"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "PushMessage";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "PushMessage"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."PushSubscription"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "PushSubscription";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "PushSubscription"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;
