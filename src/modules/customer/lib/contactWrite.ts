@@ -6,6 +6,7 @@
 
 import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { requireCanonicalPhone } from "@/shared/lib/format/phone";
 
 export type ContactOwner =
     | { personId: number; companyId?: never }
@@ -151,6 +152,9 @@ async function maybePromoteNextAfterDelete(
 }
 
 export async function createPhone(owner: ContactOwner, input: ContactValueInput) {
+    // One stored form per number, so `+91…` and the bare 10 digits collide on
+    // the unique index instead of sitting side by side (canonicalPhone).
+    const value = requireCanonicalPhone(input.value);
     try {
         return await prisma.$transaction(async (tx) => {
             // Is this the owner's first phone? Then the row must be primary.
@@ -173,7 +177,7 @@ export async function createPhone(owner: ContactOwner, input: ContactValueInput)
 
             const created = await tx.phone.create({
                 data: {
-                    phone: input.value,
+                    phone: value,
                     personId: owner.personId ?? null,
                     companyId: owner.companyId ?? null,
                     label: input.label ?? null,
@@ -186,7 +190,7 @@ export async function createPhone(owner: ContactOwner, input: ContactValueInput)
         });
     } catch (err) {
         if (isUniqueViolation(err, "phone")) {
-            throw new ContactConflictError("phone", input.value);
+            throw new ContactConflictError("phone", value);
         }
         throw err;
     }
@@ -228,6 +232,7 @@ export async function createEmail(owner: ContactOwner, input: ContactValueInput)
 }
 
 export async function updatePhone(id: number, patch: Partial<ContactValueInput>) {
+    const value = patch.value !== undefined ? requireCanonicalPhone(patch.value) : undefined;
     try {
         // The owner is read up front for BOTH branches, not only the promotion:
         // every edit here has to touch the parent, or the correction never
@@ -244,7 +249,7 @@ export async function updatePhone(id: number, patch: Partial<ContactValueInput>)
             const updated = await tx.phone.update({
                 where: { id },
                 data: {
-                    ...(patch.value !== undefined && { phone: patch.value }),
+                    ...(value !== undefined && { phone: value }),
                     ...(patch.label !== undefined && { label: patch.label ?? null }),
                     ...(patch.isPrimary !== undefined && patch.isPrimary !== true
                         && { isPrimary: patch.isPrimary }),
@@ -255,7 +260,7 @@ export async function updatePhone(id: number, patch: Partial<ContactValueInput>)
         });
     } catch (err) {
         if (isUniqueViolation(err, "phone")) {
-            throw new ContactConflictError("phone", patch.value ?? "");
+            throw new ContactConflictError("phone", value ?? "");
         }
         throw err;
     }

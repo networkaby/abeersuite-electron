@@ -95,7 +95,7 @@ async function run(dryRun: boolean): Promise<ReconcileResult> {
                         if (guestPhoneNorm || order.guestPhone) {
                             await tx.phone.create({
                                 data: {
-                                    phone: guestPhoneNorm ? `+91${guestPhoneNorm}` : order.guestPhone!,
+                                    phone: guestPhoneNorm ?? order.guestPhone!,
                                     personId: p.id,
                                     isPrimary: true,
                                 },

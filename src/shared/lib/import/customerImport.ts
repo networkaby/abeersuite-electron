@@ -1,4 +1,5 @@
 import { createHash } from "crypto";
+import { canonicalPhone, PhoneFormatError } from "@/shared/lib/format/phone";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
@@ -66,10 +67,13 @@ export interface CustomerImportResult {
 const GST_REG_TYPES = ["REGULAR", "COMPOSITION", "SEZ", "UNREGISTERED"] as const;
 type GstRegType = (typeof GST_REG_TYPES)[number];
 
+/** Typed phones in their stored form (canonicalPhone); one that cannot be read
+ *  as a number is kept as typed so the row reports it. */
 function pickPhones(v: CustomerImportRowInput["values"]): string[] {
-    return [v.phone1, v.phone2, v.phone3]
+    const typed = [v.phone1, v.phone2, v.phone3]
         .map((s) => (s ?? "").trim())
         .filter((s) => s.length > 0);
+    return [...new Set(typed.map((s) => canonicalPhone(s) ?? s))];
 }
 
 function pickEmails(v: CustomerImportRowInput["values"]): string[] {
@@ -232,6 +236,9 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
         if (!name) errors.push("name is required");
 
         const phones = pickPhones(v);
+        for (const p of phones) {
+            if (!canonicalPhone(p)) errors.push(new PhoneFormatError(p).message);
+        }
         let emails = pickEmails(v);
         for (const e of emails) {
             if (!isProbablyEmail(e)) errors.push(`email "${e}" is not a valid address`);

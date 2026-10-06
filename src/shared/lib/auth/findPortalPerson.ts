@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
+import { canonicalPhone } from "@/shared/lib/format/phone";
 import { normalizePortalEmail, normalizePortalPhone } from "@/shared/lib/auth/portalIdentifier";
 
 /**
@@ -111,7 +112,7 @@ export type PortalContactIdentity = {
  */
 async function attachPhone(db: Db, personId: number, phone: string, isPrimary: boolean, verified: boolean) {
     await db.phone
-        .create({ data: { phone: `+91${phone}`, personId, isPrimary, verifiedAt: verified ? new Date() : null } })
+        .create({ data: { phone, personId, isPrimary, verifiedAt: verified ? new Date() : null } })
         .catch(() => { /* already on file — nothing to do */ });
 }
 
@@ -148,7 +149,7 @@ export async function ensurePortalPerson(
         identity.emailNormalized ?? (extra.includes("@") ? normalizePortalEmail(extra) : null);
     const phone =
         identity.phoneNormalized ??
-        (extra && !extra.includes("@") ? normalizePortalPhone(extra) : null);
+        (extra && !extra.includes("@") ? canonicalPhone(extra) : null);
 
     const phoneVerified = Boolean(identity.phoneNormalized);
     const emailVerified = Boolean(identity.emailNormalized);
@@ -177,7 +178,7 @@ export async function ensurePortalPerson(
         // primary nor verified (an unverified row can never be primary).
         if (phone) {
             await tx.phone.create({
-                data: { phone: `+91${phone}`, personId: person.id, isPrimary: phoneVerified, verifiedAt: phoneVerified ? new Date() : null },
+                data: { phone, personId: person.id, isPrimary: phoneVerified, verifiedAt: phoneVerified ? new Date() : null },
             });
         }
         if (email) {

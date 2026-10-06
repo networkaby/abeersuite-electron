@@ -48,7 +48,7 @@ export async function POST(req: Request) {
                 if (own) {
                     if (!own.verifiedAt) await markPhoneVerified(own.id);
                 } else {
-                    await createPhone({ personId: customerId }, { value: `+91${identity.phoneNormalized}` });
+                    await createPhone({ personId: customerId }, { value: identity.phoneNormalized });
                 }
             } else if (identity.emailNormalized) {
                 const own = await findOwnEmail(customerId, identity.emailNormalized);
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
                 if (await findOwnPhone(customerId, digits)) {
                     return NextResponse.json({ error: "That mobile is already on your profile" }, { status: 409 });
                 }
-                await createPhone({ personId: customerId }, { value: `+91${digits}`, verified: false });
+                await createPhone({ personId: customerId }, { value: digits, verified: false });
             }
         }
 

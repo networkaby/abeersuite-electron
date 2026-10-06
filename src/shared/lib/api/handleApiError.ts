@@ -3,6 +3,7 @@ import { OFFLINE_READ_ONLY, isOfflineWriteBlocked } from "@/shared/lib/prisma/of
 import { isVoucherDateError } from "@/shared/lib/accountancy/booksPeriodServer";
 import { BranchAccessError } from "@/shared/lib/auth/activeBranch";
 import { branchAccessResponse } from "./branchAccessResponse";
+import { PhoneFormatError } from "@/shared/lib/format/phone";
 
 /**
  * Generic API error envelope. Logs server-side, returns a 500 NextResponse with
@@ -39,6 +40,11 @@ export function handleApiError(e: unknown, fallback = "Internal server error"): 
     // that resolve their branch up front and call branchAccessResponse() directly.
     if (e instanceof BranchAccessError) {
         return branchAccessResponse(e);
+    }
+    // A phone that is not one number by the stored-form rule (canonicalPhone):
+    // the user's typing, not a fault — 400 with the rule spelled out.
+    if (e instanceof PhoneFormatError) {
+        return NextResponse.json({ error: e.message, field: "phone" }, { status: 400 });
     }
     console.error("[api]", e);
     return NextResponse.json({ error: fallback }, { status: 500 });

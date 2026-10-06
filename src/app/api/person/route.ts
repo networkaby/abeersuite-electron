@@ -4,6 +4,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { ContactConflictError } from "@/modules/customer/lib/contactWrite";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
+import { canonicalPhone, PhoneFormatError } from "@/shared/lib/format/phone";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 import { loadPartyUnallocated } from "@/modules/accountancy/lib/billLink";
@@ -185,7 +186,11 @@ export async function POST(req: Request) {
         );
     }
 
-    const phones = body.phones.filter(p => p.trim().length > 0);
+    // Stored form per canonicalPhone; `+91…` and bare 10 digits are one number.
+    const typedPhones = body.phones.filter(p => p.trim().length > 0);
+    const badPhone = typedPhones.find(p => !canonicalPhone(p));
+    if (badPhone) return handleApiError(new PhoneFormatError(badPhone));
+    const phones = [...new Set(typedPhones.map(p => canonicalPhone(p)!))];
     const emails = body.emails.filter(e => e.trim().length > 0);
 
     try {

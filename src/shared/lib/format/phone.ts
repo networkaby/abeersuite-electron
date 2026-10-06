@@ -215,3 +215,49 @@ export function formatCallerNumber(raw: string | null | undefined, direction?: s
         default: return "—";
     }
 }
+
+/**
+ * Thrown when a phone being SAVED cannot be read as one number. API routes turn
+ * it into a 400 with this sentence (handleApiError).
+ */
+export class PhoneFormatError extends Error {
+    constructor(raw: string) {
+        super(`"${raw}" is not a valid number. An Indian number needs its 10 digits; a number outside India needs its country code, e.g. +44 20 7946 0000.`);
+        this.name = "PhoneFormatError";
+    }
+}
+
+/**
+ * The ONE stored form of a phone — owner's rule (2026-10-06):
+ *
+ *   Indian  → bare 10 digits, no country code. `+91 99549 99271`,
+ *             `919954999271` and `09954999271` all save as `9954999271`, so
+ *             they are one number and `Phone.phone @unique` catches the repeat.
+ *   Foreign → `+` and every digit; the country code is MANDATORY. A number
+ *             with no `+`/`00` in front is read as Indian, so anything that is
+ *             not 10 digits after stripping 91 / trunk zeros is refused.
+ *
+ * Returns null when the value is not a number by these rules.
+ */
+export function canonicalPhone(raw: string | null | undefined): string | null {
+    const s = (raw ?? "").trim();
+    const all = s.replace(/\D/g, "");
+    if (!all) return null;
+    const international = s.startsWith("+") || all.startsWith("00");
+    if (international) {
+        const digits = all.replace(/^0+/, "");
+        if (digits.startsWith("91")) return digits.length === 12 ? digits.slice(2) : null;
+        return digits.length >= 8 && digits.length <= MAX_NUMBER_DIGITS ? `+${digits}` : null;
+    }
+    const local = all.replace(/^0+/, "");
+    if (local.length === 10) return local;
+    if (local.length === 12 && local.startsWith("91")) return local.slice(2);
+    return null;
+}
+
+/** canonicalPhone for a write path: the stored form, or PhoneFormatError. */
+export function requireCanonicalPhone(raw: string): string {
+    const v = canonicalPhone(raw);
+    if (!v) throw new PhoneFormatError(raw);
+    return v;
+}
