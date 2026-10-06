@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { WhatsAppIcon } from "@/shared/components/WhatsAppIcon";
 import { isLikelyEmail, normalizeMobile10, normalizePortalEmail } from "@/shared/lib/auth/portalIdentifier";
 import { sendOtp, type OtpChannel, type OtpConfirmation, type OtpDelivery } from "@/shared/lib/auth/portalPasswordless";
 
@@ -147,7 +148,13 @@ export default function PortalOtpLoginForm({
                     <p className="text-xs text-muted-foreground">
                         {asEmail
                             ? "We will email you a 6-digit code. No password needed."
-                            : "We will send a 6-digit code on WhatsApp. No password needed."}
+                            : (
+                                  <>
+                                      We will send a 6-digit code on{" "}
+                                      <WhatsAppIcon className="size-3.5 align-[-2px]" />{" "}
+                                      <span className="font-medium text-foreground">WhatsApp</span>. No password needed.
+                                  </>
+                              )}
                     </p>
                 </div>
                 {(error || submitError) && (
@@ -185,7 +192,8 @@ export default function PortalOtpLoginForm({
                 <p className="text-xs text-muted-foreground">
                     {via === "whatsapp" ? (
                         <>
-                            Check <span className="font-medium text-foreground">WhatsApp</span> on {maskedIdentity}
+                            Check <WhatsAppIcon className="size-4 align-[-3px]" />{" "}
+                            <span className="font-medium text-foreground">WhatsApp</span> on {maskedIdentity}
                         </>
                     ) : via === "sms" ? (
                         <>
