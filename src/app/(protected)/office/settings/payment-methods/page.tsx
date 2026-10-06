@@ -526,7 +526,7 @@ export default function PaymentMethodsSettingsPage() {
             </div>
 
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
                     <DialogHeader>
                         <DialogTitle>Edit {provider?.label ?? form.displayName}</DialogTitle>
                         <DialogDescription>
@@ -535,7 +535,7 @@ export default function PaymentMethodsSettingsPage() {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-1.5">
                             <Label htmlFor="pm-name">Display name</Label>
                             <Input
@@ -572,7 +572,7 @@ export default function PaymentMethodsSettingsPage() {
 
                         {/* Pay-on-Delivery area rule — where the "pay later" rail is offered. */}
                         {form.provider === PAY_ON_DELIVERY_PROVIDER_ID && (
-                            <div className="rounded-md border border-border p-3 space-y-3">
+                            <div className="rounded-md border border-border p-3 space-y-3 sm:col-span-2">
                                 <div className="flex items-center gap-1.5 text-sm font-medium">
                                     <MapPin className="size-3.5" /> Where it&apos;s offered
                                 </div>
@@ -681,11 +681,11 @@ export default function PaymentMethodsSettingsPage() {
                             a payment on this method raises the line prices toward their
                             tag by this charge — never above the tag (paymentMdr.ts). */}
                         {provider?.supportsCounter && (
-                            <div className="rounded-md border border-border p-3 space-y-3">
+                            <div className="rounded-md border border-border p-3 space-y-3 sm:col-span-2">
                                 <div className="flex items-center gap-1.5 text-sm font-medium">
                                     <Percent className="size-3.5" /> Bank charge (MDR) at the counter
                                 </div>
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className="grid grid-cols-3 items-end gap-2 sm:grid-cols-5">
                                     <div className="grid gap-1">
                                         <Label htmlFor="pm-mdr-rate" className="text-xs text-muted-foreground">MDR %</Label>
                                         <NumericInput
@@ -719,40 +719,46 @@ export default function PaymentMethodsSettingsPage() {
                                             onValueChange={(v) => setForm((f) => ({ ...f, mdrCap: v }))}
                                         />
                                     </div>
+                                    {provider.channel === "UPI" && (
+                                        <>
+                                            <div className="flex h-9 items-center">
+                                                <FlagSwitch
+                                                    id="pm-split"
+                                                    label="Split into parts"
+                                                    icon={<Split className="size-3" />}
+                                                    checked={form.splitEnabled}
+                                                    onChange={(v) => setForm((f) => ({ ...f, splitEnabled: v }))}
+                                                />
+                                            </div>
+                                            <div className="grid gap-1">
+                                                <Label htmlFor="pm-split-max" className="text-xs text-muted-foreground">Max parts</Label>
+                                                <NumericInput
+                                                    id="pm-split-max"
+                                                    min={2}
+                                                    max={50}
+                                                    value={form.splitMaxParts}
+                                                    onValueChange={(v) => setForm((f) => ({ ...f, splitMaxParts: v }))}
+                                                />
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
-                                <p className="text-muted-foreground text-[11px]">
-                                    Per payment: nothing up to the free limit, above it this % of the
-                                    whole payment. The bill stays the cash price; a payment by this
-                                    method raises the line prices toward their tag by the charge, never
-                                    above the tag — no room left and the shop bears it.
-                                    {provider.channel === "UPI" && " UPI from 15 Oct 2026: 0.4% above ₹2,000 (free up to ₹1,999), max ₹300."}
-                                </p>
-                                {provider.channel === "UPI" && (
-                                    <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
-                                        <FlagSwitch
-                                            id="pm-split"
-                                            label="Split big UPI payments into parts"
-                                            icon={<Split className="size-3" />}
-                                            checked={form.splitEnabled}
-                                            onChange={(v) => setForm((f) => ({ ...f, splitEnabled: v }))}
-                                        />
-                                        <div className="flex items-center gap-1.5">
-                                            <Label htmlFor="pm-split-max" className="text-xs text-muted-foreground">Max parts</Label>
-                                            <NumericInput
-                                                id="pm-split-max"
-                                                className="h-8 w-16"
-                                                min={2}
-                                                max={50}
-                                                value={form.splitMaxParts}
-                                                onValueChange={(v) => setForm((f) => ({ ...f, splitMaxParts: v }))}
-                                            />
-                                        </div>
-                                        <p className="text-muted-foreground w-full text-[11px]">
-                                            Each part stays within the free limit and has its own amount, one
-                                            QR at a time. Past the max, the last part takes the rest and pays MDR.
+                                <div className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+                                    <p className="text-muted-foreground text-[11px]">
+                                        Per payment: nothing up to the free limit, above it this % of the
+                                        whole payment. The bill stays the cash price; a payment by this
+                                        method raises the line prices toward their tag by the charge, never
+                                        above the tag — no room left and the shop bears it.
+                                        {provider.channel === "UPI" && " UPI from 15 Oct 2026: 0.4% above ₹2,000 (free up to ₹1,999), max ₹300."}
+                                    </p>
+                                    {provider.channel === "UPI" && (
+                                        <p className="text-muted-foreground text-[11px]">
+                                            Split big UPI payments: each part stays within the free limit and has
+                                            its own amount, one QR at a time. Past the max, the last part takes
+                                            the rest and pays MDR.
                                         </p>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -776,7 +782,7 @@ export default function PaymentMethodsSettingsPage() {
 
                         {/* Credential detection (read-only; names + ✓/✗ only). */}
                         {provider && provider.kind === "GATEWAY" && (
-                            <div className="rounded-md border border-border px-3 py-2.5">
+                            <div className="rounded-md border border-border px-3 py-2.5 sm:col-span-2">
                                 <div className="mb-1.5 flex items-center gap-1.5 text-sm font-medium">
                                     <KeyRound className="size-3.5" /> API credentials (
                                     {form.environment === "LIVE" ? "Live" : "Test"})
