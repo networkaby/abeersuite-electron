@@ -21,12 +21,18 @@
  */
 
 import { isFirebaseConfigured } from "@/shared/lib/auth/firebaseClient";
+import { isLikelyEmail } from "@/shared/lib/auth/portalIdentifier";
 
 /** Which channel the customer verified through. */
 export type OtpChannel = "mobile" | "email";
 
+/** How the code actually travelled — mobile codes go by WhatsApp, SMS as fallback. */
+export type OtpDelivery = "email" | "whatsapp" | "sms";
+
 /** Handle for the code-entry step, returned once the code is on its way. */
 export type OtpConfirmation = {
+    /** Shown on the code step so the customer knows where to look. */
+    via: OtpDelivery;
     /**
      * Verify the 6-digit code. Resolves to a verification token: our own
      * short-lived portal ticket. The NextAuth provider re-checks it server-side.
@@ -60,8 +66,9 @@ function friendlyFirebaseError(e: unknown): string {
 }
 
 /** Shared verify half — identical for SMS and email. */
-function confirmationFor(): OtpConfirmation {
+function confirmationFor(via: OtpDelivery): OtpConfirmation {
     return {
+        via,
         confirm: async (code: string) => {
             const res = await fetch("/api/portal/otp/verify", {
                 method: "POST",
@@ -89,11 +96,11 @@ export async function sendOtp(identifier: string): Promise<OtpConfirmation> {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier }),
     });
+    const body = (await res.json().catch(() => null)) as { error?: string; via?: OtpDelivery } | null;
     if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(body?.error ?? "Could not send the code. Please try again.");
     }
-    return confirmationFor();
+    return confirmationFor(body?.via ?? (isLikelyEmail(identifier) ? "email" : "sms"));
 }
 
 /** Google sign-in via popup; resolves to a Firebase ID token. */

@@ -40,17 +40,18 @@ const bodySchema = z.object({
  * them a code, so we retry over SMS rather than fail the sign-in. Both pipes
  * carry the *same* code, so a customer who somehow gets both can use either.
  */
-async function sendMobileOtp(mobile: string, code: string): Promise<void> {
+async function sendMobileOtp(mobile: string, code: string): Promise<"whatsapp" | "sms"> {
     if (isWhatsAppConfigured()) {
         try {
             await sendOtpWhatsApp(mobile, code);
-            return;
+            return "whatsapp";
         } catch (e) {
             if (!isSmsConfigured()) throw e;
             console.error("WhatsApp OTP failed, falling back to SMS:", e);
         }
     }
     await sendOtpSms(mobile, code);
+    return "sms";
 }
 
 export async function POST(req: Request) {
@@ -104,6 +105,9 @@ export async function POST(req: Request) {
         }
 
         const code = generateOtpCode();
+        // Which pipe actually carried it, so the screen can say "check WhatsApp"
+        // or "check your texts" — the customer cannot guess.
+        let via: "email" | "whatsapp" | "sms" = "email";
 
         if (asEmail) {
             await sendEmail({
@@ -120,10 +124,10 @@ export async function POST(req: Request) {
             });
         } else {
             // Already exactly 10 bare digits, which is what both pipes want.
-            await sendMobileOtp(identity, code);
+            via = await sendMobileOtp(identity, code);
         }
 
-        const res = NextResponse.json({ ok: true, channel });
+        const res = NextResponse.json({ ok: true, channel, via });
         res.cookies.set(OTP_COOKIE, packPendingOtp(channel, identity, code), otpCookieOptions);
         // Drop any earlier verified ticket so a new send always re-verifies.
         res.cookies.delete(TICKET_COOKIE);

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isLikelyEmail, normalizeMobile10, normalizePortalEmail } from "@/shared/lib/auth/portalIdentifier";
-import { sendOtp, type OtpChannel, type OtpConfirmation } from "@/shared/lib/auth/portalPasswordless";
+import { sendOtp, type OtpChannel, type OtpConfirmation, type OtpDelivery } from "@/shared/lib/auth/portalPasswordless";
 
 const RESEND_SECONDS = 30;
 
@@ -54,6 +54,8 @@ export default function PortalOtpLoginForm({
     const [sending, setSending] = useState(false);
     const [cooldown, setCooldown] = useState(0);
     const confirmation = useRef<OtpConfirmation | null>(null);
+    // Where the last code went — the server picks WhatsApp or SMS per send.
+    const [via, setVia] = useState<OtpDelivery>("whatsapp");
 
     const busy = sending || parentBusy;
     const asEmail = isLikelyEmail(identifier);
@@ -88,6 +90,7 @@ export default function PortalOtpLoginForm({
             // One endpoint for both channels — the server normalizes the
             // identifier and picks SMS or email.
             confirmation.current = await sendOtp(identifier.trim());
+            setVia(confirmation.current.via);
             setStep("code");
             setCode("");
             setCooldown(RESEND_SECONDS);
@@ -144,7 +147,7 @@ export default function PortalOtpLoginForm({
                     <p className="text-xs text-muted-foreground">
                         {asEmail
                             ? "We will email you a 6-digit code. No password needed."
-                            : "We will text you a 6-digit code. No password needed."}
+                            : "We will send a 6-digit code on WhatsApp. No password needed."}
                     </p>
                 </div>
                 {(error || submitError) && (
@@ -180,7 +183,18 @@ export default function PortalOtpLoginForm({
                     autoFocus
                 />
                 <p className="text-xs text-muted-foreground">
-                    Sent to {maskedIdentity} by {asEmail ? "email" : "SMS"}
+                    {via === "whatsapp" ? (
+                        <>
+                            Check <span className="font-medium text-foreground">WhatsApp</span> on {maskedIdentity}
+                        </>
+                    ) : via === "sms" ? (
+                        <>
+                            Check your <span className="font-medium text-foreground">text messages (SMS)</span> on{" "}
+                            {maskedIdentity}
+                        </>
+                    ) : (
+                        <>Sent to {maskedIdentity} by email</>
+                    )}
                 </p>
             </div>
             {(error || submitError) && <p className="text-sm text-destructive">{error || submitError}</p>}
