@@ -8,8 +8,6 @@
 -- PushMessage = one notification sent, with shownAt/clickedAt reported back by
 -- the service worker (/api/push/ack) for the WhatsApp-fallback decision.
 
-◇ injected env (12) from .env.local // tip: ⌁ auth for agents [www.vestauth.com]
-◇ injected env (60) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
 -- CreateTable
 CREATE TABLE "PushSubscription" (
     "id" SERIAL NOT NULL,
