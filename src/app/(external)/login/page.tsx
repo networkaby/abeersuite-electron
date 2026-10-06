@@ -1,6 +1,7 @@
 "use client";
 
 import { signIn } from "next-auth/react";
+import { isSafeLandingPage } from "@/shared/lib/appModeCore";
 import Image from "next/image";
 import Link from "next/link";
 import { Suspense, useState } from "react";
@@ -59,7 +60,9 @@ function CustomerLoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const rawCallback = searchParams.get("callbackUrl") ?? "";
-    const callbackUrl = rawCallback.startsWith("/") && !rawCallback.startsWith("//") ? rawCallback : "/portal";
+    const hasCallback = isSafeLandingPage(rawCallback);
+    // No return page: land on the welcome choice (shop or portal).
+    const callbackUrl = hasCallback ? rawCallback : "/portal?welcome=1";
 
     const [method, setMethod] = useState<"otp" | "password">("otp");
     // One field for mobile OR email — the server works out which it is.
@@ -316,7 +319,11 @@ function CustomerLoginForm() {
                         <p className="text-center text-sm text-muted-foreground">
                             New here?{" "}
                             <Link
-                                href="/portal/register"
+                                href={
+                                    hasCallback
+                                        ? `/portal/register?callbackUrl=${encodeURIComponent(rawCallback)}`
+                                        : "/portal/register"
+                                }
                                 className="font-medium text-primary underline-offset-4 hover:underline"
                             >
                                 Create an account

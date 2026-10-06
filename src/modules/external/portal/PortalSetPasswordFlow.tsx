@@ -21,7 +21,14 @@ import type { OtpChannel } from "@/shared/lib/auth/portalPasswordless";
  * customer straight in with it rather than dropping them back on the login page
  * to type the password they just chose.
  */
-export default function PortalSetPasswordFlow({ mode }: { mode: "register" | "reset" }) {
+export default function PortalSetPasswordFlow({
+    mode,
+    returnTo = "/portal?welcome=1",
+}: {
+    mode: "register" | "reset";
+    /** Where to land once signed in — checkout passes itself through /login. */
+    returnTo?: string;
+}) {
     const router = useRouter();
     const registering = mode === "register";
 
@@ -89,7 +96,7 @@ export default function PortalSetPasswordFlow({ mode }: { mode: "register" | "re
                 router.push("/login");
                 return;
             }
-            router.push("/portal");
+            router.push(returnTo);
             router.refresh();
         } catch {
             setError("Could not save your password. Please try again.");

@@ -42,7 +42,7 @@ export default function PortalHeader() {
                         </Badge>
                     ) : null}
                     {status === "authenticated" && isCustomer ? (
-                        <Button variant="outline" size="sm" type="button" onClick={() => void signOutTo("/portal")}>
+                        <Button variant="outline" size="sm" type="button" onClick={() => void signOutTo("/shop")}>
                             Sign out
                         </Button>
                     ) : (

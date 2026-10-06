@@ -164,7 +164,7 @@ export default function PortalAppShell({ children }: PortalAppShellProps) {
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
                                         variant="destructive"
-                                        onClick={() => void signOutTo("/portal")}
+                                        onClick={() => void signOutTo("/shop")}
                                     >
                                         <LogOut className="size-4" />
                                         Sign out

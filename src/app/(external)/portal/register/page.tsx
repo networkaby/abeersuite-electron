@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import LegalConsentNote from "@/modules/external/legal/LegalConsentNote";
 import PortalSetPasswordFlow from "@/modules/external/portal/PortalSetPasswordFlow";
+import { isSafeLandingPage } from "@/shared/lib/appModeCore";
 
 /**
  * Create a portal account with a password.
@@ -17,6 +20,16 @@ import PortalSetPasswordFlow from "@/modules/external/portal/PortalSetPasswordFl
  */
 export default function PortalRegisterPage() {
     return (
+        <Suspense>
+            <PortalRegister />
+        </Suspense>
+    );
+}
+
+function PortalRegister() {
+    const raw = useSearchParams().get("callbackUrl") ?? "";
+    const callbackUrl = isSafeLandingPage(raw) ? raw : null;
+    return (
         <div className="flex min-h-[60vh] items-center justify-center px-4 py-10">
             <Card className="w-full max-w-md">
                 <CardHeader>
@@ -26,9 +39,11 @@ export default function PortalRegisterPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <PortalSetPasswordFlow mode="register" />
+                    <PortalSetPasswordFlow mode="register" returnTo={callbackUrl ?? undefined} />
                     <p className="text-center text-sm text-muted-foreground">
-                        <Link href="/login" className="text-primary underline">
+                        <Link
+                            href={callbackUrl ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : "/login"}
+                            className="text-primary underline">
                             Already have an account?
                         </Link>
                     </p>
