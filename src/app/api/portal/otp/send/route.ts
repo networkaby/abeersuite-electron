@@ -15,7 +15,7 @@ import {
 } from "@/shared/lib/auth/otpChallenge";
 import { isLoginBlocked, recordLoginFailure } from "@/shared/lib/auth/loginRateLimit";
 import { isEmailConfigured, sendEmail } from "@/shared/lib/email/sendEmail";
-import { isSmsConfigured, sendOtpSms } from "@/shared/lib/sms/sendSms";
+import { isSmsConfigured, sendOtpSms, SMS_PARTNER_LABEL } from "@/shared/lib/sms/sendSms";
 import { isWhatsAppConfigured, sendOtpWhatsApp } from "@/shared/lib/whatsapp/sendWhatsApp";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
@@ -57,7 +57,7 @@ async function sendMobileOtp(
     code: string,
     smsOnly: boolean,
     smsTry: number
-): Promise<{ via: "whatsapp" | "sms"; remote: boolean }> {
+): Promise<{ via: "whatsapp" | "sms"; remote: boolean; partner?: string }> {
     if (!smsOnly && isWhatsAppConfigured()) {
         try {
             await sendOtpWhatsApp(mobile, code);
@@ -68,8 +68,8 @@ async function sendMobileOtp(
         }
     }
     try {
-        const held = await sendOtpSms(mobile, code, smsTry);
-        return { via: "sms", remote: held === "remote" };
+        const { provider, held } = await sendOtpSms(mobile, code, smsTry);
+        return { via: "sms", remote: held === "remote", partner: SMS_PARTNER_LABEL[provider] };
     } catch (e) {
         // Every provider failed (each logged in sendSms) — same polite answer.
         console.error("SMS OTP failed on every provider:", e);
@@ -134,6 +134,8 @@ export async function POST(req: Request) {
         // or "check your texts" — the customer cannot guess.
         let via: "email" | "whatsapp" | "sms" = "email";
         let remote = false;
+        // Which delivery partner carried an SMS — named on the code screen.
+        let partner: string | undefined;
 
         if (asEmail) {
             await sendEmail({
@@ -150,7 +152,7 @@ export async function POST(req: Request) {
             });
         } else {
             // Already exactly 10 bare digits, which is what both pipes want.
-            ({ via, remote } = await sendMobileOtp(identity, code, smsOnly, data.smsTry ?? 0));
+            ({ via, remote, partner } = await sendMobileOtp(identity, code, smsOnly, data.smsTry ?? 0));
         }
 
         // smsAvailable: whether the code screen may offer "Send by SMS instead".
@@ -159,6 +161,7 @@ export async function POST(req: Request) {
             channel,
             via,
             smsAvailable: !asEmail && isSmsConfigured(),
+            partner,
         });
         res.cookies.set(OTP_COOKIE, packPendingOtp(channel, identity, code, remote), otpCookieOptions);
         // Drop any earlier verified ticket so a new send always re-verifies.

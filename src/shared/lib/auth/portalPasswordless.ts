@@ -35,6 +35,8 @@ export type OtpConfirmation = {
     via: OtpDelivery;
     /** A mobile code may be re-sent by SMS — an SMS provider is set up. */
     smsAvailable: boolean;
+    /** The SMS delivery partner whose name the customer will see, if any. */
+    partner?: string;
     /**
      * Verify the 6-digit code. Resolves to a verification token: our own
      * short-lived portal ticket. The NextAuth provider re-checks it server-side.
@@ -62,10 +64,11 @@ function friendlyFirebaseError(e: unknown): string {
 }
 
 /** Shared verify half — identical for SMS and email. */
-function confirmationFor(via: OtpDelivery, smsAvailable: boolean): OtpConfirmation {
+function confirmationFor(via: OtpDelivery, smsAvailable: boolean, partner?: string): OtpConfirmation {
     return {
         via,
         smsAvailable,
+        partner,
         confirm: async (code: string) => {
             const res = await fetch("/api/portal/otp/verify", {
                 method: "POST",
@@ -95,13 +98,14 @@ export async function sendOtp(identifier: string, sms?: { smsTry: number }): Pro
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(sms ? { identifier, via: "sms", smsTry: sms.smsTry } : { identifier }),
     });
-    const body = (await res.json().catch(() => null)) as { error?: string; via?: OtpDelivery; smsAvailable?: boolean } | null;
+    const body = (await res.json().catch(() => null)) as { error?: string; via?: OtpDelivery; smsAvailable?: boolean; partner?: string } | null;
     if (!res.ok) {
         throw new Error(body?.error ?? "Could not send the code. Please try again.");
     }
     return confirmationFor(
         body?.via ?? (isLikelyEmail(identifier) ? "email" : "whatsapp"),
-        body?.smsAvailable ?? false
+        body?.smsAvailable ?? false,
+        body?.partner
     );
 }
 

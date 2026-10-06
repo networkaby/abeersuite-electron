@@ -57,6 +57,10 @@ to turn on mobile data or Wi-Fi; once the 30 s resend wait ends it offers
 **Resend on WhatsApp | SMS** (SMS only when a provider is on). SMS posts
 `via: "sms"`, which skips WhatsApp. Same per-number send throttle.
 
+Neither provider can put our name in the message, so the send route returns
+`partner` (`SMS_PARTNER_LABEL` in `sendSms.ts`) and the code screen says the
+code comes from that delivery partner, not from us directly.
+
 HanuOTP replies HTTP 200 even on errors (`{"status":"error",...}`), so the body
 is checked too. MiniMoth tries its own WhatsApp before SMS, but we only call it
 after Meta WhatsApp has failed. Fast2SMS was removed on 2026-10-06: without our

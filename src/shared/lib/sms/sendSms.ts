@@ -41,6 +41,16 @@ const KEY_ENV: Record<SmsProvider, string> = {
     minimoth: "MINIMOTH_API_KEY",
 };
 
+/**
+ * What the customer sees as the sender, so a stranger's name in the message
+ * reads as our delivery partner rather than a scam.
+ */
+export const SMS_PARTNER_LABEL: Record<SmsProvider, string> = {
+    // MiniMoth tries its own WhatsApp before SMS, so say where to look.
+    minimoth: "MiniMoth (on WhatsApp or SMS)",
+    hanuotp: "HanuOTP (sender HANUTP)",
+};
+
 /** Fixed order — the rotation and the failover both walk this list. */
 const ORDER: SmsProvider[] = ["minimoth", "hanuotp"];
 
@@ -59,11 +69,15 @@ export function isSmsConfigured(): boolean {
 /**
  * Send an OTP by SMS to a bare 10-digit Indian mobile number, starting at
  * provider `smsTry` (mod the number that are on) and falling through the rest
- * on failure. Returns `"remote"` when the provider that delivered made and
+ * on failure. Returns the provider that took it, and `held: "remote"` when it made and
  * holds its own code (MiniMoth) — then the caller must verify through
  * `verifyOtpSms`.
  */
-export async function sendOtpSms(mobile: string, code: string, smsTry = 0): Promise<"local" | "remote"> {
+export async function sendOtpSms(
+    mobile: string,
+    code: string,
+    smsTry = 0
+): Promise<{ provider: SmsProvider; held: "local" | "remote" }> {
     const active = activeProviders();
     if (active.length === 0) throw new SmsNotConfiguredError("no SMS provider key set");
     const start = Math.abs(Math.trunc(smsTry)) % active.length;
@@ -71,7 +85,7 @@ export async function sendOtpSms(mobile: string, code: string, smsTry = 0): Prom
     for (let i = 0; i < active.length; i++) {
         const { provider, key } = active[(start + i) % active.length];
         try {
-            return await sendVia(provider, key, mobile, code);
+            return { provider, held: await sendVia(provider, key, mobile, code) };
         } catch (e) {
             console.error(`SMS OTP via ${provider} failed:`, e);
             lastError = e;

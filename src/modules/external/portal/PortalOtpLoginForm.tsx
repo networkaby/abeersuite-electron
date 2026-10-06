@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { WhatsAppIcon } from "@/shared/components/WhatsAppIcon";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { isLikelyEmail, normalizeMobile10, normalizePortalEmail } from "@/shared/lib/auth/portalIdentifier";
 import { sendOtp, type OtpChannel, type OtpConfirmation, type OtpDelivery } from "@/shared/lib/auth/portalPasswordless";
 
@@ -65,6 +66,7 @@ export default function PortalOtpLoginForm({
     const [smsAvailable, setSmsAvailable] = useState(false);
     // SMS sends so far on this screen — the server rotates providers by it.
     const smsTries = useRef(0);
+    const [partner, setPartner] = useState<string | undefined>();
 
     const busy = sending || parentBusy;
     const asEmail = isLikelyEmail(identifier);
@@ -105,6 +107,7 @@ export default function PortalOtpLoginForm({
             if (confirmation.current.via === "sms") smsTries.current += 1;
             setVia(confirmation.current.via);
             setSmsAvailable(confirmation.current.smsAvailable);
+            setPartner(confirmation.current.partner);
             setStep("code");
             setCode("");
             setCooldown(RESEND_SECONDS);
@@ -266,6 +269,13 @@ export default function PortalOtpLoginForm({
                         </span>
                     )}
                 </div>
+                {via === "sms" && partner && (
+                    <p className="text-xs text-muted-foreground">
+                        It comes from our delivery partner{" "}
+                        <span className="font-medium text-foreground">{partner}</span>, not from{" "}
+                        {COMPANY_DETAILS.brandName} directly.
+                    </p>
+                )}
                 {via === "whatsapp" && RESEND_SECONDS - cooldown >= INTERNET_HINT_AFTER_SECONDS && (
                     <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
                         Not received yet? Turn on mobile data or Wi-Fi — WhatsApp codes arrive only
