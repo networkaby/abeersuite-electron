@@ -27,7 +27,7 @@ import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { extractApiError } from "@/shared/lib/api";
 import { formatInr, todayIso } from "@/shared/lib/format";
 import { cleanLineNote, composeLineDescription, readLineText } from "@/shared/lib/print/lineDescription";
-import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
+import { openCashDrawer, printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearchAndCreate";
 import { usePosDraftStore } from "@/store/posDraftStore";
 import type { EditSource } from "@/modules/pos/components/PosTopBar";
@@ -310,6 +310,8 @@ export default function PosQuoteScreen({ mode, editId }: { mode: QuoteMode; edit
                 // Advance receipt prints as a second slip (GL voucher source) — the
                 // slip that records the cash is the one that opens the drawer.
                 if (data.receiptVoucherId) await printVoucherThermal("gl", data.receiptVoucherId, "RECEIPT", { openDrawer: cashAdvance });
+            } else if (cashAdvance && data.receiptVoucherId) {
+                void openCashDrawer();   // advance taken in cash, nothing printing
             }
         } catch (e: unknown) {
             toast.error(extractApiError(e, cfg.saveErr));

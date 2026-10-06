@@ -27,7 +27,7 @@ import type { PromoSnapshot } from "@/shared/lib/accountancy/settlement";
 import type { ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { bridgeOk, bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
-import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
+import { openCashDrawer, printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import { computePriceLadder } from "@/modules/pos/lib/priceLadder";
 import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 import type { VoucherBridgePayload } from "@/modules/accountancy/lib/voucherReceiptSample";
@@ -438,6 +438,8 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             b.setDisplayHold("thankyou");
             setTimeout(() => b.setDisplayHold(null), 4500);
             b.resetAfterSubmit();   // also ends the ⇄ conversion
+            // Cash taken with Print off → open the drawer without a slip.
+            if (!printAfter && movesCash(pay)) void openCashDrawer();
             if (printAfter) {
                 if (await bridgeOk("thermal", 1000)) {
                     // Customer "Today's discount" ladder for the thermal slip (B

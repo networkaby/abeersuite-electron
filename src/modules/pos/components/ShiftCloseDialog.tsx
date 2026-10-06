@@ -30,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { getOrgDefaults } from "@/shared/lib/orgDefaults";
 import { extractApiError } from "@/shared/lib/api";
+import { openCashDrawer } from "@/shared/lib/print/silentThermalPrint";
 import { parseDigitsInput, parseDecimalInput } from "@/shared/lib/format";
 import { toDateTimeLocalInput } from "@/shared/lib/format/dateInput";
 import { TallyDateTimeInput } from "@/shared/components/TallyDateTimeInput";
@@ -169,6 +170,13 @@ export function ShiftCloseDialog({
             .catch(() => toast.error("Failed to load shift summary"))
             .finally(() => setLoading(false));
     }, [open, shiftId, initialClosedAt]);
+
+    // The cashier closing their own shift at the till counts the cash — open the
+    // drawer once as the dialog opens. Office closes (someone else's shift, or a
+    // back-dated close) are not at the drawer, so they never kick it.
+    useEffect(() => {
+        if (open && !forCashierName && initialClosedAt === undefined) void openCashDrawer();
+    }, [open, forCashierName, initialClosedAt]);
 
     const expected     = detail ? Number(detail.runningExpectedPaise) / 100 : 0;
     const dropsNum     = detail ? Number(detail.dropsPaise) / 100 : 0;

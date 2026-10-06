@@ -28,6 +28,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { extractApiError } from "@/shared/lib/api";
+import { openCashDrawer } from "@/shared/lib/print/silentThermalPrint";
 import { resolveMachineIdentity, matchesThisMachine } from "@/shared/lib/counter/identity";
 import { applyCounterIdRanges } from "@/modules/pos/lib/counterIdRanges";
 
@@ -126,6 +127,8 @@ export function ShiftOpenDialog({
                 deviceLabel:     deviceLabel ?? undefined,
             });
             await applyCounterIdRanges(data.idRangeStart);
+            // Float goes into the drawer as the shift opens.
+            if (!data.resumed && totalFloat > 0) void openCashDrawer();
             if (data.resumed) {
                 toast.success(`Resumed shift — ${selectedCounter?.name} · continuing from where you left off`);
             } else {

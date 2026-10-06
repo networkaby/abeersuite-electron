@@ -10,7 +10,7 @@
 import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
+import { openCashDrawer, printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import { Banknote } from "lucide-react";
 import { SavePrintButtons, savePrintKey } from "@/modules/pos/components/SavePrintButtons";
 import {
@@ -64,6 +64,7 @@ export function PosExpenditureDialog({
             // Silent thermal print of the payment voucher (selection page only as fallback).
             // Always paid in cash from the drawer, so the slip always opens it.
             if (print) void printVoucherThermal("gl", data.voucherId, "PAYMENT", { openDrawer: true });
+            else void openCashDrawer();
             onDone();
             onOpenChange(false);
         } catch (e: unknown) {

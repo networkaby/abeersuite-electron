@@ -25,7 +25,7 @@ import {
 } from "@/shared/components/PartySearchAndCreate";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { extractApiError } from "@/shared/lib/api";
-import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
+import { openCashDrawer, printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import { SavePrintButtons, savePrintKey } from "@/modules/pos/components/SavePrintButtons";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -277,6 +277,7 @@ export function PosReturnDialog({
             );
             // A cash refund comes out of the drawer; credit note / gift card does not.
             if (print) void printVoucherThermal("inv", data.returnVoucherId, "SALE_RETURN", { openDrawer: mode === "CASH" });
+            else if (mode === "CASH") void openCashDrawer();
             onDone();
             onOpenChange(false);
             reset();

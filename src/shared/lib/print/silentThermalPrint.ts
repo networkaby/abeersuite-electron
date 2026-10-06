@@ -12,6 +12,23 @@ import { receiptHref, voucherPrintPageHref, type VoucherSource } from "@/modules
 type ThermalPrintOpts = { openDrawer?: boolean };
 
 /**
+ * Open the cash drawer with no slip — cash moved but nothing is printing (a bill
+ * saved with Print off, a shift opened with float, the Close Shift count). Only
+ * when Printer Settings has the cash-drawer tick on this PC. Never throws, never
+ * toasts: a counter without a drawer simply does nothing.
+ */
+export async function openCashDrawer(): Promise<void> {
+    try {
+        if (!await bridgeOk("thermal", 1200)) return;
+        const cfg = await bridgeRequest<{ cashDrawer?: boolean }>("thermal", "config:get", undefined, 1500);
+        if (!cfg?.cashDrawer) return;
+        await bridgeRequest("thermal", "drawer:open");
+    } catch {
+        // No drawer / bridge gone — the sale is already saved, stay quiet.
+    }
+}
+
+/**
  * Silent thermal print of a Day-Book voucher — the way a POS sale prints:
  * no page, no dialog. Fetches the bridge payload from
  * `/api/print/thermal/[source]/[id]` and sends it over the bridge.
@@ -46,6 +63,8 @@ export async function printVoucherThermal(source: VoucherSource, rawId: number, 
         toast.success("Sent to thermal printer");
         return;
     }
+    // The slip could not carry the kick — still open the drawer for the cash.
+    if (opts.openDrawer) void openCashDrawer();
     window.open(`${receiptHref(source, rawId, kind, "pdf")}&paper=THERMAL_80MM`, "_blank", "noopener");
 }
 

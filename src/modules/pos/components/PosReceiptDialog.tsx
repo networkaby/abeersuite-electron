@@ -19,7 +19,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
+import { openCashDrawer, printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -134,6 +134,7 @@ export function PosReceiptDialog({
             });
             toast.success(`Receipt ${data.voucherRef} · ${formatInr(total)} from ${party.name}`);
             if (printAfter) void printVoucherThermal("gl", data.voucherId, "RECEIPT", { openDrawer: movesCash(pay) });
+            else if (movesCash(pay)) void openCashDrawer();
             onDone();
             onOpenChange(false);
         } catch (e: unknown) {
