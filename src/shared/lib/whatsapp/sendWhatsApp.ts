@@ -58,8 +58,8 @@ function templateLang(): string {
 }
 /**
  * Which button the approved template has, if any — these are NOT
- * interchangeable, Meta expects a different parameter shape for each:
- *   "copy_code"  → button parameter is `{ type: "coupon_code", coupon_code }`.
+ * interchangeable at template-creation time, but both send the same payload:
+ *   "copy_code"  → sent as a `url` button with the code as text (Meta requires it).
  *                  This is the one to use for a website login (no Android app).
  *   "one_tap"    → button parameter is `{ type: "text", text }` (autofills into
  *                  a native Android app via the SMS Retriever API — needs the
@@ -113,18 +113,14 @@ export async function sendOtpWhatsApp(mobile: string, code: string): Promise<voi
     }
 
     // Copy-code and one-tap templates repeat the code in the button payload,
-    // each with its own parameter shape; a plain authentication template has
+    // in the same url-button shape; a plain authentication template has
     // a body parameter only.
     const components: unknown[] = [{ type: "body", parameters: [{ type: "text", text: code }] }];
     const buttonKind = templateButtonKind();
-    if (buttonKind === "copy_code") {
-        components.push({
-            type: "button",
-            sub_type: "copy_code",
-            index: "0",
-            parameters: [{ type: "coupon_code", coupon_code: code }],
-        });
-    } else if (buttonKind === "one_tap") {
+    // Meta sends BOTH button kinds of an authentication template as a "url"
+    // button carrying the code as text — a `copy_code`/`coupon_code` shape is
+    // refused with 132018 "Button at index 0 must be of type Url" (2026-10-06).
+    if (buttonKind !== "none") {
         components.push({
             type: "button",
             sub_type: "url",
