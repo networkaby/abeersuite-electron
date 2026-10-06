@@ -526,7 +526,7 @@ export default function PaymentMethodsSettingsPage() {
             </div>
 
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent className="max-w-lg">
+                <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Edit {provider?.label ?? form.displayName}</DialogTitle>
                         <DialogDescription>
