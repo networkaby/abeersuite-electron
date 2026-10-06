@@ -37,7 +37,7 @@ const bodySchema = z.object({
  *
  * WhatsApp first, SMS second. If WhatsApp refuses — the customer has no
  * WhatsApp, the number is unreachable, the template is paused — we retry over
- * SMS when a provider is set up. None is yet (see `sendSms.ts`), so today a
+ * SMS when HanuOTP is set up (see `sendSms.ts`); without its key a
  * WhatsApp failure ends in `MobileOtpUndeliveredError`. Both pipes carry the
  * *same* code, so a customer who somehow gets both can use either.
  */

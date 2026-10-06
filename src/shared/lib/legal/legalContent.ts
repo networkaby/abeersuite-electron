@@ -115,6 +115,7 @@ export const PRIVACY_POLICY: LegalDoc = {
                 "We do not sell your personal data. We share it only with service providers who help us run the business, and only with the data they need:",
                 "- Razorpay — to take online payments and process refunds.",
                 "- Meta (WhatsApp) — to deliver one-time sign-in and verification codes on WhatsApp. Meta receives your mobile number and the code.",
+                "- HanuOTP (A D Smart) — to deliver one-time sign-in codes by SMS when WhatsApp cannot reach you. HanuOTP receives your mobile number and the code.",
                 "- Resend — to deliver one-time codes, order confirmations and invoices by email.",
                 "- Google / Firebase — to verify your identity if you choose Google sign-in.",
                 "- Shiprocket, Shipway and our own delivery staff — to deliver your order. They receive your name, delivery address and mobile number.",

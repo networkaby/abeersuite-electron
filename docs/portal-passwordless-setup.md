@@ -33,19 +33,20 @@ Mobile codes go on WhatsApp as an *authentication* template, sent straight
 through Meta's Cloud API: **~Rs 0.115 per code, no monthly fee**, and Meta bills
 only delivered messages. We generate and verify the code ourselves.
 
-### SMS — slot only, no provider yet
+### SMS — HanuOTP fallback (no DLT of our own)
 
-There is no SMS fallback today. If WhatsApp cannot deliver (no WhatsApp on the
-number, template paused), the customer is told to use email OTP, Google or
-password. Fast2SMS was removed on 2026-10-06: without our own DLT registration
-its only route cost ~Rs 5 per SMS, against a Rs 0.30 ceiling.
+When WhatsApp cannot deliver (no WhatsApp on the number, template paused), the
+same code goes by SMS through HanuOTP's "OTP Without DLT" route
+(`src/shared/lib/sms/sendSms.ts`) — Rs 0.30 per code on plan OTP 1 (Rs 100,
+335 codes, cannot be recharged; next is OTP 2, Rs 3,600 at Rs 0.25). It sends on
+HanuOTP's own template, so no DLT registration is needed. Fast2SMS was removed
+on 2026-10-06: without our own DLT its only route cost ~Rs 5 per SMS.
 
-To add a provider later, fill in `isSmsConfigured()` and `sendOtpSms()` in
-`src/shared/lib/sms/sendSms.ts` and add its env keys — the send route already
-falls back to SMS, and the code screen and Send code button already show the SMS
-wording and icon. Look for one that sends OTP under its *own* DLT sender and
-template, or register DLT ourselves first. Add the provider to the privacy
-policy (`src/shared/lib/legal/legalContent.ts`) in the same change.
+Env: `HANU_OTP_API_KEY` (hanuotp.in > OTP Service > API Documentation >
+Generate API Key) and optional `HANU_OTP_TEMPLATE_ID` (default `default`). While
+the key is missing or still the `your-…` placeholder, SMS stays off and a
+WhatsApp failure tells the customer to use email OTP, Google or password.
+Delivery logs on hanuotp.in are purged after 30 days.
 
 ### Setup
 
