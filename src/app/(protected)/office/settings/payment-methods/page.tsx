@@ -659,7 +659,7 @@ export default function PaymentMethodsSettingsPage() {
                             method books into (online receipts Dr this ledger). */}
                         <div className="grid gap-1.5">
                             <Label className="flex items-center gap-1.5">
-                                <Landmark className="size-3.5" /> Settlement ledger
+                                <Landmark className="size-3.5" /> Online settlement ledger
                             </Label>
                             <GlAccountCombobox
                                 value={form.settlementAccountId}
@@ -672,7 +672,7 @@ export default function PaymentMethodsSettingsPage() {
                                 {form.provider === PAY_ON_DELIVERY_PROVIDER_ID
                                     ? "Where collected-on-delivery cash is booked when remitted."
                                     : provider?.kind === "MANUAL"
-                                      ? "The default ledger this method books into. Each counter row picks its own."
+                                      ? "Online settlement. Counter payments book to each counter's own ledger (Admin → POS Counters)."
                                       : "Online payments via this gateway post a Receipt debiting this ledger."}
                             </p>
                         </div>
