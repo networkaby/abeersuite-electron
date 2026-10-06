@@ -103,7 +103,7 @@ async function reset(email: string, code: string, password: string | undefined) 
     const raw = (await cookies()).get(COOKIE)?.value;
     // Counts wrong codes per address the code was SENT to (the signed cookie), never
     // the typed one, which the caller can change on every try.
-    const check = checkOtpCode(raw, code, "staff-reset-code");
+    const check = await checkOtpCode(raw, code, "staff-reset-code");
     if (!check.ok && check.reason === "blocked") {
         return NextResponse.json({ error: TOO_MANY }, { status: 429 });
     }

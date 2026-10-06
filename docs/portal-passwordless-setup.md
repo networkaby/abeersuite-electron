@@ -33,20 +33,25 @@ Mobile codes go on WhatsApp as an *authentication* template, sent straight
 through Meta's Cloud API: **~Rs 0.115 per code, no monthly fee**, and Meta bills
 only delivered messages. We generate and verify the code ourselves.
 
-### SMS — HanuOTP fallback (no DLT of our own)
+### SMS fallback — HanuOTP or MiniMoth (no DLT of our own)
 
 When WhatsApp cannot deliver (no WhatsApp on the number, template paused), the
-same code goes by SMS through HanuOTP's "OTP Without DLT" route
-(`src/shared/lib/sms/sendSms.ts`) — Rs 0.30 per code on plan OTP 1 (Rs 100,
-335 codes, cannot be recharged; next is OTP 2, Rs 3,600 at Rs 0.25). It sends on
-HanuOTP's own template, so no DLT registration is needed. Fast2SMS was removed
-on 2026-10-06: without our own DLT its only route cost ~Rs 5 per SMS.
+code goes by SMS through the provider named in `SMS_OTP_PROVIDER`
+(`hanuotp` | `minimoth` | `off`) — `src/shared/lib/sms/sendSms.ts`. Switching
+is that one env line plus a restart. A provider counts only when its key is
+filled in (blank or the `your-…` placeholder = off); with none, a WhatsApp
+failure tells the customer to use email OTP, Google or password.
 
-Env: `HANU_OTP_API_KEY` (hanuotp.in > OTP Service > API Documentation >
-Generate API Key) and optional `HANU_OTP_TEMPLATE_ID` (default `default`). While
-the key is missing or still the `your-…` placeholder, SMS stays off and a
-WhatsApp failure tells the customer to use email OTP, Google or password.
-Delivery logs on hanuotp.in are purged after 30 days.
+| | HanuOTP | MiniMoth |
+|---|---|---|
+| Key | `HANU_OTP_API_KEY` (+ optional `HANU_OTP_TEMPLATE_ID`, default `default`) | `MINIMOTH_API_KEY` (`mm_live_…`, app.minimoth.dev > Projects) |
+| Price | Rs 0.30 on plan OTP 1 (Rs 100, 335 codes, no recharge; next plan Rs 3,600) | Rs 0.35, Rs 50 minimum top-up, refunded if undelivered |
+| Who makes the code | We do; HanuOTP only delivers | MiniMoth makes and checks it — the pending cookie stores `remote:minimoth` instead of a hash and verify asks their `/v1/otp/verify` |
+
+HanuOTP replies HTTP 200 even on errors (`{"status":"error",...}`), so the body
+is checked too. MiniMoth tries its own WhatsApp before SMS, but we only call it
+after Meta WhatsApp has failed. Fast2SMS was removed on 2026-10-06: without our
+own DLT its only route cost ~Rs 5 per SMS.
 
 ### Setup
 

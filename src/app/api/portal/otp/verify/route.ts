@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
         const { data, error } = await validateRequest(req, bodySchema);
         if (error) return error;
 
-        const result = checkOtpCode(req.cookies.get(OTP_COOKIE)?.value, data.code, "portal-otp-code");
+        const result = await checkOtpCode(req.cookies.get(OTP_COOKIE)?.value, data.code, "portal-otp-code");
 
         if (result.ok) {
             const ticket = packTicket(result.channel, result.identity);

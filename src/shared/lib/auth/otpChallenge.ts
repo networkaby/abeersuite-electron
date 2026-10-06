@@ -33,6 +33,7 @@ import "server-only";
 import { createHmac, randomInt, timingSafeEqual } from "crypto";
 import { OTP_CODE_TTL_MS, OTP_MAX_ATTEMPTS, OTP_TICKET_TTL_MS } from "@/shared/lib/constants/session";
 import { clearLoginFailures, loginTriesLeft, recordLoginFailure } from "@/shared/lib/auth/loginRateLimit";
+import { verifyOtpSms } from "@/shared/lib/sms/sendSms";
 
 export const OTP_COOKIE = "portal_otp";
 export const TICKET_COOKIE = "portal_otp_ticket";
@@ -67,10 +68,21 @@ export function generateOtpCode(): string {
 
 // ── Pending-code cookie ──────────────────────────────────────────────────────
 
-/** `channel|identity|expiry|attempts|codeHash|sig` */
-export function packPendingOtp(channel: OtpChannel, identity: string, code: string): string {
+/**
+ * Stands in for the code hash when an SMS provider made its own code
+ * (MiniMoth) — the ":" can never appear in a base64url hash.
+ */
+const REMOTE_CODE = "remote:minimoth";
+
+/** `channel|identity|expiry|attempts|codeHash|sig` — `remote`: the provider holds the code. */
+export function packPendingOtp(
+    channel: OtpChannel,
+    identity: string,
+    code: string,
+    remote = false
+): string {
     const expiry = Date.now() + OTP_CODE_TTL_MS;
-    const codeHash = sign(`${channel}:${identity}:${code}`);
+    const codeHash = remote ? REMOTE_CODE : sign(`${channel}:${identity}:${code}`);
     const body = [channel, identity, String(expiry), "0", codeHash].join("|");
     return `${body}|${sign(body)}`;
 }
@@ -124,7 +136,11 @@ export type OtpCheck =
  * never anything typed. Once "blocked", even a right code is refused, so the
  * answer never tells a guesser they got there.
  */
-export function checkOtpCode(rawCookie: string | undefined, code: string, scope: string): OtpCheck {
+export async function checkOtpCode(
+    rawCookie: string | undefined,
+    code: string,
+    scope: string
+): Promise<OtpCheck> {
     if (!rawCookie) return { ok: false, reason: "missing" };
     const pending = parsePendingOtp(rawCookie);
     if (!pending) return { ok: false, reason: "tampered" };
@@ -132,7 +148,11 @@ export function checkOtpCode(rawCookie: string | undefined, code: string, scope:
     if (loginTriesLeft(guessKey, OTP_MAX_ATTEMPTS) <= 0) return { ok: false, reason: "blocked" };
     if (Date.now() > pending.expiry) return { ok: false, reason: "expired" };
     if (pending.attempts >= OTP_MAX_ATTEMPTS) return { ok: false, reason: "exhausted" };
-    if (!safeEqual(pending.codeHash, sign(`${pending.channel}:${pending.identity}:${code}`))) {
+    const matched =
+        pending.codeHash === REMOTE_CODE
+            ? await verifyOtpSms(pending.identity, code)
+            : safeEqual(pending.codeHash, sign(`${pending.channel}:${pending.identity}:${code}`));
+    if (!matched) {
         recordLoginFailure(guessKey);
         const triesLeft = Math.min(
             OTP_MAX_ATTEMPTS - (pending.attempts + 1),
