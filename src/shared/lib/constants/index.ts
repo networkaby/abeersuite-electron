@@ -6,7 +6,8 @@
  *   badges.ts         status / priority badge colours, colour choices on settings pages
  *
  *   session.ts        login lifetime, idle sign-out (45 min) + its warning,
- *                     counter PIN clocks, customer OTP timings
+ *                     counter PIN clocks, customer OTP timings,
+ *                     where a customer lands after sign-out
  *   hr.ts             duty hours, full-day length, late grace, full/half-day shares,
  *                     pay days a month, leave year, off-counter tracking switch
  *   polling.ts        how often each screen re-reads the server (the DB-cost dial),

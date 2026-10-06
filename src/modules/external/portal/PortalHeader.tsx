@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CUSTOMER_SIGN_OUT_PATH } from "@/shared/lib/constants/session";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { signOutTo } from "@/shared/lib/auth/signOutTo";
@@ -42,7 +43,7 @@ export default function PortalHeader() {
                         </Badge>
                     ) : null}
                     {status === "authenticated" && isCustomer ? (
-                        <Button variant="outline" size="sm" type="button" onClick={() => void signOutTo("/shop")}>
+                        <Button variant="outline" size="sm" type="button" onClick={() => void signOutTo(CUSTOMER_SIGN_OUT_PATH)}>
                             Sign out
                         </Button>
                     ) : (

@@ -103,3 +103,7 @@ export const OTP_TICKET_TTL_MS = 5 * 60 * 1000;
 
 /** Wrong guesses before the code dies. */
 export const OTP_MAX_ATTEMPTS = 5;
+
+// ─── Customer sign-out ───────────────────────────────────────────────────────
+/** Where a customer lands after Sign out on the shop / portal — swap for a promo page any time. Same-site path only. */
+export const CUSTOMER_SIGN_OUT_PATH = "/shop";

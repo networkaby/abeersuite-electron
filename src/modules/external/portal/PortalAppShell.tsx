@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CUSTOMER_SIGN_OUT_PATH } from "@/shared/lib/constants/session";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useSession } from "next-auth/react";
@@ -164,7 +165,7 @@ export default function PortalAppShell({ children }: PortalAppShellProps) {
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
                                         variant="destructive"
-                                        onClick={() => void signOutTo("/shop")}
+                                        onClick={() => void signOutTo(CUSTOMER_SIGN_OUT_PATH)}
                                     >
                                         <LogOut className="size-4" />
                                         Sign out
