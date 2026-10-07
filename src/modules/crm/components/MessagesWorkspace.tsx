@@ -150,7 +150,11 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
         const had = list.find((c) => c.phone === phone)?.unread ?? 0;
         if (had) {
             setTotalUnread((n) => Math.max(0, n - had));
-            void axios.patch("/api/messages/thread", { phone, seen: true }).catch(() => {});
+            // Re-read once the server has it: a list load already in flight would
+            // otherwise land after this and put the old count back.
+            void axios.patch("/api/messages/thread", { phone, seen: true })
+                .then(() => loadList(1))
+                .catch(() => {});
         }
     };
 

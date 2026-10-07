@@ -654,6 +654,8 @@ export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, ExtraToggle | ExtraToggle
     // Backup & Restore — the page opens on its link; taking a backup or restoring
     // one is settings:manage (which also allows the repair ticket's dev override).
     [sidebarChildPermissionId("settings", "backup-restore")]: { id: "settings:manage", label: "Can back up & restore" },
+    // CRM → Messages — reading opens on the link; a reply is a paid WhatsApp message.
+    [sidebarChildPermissionId("crm", "messages")]: { id: "messages:reply", label: "Can reply on WhatsApp" },
 };
 
 /** The extra toggles for a link, as a list (bare entries normalise to one item). */
