@@ -1,12 +1,13 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { listWaTemplates } from "@/shared/lib/whatsapp/waTemplateStore";
+import { listWaTemplatesFresh } from "@/shared/lib/whatsapp/waTemplateStore";
 import { isBillSendConfigured, isTemplateApiConfigured } from "@/shared/lib/whatsapp/metaTemplates";
 import { WhatsAppTemplatesPanel } from "@/modules/settings/components/WhatsAppTemplatesPanel";
 
 export const metadata = { title: "WhatsApp Templates" };
 
 export default async function WhatsAppTemplatesPage() {
-    const templates = await listWaTemplates();
+    // Asks Meta about any card still waiting, so an approval shows on open.
+    const templates = await listWaTemplatesFresh();
     return (
         <ScrollArea className="h-full" type="always">
             <div className="space-y-4 px-6 pt-3 pb-6">

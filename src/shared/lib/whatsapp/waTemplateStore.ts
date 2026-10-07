@@ -57,6 +57,17 @@ export async function listWaTemplates(): Promise<WaTemplateView[]> {
     return WA_TEMPLATE_KINDS.map((k) => toView(k, byKind.get(k)));
 }
 
+/** Every kind, after asking Meta about any still waiting for approval — so
+ *  opening the page (or its list API) is how staff see an approval land, with
+ *  no polling job. Only PENDING rows call Meta; the rest is one read. */
+export async function listWaTemplatesFresh(): Promise<WaTemplateView[]> {
+    const templates = await listWaTemplates();
+    const pending = templates.filter((t) => t.status === "PENDING");
+    if (!pending.length) return templates;
+    await Promise.all(pending.map((t) => refreshWaTemplate(t.kind).catch(() => null)));
+    return listWaTemplates();
+}
+
 async function getOne(kind: WaTemplateKind): Promise<WaTemplateView> {
     const r = await prisma.whatsAppTemplate.findUnique({ where: { kind } });
     return toView(kind, r ?? undefined);
