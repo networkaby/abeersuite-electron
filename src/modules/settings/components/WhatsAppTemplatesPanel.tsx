@@ -12,10 +12,10 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
-    WA_SAMPLE_VALUES,
     WA_TEMPLATE_LABEL,
     WA_TEMPLATE_WHEN,
     fieldsFor,
+    sampleValuesFor,
     checkBody,
     fillBody,
     type WaTemplateDraft,
@@ -301,7 +301,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                 <p className="text-sm font-medium">Preview</p>
                 <div className="rounded-lg bg-[#e5ddd5] p-3 dark:bg-[#0b141a]">
                     <div className="max-w-[300px] rounded-lg rounded-tl-none bg-white p-2.5 text-sm text-[#111b21] shadow-sm dark:bg-[#202c33] dark:text-[#e9edef]">
-                        <p className="whitespace-pre-wrap break-words">{fillBody(draft.body, WA_SAMPLE_VALUES)}</p>
+                        <p className="whitespace-pre-wrap break-words">{fillBody(draft.body, sampleValuesFor(kind))}</p>
                         <p className="mt-1 text-right text-[10px] opacity-60">10:42</p>
                     </div>
                     {[viewBtn, appBtn].filter(Boolean).map((b) => (

@@ -202,7 +202,24 @@ export function fillBody(body: string, values: Partial<WaFieldValues>): string {
     return body.replace(FIELD_RE, (whole, k: string) => values[k as WaFieldKey] ?? whole);
 }
 
-export const WA_SAMPLE_VALUES = Object.fromEntries(WA_FIELDS.map((f) => [f.key, f.sample])) as WaFieldValues;
+const BASE_SAMPLES = Object.fromEntries(WA_FIELDS.map((f) => [f.key, f.sample])) as WaFieldValues;
+
+/** A realistic document number per kind — for the preview, the test send and
+ *  the example Meta reviews (a repair job showing "POS-1042" reads wrong). */
+const SAMPLE_DOC_NO: Record<WaTemplateKind, string> = {
+    SALE: "POS-1042",
+    RECEIPT: "RV-2207",
+    SALE_RETURN: "SR-0311",
+    REFUND: "PMT-0158",
+    ORDER: "POSO-0087",
+    ESTIMATE: "EST-0419",
+    REPAIR_RECEIVED: "#2051",
+    REPAIR_READY: "#2051",
+};
+
+export function sampleValuesFor(kind: WaTemplateKind): WaFieldValues {
+    return { ...BASE_SAMPLES, billNo: SAMPLE_DOC_NO[kind] };
+}
 
 /** Problems Meta would reject the draft for — empty means fine. */
 export function checkBody(draft: WaTemplateDraft, kind?: WaTemplateKind): string[] {

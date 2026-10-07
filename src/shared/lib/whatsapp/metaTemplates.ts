@@ -2,11 +2,12 @@ import "server-only";
 import {
     WA_APP_LINK,
     WA_BILL_LINK_BASE,
-    WA_SAMPLE_VALUES,
     bodyFieldOrder,
+    sampleValuesFor,
     toMetaBody,
     type WaFieldValues,
     type WaTemplateDraft,
+    type WaTemplateKind,
 } from "./billTemplates";
 
 /**
@@ -62,13 +63,14 @@ async function graph<T>(path: string, init?: { method?: string; body?: unknown }
 }
 
 /** Meta's component list for a draft — body plus the optional URL buttons. */
-function components(draft: WaTemplateDraft) {
+function components(kind: WaTemplateKind, draft: WaTemplateDraft) {
     const order = bodyFieldOrder(draft.body);
+    const samples = sampleValuesFor(kind);
     const list: unknown[] = [
         {
             type: "BODY",
             text: toMetaBody(draft.body.trim()),
-            ...(order.length ? { example: { body_text: [order.map((k) => WA_SAMPLE_VALUES[k])] } } : {}),
+            ...(order.length ? { example: { body_text: [order.map((k) => samples[k])] } } : {}),
         },
     ];
     const buttons: unknown[] = [];
@@ -89,10 +91,10 @@ function components(draft: WaTemplateDraft) {
 
 /** Send a draft to Meta for approval. Meta answers PENDING (or sometimes
  *  APPROVED straight away for a clean utility template). */
-export async function submitTemplate(name: string, draft: WaTemplateDraft): Promise<{ id: string; status: string }> {
+export async function submitTemplate(kind: WaTemplateKind, name: string, draft: WaTemplateDraft): Promise<{ id: string; status: string }> {
     const r = await graph<{ id: string; status: string }>(
         `${process.env.META_WA_BUSINESS_ACCOUNT_ID}/message_templates`,
-        { method: "POST", body: { name, language: LANG, category: "UTILITY", components: components(draft) } },
+        { method: "POST", body: { name, language: LANG, category: "UTILITY", components: components(kind, draft) } },
     );
     return { id: r.id, status: r.status };
 }

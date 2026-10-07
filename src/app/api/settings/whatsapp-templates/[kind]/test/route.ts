@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
 import { normalizeMobile10 } from "@/shared/lib/auth/portalIdentifier";
-import { WA_SAMPLE_VALUES, WA_TEMPLATE_KINDS, type WaTemplateKind } from "@/shared/lib/whatsapp/billTemplates";
+import { WA_TEMPLATE_KINDS, sampleValuesFor, type WaTemplateKind } from "@/shared/lib/whatsapp/billTemplates";
 import { listWaTemplates } from "@/shared/lib/whatsapp/waTemplateStore";
 import { isBillSendConfigured, sendBillTemplate } from "@/shared/lib/whatsapp/metaTemplates";
 
@@ -33,7 +33,7 @@ export async function POST(req: Request, { params }: RouteCtx) {
     if (!t?.approved) return NextResponse.json({ error: "Nothing approved yet — a test can only use an approved template." }, { status: 422 });
 
     try {
-        await sendBillTemplate({ mobile10, name: t.approved.name, approved: t.approved, values: WA_SAMPLE_VALUES, linkCode: "0" });
+        await sendBillTemplate({ mobile10, name: t.approved.name, approved: t.approved, values: sampleValuesFor(kind as WaTemplateKind), linkCode: "0" });
         return NextResponse.json({ ok: true });
     } catch (e) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "Send failed" }, { status: 502 });

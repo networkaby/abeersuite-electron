@@ -120,7 +120,7 @@ export async function submitWaTemplate(kind: WaTemplateKind): Promise<WaTemplate
     // Meta keeps a deleted/rejected name reserved, so every submission gets its own.
     const name = `${kind.toLowerCase()}_v${row.version}`;
     try {
-        const r = await submitTemplate(name, cur.draft);
+        const r = await submitTemplate(kind, name, cur.draft);
         await prisma.whatsAppTemplate.update({
             where: { kind },
             data: { status: r.status, metaName: name, metaId: r.id, rejectReason: null, submittedAt: new Date() },
