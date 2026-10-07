@@ -10,6 +10,9 @@ import { PORTAL_ACTIVE_ACCOUNT_COOKIE, resolvePortalAccountContext } from "@/sha
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { businessTodayIso, endOfDayUtc, formatDate, startOfDayUtc, toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import { formatInr } from "@/shared/lib/format/moneyInr";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import { upiProvider } from "@/modules/pos/lib/paymentLink";
+import { QrSvg } from "@/shared/components/print/QrSvg";
 import {
     loadPortalOutstanding,
     loadPortalStatement,
@@ -334,6 +337,29 @@ export default async function PortalBillsPage({
                                 <SummaryCard label="Oldest due" value={outstanding.oldestDays == null ? "—" : `${outstanding.oldestDays} days`} />
                             </div>
                         </div>
+                        {/* Pay the whole due by UPI — the button a due reminder's "Pay now" lands on.
+                            Phone: opens any UPI app pre-filled. Desktop: scan the QR. Staff still
+                            post the receipt when the money shows in the bank. */}
+                        {outstanding.totalDue > 0 && COMPANY_DETAILS.bank.upiVpa ? (() => {
+                            const upi = upiProvider.build(
+                                { upiVpa: COMPANY_DETAILS.bank.upiVpa, payeeName: COMPANY_DETAILS.upi.payeeName },
+                                { amountRupees: outstanding.totalDue, note: `Due ${active.label}`.slice(0, 50) },
+                            );
+                            return (
+                                <Card className="border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40">
+                                    <CardContent className="flex flex-col items-center gap-3 p-4 text-center sm:flex-row sm:justify-between sm:text-left">
+                                        <div className="space-y-2">
+                                            <p className="text-sm">Pay your due of <b>{formatInr(outstanding.totalDue)}</b> by any UPI app.</p>
+                                            <Button asChild className="w-full bg-emerald-600 text-white hover:bg-emerald-700 sm:w-auto">
+                                                <a href={upi}>Pay {formatInr(outstanding.totalDue)} by UPI</a>
+                                            </Button>
+                                            <p className="text-xs text-muted-foreground">Pays to {COMPANY_DETAILS.bank.upiVpa}. Your balance updates once the shop records it.</p>
+                                        </div>
+                                        <QrSvg value={upi} size={120} className="hidden rounded bg-white p-1 sm:block" />
+                                    </CardContent>
+                                </Card>
+                            );
+                        })() : null}
                         <Card className="border-border/70">
                             <CardContent className="p-0">
                                 {outstanding.bills.length === 0 ? (

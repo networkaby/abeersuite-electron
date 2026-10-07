@@ -12,6 +12,7 @@ export default function ReceivablesPage() {
             emptyText={{ party: "No outstanding receivables.", bill: "No outstanding bills." }}
             settleKind="RECEIPT"
             settleHint="Receive against this bill — opens a receipt with this bill ticked"
+            reminders
         />
     );
 }

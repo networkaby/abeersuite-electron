@@ -11,7 +11,7 @@ import Link from "next/link";
 import { GatedLink } from "@/shared/components/GatedLink";
 import { toast } from "sonner";
 import { useApiResource } from "@/shared/hooks/useApiResource";
-import { Loader2, ChevronRight, HandCoins, Search, X } from "lucide-react";
+import { Loader2, ChevronRight, HandCoins, MessageSquareWarning, Search, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +30,8 @@ import type { OutstandingsReport } from "@/modules/accountancy/lib/outstandings"
 import { useEscape } from "@/shared/hooks/useEscape";
 import { referenceHref, voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
 import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
+import { SendReminderDialog, type ReminderParty } from "@/modules/accountancy/components/reminders/SendReminderDialog";
+import { BulkReminderDialog } from "@/modules/accountancy/components/reminders/BulkReminderDialog";
 
 // The period labels and colours live in `lib/ageing.ts` — this report and the
 // party's own Outstanding tab in the customer profile share them.
@@ -39,8 +41,10 @@ type ViewMode = "party" | "bill";
 const EMPTY_BUCKETS = { b0_30: 0, b30_60: 0, b60_90: 0, b90_plus: 0 };
 
 export function OutstandingsReportScreen({
-    title, subtitle, apiPath, loadError, emptyText, settleKind, settleHint,
+    title, subtitle, apiPath, loadError, emptyText, settleKind, settleHint, reminders = false,
 }: {
+    /** Receivables only: a per-party due-reminder button and "Send to all". */
+    reminders?: boolean;
     title:      string;
     subtitle:   string;
     /** `/api/accountancy/reports/receivables` or `…/payables`. */
@@ -122,6 +126,26 @@ export function OutstandingsReportScreen({
         [data],
     );
 
+    // The reminder dialogs quote each party's oldest unpaid bill — read off the
+    // bill rows this report already carries, no second fetch.
+    const reminderParties = useMemo<ReminderParty[]>(() => {
+        if (!reminders || !data) return [];
+        const oldest = new Map<number, { date: string; days: number }>();
+        for (const b of data.bills) {
+            const cur = oldest.get(b.accountId);
+            if (!cur || b.daysOverdue > cur.days) oldest.set(b.accountId, { date: b.billDate, days: b.daysOverdue });
+        }
+        return data.parties.map((p) => ({
+            accountId: p.accountId,
+            name: p.accountName,
+            balance: p.totalOutstanding,
+            oldestBillDate: oldest.get(p.accountId)?.date ?? null,
+            oldestDays: oldest.get(p.accountId)?.days ?? 0,
+        }));
+    }, [reminders, data]);
+    const [remindOne, setRemindOne] = useState<ReminderParty | null>(null);
+    const [remindAll, setRemindAll] = useState(false);
+
     const bills = useMemo(() => {
         if (!data) return [];
         let rows = q ? data.bills.filter((b) => b.searchKey.includes(q)) : data.bills;
@@ -187,6 +211,11 @@ export function OutstandingsReportScreen({
                         <Label>As on</Label>
                         <TallyDateInput value={asOf} onValueChange={setAsOf} className="w-auto" />
                     </div>
+                    {reminders && (
+                        <Button variant="outline" onClick={() => setRemindAll(true)} disabled={!data}>
+                            <MessageSquareWarning size={14} /> Send reminder to all…
+                        </Button>
+                    )}
                     <Button onClick={reload}>Refresh</Button>
                 </div>
             </div>
@@ -274,13 +303,14 @@ export function OutstandingsReportScreen({
                                     <th className="px-3 py-2 text-right font-medium">60–90</th>
                                     <th className="px-3 py-2 text-right font-medium">90+</th>
                                     <th className="px-3 py-2 text-right font-medium">Total</th>
+                                    {reminders && <th className="px-1 py-2 w-8" />}
                                     <th className="px-3 py-2 w-8" />
                                 </tr>
                             </thead>
                             <tbody>
                                 {parties.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="py-10 text-center text-muted-foreground text-sm">
+                                        <td colSpan={reminders ? 9 : 8} className="py-10 text-center text-muted-foreground text-sm">
                                             {q || period ? narrowed("party") : emptyText.party}
                                         </td>
                                     </tr>
@@ -312,6 +342,22 @@ export function OutstandingsReportScreen({
                                         <td className="px-3 py-1.5 text-right font-mono text-orange-600">{p.buckets.b60_90 > 0 ? fmt(p.buckets.b60_90) : <span className="text-muted-foreground/65">—</span>}</td>
                                         <td className="px-3 py-1.5 text-right font-mono text-red-600">{p.buckets.b90_plus > 0 ? fmt(p.buckets.b90_plus) : <span className="text-muted-foreground/65">—</span>}</td>
                                         <td className="px-3 py-1.5 text-right font-mono font-semibold">{fmt(period ? p.buckets[period] : p.totalOutstanding)}</td>
+                                        {reminders && (
+                                            <td className="px-1 py-1.5 text-right">
+                                                <button
+                                                    type="button"
+                                                    title="Send due reminder on WhatsApp"
+                                                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-emerald-600"
+                                                    onClick={(e) => {
+                                                        // The row itself drills to the party's bills — keep that off this button.
+                                                        e.stopPropagation();
+                                                        setRemindOne(reminderParties.find((r) => r.accountId === p.accountId) ?? null);
+                                                    }}
+                                                >
+                                                    <Send size={14} />
+                                                </button>
+                                            </td>
+                                        )}
                                         <td className="px-3 py-1.5 text-muted-foreground"><ChevronRight size={14} /></td>
                                     </tr>
                                 ))}
@@ -326,6 +372,7 @@ export function OutstandingsReportScreen({
                                         <td className="px-3 py-1.5 text-right font-mono text-orange-600">{fmt(shownParty.buckets.b60_90)}</td>
                                         <td className="px-3 py-1.5 text-right font-mono text-red-600">{fmt(shownParty.buckets.b90_plus)}</td>
                                         <td className="px-3 py-1.5 text-right font-mono">{fmt(shownParty.total)}</td>
+                                        {reminders && <td />}
                                         <td />
                                     </tr>
                                 </tfoot>
@@ -462,6 +509,12 @@ export function OutstandingsReportScreen({
                 voucherId={link.voucherId}
                 onSaved={() => { clearBillLinkCache(); setLink(null); reload(); }}
             />
+        )}
+        {reminders && (
+            <>
+                <SendReminderDialog party={remindOne} onClose={() => setRemindOne(null)} />
+                <BulkReminderDialog open={remindAll} parties={reminderParties} onClose={() => setRemindAll(false)} />
+            </>
         )}
         <LinkContextMenu menu={linkMenu} onClose={closeLinkMenu} />
         </ScrollArea>

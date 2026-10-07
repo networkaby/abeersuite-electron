@@ -159,6 +159,7 @@ import {
     Workflow,
     Wrench,
     MessageSquareText,
+    BellRing,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -759,6 +760,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Screen Size", href: "/office/settings/screen-size", icon: MonitorCog, permission: "settings:manage", desktopOnly: true },
     { label: "Print Templates", href: "/office/settings/voucher-templates", icon: Printer, permission: "settings:manage", sidebarKey: "voucher-templates" },
     { label: "WhatsApp Templates", href: "/office/settings/whatsapp-templates", icon: MessageSquareText, permission: "settings:manage", sidebarKey: "whatsapp-templates" },
+    { label: "Due Reminders", href: "/office/settings/due-reminders", icon: BellRing, permission: "settings:manage", sidebarKey: "due-reminders" },
     // { label: "Print Preview", href: "/office/settings/voucher-templates/preview", icon: FileText, permission: "settings:manage", sidebarKey: "voucher-preview" },
     { label: "Backup & Restore", href: "/office/settings/backup-restore", icon: Database, permission: "settings:manage" },
     { label: "Downloads", href: "/office/settings/downloads", icon: Download, permission: "settings:manage" },
