@@ -154,7 +154,7 @@ export default async function PortalBillsPage({
     const dateBox = "h-9 w-full rounded-md border border-input bg-background px-2 text-foreground sm:w-auto";
 
     return (
-        <main className="px-4 py-6 md:px-6 md:py-8">
+        <main className="px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8">
             <div className="mx-auto max-w-5xl space-y-5">
                 <PortalSectionHeader
                     title="My Bills"

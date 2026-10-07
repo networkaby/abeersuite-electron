@@ -26,7 +26,7 @@ export default function PortalWishlistPage() {
     const list = useMemo(() => products.filter((p) => ids.includes(p.id)), [products, ids]);
 
     return (
-        <main className="px-4 py-6 md:px-6 md:py-8">
+        <main className="px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8">
             <div className="mx-auto max-w-6xl space-y-5">
                 <PortalSectionHeader
                     title="Wishlist"

@@ -271,7 +271,7 @@ export default function PortalSocialPage() {
     ];
 
     return (
-        <main className="px-4 py-6 md:px-6 md:py-8">
+        <main className="px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8">
             <div className="mx-auto max-w-5xl space-y-5">
                 {/* <PortalSectionHeader title="Social" description="Your Network Service community profile." icon={Users} /> */}
 

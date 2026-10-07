@@ -26,12 +26,12 @@ export default async function PortalHomePage() {
     const name = user.name ?? "Customer";
 
     return (
-        <main className="mx-auto max-w-6xl px-4 py-10 lg:py-12 space-y-6">
+        <main className="mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-10 lg:py-12 space-y-4 sm:space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <h1 className="text-2xl font-semibold tracking-tight lg:text-3xl">Welcome back, {name}.</h1>
+                <h1 className="text-xl font-semibold tracking-tight sm:text-2xl lg:text-3xl">Welcome back, {name}.</h1>
             </div>
             <PortalPushCard compact />
-            <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
                 <PortalCard href="/portal/orders" icon={ShoppingBag} title="My Orders" desc="Track purchases and statuses." />
                 <PortalCard href="/portal/repairs" icon={Ticket} title="My Repairs" desc="Follow service and repair progress." />
                 <PortalCard href="/portal/social" icon={Users} title="Social" desc="Join and connect with the customer network." />
@@ -58,15 +58,15 @@ function PortalCard({
     return (
         <Link href={href} className="group">
             <Card className="h-full border-border/70 transition hover:border-primary/35 hover:shadow-sm">
-                <CardContent className="p-4 sm:p-5">
+                <CardContent className="p-3 sm:p-5">
                     <div className="flex items-start justify-between gap-3">
                         <div>
                             <p className="font-semibold tracking-tight">{title}</p>
-                            <p className="mt-1 text-sm text-muted-foreground">{desc}</p>
+                            <p className="mt-1 hidden text-sm text-muted-foreground sm:block">{desc}</p>
                         </div>
-                        <Icon className="size-4 shrink-0 text-primary/80" />
+                        <Icon className="size-5 shrink-0 text-primary/80 sm:size-4" />
                     </div>
-                    <p className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                    <p className="mt-4 hidden sm:inline-flex items-center gap-1 text-xs font-medium text-primary">
                         Open
                         <ArrowRight className="size-3.5 transition group-hover:translate-x-0.5" />
                     </p>

@@ -12,7 +12,7 @@ import {
     Heart,
     LayoutDashboard,
     LogOut,
-    Menu,
+    MoreHorizontal,
     Percent,
     ShoppingBag,
     Ticket,
@@ -52,6 +52,18 @@ const NAV_ITEMS = [
     { href: "/portal/profile", label: "My Profile", icon: UserRound },
 ] as const;
 
+/** Phone bottom bar: four everyday tabs; "More" opens the full menu. */
+const TAB_ITEMS = [
+    { href: "/portal", label: "Home", icon: LayoutDashboard },
+    { href: "/portal/orders", label: "Orders", icon: ShoppingBag },
+    { href: "/portal/bills", label: "Bills", icon: Receipt },
+    { href: "/portal/repairs", label: "Repairs", icon: Ticket },
+] as const;
+
+function isActive(pathname: string, href: string) {
+    return pathname === href || (href !== "/portal" && pathname.startsWith(href));
+}
+
 /** Sign-up / password pages render bare — no sidebar for someone not signed in. */
 const PORTAL_AUTH_PAGES = ["/portal/register", "/portal/forgot-password"];
 
@@ -68,7 +80,7 @@ function Sidebar({ pathname, onNavigate }: { pathname: string; onNavigate?: () =
             </div>
             <nav className="flex-1 space-y-1 p-3">
                 {NAV_ITEMS.map((item) => {
-                    const active = pathname === item.href || (item.href !== "/portal" && pathname.startsWith(item.href));
+                    const active = isActive(pathname, item.href);
                     const Icon = item.icon;
                     return (
                         <Link
@@ -76,7 +88,7 @@ function Sidebar({ pathname, onNavigate }: { pathname: string; onNavigate?: () =
                             href={item.href}
                             onClick={onNavigate}
                             className={[
-                                "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition",
+                                "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm transition md:py-2",
                                 active
                                     ? "bg-primary/12 text-primary"
                                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -128,35 +140,24 @@ export default function PortalAppShell({ children }: PortalAppShellProps) {
     return (
         <div className="min-h-screen bg-background">
             <header className="sticky top-0 z-30 border-b border-border/70 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
-                <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 px-4">
-                    <div className="flex items-center gap-2">
-                        {isCustomer ? (
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="md:hidden"
-                                onClick={() => setOpen(true)}
-                                aria-label="Open menu"
-                            >
-                                <Menu className="size-5" />
-                            </Button>
-                        ) : null}
-                        <Link href="/portal" className="text-sm font-semibold tracking-tight">
-                            Network Service Portal
+                <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-2 px-3 sm:gap-3 sm:px-4">
+                    <div className="flex min-w-0 items-center gap-2">
+                        <Link href="/portal" className="truncate text-sm font-semibold tracking-tight">
+                            <span className="sm:hidden">My Account</span>
+                            <span className="hidden sm:inline">Network Service Portal</span>
                         </Link>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
                         <PortalShopButton compact />
                         {isCustomer ? (
                             <>
                                 <PortalProfileSwitch />
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="sm" className="gap-2 pl-1.5" aria-label="Account menu">
+                                        <Button variant="ghost" size="sm" className="gap-1 px-1 sm:gap-2 sm:pl-1.5" aria-label="Account menu">
                                             <UserAvatar avatarUrl={profile?.avatarUrl} name={displayName || "Customer"} role={null} sizePx={26} />
                                             <span className="hidden max-w-[8rem] truncate sm:inline">{displayName || "My Account"}</span>
-                                            <ChevronDown className="size-3.5 shrink-0 opacity-60" />
+                                            <ChevronDown className="hidden size-3.5 shrink-0 opacity-60 sm:block" />
                                         </Button>
                                     </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
@@ -192,8 +193,39 @@ export default function PortalAppShell({ children }: PortalAppShellProps) {
                         <Sidebar pathname={pathname} />
                     </aside>
                 ) : null}
-                <main className="min-w-0 flex-1">{children}</main>
+                <main className={`min-w-0 flex-1 ${isCustomer ? "pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0" : ""}`}>{children}</main>
             </div>
+
+            {isCustomer ? (
+                <nav
+                    aria-label="Portal tabs"
+                    className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-border/70 bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+                >
+                    {TAB_ITEMS.map((item) => {
+                        const Icon = item.icon;
+                        const active = isActive(pathname, item.href);
+                        return (
+                            <Link
+                                key={item.href}
+                                href={item.href}
+                                aria-current={active ? "page" : undefined}
+                                className={`flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium ${active ? "text-primary" : "text-muted-foreground"}`}
+                            >
+                                <Icon className="size-5" />
+                                {item.label}
+                            </Link>
+                        );
+                    })}
+                    <button
+                        type="button"
+                        onClick={() => setOpen(true)}
+                        className={`flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium ${open || !TAB_ITEMS.some((t) => isActive(pathname, t.href)) ? "text-primary" : "text-muted-foreground"}`}
+                    >
+                        <MoreHorizontal className="size-5" />
+                        More
+                    </button>
+                </nav>
+            ) : null}
 
             {isCustomer && open ? (
                 <div className="fixed inset-0 z-50 md:hidden">
@@ -203,7 +235,7 @@ export default function PortalAppShell({ children }: PortalAppShellProps) {
                         aria-label="Close menu backdrop"
                         onClick={() => setOpen(false)}
                     />
-                    <aside className="absolute left-0 top-0 h-full w-72 border-r border-border bg-background shadow-xl">
+                    <aside className="absolute left-0 top-0 h-full w-72 max-w-[85vw] overflow-y-auto border-r border-border bg-background shadow-xl">
                         <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
                             <p className="text-sm font-semibold">Menu</p>
                             <Button type="button" variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="Close menu">

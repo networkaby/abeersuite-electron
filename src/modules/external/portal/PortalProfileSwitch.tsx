@@ -53,7 +53,7 @@ export default function PortalProfileSwitch({ className = "" }: { className?: st
                 <Button variant="outline" size="sm" className={`gap-1.5 ${className}`} disabled={loading}>
                     <Icon className="size-3.5 text-primary" />
                     <span className="hidden text-muted-foreground sm:inline">Using</span>
-                    <span className="max-w-[9rem] truncate font-medium">{profileLabel(active)}</span>
+                    <span className="max-w-[5.5rem] truncate font-medium sm:max-w-[9rem]">{profileLabel(active)}</span>
                     <ChevronDown className="size-3.5 shrink-0 opacity-60" />
                 </Button>
             </DropdownMenuTrigger>
