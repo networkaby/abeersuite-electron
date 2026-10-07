@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { requireAuth } from "@/shared/lib/auth/permissions";
+import { hasPermission, requireAuth } from "@/shared/lib/auth/permissions";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { SUPPLIER_SIDE_TYPES } from "@/modules/accountancy/lib/tradingVoucherKinds";
 import { handleApiError, parseCursor, deltaSlice, pageSlice } from "@/shared/lib/api";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
@@ -115,8 +118,14 @@ async function settlementsFor(
 }
 
 export async function GET(req: Request) {
-    const { response } = await requireAuth();
+    const { user, response } = await requireAuth();
     if (response) return response;
+    // Without "Show suppliers (creditors)" the book loses its supplier side, as
+    // SL Search and the Contacts lists do: purchase-side kinds, and any voucher
+    // whose party is a Sundry Creditor (a payment to a supplier). Said in the
+    // query, so pages stay full and the phone Day Book (which reads through this
+    // handler) gets the same rule.
+    const hideSuppliers = !hasPermission(user, PERMISSIONS.CUSTOMERS_VIEW_CREDITORS);
 
     const { searchParams } = new URL(req.url);
     const { cursor, take } = parseCursor(searchParams);
@@ -185,7 +194,22 @@ export async function GET(req: Request) {
             })).map((a) => a.id)
             : [];
 
+        const supplierIds = hideSuppliers
+            ? (await prisma.account.findMany({
+                where: { group: { is: { name: ACCOUNT_GROUPS.SUNDRY_CREDITORS } } },
+                select: { id: true },
+            })).map((a) => a.id)
+            : [];
+
         const where: Prisma.UniversalVoucherWhereInput = {
+            ...(hideSuppliers ? {
+                AND: [
+                    { type: { notIn: SUPPLIER_SIDE_TYPES } },
+                    ...(supplierIds.length > 0
+                        ? [{ OR: [{ partyAccountId: null }, { partyAccountId: { notIn: supplierIds } }] }]
+                        : []),
+                ],
+            } : {}),
             ...(kinds ? { type: { in: kinds } } : {}),
             ...(statuses.length > 0 ? { status: { in: statuses } } : {}),
             ...(branchId && branchId !== "__all__" ? { branchId } : {}),
