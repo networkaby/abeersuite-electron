@@ -5,10 +5,12 @@ import { SessionProvider } from "next-auth/react";
 import WelcomeChoiceModal from "@/modules/external/portal/WelcomeChoiceModal";
 import { Toaster } from "@/components/ui/sonner";
 import ServiceWorkerRegister from "@/modules/external/pwa/ServiceWorkerRegister";
+import GetAppBanner from "@/modules/external/pwa/GetAppBanner";
 
 export default function ExternalRootShell({ children }: { children: React.ReactNode }) {
     return (
         <SessionProvider>
+            <GetAppBanner />
             {children}
             <Suspense fallback={null}>
                 <WelcomeChoiceModal />

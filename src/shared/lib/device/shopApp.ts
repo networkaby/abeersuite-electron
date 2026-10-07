@@ -1,6 +1,6 @@
 /**
  * The CUSTOMER app — shop.networkservice.in installed on a phone (PWA, plus the
- * Android wrapper in `android-shop/`). Kept apart from the staff app
+ * Android wrapper in `shop-app/`). Kept apart from the staff app
  * (device/phone.ts): its own manifest `id`, name and package, so a phone can
  * carry both as two separate apps.
  *
@@ -22,7 +22,7 @@ export const SHOP_APP_MANIFEST = "/shop.webmanifest";
  *  the WhatsApp bill message carries. Open without sign-in. */
 export const SHOP_APP_INSTALL = "/app";
 
-/** Android package — must match android-shop/twa-manifest.json and
+/** Android package — must match shop-app/twa-manifest.json and
  *  public/.well-known/assetlinks.json. Permanent once phones carry it. */
 export const SHOP_APP_ANDROID_PACKAGE = "in.networkservice.shop";
 

@@ -4,30 +4,18 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { CheckCircle2, Download } from "lucide-react";
 import { PHONE_APP_APK, PHONE_APP_HOME } from "@/shared/lib/device/phone";
+import { noSubscribe, readPlace, useApkAvailable } from "@/modules/mobile/components/installPlace";
 
 /** Chrome's install event — not in the DOM typings. */
 type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
-
-const noSubscribe = () => () => {};
-
-/** "installed" | "iphone" | "android" | "browser" on the phone; "server" while rendering on the server. */
-function readPlace(): string {
-    const standalone = window.matchMedia("(display-mode: standalone)").matches
-        || (navigator as { standalone?: boolean }).standalone === true;
-    // The Android app (phone-app/, Capacitor) is a WebView, not "standalone" — it
-    // says so through its own global.
-    const native = (window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
-    if (standalone || native) return "installed";
-    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) return "iphone";
-    return /Android/i.test(navigator.userAgent) ? "android" : "browser";
-}
 
 /**
  * The install page's one job — the closest a web page may come to "install from a
  * QR": phones never let a site install itself, so the best is one tap here and the
  * phone's own Install confirm.
- *   • Android: the APK (the `android/` wrapper) → "Download NS Staff", then the
+ *   • Android: the APK (the staff or customer wrapper) → "Download …", then the
  *     phone's own steps; Chrome's `beforeinstallprompt` stays as the second way.
+ *     No APK on the site yet (built by hand after a deploy) → Chrome's way only.
  *   • iPhone: no such event — the two Share steps.
  *   • already the installed app, or just installed: "Open app".
  *   • no install offer (an http test address, another browser): open in Chrome,
@@ -51,6 +39,7 @@ export default function InstallAppButton({
     // Already installed on this device, while this page is open in the browser.
     const [installedHere, setInstalledHere] = useState(false);
     const place = useSyncExternalStore(noSubscribe, readPlace, () => "server");
+    const apkOk = useApkAvailable(apk, place === "android");
 
     useEffect(() => {
         // The install page's inline script catches Chrome's offer (it may fire before
@@ -81,7 +70,7 @@ export default function InstallAppButton({
         </Link>
     );
 
-    if (place === "server") return null;
+    if (place === "server" || (place === "android" && apkOk === null)) return null;
     if (!installed && place !== "installed" && installedHere && !prompt) {
         return (
             <div className="space-y-3 text-center">
@@ -107,7 +96,7 @@ export default function InstallAppButton({
             </div>
         );
     }
-    if (place === "android") {
+    if (place === "android" && apkOk) {
         return (
             <div className="space-y-3">
                 <a
