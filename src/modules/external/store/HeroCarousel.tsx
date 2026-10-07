@@ -97,7 +97,7 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                         />
                         <div className="absolute inset-0 bg-linear-to-r from-black/85 via-black/55 to-black/25 sm:from-black/80 sm:via-black/40 sm:to-transparent" />
                         <div className="absolute inset-0 bg-linear-to-t from-black/75 via-black/30 to-transparent sm:from-black/60 sm:via-transparent" />
-                        <div className="relative mx-auto flex h-full max-w-6xl items-end pb-28 pt-10 sm:items-center sm:pb-0 sm:pt-0 px-4 sm:px-6">
+                        <div className="relative mx-auto flex h-full max-w-6xl items-end pb-20 pt-10 sm:items-center sm:pb-0 sm:pt-0 px-4 sm:px-6">
                             <div className="max-w-xl text-white">
                                 <p
                                     className={cn(
@@ -148,7 +148,7 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                             type="button"
                             onClick={prev}
                             aria-label="Previous slide"
-                            className="absolute bottom-23 left-2 z-10 flex size-11 touch-manipulation items-center justify-center rounded-full border border-white/35 bg-black/45 text-white backdrop-blur-md transition active:bg-black/60 sm:bottom-auto sm:left-3 sm:top-1/2 sm:size-10 sm:-translate-y-1/2"
+                            className="absolute bottom-3 left-3 z-10 flex size-11 touch-manipulation items-center justify-center rounded-full border border-white/35 bg-black/45 text-white backdrop-blur-md transition active:bg-black/60 sm:bottom-auto sm:left-3 sm:top-1/2 sm:size-10 sm:-translate-y-1/2"
                         >
                             <ChevronLeft className="size-5" />
                         </button>
@@ -156,7 +156,7 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                             type="button"
                             onClick={next}
                             aria-label="Next slide"
-                            className="absolute bottom-23 right-2 z-10 flex size-11 touch-manipulation items-center justify-center rounded-full border border-white/35 bg-black/45 text-white backdrop-blur-md transition active:bg-black/60 sm:bottom-auto sm:right-3 sm:top-1/2 sm:size-10 sm:-translate-y-1/2"
+                            className="absolute bottom-3 right-3 z-10 flex size-11 touch-manipulation items-center justify-center rounded-full border border-white/35 bg-black/45 text-white backdrop-blur-md transition active:bg-black/60 sm:bottom-auto sm:right-3 sm:top-1/2 sm:size-10 sm:-translate-y-1/2"
                         >
                             <ChevronRight className="size-5" />
                         </button>

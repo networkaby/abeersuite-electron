@@ -124,7 +124,7 @@ function Sidebar({ pathname, onNavigate }: { pathname: string; onNavigate?: () =
 
 export default function PortalAppShell({ children }: PortalAppShellProps) {
     const pathname = usePathname();
-    const { data: session } = useSession();
+    const { data: session, status } = useSession();
     const [open, setOpen] = useState(false);
     const user = session?.user as { kind?: string; name?: string } | undefined;
     const isCustomer = user?.kind === "customer";
@@ -178,11 +178,13 @@ export default function PortalAppShell({ children }: PortalAppShellProps) {
                                 </DropdownMenuContent>
                                 </DropdownMenu>
                             </>
-                        ) : (
+                        ) : status === "unauthenticated" ? (
+                            // Not while the session is still loading: a signed-in
+                            // customer would see "Sign in" flash on every page.
                             <Button variant="outline" size="sm" asChild>
                                 <Link href="/login">Sign in</Link>
                             </Button>
-                        )}
+                        ) : null}
                     </div>
                 </div>
             </header>

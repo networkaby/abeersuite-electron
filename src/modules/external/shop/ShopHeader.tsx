@@ -113,8 +113,9 @@ export default function ShopHeader() {
 
                     <div className="flex shrink-0 items-center justify-end gap-0.5 sm:gap-1">
                         <Button variant="ghost" size="sm" className="hidden h-9 max-w-[11rem] touch-manipulation sm:inline-flex" asChild>
+                            {/* The Link takes no display class: it would beat the Button's `hidden` on phones. */}
                             {authenticated ? (
-                                <Link href="/portal" className="inline-flex items-center gap-1.5 min-w-0">
+                                <Link href="/portal" className="items-center gap-1.5 min-w-0">
                                     <UserRound className="size-4 shrink-0" />
                                     <span className="truncate">{customerName ?? "My account"}</span>
                                 </Link>
