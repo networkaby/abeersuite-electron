@@ -1,25 +1,34 @@
-# v1.12.1 [urgent]
+# v1.13.0 [urgent]
 
-Every counter and the office should take this update. It makes editing an old POS sale safe: the payment, the shift cash and the shift report now stay correct after a sale is changed. No database change, but every counter should restart today so edited sales and shift cash stay correct.
+Every counter and the office should take this update today. It brings WhatsApp and app messages to customers, a new customer portal, a fresh Home dashboard and the first version of the staff phone app. It adds new tables to the database, so counters must update before the office site is deployed; until a counter updates, its sync of the new tables stays quiet. Billing is not affected.
 
-## POS — editing a sale
+## Customer messages (WhatsApp + customer app)
 
-- **Update Sale now takes the payment again, just like a fresh checkout.** You can change how the customer paid (cash, card, UPI and so on) while editing a sale.
-- An edited sale keeps the offers, prices and loyalty points of the day it was first billed — not today's. Points and card amounts adjust to match the new bill.
-- A sale always belongs to the shift whose till took its cash, so shift totals no longer drift when a sale is edited later.
-- When you leave a sale you were editing, you go back to the screen you opened it from (or the tab closes) instead of landing somewhere random.
+- Bills, receipts, estimates and other customer-facing documents now go to the customer's app AND on WhatsApp.
+- New WhatsApp Templates page: write the wording, send it to Meta, and see the approval status when you open the page.
+- Auto send switch for each template, and "Send on WhatsApp" in the 3-dot menu of each document (greyed out with the reason when it cannot go).
+- The customer app can be installed on the phone and shows bill notifications.
 
-## Shift close
+## Customer portal
 
-- If a sale is edited after its shift was closed, the shift report now shows that the cash changed after closing.
-- The correction is posted automatically in the same save — no manual adjustment needed.
+- The sign-in code comes by WhatsApp; if the phone has no internet for WhatsApp, "Send by SMS instead" is offered, with failover between SMS partners.
+- After sign-in, a popup lets the customer choose the shop or the portal.
+- New My Bills: counter bills, ledger with running balance and outstanding amount, with phone layout and shop links.
 
-## Vouchers
+## Home dashboard
 
-- **Convert** (for example estimate to bill) now carries services, extra charges and per-line ₹ discounts across.
-- Each line's rate after Convert is worked out exactly from its saved amount, so totals no longer change by a few paise.
+- New Home with My day, Cash flow, Cash runway, Sales and net profit, and Business health cards with charts.
 
-## Phone app
+## Staff phone app
 
-- The app on a phone now looks and behaves like an installed app.
-- If Chrome's "Desktop site" setting is making the app look tiny, the phone now tells the user how to switch it off.
+- Android app with a "Can use Mobile App" tick, camera barcode scan on Stock & price, a Photos screen for product photos, and tap-to-view voucher details.
+
+## POS
+
+- Cash drawer opens when the shift opens, shift close has a cash count, and cash bills can be saved without printing.
+
+## Settings and fixes
+
+- Payment method edit dialog is wider and no longer clips; the online settlement ledger is set properly.
+- Phone numbers are stored in one form per customer (Indian = 10 digits, foreign = with country code).
+- Repair ticket page now says "not a repair ticket" instead of crashing.
