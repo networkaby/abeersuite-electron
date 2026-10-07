@@ -5,6 +5,7 @@ import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import { getOutstandings } from "@/modules/accountancy/lib/outstandings";
+import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { DUE_LINK_CODE, WA_APP_LINK, WA_BILL_LINK_BASE, type WaTemplateKind } from "./billTemplates";
 import { partySelect, sendPushAndWhatsApp } from "./notifyBill";
 import type {
@@ -302,6 +303,7 @@ export async function runDueReminders(now = new Date()): Promise<RunResult> {
     const todayStart = new Date(`${t.date}T00:00:00+05:30`);
 
     let sent = 0, callList = 0, skipped = 0;
+    const toCall: PartyDue[] = [];
     for (const due of dues.values()) {
         if (excluded.has(due.accountId) || due.balance < minBalance) continue;
         // The strongest rule this party matches.
@@ -321,7 +323,20 @@ export async function runDueReminders(now = new Date()): Promise<RunResult> {
         if (rule.action !== "CALL_LIST" && sent >= s.dailyCap) { skipped++; continue; }
         const r = await sendDueReminder({ accountId: due.accountId, action: rule.action, mode: "AUTO", ruleId: rule.id, due });
         if (r.status !== "sent") { skipped++; continue; }
-        if (rule.action === "CALL_LIST") callList++; else sent++;
+        if (rule.action === "CALL_LIST") { callList++; toCall.push(due); } else sent++;
+    }
+
+    // One bell for the owner when the run put anyone on the call list.
+    if (toCall.length) {
+        toCall.sort((a, b) => b.balance - a.balance);
+        const shown = toCall.slice(0, 5).map((d) => `${d.name} ₹${money.format(d.balance)}`).join(" · ");
+        const more = toCall.length > 5 ? ` + ${toCall.length - 5} more` : "";
+        await createSystemInboxNotifications({
+            roleIds: ["R1", "R2"],
+            title: `${toCall.length} customer${toCall.length > 1 ? "s" : ""} to call for dues`,
+            body: shown + more,
+            link: "/office/settings/due-reminders",
+        }).catch(() => undefined);
     }
     return { ran: true, sent, callList, skipped };
 }
