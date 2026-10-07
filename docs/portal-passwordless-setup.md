@@ -114,6 +114,24 @@ a real mobile and watch the server log. Silence means WhatsApp delivered; a
 Sender lives in `src/shared/lib/whatsapp/sendWhatsApp.ts`; the pick-a-pipe
 decision is `sendMobileOtp()` in `src/app/api/portal/otp/send/route.ts`.
 
+### Customer replies and ticks — CRM → Messages
+
+Customer replies and the delivered / read ticks reach us through a webhook. Once
+per Meta app:
+
+1. Vercel env: `META_WA_VERIFY_TOKEN` (any long random string) and
+   `META_WA_APP_SECRET` (Meta app → **Settings → Basic → App secret**). Deploy.
+2. Meta app → **WhatsApp → Configuration → Webhook → Edit**: callback URL
+   `https://<office-domain>/api/whatsapp/webhook`, verify token = the same
+   `META_WA_VERIFY_TOKEN`. Meta calls the URL once to check it.
+3. In the same box, **Manage → subscribe to `messages`**.
+
+Without `META_WA_APP_SECRET` the webhook refuses every post in production (a
+dev server accepts unsigned sample posts). Staff reply from the Messages screen
+only within 24 hours of the customer's last message — Meta's rule; after that
+only an approved template can go. Code: `src/app/api/whatsapp/webhook/route.ts`,
+`src/modules/message/lib/customerMessages.ts`.
+
 ## 2. Firebase — unlocks Google sign-in only
 
 1. Go to <https://console.firebase.google.com> → **Add project** (or pick an existing one).

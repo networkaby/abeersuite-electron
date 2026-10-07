@@ -132,6 +132,9 @@ export const PERMISSIONS = {
     HELP_CREATE: "help:create",
     HELP_EDIT: "help:edit",
     HELP_DELETE: "help:delete",
+    // Customer Messages (CRM → Messages). View rides the sidebar link; REPLY gates
+    // sending a WhatsApp reply — checked at the API, since each reply costs money.
+    MESSAGES_REPLY: "messages:reply",
     // Gate for the "More +" quick action (opens the all-create-actions dialog).
     // Behaves like a create action — its own tick in the role's Quick Actions.
     QUICK_ACTIONS_MORE: "quick-actions:more",

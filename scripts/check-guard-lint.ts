@@ -59,6 +59,9 @@ const GUARD_PATTERNS = [
     /\bCRON_SECRET\b/,
     // The call-log feed from the phone system: a shared x-api-key header, same idea.
     /\bCALLS_API_KEY\b/,
+    // Meta's WhatsApp webhook: GET answers only the verify token typed into Meta's
+    // form; POST is gated by verifyWebhookSignature (X-Hub-Signature-256).
+    /\bMETA_WA_VERIFY_TOKEN\b/,
 ];
 
 const HANDLER_START = /^export\s+(?:async\s+)?(?:function|const)\s+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/gm;

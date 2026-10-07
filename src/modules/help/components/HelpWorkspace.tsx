@@ -73,6 +73,15 @@ export default function HelpWorkspace({
         }
     }, [newParamKey, handledNewParam, router]);
 
+    // Deep link: /office/help?ticket=<id> opens that ticket (CRM → Messages links here).
+    const ticketParam = Number(searchParams.get("ticket")) || null;
+    const [handledTicketParam, setHandledTicketParam] = useState<number | null>(null);
+    if (ticketParam !== null && handledTicketParam !== ticketParam) {
+        setHandledTicketParam(ticketParam);
+        setDetailId(ticketParam);
+        setDetailOpen(true);
+    }
+
     const mySet = new Set(myPositionIds);
     const q = query.trim().toLowerCase();
     const visible = tickets

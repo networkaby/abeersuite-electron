@@ -15,6 +15,7 @@ import {
     type WaTemplateKind,
 } from "./billTemplates";
 import { getApprovedWaTemplate, isAutoSend } from "./waTemplateStore";
+import { recordBillMessage } from "@/modules/message/lib/customerMessages";
 
 export { autoKindForVoucherType };
 import { isBillSendConfigured, sendBillTemplate } from "./metaTemplates";
@@ -162,6 +163,7 @@ async function notifyVoucher(kind: WaTemplateKind, uvId: number): Promise<Notify
             app: WA_APP_LINK,
         },
         push: { title: `${WA_TEMPLATE_LABEL[kind]} ${docNo}`, body: `Rs ${amountText} · ${dateText} · tap to view` },
+        summary: `${WA_TEMPLATE_LABEL[kind]} ${docNo} · Rs ${amountText}`,
     });
 }
 
@@ -204,6 +206,7 @@ async function notifyTicket(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: 
             title: ready ? `Your ${deviceName} is ready` : `Repair ${jobNo} received`,
             body: ready ? `Job ${jobNo} · ready for pickup · tap for details` : `${deviceName} · tap to track`,
         },
+        summary: ready ? `Repair ${jobNo} ready · ${deviceName}` : `Repair ${jobNo} received · ${deviceName}`,
     });
 }
 
@@ -216,6 +219,8 @@ async function deliver(d: {
     phones: PhoneRow[];
     values: WaFieldValues;
     push: { title: string; body: string };
+    /** One line for the customer's message thread (Messages screen). */
+    summary: string;
 }): Promise<NotifyResult> {
     // Claim first — a retried request or a second save path for the same
     // document stops here instead of messaging the customer twice.
@@ -253,6 +258,9 @@ async function deliver(d: {
             waError: wa.error ?? null,
         },
     });
+    if (mobile && wa.messageId) {
+        await recordBillMessage({ mobile10: mobile, externalId: wa.messageId, billKind: d.kind, billRefId: d.refId, body: d.summary });
+    }
     return { status: "sent" };
 }
 

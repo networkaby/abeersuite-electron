@@ -1,0 +1,72 @@
+// ── Customer messages (WhatsApp now; email / social later) ────────────────────
+//
+// One row per message to or from a customer, on any channel. Modelled on `Call`:
+// a raw event log with NO foreign key to Person/Company. A message is matched to
+// a customer BY PHONE at read time (phoneMatchKey), so messages from a number
+// that is not a party yet light up the moment the party is created with it.
+//
+// A message always belongs to a customer (by phone), sometimes to a ticket
+// (`ticketId` — staff raise one, or a new message joins the customer's open
+// help ticket), and sometimes to a bill (`billKind` + `billRefId` — the customer
+// replied to a bill message, or this IS the bill message we sent).
+//
+// IN rows come from the Meta webhook (/api/whatsapp/webhook); OUT rows are staff
+// replies (/api/messages/reply) and the bill messages notifyBill.ts sends.
+
+model Message {
+  id Int @id @default(autoincrement())
+
+  /// WHATSAPP | EMAIL | … — the channel a reply goes back on.
+  channel   String @default("WHATSAPP")
+  /// IN (customer → us) | OUT (us → customer).
+  direction String
+
+  /// Last-10-digit match key (phoneMatchKey) — the join to a customer.
+  phone      String?
+  /// The address exactly as the channel gave it (wa_id, email) — audit.
+  address    String?
+  /// The sender's own display name on the channel (WhatsApp profile name).
+  senderName String?
+
+  /// text | image | audio | video | document | sticker | location | button | template | …
+  kind String @default("text")
+  body String
+
+  /// The channel's own message id (Meta wamid). Idempotency key: Meta retries
+  /// a webhook until it gets a 200, and every retry carries the same id.
+  externalId        String? @unique
+  /// The message this one answers (Meta `context.id`).
+  replyToExternalId String?
+
+  /// The bill this message is about — the WaTemplateKind + refId of its
+  /// BillNotification (UniversalVoucher id, or Ticket id for REPAIR_*).
+  billKind  String?
+  billRefId Int?
+
+  /// The ticket this message is part of. Plain scalar, like Call.ticketId.
+  ticketId     Int?
+  /// Staff member who sent an OUT reply; null for IN rows and system sends.
+  sentByUserId Int?
+
+  /// OUT delivery state: sent | delivered | read | failed. Null on IN rows.
+  status      String?
+  deliveredAt DateTime?
+  readAt      DateTime?
+  error       String?
+
+  /// IN rows: when staff first opened the conversation. Null = unread.
+  seenAt DateTime?
+  /// Spam is a property of the NUMBER, as on Call: flagging one message flags
+  /// every message from that phone, and new ones arrive flagged.
+  spam   Boolean @default(false)
+
+  /// When the message actually happened (the channel's own timestamp).
+  occurredAt DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([phone, occurredAt])
+  @@index([occurredAt])
+  @@index([ticketId])
+  @@index([updatedAt])
+}

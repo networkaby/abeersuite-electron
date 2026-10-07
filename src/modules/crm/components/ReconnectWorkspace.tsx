@@ -8,6 +8,7 @@ import {
     Search, Phone, StickyNote, CalendarCheck, CheckSquare, Send, ShoppingCart, CreditCard,
     Wrench, HelpCircle, Handshake, Sparkles, RefreshCw, User, Building2, PhoneOff, PlusCircle,
     Package, ShieldCheck, ShieldAlert, Clock, Bookmark, Users2, X, PhoneIncoming, PhoneOutgoing, PhoneMissed, ArrowDownUp,
+    MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,7 +38,7 @@ interface Candidate {
 }
 interface CandidatesResponse { candidates: Candidate[]; total: number; nextCursor: number | null; truncated: boolean }
 
-type TimelineSource = "sale" | "payment" | "repair" | "inquiry" | "deal" | "note" | "call" | "meeting" | "task";
+type TimelineSource = "sale" | "payment" | "repair" | "inquiry" | "deal" | "note" | "call" | "message" | "meeting" | "task";
 interface TimelineEntry {
     key: string; at: string; source: TimelineSource; title: string;
     detail?: string; amountPaise?: number; ref?: { kind: "ticket" | "voucher"; id: number }; author?: string;
@@ -90,6 +91,7 @@ const SOURCE_META: Record<TimelineSource, { icon: typeof StickyNote; tint: strin
     deal: { icon: Handshake, tint: "text-purple-600" },
     note: { icon: StickyNote, tint: "text-muted-foreground" },
     call: { icon: Phone, tint: "text-sky-600" },
+    message: { icon: MessageCircle, tint: "text-green-600" },
     meeting: { icon: CalendarCheck, tint: "text-indigo-600" },
     task: { icon: CheckSquare, tint: "text-amber-600" },
 };

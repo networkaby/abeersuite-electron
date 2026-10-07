@@ -19,7 +19,7 @@ import { phoneMatchKey } from "@/shared/lib/format";
 
 export type CustomerRef = { kind: "person" | "company"; id: number };
 
-export type TimelineSource = "sale" | "payment" | "repair" | "inquiry" | "deal" | "note" | "call" | "meeting" | "task";
+export type TimelineSource = "sale" | "payment" | "repair" | "inquiry" | "deal" | "note" | "call" | "message" | "meeting" | "task";
 
 export interface TimelineEntry {
     /** Stable per-source key, e.g. "sale:1042". */
@@ -136,7 +136,7 @@ export async function buildCustomerTimeline(ref: CustomerRef, limit = 20): Promi
         new Set(phoneRows.map((p) => phoneMatchKey(p.phone)).filter((k): k is string => !!k)),
     );
 
-    const [sales, repairs, inquiries, deals, logs, calls] = await Promise.all([
+    const [sales, repairs, inquiries, deals, logs, calls, messages] = await Promise.all([
         salesWhere
             ? prisma.universalVoucher.findMany({
                 where: salesWhere,
@@ -211,6 +211,15 @@ export async function buildCustomerTimeline(ref: CustomerRef, limit = 20): Promi
                     durationSec: true,
                     speechSec: true,
                 },
+            })
+            : Promise.resolve([]),
+        // Customer messages (WhatsApp …) — matched by phone, the same as calls.
+        callKeys.length
+            ? prisma.message.findMany({
+                where: { phone: { in: callKeys }, spam: false },
+                orderBy: { occurredAt: "desc" },
+                take: limit,
+                select: { id: true, channel: true, direction: true, body: true, occurredAt: true, ticketId: true },
             })
             : Promise.resolve([]),
     ]);
@@ -304,6 +313,19 @@ export async function buildCustomerTimeline(ref: CustomerRef, limit = 20): Promi
             detail: c.note ? c.note : summary,
             direction: incoming ? "in" : outgoing ? "out" : undefined,
             missed,
+        });
+    }
+
+    for (const m of messages) {
+        const channel = m.channel === "EMAIL" ? "Email" : "WhatsApp";
+        entries.push({
+            key: `message:${m.id}`,
+            at: m.occurredAt.toISOString(),
+            source: "message",
+            title: m.direction === "IN" ? `${channel} — from customer` : `${channel} — sent`,
+            detail: m.body,
+            direction: m.direction === "IN" ? "in" : "out",
+            ref: m.ticketId ? { kind: "ticket", id: m.ticketId } : undefined,
         });
     }
 

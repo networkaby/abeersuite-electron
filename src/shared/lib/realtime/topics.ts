@@ -112,6 +112,7 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
     // FIRST message of a brand new DM, which mints the room this path creates.
     [/^\/api\/inbox\/direct/,                       ["chat"]],
     [/^\/api\/inbox\/rooms/,                        ["chat"]],
+    [/^\/api\/messages/,                            ["chat"]],
 ];
 
 /**

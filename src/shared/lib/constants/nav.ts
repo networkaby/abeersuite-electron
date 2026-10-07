@@ -150,6 +150,7 @@ import {
     Users,
     UsersRound,
     Voicemail,
+    MessagesSquare,
     Wallet,
     WalletMinimal,
     Wand2,
@@ -543,6 +544,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Deals", icon: Handshake, href: "/office/crm/deals" },
             { label: "Reconnect", icon: PhoneCall, href: "/office/crm/reconnect" },
             { label: "Call Log", icon: Voicemail, href: "/office/crm/call-log" },
+            { label: "Messages", icon: MessagesSquare, href: "/office/crm/messages" },
 
         ],
     },

@@ -147,3 +147,24 @@ export async function sendBillTemplate(args: {
     if (!id) throw new Error("Meta accepted the call but returned no message id");
     return id;
 }
+
+/**
+ * Send a free-text reply. Meta accepts one only inside the 24-hour window that
+ * opens when the customer last wrote to us — the caller checks that first
+ * (customerMessages.ts `replyWindowOpen`). Returns Meta's message id.
+ */
+export async function sendTextMessage(mobile10: string, text: string): Promise<string> {
+    const r = await graph<{ messages?: { id?: string }[] }>(`${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
+        method: "POST",
+        body: {
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: `+91${mobile10}`,
+            type: "text",
+            text: { body: text, preview_url: false },
+        },
+    });
+    const id = r.messages?.[0]?.id;
+    if (!id) throw new Error("Meta accepted the call but returned no message id");
+    return id;
+}

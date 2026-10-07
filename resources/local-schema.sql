@@ -3031,6 +3031,72 @@ ALTER TABLE "LoyaltyLedger" ADD COLUMN IF NOT EXISTS "createdById" INTEGER NOT N
 ALTER TABLE "LoyaltyLedger" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "Message" (
+    "id" SERIAL NOT NULL,
+    "channel" TEXT NOT NULL DEFAULT 'WHATSAPP',
+    "direction" TEXT NOT NULL,
+    "phone" TEXT,
+    "address" TEXT,
+    "senderName" TEXT,
+    "kind" TEXT NOT NULL DEFAULT 'text',
+    "body" TEXT NOT NULL,
+    "externalId" TEXT,
+    "replyToExternalId" TEXT,
+    "billKind" TEXT,
+    "billRefId" INTEGER,
+    "ticketId" INTEGER,
+    "sentByUserId" INTEGER,
+    "status" TEXT,
+    "deliveredAt" TIMESTAMP(3),
+    "readAt" TIMESTAMP(3),
+    "error" TEXT,
+    "seenAt" TIMESTAMP(3),
+    "spam" BOOLEAN NOT NULL DEFAULT false,
+    "occurredAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Message_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "channel" TEXT NOT NULL DEFAULT 'WHATSAPP';
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "direction" TEXT NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "phone" TEXT;
+ALTER TABLE "Message" ALTER COLUMN "phone" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "address" TEXT;
+ALTER TABLE "Message" ALTER COLUMN "address" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "senderName" TEXT;
+ALTER TABLE "Message" ALTER COLUMN "senderName" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "kind" TEXT NOT NULL DEFAULT 'text';
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "body" TEXT NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "externalId" TEXT;
+ALTER TABLE "Message" ALTER COLUMN "externalId" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "replyToExternalId" TEXT;
+ALTER TABLE "Message" ALTER COLUMN "replyToExternalId" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "billKind" TEXT;
+ALTER TABLE "Message" ALTER COLUMN "billKind" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "billRefId" INTEGER;
+ALTER TABLE "Message" ALTER COLUMN "billRefId" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "ticketId" INTEGER;
+ALTER TABLE "Message" ALTER COLUMN "ticketId" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "sentByUserId" INTEGER;
+ALTER TABLE "Message" ALTER COLUMN "sentByUserId" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "status" TEXT;
+ALTER TABLE "Message" ALTER COLUMN "status" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "deliveredAt" TIMESTAMP(3);
+ALTER TABLE "Message" ALTER COLUMN "deliveredAt" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "readAt" TIMESTAMP(3);
+ALTER TABLE "Message" ALTER COLUMN "readAt" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "error" TEXT;
+ALTER TABLE "Message" ALTER COLUMN "error" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "seenAt" TIMESTAMP(3);
+ALTER TABLE "Message" ALTER COLUMN "seenAt" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "spam" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "occurredAt" TIMESTAMP(3) NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "WhatsAppTemplate" (
     "kind" TEXT NOT NULL,
     "enabled" BOOLEAN NOT NULL DEFAULT false,
@@ -5330,6 +5396,21 @@ CREATE INDEX IF NOT EXISTS "LoyaltyLedger_accountId_createdAt_idx" ON "LoyaltyLe
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "LoyaltyLedger_universalVoucherId_idx" ON "LoyaltyLedger"("universalVoucherId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "Message_externalId_key" ON "Message"("externalId");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "Message_phone_occurredAt_idx" ON "Message"("phone", "occurredAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "Message_occurredAt_idx" ON "Message"("occurredAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "Message_ticketId_idx" ON "Message"("ticketId");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "Message_updatedAt_idx" ON "Message"("updatedAt");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "BillNotification_personId_createdAt_idx" ON "BillNotification"("personId", "createdAt");
@@ -7818,6 +7899,13 @@ DO $$ BEGIN
     IF to_regclass('public."LoyaltyMilestoneAward"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "LoyaltyMilestoneAward";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "LoyaltyMilestoneAward"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Message"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Message";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Message"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;
