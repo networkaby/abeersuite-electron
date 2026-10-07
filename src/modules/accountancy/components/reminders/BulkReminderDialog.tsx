@@ -2,59 +2,86 @@
 
 // "Send to all" — for an emergency or the run-up to year-end. Narrow the list,
 // see how many customers and how much money it touches, type SEND, then watch
-// it go out in batches. UI-first phase: the progress is simulated, nothing sends.
+// it go out SEND_BATCH at a time. Closing the dialog stops after the batch in hand.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumericInput } from "@/shared/components/NumericInput";
+import { extractApiError } from "@/shared/lib/api";
 import { fmt } from "@/shared/lib/format/moneyInr";
-import { EST_COST_PER_MESSAGE, TONE_LABEL, type ReminderTone } from "./sampleData";
-import type { ReminderParty } from "./SendReminderDialog";
+import { EST_COST_PER_MESSAGE, SEND_BATCH, type ReminderSendInfo, type ReminderTone } from "@/shared/lib/whatsapp/dueReminderTypes";
+import { TemplateStateNote, type ReminderParty } from "./SendReminderDialog";
 
-type Progress = { sent: number; failed: number; total: number; done: boolean };
+type Progress = { sent: number; skipped: number; failed: number; total: number; done: boolean; noWa: number };
 
-export function BulkReminderDialog({ open, parties, onClose }: { open: boolean; parties: ReminderParty[]; onClose: () => void }) {
+export function BulkReminderDialog({
+    open, parties, info, onClose, onSent,
+}: {
+    open: boolean;
+    parties: ReminderParty[];
+    info: ReminderSendInfo | null;
+    onClose: () => void;
+    onSent: () => void;
+}) {
     const [minAmount, setMinAmount] = useState("500");
     const [minDays, setMinDays] = useState("30");
     const [skipDays, setSkipDays] = useState("3");
     const [tone, setTone] = useState<ReminderTone>("FIRM");
     const [confirm, setConfirm] = useState("");
     const [progress, setProgress] = useState<Progress | null>(null);
-    const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+    const stop = useRef(false);
+    // "Reminded in the last N days" is measured from when the report was opened.
+    const [now] = useState(() => Date.now());
 
-    const picked = useMemo(
-        () => parties.filter((p) => p.balance >= (Number(minAmount) || 0) && p.oldestDays >= (Number(minDays) || 0)),
-        [parties, minAmount, minDays],
-    );
+    const picked = useMemo(() => {
+        const skipMs = (Number(skipDays) || 0) * 86_400_000;
+        return parties.filter((p) => {
+            if (p.balance < (Number(minAmount) || 0) || p.oldestDays < (Number(minDays) || 0)) return false;
+            const last = info?.lastReminded[p.accountId];
+            return !(skipMs > 0 && last && now - new Date(last).getTime() < skipMs);
+        });
+    }, [parties, minAmount, minDays, skipDays, info, now]);
     const total = picked.reduce((s, p) => s + p.balance, 0);
-
-    useEffect(() => () => { if (timer.current) clearInterval(timer.current); }, []);
+    const running = progress != null && !progress.done;
 
     const close = () => {
-        if (timer.current) clearInterval(timer.current);
+        stop.current = true;
+        if (progress) onSent();
         setProgress(null);
         setConfirm("");
         onClose();
     };
 
-    const start = () => {
-        const n = picked.length;
-        setProgress({ sent: 0, failed: 0, total: n, done: n === 0 });
-        timer.current = setInterval(() => {
-            setProgress((p) => {
-                if (!p) return p;
-                const step = Math.min(10, p.total - p.sent - p.failed);
-                const failed = p.failed + (step > 0 && p.sent + p.failed > 0 && (p.sent + p.failed) % 40 === 0 ? 1 : 0);
-                const sent = p.sent + step - (failed - p.failed);
-                const done = sent + failed >= p.total;
-                if (done && timer.current) clearInterval(timer.current);
-                return { ...p, sent, failed, done };
-            });
-        }, 400);
+    const start = async () => {
+        stop.current = false;
+        const ids = picked.map((p) => p.accountId);
+        const p: Progress = { sent: 0, skipped: 0, failed: 0, noWa: 0, total: ids.length, done: false };
+        setProgress({ ...p });
+        for (let i = 0; i < ids.length && !stop.current; i += SEND_BATCH) {
+            try {
+                const { data } = await axios.post<{ results: { status: string; waStatus?: string }[] }>(
+                    "/api/due-reminders/send",
+                    { accountIds: ids.slice(i, i + SEND_BATCH), tone, mode: "ALL" },
+                );
+                for (const r of data.results) {
+                    if (r.status !== "sent") p.skipped++;
+                    else if (r.waStatus === "failed") p.failed++;
+                    else { p.sent++; if (r.waStatus !== "sent") p.noWa++; }
+                }
+            } catch (e) {
+                toast.error(extractApiError(e, "Sending stopped"));
+                p.failed += Math.min(SEND_BATCH, ids.length - i);
+                break;
+            }
+            setProgress({ ...p });
+        }
+        setProgress({ ...p, done: true });
     };
 
     return (
@@ -63,7 +90,7 @@ export function BulkReminderDialog({ open, parties, onClose }: { open: boolean; 
                 <DialogHeader>
                     <DialogTitle>Send reminder to all</DialogTitle>
                     <DialogDescription>
-                        For an emergency or before year-end. Excluded customers are always skipped.
+                        For an emergency or before year-end. Customers on the Never remind list are always skipped.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -72,15 +99,21 @@ export function BulkReminderDialog({ open, parties, onClose }: { open: boolean; 
                         <div className="h-3 overflow-hidden rounded-full bg-muted">
                             <div
                                 className="h-full bg-primary transition-all"
-                                style={{ width: `${progress.total ? ((progress.sent + progress.failed) / progress.total) * 100 : 100}%` }}
+                                style={{ width: `${progress.total ? ((progress.sent + progress.skipped + progress.failed) / progress.total) * 100 : 100}%` }}
                             />
                         </div>
                         <p className="text-sm">
                             Sent <b>{progress.sent}</b> / {progress.total}
+                            {progress.skipped > 0 && <span className="text-muted-foreground"> · {progress.skipped} skipped</span>}
                             {progress.failed > 0 && <span className="text-red-600"> · {progress.failed} failed</span>}
                             {progress.done && <span className="text-emerald-600"> · Finished</span>}
                         </p>
-                        <p className="text-xs text-muted-foreground">Preview only — this progress is simulated, nothing was sent.</p>
+                        {progress.noWa > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                                {progress.noWa} got the app notification only (no mobile, or the template is not approved yet).
+                            </p>
+                        )}
+                        <p className="text-xs text-muted-foreground">Every send is listed under Settings → Due Reminders → Recent reminders.</p>
                     </div>
                 ) : (
                     <>
@@ -95,12 +128,12 @@ export function BulkReminderDialog({ open, parties, onClose }: { open: boolean; 
                             </div>
                             <div className="space-y-1">
                                 <Label>Skip if reminded in last (days)</Label>
-                                <NumericInput value={skipDays} onValueChange={setSkipDays} min={0} max={365} />
+                                <NumericInput value={skipDays} onValueChange={setSkipDays} min={0} max={30} />
                             </div>
                             <div className="space-y-1">
                                 <Label>Message</Label>
                                 <div className="flex gap-1 rounded-md border p-1">
-                                    {(Object.keys(TONE_LABEL) as ReminderTone[]).map((t) => (
+                                    {(["SOFT", "FIRM"] as ReminderTone[]).map((t) => (
                                         <button
                                             key={t}
                                             type="button"
@@ -115,6 +148,8 @@ export function BulkReminderDialog({ open, parties, onClose }: { open: boolean; 
                                 </div>
                             </div>
                         </div>
+
+                        <TemplateStateNote state={info?.templates[tone].state} />
 
                         <div className="grid grid-cols-3 gap-2 rounded-lg border bg-muted/30 p-3 text-center">
                             <div>
@@ -139,9 +174,9 @@ export function BulkReminderDialog({ open, parties, onClose }: { open: boolean; 
                 )}
 
                 <DialogFooter>
-                    <Button variant="outline" onClick={close}>{progress?.done ? "Close" : "Cancel"}</Button>
+                    <Button variant="outline" onClick={close}>{running ? "Stop" : progress?.done ? "Close" : "Cancel"}</Button>
                     {!progress && (
-                        <Button disabled={confirm.trim() !== "SEND" || picked.length === 0} onClick={start}>
+                        <Button disabled={confirm.trim() !== "SEND" || picked.length === 0 || !info} onClick={start}>
                             <Send size={14} /> Send to {picked.length}
                         </Button>
                     )}

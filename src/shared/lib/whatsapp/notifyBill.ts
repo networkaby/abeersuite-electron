@@ -93,9 +93,9 @@ export async function sendManually(source: "inv" | "uv", id: number): Promise<No
 const money = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const day = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
 
-type PhoneRow = { phone: string; isPrimary: boolean; verifiedAt: Date | null };
+export type PhoneRow = { phone: string; isPrimary: boolean; verifiedAt: Date | null };
 const phonesSelect = { select: { phone: true, isPrimary: true, verifiedAt: true } } as const;
-const partySelect = {
+export const partySelect = {
     personId: true,
     companyId: true,
     groupId: true,
@@ -232,6 +232,37 @@ async function deliver(d: {
         return { status: "already" };
     }
 
+    const { mobile, push, wa } = await sendPushAndWhatsApp(d);
+
+    await prisma.billNotification.update({
+        where: { kind_refId: { kind: d.kind, refId: d.refId } },
+        data: {
+            mobile,
+            pushStatus: push.status,
+            pushMessageId: push.messageId,
+            waStatus: wa.status,
+            waMessageId: wa.messageId ?? null,
+            waError: wa.error ?? null,
+        },
+    });
+    return { status: "sent" };
+}
+
+export type WaOutcome = { status: string; messageId?: string; error?: string };
+
+/** App notification + WhatsApp side by side, and the WhatsApp copied into the
+ *  customer's Messages thread. No claim row — `deliver` above claims one per
+ *  document; a due reminder logs its own (dueReminders.ts). */
+export async function sendPushAndWhatsApp(d: {
+    kind: WaTemplateKind;
+    refId: number;
+    linkCode: string;
+    personId: number | null;
+    phones: PhoneRow[];
+    values: WaFieldValues;
+    push: { title: string; body: string };
+    summary: string;
+}): Promise<{ mobile: string | null; push: { status: string; messageId: string | null }; wa: WaOutcome }> {
     const mobile = pickMobile(d.phones);
     const [push, wa] = await Promise.all([
         d.personId != null
@@ -246,25 +277,11 @@ async function deliver(d: {
             : Promise.resolve({ status: "no-person" as const, messageId: null }),
         sendWhatsApp(d.kind, d.linkCode, mobile, d.values),
     ]);
-
-    await prisma.billNotification.update({
-        where: { kind_refId: { kind: d.kind, refId: d.refId } },
-        data: {
-            mobile,
-            pushStatus: push.status,
-            pushMessageId: push.messageId,
-            waStatus: wa.status,
-            waMessageId: wa.messageId ?? null,
-            waError: wa.error ?? null,
-        },
-    });
     if (mobile && wa.messageId) {
         await recordBillMessage({ mobile10: mobile, externalId: wa.messageId, billKind: d.kind, billRefId: d.refId, body: d.summary });
     }
-    return { status: "sent" };
+    return { mobile, push, wa };
 }
-
-type WaOutcome = { status: string; messageId?: string; error?: string };
 
 async function sendWhatsApp(kind: WaTemplateKind, linkCode: string, mobile: string | null, values: WaFieldValues): Promise<WaOutcome> {
     if (!mobile) return { status: "no-mobile" };

@@ -1,16 +1,21 @@
 "use client";
 
 // One customer's due reminder: pick the tone, see exactly what the customer
-// gets, press Send. UI-first phase — Send only says it is not wired yet.
+// gets, press Send. App notification + WhatsApp, logged under Settings → Due
+// Reminders.
 
 import { useState } from "react";
+import axios from "axios";
 import { toast } from "sonner";
-import { AlertTriangle, ExternalLink, Send } from "lucide-react";
+import { AlertTriangle, ExternalLink, Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { extractApiError } from "@/shared/lib/api";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { formatDateCompact } from "@/shared/lib/format/formatDate";
-import { TONE_LABEL, sampleReminderText, type ReminderTone } from "./sampleData";
+import { fillBody } from "@/shared/lib/whatsapp/billTemplates";
+import { TONE_LABEL, waStatusText, type ReminderSendInfo, type ReminderTone } from "@/shared/lib/whatsapp/dueReminderTypes";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 export type ReminderParty = {
     accountId: number;
@@ -21,12 +26,16 @@ export type ReminderParty = {
     oldestDays: number;
 };
 
-export function ReminderPreview({ tone, party }: { tone: ReminderTone; party: ReminderParty }) {
-    const text = sampleReminderText(tone, {
+const money = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const day = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+
+/** The WhatsApp bubble — the template's own wording, filled for this party. */
+export function ReminderPreview({ body, party }: { body: string; party: ReminderParty }) {
+    const text = fillBody(body, {
         customer: party.name,
-        amount: fmt(party.balance),
-        since: party.oldestBillDate ? formatDateCompact(party.oldestBillDate) : "—",
-        shop: "our shop",
+        amount: money.format(party.balance),
+        date: party.oldestBillDate ? day.format(new Date(party.oldestBillDate)) : "—",
+        shop: COMPANY_DETAILS.brandName,
     });
     return (
         <div className="rounded-lg bg-[#e5ddd5] p-3 dark:bg-[#0b141a]">
@@ -40,13 +49,55 @@ export function ReminderPreview({ tone, party }: { tone: ReminderTone; party: Re
     );
 }
 
-export function SendReminderDialog({ party, onClose }: { party: ReminderParty | null; onClose: () => void }) {
+/** Amber line under a template that cannot go on WhatsApp yet. */
+export function TemplateStateNote({ state }: { state: string | undefined }) {
+    if (!state || state === "ready") return null;
+    return (
+        <div className="flex items-center gap-2 rounded-md bg-amber-100 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+            <AlertTriangle size={14} />
+            {state === "off" ? "This template is switched off" : "This template is not approved by Meta yet"} on WhatsApp Templates —
+            only the app notification will go.
+        </div>
+    );
+}
+
+export function SendReminderDialog({
+    party, info, onClose, onSent,
+}: {
+    party: ReminderParty | null;
+    info: ReminderSendInfo | null;
+    onClose: () => void;
+    onSent: () => void;
+}) {
     const [tone, setTone] = useState<ReminderTone>("SOFT");
-    // Stand-in for "a reminder already went to this customer today".
-    const remindedToday = party != null && party.accountId % 5 === 0;
+    const [sending, setSending] = useState(false);
+    const last = party && info?.lastReminded[party.accountId];
+
+    const send = async () => {
+        if (!party) return;
+        setSending(true);
+        try {
+            const { data } = await axios.post<{ results: { status: string; reason?: string; waStatus?: string }[] }>(
+                "/api/due-reminders/send",
+                { accountIds: [party.accountId], tone, mode: "MANUAL" },
+            );
+            const r = data.results[0];
+            if (r?.status === "sent") {
+                toast.success(`Reminder sent to ${party.name} — WhatsApp: ${waStatusText(r.waStatus ?? "")}`);
+                onSent();
+                onClose();
+            } else {
+                toast.error(`Not sent: ${r?.reason ?? "unknown reason"}`);
+            }
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not send the reminder"));
+        } finally {
+            setSending(false);
+        }
+    };
 
     return (
-        <Dialog open={party != null} onOpenChange={(v) => { if (!v) onClose(); }}>
+        <Dialog open={party != null} onOpenChange={(v) => { if (!v && !sending) onClose(); }}>
             <DialogContent className="sm:max-w-md">
                 {party && (
                     <>
@@ -86,18 +137,25 @@ export function SendReminderDialog({ party, onClose }: { party: ReminderParty | 
                             ))}
                         </div>
 
-                        <ReminderPreview tone={tone} party={party} />
+                        {info ? (
+                            <>
+                                <ReminderPreview body={info.templates[tone].body} party={party} />
+                                <TemplateStateNote state={info.templates[tone].state} />
+                            </>
+                        ) : (
+                            <div className="flex justify-center py-6"><Loader2 className="animate-spin text-muted-foreground" size={20} /></div>
+                        )}
 
-                        {remindedToday && (
+                        {last && (
                             <div className="flex items-center gap-2 rounded-md bg-amber-100 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                                <AlertTriangle size={14} /> Already reminded today at 10:00 am. You can still send again.
+                                <AlertTriangle size={14} /> Last reminded {new Date(last).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}. You can still send again.
                             </div>
                         )}
 
                         <DialogFooter>
-                            <Button variant="outline" onClick={onClose}>Cancel</Button>
-                            <Button onClick={() => { toast.info("Preview only — sending is not wired yet."); onClose(); }}>
-                                <Send size={14} /> Send
+                            <Button variant="outline" onClick={onClose} disabled={sending}>Cancel</Button>
+                            <Button onClick={send} disabled={sending || !info}>
+                                {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Send
                             </Button>
                         </DialogFooter>
                     </>

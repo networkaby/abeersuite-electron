@@ -35,6 +35,12 @@ export const PERMISSIONS = {
     ACCOUNTANCY_MASTERS_EDIT: "accountancy:masters:edit",
     ACCOUNTANCY_MASTERS_DELETE: "accountancy:masters:delete",
 
+    // Due reminders from the Receivables report. SEND = one customer at a time;
+    // SEND_ALL = "Send reminder to all", kept apart because one press can message
+    // every customer who owes. The automation itself is Settings (settings:manage).
+    ACCOUNTANCY_REMINDERS_SEND: "accountancy:reminders:send",
+    ACCOUNTANCY_REMINDERS_SEND_ALL: "accountancy:reminders:send-all",
+
     // Customers (Contacts = Person + Company; share ONE flat set). Contacts carry
     // no branch, so there is no radius to enforce — any branch may CRUD (gated only
     // by holding the write id).

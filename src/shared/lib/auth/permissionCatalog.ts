@@ -168,6 +168,8 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     { id: "accountancy:masters:create", label: "Create accounting masters", module: "accountancy", description: "Create account groups and GL ledgers (chart of accounts)." },
     { id: "accountancy:masters:edit", label: "Edit accounting masters", module: "accountancy", description: "Edit account groups and GL ledgers." },
     { id: "accountancy:masters:delete", label: "Delete accounting masters", module: "accountancy", description: "Delete account groups." },
+    { id: "accountancy:reminders:send", label: "Send due reminder", module: "accountancy", description: "Send a WhatsApp + app due reminder to one customer from the Receivables report." },
+    { id: "accountancy:reminders:send-all", label: "Send due reminder to all", module: "accountancy", description: "\"Send reminder to all\" on the Receivables report — messages every customer who owes, in one go." },
 
     // loyalty — earn/redeem config, earn rules, and milestones (manual point
     // adjustments live on the customer record, not here). manage = umbrella.

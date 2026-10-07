@@ -62,3 +62,73 @@ model BillNotification {
   @@unique([kind, refId])
   @@index([personId, createdAt])
 }
+
+// ── Due reminders ────────────────────────────────────────────────────────────
+//
+// A party's whole balance due, sent by hand (Receivables → Send), to many at once
+// (Send to all) or by the daily job when a rule matches. Edited at
+// /office/settings/due-reminders; wording is the DUE_SOFT / DUE_FIRM templates.
+// See src/shared/lib/whatsapp/dueReminders.ts.
+
+/// Singleton (id = 1). The automation switch and its limits.
+model DueReminderSettings {
+  id          Int      @id @default(1)
+  /// The daily job sends nothing while this is off.
+  enabled     Boolean  @default(false)
+  /// "HH:MM" India time — the job sends on its first run at or after this.
+  sendTime    String   @default("10:00")
+  /// Weekdays not to send on, 0 = Sunday … 6 = Saturday.
+  skipDays    Int[]    @default([5])
+  /// Most automatic reminders in one day.
+  dailyCap    Int      @default(50)
+  /// Skip a party whose balance is below this (rupees).
+  minBalance  Decimal  @default(100) @db.Decimal(14, 2)
+  /// Account ids never reminded — automation and Send to all skip them.
+  excludedAccountIds Int[] @default([])
+  /// India date ("YYYY-MM-DD") the job last ran — once a day.
+  lastRunDate String?
+  updatedAt   DateTime @default(now()) @updatedAt
+}
+
+/// One automation rule: oldest unpaid bill ≥ minDays AND balance ≥ minAmount.
+/// The strongest matching rule (highest minDays) wins for a party.
+model DueReminderRule {
+  id          Int      @id @default(autoincrement())
+  name        String
+  minDays     Int
+  minAmount   Decimal  @db.Decimal(14, 2)
+  /// 0 = once per rule until the balance clears; N = again every N days.
+  repeatDays  Int      @default(0)
+  /// SOFT | FIRM | CALL_LIST (no message — on the owner's call list).
+  action      String
+  enabled     Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+}
+
+/// One reminder sent (or put on the call list) to one party.
+model DueReminderLog {
+  id            Int      @id @default(autoincrement())
+  accountId     Int
+  partyName     String
+  personId      Int?
+  amount        Decimal  @db.Decimal(14, 2)
+  /// SOFT | FIRM | CALL_LIST
+  action        String
+  /// MANUAL | ALL | AUTO
+  mode          String
+  ruleId        Int?
+  mobile        String?
+  /// Same words as BillNotification.
+  pushStatus    String
+  waStatus      String
+  waMessageId   String?
+  waError       String?
+  /// Staff who pressed Send; null for the daily job.
+  sentById      Int?
+  createdAt     DateTime @default(now())
+
+  @@index([accountId, createdAt])
+  @@index([createdAt])
+}

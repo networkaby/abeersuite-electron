@@ -18,6 +18,7 @@ import {
     sampleValuesFor,
     checkBody,
     fillBody,
+    isDueKind,
     type WaTemplateDraft,
     type WaTemplateKind,
 } from "@/shared/lib/whatsapp/billTemplates";
@@ -194,13 +195,16 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                         <Switch checked={enabled} onCheckedChange={setEnabled} />
                         Send on WhatsApp
                     </label>
-                    <label
-                        className="flex items-center gap-2 text-sm"
-                        title="On: goes by itself when the document is saved. Off: only from the 3-dot menu's Send on WhatsApp."
-                    >
-                        <Switch checked={autoSend} onCheckedChange={setAutoSend} />
-                        Auto send
-                    </label>
+                    {/* Due reminders go by Settings → Due Reminders' rules, not on a save. */}
+                    {!isDueKind(current.kind) && (
+                        <label
+                            className="flex items-center gap-2 text-sm"
+                            title="On: goes by itself when the document is saved. Off: only from the 3-dot menu's Send on WhatsApp."
+                        >
+                            <Switch checked={autoSend} onCheckedChange={setAutoSend} />
+                            Auto send
+                        </label>
+                    )}
                 </div>
                 {current.status === "REJECTED" && current.rejectReason && (
                     <p className="text-sm text-red-600">Meta&apos;s reason: {current.rejectReason}</p>

@@ -5,7 +5,12 @@
 // same drill-down. So there is one screen here and each page just says which
 // side it is. Anything added below shows up on both, which is the point.
 
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
+import axios from "axios";
+import { useSession } from "next-auth/react";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import type { ReminderSendInfo } from "@/shared/lib/whatsapp/dueReminderTypes";
 import { partyProfileHref } from "@/shared/lib/parties";
 import Link from "next/link";
 import { GatedLink } from "@/shared/components/GatedLink";
@@ -132,19 +137,35 @@ export function OutstandingsReportScreen({
         if (!reminders || !data) return [];
         const oldest = new Map<number, { date: string; days: number }>();
         for (const b of data.bills) {
+            if (b.side !== 1) continue;
             const cur = oldest.get(b.accountId);
             if (!cur || b.daysOverdue > cur.days) oldest.set(b.accountId, { date: b.billDate, days: b.daysOverdue });
         }
-        return data.parties.map((p) => ({
+        return data.parties.filter((p) => p.totalOutstanding - p.toLink > 0.005).map((p) => ({
             accountId: p.accountId,
             name: p.accountName,
-            balance: p.totalOutstanding,
+            // Less money paid but not yet linked to a bill — what the server sends.
+            balance: Math.round((p.totalOutstanding - p.toLink) * 100) / 100,
             oldestBillDate: oldest.get(p.accountId)?.date ?? null,
             oldestDays: oldest.get(p.accountId)?.days ?? 0,
         }));
     }, [reminders, data]);
     const [remindOne, setRemindOne] = useState<ReminderParty | null>(null);
     const [remindAll, setRemindAll] = useState(false);
+    const perms = (useSession().data?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canRemind = reminders && hasPermissionWithScope(perms, PERMISSIONS.ACCOUNTANCY_REMINDERS_SEND);
+    const canRemindAll = reminders && hasPermissionWithScope(perms, PERMISSIONS.ACCOUNTANCY_REMINDERS_SEND_ALL);
+    // Who was reminded lately and whether the templates can go — read when a
+    // reminder dialog first opens, and again after a send.
+    const [reminderInfo, setReminderInfo] = useState<ReminderSendInfo | null>(null);
+    const loadReminderInfo = useCallback(() => {
+        axios.get<ReminderSendInfo>("/api/due-reminders/send")
+            .then((r) => setReminderInfo(r.data))
+            .catch(() => toast.error("Could not read the reminder templates"));
+    }, []);
+    useEffect(() => {
+        if ((remindOne || remindAll) && !reminderInfo) loadReminderInfo();
+    }, [remindOne, remindAll, reminderInfo, loadReminderInfo]);
 
     const bills = useMemo(() => {
         if (!data) return [];
@@ -211,7 +232,7 @@ export function OutstandingsReportScreen({
                         <Label>As on</Label>
                         <TallyDateInput value={asOf} onValueChange={setAsOf} className="w-auto" />
                     </div>
-                    {reminders && (
+                    {canRemindAll && (
                         <Button variant="outline" onClick={() => setRemindAll(true)} disabled={!data}>
                             <MessageSquareWarning size={14} /> Send reminder to all…
                         </Button>
@@ -344,7 +365,7 @@ export function OutstandingsReportScreen({
                                         <td className="px-3 py-1.5 text-right font-mono font-semibold">{fmt(period ? p.buckets[period] : p.totalOutstanding)}</td>
                                         {reminders && (
                                             <td className="px-1 py-1.5 text-right">
-                                                <button
+                                                {canRemind && reminderParties.some((r) => r.accountId === p.accountId) && <button
                                                     type="button"
                                                     title="Send due reminder on WhatsApp"
                                                     className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-emerald-600"
@@ -355,7 +376,7 @@ export function OutstandingsReportScreen({
                                                     }}
                                                 >
                                                     <Send size={14} />
-                                                </button>
+                                                </button>}
                                             </td>
                                         )}
                                         <td className="px-3 py-1.5 text-muted-foreground"><ChevronRight size={14} /></td>
@@ -512,8 +533,8 @@ export function OutstandingsReportScreen({
         )}
         {reminders && (
             <>
-                <SendReminderDialog party={remindOne} onClose={() => setRemindOne(null)} />
-                <BulkReminderDialog open={remindAll} parties={reminderParties} onClose={() => setRemindAll(false)} />
+                <SendReminderDialog party={remindOne} info={reminderInfo} onClose={() => setRemindOne(null)} onSent={loadReminderInfo} />
+                <BulkReminderDialog open={remindAll} parties={reminderParties} info={reminderInfo} onClose={() => setRemindAll(false)} onSent={loadReminderInfo} />
             </>
         )}
         <LinkContextMenu menu={linkMenu} onClose={closeLinkMenu} />

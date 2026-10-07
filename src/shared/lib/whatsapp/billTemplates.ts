@@ -25,6 +25,8 @@ export const WA_TEMPLATE_KINDS = [
     "ESTIMATE",
     "REPAIR_RECEIVED",
     "REPAIR_READY",
+    "DUE_SOFT",
+    "DUE_FIRM",
 ] as const;
 export type WaTemplateKind = (typeof WA_TEMPLATE_KINDS)[number];
 
@@ -37,6 +39,8 @@ export const WA_TEMPLATE_LABEL: Record<WaTemplateKind, string> = {
     ESTIMATE: "Estimate",
     REPAIR_RECEIVED: "Repair received",
     REPAIR_READY: "Repair ready",
+    DUE_SOFT: "Due reminder – soft",
+    DUE_FIRM: "Due reminder – firm",
 };
 
 /** When each kind goes out by itself (Auto send on) — shown on its card. Any of
@@ -50,6 +54,8 @@ export const WA_TEMPLATE_WHEN: Record<WaTemplateKind, string> = {
     ESTIMATE: "Estimate saved (POS or office). Auto send starts off — send from the 3-dot menu.",
     REPAIR_RECEIVED: "A repair stage with the action \"Tell customer: repair received\" is completed.",
     REPAIR_READY: "A repair stage with the action \"Tell customer: repair ready\" is completed.",
+    DUE_SOFT: "Send reminder on Receivables, Send to all, or a Soft rule under Settings → Due Reminders.",
+    DUE_FIRM: "Send reminder on Receivables, Send to all, or a Firm rule under Settings → Due Reminders.",
 };
 
 /** Auto send starts on for every kind except Estimate — staff often make rough
@@ -91,6 +97,17 @@ export function isRepairKind(kind: WaTemplateKind): boolean {
     return kind === "REPAIR_RECEIVED" || kind === "REPAIR_READY";
 }
 
+/** Due reminders announce a party's whole balance, not one document — their
+ *  refId is the party's Account id and Settings → Due Reminders decides when
+ *  they go, not the Auto send switch. */
+export function isDueKind(kind: WaTemplateKind): kind is "DUE_SOFT" | "DUE_FIRM" {
+    return kind === "DUE_SOFT" || kind === "DUE_FIRM";
+}
+
+/** The View button code a due reminder carries: /portal/b/due opens My Bills →
+ *  Outstanding with the UPI pay button. */
+export const DUE_LINK_CODE = "due";
+
 /** The fields a template body may use, with the sample Meta is shown on submission. */
 export const WA_FIELDS = [
     { key: "customer", label: "Customer name", sample: "Rahul Sharma" },
@@ -110,9 +127,12 @@ export type WaFieldKey = (typeof WA_FIELDS)[number]["key"];
 export type WaFieldValues = Record<WaFieldKey, string>;
 
 const VOUCHER_ONLY = new Set<string>(["amount", "prevBalance", "balance"]);
+/** A due reminder: {amount} is the balance due, {date} the oldest unpaid bill's date. */
+const DUE_FIELDS = new Set<string>(["customer", "amount", "date", "shop", "link", "app"]);
 
 /** Fields a kind can fill: a repair has a device and no money; a voucher the reverse. */
 export function fieldsFor(kind: WaTemplateKind): readonly (typeof WA_FIELDS)[number][] {
+    if (isDueKind(kind)) return WA_FIELDS.filter((f) => DUE_FIELDS.has(f.key));
     return WA_FIELDS.filter((f) => (isRepairKind(kind) ? !VOUCHER_ONLY.has(f.key) : f.key !== "device"));
 }
 
@@ -217,6 +237,22 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
         viewButton: "Track repair",
         appButton: "Get our app",
     },
+    // A reminder, not a sales push — kept free of offers so Meta files it as UTILITY.
+    DUE_SOFT: {
+        body:
+            "Dear {customer}, this is a friendly reminder from {shop}.\n\n" +
+            "Balance due: Rs {amount}\n\n" +
+            "Tap Pay now to see your bills and pay by UPI. Please ignore this message if you have already paid. Thank you.",
+        viewButton: "Pay now",
+        appButton: "Get our app",
+    },
+    DUE_FIRM: {
+        body:
+            "Dear {customer}, Rs {amount} has been due at {shop} since {date}.\n\n" +
+            "Please clear it at the earliest. Tap Pay now to see your bills and pay by UPI. Please ignore this message if you have already paid.",
+        viewButton: "Pay now",
+        appButton: "Get our app",
+    },
 };
 
 /** Bill link and app link — the button URLs Meta approves. The bill button's
@@ -261,12 +297,15 @@ const SAMPLE_DOC_NO: Record<WaTemplateKind, string> = {
     ESTIMATE: "EST-0419",
     REPAIR_RECEIVED: "#2051",
     REPAIR_READY: "#2051",
+    DUE_SOFT: "",
+    DUE_FIRM: "",
 };
 
 export function sampleValuesFor(kind: WaTemplateKind): WaFieldValues {
     const v = { ...BASE_SAMPLES, billNo: SAMPLE_DOC_NO[kind] };
     // Money in brings the balance down; everything else adds to it.
     if (kind === "RECEIPT") return { ...v, prevBalance: "Rs 3,750.00 due", balance: "Rs 2,500.00 due" };
+    if (isDueKind(kind)) return { ...v, amount: "4,250.00", date: "12 Aug 2026", link: `${WA_BILL_LINK_BASE}${DUE_LINK_CODE}` };
     return v;
 }
 

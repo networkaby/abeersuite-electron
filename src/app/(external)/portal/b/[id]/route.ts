@@ -7,6 +7,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 //                estimate) opens the bill page; a money voucher (receipt,
 //                refund) opens the receipt page
 //   t<ticketId>  a repair: My Repairs
+//   due          a due reminder: My Bills → Outstanding (UPI pay)
 // The pages check the signed-in customer owns the document, so this hop
 // reveals nothing.
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -14,6 +15,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const to = (path: string) => NextResponse.redirect(new URL(path, req.url));
 
     if (/^t\d+$/.test(code)) return to("/portal/repairs");
+    // A due reminder's "Pay now": the balance with its UPI pay button.
+    if (code === "due") return to("/portal/bills?tab=outstanding");
 
     const id = Number(code);
     if (!Number.isInteger(id) || id <= 0) return to("/portal/orders");
