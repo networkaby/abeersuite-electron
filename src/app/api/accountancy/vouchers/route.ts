@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, after } from "next/server";
-import { notifyBill } from "@/shared/lib/whatsapp/notifyBill";
+import { notifyBill, autoKindForVoucherType } from "@/shared/lib/whatsapp/notifyBill";
 import { auth } from "@/auth";
 import { requireAuth, requireVoucherPermission } from "@/shared/lib/auth/permissions";
 import { requireWritableBranchId } from "@/shared/lib/auth/activeBranch";
@@ -249,9 +249,8 @@ export async function POST(req: Request) {
             });
         }
 
-        if ((body.post ?? false) && (body.type === "RECEIPT" || body.type === "PAYMENT")) {
-            after(() => notifyBill(body.type === "RECEIPT" ? "RECEIPT" : "REFUND", voucher.id));
-        }
+        const notifyKind = (body.post ?? false) ? autoKindForVoucherType(body.type) : null;
+        if (notifyKind) after(() => notifyBill(notifyKind, voucher.id));
 
         return NextResponse.json(
             settled

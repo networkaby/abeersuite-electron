@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
-import { isEstimateType, notifyBill } from "@/shared/lib/whatsapp/notifyBill";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
@@ -49,29 +48,4 @@ export async function GET(_req: Request, { params }: RouteCtx) {
     const refId = Number((await params).id);
     if (!Number.isInteger(refId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
     return NextResponse.json({ notification: await readStatus(refId) });
-}
-
-// POST /api/bill-notifications/<universalVoucherId> — "Send on WhatsApp" for an
-// estimate, the one kind that never goes out by itself. Once per estimate.
-export async function POST(_req: Request, { params }: RouteCtx) {
-    const denied = await staff();
-    if (denied) return denied;
-    const refId = Number((await params).id);
-    if (!Number.isInteger(refId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-
-    const uv = await prisma.universalVoucher.findUnique({ where: { id: refId }, select: { type: true } });
-    if (!uv || !isEstimateType(uv.type)) {
-        return NextResponse.json({ error: "Only an estimate is sent by hand." }, { status: 422 });
-    }
-    const r = await notifyBill("ESTIMATE", refId);
-    if (r.status === "skipped") {
-        const why: Record<string, string> = {
-            "not posted": "Save the estimate first.",
-            "no party": "Pick a customer on the estimate first.",
-            "walk-in": "A walk-in estimate has nobody to send to.",
-            counter: "Sending works from the office site, not the counter's own server.",
-        };
-        return NextResponse.json({ error: why[r.reason ?? ""] ?? "Could not send." }, { status: 422 });
-    }
-    return NextResponse.json({ result: r.status, notification: await readStatus(refId) });
 }

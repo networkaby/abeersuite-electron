@@ -51,6 +51,30 @@ export const WA_TEMPLATE_WHEN: Record<WaTemplateKind, string> = {
     REPAIR_READY: "A repair stage with the action \"Tell customer: repair ready\" is completed.",
 };
 
+/** Auto send starts on for every kind except Estimate — staff often make rough
+ *  quotes, so an estimate goes only when someone presses Send. */
+export function autoSendDefault(kind: WaTemplateKind): boolean {
+    return kind !== "ESTIMATE";
+}
+
+/** UniversalVoucher type → the template that announces it. A PAYMENT is a
+ *  REFUND (sent only to a party under Sundry Debtors — checked when sending). */
+const KIND_FOR_TYPE: Record<string, WaTemplateKind> = {
+    SALE: "SALE",
+    POS: "SALE",
+    ONLINE_INVOICE: "SALE",
+    SALE_RETURN: "SALE_RETURN",
+    SALES_ORDER: "ORDER",
+    POS_ORDER: "ORDER",
+    ESTIMATE: "ESTIMATE",
+    POS_ESTIMATE: "ESTIMATE",
+    RECEIPT: "RECEIPT",
+    PAYMENT: "REFUND",
+};
+export function autoKindForVoucherType(type: string): WaTemplateKind | null {
+    return KIND_FOR_TYPE[type] ?? null;
+}
+
 /** Repair kinds announce a ticket, not a voucher — their refId is Ticket.id. */
 export function isRepairKind(kind: WaTemplateKind): boolean {
     return kind === "REPAIR_RECEIVED" || kind === "REPAIR_READY";
@@ -63,6 +87,10 @@ export const WA_FIELDS = [
     { key: "amount", label: "Amount", sample: "1,250.00" },
     { key: "date", label: "Date", sample: "06 Oct 2026" },
     { key: "device", label: "Device", sample: "HP Laptop 15s" },
+    // The party balance the print template shows (Previous / Closing), worded
+    // for a customer: "Rs 2,500.00 due" / "Rs 300.00 advance" / "Nil".
+    { key: "prevBalance", label: "Previous balance", sample: "Rs 2,500.00 due" },
+    { key: "balance", label: "Balance now", sample: "Rs 3,750.00 due" },
     { key: "shop", label: "Shop name", sample: COMPANY_DETAILS.brandName },
     { key: "link", label: "Document link", sample: `${COMPANY_DETAILS.sites.shop}/portal/b/1042` },
     { key: "app", label: "App install link", sample: `${COMPANY_DETAILS.sites.shop}${SHOP_APP_INSTALL}` },
@@ -70,9 +98,11 @@ export const WA_FIELDS = [
 export type WaFieldKey = (typeof WA_FIELDS)[number]["key"];
 export type WaFieldValues = Record<WaFieldKey, string>;
 
-/** Fields a kind can fill: a repair has a device and no amount; a voucher the reverse. */
+const VOUCHER_ONLY = new Set<string>(["amount", "prevBalance", "balance"]);
+
+/** Fields a kind can fill: a repair has a device and no money; a voucher the reverse. */
 export function fieldsFor(kind: WaTemplateKind): readonly (typeof WA_FIELDS)[number][] {
-    return WA_FIELDS.filter((f) => (isRepairKind(kind) ? f.key !== "amount" : f.key !== "device"));
+    return WA_FIELDS.filter((f) => (isRepairKind(kind) ? !VOUCHER_ONLY.has(f.key) : f.key !== "device"));
 }
 
 const FIELD_KEYS = new Set<string>(WA_FIELDS.map((f) => f.key));
@@ -95,6 +125,9 @@ const PORTAL_LINE =
 const docLines = (noLabel: string, amountLabel = "Amount") =>
     `${noLabel}: {billNo}\nDate: {date}\n${amountLabel}: Rs {amount}\n\n`;
 
+/** The party balance, as the bill / receipt print shows it. */
+const BALANCE_LINES = "Previous balance: {prevBalance}\nBalance now: {balance}\n\n";
+
 // Owner's wording, 2026-10-07, and the same shape for every other kind. Kept free
 // of promotion ("offers", "discount") so Meta files them as UTILITY, not the
 // dearer MARKETING.
@@ -103,6 +136,7 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
         body:
             "Dear {customer}, thank you for your purchase at {shop}.\n\n" +
             docLines("Bill no") +
+            BALANCE_LINES +
             "Tap View bill to see or download this bill.\n\n" +
             PORTAL_LINE,
         viewButton: "View bill",
@@ -112,6 +146,7 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
         body:
             "Dear {customer}, we have received your payment at {shop}.\n\n" +
             docLines("Receipt no") +
+            BALANCE_LINES +
             "Tap View receipt to see or download this receipt.\n\n" +
             PORTAL_LINE,
         viewButton: "View receipt",
@@ -218,7 +253,10 @@ const SAMPLE_DOC_NO: Record<WaTemplateKind, string> = {
 };
 
 export function sampleValuesFor(kind: WaTemplateKind): WaFieldValues {
-    return { ...BASE_SAMPLES, billNo: SAMPLE_DOC_NO[kind] };
+    const v = { ...BASE_SAMPLES, billNo: SAMPLE_DOC_NO[kind] };
+    // Money in brings the balance down; everything else adds to it.
+    if (kind === "RECEIPT") return { ...v, prevBalance: "Rs 3,750.00 due", balance: "Rs 2,500.00 due" };
+    return v;
 }
 
 /** Problems Meta would reject the draft for — empty means fine. */

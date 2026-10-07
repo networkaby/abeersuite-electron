@@ -16,6 +16,9 @@
 model WhatsAppTemplate {
   kind          String    @id
   enabled       Boolean   @default(false)
+  /// Send by itself when the document is saved. Off = only staff's "Send on
+  /// WhatsApp" (3-dot menu). Estimates start off (billTemplates WA_AUTO_SEND_DEFAULT).
+  autoSend      Boolean   @default(true)
   body          String
   /// Text of the "View bill" URL button; null = no button.
   viewButton    String?

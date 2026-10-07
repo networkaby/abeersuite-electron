@@ -3,7 +3,7 @@
 // Cross-source 3-dot row menu — used by the Day Book, the All Vouchers
 // register, and (after the DRY migration) every per-kind voucher register.
 //
-//   Edit · Cancel · Delete · Duplicate · Convert
+//   Edit · Cancel · Delete · Duplicate · Convert · Send on WhatsApp
 //
 // "Delete" is the ONE delete: it posts to `${apiBase}/hard-delete`, which removes
 // the row and snapshots the whole graph to AuditLog = the Recycle Bin (restore via
@@ -21,7 +21,7 @@ import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
-import { MoreVertical, Pencil, Ban, Trash2, Copy, Printer, FileText, ArrowRightLeft } from "lucide-react";
+import { MoreVertical, Pencil, Ban, Trash2, Copy, Printer, FileText, ArrowRightLeft, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,6 +38,8 @@ import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import { stashDuplicate, todayLocalISO, type DuplicateLine } from "@/modules/accountancy/lib/duplicate";
 import { convertTargets } from "@/modules/accountancy/lib/convertMap";
 import { canActOnVoucher } from "@/shared/lib/auth/posVoucherMatrix";
+import { autoKindForVoucherType } from "@/shared/lib/whatsapp/billTemplates";
+import { sendOnWhatsApp, useSendableWaKinds } from "@/shared/hooks/useWhatsAppSend";
 
 // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -66,6 +68,17 @@ export function DayBookActionsMenu({
     const [busy, setBusy] = useState(false);
 
     const base = apiBase(source, rawId);
+
+    // "Send on WhatsApp" — only for a customer document whose template is
+    // switched on (Settings → WhatsApp Templates). A GL row's rawId is the
+    // spine id; an inventory row's is its VoucherDetail id.
+    const waKind = source !== "je" ? autoKindForVoucherType(kind) : null;
+    const sendableKinds = useSendableWaKinds();
+    const canSendWa = waKind != null && sendableKinds.includes(waKind);
+    const sendWa = async () => {
+        setBusy(true);
+        await sendOnWhatsApp({ source: source === "gl" ? "uv" : "inv", id: rawId }).finally(() => setBusy(false));
+    };
 
     // Edit, Cancel and Delete follow the Role page's ticks for this kind — the
     // same rule the server applies (canActOnVoucher): Cancel / edit for the
@@ -239,6 +252,11 @@ export function DayBookActionsMenu({
                     <DropdownMenuItem onSelect={() => void goPrint("pdf")} disabled={busy}>
                         <FileText className="size-4" /> Print / PDF
                     </DropdownMenuItem>
+                    {canSendWa && (
+                        <DropdownMenuItem onSelect={() => void sendWa()} disabled={busy}>
+                            <MessageCircle className="size-4" /> Send on WhatsApp
+                        </DropdownMenuItem>
+                    )}
                     <DropdownMenuSeparator />
                     {canEdit && (
                         <DropdownMenuItem onSelect={goEdit} disabled={busy}>

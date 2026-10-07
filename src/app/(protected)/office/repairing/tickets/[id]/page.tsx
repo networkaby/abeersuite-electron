@@ -27,6 +27,7 @@ import WarrantyDetailsBadge from "@/modules/repairing/components/WarrantyDetails
 import WarrantyConvertModal from "@/modules/repairing/components/WarrantyConvertModal";
 import PipelineTransferModal from "@/modules/repairing/components/PipelineTransferModal";
 import TicketInvoicesPanel from "@/modules/repairing/components/TicketInvoicesPanel";
+import RepairWhatsAppButtons from "@/modules/repairing/components/RepairWhatsAppButtons";
 import UserAvatar from "@/shared/components/UserAvatar";
 import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 import ShippingSlipModal from "@/modules/repairing/components/ShippingSlipModal";
@@ -778,6 +779,8 @@ export default function TicketDetailPage() {
                             <Button onClick={() => setShowAddNote(true)} variant="outline" className={actionBtnBase}>
                                 <NotebookPen size={15} /> Add Note
                             </Button>
+
+                            <RepairWhatsAppButtons ticketId={ticket.id} className={actionBtnBase} />
 
                             {canTransfer && !ticket.ticketStatus.isTerminal && (
                                 <Button onClick={() => setShowTransferModal(true)} variant="outline" className={actionBtnBase} disabled={workInProgress}>

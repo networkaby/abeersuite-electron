@@ -1,4 +1,5 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, after, type NextRequest } from "next/server";
+import { notifyBill } from "@/shared/lib/whatsapp/notifyBill";
 import { auth } from "@/auth";
 import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { requireWritableBranchId, BranchAccessError } from "@/shared/lib/auth/activeBranch";
@@ -34,6 +35,8 @@ export async function POST(req: NextRequest) {
     try {
         const body = (await req.json()) as PosQuoteBody;
         const result = await createPosQuoteVoucher({ type: "POS_ESTIMATE", branchId, userId: user!.id, body, today: requestBusinessDate(req) });
+        // Goes only if the Estimate template's Auto send is on (off by default).
+        after(() => notifyBill("ESTIMATE", result.universalVoucherId));
         return NextResponse.json(result, { status: 201 });
     } catch (e) {
         // A service switched off since the screen loaded is the cashier's to fix

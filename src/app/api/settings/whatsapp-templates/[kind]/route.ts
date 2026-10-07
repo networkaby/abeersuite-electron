@@ -10,6 +10,7 @@ type RouteCtx = { params: Promise<{ kind: string }> };
 const buttonText = z.string().trim().max(25).nullable().transform((v) => (v ? v : null));
 const schema = z.object({
     enabled: z.boolean(),
+    autoSend: z.boolean(),
     body: z.string().max(1024),
     viewButton: buttonText,
     appButton: buttonText,
@@ -30,6 +31,7 @@ export async function PUT(req: Request, { params }: RouteCtx) {
     try {
         const template = await saveWaTemplate(kind as WaTemplateKind, {
             enabled: data.enabled,
+            autoSend: data.autoSend,
             draft: { body: data.body, viewButton: data.viewButton, appButton: data.appButton },
         });
         return NextResponse.json({ template });

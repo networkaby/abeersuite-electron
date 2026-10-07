@@ -3034,6 +3034,7 @@ ALTER TABLE "LoyaltyLedger" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NO
 CREATE TABLE IF NOT EXISTS "WhatsAppTemplate" (
     "kind" TEXT NOT NULL,
     "enabled" BOOLEAN NOT NULL DEFAULT false,
+    "autoSend" BOOLEAN NOT NULL DEFAULT true,
     "body" TEXT NOT NULL,
     "viewButton" TEXT,
     "appButton" TEXT,
@@ -3054,6 +3055,7 @@ CREATE TABLE IF NOT EXISTS "WhatsAppTemplate" (
 );
 ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "kind" TEXT NOT NULL;
 ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "enabled" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "autoSend" BOOLEAN NOT NULL DEFAULT true;
 ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "body" TEXT NOT NULL;
 ALTER TABLE "WhatsAppTemplate" ADD COLUMN IF NOT EXISTS "viewButton" TEXT;
 ALTER TABLE "WhatsAppTemplate" ALTER COLUMN "viewButton" DROP NOT NULL;

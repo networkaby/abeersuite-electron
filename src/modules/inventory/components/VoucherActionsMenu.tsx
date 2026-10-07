@@ -11,6 +11,7 @@
 //                  graph is snapshotted to AuditLog = the Recycle Bin, which
 //                  restores via POST /api/audit/[id]/restore.
 //   • Duplicate  — POST /api/inventory/vouchers/[id]/duplicate → navigate to draft
+//   • Send on WhatsApp — a customer document whose template is switched on
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -18,9 +19,11 @@ import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
-import { MoreVertical, Pencil, Ban, Trash2, Copy, Printer } from "lucide-react";
+import { MoreVertical, Pencil, Ban, Trash2, Copy, Printer, MessageCircle } from "lucide-react";
 import { extractApiError } from "@/shared/lib/api";
 import { canActOnVoucher } from "@/shared/lib/auth/posVoucherMatrix";
+import { autoKindForVoucherType } from "@/shared/lib/whatsapp/billTemplates";
+import { sendOnWhatsApp, useSendableWaKinds } from "@/shared/hooks/useWhatsAppSend";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,6 +70,14 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
     const canDelete = canActOnVoucher(voucherType, "delete", perms);
 
     const hasEditableForm = voucherType in EDIT_FORM_URLS;
+
+    const waKind = autoKindForVoucherType(voucherType);
+    const sendableKinds = useSendableWaKinds();
+    const canSendWa = waKind != null && sendableKinds.includes(waKind);
+    const sendWa = async () => {
+        setBusy(true);
+        await sendOnWhatsApp({ source: "inv", id: voucherId }).finally(() => setBusy(false));
+    };
 
     // "Print labels" — surfaces a shortcut on receiving / purchase vouchers
     // to jump straight to the barcode-label print page with the voucher's
@@ -177,6 +188,11 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
                     <DropdownMenuItem onSelect={duplicate} disabled={busy}>
                         <Copy className="size-4" /> Duplicate
                     </DropdownMenuItem>
+                    {canSendWa && (
+                        <DropdownMenuItem onSelect={() => void sendWa()} disabled={busy}>
+                            <MessageCircle className="size-4" /> Send on WhatsApp
+                        </DropdownMenuItem>
+                    )}
                     {canPrintLabels && (
                         <DropdownMenuItem onSelect={goPrintLabels} disabled={busy}>
                             <Printer className="size-4" /> Print labels

@@ -4,15 +4,19 @@ import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { normalizeMobile10 } from "@/shared/lib/auth/portalIdentifier";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
+import { partyBalanceAroundVoucher } from "@/shared/lib/accountancy/partyLedgerBalance";
 import { sendPushToPerson } from "@/shared/lib/push/sendPush";
 import {
     WA_APP_LINK,
     WA_BILL_LINK_BASE,
     WA_TEMPLATE_LABEL,
+    autoKindForVoucherType,
     type WaFieldValues,
     type WaTemplateKind,
 } from "./billTemplates";
-import { getApprovedWaTemplate } from "./waTemplateStore";
+import { getApprovedWaTemplate, isAutoSend } from "./waTemplateStore";
+
+export { autoKindForVoucherType };
 import { isBillSendConfigured, sendBillTemplate } from "./metaTemplates";
 
 /**
@@ -25,6 +29,10 @@ import { isBillSendConfigured, sendBillTemplate } from "./metaTemplates";
  *     after(() => notifyBill("SALE", universalVoucherId));
  * Repair stages call `notifyRepair` from their worker action.
  *
+ * Automatic (a save, a repair stage) goes only when the kind's **Auto send** is
+ * on. Manual (3-dot menu "Send on WhatsApp" → `sendManually`) goes only when
+ * the kind's template is switched on and approved.
+ *
  * Skipped without a row: a counter PC (no Meta / push keys there — the relayed
  * save runs on the office server and is announced from there), a draft or
  * cancelled voucher, a walk-in (the pooled walk-in ledger names nobody), a
@@ -33,9 +41,19 @@ import { isBillSendConfigured, sendBillTemplate } from "./metaTemplates";
  */
 export type NotifyResult = { status: "sent" | "already" | "skipped"; reason?: string };
 
-export async function notifyBill(kind: WaTemplateKind, universalVoucherId: number): Promise<NotifyResult> {
+type SendMode = { manual?: boolean };
+
+/** Automatic needs Auto send on; manual needs the template switched on + approved. */
+async function allowed(kind: WaTemplateKind, mode: SendMode): Promise<NotifyResult | null> {
     if (IS_COUNTER_PC) return { status: "skipped", reason: "counter" };
+    if (mode.manual) return (await getApprovedWaTemplate(kind)) ? null : { status: "skipped", reason: "template off" };
+    return (await isAutoSend(kind)) ? null : { status: "skipped", reason: "auto off" };
+}
+
+export async function notifyBill(kind: WaTemplateKind, universalVoucherId: number, mode: SendMode = {}): Promise<NotifyResult> {
     try {
+        const stop = await allowed(kind, mode);
+        if (stop) return stop;
         return await notifyVoucher(kind, universalVoucherId);
     } catch (e) {
         console.error(`[notify-bill] ${kind} ${universalVoucherId} failed`, e);
@@ -43,9 +61,10 @@ export async function notifyBill(kind: WaTemplateKind, universalVoucherId: numbe
     }
 }
 
-export async function notifyRepair(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: number): Promise<NotifyResult> {
-    if (IS_COUNTER_PC) return { status: "skipped", reason: "counter" };
+export async function notifyRepair(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: number, mode: SendMode = {}): Promise<NotifyResult> {
     try {
+        const stop = await allowed(kind, mode);
+        if (stop) return stop;
         return await notifyTicket(kind, ticketId);
     } catch (e) {
         console.error(`[notify-bill] ${kind} ticket ${ticketId} failed`, e);
@@ -53,21 +72,21 @@ export async function notifyRepair(kind: "REPAIR_RECEIVED" | "REPAIR_READY", tic
     }
 }
 
-/** Inventory voucher type → the template that announces it. Estimates are
- *  manual only (staff press Send), so they are not in the automatic map. */
-const AUTO_KIND: Record<string, WaTemplateKind> = {
-    SALE: "SALE",
-    POS: "SALE",
-    ONLINE_INVOICE: "SALE",
-    SALE_RETURN: "SALE_RETURN",
-    SALES_ORDER: "ORDER",
-    POS_ORDER: "ORDER",
-};
-export function autoKindForVoucherType(type: string): WaTemplateKind | null {
-    return AUTO_KIND[type] ?? null;
-}
-export function isEstimateType(type: string): boolean {
-    return type === "ESTIMATE" || type === "POS_ESTIMATE";
+
+/**
+ * Staff's "Send on WhatsApp" from a 3-dot menu. `source` + `id` are the menu's
+ * own row ids — `inv` is a VoucherDetail id; `uv` is a UniversalVoucher id (a GL
+ * row, or any caller that already holds the spine id). Once per document, like the automatic send.
+ */
+export async function sendManually(source: "inv" | "uv", id: number): Promise<NotifyResult> {
+    const uvId = source === "uv"
+        ? id
+        : (await prisma.voucherDetail.findUnique({ where: { id }, select: { universalVoucherId: true } }))?.universalVoucherId ?? null;
+    if (uvId == null) return { status: "skipped", reason: "not posted" };
+    const uv = await prisma.universalVoucher.findUnique({ where: { id: uvId }, select: { type: true } });
+    const kind = uv ? autoKindForVoucherType(uv.type) : null;
+    if (!kind) return { status: "skipped", reason: "not a customer document" };
+    return notifyBill(kind, uvId, { manual: true });
 }
 
 const money = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -113,6 +132,14 @@ async function notifyVoucher(kind: WaTemplateKind, uvId: number): Promise<Notify
         amount = lines.reduce((s, l) => s + Number(l.amount), 0);
     }
 
+    // Previous / closing balance — the same figures the print template shows.
+    const bal = await partyBalanceAroundVoucher(uv.partyAccountId, uvId);
+    const balanceText = (n: number) => {
+        const rounded = Math.round(n * 100) / 100;
+        if (rounded === 0) return "Nil";
+        return `Rs ${money.format(Math.abs(rounded))} ${rounded > 0 ? "due" : "advance"}`;
+    };
+
     const docNo = uv.voucherNo ?? `#${uvId}`;
     const amountText = money.format(amount);
     const dateText = day.format(uv.date);
@@ -127,6 +154,8 @@ async function notifyVoucher(kind: WaTemplateKind, uvId: number): Promise<Notify
             billNo: docNo,
             amount: amountText,
             date: dateText,
+            prevBalance: bal ? balanceText(bal.before) : "Nil",
+            balance: bal ? balanceText(bal.after) : "Nil",
             device: "",
             shop: getOrganisation().brandName,
             link: `${WA_BILL_LINK_BASE}${uvId}`,
@@ -163,6 +192,8 @@ async function notifyTicket(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: 
             customer: party.name,
             billNo: jobNo,
             amount: "",
+            prevBalance: "",
+            balance: "",
             date: day.format(t.createdAt),
             device: deviceName,
             shop: getOrganisation().brandName,

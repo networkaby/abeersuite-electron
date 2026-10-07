@@ -4,6 +4,7 @@ import type { WhatsAppTemplate } from "@/generated/prisma/client";
 import {
     WA_TEMPLATE_DEFAULTS,
     WA_TEMPLATE_KINDS,
+    autoSendDefault,
     checkBody,
     type WaTemplateDraft,
     type WaTemplateKind,
@@ -21,6 +22,7 @@ import { fetchTemplateStatus, isTemplateApiConfigured, submitTemplate } from "./
 export type WaTemplateView = {
     kind: WaTemplateKind;
     enabled: boolean;
+    autoSend: boolean;
     draft: WaTemplateDraft;
     status: string;
     rejectReason: string | null;
@@ -31,11 +33,12 @@ export type WaTemplateView = {
 
 function toView(kind: WaTemplateKind, r: WhatsAppTemplate | undefined): WaTemplateView {
     if (!r) {
-        return { kind, enabled: false, draft: WA_TEMPLATE_DEFAULTS[kind], status: "DRAFT", rejectReason: null, metaName: null, submittedAt: null, approved: null };
+        return { kind, enabled: false, autoSend: autoSendDefault(kind), draft: WA_TEMPLATE_DEFAULTS[kind], status: "DRAFT", rejectReason: null, metaName: null, submittedAt: null, approved: null };
     }
     return {
         kind,
         enabled: r.enabled,
+        autoSend: r.autoSend,
         draft: { body: r.body, viewButton: r.viewButton, appButton: r.appButton },
         status: r.status,
         rejectReason: r.rejectReason,
@@ -60,23 +63,42 @@ async function getOne(kind: WaTemplateKind): Promise<WaTemplateView> {
 
 // ── Sender cache ────────────────────────────────────────────────────────────
 const TTL_MS = 60_000;
-const cache = new Map<WaTemplateKind, { at: number; value: { name: string; draft: WaTemplateDraft } | null }>();
+type Cached = { autoSend: boolean; approved: { name: string; draft: WaTemplateDraft } | null };
+const cache = new Map<WaTemplateKind, { at: number; value: Cached }>();
 
-/** The approved copy bills are sent with; null when switched off or never approved. */
-export async function getApprovedWaTemplate(kind: WaTemplateKind) {
+async function cached(kind: WaTemplateKind): Promise<Cached> {
     const hit = cache.get(kind);
     if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
     const v = await getOne(kind);
-    const value = v.enabled && v.approved ? { name: v.approved.name, draft: v.approved } : null;
+    const value: Cached = {
+        autoSend: v.autoSend,
+        approved: v.enabled && v.approved ? { name: v.approved.name, draft: v.approved } : null,
+    };
     cache.set(kind, { at: Date.now(), value });
     return value;
+}
+
+/** The approved copy bills are sent with; null when switched off or never approved. */
+export async function getApprovedWaTemplate(kind: WaTemplateKind) {
+    return (await cached(kind)).approved;
+}
+
+/** Whether a save sends this kind by itself. */
+export async function isAutoSend(kind: WaTemplateKind): Promise<boolean> {
+    return (await cached(kind)).autoSend;
+}
+
+/** Kinds staff may send by hand — switched on and approved. Feeds the 3-dot menu. */
+export async function sendableKinds(): Promise<WaTemplateKind[]> {
+    const all = await Promise.all(WA_TEMPLATE_KINDS.map(async (k) => ((await cached(k)).approved ? k : null)));
+    return all.filter((k): k is WaTemplateKind => k != null);
 }
 
 // ── Edits ───────────────────────────────────────────────────────────────────
 
 /** Save the wording. A changed wording goes back to DRAFT; bills keep using
  *  the last approved copy until the new one is approved. */
-export async function saveWaTemplate(kind: WaTemplateKind, input: { enabled: boolean; draft: WaTemplateDraft }): Promise<WaTemplateView> {
+export async function saveWaTemplate(kind: WaTemplateKind, input: { enabled: boolean; autoSend: boolean; draft: WaTemplateDraft }): Promise<WaTemplateView> {
     const cur = await getOne(kind);
     const d = input.draft;
     const changed = d.body !== cur.draft.body || d.viewButton !== cur.draft.viewButton || d.appButton !== cur.draft.appButton;
@@ -87,9 +109,10 @@ export async function saveWaTemplate(kind: WaTemplateKind, input: { enabled: boo
     }
     await prisma.whatsAppTemplate.upsert({
         where: { kind },
-        create: { kind, enabled: input.enabled, body: d.body, viewButton: d.viewButton, appButton: d.appButton },
+        create: { kind, enabled: input.enabled, autoSend: input.autoSend, body: d.body, viewButton: d.viewButton, appButton: d.appButton },
         update: {
             enabled: input.enabled,
+            autoSend: input.autoSend,
             body: d.body,
             viewButton: d.viewButton,
             appButton: d.appButton,
@@ -113,7 +136,7 @@ export async function submitWaTemplate(kind: WaTemplateKind): Promise<WaTemplate
 
     const row = await prisma.whatsAppTemplate.upsert({
         where: { kind },
-        create: { kind, body: cur.draft.body, viewButton: cur.draft.viewButton, appButton: cur.draft.appButton, version: 1 },
+        create: { kind, autoSend: cur.autoSend, body: cur.draft.body, viewButton: cur.draft.viewButton, appButton: cur.draft.appButton, version: 1 },
         update: { version: { increment: 1 } },
         select: { version: true },
     });

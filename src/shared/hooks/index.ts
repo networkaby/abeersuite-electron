@@ -27,3 +27,4 @@ export { useClientPagination } from "./useClientPagination";
 export { useRegisterReads } from "./useRegisterReads";
 export { useIfscLookup, type IfscDetails, type IfscLookupState, type IfscPatch } from "./useIfscLookup";
 export { useCanOpenPage } from "./useCanOpenPage";
+export { useSendableWaKinds, sendOnWhatsApp, type WaSendTarget } from "./useWhatsAppSend";

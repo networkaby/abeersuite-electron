@@ -42,6 +42,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
     const current = templates.find((t) => t.kind === kind)!;
 
     const [enabled, setEnabled] = useState(current.enabled);
+    const [autoSend, setAutoSend] = useState(current.autoSend);
     const [draft, setDraft] = useState<WaTemplateDraft>(current.draft);
     const [busy, setBusy] = useState<null | "save" | "submit" | "refresh" | "test">(null);
     const [testMobile, setTestMobile] = useState("");
@@ -50,6 +51,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
     // Switching kind (or a server answer) resets the editor to the saved copy.
     useEffect(() => {
         setEnabled(current.enabled);
+        setAutoSend(current.autoSend);
         setDraft(current.draft);
     }, [current]);
 
@@ -57,6 +59,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
     const appBtn = draft.appButton?.trim() || null;
     const dirty =
         enabled !== current.enabled ||
+        autoSend !== current.autoSend ||
         draft.body !== current.draft.body ||
         viewBtn !== current.draft.viewButton ||
         appBtn !== current.draft.appButton;
@@ -85,6 +88,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
         try {
             const { data } = await axios.put(`/api/settings/whatsapp-templates/${kind}`, {
                 enabled,
+                autoSend,
                 body: draft.body,
                 viewButton: viewBtn,
                 appButton: appBtn,
@@ -189,6 +193,13 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                     <label className="ml-auto flex items-center gap-2 text-sm">
                         <Switch checked={enabled} onCheckedChange={setEnabled} />
                         Send on WhatsApp
+                    </label>
+                    <label
+                        className="flex items-center gap-2 text-sm"
+                        title="On: goes by itself when the document is saved. Off: only from the 3-dot menu's Send on WhatsApp."
+                    >
+                        <Switch checked={autoSend} onCheckedChange={setAutoSend} />
+                        Auto send
                     </label>
                 </div>
                 {current.status === "REJECTED" && current.rejectReason && (
