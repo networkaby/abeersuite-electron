@@ -106,7 +106,12 @@ function SummaryCard({ label, value, tone = "" }: { label: string; value: string
 
 function ShopButton({ className = "", variant }: { className?: string; variant?: "outline" }) {
     return (
-        <Button asChild size="sm" variant={variant} className={className}>
+        <Button
+            asChild
+            size="sm"
+            variant={variant}
+            className={`${variant ? "border-yellow-400 text-yellow-900 hover:bg-yellow-50 dark:text-yellow-200 dark:hover:bg-yellow-950" : "bg-yellow-400 font-semibold text-yellow-950 hover:bg-yellow-300"} ${className}`}
+        >
             <Link href="/shop"><ShoppingBag className="size-4" /> Visit our shop</Link>
         </Button>
     );
@@ -383,7 +388,7 @@ export default async function PortalBillsPage({
                     </div>
                 ) : null}
 
-                <Card className="border-primary/30 bg-primary/5">
+                <Card className="border-yellow-300 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950/40">
                     <CardContent className="flex flex-col items-center gap-3 p-4 text-center text-sm sm:flex-row sm:justify-between sm:text-left">
                         <span>Need something new? Order online — pick up at the shop or get it delivered.</span>
                         <ShopButton className="w-full sm:w-auto" />
