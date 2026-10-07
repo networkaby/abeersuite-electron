@@ -25,7 +25,7 @@ model PushSubscription {
 }
 
 /// One notification sent to a customer (all their devices). The service worker
-/// reports back through /api/push/ack: `shownAt` = the phone put it in the
+/// reports back through /api/portal/push/ack: `shownAt` = the phone put it in the
 /// notification tray (counts as delivered, like WhatsApp's double tick),
 /// `clickedAt` = the customer tapped it. `refType` / `refId` tie it to the bill,
 /// receipt etc. it announced, so the sender can decide on a WhatsApp fallback.

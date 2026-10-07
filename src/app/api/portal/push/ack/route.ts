@@ -4,7 +4,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { validateRequest } from "@/shared/lib/api";
 
 /**
- * POST /api/push/ack — the service worker (public/sw.js) reporting on one
+ * POST /api/portal/push/ack — the service worker (public/sw.js) reporting on one
  * notification: "shown" when the phone put it in the tray, "clicked" when the
  * customer tapped it. No sign-in: the service worker has no session, and the
  * message id (a cuid the phone only learns from the push itself) is the proof.

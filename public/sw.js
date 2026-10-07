@@ -4,7 +4,7 @@
  *
  * Three jobs, nothing else:
  *  1. Show a push notification (src/shared/lib/push/sendPush.ts) even when the
- *     app is closed, and report "shown" to /api/push/ack — that report is what
+ *     app is closed, and report "shown" to /api/portal/push/ack — that report is what
  *     lets a bill skip the WhatsApp copy.
  *  2. On a tap, report "clicked" and open (or focus) the page it points at.
  *  3. Page loads always come from the network — the site changes often and must
@@ -13,7 +13,7 @@
  *
  * Bump VERSION when this file changes; phones pick the new worker up on their own.
  */
-const VERSION = "2026-10-06.1";
+const VERSION = "2026-10-07.1";
 const OFFLINE_CACHE = `offline-${VERSION}`;
 const OFFLINE_URL = "/offline.html";
 
@@ -44,7 +44,7 @@ self.addEventListener("fetch", (event) => {
 
 function ack(id, kind) {
     if (!id) return Promise.resolve();
-    return fetch("/api/push/ack", {
+    return fetch("/api/portal/push/ack", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, event: kind }),

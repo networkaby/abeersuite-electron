@@ -8,7 +8,7 @@ import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
  *
  * Every device the customer allowed (PushSubscription) gets the message; the
  * phone's service worker (public/sw.js) shows it and reports back through
- * /api/push/ack, which stamps PushMessage.shownAt. The sender reads that stamp
+ * /api/portal/push/ack, which stamps PushMessage.shownAt. The sender reads that stamp
  * to decide whether the WhatsApp copy can be skipped — a `reached` count here
  * only means Google/Apple accepted the message, not that the phone showed it.
  *
