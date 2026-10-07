@@ -74,8 +74,8 @@ export function DueRemindersPanel() {
         setSkipDays(s.skipDays);
         setDailyCap(String(s.dailyCap));
         setMinBalance(String(s.minBalance));
-        setMinPctAuto(String(s.minPctAutoLimit));
-        setMinPctCredit(String(s.minPctCreditLimit));
+        setMinPctAuto(String(s.minPctAutoLimit ?? 0));
+        setMinPctCredit(String(s.minPctCreditLimit ?? 0));
         setRules(s.rules);
         setExcluded(s.excluded);
     };
