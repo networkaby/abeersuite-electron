@@ -3185,6 +3185,101 @@ ALTER TABLE "BillNotification" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3)
 ALTER TABLE "BillNotification" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "DueReminderSettings" (
+    "id" INTEGER NOT NULL DEFAULT 1,
+    "enabled" BOOLEAN NOT NULL DEFAULT false,
+    "sendTime" TEXT NOT NULL DEFAULT '10:00',
+    "skipDays" INTEGER[] DEFAULT ARRAY[5]::INTEGER[],
+    "dailyCap" INTEGER NOT NULL DEFAULT 50,
+    "minBalance" DECIMAL(14,2) NOT NULL DEFAULT 100,
+    "excludedAccountIds" INTEGER[] DEFAULT ARRAY[]::INTEGER[],
+    "lastRunDate" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "DueReminderSettings_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "DueReminderSettings" ADD COLUMN IF NOT EXISTS "id" INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE "DueReminderSettings" ADD COLUMN IF NOT EXISTS "enabled" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "DueReminderSettings" ADD COLUMN IF NOT EXISTS "sendTime" TEXT NOT NULL DEFAULT '10:00';
+ALTER TABLE "DueReminderSettings" ADD COLUMN IF NOT EXISTS "skipDays" INTEGER[] DEFAULT ARRAY[5]::INTEGER[];
+ALTER TABLE "DueReminderSettings" ALTER COLUMN "skipDays" DROP NOT NULL;
+ALTER TABLE "DueReminderSettings" ADD COLUMN IF NOT EXISTS "dailyCap" INTEGER NOT NULL DEFAULT 50;
+ALTER TABLE "DueReminderSettings" ADD COLUMN IF NOT EXISTS "minBalance" DECIMAL(14,2) NOT NULL DEFAULT 100;
+ALTER TABLE "DueReminderSettings" ADD COLUMN IF NOT EXISTS "excludedAccountIds" INTEGER[] DEFAULT ARRAY[]::INTEGER[];
+ALTER TABLE "DueReminderSettings" ALTER COLUMN "excludedAccountIds" DROP NOT NULL;
+ALTER TABLE "DueReminderSettings" ADD COLUMN IF NOT EXISTS "lastRunDate" TEXT;
+ALTER TABLE "DueReminderSettings" ALTER COLUMN "lastRunDate" DROP NOT NULL;
+ALTER TABLE "DueReminderSettings" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "DueReminderRule" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "minDays" INTEGER NOT NULL,
+    "minAmount" DECIMAL(14,2) NOT NULL,
+    "repeatDays" INTEGER NOT NULL DEFAULT 0,
+    "action" TEXT NOT NULL,
+    "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "DueReminderRule_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "DueReminderRule" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "DueReminderRule" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL;
+ALTER TABLE "DueReminderRule" ADD COLUMN IF NOT EXISTS "minDays" INTEGER NOT NULL;
+ALTER TABLE "DueReminderRule" ADD COLUMN IF NOT EXISTS "minAmount" DECIMAL(14,2) NOT NULL;
+ALTER TABLE "DueReminderRule" ADD COLUMN IF NOT EXISTS "repeatDays" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "DueReminderRule" ADD COLUMN IF NOT EXISTS "action" TEXT NOT NULL;
+ALTER TABLE "DueReminderRule" ADD COLUMN IF NOT EXISTS "enabled" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "DueReminderRule" ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "DueReminderRule" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "DueReminderRule" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "DueReminderLog" (
+    "id" SERIAL NOT NULL,
+    "accountId" INTEGER NOT NULL,
+    "partyName" TEXT NOT NULL,
+    "personId" INTEGER,
+    "amount" DECIMAL(14,2) NOT NULL,
+    "action" TEXT NOT NULL,
+    "mode" TEXT NOT NULL,
+    "ruleId" INTEGER,
+    "mobile" TEXT,
+    "pushStatus" TEXT NOT NULL,
+    "waStatus" TEXT NOT NULL,
+    "waMessageId" TEXT,
+    "waError" TEXT,
+    "sentById" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "DueReminderLog_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "DueReminderLog" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "DueReminderLog" ADD COLUMN IF NOT EXISTS "accountId" INTEGER NOT NULL;
+ALTER TABLE "DueReminderLog" ADD COLUMN IF NOT EXISTS "partyName" TEXT NOT NULL;
+ALTER TABLE "DueReminderLog" ADD COLUMN IF NOT EXISTS "personId" INTEGER;
+ALTER TABLE "DueReminderLog" ALTER COLUMN "personId" DROP NOT NULL;
+ALTER TABLE "DueReminderLog" ADD COLUMN IF NOT EXISTS "amount" DECIMAL(14,2) NOT NULL;
+ALTER TABLE "DueReminderLog" ADD COLUMN IF NOT EXISTS "action" TEXT NOT NULL;
+ALTER TABLE "DueReminderLog" ADD COLUMN IF NOT EXISTS "mode" TEXT NOT NULL;
+ALTER TABLE "DueReminderLog" ADD COLUMN IF NOT EXISTS "ruleId" INTEGER;
+ALTER TABLE "DueReminderLog" ALTER COLUMN "ruleId" DROP NOT NULL;
+ALTER TABLE "DueReminderLog" ADD COLUMN IF NOT EXISTS "mobile" TEXT;
+ALTER TABLE "DueReminderLog" ALTER COLUMN "mobile" DROP NOT NULL;
+ALTER TABLE "DueReminderLog" ADD COLUMN IF NOT EXISTS "pushStatus" TEXT NOT NULL;
+ALTER TABLE "DueReminderLog" ADD COLUMN IF NOT EXISTS "waStatus" TEXT NOT NULL;
+ALTER TABLE "DueReminderLog" ADD COLUMN IF NOT EXISTS "waMessageId" TEXT;
+ALTER TABLE "DueReminderLog" ALTER COLUMN "waMessageId" DROP NOT NULL;
+ALTER TABLE "DueReminderLog" ADD COLUMN IF NOT EXISTS "waError" TEXT;
+ALTER TABLE "DueReminderLog" ALTER COLUMN "waError" DROP NOT NULL;
+ALTER TABLE "DueReminderLog" ADD COLUMN IF NOT EXISTS "sentById" INTEGER;
+ALTER TABLE "DueReminderLog" ALTER COLUMN "sentById" DROP NOT NULL;
+ALTER TABLE "DueReminderLog" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "Branch" (
     "id" TEXT NOT NULL,
     "number" INTEGER NOT NULL,
@@ -5417,6 +5512,12 @@ CREATE INDEX IF NOT EXISTS "BillNotification_personId_createdAt_idx" ON "BillNot
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "BillNotification_kind_refId_key" ON "BillNotification"("kind", "refId");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "DueReminderLog_accountId_createdAt_idx" ON "DueReminderLog"("accountId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "DueReminderLog_createdAt_idx" ON "DueReminderLog"("createdAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "Branch_number_key" ON "Branch"("number");
@@ -7710,6 +7811,27 @@ DO $$ BEGIN
     IF to_regclass('public."Device"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "Device";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Device"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."DueReminderLog"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "DueReminderLog";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "DueReminderLog"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."DueReminderRule"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "DueReminderRule";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "DueReminderRule"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."DueReminderSettings"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "DueReminderSettings";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "DueReminderSettings"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;
