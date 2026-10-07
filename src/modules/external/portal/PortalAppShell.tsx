@@ -142,9 +142,9 @@ export default function PortalAppShell({ children }: PortalAppShellProps) {
             <header className="sticky top-0 z-30 border-b border-border/70 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
                 <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-2 px-3 sm:gap-3 sm:px-4">
                     <div className="flex min-w-0 items-center gap-2">
-                        <Link href="/portal" className="truncate text-sm font-semibold tracking-tight">
-                            <span className="sm:hidden">My Account</span>
-                            <span className="hidden sm:inline">Network Service Portal</span>
+                        {/* Phones drop the title: the Home tab already leads here. */}
+                        <Link href="/portal" className="hidden truncate text-sm font-semibold tracking-tight sm:inline">
+                            Network Service Portal
                         </Link>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
