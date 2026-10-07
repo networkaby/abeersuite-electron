@@ -263,6 +263,9 @@ export default function TicketDetailPage() {
 
     if (loading) return <p className="text-muted-foreground">Loading...</p>;
     if (!ticket) return <p className="text-muted-foreground">Ticket not found.</p>;
+    // Every repair ticket carries its device (TicketRepair.deviceId is required).
+    // No device = a deal or help-desk ticket opened on the repair page by number.
+    if (!ticket.device) return <p className="text-muted-foreground">Ticket #{ticket.id} is not a repair ticket.</p>;
 
     // The "Current work" card lets the technician advance the ticket's Work (Accept /
     // Reject → next worker/status) right on the ticket page, mirroring the Work Inbox
