@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
 import { notifyRepair, sendManually, type NotifyResult } from "@/shared/lib/whatsapp/notifyBill";
-import { sendableKinds } from "@/shared/lib/whatsapp/waTemplateStore";
+import { waSendStates } from "@/shared/lib/whatsapp/waTemplateStore";
 
 /** Staff only — a customer session never sends. */
 async function staff() {
@@ -15,13 +15,13 @@ async function staff() {
     return null;
 }
 
-// GET /api/bill-notifications/send — which kinds staff may send by hand (switched
-// on + approved on Settings → WhatsApp Templates). The 3-dot menu shows
-// "Send on WhatsApp" only for these. Cached a minute on the server.
+// GET /api/bill-notifications/send — per kind, whether staff may send it by hand
+// ("ready" = switched on + approved on Settings → WhatsApp Templates) or why not.
+// The 3-dot menus grey the item out with the reason. Cached a minute on the server.
 export async function GET() {
     const denied = await staff();
     if (denied) return denied;
-    return NextResponse.json({ kinds: await sendableKinds() });
+    return NextResponse.json({ states: await waSendStates() });
 }
 
 const schema = z.union([

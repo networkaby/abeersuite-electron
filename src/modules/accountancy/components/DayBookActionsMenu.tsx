@@ -38,8 +38,8 @@ import { printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import { stashDuplicate, todayLocalISO, type DuplicateLine } from "@/modules/accountancy/lib/duplicate";
 import { convertTargets } from "@/modules/accountancy/lib/convertMap";
 import { canActOnVoucher } from "@/shared/lib/auth/posVoucherMatrix";
-import { autoKindForVoucherType } from "@/shared/lib/whatsapp/billTemplates";
-import { sendOnWhatsApp, useSendableWaKinds } from "@/shared/hooks/useWhatsAppSend";
+import { autoKindForVoucherType, waSendHint } from "@/shared/lib/whatsapp/billTemplates";
+import { sendOnWhatsApp, useWaSendStates } from "@/shared/hooks/useWhatsAppSend";
 
 // ── Props ──────────────────────────────────────────────────────────────────
 
@@ -69,12 +69,14 @@ export function DayBookActionsMenu({
 
     const base = apiBase(source, rawId);
 
-    // "Send on WhatsApp" — only for a customer document whose template is
-    // switched on (Settings → WhatsApp Templates). A GL row's rawId is the
-    // spine id; an inventory row's is its VoucherDetail id.
+    // "Send on WhatsApp" — on every customer document; greyed out with the
+    // reason until its template is approved and switched on (Settings →
+    // WhatsApp Templates). A GL row's rawId is the spine id; an inventory
+    // row's is its VoucherDetail id.
     const waKind = source !== "je" ? autoKindForVoucherType(kind) : null;
-    const sendableKinds = useSendableWaKinds();
-    const canSendWa = waKind != null && sendableKinds.includes(waKind);
+    const waStates = useWaSendStates();
+    const waHint = waKind ? waSendHint(waStates[waKind]) : null;
+    const canSendWa = waKind != null && waStates[waKind] === "ready";
     const sendWa = async () => {
         setBusy(true);
         await sendOnWhatsApp({ source: source === "gl" ? "uv" : "inv", id: rawId }).finally(() => setBusy(false));
@@ -244,7 +246,7 @@ export function DayBookActionsMenu({
                         <MoreVertical className="size-4" />
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuContent align="end" className="w-60">
                     {/* Print / PDF — available for every voucher kind & state */}
                     <DropdownMenuItem onSelect={() => void goPrint("thermal")} disabled={busy}>
                         <Printer className="size-4" /> Print (thermal)
@@ -252,9 +254,13 @@ export function DayBookActionsMenu({
                     <DropdownMenuItem onSelect={() => void goPrint("pdf")} disabled={busy}>
                         <FileText className="size-4" /> Print / PDF
                     </DropdownMenuItem>
-                    {canSendWa && (
-                        <DropdownMenuItem onSelect={() => void sendWa()} disabled={busy}>
-                            <MessageCircle className="size-4" /> Send on WhatsApp
+                    {waKind && (
+                        <DropdownMenuItem onSelect={() => void sendWa()} disabled={busy || !canSendWa} title={waHint ?? undefined}>
+                            <MessageCircle className="size-4" />
+                            <span className="flex flex-col">
+                                Send on WhatsApp
+                                {waHint && <span className="text-[10px] leading-tight text-muted-foreground">{waHint}</span>}
+                            </span>
                         </DropdownMenuItem>
                     )}
                     <DropdownMenuSeparator />

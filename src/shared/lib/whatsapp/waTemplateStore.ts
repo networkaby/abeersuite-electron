@@ -6,6 +6,7 @@ import {
     WA_TEMPLATE_KINDS,
     autoSendDefault,
     checkBody,
+    type WaSendState,
     type WaTemplateDraft,
     type WaTemplateKind,
 } from "./billTemplates";
@@ -63,7 +64,7 @@ async function getOne(kind: WaTemplateKind): Promise<WaTemplateView> {
 
 // ── Sender cache ────────────────────────────────────────────────────────────
 const TTL_MS = 60_000;
-type Cached = { autoSend: boolean; approved: { name: string; draft: WaTemplateDraft } | null };
+type Cached = { autoSend: boolean; state: WaSendState; approved: { name: string; draft: WaTemplateDraft } | null };
 const cache = new Map<WaTemplateKind, { at: number; value: Cached }>();
 
 async function cached(kind: WaTemplateKind): Promise<Cached> {
@@ -73,6 +74,7 @@ async function cached(kind: WaTemplateKind): Promise<Cached> {
     const value: Cached = {
         autoSend: v.autoSend,
         approved: v.enabled && v.approved ? { name: v.approved.name, draft: v.approved } : null,
+        state: !v.approved ? "not-approved" : v.enabled ? "ready" : "off",
     };
     cache.set(kind, { at: Date.now(), value });
     return value;
@@ -88,10 +90,11 @@ export async function isAutoSend(kind: WaTemplateKind): Promise<boolean> {
     return (await cached(kind)).autoSend;
 }
 
-/** Kinds staff may send by hand — switched on and approved. Feeds the 3-dot menu. */
-export async function sendableKinds(): Promise<WaTemplateKind[]> {
-    const all = await Promise.all(WA_TEMPLATE_KINDS.map(async (k) => ((await cached(k)).approved ? k : null)));
-    return all.filter((k): k is WaTemplateKind => k != null);
+/** Per kind: can staff send it by hand now, and if not, why. Feeds the 3-dot
+ *  menus and the repair ticket, which grey the item out with the reason. */
+export async function waSendStates(): Promise<Record<WaTemplateKind, WaSendState>> {
+    const pairs = await Promise.all(WA_TEMPLATE_KINDS.map(async (k) => [k, (await cached(k)).state] as const));
+    return Object.fromEntries(pairs) as Record<WaTemplateKind, WaSendState>;
 }
 
 // ── Edits ───────────────────────────────────────────────────────────────────

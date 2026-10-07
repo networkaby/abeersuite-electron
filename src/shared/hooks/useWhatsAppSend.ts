@@ -4,41 +4,43 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
-import type { WaTemplateKind } from "@/shared/lib/whatsapp/billTemplates";
+import type { WaSendState, WaTemplateKind } from "@/shared/lib/whatsapp/billTemplates";
 
 /**
  * "Send on WhatsApp" for the 3-dot menus and the repair ticket.
  *
- * Which kinds may be sent (switched on + approved on Settings → WhatsApp
- * Templates) is asked once and shared by every menu on the page for a minute —
- * a register with 200 rows makes one call, not 200.
+ * Whether each kind can be sent (switched on + approved on Settings → WhatsApp
+ * Templates, or why not) is asked once and shared by every menu on the page for
+ * a minute — a register with 200 rows makes one call, not 200.
  */
 const TTL_MS = 60_000;
-let shared: { at: number; kinds: Promise<WaTemplateKind[]> } | null = null;
+export type WaSendStates = Partial<Record<WaTemplateKind, WaSendState>>;
+let shared: { at: number; states: Promise<WaSendStates> } | null = null;
 
-function loadKinds(): Promise<WaTemplateKind[]> {
+function loadStates(): Promise<WaSendStates> {
     if (!shared || Date.now() - shared.at > TTL_MS) {
         shared = {
             at: Date.now(),
-            kinds: axios
-                .get<{ kinds: WaTemplateKind[] }>("/api/bill-notifications/send")
-                .then((r) => r.data.kinds)
-                .catch(() => []),
+            states: axios
+                .get<{ states: WaSendStates }>("/api/bill-notifications/send")
+                .then((r) => r.data.states)
+                .catch(() => ({})),
         };
     }
-    return shared.kinds;
+    return shared.states;
 }
 
-export function useSendableWaKinds(): WaTemplateKind[] {
-    const [kinds, setKinds] = useState<WaTemplateKind[]>([]);
+/** Per kind: "ready", or why the send is greyed out. Empty until loaded. */
+export function useWaSendStates(): WaSendStates {
+    const [states, setStates] = useState<WaSendStates>({});
     useEffect(() => {
         let alive = true;
-        void loadKinds().then((k) => alive && setKinds(k));
+        void loadStates().then((s) => alive && setStates(s));
         return () => {
             alive = false;
         };
     }, []);
-    return kinds;
+    return states;
 }
 
 export type WaSendTarget =

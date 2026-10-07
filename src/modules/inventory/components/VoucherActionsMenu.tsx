@@ -22,8 +22,8 @@ import { toast } from "sonner";
 import { MoreVertical, Pencil, Ban, Trash2, Copy, Printer, MessageCircle } from "lucide-react";
 import { extractApiError } from "@/shared/lib/api";
 import { canActOnVoucher } from "@/shared/lib/auth/posVoucherMatrix";
-import { autoKindForVoucherType } from "@/shared/lib/whatsapp/billTemplates";
-import { sendOnWhatsApp, useSendableWaKinds } from "@/shared/hooks/useWhatsAppSend";
+import { autoKindForVoucherType, waSendHint } from "@/shared/lib/whatsapp/billTemplates";
+import { sendOnWhatsApp, useWaSendStates } from "@/shared/hooks/useWhatsAppSend";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -72,8 +72,9 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
     const hasEditableForm = voucherType in EDIT_FORM_URLS;
 
     const waKind = autoKindForVoucherType(voucherType);
-    const sendableKinds = useSendableWaKinds();
-    const canSendWa = waKind != null && sendableKinds.includes(waKind);
+    const waStates = useWaSendStates();
+    const waHint = waKind ? waSendHint(waStates[waKind]) : null;
+    const canSendWa = waKind != null && waStates[waKind] === "ready";
     const sendWa = async () => {
         setBusy(true);
         await sendOnWhatsApp({ source: "inv", id: voucherId }).finally(() => setBusy(false));
@@ -168,7 +169,7 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
                         <MoreVertical className="size-4" />
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuContent align="end" className="w-60">
                     {canEdit && (
                         <DropdownMenuItem onSelect={goEdit} disabled={busy}>
                             <Pencil className="size-4" /> Edit
@@ -188,9 +189,13 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
                     <DropdownMenuItem onSelect={duplicate} disabled={busy}>
                         <Copy className="size-4" /> Duplicate
                     </DropdownMenuItem>
-                    {canSendWa && (
-                        <DropdownMenuItem onSelect={() => void sendWa()} disabled={busy}>
-                            <MessageCircle className="size-4" /> Send on WhatsApp
+                    {waKind && (
+                        <DropdownMenuItem onSelect={() => void sendWa()} disabled={busy || !canSendWa} title={waHint ?? undefined}>
+                            <MessageCircle className="size-4" />
+                            <span className="flex flex-col">
+                                Send on WhatsApp
+                                {waHint && <span className="text-[10px] leading-tight text-muted-foreground">{waHint}</span>}
+                            </span>
                         </DropdownMenuItem>
                     )}
                     {canPrintLabels && (

@@ -76,6 +76,16 @@ export function autoKindForVoucherType(type: string): WaTemplateKind | null {
     return KIND_FOR_TYPE[type] ?? null;
 }
 
+/** Whether staff can send a kind by hand right now. */
+export type WaSendState = "ready" | "not-approved" | "off";
+
+/** Why a "Send on WhatsApp" is greyed out — shown under the disabled item. */
+export function waSendHint(state: WaSendState | undefined): string | null {
+    if (state === "not-approved") return "Waiting for Meta approval (WhatsApp Templates)";
+    if (state === "off") return "Switched off on WhatsApp Templates";
+    return null;
+}
+
 /** Repair kinds announce a ticket, not a voucher — their refId is Ticket.id. */
 export function isRepairKind(kind: WaTemplateKind): boolean {
     return kind === "REPAIR_RECEIVED" || kind === "REPAIR_READY";
