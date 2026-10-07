@@ -31,3 +31,25 @@ export const SHOP_APP_APK = "/ns-shop.apk";
 
 /** Status bar / splash colours — same page colours as the staff app. */
 export const SHOP_APP_THEME = { light: "#eff4fb", dark: "#101725" } as const;
+
+/**
+ * The customer app's own phone-only screens (Capacitor shell in
+ * `shop-app-native/`, opening this address) — the ONE place the address is
+ * written; the route folder `src/app/m-shop-app` carries the same name.
+ * The website (/, /shop, /portal) stays as it is for browsers.
+ */
+export const SHOP_NATIVE_HOME = "/m-shop-app";
+
+/** The shell appends this to its user agent (capacitor.config.json
+ *  `appendUserAgent`), so the server and the page both know they are inside it. */
+export const SHOP_NATIVE_UA = "NSShopApp";
+
+export function isShopNativePath(pathname: string): boolean {
+    return pathname === SHOP_NATIVE_HOME || pathname.startsWith(`${SHOP_NATIVE_HOME}/`);
+}
+
+/** Inside the Android customer app. Google sign-in uses a popup, which Google
+ *  refuses inside an app's web view — the sign-in page hides it here. */
+export function isShopNativeUserAgent(userAgent: string): boolean {
+    return userAgent.includes(SHOP_NATIVE_UA);
+}

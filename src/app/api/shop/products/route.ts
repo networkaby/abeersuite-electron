@@ -1,36 +1,10 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { loadStorefrontProducts } from "@/shared/lib/shop/storefrontProducts";
 import { NextResponse } from "next/server";
-import { invProductToPublic } from "@/shared/lib/shop/productPublic";
-import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
-import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
-import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
-import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
-import { shopQualification, storefrontQualifiable } from "@/modules/ecommerce/lib/shopQualification";
-import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
 import { handleApiError } from "@/shared/lib/api";
 
 export async function GET() {
     try {
-        const [bands, rules, policy, groupIndex] = await Promise.all([
-            loadBarcodeBands(),
-            loadShopPublishRules(),
-            loadShopStockPolicy(),
-            loadShopGroupIndex(),
-        ]);
-        const products = await prisma.invProduct.findMany({
-            where: { isListedInShop: true, isActive: true },
-            include: { category: { select: { name: true } } },
-            orderBy: [{ shopCategory: "asc" }, { id: "asc" }],
-        });
-        const published = products
-            .map((p) => ({ p, avail: resolveAvailability(p.stock, p.allowBackorder, policy) }))
-            // HIDE policy drops out-of-stock products from the storefront entirely.
-            .filter(({ avail }) => avail.visible)
-            .map(({ p, avail }) => ({ p, pub: invProductToPublic(p, { bands, avail, groupIndex }) }))
-            // Defensive: never show a half-built product even if the flag is stale.
-            .filter(({ p, pub }) => shopQualification(storefrontQualifiable(p, pub), rules).qualified)
-            .map(({ pub }) => pub);
-        return NextResponse.json(published);
+        return NextResponse.json(await loadStorefrontProducts());
     } catch (e) {
         return handleApiError(e, "Failed to load products");
     }

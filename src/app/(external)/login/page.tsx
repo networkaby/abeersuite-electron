@@ -4,7 +4,7 @@ import { signIn } from "next-auth/react";
 import { isSafeLandingPage } from "@/shared/lib/appModeCore";
 import Image from "next/image";
 import Link from "next/link";
-import { Suspense, useState } from "react";
+import { Suspense, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FileText, KeyRound, MessageSquareLock, ShieldCheck, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ import { usePortalPasswordlessSignIn } from "@/modules/external/portal/usePortal
 import { signInWithGoogle } from "@/shared/lib/auth/portalPasswordless";
 import { HERO_SLIDES } from "@/shared/lib/shop/storeContent";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import { isShopNativeUserAgent } from "@/shared/lib/device/shopApp";
+import { noSubscribe } from "@/modules/mobile/components/installPlace";
 
 /**
  * Backdrop photo — reuses the storefront hero imagery so the login matches the
@@ -70,6 +72,7 @@ function CustomerLoginForm() {
           : rawCallback;
 
     const [method, setMethod] = useState<"otp" | "password">("otp");
+    const inApp = useSyncExternalStore(noSubscribe, () => isShopNativeUserAgent(navigator.userAgent), () => false);
     // One field for mobile OR email — the server works out which it is.
     const [identifier, setIdentifier] = useState("");
     const [password, setPassword] = useState("");
@@ -290,28 +293,33 @@ function CustomerLoginForm() {
                                         </form>
                                     )}
 
-                                    {/* Divider */}
-                                    <div className="relative">
-                                        <div className="absolute inset-0 flex items-center">
-                                            <span className="w-full border-t" />
-                                        </div>
-                                        <div className="relative flex justify-center text-xs uppercase">
-                                            <span className="bg-card px-2 text-muted-foreground">
-                                                or continue with
-                                            </span>
-                                        </div>
-                                    </div>
+                                    {/* Not inside the customer app: Google refuses its sign-in popup in an
+                                        app's web view. OTP and password work there as normal. */}
+                                    {!inApp && (
+                                        <>
+                                            <div className="relative">
+                                                <div className="absolute inset-0 flex items-center">
+                                                    <span className="w-full border-t" />
+                                                </div>
+                                                <div className="relative flex justify-center text-xs uppercase">
+                                                    <span className="bg-card px-2 text-muted-foreground">
+                                                        or continue with
+                                                    </span>
+                                                </div>
+                                            </div>
 
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        className="w-full gap-2"
-                                        disabled={passwordless.busy}
-                                        onClick={() => void handleGoogle()}
-                                    >
-                                        <GoogleIcon />
-                                        Google
-                                    </Button>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                className="w-full gap-2"
+                                                disabled={passwordless.busy}
+                                                onClick={() => void handleGoogle()}
+                                            >
+                                                <GoogleIcon />
+                                                Google
+                                            </Button>
+                                        </>
+                                    )}
                                     {method === "password" && passwordless.error && (
                                         <p className="text-sm text-destructive">{passwordless.error}</p>
                                     )}

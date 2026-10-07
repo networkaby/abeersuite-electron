@@ -1,0 +1,28 @@
+{
+  "appId": "in.networkservice.shop",
+  "appName": "Network Service",
+  "webDir": "www",
+  "appendUserAgent": "NSShopApp",
+  "backgroundColor": "#eff4fb",
+  "server": {
+    "url": "https://shop.networkservice.in/m-shop-app",
+    "errorPath": "offline.html"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "initialViewportFitValueHint": "cover"
+    },
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "launchShowDuration": 4000,
+      "launchFadeOutDuration": 200,
+      "backgroundColor": "#eff4fb",
+      "showSpinner": false
+    }
+  }
+}

@@ -3,13 +3,7 @@ import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { invProductToPublic as shopProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
-import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
-import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
-import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
-import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
-import { shopQualification, storefrontQualifiable } from "@/modules/ecommerce/lib/shopQualification";
-import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
+import { loadStorefrontProducts } from "@/shared/lib/shop/storefrontProducts";
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import ShopCatalogClient from "@/modules/external/shop/ShopCatalogClient";
 import { loadShopAdContext } from "@/shared/lib/shop/adContext";
@@ -28,23 +22,7 @@ const loadBrandWithProducts = cache(async (slug: string) => {
     });
     if (!brand) return null;
 
-    const [bands, rules, policy, groupIndex] = await Promise.all([
-        loadBarcodeBands(),
-        loadShopPublishRules(),
-        loadShopStockPolicy(),
-        loadShopGroupIndex(),
-    ]);
-    const rows = await prisma.invProduct.findMany({
-        where: { brandId: brand.id, isListedInShop: true, isActive: true },
-        include: { category: { select: { name: true } } },
-        orderBy: { id: "asc" },
-    });
-    const products: ShopProductPublic[] = rows
-        .map((p) => ({ p, avail: resolveAvailability(p.stock, p.allowBackorder, policy) }))
-        .filter(({ avail }) => avail.visible)
-        .map(({ p, avail }) => ({ p, pub: shopProductToPublic(p, { bands, avail, groupIndex }) }))
-        .filter(({ p, pub }) => shopQualification(storefrontQualifiable(p, pub), rules).qualified)
-        .map(({ pub }) => pub);
+    const products = await loadStorefrontProducts({ brandId: brand.id });
 
     return { brand, products };
 });

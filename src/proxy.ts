@@ -8,7 +8,7 @@ import { canOpenPage, NO_ACCESS_HOME, NO_ACCESS_PARAM } from "@/shared/lib/auth/
 import { isPhoneAppPath, isPhoneRequest, PHONE_APP_HOME, PHONE_APP_FORGOT, PHONE_APP_INSTALL, PHONE_APP_LOGIN } from "@/shared/lib/device/phone";
 import { isPhoneOnlyApi, isPhoneOnlyPage, isPhoneOnlySession, phoneOnlyMayCall } from "@/shared/lib/auth/phoneOnly";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
-import { SHOP_APP_INSTALL } from "@/shared/lib/device/shopApp";
+import { isShopNativePath, SHOP_APP_INSTALL } from "@/shared/lib/device/shopApp";
 
 function isPublicPath(pathname: string): boolean {
     if (pathname === "/" || pathname === "/login") return true;
@@ -30,6 +30,9 @@ function isPublicPath(pathname: string): boolean {
     if (pathname === SHOP_APP_INSTALL) return true;
     if (pathname.startsWith("/portal")) return true;
     if (pathname.startsWith("/shop")) return true;
+    // The customer app's screens — browsing the shop needs no sign-in; the
+    // account screens check the customer session themselves, like /portal.
+    if (isShopNativePath(pathname)) return true;
     if (pathname === "/public/login") return true;
     // Root-level storefront slugs (/hp, /dell) — brand pages are part of the
     // shop and must stay browsable signed-out and as a signed-in customer.

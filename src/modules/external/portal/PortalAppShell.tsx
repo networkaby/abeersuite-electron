@@ -9,17 +9,13 @@ import { signOutTo } from "@/shared/lib/auth/signOutTo";
 import {
     ChevronDown,
     CreditCard,
-    Heart,
     LayoutDashboard,
     LogOut,
     MoreHorizontal,
-    Percent,
     ShoppingBag,
     Ticket,
     UserRound,
     Receipt,
-    Users,
-    Wallet,
     X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -32,6 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LEGAL_LINKS } from "@/shared/lib/legal/legalContent";
 import UserAvatar from "@/shared/components/UserAvatar";
+import { PORTAL_NAV_ITEMS } from "@/modules/external/portal/portalNav";
 import PortalShopButton from "@/modules/external/portal/PortalShopButton";
 import PortalProfileSwitch from "@/modules/external/portal/PortalProfileSwitch";
 import { usePortalAccountStore } from "@/store/external/portalAccountStore";
@@ -40,17 +37,6 @@ type PortalAppShellProps = {
     children: React.ReactNode;
 };
 
-const NAV_ITEMS = [
-    { href: "/portal", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/portal/orders", label: "My Orders", icon: ShoppingBag },
-    { href: "/portal/bills", label: "My Bills", icon: Receipt },
-    { href: "/portal/repairs", label: "My Repairs", icon: Ticket },
-    { href: "/portal/social", label: "Social", icon: Users },
-    { href: "/portal/coupons", label: "My Coupons", icon: Percent },
-    { href: "/portal/wallet", label: "My Wallet", icon: Wallet },
-    { href: "/portal/wishlist", label: "Wishlist", icon: Heart },
-    { href: "/portal/profile", label: "My Profile", icon: UserRound },
-] as const;
 
 /** Phone bottom bar: four everyday tabs; "More" opens the full menu. */
 const TAB_ITEMS = [
@@ -79,7 +65,7 @@ function Sidebar({ pathname, onNavigate }: { pathname: string; onNavigate?: () =
                 <p className="text-xs text-muted-foreground">Everything in one place</p>
             </div>
             <nav className="flex-1 space-y-1 p-3">
-                {NAV_ITEMS.map((item) => {
+                {PORTAL_NAV_ITEMS.map((item) => {
                     const active = isActive(pathname, item.href);
                     const Icon = item.icon;
                     return (

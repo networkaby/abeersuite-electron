@@ -1,13 +1,7 @@
 import type { Metadata } from "next";
 import { Fragment, type ReactNode } from "react";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { invProductToPublic as shopProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
-import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
-import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
-import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
-import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
-import { shopQualification, storefrontQualifiable } from "@/modules/ecommerce/lib/shopQualification";
-import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
+import { loadStorefrontProducts, pickDealOfTheDay, pickDeals, pickFeatured, storefrontCategories } from "@/shared/lib/shop/storefrontProducts";
+import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { STORE_PAGE_HEADING } from "@/shared/lib/shop/storeContent";
 import {
     resolveHomeSections,
@@ -37,30 +31,6 @@ import { buildSiteLd } from "@/shared/lib/seo/jsonLd";
 export const metadata: Metadata = {
     alternates: { canonical: "/" },
 };
-
-function pickFeatured(products: ShopProductPublic[], n = 8): ShopProductPublic[] {
-    return [...products]
-        .filter((p) => p.badge)
-        .concat(products.filter((p) => !p.badge))
-        .slice(0, n);
-}
-
-function discountPctOf(p: ShopProductPublic): number {
-    if (!p.mrpPaise || p.mrpPaise <= p.pricePaise) return 0;
-    return (p.mrpPaise - p.pricePaise) / p.mrpPaise;
-}
-
-function pickDeals(products: ShopProductPublic[], n = 8): ShopProductPublic[] {
-    return [...products]
-        .filter((p) => discountPctOf(p) > 0)
-        .sort((a, b) => discountPctOf(b) - discountPctOf(a))
-        .slice(0, n);
-}
-
-function pickDealOfTheDay(products: ShopProductPublic[]): ShopProductPublic | null {
-    const sorted = [...products].sort((a, b) => discountPctOf(b) - discountPctOf(a));
-    return sorted[0] ?? null;
-}
 
 type PageData = {
     categoryEntries: { name: string; count: number; fallbackImageUrl: string | null }[];
@@ -167,37 +137,14 @@ export default async function StoreHomePage({
     const sp = await searchParams;
     const initialCategory = sp.category && sp.category !== "" ? sp.category : "all";
 
-    const [bands, rules, policy, groupIndex, instances, adContext] = await Promise.all([
-        loadBarcodeBands(),
-        loadShopPublishRules(),
-        loadShopStockPolicy(),
-        loadShopGroupIndex(),
+    const [products, instances, adContext] = await Promise.all([
+        loadStorefrontProducts(),
         loadHomeLayout(),
         loadShopAdContext(sp),
     ]);
-    const rows = await prisma.invProduct.findMany({
-        where: { isListedInShop: true, isActive: true },
-        include: { category: { select: { name: true } } },
-        orderBy: [{ shopCategory: "asc" }, { id: "asc" }],
-    });
-    const products = rows
-        .map((p) => ({ p, avail: resolveAvailability(p.stock, p.allowBackorder, policy) }))
-        .filter(({ avail }) => avail.visible)
-        .map(({ p, avail }) => ({ p, pub: shopProductToPublic(p, { bands, avail, groupIndex }) }))
-        .filter(({ p, pub }) => shopQualification(storefrontQualifiable(p, pub), rules).qualified)
-        .map(({ pub }) => pub);
 
     const allCategories = [...new Set(products.map((p) => p.category))];
-    const categoryEntries = allCategories
-        .map((name) => {
-            const inCat = products.filter((p) => p.category === name);
-            return {
-                name,
-                count: inCat.length,
-                fallbackImageUrl: inCat[0]?.galleryUrls[0] ?? inCat[0]?.imageUrl ?? null,
-            };
-        })
-        .sort((a, b) => b.count - a.count);
+    const categoryEntries = storefrontCategories(products);
 
     const data: PageData = {
         categoryEntries,

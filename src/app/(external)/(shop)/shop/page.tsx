@@ -1,11 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { invProductToPublic as shopProductToPublic } from "@/shared/lib/shop/productPublic";
-import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
-import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
-import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
-import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
-import { shopQualification, storefrontQualifiable } from "@/modules/ecommerce/lib/shopQualification";
-import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
+import { loadStorefrontProducts, storefrontCategories } from "@/shared/lib/shop/storefrontProducts";
 import ShopPageBanner from "@/modules/external/shop/ShopPageBanner";
 import TrustStrip from "@/modules/external/store/TrustStrip";
 import BrandStrip from "@/modules/external/store/BrandStrip";
@@ -19,32 +12,9 @@ export default async function ShopCatalogPage({
 }) {
     const sp = await searchParams;
     const initialCategory = sp.category && sp.category !== "" ? sp.category : "all";
-    const [bands, rules, policy, groupIndex, adContext] = await Promise.all([
-        loadBarcodeBands(),
-        loadShopPublishRules(),
-        loadShopStockPolicy(),
-        loadShopGroupIndex(),
-        loadShopAdContext(sp),
-    ]);
-    const rows = await prisma.invProduct.findMany({
-        where: { isListedInShop: true, isActive: true },
-        include: { category: { select: { name: true } } },
-        orderBy: [{ shopCategory: "asc" }, { id: "asc" }],
-    });
-    const products = rows
-        .map((p) => ({ p, avail: resolveAvailability(p.stock, p.allowBackorder, policy) }))
-        .filter(({ avail }) => avail.visible)
-        .map(({ p, avail }) => ({ p, pub: shopProductToPublic(p, { bands, avail, groupIndex }) }))
-        .filter(({ p, pub }) => shopQualification(storefrontQualifiable(p, pub), rules).qualified)
-        .map(({ pub }) => pub);
+    const [products, adContext] = await Promise.all([loadStorefrontProducts(), loadShopAdContext(sp)]);
     const cats = [...new Set(products.map((p) => p.category))];
-
-    const categoryPills = cats
-        .map((name) => ({
-            name,
-            count: products.filter((p) => p.category === name).length,
-        }))
-        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    const categoryPills = storefrontCategories(products).map(({ name, count }) => ({ name, count }));
 
     return (
         <>
