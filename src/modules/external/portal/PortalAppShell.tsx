@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LEGAL_LINKS } from "@/shared/lib/legal/legalContent";
 import UserAvatar from "@/shared/components/UserAvatar";
+import PortalShopButton from "@/modules/external/portal/PortalShopButton";
 import PortalProfileSwitch from "@/modules/external/portal/PortalProfileSwitch";
 import { usePortalAccountStore } from "@/store/external/portalAccountStore";
 
@@ -146,6 +147,7 @@ export default function PortalAppShell({ children }: PortalAppShellProps) {
                         </Link>
                     </div>
                     <div className="flex items-center gap-2">
+                        <PortalShopButton compact />
                         {isCustomer ? (
                             <>
                                 <PortalProfileSwitch />

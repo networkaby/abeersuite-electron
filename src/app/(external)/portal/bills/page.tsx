@@ -2,7 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { auth } from "@/auth";
-import { Receipt, ShoppingBag } from "lucide-react";
+import { Receipt } from "lucide-react";
+import PortalShopButton from "@/modules/external/portal/PortalShopButton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import PortalSectionHeader from "@/modules/external/portal/PortalSectionHeader";
@@ -107,19 +108,6 @@ function SummaryCard({ label, value, tone = "" }: { label: string; value: string
     );
 }
 
-function ShopButton({ className = "", variant }: { className?: string; variant?: "outline" }) {
-    return (
-        <Button
-            asChild
-            size="sm"
-            variant={variant}
-            className={`${variant ? "border-yellow-400 text-yellow-900 hover:bg-yellow-50 dark:text-yellow-200 dark:hover:bg-yellow-950" : "bg-yellow-400 font-semibold text-yellow-950 hover:bg-yellow-300"} ${className}`}
-        >
-            <Link href="/shop"><ShoppingBag className="size-4" /> Visit our shop</Link>
-        </Button>
-    );
-}
-
 export default async function PortalBillsPage({
     searchParams,
 }: {
@@ -172,7 +160,6 @@ export default async function PortalBillsPage({
                     title="My Bills"
                     description={`Shop and counter bills, payments and balance for ${active.label}.`}
                     icon={Receipt}
-                    rightSlot={<ShopButton className="w-full sm:w-auto" />}
                 />
 
                 <nav className="grid grid-cols-3 border-b border-border text-sm sm:flex sm:gap-1">
@@ -222,7 +209,7 @@ export default async function PortalBillsPage({
                             {bills.length === 0 ? (
                                 <div className="space-y-3 p-8 text-center text-sm text-muted-foreground">
                                     <p>No bills in this period.</p>
-                                    <ShopButton variant="outline" />
+                                    <PortalShopButton variant="outline" />
                                 </div>
                             ) : (
                                 <>
@@ -417,7 +404,7 @@ export default async function PortalBillsPage({
                 <Card className="border-yellow-300 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950/40">
                     <CardContent className="flex flex-col items-center gap-3 p-4 text-center text-sm sm:flex-row sm:justify-between sm:text-left">
                         <span>Need something new? Order online — pick up at the shop or get it delivered.</span>
-                        <ShopButton className="w-full sm:w-auto" />
+                        <PortalShopButton className="w-full sm:w-auto" />
                     </CardContent>
                 </Card>
             </div>

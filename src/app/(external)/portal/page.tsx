@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import PortalPushCard from "@/modules/external/pwa/PortalPushCard";
 import {
@@ -30,12 +29,6 @@ export default async function PortalHomePage() {
         <main className="mx-auto max-w-6xl px-4 py-10 lg:py-12 space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <h1 className="text-2xl font-semibold tracking-tight lg:text-3xl">Welcome back, {name}.</h1>
-                <Button variant="outline" asChild className="gap-1.5">
-                    <Link href="/shop">
-                        <ShoppingBag className="size-4" />
-                        Shop
-                    </Link>
-                </Button>
             </div>
             <PortalPushCard compact />
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
