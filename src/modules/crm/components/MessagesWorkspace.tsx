@@ -162,7 +162,7 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
         void loadList(1);
         if (selected) void loadThread(selected);
     }, [loadList, loadThread, selected]);
-    useRealtimeTopics(["chat", "tickets"], refresh, true, ["Message", "Call", "Ticket"]);
+    useRealtimeTopics(["messages", "tickets"], refresh, true, ["Message", "Call", "Ticket"]);
 
     useEffect(() => { bottomRef.current?.scrollIntoView({ block: "end" }); }, [thread?.items.length, selected]);
 

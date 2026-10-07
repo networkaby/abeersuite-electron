@@ -66,6 +66,6 @@ export async function POST(req: Request) {
             }
         }
     }
-    if (changed) void publishChangeServer(["chat"]);
+    if (changed) void publishChangeServer(["messages"]);
     return NextResponse.json({ ok: true });
 }

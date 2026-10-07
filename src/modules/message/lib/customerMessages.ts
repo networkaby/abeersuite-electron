@@ -273,7 +273,7 @@ export async function sendReply(args: { phone: string; text: string; userId: num
             occurredAt: new Date(),
         },
     });
-    void publishChangeServer(["chat"]);
+    void publishChangeServer(["messages"]);
     return row;
 }
 
@@ -334,6 +334,6 @@ export async function ticketFromMessage(messageId: number, userId: number, exist
         },
         data: { ticketId },
     });
-    void publishChangeServer(["chat", "tickets"]);
+    void publishChangeServer(["messages", "tickets"]);
     return ticketId;
 }

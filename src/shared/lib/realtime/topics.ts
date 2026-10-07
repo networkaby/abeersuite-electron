@@ -24,7 +24,9 @@ export type Topic =
     | "catalogue"   // products, brands, categories, pricing, coupons
     | "tasks"       // admin tasks, notes, notifications, wall posts
     | "settings"    // org config, users, roles, positions, branches
-    | "chat";       // a new DM room came into existence (messages ride their own broadcast)
+    | "chat"        // a new DM room came into existence (messages ride their own broadcast)
+    | "messages";   // customer messages (WhatsApp …) + their ticks — CRM → Messages only.
+                    // Kept off "chat" so a customer reply never wakes every tab's team inbox.
 
 /**
  * Every topic, for a publisher that genuinely cannot narrow it down.
@@ -38,7 +40,7 @@ export type Topic =
  * subscribe to anyway.
  */
 export const ALL_TOPICS: readonly Topic[] = [
-    "ledger", "stock", "tickets", "parties", "catalogue", "tasks", "settings", "chat",
+    "ledger", "stock", "tickets", "parties", "catalogue", "tasks", "settings", "chat", "messages",
 ];
 
 /**
@@ -112,7 +114,7 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
     // FIRST message of a brand new DM, which mints the room this path creates.
     [/^\/api\/inbox\/direct/,                       ["chat"]],
     [/^\/api\/inbox\/rooms/,                        ["chat"]],
-    [/^\/api\/messages/,                            ["chat"]],
+    [/^\/api\/messages/,                            ["messages"]],
 ];
 
 /**
@@ -173,6 +175,7 @@ export const TOPIC_MODELS: Readonly<Record<Topic, readonly string[]>> = {
         "CreditLimitConfig", "StaffProfile", "StaffSalary",
     ],
     chat: ["ChatRoom", "ChatRoomMember"],
+    messages: ["Message"],
 };
 
 /** The union of `TOPIC_MODELS` for `topics`, de-duplicated. */
