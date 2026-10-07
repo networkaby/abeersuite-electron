@@ -198,8 +198,12 @@ export default async function PortalOrdersPage() {
                 {dtos.length === 0 ? (
                     <Card>
                         <CardContent className="py-14 text-center text-sm text-muted-foreground">
-                            No orders yet.{" "}
+                            No online orders yet.{" "}
                             <Link href="/shop" className="text-primary underline">Browse the shop</Link> to place your first one.
+                            <div className="mt-2">
+                                Bought at our counter? Your bills are under{" "}
+                                <Link href="/portal/bills" className="text-primary underline">My Bills</Link>.
+                            </div>
                         </CardContent>
                     </Card>
                 ) : (

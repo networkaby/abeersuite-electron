@@ -40,13 +40,23 @@ export default async function PortalInvoicePage({
 
     const voucherRow = await prisma.voucherDetail.findUnique({
         where:  { id: detailId },
-        select: { universalVoucher: { select: { partyAccountId: true, type: true } } },
+        select: {
+            partyType: true,
+            partyId: true,
+            universalVoucher: { select: { partyAccountId: true, type: true } },
+        },
     });
-    const partyAccountId = voucherRow?.universalVoucher?.partyAccountId;
-    if (partyAccountId == null) notFound();
+    if (!voucherRow) notFound();
 
+    // Owned when the bill is on one of the customer's ledgers, or — a cash bill
+    // at the counter that never touched a ledger — when it names the person or
+    // one of their companies as the party (the same rule My Bills lists by).
     const accountOptions = await getPortalAccountOptions(customerId);
-    const owns = accountOptions.some((o) => o.accountId === partyAccountId);
+    const partyAccountId = voucherRow.universalVoucher?.partyAccountId;
+    const owns = accountOptions.some((o) =>
+        (partyAccountId != null && o.accountId === partyAccountId)
+        || (o.accountType === "personal" && voucherRow.partyType === "customer" && voucherRow.partyId === customerId)
+        || (o.companyId != null && voucherRow.partyType === "company" && voucherRow.partyId === o.companyId));
     if (!owns) notFound();
 
     return (

@@ -17,6 +17,7 @@ import {
     ShoppingBag,
     Ticket,
     UserRound,
+    Receipt,
     Users,
     Wallet,
     X,
@@ -41,6 +42,7 @@ type PortalAppShellProps = {
 const NAV_ITEMS = [
     { href: "/portal", label: "Dashboard", icon: LayoutDashboard },
     { href: "/portal/orders", label: "My Orders", icon: ShoppingBag },
+    { href: "/portal/bills", label: "My Bills", icon: Receipt },
     { href: "/portal/repairs", label: "My Repairs", icon: Ticket },
     { href: "/portal/social", label: "Social", icon: Users },
     { href: "/portal/coupons", label: "My Coupons", icon: Percent },
