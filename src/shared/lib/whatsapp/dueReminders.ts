@@ -5,6 +5,7 @@ import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import { getOutstandings } from "@/modules/accountancy/lib/outstandings";
+import { creditLimitsFor } from "@/shared/lib/accountancy/creditLimit";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
 import { DUE_LINK_CODE, WA_APP_LINK, WA_BILL_LINK_BASE, type WaTemplateKind } from "./billTemplates";
 import { partySelect, sendPushAndWhatsApp } from "./notifyBill";
@@ -95,6 +96,8 @@ export async function getReminderSettings(): Promise<ReminderSettings> {
         skipDays: s.skipDays,
         dailyCap: s.dailyCap,
         minBalance: Number(s.minBalance),
+        minPctAutoLimit: s.minPctAutoLimit,
+        minPctCreditLimit: s.minPctCreditLimit,
         excluded: s.excludedAccountIds.filter((id) => nameById.has(id)).map((id) => ({ accountId: id, name: nameById.get(id)! })),
         rules: rules.map(toRule),
         lastRunDate: s.lastRunDate,
@@ -111,8 +114,8 @@ export async function saveReminderSettings(input: Omit<ReminderSettings, "exclud
     await prisma.$transaction([
         prisma.dueReminderSettings.upsert({
             where: { id: 1 },
-            create: { id: 1, enabled: input.enabled, sendTime: input.sendTime, skipDays: input.skipDays, dailyCap: input.dailyCap, minBalance: input.minBalance, excludedAccountIds: input.excludedAccountIds },
-            update: { enabled: input.enabled, sendTime: input.sendTime, skipDays: input.skipDays, dailyCap: input.dailyCap, minBalance: input.minBalance, excludedAccountIds: input.excludedAccountIds },
+            create: { id: 1, enabled: input.enabled, sendTime: input.sendTime, skipDays: input.skipDays, dailyCap: input.dailyCap, minBalance: input.minBalance, minPctAutoLimit: input.minPctAutoLimit, minPctCreditLimit: input.minPctCreditLimit, excludedAccountIds: input.excludedAccountIds },
+            update: { enabled: input.enabled, sendTime: input.sendTime, skipDays: input.skipDays, dailyCap: input.dailyCap, minBalance: input.minBalance, minPctAutoLimit: input.minPctAutoLimit, minPctCreditLimit: input.minPctCreditLimit, excludedAccountIds: input.excludedAccountIds },
         }),
         prisma.dueReminderRule.deleteMany({ where: { id: { notIn: keep } } }),
         ...input.rules.map((r, i) => {
@@ -292,6 +295,17 @@ export async function runDueReminders(now = new Date()): Promise<RunResult> {
     const dues = await loadPartyDues();
     const excluded = new Set(s.excludedAccountIds);
     const minBalance = Number(s.minBalance);
+    // "Still well inside its credit limit" — read only when a % is set. A party
+    // with no limit of that kind is not skipped by it.
+    const limits = s.minPctAutoLimit > 0 || s.minPctCreditLimit > 0
+        ? await creditLimitsFor(prisma, [...dues.keys()])
+        : null;
+    const insideLimit = (due: PartyDue) => {
+        const l = limits?.get(due.accountId);
+        if (!l) return false;
+        return (s.minPctAutoLimit > 0 && l.auto > 0 && due.balance < (l.auto * s.minPctAutoLimit) / 100)
+            || (s.minPctCreditLimit > 0 && l.manual > 0 && due.balance < (l.manual * s.minPctCreditLimit) / 100);
+    };
 
     // Every automatic send in the last year, newest first — enough to answer
     // "has this rule already gone to this party for this run of debt".
@@ -305,7 +319,7 @@ export async function runDueReminders(now = new Date()): Promise<RunResult> {
     let sent = 0, callList = 0, skipped = 0;
     const toCall: PartyDue[] = [];
     for (const due of dues.values()) {
-        if (excluded.has(due.accountId) || due.balance < minBalance) continue;
+        if (excluded.has(due.accountId) || due.balance < minBalance || insideLimit(due)) continue;
         // The strongest rule this party matches.
         const rule = rules.find((r) => due.oldestDays >= r.minDays && due.balance >= r.minAmount);
         if (!rule) continue;

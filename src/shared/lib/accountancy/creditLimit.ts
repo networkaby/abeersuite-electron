@@ -78,6 +78,45 @@ export async function windowSalesTotal(
     return Number(agg._sum.totalAmount ?? 0);
 }
 
+// Manual and auto limits for many accounts in two queries — for whole-list jobs
+// (due reminders) that must not run windowSalesTotal per party.
+export async function creditLimitsFor(
+    db: Prisma.TransactionClient,
+    accountIds: number[],
+    cfg?: CreditLimitConfigLite,
+): Promise<Map<number, { manual: number; auto: number }>> {
+    const out = new Map<number, { manual: number; auto: number }>();
+    if (!accountIds.length) return out;
+    const config = cfg ?? (await loadCreditLimitConfig(db));
+    const accounts = await db.account.findMany({ where: { id: { in: accountIds } }, select: { id: true, creditLimit: true } });
+    for (const a of accounts) out.set(a.id, { manual: Math.max(0, Number(a.creditLimit ?? 0)), auto: 0 });
+    if (!config.autoEnabled) return out;
+
+    const since = new Date();
+    since.setDate(since.getDate() - config.windowDays);
+    const rows = await db.voucherDetail.findMany({
+        where: {
+            universalVoucher: {
+                partyAccountId: { in: accountIds },
+                status:         "POSTED",
+                type:           { in: [...SALE_TYPES] },
+                date:           { gte: since },
+            },
+        },
+        select: { totalAmount: true, universalVoucher: { select: { partyAccountId: true } } },
+    });
+    const sales = new Map<number, number>();
+    for (const r of rows) {
+        const id = r.universalVoucher?.partyAccountId;
+        if (id != null) sales.set(id, (sales.get(id) ?? 0) + Number(r.totalAmount ?? 0));
+    }
+    for (const [id, total] of sales) {
+        const lim = out.get(id);
+        if (lim) lim.auto = computeAutoCreditLimit(total, config);
+    }
+    return out;
+}
+
 // The effective limit for one customer = max(manual, auto). Skips the sales
 // aggregate entirely when auto is off. `manualLimit` is the raw Account.creditLimit
 // coerced to a number (null → 0).

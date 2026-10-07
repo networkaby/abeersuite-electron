@@ -83,6 +83,10 @@ model DueReminderSettings {
   dailyCap    Int      @default(50)
   /// Skip a party whose balance is below this (rupees).
   minBalance  Decimal  @default(100) @db.Decimal(14, 2)
+  /// Skip a party owing less than this % of its auto credit limit (0 = off).
+  minPctAutoLimit   Int @default(0)
+  /// Skip a party owing less than this % of its manual credit limit (0 = off).
+  minPctCreditLimit Int @default(0)
   /// Account ids never reminded — automation and Send to all skip them.
   excludedAccountIds Int[] @default([])
   /// India date ("YYYY-MM-DD") the job last ran — once a day.

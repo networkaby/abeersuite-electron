@@ -29,6 +29,8 @@ const schema = z.object({
     skipDays: z.array(z.number().int().min(0).max(6)).max(7),
     dailyCap: z.number().int().min(1).max(1000),
     minBalance: z.number().min(0).max(1e9),
+    minPctAutoLimit: z.number().int().min(0).max(1000),
+    minPctCreditLimit: z.number().int().min(0).max(1000),
     excludedAccountIds: z.array(z.number().int().positive()).max(2000),
     rules: z.array(rule).max(20),
 });

@@ -55,6 +55,8 @@ export function DueRemindersPanel() {
     const [skipDays, setSkipDays] = useState<number[]>([]);
     const [dailyCap, setDailyCap] = useState("50");
     const [minBalance, setMinBalance] = useState("100");
+    const [minPctAuto, setMinPctAuto] = useState("0");
+    const [minPctCredit, setMinPctCredit] = useState("0");
     const [rules, setRules] = useState<ReminderRule[]>([]);
     const [excluded, setExcluded] = useState<{ accountId: number; name: string }[]>([]);
     // Rule being edited (id) or added (0), with its draft values.
@@ -72,6 +74,8 @@ export function DueRemindersPanel() {
         setSkipDays(s.skipDays);
         setDailyCap(String(s.dailyCap));
         setMinBalance(String(s.minBalance));
+        setMinPctAuto(String(s.minPctAutoLimit));
+        setMinPctCredit(String(s.minPctCreditLimit));
         setRules(s.rules);
         setExcluded(s.excluded);
     };
@@ -118,6 +122,8 @@ export function DueRemindersPanel() {
                 skipDays,
                 dailyCap: Math.max(1, Number(dailyCap) || 1),
                 minBalance: Number(minBalance) || 0,
+                minPctAutoLimit: Math.min(1000, Number(minPctAuto) || 0),
+                minPctCreditLimit: Math.min(1000, Number(minPctCredit) || 0),
                 excludedAccountIds: excluded.map((x) => x.accountId),
                 rules,
             });
@@ -193,6 +199,16 @@ export function DueRemindersPanel() {
                     <div className="space-y-1">
                         <Label>Skip balance below (₹)</Label>
                         <NumericInput mode="decimal" value={minBalance} onValueChange={setMinBalance} min={0} className="w-32" />
+                    </div>
+                    <div className="space-y-1">
+                        <Label>Skip below % of auto credit limit</Label>
+                        <NumericInput value={minPctAuto} onValueChange={setMinPctAuto} min={0} max={1000} className="w-32" />
+                        <p className="text-[11px] text-muted-foreground">0 = off. Only when auto limit is on.</p>
+                    </div>
+                    <div className="space-y-1">
+                        <Label>Skip below % of credit limit</Label>
+                        <NumericInput value={minPctCredit} onValueChange={setMinPctCredit} min={0} max={1000} className="w-32" />
+                        <p className="text-[11px] text-muted-foreground">0 = off. Customers with no limit are not skipped.</p>
                     </div>
                     <div className="space-y-1">
                         <Label>Don&apos;t send on</Label>

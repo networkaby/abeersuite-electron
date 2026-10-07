@@ -51,6 +51,9 @@ export type ReminderSettings = {
     skipDays: number[];
     dailyCap: number;
     minBalance: number;
+    /** Skip below this % of the auto / manual credit limit; 0 = off. */
+    minPctAutoLimit: number;
+    minPctCreditLimit: number;
     excluded: { accountId: number; name: string }[];
     rules: ReminderRule[];
     lastRunDate: string | null;
