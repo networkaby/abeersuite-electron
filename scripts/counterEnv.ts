@@ -163,7 +163,8 @@ export const COUNTER_ENV_CLOUDFLARE_KEYS: readonly string[] = [
 export function counterEnvCopiedFor(mode: AppMode): readonly string[] {
     return mode === "office"
         ? [...COUNTER_ENV_COPIED, ...COUNTER_ENV_BACKUP_KEYS, ...COUNTER_ENV_CLOUDINARY_KEYS,
-        ...COUNTER_ENV_CLOUDFLARE_KEYS, ...COUNTER_ENV_COURIER_KEYS, ...COUNTER_ENV_SUPER_ADMIN_KEYS]
+        ...COUNTER_ENV_CLOUDFLARE_KEYS, ...COUNTER_ENV_COURIER_KEYS, ...COUNTER_ENV_SUPER_ADMIN_KEYS,
+        ...COUNTER_ENV_WHATSAPP_KEYS]
         : COUNTER_ENV_COPIED;
 }
 
@@ -269,3 +270,15 @@ export const COUNTER_ENV_COURIER_KEYS: readonly string[] = [
  * every installer. REMOVE before any public desktop release.
  */
 export const COUNTER_ENV_SUPER_ADMIN_KEYS: readonly string[] = ["SUPER_ADMIN_EMAIL", "SUPER_ADMIN_PASSWORD"];
+
+/**
+ * Meta WhatsApp keys — Settings → WhatsApp Templates reads approval status and sends a
+ * test through GETs / local calls that v_live never relays (`metaTemplates.ts`), so without
+ * them the page says "Sending for approval is not set up". Office only (2026-10-07), same
+ * cost as the rest: whoever holds an office installer can send as the business number.
+ */
+export const COUNTER_ENV_WHATSAPP_KEYS: readonly string[] = [
+    "META_WA_ACCESS_TOKEN",
+    "META_WA_PHONE_NUMBER_ID",
+    "META_WA_BUSINESS_ACCOUNT_ID",
+];
