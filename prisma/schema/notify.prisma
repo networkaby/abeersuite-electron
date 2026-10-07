@@ -38,12 +38,12 @@ model WhatsAppTemplate {
   updatedAt     DateTime  @default(now()) @updatedAt
 }
 
-/// One bill or receipt announced to its customer. `refId` is the
-/// UniversalVoucher id; `kind` is the template kind used.
+/// One document announced to its customer — once per (kind, refId). `refId` is
+/// the UniversalVoucher id, or the Ticket id for the REPAIR_* kinds.
 model BillNotification {
   id             Int       @id @default(autoincrement())
   kind           String
-  refId          Int       @unique
+  refId          Int
   personId       Int?
   mobile         String?
   /// sent | no-subscription | failed | not-configured | no-person
@@ -56,5 +56,6 @@ model BillNotification {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @default(now()) @updatedAt
 
+  @@unique([kind, refId])
   @@index([personId, createdAt])
 }

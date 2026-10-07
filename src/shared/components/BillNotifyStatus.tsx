@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { BellRing, MessageCircle } from "lucide-react";
+import { toast } from "sonner";
+import { BellRing, Loader2, MessageCircle } from "lucide-react";
+import { extractApiError } from "@/shared/lib/api";
+import { Button } from "@/components/ui/button";
 
 type Notification = {
     pushStatus: string;
@@ -39,25 +42,60 @@ function waChip(n: Notification): [string, string, string] {
 }
 
 /**
- * How the customer was told about one bill / receipt — App and WhatsApp chips.
- * Renders nothing when no message was sent (walk-in, draft, older bill).
+ * How the customer was told about one document — App and WhatsApp chips.
+ * Renders nothing when no message was sent (walk-in, draft, older document),
+ * except an estimate, which offers the manual Send button instead.
  */
-export function BillNotifyStatus({ universalVoucherId }: { universalVoucherId: number | null | undefined }) {
+export function BillNotifyStatus({
+    universalVoucherId,
+    sendable = false,
+}: {
+    universalVoucherId: number | null | undefined;
+    /** An estimate: offer "Send on WhatsApp" until it has been sent. */
+    sendable?: boolean;
+}) {
     const [n, setN] = useState<Notification | null>(null);
+    const [loaded, setLoaded] = useState(false);
+    const [sending, setSending] = useState(false);
 
     useEffect(() => {
         if (!universalVoucherId) return;
         let alive = true;
         axios
             .get(`/api/bill-notifications/${universalVoucherId}`)
-            .then(({ data }) => alive && setN(data.notification))
+            .then(({ data }) => {
+                if (!alive) return;
+                setN(data.notification);
+                setLoaded(true);
+            })
             .catch(() => undefined);
         return () => {
             alive = false;
         };
     }, [universalVoucherId]);
 
-    if (!n) return null;
+    async function send() {
+        setSending(true);
+        try {
+            const { data } = await axios.post(`/api/bill-notifications/${universalVoucherId}`);
+            setN(data.notification);
+            toast.success("Sent to the customer's app and WhatsApp");
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not send"));
+        } finally {
+            setSending(false);
+        }
+    }
+
+    if (!n) {
+        if (!sendable || !loaded) return null;
+        return (
+            <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs" onClick={send} disabled={sending}>
+                {sending ? <Loader2 className="size-3 animate-spin" /> : <MessageCircle className="size-3" />}
+                Send on WhatsApp
+            </Button>
+        );
+    }
     const [appText, appCls, appTip] = appChip(n);
     const [waText, waCls, waTip] = waChip(n);
     return (

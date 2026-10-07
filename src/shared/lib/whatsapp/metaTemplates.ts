@@ -112,14 +112,15 @@ export async function fetchTemplateStatus(name: string): Promise<MetaTemplateSta
 
 /**
  * Send one bill / receipt with an APPROVED template. `values` fills the body's
- * fields; `refId` goes into the View button's URL. Returns Meta's message id.
+ * fields; `linkCode` goes into the View button's URL. Returns Meta's message id.
  */
 export async function sendBillTemplate(args: {
     mobile10: string;
     name: string;
     approved: WaTemplateDraft;
     values: WaFieldValues;
-    refId: number;
+    /** Last part of the View button URL: a voucher id, or t<ticketId>. */
+    linkCode: string;
 }): Promise<string> {
     const order = bodyFieldOrder(args.approved.body);
     const comps: unknown[] = [];
@@ -128,7 +129,7 @@ export async function sendBillTemplate(args: {
     }
     // Only the View button carries a variable; the app button's URL is fixed.
     if (args.approved.viewButton?.trim()) {
-        comps.push({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: String(args.refId) }] });
+        comps.push({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: args.linkCode }] });
     }
     const r = await graph<{ messages?: { id?: string }[] }>(`${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
         method: "POST",

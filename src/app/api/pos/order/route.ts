@@ -1,4 +1,5 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, after, type NextRequest } from "next/server";
+import { notifyBill } from "@/shared/lib/whatsapp/notifyBill";
 import { auth } from "@/auth";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requirePosVoucher } from "@/shared/lib/auth/permissions";
@@ -133,6 +134,8 @@ export async function POST(req: NextRequest) {
             receiptVoucherId = r.voucherId;
             receiptVoucherRef = r.voucherRef;
         }
+
+        after(() => notifyBill("ORDER", order.universalVoucherId));
 
         return NextResponse.json({ ...order, receiptVoucherId, receiptVoucherRef }, { status: 201 });
     } catch (e) {

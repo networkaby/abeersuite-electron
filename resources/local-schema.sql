@@ -5330,10 +5330,10 @@ CREATE INDEX IF NOT EXISTS "LoyaltyLedger_accountId_createdAt_idx" ON "LoyaltyLe
 CREATE INDEX IF NOT EXISTS "LoyaltyLedger_universalVoucherId_idx" ON "LoyaltyLedger"("universalVoucherId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX IF NOT EXISTS "BillNotification_refId_key" ON "BillNotification"("refId");
+CREATE INDEX IF NOT EXISTS "BillNotification_personId_createdAt_idx" ON "BillNotification"("personId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX IF NOT EXISTS "BillNotification_personId_createdAt_idx" ON "BillNotification"("personId", "createdAt");
+CREATE UNIQUE INDEX IF NOT EXISTS "BillNotification_kind_refId_key" ON "BillNotification"("kind", "refId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "Branch_number_key" ON "Branch"("number");

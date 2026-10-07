@@ -249,7 +249,9 @@ export async function POST(req: Request) {
             });
         }
 
-        if ((body.post ?? false) && body.type === "RECEIPT") after(() => notifyBill("RECEIPT", voucher.id));
+        if ((body.post ?? false) && (body.type === "RECEIPT" || body.type === "PAYMENT")) {
+            after(() => notifyBill(body.type === "RECEIPT" ? "RECEIPT" : "REFUND", voucher.id));
+        }
 
         return NextResponse.json(
             settled

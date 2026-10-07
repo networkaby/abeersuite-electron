@@ -15,6 +15,13 @@ import InvoiceReceipt from "@/shared/components/print/InvoiceReceipt";
 // Always the customer's own online invoice: A4, ONLINE_INVOICE kind, no
 // thermal/autoprint controls — those are staff-only knobs on
 // `/receipt/invoice/[id]`, which this page does not expose.
+// A sale prints as the customer's online invoice; a return, order or estimate
+// (reached from its WhatsApp / app message) prints with its own template.
+const OWN_TEMPLATE = new Set(["SALE_RETURN", "SALES_ORDER", "POS_ORDER", "ESTIMATE", "POS_ESTIMATE"]);
+function customerPrintKind(type: string | undefined): string {
+    return type && OWN_TEMPLATE.has(type) ? type : "ONLINE_INVOICE";
+}
+
 export default async function PortalInvoicePage({
     params,
 }: {
@@ -33,7 +40,7 @@ export default async function PortalInvoicePage({
 
     const voucherRow = await prisma.voucherDetail.findUnique({
         where:  { id: detailId },
-        select: { universalVoucher: { select: { partyAccountId: true } } },
+        select: { universalVoucher: { select: { partyAccountId: true, type: true } } },
     });
     const partyAccountId = voucherRow?.universalVoucher?.partyAccountId;
     if (partyAccountId == null) notFound();
@@ -45,7 +52,7 @@ export default async function PortalInvoicePage({
     return (
         <InvoiceReceipt
             id={id}
-            kindParam="ONLINE_INVOICE"
+            kindParam={customerPrintKind(voucherRow?.universalVoucher?.type)}
             paper="A4"
             autoprint="0"
         />

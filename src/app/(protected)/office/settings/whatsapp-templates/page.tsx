@@ -13,8 +13,8 @@ export default async function WhatsAppTemplatesPage() {
                 <div>
                     <h1 className="text-xl font-semibold">WhatsApp Templates</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        The WhatsApp message a customer gets for a sale bill or a receipt — sent together with the
-                        customer-app notification. WhatsApp only delivers wording Meta has <b>approved</b>: edit, then
+                        The WhatsApp message a customer gets for each bill, receipt, return, refund, order, estimate and
+                        repair update — sent together with the customer-app notification. WhatsApp only delivers wording Meta has <b>approved</b>: edit, then
                         <b> Send for approval</b>. Bills keep using the last approved wording until the new one is approved.
                     </p>
                 </div>

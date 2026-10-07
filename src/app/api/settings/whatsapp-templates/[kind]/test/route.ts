@@ -33,7 +33,7 @@ export async function POST(req: Request, { params }: RouteCtx) {
     if (!t?.approved) return NextResponse.json({ error: "Nothing approved yet — a test can only use an approved template." }, { status: 422 });
 
     try {
-        await sendBillTemplate({ mobile10, name: t.approved.name, approved: t.approved, values: WA_SAMPLE_VALUES, refId: 0 });
+        await sendBillTemplate({ mobile10, name: t.approved.name, approved: t.approved, values: WA_SAMPLE_VALUES, linkCode: "0" });
         return NextResponse.json({ ok: true });
     } catch (e) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "Send failed" }, { status: 502 });

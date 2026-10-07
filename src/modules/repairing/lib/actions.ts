@@ -3,6 +3,8 @@ import type { Prisma } from "@/generated/prisma/client";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { spawnChild } from "./spawnChild";
 import { isKnownActionType } from "./actionTypes";
+import { after } from "next/server";
+import { notifyRepair } from "@/shared/lib/whatsapp/notifyBill";
 
 // ── Worker action runtime (6th power) ─────────────────────────────────────────
 // Actions are read-only CODE hooks (catalog in actionTypes.ts). A worker carries an
@@ -95,7 +97,25 @@ const RUN_HANDLERS: Record<string, RunHandler> = {
             data: { ticketId: ctx.ticketId, status: ctx.status, note: `Action: snoozed — re-surfaces ${str(config, "after")}`, author: ctx.author },
         });
     },
+
+    // Tell the customer (app + WhatsApp) after the response — the stage move
+    // never waits on Meta or Google. Once per ticket per kind: a stage completed
+    // twice does not message twice. No args.
+    async notify_repair_received(ctx) {
+        after(async () => logNotify(ctx, "Repair received", await notifyRepair("REPAIR_RECEIVED", ctx.ticketId)));
+    },
+    async notify_repair_ready(ctx) {
+        after(async () => logNotify(ctx, "Repair ready", await notifyRepair("REPAIR_READY", ctx.ticketId)));
+    },
 };
+
+async function logNotify(ctx: ActionRunContext, what: string, r: { status: string; reason?: string }) {
+    const note =
+        r.status === "sent" ? `📲 Customer told: ${what} (app + WhatsApp)`
+            : r.status === "already" ? `📲 ${what} message was already sent`
+                : `📲 ${what} message not sent — ${r.reason ?? "skipped"}`;
+    await prisma.ticketLog.create({ data: { ticketId: ctx.ticketId, status: ctx.status, note, author: ctx.author } });
+}
 
 type ChainEntry = { type: string; on: ActionOn; config: Record<string, unknown> };
 

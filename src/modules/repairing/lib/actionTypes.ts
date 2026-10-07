@@ -43,6 +43,20 @@ export const ACTION_TYPES: ActionTypeDef[] = [
         output: "Ticket parked until due (wakeAt set)",
         fields: [{ key: "after", label: "After (e.g. 2d, 6h, 30m)", kind: "schedule" }],
     },
+    {
+        type: "notify_repair_received",
+        label: "Tell customer: repair received",
+        description: "Sends the customer the \"Repair received\" message — app notification and WhatsApp (Settings → WhatsApp Templates). Put it on the intake stage.",
+        output: "App notification + WhatsApp, once per ticket",
+        fields: [],
+    },
+    {
+        type: "notify_repair_ready",
+        label: "Tell customer: repair ready",
+        description: "Sends the customer the \"Repair ready\" message — app notification and WhatsApp (Settings → WhatsApp Templates). Put it on the stage that ends the repair.",
+        output: "App notification + WhatsApp, once per ticket",
+        fields: [],
+    },
 ];
 
 export const ACTION_TYPE_MAP: Record<string, ActionTypeDef> = Object.fromEntries(ACTION_TYPES.map((t) => [t.type, t]));

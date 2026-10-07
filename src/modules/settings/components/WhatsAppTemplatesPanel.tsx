@@ -12,9 +12,10 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
-    WA_FIELDS,
     WA_SAMPLE_VALUES,
     WA_TEMPLATE_LABEL,
+    WA_TEMPLATE_WHEN,
+    fieldsFor,
     checkBody,
     fillBody,
     type WaTemplateDraft,
@@ -59,7 +60,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
         draft.body !== current.draft.body ||
         viewBtn !== current.draft.viewButton ||
         appBtn !== current.draft.appButton;
-    const errors = useMemo(() => checkBody(draft), [draft]);
+    const errors = useMemo(() => checkBody(draft, kind), [draft, kind]);
     const status = STATUS_LABEL[current.status] ?? STATUS_LABEL.DRAFT;
     const locked = current.status === "PENDING";
 
@@ -173,6 +174,9 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                         Sending for approval is not set up on this server — <code>META_WA_BUSINESS_ACCOUNT_ID</code> is missing.
                     </p>
                 )}
+                <p className="text-xs text-muted-foreground">
+                    <b>Sent when:</b> {WA_TEMPLATE_WHEN[kind]}
+                </p>
                 <div className="flex flex-wrap items-center gap-3">
                     <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${status.className}`}>{status.text}</span>
                     {current.metaName && <span className="font-mono text-xs text-muted-foreground">{current.metaName}</span>}
@@ -199,7 +203,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                 <div className="space-y-1.5">
                     <Label htmlFor="wa-body">Message</Label>
                     <div className="flex flex-wrap gap-1.5">
-                        {WA_FIELDS.map((f) => (
+                        {fieldsFor(kind).map((f) => (
                             <Button
                                 key={f.key}
                                 type="button"
@@ -229,7 +233,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
 
                 <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">
-                        <Label htmlFor="wa-view">&ldquo;View bill&rdquo; button</Label>
+                        <Label htmlFor="wa-view">&ldquo;View&rdquo; button (opens the document)</Label>
                         <Input
                             id="wa-view"
                             maxLength={25}

@@ -7,9 +7,9 @@ import PrintToolbar from "@/shared/components/print/PrintToolbar";
 import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
 import { buildVoucherReceiptSample } from "@/modules/accountancy/lib/voucherReceiptSample";
 
-// Customer-facing receipt — the money-receipt twin of /portal/orders/[id]/bill,
-// opened from the receipt's WhatsApp / app message (/portal/b/<id>). `id` is
-// the receipt's UniversalVoucher id; the signed-in customer must own the
+// Customer-facing receipt or refund slip — the money twin of
+// /portal/orders/[id]/bill, opened from its WhatsApp / app message
+// (/portal/b/<id>). `id` is the Receipt / Payment UniversalVoucher id; the signed-in customer must own the
 // account it was received on. Rendered by the same template-driven renderer as
 // the staff print (/receipt/voucher/gl/<id>), always A4, no autoprint.
 export default async function PortalReceiptPage({ params }: { params: Promise<{ id: string }> }) {
@@ -27,7 +27,7 @@ export default async function PortalReceiptPage({ params }: { params: Promise<{ 
         where: { id: uvId },
         select: { type: true, status: true, partyAccountId: true },
     });
-    if (!uv || uv.type !== "RECEIPT" || uv.status !== "POSTED" || uv.partyAccountId == null) notFound();
+    if (!uv || (uv.type !== "RECEIPT" && uv.type !== "PAYMENT") || uv.status !== "POSTED" || uv.partyAccountId == null) notFound();
 
     const accountOptions = await getPortalAccountOptions(customerId);
     if (!accountOptions.some((o) => o.accountId === uv.partyAccountId)) notFound();

@@ -108,7 +108,7 @@ export async function submitWaTemplate(kind: WaTemplateKind): Promise<WaTemplate
         throw new WaTemplateError("WhatsApp template sending is not set up — META_WA_BUSINESS_ACCOUNT_ID or META_WA_ACCESS_TOKEN is missing.");
     }
     const cur = await getOne(kind);
-    const errs = checkBody(cur.draft);
+    const errs = checkBody(cur.draft, kind);
     if (errs.length) throw new WaTemplateError(errs.join(" "));
 
     const row = await prisma.whatsAppTemplate.upsert({
@@ -118,7 +118,7 @@ export async function submitWaTemplate(kind: WaTemplateKind): Promise<WaTemplate
         select: { version: true },
     });
     // Meta keeps a deleted/rejected name reserved, so every submission gets its own.
-    const name = `${kind.toLowerCase()}_bill_v${row.version}`;
+    const name = `${kind.toLowerCase()}_v${row.version}`;
     try {
         const r = await submitTemplate(name, cur.draft);
         await prisma.whatsAppTemplate.update({

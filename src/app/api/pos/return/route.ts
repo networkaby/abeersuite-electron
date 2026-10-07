@@ -28,6 +28,7 @@
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { Prisma } from "@/generated/prisma/client";
+import { notifyBill } from "@/shared/lib/whatsapp/notifyBill";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
 import { z } from "zod";
@@ -402,6 +403,7 @@ export async function POST(req: Request) {
             }
 
             return {
+                returnUniversalVoucherId: gl.universalVoucherId,
                 returnVoucherId: voucher.id,
                 returnVoucherRef: vRef,
                 journalEntryId:  gl.journalEntryId,
@@ -434,6 +436,12 @@ export async function POST(req: Request) {
                 console.error("[price-recompute] failed for voucher", result.returnVoucherId, err);
             });
         });
+
+        // Credit note to the customer's app + WhatsApp (walk-ins are skipped inside).
+        if (result.returnUniversalVoucherId != null) {
+            const uvId = result.returnUniversalVoucherId;
+            after(() => notifyBill("SALE_RETURN", uvId));
+        }
 
         return NextResponse.json(result, { status: 201 });
     } catch (e) {

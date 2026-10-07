@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
-import { notifyBill, isCustomerSaleType } from "@/shared/lib/whatsapp/notifyBill";
+import { notifyBill, autoKindForVoucherType } from "@/shared/lib/whatsapp/notifyBill";
 import { requireAuth, userCanPostVoucher } from "@/shared/lib/auth/permissions";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import * as Sentry from "@sentry/nextjs";
@@ -128,9 +128,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         // non-critical — its own failure path says so — and it walks the cost ledger
         // and opens a second transaction, all of which the cashier was waiting
         // through for a number that is not on the bill they just printed.
-        if (isCustomerSaleType(voucher.type) && result.universalVoucherId != null) {
+        const notifyKind = autoKindForVoucherType(voucher.type);
+        if (notifyKind && result.universalVoucherId != null) {
             const uvId = result.universalVoucherId;
-            after(() => notifyBill("SALE", uvId));
+            after(() => notifyBill(notifyKind, uvId));
         }
 
         const touchedProductIds = voucher.lines.map((l) => l.productId);

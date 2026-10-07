@@ -144,7 +144,12 @@ export function InvVoucherDetail({ basePath, label, formPath }: {
                         <span className={`text-xs px-2 py-0.5 font-medium rounded ${JOURNAL_STATUS_COLORS[voucher.status]}`}>
                             {voucher.status}
                         </span>
-                        {voucher.status === "POSTED" && <BillNotifyStatus universalVoucherId={voucher.universalVoucherId} />}
+                        {voucher.status === "POSTED" && (
+                            <BillNotifyStatus
+                                universalVoucherId={voucher.universalVoucherId}
+                                sendable={voucher.type === "ESTIMATE" || voucher.type === "POS_ESTIMATE"}
+                            />
+                        )}
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">{voucher.description}</p>
                 </div>
