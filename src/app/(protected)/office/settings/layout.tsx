@@ -18,6 +18,7 @@ const SETTINGS_CRUMB_LABELS: Record<string, string> = {
     "screen-size": "Screen Size",
     "pos-services": "Services",
     "voucher-templates": "Print Templates",
+    "whatsapp-templates": "WhatsApp Templates",
     preview: "Preview",
     "backup-restore": "Backup & Restore",
     "item-import": "Item Import",

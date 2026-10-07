@@ -25,6 +25,7 @@ import { resolveBuyerStateCode } from "@/shared/lib/gst/resolveBuyerState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
 import { getOrderPipeline, orderEntryStatus } from "@/modules/order/lib/orderPipeline";
 import { after } from "next/server";
+import { notifyBill, isCustomerSaleType } from "@/shared/lib/whatsapp/notifyBill";
 import * as Sentry from "@sentry/nextjs";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { GlPostFailedError, postVoucherInTx } from "@/modules/inventory/lib/postVoucherInTx";
@@ -785,6 +786,11 @@ export async function POST(req: NextRequest) {
                     console.error("[price-recompute] failed for voucher", voucher.id, err);
                 });
             });
+        }
+
+        if (postNow && isCustomerSaleType(type) && voucher.universalVoucherId != null) {
+            const uvId = voucher.universalVoucherId;
+            after(() => notifyBill("SALE", uvId));
         }
 
         return NextResponse.json(voucher, { status: 201 });

@@ -1,0 +1,48 @@
+import { redirect, notFound } from "next/navigation";
+import { auth } from "@/auth";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { getPortalAccountOptions } from "@/shared/lib/auth/portalAccountContext";
+import ReceiptPreview from "@/shared/components/print/ReceiptPreview";
+import PrintToolbar from "@/shared/components/print/PrintToolbar";
+import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
+import { buildVoucherReceiptSample } from "@/modules/accountancy/lib/voucherReceiptSample";
+
+// Customer-facing receipt — the money-receipt twin of /portal/orders/[id]/bill,
+// opened from the receipt's WhatsApp / app message (/portal/b/<id>). `id` is
+// the receipt's UniversalVoucher id; the signed-in customer must own the
+// account it was received on. Rendered by the same template-driven renderer as
+// the staff print (/receipt/voucher/gl/<id>), always A4, no autoprint.
+export default async function PortalReceiptPage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params;
+    const session = await auth();
+    const kind = (session?.user as { kind?: string } | undefined)?.kind;
+    const customerId = Number((session?.user as { id?: string | number } | undefined)?.id);
+    if (!session?.user || kind !== "customer" || !Number.isFinite(customerId)) {
+        redirect(`/login?callbackUrl=${encodeURIComponent(`/portal/receipts/${id}`)}`);
+    }
+
+    const uvId = Number(id);
+    if (!Number.isInteger(uvId)) notFound();
+    const uv = await prisma.universalVoucher.findUnique({
+        where: { id: uvId },
+        select: { type: true, status: true, partyAccountId: true },
+    });
+    if (!uv || uv.type !== "RECEIPT" || uv.status !== "POSTED" || uv.partyAccountId == null) notFound();
+
+    const accountOptions = await getPortalAccountOptions(customerId);
+    if (!accountOptions.some((o) => o.accountId === uv.partyAccountId)) notFound();
+
+    const data = await buildVoucherReceiptSample("gl", uvId);
+    if (!data) notFound();
+    const template = await getVoucherTemplate(data.kind);
+
+    return (
+        <ReceiptPreview
+            format="A4"
+            template={template}
+            sample={data.sample}
+            toolbar={<PrintToolbar autoPrint={false} />}
+            docTitle={data.docTitle}
+        />
+    );
+}

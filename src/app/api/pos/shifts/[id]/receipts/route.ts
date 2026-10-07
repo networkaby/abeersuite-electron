@@ -11,7 +11,8 @@
 // mirroring the per-counter routing at /office/admin/counters.
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
+import { notifyBill } from "@/shared/lib/whatsapp/notifyBill";
 import { z } from "zod";
 import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
@@ -117,6 +118,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             userId:    user!.id,
             reference: result.voucherRef,
         });
+
+        after(() => notifyBill("RECEIPT", result.voucherId));
 
         return NextResponse.json(
             {

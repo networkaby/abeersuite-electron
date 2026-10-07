@@ -20,14 +20,14 @@ export default async function PortalInvoicePage({
 }: {
     params: Promise<{ id: string }>;
 }) {
+    const { id } = await params;
     const session = await auth();
     const kind = (session?.user as { kind?: string } | undefined)?.kind;
     const customerId = Number((session?.user as { id?: string | number } | undefined)?.id);
     if (!session?.user || kind !== "customer" || !Number.isFinite(customerId)) {
-        redirect("/login?callbackUrl=/portal/orders");
+        redirect(`/login?callbackUrl=${encodeURIComponent(`/portal/orders/${id}/bill`)}`);
     }
 
-    const { id } = await params;
     const detailId = Number(id);
     if (!Number.isFinite(detailId)) notFound();
 

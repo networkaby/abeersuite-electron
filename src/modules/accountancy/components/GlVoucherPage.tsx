@@ -12,6 +12,7 @@
 // Create + edit (PATCH).
 
 import { useEffect, useRef, useState } from "react";
+import { BillNotifyStatus } from "@/shared/components/BillNotifyStatus";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -1608,6 +1609,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                                 <Link2 size={14} /> Link to bills
                             </Button>
                         )}
+                        {kind === "RECEIPT" && loadedVoucher.status === "POSTED" && <BillNotifyStatus universalVoucherId={voucherId} />}
                         {loadedVoucher.status === "POSTED" && !loadedVoucher.cancelledAt && (
                             <span className="text-[11px] text-amber-600 italic">
                                 Will reverse + re-post on save (reference preserved)

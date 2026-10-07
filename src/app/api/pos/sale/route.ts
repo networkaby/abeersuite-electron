@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, after } from "next/server";
+import { notifyBill } from "@/shared/lib/whatsapp/notifyBill";
 import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { cleanLineNote } from "@/shared/lib/print/lineDescription";
@@ -1336,6 +1337,9 @@ export async function POST(req: Request) {
                 console.error("[pos sale] ticket timeline log failed", e);
             }
         }
+
+        // Bill to the customer's app + WhatsApp — after the response, never in the cashier's way.
+        if (isIdentified) after(() => notifyBill("SALE", result.universalVoucherId));
 
         const touchedProductIds = body.lines.map((l) => l.productId);
         // Pricing-cache refresh is NOT needed for the receipt response — defer it
