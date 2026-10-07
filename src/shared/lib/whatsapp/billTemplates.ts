@@ -48,20 +48,29 @@ export type WaTemplateDraft = {
     appButton: string | null;
 };
 
+/** Closing paragraph of every template — the customer's whole account is on the portal. */
+const PORTAL_LINE =
+    "All your bills, payments, warranty details and repair status are available anytime " +
+    "in your account on our website and app. Tap Get our app to install it.";
+
+// Owner's wording, 2026-10-07. Kept free of promotion ("offers", "discount") so
+// Meta files it as UTILITY, not the dearer MARKETING.
 export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
     SALE: {
         body:
-            "Dear {customer}, thank you for shopping at {shop}.\n\n" +
-            "Your bill {billNo} dated {date} for Rs {amount} is ready. Tap View bill to see or download it.\n\n" +
-            "Get our app to receive your bills and offers instantly.",
+            "Dear {customer}, thank you for your purchase at {shop}.\n\n" +
+            "Bill no: {billNo}\nDate: {date}\nAmount: Rs {amount}\n\n" +
+            "Tap View bill to see or download this bill.\n\n" +
+            PORTAL_LINE,
         viewButton: "View bill",
         appButton: "Get our app",
     },
     RECEIPT: {
         body:
-            "Dear {customer}, we have received Rs {amount} on {date} at {shop}.\n\n" +
-            "Your receipt no. is {billNo}. Tap View receipt to see or download it.\n\n" +
-            "Get our app to receive your receipts instantly.",
+            "Dear {customer}, we have received your payment at {shop}.\n\n" +
+            "Receipt no: {billNo}\nDate: {date}\nAmount: Rs {amount}\n\n" +
+            "Tap View receipt to see or download this receipt.\n\n" +
+            PORTAL_LINE,
         viewButton: "View receipt",
         appButton: "Get our app",
     },
