@@ -16,49 +16,15 @@ import {
 } from "lucide-react";
 
 /**
- * Customer portal home. Signed-out visitors go straight to sign-in. Right after
- * signing in (`?welcome=1`, the sign-in default) the customer picks between
- * shopping and the portal; any later visit shows the portal tiles.
+ * Customer portal home. Signed-out visitors go straight to sign-in. The
+ * shop-or-portal choice after sign-in (`?welcome=1`) is WelcomeChoiceModal,
+ * mounted in ExternalRootShell over these tiles.
  */
-export default async function PortalHomePage({
-    searchParams,
-}: {
-    searchParams: Promise<{ welcome?: string }>;
-}) {
+export default async function PortalHomePage() {
     const session = await auth();
     const user = session?.user as { kind?: string; name?: string } | undefined;
     if (user?.kind !== "customer") redirect("/login");
     const name = user.name ?? "Customer";
-    const { welcome } = await searchParams;
-
-    if (welcome) {
-        return (
-            <main className="mx-auto flex min-h-[60vh] max-w-xl items-center px-4 py-10">
-                <Card className="w-full border-border/70">
-                    <CardContent className="space-y-5 p-6 text-center lg:p-8">
-                        <div>
-                            <h1 className="text-2xl font-semibold tracking-tight">Welcome, {name}.</h1>
-                            <p className="mt-2 text-sm text-muted-foreground">Where would you like to go?</p>
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            <Button asChild size="lg" className="gap-1.5">
-                                <Link href="/shop">
-                                    <ShoppingBag className="size-4" />
-                                    Continue shopping
-                                </Link>
-                            </Button>
-                            <Button asChild size="lg" variant="outline" className="gap-1.5">
-                                <Link href="/portal">
-                                    <UserRound className="size-4" />
-                                    Go to my portal
-                                </Link>
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-            </main>
-        );
-    }
 
     return (
         <main className="mx-auto max-w-6xl px-4 py-10 lg:py-12 space-y-6">

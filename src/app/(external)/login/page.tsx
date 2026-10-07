@@ -61,8 +61,13 @@ function CustomerLoginForm() {
     const searchParams = useSearchParams();
     const rawCallback = searchParams.get("callbackUrl") ?? "";
     const hasCallback = isSafeLandingPage(rawCallback);
-    // No return page: land on the welcome choice (shop or portal).
-    const callbackUrl = hasCallback ? rawCallback : "/portal?welcome=1";
+    // No return page, or a shop page: land there with the shop-or-portal popup
+    // (WelcomeChoiceModal). A deep link (bill, wallet…) goes straight through.
+    const callbackUrl = !hasCallback
+        ? "/portal?welcome=1"
+        : rawCallback === "/shop" || rawCallback.startsWith("/shop/") || rawCallback.startsWith("/shop?")
+          ? `${rawCallback}${rawCallback.includes("?") ? "&" : "?"}welcome=1`
+          : rawCallback;
 
     const [method, setMethod] = useState<"otp" | "password">("otp");
     // One field for mobile OR email — the server works out which it is.
