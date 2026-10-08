@@ -9,8 +9,8 @@
 -- Covers people AND companies. Placeholders stay null:
 --   mobile — not 10 digits starting 6-9 (after +91 / 0), one digit repeated,
 --            one digit filling 8+ places, or 1234567890 / 9876543210.
---   email  — not name@domain.tld, a test domain, or a "no / none / na /
---            noemail / test / dummy" name part.
+--   email  — anything not @gmail.com (owner's call 2026-10-07: only Gmail
+--            counts), or a "no / none / na / noemail / test / dummy" name part.
 --
 -- `verifiedAt` takes the row's own createdAt (proved when staff entered it).
 -- `updatedAt` is bumped so the counters' watermark pull carries the change.
@@ -46,9 +46,7 @@ UPDATE _phone SET real =
 
 CREATE TEMP TABLE _email AS
 SELECT e.id, e.email, e."personId", e."companyId",
-       lower(trim(e.email)) ~ '^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$'
-   AND split_part(lower(trim(e.email)), '@', 2) NOT IN
-       ('example.com', 'test.com', 'abc.com', 'xyz.com', 'email.com', 'mail.com', 'domain.com')
+       lower(trim(e.email)) ~ '^[a-z0-9._%+-]+@gmail\.com$'
    AND split_part(lower(trim(e.email)), '@', 1) NOT IN
        ('no', 'none', 'na', 'nil', 'noemail', 'nomail', 'test', 'dummy', 'abc', 'xyz')
    AS real
