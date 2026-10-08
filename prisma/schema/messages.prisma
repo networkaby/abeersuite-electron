@@ -70,3 +70,23 @@ model Message {
   @@index([ticketId])
   @@index([updatedAt])
 }
+
+// ── Who is handling a customer's chat ──────────────────────────────────────────
+//
+// One row per customer number, keyed like Message by the 10-digit match key —
+// no foreign key, for the same reason. The first staff member to reply (or to
+// press "Take it" on the new-message popup) becomes the owner; the owner can
+// invite helpers or hand the chat over. New-message popups go to the owner and
+// helpers only, and to everyone again once a message has waited
+// MESSAGE_CLAIM_FALLBACK_MS unread (see MessageAlertPopup).
+model MessageClaim {
+  /// Last-10-digit match key, as Message.phone.
+  phone         String   @id
+  ownerUserId   Int
+  /// Staff invited in by the owner — they get the popups too.
+  helperUserIds Int[]    @default([])
+  claimedAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  @@index([updatedAt])
+}

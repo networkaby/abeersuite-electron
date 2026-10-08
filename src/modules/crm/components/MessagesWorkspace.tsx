@@ -1,15 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
     MessageCircle, Mail, PhoneIncoming, PhoneOutgoing, PhoneMissed, Ticket, Check, CheckCheck,
-    AlertCircle, Search, Send, UserPlus, User, Building2, ShieldAlert, RefreshCw, Lock, FileText,
+    AlertCircle, Search, Send, UserPlus, User, Building2, ShieldAlert, RefreshCw, Lock, FileText, Hand, Users, ArrowRightLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDateTime } from "@/shared/lib/format";
 import { extractApiError } from "@/shared/lib/api";
 import { useRealtimeTopics } from "@/shared/hooks";
@@ -41,9 +44,14 @@ interface Thread {
     senderName: string | null;
     spam: boolean;
     ticket: { id: number; title: string | null; priority: string; status: string | null; assignee: string | null } | null;
+    /** Who is handling this chat (MessageClaim) — null until someone replies or takes it. */
+    claim: { owner: Staff; helpers: Staff[] } | null;
     replyWindow: { open: boolean; closesAt: string | null };
     items: (ThreadMessage | ThreadCall)[];
 }
+
+type Staff = { id: number; name: string };
+type PickMode = "invite" | "handover";
 
 type Filter = "all" | "unread" | "open" | "unknown";
 const FILTERS: { key: Filter; label: string }[] = [
@@ -105,6 +113,10 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
     const [sending, setSending] = useState(false);
     const [newPartyPhone, setNewPartyPhone] = useState<string | null>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
+    const me = Number((useSession().data?.user as { id?: string } | undefined)?.id ?? 0);
+    const [pick, setPick] = useState<PickMode | null>(null);
+    const [staff, setStaff] = useState<Staff[]>([]);
+    const [staffQuery, setStaffQuery] = useState("");
 
     const loadList = useCallback(async (p = 1) => {
         try {
@@ -158,11 +170,42 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
         }
     };
 
+    // The new-message popup opens a chat here as ?phone=... once per arrival.
+    const wantPhone = useSearchParams().get("phone");
+    const openedFromLink = useRef<string | null>(null);
+    useEffect(() => {
+        if (!wantPhone || listLoading || openedFromLink.current === wantPhone) return;
+        openedFromLink.current = wantPhone;
+        openConversation(wantPhone);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- open once per link, after the list (unread counts) is in
+    }, [wantPhone, listLoading]);
+
+    const changeClaim = async (body: { action: "take" | "leave" } | { action: PickMode; userId: number }, done: string) => {
+        if (!thread) return;
+        try {
+            await axios.post("/api/messages/claim", { phone: thread.phone, ...body });
+            toast.success(done);
+            setPick(null);
+            void loadThread(thread.phone);
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not update who handles this chat"));
+        }
+    };
+    const openPicker = (mode: PickMode) => {
+        setPick(mode);
+        setStaffQuery("");
+        if (!staff.length) {
+            axios.get<{ staff: Staff[] }>("/api/messages/claim")
+                .then((r) => setStaff(r.data.staff))
+                .catch((e) => toast.error(extractApiError(e, "Could not load staff")));
+        }
+    };
+
     const refresh = useCallback(() => {
         void loadList(1);
         if (selected) void loadThread(selected);
     }, [loadList, loadThread, selected]);
-    useRealtimeTopics(["messages", "tickets"], refresh, true, ["Message", "Call", "Ticket"]);
+    useRealtimeTopics(["messages", "tickets"], refresh, true, ["Message", "MessageClaim", "Call", "Ticket"]);
 
     useEffect(() => { bottomRef.current?.scrollIntoView({ block: "end" }); }, [thread?.items.length, selected]);
 
@@ -326,6 +369,40 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
                             </div>
                         </header>
 
+                        <div className="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-4 py-1.5 text-xs">
+                            <Hand className="size-3.5 text-muted-foreground" />
+                            {thread.claim ? (
+                                <span>
+                                    Handled by <b>{thread.claim.owner.id === me ? "you" : thread.claim.owner.name}</b>
+                                    {thread.claim.helpers.length > 0 && <> · with {thread.claim.helpers.map((h) => (h.id === me ? "you" : h.name)).join(", ")}</>}
+                                </span>
+                            ) : (
+                                <span className="text-muted-foreground">Nobody has taken this chat yet — the first reply takes it.</span>
+                            )}
+                            {canReply && (
+                                <span className="ml-auto flex gap-1">
+                                    {thread.claim?.owner.id !== me && (
+                                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => void changeClaim({ action: "take" }, "You are handling this chat")}>
+                                            <Hand className="mr-1 size-3" /> Take it
+                                        </Button>
+                                    )}
+                                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => openPicker("invite")}>
+                                        <Users className="mr-1 size-3" /> Invite
+                                    </Button>
+                                    {thread.claim?.owner.id === me && (
+                                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => openPicker("handover")}>
+                                            <ArrowRightLeft className="mr-1 size-3" /> Hand over
+                                        </Button>
+                                    )}
+                                    {thread.claim?.helpers.some((h) => h.id === me) && (
+                                        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => void changeClaim({ action: "leave" }, "You left this chat")}>
+                                            Leave
+                                        </Button>
+                                    )}
+                                </span>
+                            )}
+                        </div>
+
                         {thread.ticket && (
                             <a
                                 href={`/office/help?ticket=${thread.ticket.id}`}
@@ -429,6 +506,33 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
                     </>
                 )}
             </section>
+
+            <Dialog open={pick !== null} onOpenChange={(o) => { if (!o) setPick(null); }}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>{pick === "handover" ? "Hand this chat over to" : "Invite to help on this chat"}</DialogTitle>
+                    </DialogHeader>
+                    <Input value={staffQuery} onChange={(e) => setStaffQuery(e.target.value)} placeholder="Search staff" autoFocus />
+                    <div className="max-h-72 overflow-y-auto">
+                        {staff
+                            .filter((s) => s.id !== me && s.name.toLowerCase().includes(staffQuery.trim().toLowerCase()))
+                            .filter((s) => pick !== "invite" || (s.id !== thread?.claim?.owner.id && !thread?.claim?.helpers.some((h) => h.id === s.id)))
+                            .map((s) => (
+                                <button
+                                    key={s.id}
+                                    className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
+                                    onClick={() => pick && void changeClaim(
+                                        { action: pick, userId: s.id },
+                                        pick === "handover" ? `Handed over to ${s.name}` : `${s.name} invited`,
+                                    )}
+                                >
+                                    {s.name}
+                                </button>
+                            ))}
+                        {staff.length === 0 && <p className="p-2 text-sm text-muted-foreground">Loading…</p>}
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             <CreatePersonDialog
                 open={newPartyPhone !== null}

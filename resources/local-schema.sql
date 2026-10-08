@@ -3097,6 +3097,23 @@ ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL
 ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "MessageClaim" (
+    "phone" TEXT NOT NULL,
+    "ownerUserId" INTEGER NOT NULL,
+    "helperUserIds" INTEGER[] DEFAULT ARRAY[]::INTEGER[],
+    "claimedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "MessageClaim_pkey" PRIMARY KEY ("phone")
+);
+ALTER TABLE "MessageClaim" ADD COLUMN IF NOT EXISTS "phone" TEXT NOT NULL;
+ALTER TABLE "MessageClaim" ADD COLUMN IF NOT EXISTS "ownerUserId" INTEGER NOT NULL;
+ALTER TABLE "MessageClaim" ADD COLUMN IF NOT EXISTS "helperUserIds" INTEGER[] DEFAULT ARRAY[]::INTEGER[];
+ALTER TABLE "MessageClaim" ALTER COLUMN "helperUserIds" DROP NOT NULL;
+ALTER TABLE "MessageClaim" ADD COLUMN IF NOT EXISTS "claimedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "MessageClaim" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "WhatsAppTemplate" (
     "kind" TEXT NOT NULL,
     "enabled" BOOLEAN NOT NULL DEFAULT false,
@@ -5510,6 +5527,9 @@ CREATE INDEX IF NOT EXISTS "Message_ticketId_idx" ON "Message"("ticketId");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "Message_updatedAt_idx" ON "Message"("updatedAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "MessageClaim_updatedAt_idx" ON "MessageClaim"("updatedAt");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "BillNotification_personId_createdAt_idx" ON "BillNotification"("personId", "createdAt");
@@ -8033,6 +8053,13 @@ DO $$ BEGIN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "Message";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Message"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."MessageClaim"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "MessageClaim";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "MessageClaim"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('phone');
     END IF;
 END $$;
 DO $$ BEGIN

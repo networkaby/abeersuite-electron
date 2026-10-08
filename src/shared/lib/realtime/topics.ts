@@ -175,7 +175,7 @@ export const TOPIC_MODELS: Readonly<Record<Topic, readonly string[]>> = {
         "CreditLimitConfig", "StaffProfile", "StaffSalary",
     ],
     chat: ["ChatRoom", "ChatRoomMember"],
-    messages: ["Message"],
+    messages: ["Message", "MessageClaim"],
 };
 
 /** The union of `TOPIC_MODELS` for `topics`, de-duplicated. */

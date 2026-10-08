@@ -132,6 +132,14 @@ export const CALL_POPUP_REMIND_MS = 30 * 60 * 1000;   // 30 minutes
 export const CALL_POPUP_PUBLIC_AFTER_MS = 30 * 60 * 1000;   // 30 minutes
 
 /**
+ * How long a customer message waits unread with its chat's owner before the
+ * new-message popup shows it to every staff member again. Until then a claimed
+ * chat pops up only for its owner and invited helpers (MessageClaim).
+ * **Edit this one line to change how long an owner has a chat to themself.**
+ */
+export const MESSAGE_CLAIM_FALLBACK_MS = 10 * 60 * 1000;   // 10 minutes
+
+/**
  * The shell's two status surfaces — /api/counter/status and /api/sync/status,
  * feeding the counter badge, the sync badge and the Electron window title.
  *

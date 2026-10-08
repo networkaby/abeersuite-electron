@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import SessionWrapper from "@/shared/components/SessionWrapper";
 import GlobalInboxListener from "@/modules/message/components/GlobalInboxListener";
 import CallFollowUpPopup from "@/modules/pos/components/CallFollowUpPopup";
+import MessageAlertPopup from "@/modules/message/components/MessageAlertPopup";
 
 // Shared auth wrapper for /vouchers/pos/* routes.
 // The list page (/vouchers/pos) renders inside the normal office chrome via
@@ -15,7 +16,8 @@ import CallFollowUpPopup from "@/modules/pos/components/CallFollowUpPopup";
 //
 // CallFollowUpPopup rides the same reasoning: the register is exactly where a
 // counter takes calls, so it needs the call follow-up reminder mounted here
-// too, not just in the office chrome.
+// too, not just in the office chrome. MessageAlertPopup (customer WhatsApp
+// messages) likewise.
 
 export default async function PosLayout({ children }: { children: React.ReactNode }) {
     const session = await auth();
@@ -30,6 +32,7 @@ export default async function PosLayout({ children }: { children: React.ReactNod
             {children}
             <GlobalInboxListener currentUserId={userId} />
             <CallFollowUpPopup />
+            <MessageAlertPopup />
         </SessionWrapper>
     );
 }

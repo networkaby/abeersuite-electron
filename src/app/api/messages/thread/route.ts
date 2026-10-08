@@ -6,7 +6,7 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { phoneMatchKey } from "@/shared/lib/format";
 import { isMissedCall } from "@/shared/lib/calls";
 import { ASSIGNED_POSITION_SELECT } from "@/shared/lib/api/ticketSelects";
-import { openTicketForPhone, ownersByPhone, replyWindowOpen } from "@/modules/message/lib/customerMessages";
+import { claimsByPhone, openTicketForPhone, ownersByPhone, replyWindowOpen } from "@/modules/message/lib/customerMessages";
 
 // /api/messages/thread?phone=<10 digits>
 //
@@ -31,7 +31,7 @@ export async function GET(req: Request) {
             take: THREAD_LIMIT,
         });
         const oldest = messages[messages.length - 1]?.occurredAt;
-        const [owners, calls, window] = await Promise.all([
+        const [owners, calls, window, claims] = await Promise.all([
             ownersByPhone([phone]),
             prisma.call.findMany({
                 where: { phone, spam: false, ...(oldest && messages.length === THREAD_LIMIT ? { occurredAt: { gte: oldest } } : {}) },
@@ -40,6 +40,7 @@ export async function GET(req: Request) {
                 select: { id: true, direction: true, occurredAt: true, durationSec: true, speechSec: true, note: true },
             }),
             replyWindowOpen(phone),
+            claimsByPhone([phone]),
         ]);
         const customer = owners.get(phone) ?? null;
 
@@ -107,6 +108,7 @@ export async function GET(req: Request) {
                     assignee: ticket.assignedPosition?.holders.map((h) => h.user.name).join(", ") || ticket.assignedPosition?.title || null,
                 }
                 : null,
+            claim: claims.get(phone) ?? null,
             replyWindow: { open: window.open, closesAt: window.closesAt?.toISOString() ?? null },
             items,
         });

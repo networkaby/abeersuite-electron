@@ -273,8 +273,75 @@ export async function sendReply(args: { phone: string; text: string; userId: num
             occurredAt: new Date(),
         },
     });
+    // The first staff member to reply takes the chat; an existing owner keeps it.
+    await prisma.messageClaim.upsert({
+        where: { phone: args.phone },
+        create: { phone: args.phone, ownerUserId: args.userId },
+        update: {},
+    });
     void publishChangeServer(["messages"]);
     return row;
+}
+
+// ── Who is handling a chat (MessageClaim) ─────────────────────────────────────────
+
+export type ClaimView = { owner: { id: number; name: string }; helpers: { id: number; name: string }[] };
+
+/** Each number's claim with staff names — one query for the claims, one for the names. */
+export async function claimsByPhone(phones: string[]): Promise<Map<string, ClaimView>> {
+    const out = new Map<string, ClaimView>();
+    const unique = Array.from(new Set(phones.filter(Boolean)));
+    if (!unique.length) return out;
+    const claims = await prisma.messageClaim.findMany({ where: { phone: { in: unique } } });
+    if (!claims.length) return out;
+    const ids = Array.from(new Set(claims.flatMap((c) => [c.ownerUserId, ...c.helperUserIds])));
+    const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
+    const name = new Map(users.map((u) => [u.id, u.name]));
+    for (const c of claims) {
+        out.set(c.phone, {
+            owner: { id: c.ownerUserId, name: name.get(c.ownerUserId) ?? "Staff" },
+            helpers: c.helperUserIds.map((id) => ({ id, name: name.get(id) ?? "Staff" })),
+        });
+    }
+    return out;
+}
+
+export type ClaimAction =
+    | { action: "take" }
+    | { action: "leave" }
+    | { action: "invite"; userId: number }
+    | { action: "handover"; userId: number };
+
+/**
+ * Change who handles a chat. "take" makes the caller owner (the old owner stays
+ * on as a helper, so nobody silently loses a chat they were in); "handover"
+ * passes ownership to someone else; "invite" adds a helper; "leave" takes the
+ * caller off the helpers.
+ */
+export async function changeClaim(phone: string, callerId: number, a: ClaimAction): Promise<void> {
+    const cur = await prisma.messageClaim.findUnique({ where: { phone } });
+    const helpers = new Set(cur?.helperUserIds ?? []);
+    let owner = cur?.ownerUserId ?? null;
+
+    if (a.action === "take" || a.action === "handover") {
+        const next = a.action === "take" ? callerId : a.userId;
+        if (owner != null && owner !== next) helpers.add(owner);
+        helpers.delete(next);
+        owner = next;
+    } else if (a.action === "invite") {
+        if (owner == null) owner = callerId;
+        if (a.userId !== owner) helpers.add(a.userId);
+    } else {
+        helpers.delete(callerId);
+        if (!cur) return;
+    }
+
+    await prisma.messageClaim.upsert({
+        where: { phone },
+        create: { phone, ownerUserId: owner!, helperUserIds: [...helpers] },
+        update: { ownerUserId: owner!, helperUserIds: [...helpers] },
+    });
+    void publishChangeServer(["messages"]);
 }
 
 /**
