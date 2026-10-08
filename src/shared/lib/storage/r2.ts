@@ -1,6 +1,5 @@
 import "server-only";
 import { createHash, createHmac } from "node:crypto";
-import { R2_ACCOUNT_ID } from "@/shared/lib/constants/whatsapp";
 
 /**
  * Cloudflare R2 — presigned URLs (AWS SigV4, query-string form), no SDK.
@@ -10,15 +9,17 @@ import { R2_ACCOUNT_ID } from "@/shared/lib/constants/whatsapp";
  * bucket itself stays private.
  *
  *   R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY   .env (secret)
- *   R2_ACCOUNT_ID                             constants/whatsapp.ts
+ *   CLOUDFLARE_ACCOUNT_ID                     .env
  */
 
-const HOST = `${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+const host = () => `${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`;
 const REGION = "auto";
 const SERVICE = "s3";
 
 export function isR2Configured(): boolean {
-    return Boolean(process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY);
+    return Boolean(
+        process.env.CLOUDFLARE_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY,
+    );
 }
 
 const hmac = (key: Buffer | string, data: string) => createHmac("sha256", key).update(data, "utf8").digest();
@@ -71,12 +72,12 @@ export function presignR2(args: {
     if (args.downloadName) q["response-content-disposition"] = `attachment; filename="${args.downloadName.replace(/"/g, "")}"`;
     const query = Object.keys(q).sort().map((k) => `${enc(k)}=${enc(q[k])}`).join("&");
 
-    const headers = args.contentType ? `content-type:${args.contentType}\nhost:${HOST}\n` : `host:${HOST}\n`;
+    const headers = args.contentType ? `content-type:${args.contentType}\nhost:${host()}\n` : `host:${host()}\n`;
     const canonical = [args.method, path, query, headers, signedHeaders, "UNSIGNED-PAYLOAD"].join("\n");
     const toSign = ["AWS4-HMAC-SHA256", amzDate, scope, sha256hex(canonical)].join("\n");
     const kSigning = hmac(hmac(hmac(hmac(`AWS4${secret}`, day), REGION), SERVICE), "aws4_request");
     const signature = createHmac("sha256", kSigning).update(toSign, "utf8").digest("hex");
-    return `https://${HOST}${path}?${query}&X-Amz-Signature=${signature}`;
+    return `https://${host()}${path}?${query}&X-Amz-Signature=${signature}`;
 }
 
 /** Server-side upload of bytes we already hold (e.g. a file fetched from Meta). */

@@ -21,8 +21,8 @@ export const META_APP_ID = "2392613611266946";
 export const META_WA_SIGNUP_CONFIG_ID = "1061577020211736";
 
 /** Cloudflare R2 bucket for WhatsApp chat attachments (private; signed links
- *  only). Keys are secrets: R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY in .env. */
-export const R2_ACCOUNT_ID = "651924adf29011fa8567c11fb681a5cf";
+ *  only). Account id + keys live in .env: CLOUDFLARE_ACCOUNT_ID,
+ *  R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY. */
 export const R2_MESSAGES_BUCKET = "abeersuite-messages";
 
 /** Largest attachment staff may send, per WhatsApp type (Meta's own limits). */
