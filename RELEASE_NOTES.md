@@ -1,15 +1,20 @@
-# v1.15.0 [urgent]
+# v1.16.0 [urgent]
 
-Every counter and the office should take this update today. It makes customer WhatsApp chats something the whole team can work from any screen, and adds photos, files and voice notes to those chats. It changes the database: the message table gets new columns and a new table tracks who is handling each chat. Update every counter first — a counter on the old version pauses its sync once the office site goes live with this change, and starts again as soon as it updates.
+Every counter should take this update today. It lets staff chat with each other, and brings the customer Messages screen to the counter. There is no database change in this release.
 
-## Customer messages
+## Staff chats
+- CRM → Messages now has Team and Groups chips, so you can chat with a colleague or a group, not only with customers.
+- Type @ to search staff. The list is organised by position, and you can also pick @All, @Department or @Branch.
 
-- A new-message popup now appears on every screen when a customer writes on WhatsApp — no need to keep CRM → Messages open.
-- Reply to the customer right from the popup. Once someone replies, the popup closes for everyone else.
-- The first person to reply owns the chat. They can invite a colleague to help, or hand the chat over completely.
-- Type @ and a colleague's name in the popup to pass the chat on to them.
-- Customers' photos, documents and voice notes now show inside the chat, and you can send files back.
+## Messages at the counter
+- POS now has a Messages drawer for both customer and staff chats.
+- "Open full chat" in the new-message popup opens this drawer at the counter instead of taking you to the office screen.
 
-## Behind the scenes
+## Popups
+- The new-message popup can be shrunk to a small bubble that you can drag anywhere.
+- The calls icon is now a round bubble that pulses, and it sits beside the chat bubble.
+- Each chat card can be dragged out of the stack on its own. Double-click it to put it back.
+- The chat stack no longer runs off the top of the screen.
 
-- Groundwork for a second WhatsApp business number: each message remembers which of our numbers it came through, so a reply goes back from the same number. The main number stays the one we send from for now.
+## Small fixes
+- The POS "+" quick action now opens in the same window. Right-click it if you want a new tab.
