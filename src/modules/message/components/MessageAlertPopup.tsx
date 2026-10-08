@@ -55,6 +55,7 @@ import { MESSAGE_CLAIM_FALLBACK_MS } from "@/shared/lib/constants/polling";
 import { extractApiError } from "@/shared/lib/api";
 import StaffPickerDialog, { type PickMode, type Staff } from "./StaffPickerDialog";
 import MentionTextarea, { mentionTargets } from "./MentionTextarea";
+import { requestOpenChat, useChatDrawerOpen } from "../lib/chatDrawer";
 
 const MESSAGES_HREF = "/office/crm/messages";
 const DISMISS_KEY = "message-alert-dismissed:v1";
@@ -170,7 +171,9 @@ export default function MessageAlertPopup() {
     const permissions = user?.permissions;
     const allowed = !!me && !!permissions && canOpenPage(MESSAGES_HREF, permissions);
     const canReply = !!permissions && (permissions.includes(PERMISSIONS.MESSAGES_REPLY) || permissions.includes(PERMISSIONS.ADMIN_BYPASS));
-    const onMessagesScreen = pathname?.startsWith(MESSAGES_HREF) ?? false;
+    // The POS Messages drawer shows everything too — hide while it is up.
+    const drawerOpen = useChatDrawerOpen();
+    const onMessagesScreen = (pathname?.startsWith(MESSAGES_HREF) ?? false) || drawerOpen;
 
     const [items, setItems] = useState<Alert[]>([]);
     const [loaded, setLoaded] = useState(false);
@@ -371,7 +374,7 @@ export default function MessageAlertPopup() {
                                     : `${a.claim.owner.name} has not answered for 10 min`}
                         </p>
                     </div>
-                    <button onClick={() => router.push(`${MESSAGES_HREF}?phone=${a.phone}`)} className="text-muted-foreground hover:text-foreground" title="Open the full chat">
+                    <button onClick={() => { if (!requestOpenChat(a.phone)) router.push(`${MESSAGES_HREF}?phone=${a.phone}`); }} className="text-muted-foreground hover:text-foreground" title="Open the full chat">
                         <ExternalLink className="size-4" />
                     </button>
                     <button onClick={() => changePlace({ ...place, minimised: true })} className="text-muted-foreground hover:text-foreground" title="Minimise to a chat bubble">

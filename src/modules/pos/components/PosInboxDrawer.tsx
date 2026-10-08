@@ -1,27 +1,40 @@
 "use client";
 
 // ── PosInboxDrawer ────────────────────────────────────────────────────────────
-// Team chat, right at the counter. Slides in from the right edge like
-// PosUpsellDrawer, but wider — wide enough to hold InboxModule's own two-pane
-// layout (room list + chat) unmodified, just embedded (no page breadcrumb).
+// Messages, right at the counter — the same screen as CRM → Messages (customer
+// WhatsApp + staff chats + groups), so the counter never has to leave for the
+// office. Slides in from the right edge like PosUpsellDrawer. Staff who may not
+// open CRM → Messages get the Team / Groups chips only. While it is open the
+// new-message popup hides (chatDrawer.ts); the popup's ↗ opens a chat here.
 // Backdrop click or Esc closes it.
 
 import { Suspense, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { X, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import InboxModule from "@/modules/message/components/InboxModule";
+import { MessagesWorkspace } from "@/modules/crm/components";
+import { canOpenPage } from "@/shared/lib/auth/pageAccess";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { setChatDrawerOpen } from "@/modules/message/lib/chatDrawer";
 
 export function PosInboxDrawer({
     open,
     onClose,
-    currentUserId,
-    currentUserName,
+    openPhone,
 }: {
     open: boolean;
     onClose: () => void;
-    currentUserId?: number;
-    currentUserName?: string;
+    /** A customer chat to open, asked for by the popup's ↗. */
+    openPhone?: string | null;
 }) {
+    const permissions = (useSession().data?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const can = (id: string) => permissions.includes(id) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+
+    useEffect(() => {
+        setChatDrawerOpen(open);
+        return () => setChatDrawerOpen(false);
+    }, [open]);
+
     // Esc closes the drawer.
     useEffect(() => {
         if (!open) return;
@@ -41,26 +54,30 @@ export function PosInboxDrawer({
             />
             {/* The drawer — slides in from the right edge. */}
             <aside
-                className={`fixed inset-y-0 right-0 z-50 flex w-[820px] max-w-[95vw] flex-col border-l border-border bg-background shadow-2xl transition-transform duration-200 ease-out ${open ? "translate-x-0" : "translate-x-full"}`}
+                className={`fixed inset-y-0 right-0 z-50 flex w-[1000px] max-w-[95vw] flex-col border-l border-border bg-background shadow-2xl transition-transform duration-200 ease-out ${open ? "translate-x-0" : "translate-x-full"}`}
                 aria-hidden={!open}
                 inert={!open}
             >
                 {/* Header */}
                 <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
                     <MessageSquare size={15} className="shrink-0 text-primary" />
-                    <h3 className="text-sm font-semibold">Team Chat</h3>
+                    <h3 className="text-sm font-semibold">Messages</h3>
                     <Button size="icon-xs" variant="ghost" className="ml-auto" onClick={onClose} title="Close (Esc)">
                         <X size={14} />
                     </Button>
                 </div>
 
                 <div className="min-h-0 flex-1">
-                    {/* InboxModule reads the URL's ?section= via useSearchParams, which
-                        requires a Suspense boundary — the POS route carries no such
-                        query string, so it just falls back to its default ("groups"). */}
+                    {/* MessagesWorkspace reads ?filter= / ?phone= via useSearchParams,
+                        which needs a Suspense boundary. */}
                     <Suspense fallback={null}>
                         {open && (
-                            <InboxModule currentUserId={currentUserId} currentUserName={currentUserName} embedded />
+                            <MessagesWorkspace
+                                customers={canOpenPage("/office/crm/messages", permissions)}
+                                canReply={can(PERMISSIONS.MESSAGES_REPLY)}
+                                canTicket={can(PERMISSIONS.HELP_CREATE)}
+                                openPhone={openPhone}
+                            />
                         )}
                     </Suspense>
                 </div>

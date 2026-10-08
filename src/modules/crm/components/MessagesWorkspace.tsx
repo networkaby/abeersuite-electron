@@ -116,9 +116,20 @@ function Ticks({ m }: { m: ThreadMessage }) {
     return <span className="inline-flex items-center gap-1"><Check className="size-3" /> sent</span>;
 }
 
-export default function MessagesWorkspace({ canReply, canTicket }: { canReply: boolean; canTicket: boolean }) {
-    const wantFilter = useSearchParams().get("filter") as Filter | null;
-    const [filter, setFilter] = useState<Filter>(wantFilter && FILTERS.some((f) => f.key === wantFilter) ? wantFilter : "all");
+export default function MessagesWorkspace({ canReply, canTicket, customers = true, openPhone }: {
+    canReply: boolean;
+    canTicket: boolean;
+    /** False = staff chats only (the POS drawer for someone without CRM → Messages). */
+    customers?: boolean;
+    /** Open this customer's chat — the POS drawer passes what the popup asked for. */
+    openPhone?: string | null;
+}) {
+    const searchParams = useSearchParams();
+    const filters = customers ? FILTERS : FILTERS.filter((f) => f.key === "team" || f.key === "groups");
+    const wantFilter = searchParams.get("filter") as Filter | null;
+    const [filter, setFilter] = useState<Filter>(
+        wantFilter && filters.some((f) => f.key === wantFilter) ? wantFilter : filters[0].key,
+    );
     const [query, setQuery] = useState("");
     const [list, setList] = useState<Conversation[]>([]);
     const [hasMore, setHasMore] = useState(false);
@@ -178,7 +189,7 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
     };
 
     const staffSearch = query.trim().startsWith("@");
-    const showCustomers = CUSTOMER_FILTERS.includes(filter) && !staffSearch;
+    const showCustomers = customers && CUSTOMER_FILTERS.includes(filter) && !staffSearch;
     const loadList = useCallback(async (p = 1) => {
         if (!showCustomers) { setList([]); setHasMore(false); setListLoading(false); return; }
         try {
@@ -234,7 +245,7 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
     };
 
     // The new-message popup opens a chat here as ?phone=... once per arrival.
-    const wantPhone = useSearchParams().get("phone");
+    const wantPhone = openPhone ?? searchParams.get("phone");
     const openedFromLink = useRef<string | null>(null);
     useEffect(() => {
         if (!wantPhone || listLoading || openedFromLink.current === wantPhone) return;
@@ -394,7 +405,7 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
                         <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name, mobile, message — or @staff" className="pl-8" />
                     </div>
                     <div className="flex flex-wrap gap-1">
-                        {FILTERS.map((f) => (
+                        {filters.map((f) => (
                             <button
                                 key={f.key}
                                 onClick={() => setFilter(f.key)}

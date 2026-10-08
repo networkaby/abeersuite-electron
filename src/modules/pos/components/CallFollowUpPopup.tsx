@@ -104,6 +104,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useChatDrawerOpen } from "@/modules/message/lib/chatDrawer";
 import axios from "axios";
 import { toast } from "sonner";
 import { PhoneIncoming, PhoneOutgoing, Ticket, HandCoins, Link2, ChevronDown, Check } from "lucide-react";
@@ -229,6 +230,7 @@ type TicketLite = { id: number; subject?: string | null; title?: string | null; 
 export default function CallFollowUpPopup() {
     const extension = useMyCounterExtension();
 
+    const chatDrawerOpen = useChatDrawerOpen();
     const [queue, setQueue] = useState<PendingCall[]>([]);
     const [noteDraft, setNoteDraft] = useState("");
     const [busy, setBusy] = useState(false);
@@ -561,10 +563,11 @@ export default function CallFollowUpPopup() {
     // The panel is up only when it has a call to show AND staff has not
     // parked it; the icon fills every other moment the queue is not empty.
     const panelOpen = Boolean(current) && !minimized;
+    // The POS Messages drawer covers this corner — the bubble waits behind it.
 
     return (
         <>
-            {groups.length > 0 && !panelOpen && (
+            {groups.length > 0 && !panelOpen && !chatDrawerOpen && (
                 <button
                     type="button"
                     onPointerDown={onDragStart}

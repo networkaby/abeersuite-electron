@@ -8,14 +8,14 @@
 // its header colour, active-tab key, checkout button (`checkoutSlot`) and its
 // own dialogs (checkout / payment-link) as `children`.
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { useExplorerStore } from "@/store/explorerStore";
 import { openPosHelpTab, POS_HELP_URL } from "@/modules/pos/lib/posHelp";
 import { useInboxUnread } from "@/shared/hooks/useNavCounts";
 import { PosInboxDrawer } from "@/modules/pos/components/PosInboxDrawer";
+import { useOpenChatRequests } from "@/modules/message/lib/chatDrawer";
 import { ScanLine, ShoppingCart, Plus, Minus, Trash2, Wrench, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -114,11 +114,12 @@ export function PosScreenShell({
     const [leadOpen, setLeadOpen] = useState(false);
     // Counter "Chat" — team inbox (groups/DMs/system), right from the register.
     const [chatOpen, setChatOpen] = useState(false);
+    // The new-message popup's ↗ opens that chat here instead of leaving for the office.
+    const [chatPhone, setChatPhone] = useState<string | null>(null);
+    const openChatHere = useCallback((phone: string) => { setChatPhone(phone); setChatOpen(true); }, []);
+    useOpenChatRequests(openChatHere);
     const explorerOpen = useExplorerStore((s) => s.open);
     const { data: taskPositions = [] } = useApiResource<TaskPositionOption[]>("/api/positions");
-    const { data: session } = useSession();
-    const sessionUser = session?.user as { id?: string | null; name?: string | null } | undefined;
-    const currentUserId = sessionUser?.id ? parseInt(sessionUser.id, 10) : undefined;
     const chatUnread = useInboxUnread();
 
     // Auto-focus the party picker on mount so the cashier can start typing
@@ -728,9 +729,8 @@ export function PosScreenShell({
             {/* Team chat drawer — opens from the rail's Chat button. */}
             <PosInboxDrawer
                 open={chatOpen}
-                onClose={() => setChatOpen(false)}
-                currentUserId={currentUserId}
-                currentUserName={sessionUser?.name ?? undefined}
+                onClose={() => { setChatOpen(false); setChatPhone(null); }}
+                openPhone={chatPhone}
             />
 
             {/* Product Explorer — thin left-edge hint strip, hover or F3 to
