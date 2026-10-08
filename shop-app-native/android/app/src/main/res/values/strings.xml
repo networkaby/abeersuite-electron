@@ -8,4 +8,7 @@
          vouching back, so Chrome's getInstalledRelatedApps() on the install page sees
          it as installed. -->
     <string name="asset_statements" translatable="false">[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://shop.networkservice.in\"}}]</string>
+    <!-- The site the app opens (capacitor.config.json server.url, without /m-shop-app): push reports go here. -->
+    <string name="ns_site" translatable="false">https://shop.networkservice.in</string>
+    <string name="ns_push_channel">Bills &amp; orders</string>
 </resources>

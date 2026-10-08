@@ -226,6 +226,8 @@ resources/7za.exe
 /phone-app/*.jks
 # Customer app (shop-app-native/, Capacitor) — signs with shop-app/ns-shop.keystore.
 /shop-app-native/node_modules/
+# Firebase app config for push - downloaded from the Firebase console, kept off git like the key.
+/shop-app-native/android/app/google-services.json
 # Customer app (shop-app/, Bubblewrap TWA): only the manifest and build script are
 # source; the Gradle project is regenerated from twa-manifest.json. Same key rule.
 /shop-app/*

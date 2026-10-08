@@ -1,5 +1,52 @@
 package in.networkservice.shop;
 
+import android.Manifest;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import android.os.Bundle;
+
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
 import com.getcapacitor.BridgeActivity;
 
-public class MainActivity extends BridgeActivity {}
+public class MainActivity extends BridgeActivity {
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(NsPushPlugin.class);
+        super.onCreate(savedInstanceState);
+        NsMessagingService.ensureChannel(this);
+        askForNotifications();
+        openFromNotification(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        openFromNotification(intent);
+    }
+
+    /** Android 13+ asks once; the answer is the customer's. Without it bills still come on WhatsApp. */
+    private void askForNotifications() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[] { Manifest.permission.POST_NOTIFICATIONS }, 7);
+        }
+    }
+
+    /** A tapped notification: say "clicked", then open its page inside the app (proxy.ts maps it to the app screen). */
+    private void openFromNotification(Intent intent) {
+        if (intent == null) return;
+        String id = intent.getStringExtra(NsMessagingService.EXTRA_ID);
+        String path = intent.getStringExtra(NsMessagingService.EXTRA_URL);
+        if (id == null && path == null) return;
+        intent.removeExtra(NsMessagingService.EXTRA_ID);
+        intent.removeExtra(NsMessagingService.EXTRA_URL);
+        if (id != null) new Thread(() -> NsMessagingService.postAck(this, id, "clicked")).start();
+        if (path != null && path.startsWith("/")) {
+            String site = getString(R.string.ns_site);
+            getBridge().getWebView().post(() -> getBridge().getWebView().loadUrl(site + path));
+        }
+    }
+}

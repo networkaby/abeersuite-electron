@@ -2,12 +2,15 @@ import "server-only";
 import webpush from "web-push";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import { FCM_PREFIX, isFcmConfigured, sendFcm } from "@/shared/lib/push/fcm";
 
 /**
- * Customer app notifications (web push) — free, unlike WhatsApp.
+ * Customer app notifications — free, unlike WhatsApp. Two kinds of device, one
+ * table (PushSubscription): a browser / installed web app (web push, VAPID) and
+ * the Android customer app (FCM, address `fcm:<token>`, see push/fcm.ts).
  *
- * Every device the customer allowed (PushSubscription) gets the message; the
- * phone's service worker (public/sw.js) shows it and reports back through
+ * Every device the customer allowed gets the message; the phone (service
+ * worker public/sw.js, or the app's NsMessagingService) shows it and reports back through
  * /api/portal/push/ack, which stamps PushMessage.shownAt. The sender reads that stamp
  * to decide whether the WhatsApp copy can be skipped — a `reached` count here
  * only means Google/Apple accepted the message, not that the phone showed it.
@@ -40,15 +43,20 @@ export type PushResult = {
     status: "sent" | "no-subscription" | "failed" | "not-configured";
 };
 
-let configured: boolean | null = null;
+let webConfigured: boolean | null = null;
 
-export function isPushConfigured(): boolean {
-    if (configured !== null) return configured;
+function isWebPushConfigured(): boolean {
+    if (webConfigured !== null) return webConfigured;
     const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     const privateKey = process.env.VAPID_PRIVATE_KEY;
-    if (!publicKey || !privateKey) return (configured = false);
+    if (!publicKey || !privateKey) return (webConfigured = false);
     webpush.setVapidDetails(process.env.VAPID_SUBJECT || `mailto:${COMPANY_DETAILS.contact.email}`, publicKey, privateKey);
-    return (configured = true);
+    return (webConfigured = true);
+}
+
+/** Either kind of push can be sent (web push keys, or the Firebase service account). */
+export function isPushConfigured(): boolean {
+    return isWebPushConfigured() || isFcmConfigured();
 }
 
 /** Push to every device of one customer (Person.id). Never throws. */
@@ -75,19 +83,20 @@ export async function sendPushToPerson(personId: number, payload: PushPayload): 
             select: { id: true },
         });
 
-        // The service worker gets everything it needs to show the notification
-        // and to say "shown" for exactly this message.
-        const body = JSON.stringify({
-            id: message.id,
-            title: payload.title,
-            body: payload.body,
-            url: payload.url,
-            tag: payload.tag,
-        });
+        // The phone gets everything it needs to show the notification and to say
+        // "shown" for exactly this message.
+        const data = { id: message.id, title: payload.title, body: payload.body, url: payload.url, ...(payload.tag ? { tag: payload.tag } : {}) };
+        const body = JSON.stringify(data);
 
         const dead: number[] = [];
         const outcomes = await Promise.all(
             subs.map(async (s) => {
+                if (s.endpoint.startsWith(FCM_PREFIX)) {
+                    const out = await sendFcm(s.endpoint.slice(FCM_PREFIX.length), data);
+                    if (out === "dead") dead.push(s.id);
+                    return out === "sent";
+                }
+                if (!isWebPushConfigured()) return false;
                 try {
                     // TTL 1 day: a phone that is off longer gets WhatsApp anyway.
                     await webpush.sendNotification(
