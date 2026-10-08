@@ -1,19 +1,18 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import { auth } from "@/auth";
 import { Receipt } from "lucide-react";
 import PortalShopButton from "@/modules/external/portal/PortalShopButton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import PortalSectionHeader from "@/modules/external/portal/PortalSectionHeader";
-import { PORTAL_ACTIVE_ACCOUNT_COOKIE, resolvePortalAccountContext } from "@/shared/lib/auth/portalAccountContext";
+import { resolveActivePortalAccount } from "@/shared/lib/auth/portalActiveAccount";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { businessTodayIso, endOfDayUtc, formatDate, startOfDayUtc, toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import { formatInr } from "@/shared/lib/format/moneyInr";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
-import { upiProvider } from "@/modules/pos/lib/paymentLink";
 import { QrSvg } from "@/shared/components/print/QrSvg";
+import { AMBER, GREEN, balanceClass, balanceText, settlementChip, upiDueLink } from "@/modules/external/portal/portalBillFormat";
 import {
     loadPortalOutstanding,
     loadPortalStatement,
@@ -37,32 +36,9 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 const PAGE = 50;
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
-const AMBER = "text-amber-700 dark:text-amber-400";
-const GREEN = "text-emerald-700 dark:text-emerald-400";
-
-/** + is what they owe, − is an advance with us — said in words, not Dr/Cr. */
-function balanceText(n: number) {
-    if (Math.abs(n) < 0.005) return formatInr(0);
-    return n > 0 ? `${formatInr(n)} due` : `${formatInr(-n)} adv`;
-}
-
-function balanceClass(n: number) {
-    if (Math.abs(n) < 0.005) return "";
-    return n > 0 ? AMBER : GREEN;
-}
-
 function StatusChip({ row }: { row: PortalStatementRow }) {
-    if (row.settlement == null) return null;
-    const settled = row.settlement === "SETTLED";
-    const text = settled
-        ? (row.kind === "payment" ? "Used" : "Paid")
-        : row.kind === "payment" || row.kind === "return"
-            ? `${formatInr(row.open)} unused`
-            : `${formatInr(row.open)} due`;
-    const tone = settled
-        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-        : "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300";
-    return <span className={`rounded px-2 py-0.5 text-xs whitespace-nowrap ${tone}`}>{text}</span>;
+    const s = settlementChip(row);
+    return s ? <span className={`rounded px-2 py-0.5 text-xs whitespace-nowrap ${s.tone}`}>{s.text}</span> : null;
 }
 
 function RefCell({ uvId, linkable, reference, label }: { uvId: number | null; linkable: boolean; reference: string; label: string }) {
@@ -120,14 +96,8 @@ export default async function PortalBillsPage({
         redirect("/login?callbackUrl=/portal/bills");
     }
 
-    const cookieStore = await cookies();
-    const rawAccountId = Number(cookieStore.get(PORTAL_ACTIVE_ACCOUNT_COOKIE)?.value);
-    let context: Awaited<ReturnType<typeof resolvePortalAccountContext>>;
-    try {
-        context = await resolvePortalAccountContext(customerId, Number.isFinite(rawAccountId) ? rawAccountId : null);
-    } catch {
-        redirect("/portal");
-    }
+    const context = await resolveActivePortalAccount(customerId);
+    if (!context) redirect("/portal");
     const active = context.active;
 
     const sp = await searchParams;
@@ -328,10 +298,7 @@ export default async function PortalBillsPage({
                             Phone: opens any UPI app pre-filled. Desktop: scan the QR. Staff still
                             post the receipt when the money shows in the bank. */}
                         {outstanding.totalDue > 0 && COMPANY_DETAILS.bank.upiVpa ? (() => {
-                            const upi = upiProvider.build(
-                                { upiVpa: COMPANY_DETAILS.bank.upiVpa, payeeName: COMPANY_DETAILS.upi.payeeName },
-                                { amountRupees: outstanding.totalDue, note: `Due ${active.label}`.slice(0, 50) },
-                            );
+                            const upi = upiDueLink(outstanding.totalDue, active.label)!;
                             return (
                                 <Card className="border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40">
                                     <CardContent className="flex flex-col items-center gap-3 p-4 text-center sm:flex-row sm:justify-between sm:text-left">

@@ -12,8 +12,10 @@ import ProfileAccountsCard from "@/modules/external/portal/profile/ProfileAccoun
 import ProfileContactsCard from "@/modules/external/portal/profile/ProfileContactsCard";
 import { usePortalAccountStore } from "@/store/external/portalAccountStore";
 
-/** My Profile — who you are, your profiles, your contacts, your password. */
-export default function PortalProfileView() {
+/** My Profile — who you are, your profiles, your contacts, your password.
+ *  `bare`: inside the customer app, which has its own header; the website's
+ *  notification card is left out there (the app gets its own notifications). */
+export default function PortalProfileView({ bare = false }: { bare?: boolean }) {
     const { profile, loaded, load } = usePortalAccountStore();
 
     useEffect(() => {
@@ -21,13 +23,15 @@ export default function PortalProfileView() {
     }, [load]);
 
     return (
-        <main className="px-4 py-6 md:px-6 md:py-8">
+        <main className={bare ? "px-3 py-3" : "px-4 py-6 md:px-6 md:py-8"}>
             <div className="mx-auto max-w-5xl space-y-5">
-                <PortalSectionHeader
-                    title="My Profile"
-                    description="Your photo, details, contacts and the profile you shop with."
-                    icon={UserRound}
-                />
+                {!bare && (
+                    <PortalSectionHeader
+                        title="My Profile"
+                        description="Your photo, details, contacts and the profile you shop with."
+                        icon={UserRound}
+                    />
+                )}
                 {!loaded || !profile ? (
                     <div className="space-y-5">
                         <Skeleton className="h-44 w-full rounded-xl" />
@@ -40,7 +44,7 @@ export default function PortalProfileView() {
                     <>
                         <ProfileIdentityCard profile={profile} />
                         <ProfileAccountsCard />
-                        <PortalPushCard />
+                        {!bare && <PortalPushCard />}
                         <div className="grid gap-5 lg:grid-cols-[1.3fr_1fr]">
                             <ProfileContactsCard profile={profile} />
                             <PortalPasswordCard />

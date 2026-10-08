@@ -142,7 +142,7 @@ export default function AppOrderView({
                 )}
 
                 {o.invoice && (
-                    <Link href={`/portal/orders/${o.invoice.detailId}/bill`} className="flex items-center gap-3 bg-background px-4 py-4 text-sm active:bg-muted">
+                    <Link href={`${APP}/bill/${o.invoice.detailId}`} className="flex items-center gap-3 bg-background px-4 py-4 text-sm active:bg-muted">
                         <FileText className="size-5 text-primary" />
                         <span className="flex-1">
                             Invoice {o.invoice.voucherNo}

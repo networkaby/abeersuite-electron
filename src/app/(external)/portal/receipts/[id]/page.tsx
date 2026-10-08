@@ -1,7 +1,6 @@
 import { redirect, notFound } from "next/navigation";
 import { auth } from "@/auth";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { getPortalAccountOptions } from "@/shared/lib/auth/portalAccountContext";
+import { ownsReceipt } from "@/modules/external/portal/portalDocAccess";
 import ReceiptPreview from "@/shared/components/print/ReceiptPreview";
 import PrintToolbar from "@/shared/components/print/PrintToolbar";
 import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
@@ -23,14 +22,7 @@ export default async function PortalReceiptPage({ params }: { params: Promise<{ 
 
     const uvId = Number(id);
     if (!Number.isInteger(uvId)) notFound();
-    const uv = await prisma.universalVoucher.findUnique({
-        where: { id: uvId },
-        select: { type: true, status: true, partyAccountId: true },
-    });
-    if (!uv || (uv.type !== "RECEIPT" && uv.type !== "PAYMENT") || uv.status !== "POSTED" || uv.partyAccountId == null) notFound();
-
-    const accountOptions = await getPortalAccountOptions(customerId);
-    if (!accountOptions.some((o) => o.accountId === uv.partyAccountId)) notFound();
+    if (!(await ownsReceipt(customerId, uvId))) notFound();
 
     const data = await buildVoucherReceiptSample("gl", uvId);
     if (!data) notFound();

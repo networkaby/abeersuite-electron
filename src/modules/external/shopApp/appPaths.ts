@@ -31,7 +31,7 @@ export function toAppHref(href: string): string {
     return APP;
 }
 
-/** Sign in, then come back to `back` (an app screen). */
+/** The app's sign-in screen, coming back to `back` (an app screen) afterwards. */
 export function appLoginPath(back: string): string {
-    return `/login?callbackUrl=${encodeURIComponent(back)}`;
+    return `${APP}/login?callbackUrl=${encodeURIComponent(back)}`;
 }

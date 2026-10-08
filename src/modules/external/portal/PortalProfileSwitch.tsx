@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Building2, Check, ChevronDown, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ export function profileLabel(option: PortalAccountOption): string {
 }
 
 export default function PortalProfileSwitch({ className = "" }: { className?: string }) {
+    const router = useRouter();
     const { options, activeAccountId, loading, load, switchAccount } = usePortalAccountStore();
 
     useEffect(() => {
@@ -40,6 +42,9 @@ export default function PortalProfileSwitch({ className = "" }: { className?: st
         try {
             await switchAccount(option.accountId);
             toast.success(`Now using ${profileLabel(option)}`);
+            // Pages drawn on the server for one profile (My Bills, My Repairs)
+            // read the switch's cookie — draw them again for the new one.
+            router.refresh();
         } catch (e) {
             toast.error(extractApiError(e, "Could not switch profile"));
         }

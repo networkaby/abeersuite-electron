@@ -37,7 +37,8 @@ function toBlocks(body: string[]): Block[] {
     }, []);
 }
 
-function Section({ section, index }: { section: LegalSection; index: number }) {
+/** One numbered section of a policy — the website page and the customer app both draw it. */
+export function LegalSectionBlock({ section, index }: { section: LegalSection; index: number }) {
     return (
         <section className="scroll-mt-20" id={`s${index + 1}`}>
             <h2 className="text-lg font-semibold tracking-tight sm:text-xl">
@@ -102,7 +103,7 @@ export default function LegalDocPage({ doc }: { doc: LegalDoc }) {
 
             <div className="mt-8 space-y-8">
                 {doc.sections.map((section, i) => (
-                    <Section key={section.heading} section={section} index={i} />
+                    <LegalSectionBlock key={section.heading} section={section} index={i} />
                 ))}
             </div>
 

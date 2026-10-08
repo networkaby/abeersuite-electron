@@ -1,12 +1,11 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { cookies } from "next/headers";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import PortalSectionHeader from "@/modules/external/portal/PortalSectionHeader";
 import { Wrench } from "lucide-react";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { PORTAL_ACTIVE_ACCOUNT_COOKIE, resolvePortalAccountContext } from "@/shared/lib/auth/portalAccountContext";
+import { loadPortalRepairs } from "@/modules/external/portal/portalRepairs";
+import { resolveActivePortalAccount } from "@/shared/lib/auth/portalActiveAccount";
 
 export default async function PortalRepairsPage() {
     const session = await auth();
@@ -18,31 +17,10 @@ export default async function PortalRepairsPage() {
     const customerId = parseInt((session.user as { customerId?: string }).customerId || "", 10);
     if (!Number.isFinite(customerId)) redirect("/login");
 
-    const cookieStore = await cookies();
-    const rawAccountId = cookieStore.get(PORTAL_ACTIVE_ACCOUNT_COOKIE)?.value;
-    const preferredAccountId = rawAccountId ? Number(rawAccountId) : null;
-    let context: Awaited<ReturnType<typeof resolvePortalAccountContext>>;
-    try {
-        context = await resolvePortalAccountContext(
-            customerId,
-            Number.isFinite(preferredAccountId) ? preferredAccountId : null
-        );
-    } catch {
-        redirect("/portal");
-    }
+    const context = await resolveActivePortalAccount(customerId);
+    if (!context) redirect("/portal");
 
-    // Phase 2 contract: enrich with repair timeline DTO + SLA details.
-    const tickets = await prisma.ticket.findMany({
-        where: { repair: { device: { accountId: context.active.accountId } } },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-        include: {
-            repair: { select: { device: { select: { type: true, brand: true, model: true } } } },
-            ticketStatus: { select: { label: true } },
-            // Customer-facing worker label takes precedence over the status name.
-            ticketWorker: { select: { publicLabel: true } },
-        },
-    });
+    const tickets = await loadPortalRepairs(context.active.accountId);
 
     return (
         <main className="px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8">
@@ -72,9 +50,9 @@ export default async function PortalRepairsPage() {
                                     <div className="flex flex-wrap items-center justify-between gap-3">
                                         <div>
                                             <p className="font-medium">Ticket #{ticket.id}</p>
-                                            <p className="text-xs text-muted-foreground">{ticket.repair?.device.brand} {ticket.repair?.device.model} · {ticket.repair?.device.type}</p>
+                                            <p className="text-xs text-muted-foreground">{ticket.device}</p>
                                         </div>
-                                        <Badge variant="secondary">{ticket.ticketWorker?.publicLabel || ticket.ticketStatus.label}</Badge>
+                                        <Badge variant="secondary">{ticket.status}</Badge>
                                     </div>
                                     <p className="mt-3 text-xs text-muted-foreground">
                                         Last update: {new Date(ticket.updatedAt).toLocaleString("en-IN")}

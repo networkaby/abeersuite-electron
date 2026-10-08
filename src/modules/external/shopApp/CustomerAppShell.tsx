@@ -31,7 +31,7 @@ function isActive(pathname: string, tab: (typeof TABS)[number]): boolean {
  * own bottom bar (Add to cart, Place order), so no tabs, as in Flipkart and
  * Amazon.
  */
-const PUSHED = [`${APP}/product/`, `${APP}/checkout`, `${APP}/order/`, `${APP}/login`, `${APP}/search`];
+const PUSHED = [`${APP}/product/`, `${APP}/checkout`, `${APP}/order/`, `${APP}/login`, `${APP}/search`, `${APP}/bill/`, `${APP}/receipt/`];
 
 export function isPushedScreen(pathname: string): boolean {
     return PUSHED.some((p) => pathname === p || pathname.startsWith(p));

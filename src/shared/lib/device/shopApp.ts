@@ -65,3 +65,16 @@ export function isShopNativeRequest(userAgent: string, devCookie: string | undef
     if (isShopNativeUserAgent(userAgent)) return true;
     return process.env.NODE_ENV !== "production" && devCookie === "1";
 }
+
+/** A website address that has its own screen in the app (inside the app only):
+ *  an order page, a customer message's short link, the Social pages. Null for the rest. */
+export function appScreenFor(pathname: string): string | null {
+    const order = pathname.match(/^\/shop\/order\/(\d+)$/);
+    if (order) return `${SHOP_NATIVE_HOME}/order/${order[1]}`;
+    const short = pathname.match(/^\/portal\/b\/([^/]+)$/);
+    if (short) return `${SHOP_NATIVE_HOME}/b/${short[1]}`;
+    // Social links inside the shared Social views (a friend's profile, back to Social).
+    const social = pathname.match(/^\/portal\/social(\/view\/(user|person)\/\d+)?$/);
+    if (social) return `${SHOP_NATIVE_HOME}/social${social[1] ?? ""}`;
+    return null;
+}

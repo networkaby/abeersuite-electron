@@ -31,6 +31,7 @@ export default async function InvoiceReceipt({
     paper,
     mode,
     autoprint,
+    embed = false,
 }: {
     id: string;
     kindParam?: string;
@@ -39,6 +40,9 @@ export default async function InvoiceReceipt({
     /** "thermal" when the document arrived by the thermal way (fires the bridge). */
     mode?: string;
     autoprint?: string;
+    /** Drawn inside another screen (the customer app's bill view): the page
+     *  sheet only, its styles kept to its own box, no print toolbar. */
+    embed?: boolean;
 }) {
     // ?kind=POS for counter sales, everything else defaults to SALE.
     const kind = isVoucherTemplateKind(kindParam) ? kindParam : "SALE";
@@ -372,15 +376,19 @@ export default async function InvoiceReceipt({
             format={format}
             template={template}
             sample={sample}
+            previewMode={embed}
+            previewFill={embed}
             toolbar={
-                <PrintToolbar
-                    bridge={posRelayPayload && isThermal && autoPrint
-                        ? { endpoint: "/print/pos", payload: posRelayPayload }
-                        : undefined}
-                    autoPrint={autoPrint}
-                    showFormatPicker
-                    currentPaper={format}
-                />
+                embed ? undefined : (
+                    <PrintToolbar
+                        bridge={posRelayPayload && isThermal && autoPrint
+                            ? { endpoint: "/print/pos", payload: posRelayPayload }
+                            : undefined}
+                        autoPrint={autoPrint}
+                        showFormatPicker
+                        currentPaper={format}
+                    />
+                )
             }
             docTitle={`Invoice ${voucherDisplayNo(voucher.universalVoucher?.voucherNo, voucher.universalVoucherId)}`}
         />
