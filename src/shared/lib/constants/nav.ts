@@ -346,7 +346,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 
         pathPrefixes: ["/office/accountancy"],
         createActions: [
-            { label: "POS +", subtitle: "New POS bill", icon: ScanBarcode, variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
+            { label: "POS +", subtitle: "New POS bill", icon: ScanBarcode, variant: "default", href: "/vouchers/pos/new", permission: "pos:shift:open" },
             { label: "Sale +", subtitle: "New Sale Invoice", icon: Receipt, variant: "default", action: "new-sale" },
             { label: "Purchase +", subtitle: "New Purchase Invoice", icon: ShoppingCart, variant: "outline", action: "new-purchase" },
             { label: "Sale Return +", subtitle: "Customer returns goods (Credit Note)", icon: RotateCcw, variant: "outline", action: "new-sale-return" },
@@ -481,7 +481,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
 
         ],
         createActions: [
-            { label: "POS +", subtitle: "New POS bill", icon: ScanBarcode, variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
+            { label: "POS +", subtitle: "New POS bill", icon: ScanBarcode, variant: "default", href: "/vouchers/pos/new", permission: "pos:shift:open" },
             { label: "Sale +", subtitle: "New Sale Invoice", icon: Receipt, variant: "default", action: "new-sale" },
             { label: "Purchase +", subtitle: "New Purchase Invoice", icon: ShoppingCart, variant: "outline", action: "new-purchase" },
             { label: "Sale Return +", subtitle: "Customer returns goods (Credit Note)", icon: RotateCcw, variant: "outline", action: "new-sale-return" },

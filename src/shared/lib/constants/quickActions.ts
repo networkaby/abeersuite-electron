@@ -157,7 +157,7 @@ export const BUTTON_BAR_ACTIONS: ButtonBarAction[] = [
         permission: "tickets:create",
     },
     { label: "Help Ticket +", subtitle: "Log a front-desk enquiry", icon: LifeBuoy, module: "help", variant: "default", action: "new-help-ticket", permission: "help:create" },
-    { label: "POS +", subtitle: "New POS bill", icon: ScanBarcode, module: "pos", variant: "default", href: "/vouchers/pos/new", newTab: true, permission: "pos:shift:open" },
+    { label: "POS +", subtitle: "New POS bill", icon: ScanBarcode, module: "pos", variant: "default", href: "/vouchers/pos/new", permission: "pos:shift:open" },
 
     { label: "Sale +", subtitle: "New Sale Invoice", icon: Receipt, module: "accountancy", variant: "default", action: "new-sale" },
     { label: "Purchase +", subtitle: "New Purchase Invoice", icon: ShoppingCart, module: "accountancy", variant: "outline", action: "new-purchase" },
