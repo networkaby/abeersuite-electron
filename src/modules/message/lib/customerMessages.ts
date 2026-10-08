@@ -4,7 +4,21 @@ import { phoneMatchKey, phoneKeyVariants } from "@/shared/lib/format";
 import { getHelpPipeline } from "@/modules/help/lib/helpPipeline";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
-import { isBillSendConfigured, sendTextMessage } from "@/shared/lib/whatsapp/metaTemplates";
+import {
+    conversationNumberId,
+    downloadWaMedia,
+    isBillSendConfigured,
+    sendMediaMessage,
+    sendTextMessage,
+    waMediaTypeFor,
+} from "@/shared/lib/whatsapp/metaTemplates";
+import { isR2Configured, presignR2, putR2 } from "@/shared/lib/storage/r2";
+import {
+    R2_MESSAGES_BUCKET,
+    WA_KEEP_INBOUND_MAX_BYTES,
+    WA_MEDIA_LINK_SECONDS,
+    WA_SEND_LIMIT_BYTES,
+} from "@/shared/lib/constants/whatsapp";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 
 /**
@@ -83,9 +97,11 @@ type WaInbound = {
     text?: { body?: string };
     button?: { text?: string };
     interactive?: { button_reply?: { title?: string }; list_reply?: { title?: string } };
-    image?: { caption?: string };
-    video?: { caption?: string };
-    document?: { caption?: string; filename?: string };
+    image?: { id?: string; caption?: string };
+    video?: { id?: string; caption?: string };
+    audio?: { id?: string; voice?: boolean };
+    sticker?: { id?: string };
+    document?: { id?: string; caption?: string; filename?: string };
     location?: { name?: string; address?: string };
 };
 type WaStatus = {
@@ -95,6 +111,8 @@ type WaStatus = {
     errors?: { title?: string; message?: string }[];
 };
 export type WaChangeValue = {
+    /** Which of our numbers the change is for. */
+    metadata?: { phone_number_id?: string; display_phone_number?: string };
     contacts?: { wa_id?: string; profile?: { name?: string } }[];
     messages?: WaInbound[];
     statuses?: WaStatus[];
@@ -105,7 +123,8 @@ function metaTime(ts: string | undefined): Date {
     return Number.isFinite(n) && n > 0 ? new Date(n * 1000) : new Date();
 }
 
-/** What a message says, as one line of text. Media we do not download yet. */
+/** What a message says, as one line of text (the list preview). A file's own
+ *  content is kept separately — see keepInboundMedia. */
 function inboundBody(m: WaInbound): string {
     switch (m.type) {
         case "text": return m.text?.body ?? "";
@@ -117,6 +136,57 @@ function inboundBody(m: WaInbound): string {
         case "location": return `[location] ${[m.location?.name, m.location?.address].filter(Boolean).join(", ")}`.trim();
         default: return `[${m.type ?? "message"}]`;
     }
+}
+
+type MediaFields = { mediaKey: string | null; mediaType: string | null; fileName: string | null; mediaSize: number | null };
+const NO_MEDIA: MediaFields = { mediaKey: null, mediaType: null, fileName: null, mediaSize: null };
+
+/**
+ * Copy a customer's attachment from Meta into our private R2 bucket. Meta's
+ * own download link expires, so this is done once, as the message arrives.
+ * Never throws: a failed copy still stores the message, just without the file.
+ */
+async function keepInboundMedia(m: WaInbound): Promise<MediaFields> {
+    const mediaId = m.image?.id ?? m.video?.id ?? m.audio?.id ?? m.sticker?.id ?? m.document?.id;
+    if (!mediaId || !isR2Configured()) return NO_MEDIA;
+    try {
+        const file = await downloadWaMedia(mediaId);
+        if (file.size > WA_KEEP_INBOUND_MAX_BYTES) return { ...NO_MEDIA, mediaType: file.mime, mediaSize: file.size };
+        const key = `in/${new Date().toISOString().slice(0, 7)}/${m.id.replace(/[^A-Za-z0-9_-]/g, "")}${extFor(file.mime, m.document?.filename)}`;
+        await putR2(R2_MESSAGES_BUCKET, key, file.bytes, file.mime);
+        return { mediaKey: key, mediaType: file.mime, fileName: m.document?.filename ?? null, mediaSize: file.size };
+    } catch (e) {
+        console.error("[messages] could not keep attachment", m.id, e);
+        return NO_MEDIA;
+    }
+}
+
+const EXT: Record<string, string> = {
+    "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "video/mp4": ".mp4", "video/3gpp": ".3gp",
+    "audio/ogg": ".ogg", "audio/mpeg": ".mp3", "audio/mp4": ".m4a", "audio/aac": ".aac", "audio/amr": ".amr",
+    "application/pdf": ".pdf",
+};
+function extFor(mime: string, fileName?: string | null): string {
+    const fromName = fileName?.match(/\.[A-Za-z0-9]{1,8}$/)?.[0];
+    return (fromName ?? EXT[mime] ?? "").toLowerCase();
+}
+
+/**
+ * A short-lived link to show / download an attachment. Null when R2 is off.
+ * Signed as of the start of the current window and valid for two windows, so
+ * every thread reload in that window gets the SAME URL — the browser serves the
+ * photo from its cache instead of downloading it again — and a link handed out
+ * late in a window still has at least one full window left.
+ */
+export function mediaLink(key: string | null, fileName?: string | null, download = false): string | null {
+    if (!key || !isR2Configured()) return null;
+    const windowMs = WA_MEDIA_LINK_SECONDS * 1000;
+    return presignR2({
+        bucket: R2_MESSAGES_BUCKET, key, method: "GET", expiresSec: WA_MEDIA_LINK_SECONDS * 2,
+        signedAt: new Date(Math.floor(Date.now() / windowMs) * windowMs),
+        cacheSeconds: WA_MEDIA_LINK_SECONDS,
+        downloadName: download ? fileName ?? key.split("/").pop() : undefined,
+    });
 }
 
 /** Store the customer messages in one webhook change. Duplicates (Meta retries) are skipped. */
@@ -141,6 +211,7 @@ export async function ingestInbound(value: WaChangeValue): Promise<number> {
             })
             : null;
         const ticketId = phone && !spam ? await openTicketForPhone(phone, owner) : null;
+        const media = await keepInboundMedia(m);
 
         try {
             await prisma.message.create({
@@ -150,8 +221,11 @@ export async function ingestInbound(value: WaChangeValue): Promise<number> {
                     phone,
                     address: m.from,
                     senderName: names.get(m.from) ?? null,
+                    businessNumberId: value.metadata?.phone_number_id ?? null,
+                    businessNumber: value.metadata?.display_phone_number ?? null,
                     kind: m.type ?? "text",
                     body: inboundBody(m),
+                    ...media,
                     externalId: m.id,
                     replyToExternalId: m.context?.id ?? null,
                     billKind: repliedTo?.billKind ?? null,
@@ -220,6 +294,7 @@ export async function recordBillMessage(args: {
                 direction: "OUT",
                 phone: phoneMatchKey(args.mobile10),
                 address: args.mobile10,
+                businessNumberId: conversationNumberId() ?? null,
                 kind: "template",
                 body: args.body,
                 externalId: args.externalId,
@@ -234,29 +309,68 @@ export async function recordBillMessage(args: {
     }
 }
 
-/** True while Meta still accepts a free-text reply to this number. */
-export async function replyWindowOpen(phone: string): Promise<{ open: boolean; closesAt: Date | null }> {
+/**
+ * True while Meta still accepts a free-text reply to this customer. The window
+ * belongs to the pair (our number, customer), so it is read off the customer's
+ * latest message — and that message's number is the one the reply goes from.
+ */
+export async function replyWindowOpen(phone: string): Promise<{ open: boolean; closesAt: Date | null; fromNumberId: string | null }> {
     const last = await prisma.message.findFirst({
         where: { phone, direction: "IN" },
         orderBy: { occurredAt: "desc" },
-        select: { occurredAt: true },
+        select: { occurredAt: true, businessNumberId: true },
     });
-    if (!last) return { open: false, closesAt: null };
+    if (!last) return { open: false, closesAt: null, fromNumberId: null };
     const closesAt = new Date(last.occurredAt.getTime() + REPLY_WINDOW_MS);
-    return { open: closesAt.getTime() > Date.now(), closesAt };
+    return { open: closesAt.getTime() > Date.now(), closesAt, fromNumberId: last.businessNumberId };
 }
 
 export class ReplyRefusedError extends Error {}
 
+export type OutgoingMedia = { key: string; type: string; name: string; size: number };
+
+/** Where a staff upload goes. Keys are ours, so a reply can only attach a file
+ *  this server handed out an upload link for (prefix + phone checked). */
+export function outgoingMediaKey(phone: string, fileName: string): string {
+    const safe = fileName.replace(/[^A-Za-z0-9._-]+/g, "_").slice(-80) || "file";
+    return `out/${phone}/${Date.now().toString(36)}-${safe}`;
+}
+
+/** Refuse a file Meta would refuse, before anything is uploaded. */
+export function checkOutgoingMedia(type: string, size: number): string | null {
+    const limit = WA_SEND_LIMIT_BYTES[waMediaTypeFor(type)];
+    if (size <= 0) return "Empty file.";
+    if (size > limit) return `File is too large for WhatsApp (max ${Math.round(limit / 1024 / 1024)} MB for this kind).`;
+    return null;
+}
+
 /** Send a staff reply on WhatsApp and store it on the customer's thread. */
-export async function sendReply(args: { phone: string; text: string; userId: number }) {
+export async function sendReply(args: { phone: string; text: string; userId: number; media?: OutgoingMedia | null }) {
     if (!isBillSendConfigured()) throw new ReplyRefusedError("WhatsApp sending is not set up on this server.");
-    const { open } = await replyWindowOpen(args.phone);
+    const { open, fromNumberId } = await replyWindowOpen(args.phone);
     if (!open) {
         throw new ReplyRefusedError("More than 24 hours since the customer last wrote. WhatsApp only allows an approved template now.");
     }
     const owner = (await ownersByPhone([args.phone])).get(args.phone) ?? null;
-    const externalId = await sendTextMessage(args.phone, args.text);
+    // Old rows carry no number = the main one, the only one back then.
+    const from = fromNumberId ?? process.env.META_WA_PHONE_NUMBER_ID ?? null;
+    const media = args.media ?? null;
+    if (media) {
+        if (!isR2Configured()) throw new ReplyRefusedError("File storage (R2) is not set up on this server.");
+        if (!media.key.startsWith(`out/${args.phone}/`)) throw new ReplyRefusedError("That file does not belong to this chat.");
+        const bad = checkOutgoingMedia(media.type, media.size);
+        if (bad) throw new ReplyRefusedError(bad);
+    }
+    const externalId = media
+        ? await sendMediaMessage({
+            mobile10: args.phone,
+            link: mediaLink(media.key)!,
+            mime: media.type,
+            caption: args.text || null,
+            fileName: media.name,
+            fromNumberId: from,
+        })
+        : await sendTextMessage(args.phone, args.text, from);
     const ticketId = await openTicketForPhone(args.phone, owner);
     const row = await prisma.message.create({
         data: {
@@ -264,8 +378,10 @@ export async function sendReply(args: { phone: string; text: string; userId: num
             direction: "OUT",
             phone: args.phone,
             address: args.phone,
-            kind: "text",
-            body: args.text,
+            businessNumberId: from,
+            kind: media ? waMediaTypeFor(media.type) : "text",
+            body: media ? (args.text ? `[${waMediaTypeFor(media.type)}] ${args.text}` : `[${waMediaTypeFor(media.type)}]`) : args.text,
+            ...(media ? { mediaKey: media.key, mediaType: media.type, fileName: media.name, mediaSize: media.size } : {}),
             externalId,
             ticketId,
             sentByUserId: args.userId,

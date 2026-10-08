@@ -233,3 +233,5 @@ resources/7za.exe
 /shop-app/*
 !/shop-app/twa-manifest.json
 !/shop-app/build-apk.ps1
+
+certificates

@@ -3038,8 +3038,14 @@ CREATE TABLE IF NOT EXISTS "Message" (
     "phone" TEXT,
     "address" TEXT,
     "senderName" TEXT,
+    "businessNumberId" TEXT,
+    "businessNumber" TEXT,
     "kind" TEXT NOT NULL DEFAULT 'text',
     "body" TEXT NOT NULL,
+    "mediaKey" TEXT,
+    "mediaType" TEXT,
+    "fileName" TEXT,
+    "mediaSize" INTEGER,
     "externalId" TEXT,
     "replyToExternalId" TEXT,
     "billKind" TEXT,
@@ -3067,8 +3073,20 @@ ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "address" TEXT;
 ALTER TABLE "Message" ALTER COLUMN "address" DROP NOT NULL;
 ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "senderName" TEXT;
 ALTER TABLE "Message" ALTER COLUMN "senderName" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "businessNumberId" TEXT;
+ALTER TABLE "Message" ALTER COLUMN "businessNumberId" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "businessNumber" TEXT;
+ALTER TABLE "Message" ALTER COLUMN "businessNumber" DROP NOT NULL;
 ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "kind" TEXT NOT NULL DEFAULT 'text';
 ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "body" TEXT NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "mediaKey" TEXT;
+ALTER TABLE "Message" ALTER COLUMN "mediaKey" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "mediaType" TEXT;
+ALTER TABLE "Message" ALTER COLUMN "mediaType" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "fileName" TEXT;
+ALTER TABLE "Message" ALTER COLUMN "fileName" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "mediaSize" INTEGER;
+ALTER TABLE "Message" ALTER COLUMN "mediaSize" DROP NOT NULL;
 ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "externalId" TEXT;
 ALTER TABLE "Message" ALTER COLUMN "externalId" DROP NOT NULL;
 ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "replyToExternalId" TEXT;

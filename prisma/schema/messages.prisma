@@ -28,9 +28,27 @@ model Message {
   /// The sender's own display name on the channel (WhatsApp profile name).
   senderName String?
 
+  /// Which of OUR WhatsApp numbers this went through (Meta phone_number_id).
+  /// A reply goes back out from the number the customer wrote to. Null on rows
+  /// from before a second number existed = the main number.
+  businessNumberId String?
+  /// That number as people see it (e.g. "918876996996") — the inbox tag.
+  businessNumber   String?
+
   /// text | image | audio | video | document | sticker | location | button | template | …
   kind String @default("text")
   body String
+
+  /// Attachment (photo, document, voice note, video, sticker) — the object key
+  /// in the private R2 bucket (constants/whatsapp.ts). Shown through a
+  /// short-lived signed link, never a public URL. Null = text only.
+  mediaKey  String?
+  /// MIME type as Meta / the uploader gave it (image/jpeg, application/pdf …).
+  mediaType String?
+  /// Original file name, for documents.
+  fileName  String?
+  /// Size in bytes.
+  mediaSize Int?
 
   /// The channel's own message id (Meta wamid). Idempotency key: Meta retries
   /// a webhook until it gets a 200, and every retry carries the same id.

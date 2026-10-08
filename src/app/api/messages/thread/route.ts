@@ -6,7 +6,7 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { phoneMatchKey } from "@/shared/lib/format";
 import { isMissedCall } from "@/shared/lib/calls";
 import { ASSIGNED_POSITION_SELECT } from "@/shared/lib/api/ticketSelects";
-import { claimsByPhone, openTicketForPhone, ownersByPhone, replyWindowOpen } from "@/modules/message/lib/customerMessages";
+import { claimsByPhone, mediaLink, openTicketForPhone, ownersByPhone, replyWindowOpen } from "@/modules/message/lib/customerMessages";
 
 // /api/messages/thread?phone=<10 digits>
 //
@@ -73,6 +73,13 @@ export async function GET(req: Request) {
                 kind: m.kind,
                 body: m.body,
                 senderName: m.senderName,
+                businessNumber: m.businessNumber,
+                // Signed, 1-hour links — the bucket itself is private.
+                mediaUrl: mediaLink(m.mediaKey),
+                downloadUrl: m.mediaKey ? mediaLink(m.mediaKey, m.fileName, true) : null,
+                mediaType: m.mediaType,
+                fileName: m.fileName,
+                mediaSize: m.mediaSize,
                 sentBy: m.sentByUserId != null ? (userName.get(m.sentByUserId) ?? "Staff") : null,
                 billKind: m.billKind,
                 billRefId: m.billRefId,

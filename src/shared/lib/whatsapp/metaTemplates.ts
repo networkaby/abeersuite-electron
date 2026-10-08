@@ -1,4 +1,5 @@
 import "server-only";
+import { WA_CONVERSATION_NUMBER_ID } from "@/shared/lib/constants/whatsapp";
 import {
     WA_APP_LINK,
     WA_BILL_LINK_BASE,
@@ -35,7 +36,16 @@ export function isTemplateApiConfigured(): boolean {
     return Boolean(token() && process.env.META_WA_BUSINESS_ACCOUNT_ID);
 }
 export function isBillSendConfigured(): boolean {
-    return Boolean(token() && process.env.META_WA_PHONE_NUMBER_ID);
+    return Boolean(token() && conversationNumberId());
+}
+
+/**
+ * The number bills, reminders and new replies go out from. OTP stays on
+ * META_WA_PHONE_NUMBER_ID (sendWhatsApp.ts); the second, conversation-only
+ * number is WA_CONVERSATION_NUMBER_ID in constants/whatsapp.ts.
+ */
+export function conversationNumberId(): string | undefined {
+    return WA_CONVERSATION_NUMBER_ID || process.env.META_WA_PHONE_NUMBER_ID;
 }
 
 type GraphError = { error?: { message?: string; error_user_msg?: string } };
@@ -133,7 +143,7 @@ export async function sendBillTemplate(args: {
     if (args.approved.viewButton?.trim()) {
         comps.push({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: args.linkCode }] });
     }
-    const r = await graph<{ messages?: { id?: string }[] }>(`${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
+    const r = await graph<{ messages?: { id?: string }[] }>(`${conversationNumberId()}/messages`, {
         method: "POST",
         body: {
             messaging_product: "whatsapp",
@@ -153,8 +163,8 @@ export async function sendBillTemplate(args: {
  * opens when the customer last wrote to us — the caller checks that first
  * (customerMessages.ts `replyWindowOpen`). Returns Meta's message id.
  */
-export async function sendTextMessage(mobile10: string, text: string): Promise<string> {
-    const r = await graph<{ messages?: { id?: string }[] }>(`${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
+export async function sendTextMessage(mobile10: string, text: string, fromNumberId?: string | null): Promise<string> {
+    const r = await graph<{ messages?: { id?: string }[] }>(`${fromNumberId || conversationNumberId()}/messages`, {
         method: "POST",
         body: {
             messaging_product: "whatsapp",
@@ -167,4 +177,50 @@ export async function sendTextMessage(mobile10: string, text: string): Promise<s
     const id = r.messages?.[0]?.id;
     if (!id) throw new Error("Meta accepted the call but returned no message id");
     return id;
+}
+
+export type WaMediaType = "image" | "video" | "audio" | "document";
+
+/** Which WhatsApp message type a file goes out as. Meta takes only JPEG/PNG as
+ *  "image" and MP4/3GPP as "video"; anything else is sent as a document. */
+export function waMediaTypeFor(mime: string): WaMediaType {
+    if (mime === "image/jpeg" || mime === "image/png") return "image";
+    if (mime === "video/mp4" || mime === "video/3gpp") return "video";
+    if (/^audio\/(aac|amr|mpeg|mp4|ogg)/.test(mime)) return "audio";
+    return "document";
+}
+
+/**
+ * Send a photo / file / voice note / video by link (a short-lived signed R2
+ * URL — Meta fetches it at once). Same 24-hour rule as text. Returns Meta's id.
+ */
+export async function sendMediaMessage(args: {
+    mobile10: string;
+    link: string;
+    mime: string;
+    caption?: string | null;
+    fileName?: string | null;
+    fromNumberId?: string | null;
+}): Promise<string> {
+    const type = waMediaTypeFor(args.mime);
+    const media: Record<string, string> = { link: args.link };
+    if (args.caption && type !== "audio") media.caption = args.caption;
+    if (type === "document" && args.fileName) media.filename = args.fileName;
+    const r = await graph<{ messages?: { id?: string }[] }>(`${args.fromNumberId || conversationNumberId()}/messages`, {
+        method: "POST",
+        body: { messaging_product: "whatsapp", recipient_type: "individual", to: `+91${args.mobile10}`, type, [type]: media },
+    });
+    const id = r.messages?.[0]?.id;
+    if (!id) throw new Error("Meta accepted the call but returned no message id");
+    return id;
+}
+
+/** A customer's attachment: Meta's media id → its bytes and type. */
+export async function downloadWaMedia(mediaId: string): Promise<{ bytes: ArrayBuffer; mime: string; size: number }> {
+    const info = await graph<{ url?: string; mime_type?: string; file_size?: number }>(mediaId);
+    if (!info.url) throw new Error("Meta gave no media URL");
+    const res = await fetch(info.url, { headers: { Authorization: `Bearer ${token()}` }, cache: "no-store" });
+    if (!res.ok) throw new Error(`Meta media download failed (${res.status})`);
+    const bytes = await res.arrayBuffer();
+    return { bytes, mime: info.mime_type?.split(";")[0].trim() || "application/octet-stream", size: bytes.byteLength };
 }

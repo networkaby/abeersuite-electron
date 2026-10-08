@@ -16,6 +16,7 @@
  *   inventory.ts      Reorder classifier ladder, FSN fast-mover turnover, phone photo cap
  *   accounting.ts     standard group / ledger names, payment instruments, bill due days
  *   business.ts       the shop's time zone
+ *   whatsapp.ts       which WhatsApp number bills and replies go from (OTP stays on the main one)
  *
  *   companyDetails.ts shop name, address, GSTIN, bank — printed on every document
  *   loginShowcase.ts  what the sign-in screens say
@@ -43,4 +44,5 @@ export * from "./hr";
 export * from "./paging";
 export * from "./inventory";
 export * from "./badges";
+export * from "./whatsapp";
 export * from "./workflow";

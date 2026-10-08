@@ -1,0 +1,64 @@
+"use client";
+
+import { Download, FileText } from "lucide-react";
+
+/**
+ * One WhatsApp attachment inside a chat bubble. Links are short-lived signed
+ * R2 URLs from /api/messages/thread (the bucket is private); a thread reload
+ * hands out fresh ones.
+ */
+export type MediaInfo = {
+    mediaUrl?: string | null;
+    downloadUrl?: string | null;
+    mediaType?: string | null;
+    fileName?: string | null;
+    mediaSize?: number | null;
+};
+
+function sizeLabel(n: number | null | undefined): string {
+    if (!n) return "";
+    if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
+    return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+export function MessageMedia({ m }: { m: MediaInfo }) {
+    const type = m.mediaType ?? "";
+    if (!m.mediaUrl) {
+        // A file we could not keep (too large, or storage was off when it came).
+        return type ? <div className="text-xs italic opacity-70">Attachment not saved ({type} {sizeLabel(m.mediaSize)})</div> : null;
+    }
+    if (type.startsWith("image/")) {
+        return (
+            <a href={m.mediaUrl} target="_blank" rel="noreferrer" className="block">
+                {/* eslint-disable-next-line @next/next/no-img-element -- signed, expiring R2 link; next/image would cache it */}
+                <img src={m.mediaUrl} alt={m.fileName ?? "Photo"} className="max-h-64 max-w-full rounded-md object-contain" loading="lazy" />
+            </a>
+        );
+    }
+    if (type.startsWith("video/")) {
+        return <video src={m.mediaUrl} controls preload="metadata" className="max-h-64 max-w-full rounded-md" />;
+    }
+    if (type.startsWith("audio/")) {
+        return <audio src={m.mediaUrl} controls preload="none" className="w-64 max-w-full" />;
+    }
+    return (
+        <a
+            href={m.downloadUrl ?? m.mediaUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 rounded-md border bg-background/60 px-2 py-1.5 hover:bg-background"
+        >
+            <FileText className="size-5 shrink-0" />
+            <span className="min-w-0">
+                <span className="block truncate font-medium">{m.fileName ?? "Document"}</span>
+                <span className="block text-[11px] opacity-70">{[type.split("/").pop()?.toUpperCase(), sizeLabel(m.mediaSize)].filter(Boolean).join(" · ")}</span>
+            </span>
+            <Download className="ml-auto size-4 shrink-0" />
+        </a>
+    );
+}
+
+/** The caption of a media message: the stored body minus its "[image] " tag. */
+export function captionOf(body: string, hasMedia: boolean): string {
+    return hasMedia ? body.replace(/^\[[a-z]+\]\s?/, "") : body;
+}

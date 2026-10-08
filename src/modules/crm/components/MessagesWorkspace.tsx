@@ -7,7 +7,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
     MessageCircle, Mail, PhoneIncoming, PhoneOutgoing, PhoneMissed, Ticket, Check, CheckCheck,
-    AlertCircle, Search, Send, UserPlus, User, Building2, ShieldAlert, RefreshCw, Lock, FileText, Hand, Users, ArrowRightLeft,
+    AlertCircle, Search, Send, Paperclip, X, UserPlus, User, Building2, ShieldAlert, RefreshCw, Lock, FileText, Hand, Users, ArrowRightLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import { extractApiError } from "@/shared/lib/api";
 import { useRealtimeTopics } from "@/shared/hooks";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import { cn } from "@/shared/lib/format/utils";
+import { MessageMedia, captionOf, type MediaInfo } from "./MessageMedia";
 
 // ── Wire types (mirror /api/messages/*) ─────────────────────────────────────────
 type Owner = { kind: "person" | "company"; id: number; name: string };
@@ -33,10 +34,10 @@ interface ConversationsResponse { items: Conversation[]; page: number; hasMore: 
 
 type ThreadMessage = {
     type: "message"; id: number; at: string; channel: string; direction: string; kind: string; body: string;
-    senderName: string | null; sentBy: string | null; billKind: string | null; billRefId: number | null;
+    senderName: string | null; businessNumber?: string | null; sentBy: string | null; billKind: string | null; billRefId: number | null;
     ticketId: number | null; status: string | null; deliveredAt: string | null; readAt: string | null; error: string | null;
     pending?: boolean;
-};
+} & MediaInfo;
 type ThreadCall = { type: "call"; id: number; at: string; direction: string; missed: boolean; durationSec: number; note: string | null };
 interface Thread {
     phone: string;
@@ -111,6 +112,9 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
     const [threadLoading, setThreadLoading] = useState(false);
     const [draft, setDraft] = useState("");
     const [sending, setSending] = useState(false);
+    // A photo / file picked with the paperclip; the draft becomes its caption.
+    const [attach, setAttach] = useState<File | null>(null);
+    const fileRef = useRef<HTMLInputElement>(null);
     const [newPartyPhone, setNewPartyPhone] = useState<string | null>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
     const me = Number((useSession().data?.user as { id?: string } | undefined)?.id ?? 0);
@@ -211,25 +215,42 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
 
     const send = async () => {
         const text = draft.trim();
-        if (!text || !thread || sending) return;
+        const file = attach;
+        if ((!text && !file) || !thread || sending) return;
         setSending(true);
-        // Show it straight away; the server copy replaces it on reload.
+        // Show it straight away (a local preview for a file); the server copy replaces it on reload.
+        const localUrl = file ? URL.createObjectURL(file) : null;
         const temp: ThreadMessage = {
             type: "message", id: -Date.now(), at: new Date().toISOString(), channel: "WHATSAPP", direction: "OUT",
             kind: "text", body: text, senderName: null, sentBy: "You", billKind: null, billRefId: null,
             ticketId: thread.ticket?.id ?? null, status: null, deliveredAt: null, readAt: null, error: null, pending: true,
+            ...(file ? { mediaUrl: localUrl, mediaType: file.type || "application/octet-stream", fileName: file.name, mediaSize: file.size } : {}),
         };
         setThread((t) => (t ? { ...t, items: [...t.items, temp] } : t));
         setDraft("");
+        setAttach(null);
         try {
-            await axios.post("/api/messages/reply", { phone: thread.phone, text });
+            let media: { key: string; type: string; name: string; size: number } | null = null;
+            if (file) {
+                const type = file.type || "application/octet-stream";
+                const { data } = await axios.post<{ key: string; putUrl: string }>("/api/messages/upload-url", {
+                    phone: thread.phone, name: file.name, type, size: file.size,
+                });
+                // Straight to R2 — the signed URL carries the permission.
+                const put = await fetch(data.putUrl, { method: "PUT", headers: { "Content-Type": type }, body: file });
+                if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+                media = { key: data.key, type, name: file.name, size: file.size };
+            }
+            await axios.post("/api/messages/reply", { phone: thread.phone, text, media });
             void loadThread(thread.phone);
             void loadList(1);
         } catch (e) {
             setThread((t) => (t ? { ...t, items: t.items.filter((i) => i !== temp) } : t));
             setDraft(text);
+            setAttach(file);
             toast.error(extractApiError(e, "Reply not sent"));
         } finally {
+            if (localUrl) setTimeout(() => URL.revokeObjectURL(localUrl), 60_000);
             setSending(false);
         }
     };
@@ -448,6 +469,7 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
                                             <div className="mb-0.5 flex flex-wrap items-center gap-1 text-[11px] opacity-80">
                                                 <ChannelIcon channel={it.channel} />
                                                 <span>{it.channel === "EMAIL" ? "Email" : "WhatsApp"}</span>
+                                                {it.businessNumber && <span title="Our number this came in on">· via …{it.businessNumber.slice(-5)}</span>}
                                                 {out && <span>· {it.sentBy ?? "System"}</span>}
                                                 {it.billKind && (
                                                     <span className="inline-flex items-center gap-0.5">
@@ -457,7 +479,10 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
                                                 )}
                                                 {it.ticketId && <span className="inline-flex items-center gap-0.5">· <Ticket className="size-3" />#{it.ticketId}</span>}
                                             </div>
-                                            <div className="whitespace-pre-wrap break-words">{it.body}</div>
+                                            <MessageMedia m={it} />
+                                            {captionOf(it.body, !!(it.mediaUrl || it.mediaType)) && (
+                                                <div className="whitespace-pre-wrap break-words">{captionOf(it.body, !!(it.mediaUrl || it.mediaType))}</div>
+                                            )}
                                             <div className="mt-0.5 flex items-center justify-end gap-2 text-[11px] opacity-70">
                                                 {!out && !it.ticketId && canTicket && (
                                                     <button className="underline" onClick={() => void raiseTicket(it.id, thread.ticket?.id)}>
@@ -479,17 +504,35 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
                                 <p className="text-xs text-muted-foreground">You can read these messages. Replying needs the &ldquo;Reply to customer messages&rdquo; tick on your role.</p>
                             ) : thread.replyWindow.open ? (
                                 <>
+                                    {attach && (
+                                        <div className="mb-1 inline-flex max-w-full items-center gap-1 rounded-md border bg-muted px-2 py-0.5 text-xs">
+                                            <Paperclip className="size-3 shrink-0" />
+                                            <span className="truncate">{attach.name}</span>
+                                            <span className="opacity-60">{Math.max(1, Math.round(attach.size / 1024))} KB</span>
+                                            <button onClick={() => setAttach(null)} title="Remove" className="ml-1"><X className="size-3" /></button>
+                                        </div>
+                                    )}
                                     <div className="flex items-end gap-2">
                                         <span className="mb-2 inline-flex items-center gap-1 text-xs text-muted-foreground"><ChannelIcon channel="WHATSAPP" /> WhatsApp</span>
+                                        <input
+                                            ref={fileRef}
+                                            type="file"
+                                            className="hidden"
+                                            accept="image/jpeg,image/png,video/mp4,video/3gpp,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+                                            onChange={(e) => { setAttach(e.target.files?.[0] ?? null); e.target.value = ""; }}
+                                        />
+                                        <Button variant="ghost" size="icon" onClick={() => fileRef.current?.click()} disabled={sending} title="Attach a photo or file">
+                                            <Paperclip className="size-4" />
+                                        </Button>
                                         <Textarea
                                             value={draft}
                                             onChange={(e) => setDraft(e.target.value)}
                                             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
-                                            placeholder={`Reply to ${displayName(thread)}`}
+                                            placeholder={attach ? "Add a caption (optional)" : `Reply to ${displayName(thread)}`}
                                             rows={1}
                                             className="min-h-9 resize-none"
                                         />
-                                        <Button onClick={() => void send()} disabled={sending || !draft.trim()} size="icon" title="Send">
+                                        <Button onClick={() => void send()} disabled={sending || (!draft.trim() && !attach)} size="icon" title="Send">
                                             <Send className="size-4" />
                                         </Button>
                                     </div>

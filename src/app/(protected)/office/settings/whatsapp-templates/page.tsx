@@ -2,6 +2,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { listWaTemplatesFresh } from "@/shared/lib/whatsapp/waTemplateStore";
 import { isBillSendConfigured, isTemplateApiConfigured } from "@/shared/lib/whatsapp/metaTemplates";
 import { WhatsAppTemplatesPanel } from "@/modules/settings/components/WhatsAppTemplatesPanel";
+import { WhatsAppConnectCard } from "@/modules/settings/components/WhatsAppConnectCard";
 
 export const metadata = { title: "WhatsApp Templates" };
 
@@ -19,6 +20,7 @@ export default async function WhatsAppTemplatesPage() {
                         <b> Send for approval</b>. Bills keep using the last approved wording until the new one is approved.
                     </p>
                 </div>
+                <WhatsAppConnectCard />
                 <WhatsAppTemplatesPanel
                     initialTemplates={templates}
                     templateApiReady={isTemplateApiConfigured()}
