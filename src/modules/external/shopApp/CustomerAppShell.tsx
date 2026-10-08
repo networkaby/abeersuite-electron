@@ -8,22 +8,33 @@ import { House, LayoutGrid, ShoppingBag, ShoppingCart, UserRound } from "lucide-
 import { Toaster } from "@/components/ui/sonner";
 import { useShopCartStore } from "@/store/external/shopCartStore";
 import { noSubscribe } from "@/modules/mobile/components/installPlace";
-import { SHOP_NATIVE_HOME } from "@/shared/lib/device/shopApp";
+import { APP } from "@/modules/external/shopApp/appPaths";
 
-/**
- * The customer app's five tabs. Cart and Orders open the website's own screens
- * for now; they move into the app in the next phases.
- */
+/** The customer app's five tabs. `owns` lists the screens under each tab, so the
+ *  right tab stays lit on a screen opened from it. */
 const TABS = [
-    { href: SHOP_NATIVE_HOME, label: "Home", icon: House },
-    { href: `${SHOP_NATIVE_HOME}/categories`, label: "Categories", icon: LayoutGrid },
-    { href: "/shop/cart", label: "Cart", icon: ShoppingCart },
-    { href: "/portal/orders", label: "Orders", icon: ShoppingBag },
-    { href: `${SHOP_NATIVE_HOME}/account`, label: "Account", icon: UserRound },
+    { href: APP, label: "Home", icon: House, owns: [] as string[] },
+    { href: `${APP}/categories`, label: "Categories", icon: LayoutGrid, owns: [`${APP}/products`, `${APP}/search`] },
+    { href: `${APP}/cart`, label: "Cart", icon: ShoppingCart, owns: [] as string[] },
+    { href: `${APP}/orders`, label: "Orders", icon: ShoppingBag, owns: [] as string[] },
+    { href: `${APP}/account`, label: "Account", icon: UserRound, owns: [] as string[] },
 ] as const;
 
-function isActive(pathname: string, href: string): boolean {
-    return pathname === href || (href !== SHOP_NATIVE_HOME && pathname.startsWith(`${href}/`));
+function isActive(pathname: string, tab: (typeof TABS)[number]): boolean {
+    if (pathname === tab.href) return true;
+    const under = (base: string) => pathname === base || pathname.startsWith(`${base}/`);
+    return (tab.href !== APP && under(tab.href)) || tab.owns.some(under);
+}
+
+/**
+ * Screens pushed on top of a tab — full screen with their own Back and their
+ * own bottom bar (Add to cart, Place order), so no tabs, as in Flipkart and
+ * Amazon.
+ */
+const PUSHED = [`${APP}/product/`, `${APP}/checkout`, `${APP}/order/`, `${APP}/login`, `${APP}/search`];
+
+export function isPushedScreen(pathname: string): boolean {
+    return PUSHED.some((p) => pathname === p || pathname.startsWith(p));
 }
 
 /**
@@ -32,14 +43,20 @@ function isActive(pathname: string, href: string): boolean {
  * pull-to-refresh bounce, no tap flash, no text selection on a long press).
  */
 export default function CustomerAppShell({ children }: { children: React.ReactNode }) {
+    const pushed = isPushedScreen(usePathname());
     return (
         <SessionProvider>
             <div data-phone-app className="min-h-dvh bg-background">
-                {/* Bottom padding = the tab bar (h-16) plus the phone's gesture area. */}
-                <div className="mx-auto flex min-h-dvh w-full max-w-xl flex-col pb-[calc(4rem+env(safe-area-inset-bottom))]">
+                {/* Bottom padding = the tab bar (h-16) plus the phone's gesture area;
+                    a pushed screen pads for its own bottom bar instead. */}
+                <div
+                    className={`mx-auto flex min-h-dvh w-full max-w-xl flex-col ${
+                        pushed ? "" : "pb-[calc(4rem+env(safe-area-inset-bottom))]"
+                    }`}
+                >
                     {children}
                 </div>
-                <TabBar />
+                {!pushed && <TabBar />}
             </div>
             <Toaster position="top-center" richColors />
         </SessionProvider>
@@ -54,8 +71,9 @@ function TabBar() {
             className="fixed inset-x-0 bottom-0 z-30 border-t border-border/70 bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
         >
             <div className="mx-auto grid max-w-xl grid-cols-5">
-                {TABS.map(({ href, label, icon: Icon }) => {
-                    const active = isActive(pathname, href);
+                {TABS.map((tab) => {
+                    const { href, label, icon: Icon } = tab;
+                    const active = isActive(pathname, tab);
                     return (
                         <Link
                             key={href}
@@ -67,7 +85,7 @@ function TabBar() {
                         >
                             <Icon className="size-5" strokeWidth={active ? 2.4 : 2} />
                             {label}
-                            {href === "/shop/cart" && <CartCount />}
+                            {href === `${APP}/cart` && <CartCount />}
                         </Link>
                     );
                 })}
@@ -78,10 +96,15 @@ function TabBar() {
 
 /** Items in the cart. The cart lives in the phone's storage, so nothing shows
  *  until the page is running in the phone — never a wrong number from the server. */
-function CartCount() {
+export function useCartCount(): number {
     const count = useShopCartStore((s) => s.lines.reduce((n, l) => n + l.quantity, 0));
     const ready = useSyncExternalStore(noSubscribe, () => true, () => false);
-    if (!ready || count === 0) return null;
+    return ready ? count : 0;
+}
+
+function CartCount() {
+    const count = useCartCount();
+    if (count === 0) return null;
     return (
         <span className="absolute left-1/2 top-2 ml-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
             {count > 99 ? "99+" : count}

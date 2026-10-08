@@ -166,9 +166,3 @@ export function invProductToPublic(
 /** @deprecated use invProductToPublic */
 export const shopProductToPublic = invProductToPublic;
 
-/** Deterministic demo star rating (4.2–4.9) and review count for UI polish. */
-export function demoRating(productId: number): { stars: number; reviewCount: number } {
-    const reviewCount = 18 + (productId % 210);
-    const stars = 4.2 + (productId % 8) / 10;
-    return { stars: Math.round(stars * 10) / 10, reviewCount };
-}

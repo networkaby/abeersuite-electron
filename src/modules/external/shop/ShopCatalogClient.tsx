@@ -14,8 +14,6 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
-import { demoRating } from "@/shared/lib/shop/productPublic";
-import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import ProductCard from "./ProductCard";
 import ProductListRow from "./ProductListRow";
 import {
@@ -25,12 +23,11 @@ import {
     LayoutList,
     X,
     ChevronDown,
-    Star,
 } from "lucide-react";
 import { cn } from "@/shared/lib/format/utils";
+import { buildPriceBands, discountPct, DISCOUNT_OPTIONS, matchesQuery } from "@/shared/lib/shop/catalogFilters";
 // Leaf import, NOT the inventory barrel — the barrel re-exports the Dexie
 // catalogue, and none of that belongs in a public storefront bundle.
-import { productMatchesSearch } from "@/shared/lib/inventory/productSearch";
 import AdUnit from "./ads/AdUnit";
 import {
     AdPicker,
@@ -40,7 +37,7 @@ import {
     type ShopAdContext,
 } from "@/shared/lib/shop/ads";
 
-type SortKey = "featured" | "price-asc" | "price-desc" | "name" | "rating";
+type SortKey = "featured" | "price-asc" | "price-desc" | "name";
 
 /** Products revealed per "page" — also the initial render size and scroll-load chunk. */
 const PAGE_SIZE = 24;
@@ -53,83 +50,11 @@ type FacetKey =
     | "collection"
     | "price"
     | "discount"
-    | "stock"
-    | "rating";
-
-type PriceBand = { id: string; label: string; minPaise: number; maxPaise: number | null };
+    | "stock";
 
 function norm(s: string) {
     return s.toLowerCase().trim();
 }
-
-/**
- * What a shopper may search — name, description, category. Deliberately built
- * here rather than taken from the office helper: the office one also matches
- * SKU, barcodes and internal attributes. `ShopProductPublic` carries none of
- * those (see productPublic.ts), and this keeps it that way on purpose.
- */
-function shopSearchText(p: ShopProductPublic) {
-    return norm(`${p.displayName} ${p.description ?? ""} ${p.category}`);
-}
-
-/**
- * The same tiered matcher the counter uses, over public fields only.
- *
- * The old test was ONE literal substring, so a shopper had to type a
- * contiguous fragment of the actual title: "copier paper a4" found 4 products
- * where 28 are relevant, and "a4paper" found none at all. Tokenised matching
- * fixes the first, the run-together rescue the second.
- *
- * Still a predicate, not a ranking: it feeds the facet counts (matchesExcept)
- * as much as the list, and the shopper's own Sort control owns the order.
- * No fuzzy or guess passes either — on a storefront, showing things the
- * shopper did not ask for reads as broken, not as helpful.
- */
-function matchesQuery(p: ShopProductPublic, q: string) {
-    return productMatchesSearch(p, q, { text: shopSearchText });
-}
-
-function discountPct(p: ShopProductPublic) {
-    if (!p.mrpPaise || p.mrpPaise <= p.pricePaise) return 0;
-    return Math.round((1 - p.pricePaise / p.mrpPaise) * 100);
-}
-
-/** Round up to the nearest 1 / 2 / 5 × 10ⁿ so band edges read as round rupees. */
-function niceStep(raw: number) {
-    if (raw <= 0) return 1;
-    const mag = 10 ** Math.floor(Math.log10(raw));
-    const unit = raw / mag;
-    const nice = unit <= 1 ? 1 : unit <= 2 ? 2 : unit <= 5 ? 5 : 10;
-    return nice * mag;
-}
-
-/** Price brackets derived from the real catalog spread, not hardcoded slabs. */
-function buildPriceBands(products: ShopProductPublic[]): PriceBand[] {
-    if (products.length === 0) return [];
-    const prices = products.map((p) => p.pricePaise);
-    const min = Math.min(...prices);
-    const max = Math.max(...prices);
-    if (max <= min) return [];
-    const step = niceStep((max - min) / 4);
-    const start = Math.floor(min / step) * step;
-    const bands: PriceBand[] = [];
-    for (let edge = start; edge < max && bands.length < 5; edge += step) {
-        const isLast = bands.length === 4 || edge + step >= max;
-        bands.push({
-            id: `p${edge}`,
-            label: isLast
-                ? `${formatRupeesFromPaise(edge)} & above`
-                : `${formatRupeesFromPaise(edge)} – ${formatRupeesFromPaise(edge + step)}`,
-            minPaise: edge,
-            maxPaise: isLast ? null : edge + step,
-        });
-        if (isLast) break;
-    }
-    return bands;
-}
-
-const DISCOUNT_OPTIONS = [10, 20, 30, 50];
-const RATING_OPTIONS = [4.5, 4.4, 4.3];
 
 function toggle(set: Set<string>, value: string) {
     const next = new Set(set);
@@ -289,7 +214,6 @@ function ShopCatalogInner({
     const [collections, setCollections] = useState<Set<string>>(new Set());
     const [priceIds, setPriceIds] = useState<Set<string>>(new Set());
     const [discountMin, setDiscountMin] = useState<number | null>(null);
-    const [ratingMin, setRatingMin] = useState<number | null>(null);
     const [inStockOnly, setInStockOnly] = useState(false);
     const [sort, setSort] = useState<SortKey>("featured");
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -341,9 +265,8 @@ function ShopCatalogInner({
                 }),
             discount: (p: ShopProductPublic) => discountMin == null || discountPct(p) >= discountMin,
             stock: (p: ShopProductPublic) => !inStockOnly || p.stockStatus === "in_stock",
-            rating: (p: ShopProductPublic) => ratingMin == null || demoRating(p.id).stars >= ratingMin,
         } satisfies Record<FacetKey, (p: ShopProductPublic) => boolean>;
-    }, [q, departments, cats, collections, priceIds, discountMin, inStockOnly, ratingMin, priceBands]);
+    }, [q, departments, cats, collections, priceIds, discountMin, inStockOnly, priceBands]);
 
     const matchesExcept = useMemo(() => {
         const keys = Object.keys(predicates) as FacetKey[];
@@ -368,9 +291,6 @@ function ShopCatalogInner({
                 break;
             case "name":
                 list.sort((a, b) => a.displayName.localeCompare(b.displayName));
-                break;
-            case "rating":
-                list.sort((a, b) => demoRating(b.id).stars - demoRating(a.id).stars);
                 break;
             case "featured":
             default:
@@ -495,9 +415,6 @@ function ShopCatalogInner({
         ...(discountMin != null
             ? [{ key: "disc", label: `${discountMin}% off or more`, clear: () => setDiscountMin(null) }]
             : []),
-        ...(ratingMin != null
-            ? [{ key: "rate", label: `${ratingMin}★ & above`, clear: () => setRatingMin(null) }]
-            : []),
         ...(inStockOnly ? [{ key: "stock", label: "In stock", clear: () => setInStockOnly(false) }] : []),
     ];
 
@@ -507,7 +424,6 @@ function ShopCatalogInner({
         setCollections(new Set());
         setPriceIds(new Set());
         setDiscountMin(null);
-        setRatingMin(null);
         setInStockOnly(false);
     };
 
@@ -578,25 +494,6 @@ function ShopCatalogInner({
                         count={countBy("discount", (p) => discountPct(p) >= d)}
                         checked={discountMin === d}
                         onChange={() => setDiscountMin((cur) => (cur === d ? null : d))}
-                    />
-                ))}
-            </FacetSection>
-
-            <FacetSection title="Customer rating">
-                {RATING_OPTIONS.map((r) => (
-                    <FacetOption
-                        key={r}
-                        id={`rate-${r}`}
-                        label={
-                            <span className="flex items-center gap-1">
-                                {r}
-                                <Star className="size-3.5 fill-amber-400 text-amber-400" />
-                                &amp; above
-                            </span>
-                        }
-                        count={countBy("rating", (p) => demoRating(p.id).stars >= r)}
-                        checked={ratingMin === r}
-                        onChange={() => setRatingMin((cur) => (cur === r ? null : r))}
                     />
                 ))}
             </FacetSection>
@@ -727,7 +624,6 @@ function ShopCatalogInner({
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="featured">Featured</SelectItem>
-                                        <SelectItem value="rating">Top rated</SelectItem>
                                         <SelectItem value="price-asc">Price · Low to high</SelectItem>
                                         <SelectItem value="price-desc">Price · High to low</SelectItem>
                                         <SelectItem value="name">Name A–Z</SelectItem>

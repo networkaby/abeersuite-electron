@@ -2,9 +2,9 @@ import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Star, Flame, ArrowRight } from "lucide-react";
+import { Flame, ArrowRight } from "lucide-react";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
-import { demoRating, productPath, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { productPath, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 
 export default function DealOfTheDay({
     product,
@@ -18,7 +18,6 @@ export default function DealOfTheDay({
     if (!product) return null;
     const img = product.galleryUrls[0] ?? product.imageUrl;
     const href = productPath(product);
-    const { stars, reviewCount } = demoRating(product.id);
     const discountPct =
         product.mrpPaise && product.mrpPaise > product.pricePaise
             ? Math.round((1 - product.pricePaise / product.mrpPaise) * 100)
@@ -83,22 +82,6 @@ export default function DealOfTheDay({
                         >
                             {product.displayName}
                         </Link>
-
-                        <div className="flex items-center gap-1 text-amber-500">
-                            {Array.from({ length: 5 }).map((_, i) => (
-                                <Star
-                                    key={i}
-                                    className={
-                                        i < Math.round(stars)
-                                            ? "size-4 fill-current"
-                                            : "size-4 text-muted/40"
-                                    }
-                                />
-                            ))}
-                            <span className="ml-1 text-sm text-muted-foreground">
-                                {stars.toFixed(1)} · {reviewCount} reviews
-                            </span>
-                        </div>
 
                         <div className="flex flex-wrap items-baseline gap-3">
                             <span className="text-3xl font-bold tabular-nums sm:text-4xl">

@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { invProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
@@ -32,6 +33,15 @@ export async function loadStorefrontProducts(opts: { brandId?: number } = {}): P
         .filter(({ p, pub }) => shopQualification(storefrontQualifiable(p, pub), rules).qualified)
         .map(({ pub }) => pub);
 }
+
+/**
+ * The same list, kept for 5 minutes — for the customer app's screens, which
+ * read it on every open (search, lists). A price or stock change shows within
+ * 5 minutes; the website pages keep reading it fresh.
+ */
+export const loadStorefrontProductsCached = unstable_cache(() => loadStorefrontProducts(), ["shop:storefront-products"], {
+    revalidate: 300,
+});
 
 export type StorefrontCategory = { name: string; count: number; fallbackImageUrl: string | null };
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
-import { productPath, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { appProductPath } from "@/modules/external/shopApp/appPaths";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 
 /**
@@ -24,11 +25,12 @@ export default function AppProductRail({ title, products }: { title: string; pro
     );
 }
 
-function AppProductTile({ product: p }: { product: ShopProductPublic }) {
+/** One product as a tile — the rails and the 2-column result grid both use it. */
+export function AppProductTile({ product: p }: { product: ShopProductPublic }) {
     const img = p.galleryUrls[0] ?? p.imageUrl;
     const off = p.mrpPaise && p.mrpPaise > p.pricePaise ? Math.round((1 - p.pricePaise / p.mrpPaise) * 100) : 0;
     return (
-        <Link href={productPath(p)} className="block overflow-hidden rounded-2xl border border-border/70 bg-card active:scale-[0.98] transition-transform">
+        <Link href={appProductPath(p)} className="block h-full overflow-hidden rounded-2xl border border-border/70 bg-card active:scale-[0.98] transition-transform">
             <div className="relative aspect-square bg-white">
                 <ShopRemoteImage src={img} alt={p.displayName} fill sizes="45vw" className="object-contain p-2" frame="square" />
                 {off > 0 && (
@@ -45,6 +47,8 @@ function AppProductTile({ product: p }: { product: ShopProductPublic }) {
                         <span className="text-[11px] text-muted-foreground line-through tabular-nums">{formatRupeesFromPaise(p.mrpPaise)}</span>
                     )}
                 </p>
+                {p.stockStatus === "backorder" && <p className="text-[11px] text-amber-700">On order · ships later</p>}
+                {!p.orderable && <p className="text-[11px] text-muted-foreground">Out of stock</p>}
             </div>
         </Link>
     );

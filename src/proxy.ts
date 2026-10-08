@@ -8,7 +8,7 @@ import { canOpenPage, NO_ACCESS_HOME, NO_ACCESS_PARAM } from "@/shared/lib/auth/
 import { isPhoneAppPath, isPhoneRequest, PHONE_APP_HOME, PHONE_APP_FORGOT, PHONE_APP_INSTALL, PHONE_APP_LOGIN } from "@/shared/lib/device/phone";
 import { isPhoneOnlyApi, isPhoneOnlyPage, isPhoneOnlySession, phoneOnlyMayCall } from "@/shared/lib/auth/phoneOnly";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
-import { isShopNativePath, SHOP_APP_INSTALL } from "@/shared/lib/device/shopApp";
+import { isShopNativePath, isShopNativeRequest, SHOP_APP_INSTALL, SHOP_NATIVE_DEV_COOKIE } from "@/shared/lib/device/shopApp";
 
 function isPublicPath(pathname: string): boolean {
     if (pathname === "/" || pathname === "/login") return true;
@@ -71,6 +71,15 @@ function staffHome(req: NextRequest, phoneOnly: boolean): URL {
  */
 const pageProxy = auth((req) => {
     const { pathname } = req.nextUrl;
+
+    // The customer app's screens open only inside the app (owner, 2026-10-08):
+    // a browser on any device is offered the app instead.
+    if (
+        isShopNativePath(pathname) &&
+        !isShopNativeRequest(req.headers.get("user-agent") ?? "", req.cookies.get(SHOP_NATIVE_DEV_COOKIE)?.value)
+    ) {
+        return NextResponse.redirect(new URL(SHOP_APP_INSTALL, req.url));
+    }
 
     if (pathname === "/portal/login") {
         const dest = new URL("/login", req.url);

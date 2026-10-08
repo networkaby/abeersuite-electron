@@ -6,13 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
-import { demoRating } from "@/shared/lib/shop/productPublic";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { useShopCartStore } from "@/store/external/shopCartStore";
 import { useShopWishlistStore } from "@/store/external/shopWishlistStore";
 import { useShopCompareStore, SHOP_COMPARE_MAX } from "@/store/external/shopCompareStore";
 import { toast } from "sonner";
-import { Heart, GitCompare, Minus, Plus, Share2, Star } from "lucide-react";
+import { Heart, GitCompare, Minus, Plus, Share2 } from "lucide-react";
 import { cn } from "@/shared/lib/format/utils";
 
 export default function ProductPurchasePanel({
@@ -33,7 +32,6 @@ export default function ProductPurchasePanel({
     const addCompare = useShopCompareStore((s) => s.add);
     const [qty, setQty] = useState(1);
 
-    const { stars, reviewCount } = demoRating(product.id);
     const discountPct =
         product.mrpPaise && product.mrpPaise > product.pricePaise
             ? Math.round((1 - product.pricePaise / product.mrpPaise) * 100)
@@ -63,17 +61,6 @@ export default function ProductPurchasePanel({
                 <Badge variant="outline">{product.category}</Badge>
             </div>
             <h1 className="text-3xl font-bold tracking-tight sm:text-4xl text-balance">{product.displayName}</h1>
-            <div className="flex flex-wrap items-center gap-2 text-amber-500">
-                {Array.from({ length: 5 }).map((_, i) => (
-                    <Star
-                        key={i}
-                        className={cn("size-5", i < Math.round(stars) ? "fill-current" : "text-muted/35")}
-                    />
-                ))}
-                <span className="text-sm text-muted-foreground ml-1">
-                    {stars.toFixed(1)} · {reviewCount} reviews
-                </span>
-            </div>
             <div className="rounded-2xl border border-border/80 bg-card/60 p-6 shadow-sm backdrop-blur-sm">
                 <div className="flex flex-wrap items-end gap-3">
                     <span className="text-4xl font-bold tabular-nums">{formatRupeesFromPaise(product.pricePaise)}</span>

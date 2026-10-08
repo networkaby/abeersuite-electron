@@ -2,12 +2,12 @@
 
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import Link from "next/link";
-import { Heart, GitCompare, Star } from "lucide-react";
+import { Heart, GitCompare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
-import { demoRating, productPath, productPreviewPath } from "@/shared/lib/shop/productPublic";
+import { productPath, productPreviewPath } from "@/shared/lib/shop/productPublic";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";
 import { useShopCartStore } from "@/store/external/shopCartStore";
@@ -39,7 +39,6 @@ export default function ProductCard({
     // In the office preview card, links open in a new tab so the editor never
     // loses the form (and its unsaved edits) by navigating away.
     const linkProps = preview ? { target: "_blank", rel: "noopener noreferrer" } : {};
-    const { stars, reviewCount } = demoRating(product.id);
     const discountPct =
         product.mrpPaise && product.mrpPaise > product.pricePaise
             ? Math.round((1 - product.pricePaise / product.mrpPaise) * 100)
@@ -114,17 +113,6 @@ export default function ProductCard({
                     </div>
                 </div>
                 <CardContent className="flex min-h-0 flex-1 flex-col gap-2 px-4 pb-4 pt-4 sm:px-5">
-                    <div className="flex items-center gap-1 text-amber-500">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                            <Star
-                                key={i}
-                                className={cn("size-3.5", i < Math.round(stars) ? "fill-current" : "text-muted/40")}
-                            />
-                        ))}
-                        <span className="ml-1 text-xs text-muted-foreground">
-                            {stars.toFixed(1)} ({reviewCount})
-                        </span>
-                    </div>
                     <Link href={href} {...linkProps} className="font-semibold leading-snug hover:text-primary transition-colors line-clamp-2">
                         {product.displayName}
                     </Link>

@@ -53,3 +53,15 @@ export function isShopNativePath(pathname: string): boolean {
 export function isShopNativeUserAgent(userAgent: string): boolean {
     return userAgent.includes(SHOP_NATIVE_UA);
 }
+
+/** Development only: a desktop browser cannot send the app's user agent, so
+ *  this cookie (`document.cookie = "nsShopApp=1; path=/"`) stands in for it.
+ *  Ignored in production builds. */
+export const SHOP_NATIVE_DEV_COOKIE = "nsShopApp";
+
+/** May this request open the app's screens? Only the app itself — every other
+ *  visitor is sent to the "Get the app" page. Edge-safe (proxy.ts). */
+export function isShopNativeRequest(userAgent: string, devCookie: string | undefined): boolean {
+    if (isShopNativeUserAgent(userAgent)) return true;
+    return process.env.NODE_ENV !== "production" && devCookie === "1";
+}

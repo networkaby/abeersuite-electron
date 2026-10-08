@@ -2,12 +2,12 @@
 
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import Link from "next/link";
-import { Heart, GitCompare, Star } from "lucide-react";
+import { Heart, GitCompare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
-import { demoRating, productPath } from "@/shared/lib/shop/productPublic";
+import { productPath } from "@/shared/lib/shop/productPublic";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { cn } from "@/shared/lib/format/utils";
 import { useShopCartStore } from "@/store/external/shopCartStore";
@@ -23,7 +23,6 @@ export default function ProductListRow({ product, className }: { product: ShopPr
 
     const mainImg = product.galleryUrls[0] ?? product.imageUrl;
     const href = productPath(product);
-    const { stars, reviewCount } = demoRating(product.id);
     const discountPct =
         product.mrpPaise && product.mrpPaise > product.pricePaise
             ? Math.round((1 - product.pricePaise / product.mrpPaise) * 100)
@@ -72,17 +71,6 @@ export default function ProductListRow({ product, className }: { product: ShopPr
                         <Link href={href} className="font-semibold leading-snug hover:text-primary transition-colors line-clamp-2">
                             {product.displayName}
                         </Link>
-                        <div className="flex items-center gap-1 text-amber-500">
-                            {Array.from({ length: 5 }).map((_, i) => (
-                                <Star
-                                    key={i}
-                                    className={cn("size-3.5", i < Math.round(stars) ? "fill-current" : "text-muted/40")}
-                                />
-                            ))}
-                            <span className="ml-1 text-xs text-muted-foreground">
-                                {stars.toFixed(1)} ({reviewCount})
-                            </span>
-                        </div>
                     </div>
                     <div className="flex shrink-0 gap-1">
                         <Button

@@ -2,12 +2,7 @@ import Link from "next/link";
 import { LayoutGrid } from "lucide-react";
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import type { StorefrontCategory } from "@/shared/lib/shop/storefrontProducts";
-
-/** Where a category opens — the shop's filtered list for now; the app's own
- *  product list comes with the shopping phase. */
-export function categoryHref(name: string): string {
-    return `/shop?category=${encodeURIComponent(name)}`;
-}
+import { appProductsPath } from "@/modules/external/shopApp/appPaths";
 
 /**
  * Round category tiles, four to a row. `limit` keeps Home to two rows and adds
@@ -29,7 +24,7 @@ export default function AppCategoryGrid({
         <ul className="grid grid-cols-4 gap-x-2 gap-y-4 px-4">
             {shown.map((c) => (
                 <li key={c.name}>
-                    <Link href={categoryHref(c.name)} className={tile}>
+                    <Link href={appProductsPath({ category: c.name })} className={tile}>
                         <span className={circle}>
                             <ShopRemoteImage src={c.fallbackImageUrl} alt="" fill sizes="64px" className="object-contain p-1.5" />
                         </span>
