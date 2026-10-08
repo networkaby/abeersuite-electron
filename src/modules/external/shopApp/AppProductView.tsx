@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -9,6 +9,7 @@ import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import AppProductRail from "@/modules/external/shopApp/AppProductRail";
 import { useCartCount } from "@/modules/external/shopApp/CustomerAppShell";
 import { APP } from "@/modules/external/shopApp/appPaths";
+import { noteViewed, savePincode, useSavedPincode } from "@/modules/external/shopApp/appDevicePrefs";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { parseDigitsInput } from "@/shared/lib/format";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
@@ -31,6 +32,8 @@ export default function AppProductView({ product: p, similar }: { product: ShopP
     const wish = useShopWishlistStore((s) => s.has(p.id));
     const toggleWish = useShopWishlistStore((s) => s.toggle);
     const cartCount = useCartCount();
+    // Home's "Recently viewed".
+    useEffect(() => noteViewed(p.id), [p.id]);
 
     const photos = p.galleryUrls.length > 0 ? p.galleryUrls : p.imageUrl ? [p.imageUrl] : [];
     const [photo, setPhoto] = useState(0);
@@ -211,7 +214,11 @@ function Section({ title, open, children }: { title: string; open?: boolean; chi
  * this only confirms we can find the place.
  */
 function DeliveryCheck() {
-    const [pin, setPin] = useState("");
+    // Starts from the pincode saved on Home (or the last one checked here).
+    const saved = useSavedPincode();
+    const [typed, setTyped] = useState<string | null>(null);
+    const pin = typed ?? saved;
+    const setPin = setTyped;
     const [place, setPlace] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
 
@@ -221,6 +228,7 @@ function DeliveryCheck() {
         try {
             const r = await fetch(`/api/shop/pincode/${pin}`).then((x) => x.json() as Promise<{ ok: boolean; city?: string; state?: string }>);
             setPlace(r.ok ? `${r.city}, ${r.state}` : "");
+            if (r.ok) savePincode(pin);
         } catch {
             setPlace("");
         } finally {

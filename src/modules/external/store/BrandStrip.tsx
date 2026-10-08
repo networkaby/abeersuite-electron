@@ -1,5 +1,5 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
 import BrandStripView from "./BrandStripView";
+import { loadShopBrands } from "@/shared/lib/shop/shopBrands";
 
 /**
  * Storefront brand strip — fetches the active, logo-bearing brands and hands
@@ -13,14 +13,6 @@ export default async function BrandStrip({
     eyebrow?: string;
     title?: string;
 } = {}) {
-    const brands = await prisma.invBrand.findMany({
-        where: {
-            isActive: true,
-            imageUrl: { not: null },
-            products: { some: { isListedInShop: true, isActive: true } },
-        },
-        select: { name: true, imageUrl: true, slug: true },
-        orderBy: { name: "asc" },
-    });
+    const brands = await loadShopBrands();
     return <BrandStripView brands={brands} eyebrow={eyebrow} title={title} />;
 }
