@@ -1,30 +1,15 @@
-# v1.14.0 [urgent]
+# v1.15.0 [urgent]
 
-Every counter and the office should take this update today. It adds due-payment reminders, customer WhatsApp replies on CRM, and the first version of the new customer shopping app. It adds new tables to the database. Update the counters first and deploy the office site after that. Until a counter updates, the new tables simply don't sync there. Billing is not affected.
-
-## Due reminders
-
-- New due reminder screens: send a reminder to one party, or to everyone at once, with DUE_SOFT and DUE_FIRM WhatsApp templates.
-- Daily rules in Settings send reminders automatically. Parties still under a chosen % of their auto or manual credit limit are skipped.
-- The owner gets a bell notification when the daily run adds names to the call list.
-- Customers can pay their due by UPI from the portal.
+Every counter and the office should take this update today. It makes customer WhatsApp chats something the whole team can work from any screen, and adds photos, files and voice notes to those chats. It changes the database: the message table gets new columns and a new table tracks who is handling each chat. Update every counter first — a counter on the old version pauses its sync once the office site goes live with this change, and starts again as soon as it updates.
 
 ## Customer messages
 
-- When a customer replies on WhatsApp, the reply now shows on CRM → Messages, linked to the party just like phone calls.
-- Opening a chat clears its unread badge. The Role page shows a "Can reply on WhatsApp" tick.
-- WhatsApp Templates now works on the counter's office build too.
+- A new-message popup now appears on every screen when a customer writes on WhatsApp — no need to keep CRM → Messages open.
+- Reply to the customer right from the popup. Once someone replies, the popup closes for everyone else.
+- The first person to reply owns the chat. They can invite a colleague to help, or hand the chat over completely.
+- Type @ and a colleague's name in the popup to pass the chat on to them.
+- Customers' photos, documents and voice notes now show inside the chat, and you can send files back.
 
-## Customer app and portal
+## Behind the scenes
 
-- New customer shopping app: Home with banners, deals and categories, search, product page, cart, 3-step checkout, orders, bills, ledger, outstanding, repairs, wishlist, coupons, wallet and profile.
-- My Coupons and My Wallet now show real shop coupons, loyalty points and gift cards.
-- The app receives bill notifications as push messages on the phone.
-- The portal is now built for phones first: bottom tab bar, slimmer top bar and a yellow "Visit our shop" button.
-- Shop and portal pages on phones offer a "Get our app" strip.
-- An order page now opens only for the customer who placed the order.
-
-## Fixes
-
-- Desktop Day Book hides the supplier side unless "Show suppliers" is ticked.
-- On phones, the shop header no longer overflows, and the Sign in button no longer flashes while the session loads.
+- Groundwork for a second WhatsApp business number: each message remembers which of our numbers it came through, so a reply goes back from the same number. The main number stays the one we send from for now.
