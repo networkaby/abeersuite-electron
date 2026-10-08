@@ -1,60 +1,27 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getMockWallet } from "@/shared/lib/portal/mockAdapters";
-import { formatRupees } from "@/shared/lib/format/moneyInr";
-import PortalSectionHeader from "@/modules/external/portal/PortalSectionHeader";
 import { Wallet } from "lucide-react";
+import PortalSectionHeader from "@/modules/external/portal/PortalSectionHeader";
+import PortalWalletView from "@/modules/external/portal/PortalWalletView";
+import { loadPortalWallet } from "@/modules/external/portal/portalWallet";
+import { resolveActivePortalAccount } from "@/shared/lib/auth/portalActiveAccount";
 
+/** My Wallet — reward points and gift cards of the profile in use (portalWallet.ts). */
 export default async function PortalWalletPage() {
     const session = await auth();
-    const kind = (session?.user as { kind?: string } | undefined)?.kind;
-    if (!session?.user || kind !== "customer") {
-        redirect("/login?callbackUrl=/portal/wallet");
-    }
-
-    // Phase 2 contract: replace with wallet ledger API and live balance.
-    const wallet = await getMockWallet();
+    const user = session?.user as { kind?: string; customerId?: string } | undefined;
+    const customerId = Number.parseInt(user?.customerId ?? "", 10);
+    if (user?.kind !== "customer" || !Number.isFinite(customerId)) redirect("/login?callbackUrl=/portal/wallet");
+    const context = await resolveActivePortalAccount(customerId);
+    if (!context) redirect("/portal");
+    const wallet = await loadPortalWallet(context.active.accountId);
 
     return (
         <main className="px-3 py-4 sm:px-4 sm:py-6 md:px-6 md:py-8">
-            <div className="mx-auto max-w-5xl space-y-5">
-                <PortalSectionHeader
-                    title="My Wallet"
-                    description="Track credits, refunds, and balance usage."
-                    icon={Wallet}
-                />
-                <Card className="border-border/70">
-                    <CardHeader>
-                        <CardDescription>Available balance</CardDescription>
-                        <CardTitle className="text-3xl tracking-tight">{formatRupees(wallet.balanceInr)}</CardTitle>
-                    </CardHeader>
-                </Card>
-
-                <Card className="border-border/70">
-                    <CardHeader>
-                        <CardTitle className="text-base">Recent transactions</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                        {wallet.txns.map((txn) => (
-                            <div key={txn.id} className="flex items-center justify-between rounded-md border border-border/70 p-3">
-                                <div>
-                                    <p className="text-sm font-medium">{txn.label}</p>
-                                    <p className="text-xs text-muted-foreground">{txn.date}</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className={`text-sm font-semibold ${txn.type === "credit" ? "text-emerald-600" : "text-foreground"}`}>
-                                        {txn.type === "credit" ? "+" : "-"}{formatRupees(txn.amountInr)}
-                                    </p>
-                                    <Badge variant="outline" className="text-[10px]">{txn.type}</Badge>
-                                </div>
-                            </div>
-                        ))}
-                    </CardContent>
-                </Card>
+            <div className="mx-auto max-w-3xl space-y-5">
+                <PortalSectionHeader title="My Wallet" description="Reward points and gift cards." icon={Wallet} />
+                <PortalWalletView wallet={wallet} profileLabel={context.active.label} />
             </div>
         </main>
     );
 }
-
