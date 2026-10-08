@@ -12,12 +12,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDateTime } from "@/shared/lib/format";
 import { extractApiError } from "@/shared/lib/api";
 import { useRealtimeTopics } from "@/shared/hooks";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import { cn } from "@/shared/lib/format/utils";
+import StaffPickerDialog, { type PickMode, type Staff } from "@/modules/message/components/StaffPickerDialog";
 import { MessageMedia, captionOf, type MediaInfo } from "./MessageMedia";
 
 // ── Wire types (mirror /api/messages/*) ─────────────────────────────────────────
@@ -50,9 +50,6 @@ interface Thread {
     replyWindow: { open: boolean; closesAt: string | null };
     items: (ThreadMessage | ThreadCall)[];
 }
-
-type Staff = { id: number; name: string };
-type PickMode = "invite" | "handover";
 
 type Filter = "all" | "unread" | "open" | "unknown";
 const FILTERS: { key: Filter; label: string }[] = [
@@ -119,8 +116,6 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
     const bottomRef = useRef<HTMLDivElement>(null);
     const me = Number((useSession().data?.user as { id?: string } | undefined)?.id ?? 0);
     const [pick, setPick] = useState<PickMode | null>(null);
-    const [staff, setStaff] = useState<Staff[]>([]);
-    const [staffQuery, setStaffQuery] = useState("");
 
     const loadList = useCallback(async (p = 1) => {
         try {
@@ -195,15 +190,7 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
             toast.error(extractApiError(e, "Could not update who handles this chat"));
         }
     };
-    const openPicker = (mode: PickMode) => {
-        setPick(mode);
-        setStaffQuery("");
-        if (!staff.length) {
-            axios.get<{ staff: Staff[] }>("/api/messages/claim")
-                .then((r) => setStaff(r.data.staff))
-                .catch((e) => toast.error(extractApiError(e, "Could not load staff")));
-        }
-    };
+    const openPicker = (mode: PickMode) => setPick(mode);
 
     const refresh = useCallback(() => {
         void loadList(1);
@@ -550,32 +537,15 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
                 )}
             </section>
 
-            <Dialog open={pick !== null} onOpenChange={(o) => { if (!o) setPick(null); }}>
-                <DialogContent className="max-w-sm">
-                    <DialogHeader>
-                        <DialogTitle>{pick === "handover" ? "Hand this chat over to" : "Invite to help on this chat"}</DialogTitle>
-                    </DialogHeader>
-                    <Input value={staffQuery} onChange={(e) => setStaffQuery(e.target.value)} placeholder="Search staff" autoFocus />
-                    <div className="max-h-72 overflow-y-auto">
-                        {staff
-                            .filter((s) => s.id !== me && s.name.toLowerCase().includes(staffQuery.trim().toLowerCase()))
-                            .filter((s) => pick !== "invite" || (s.id !== thread?.claim?.owner.id && !thread?.claim?.helpers.some((h) => h.id === s.id)))
-                            .map((s) => (
-                                <button
-                                    key={s.id}
-                                    className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
-                                    onClick={() => pick && void changeClaim(
-                                        { action: pick, userId: s.id },
-                                        pick === "handover" ? `Handed over to ${s.name}` : `${s.name} invited`,
-                                    )}
-                                >
-                                    {s.name}
-                                </button>
-                            ))}
-                        {staff.length === 0 && <p className="p-2 text-sm text-muted-foreground">Loading…</p>}
-                    </div>
-                </DialogContent>
-            </Dialog>
+            <StaffPickerDialog
+                mode={pick}
+                exclude={[me, ...(pick === "invite" && thread?.claim ? [thread.claim.owner.id, ...thread.claim.helpers.map((h) => h.id)] : [])]}
+                onClose={() => setPick(null)}
+                onPick={(st: Staff) => pick && void changeClaim(
+                    { action: pick, userId: st.id },
+                    pick === "handover" ? `Handed over to ${st.name}` : `${st.name} invited`,
+                )}
+            />
 
             <CreatePersonDialog
                 open={newPartyPhone !== null}

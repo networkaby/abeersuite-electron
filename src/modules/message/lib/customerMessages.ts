@@ -389,12 +389,24 @@ export async function sendReply(args: { phone: string; text: string; userId: num
             occurredAt: new Date(),
         },
     });
-    // The first staff member to reply takes the chat; an existing owner keeps it.
-    await prisma.messageClaim.upsert({
-        where: { phone: args.phone },
-        create: { phone: args.phone, ownerUserId: args.userId },
-        update: {},
+    // A reply answers what the customer wrote: their messages are read for the
+    // whole shop, so the new-message popup closes everywhere.
+    await prisma.message.updateMany({
+        where: { phone: args.phone, direction: "IN", seenAt: null },
+        data: { seenAt: new Date() },
     });
+    // Replying puts you in the conversation: the first to reply owns it, anyone
+    // else who replies joins as a helper, so the customer's next message pops
+    // up for them too.
+    const claim = await prisma.messageClaim.findUnique({ where: { phone: args.phone } });
+    if (!claim) {
+        await prisma.messageClaim.create({ data: { phone: args.phone, ownerUserId: args.userId } });
+    } else if (claim.ownerUserId !== args.userId && !claim.helperUserIds.includes(args.userId)) {
+        await prisma.messageClaim.update({
+            where: { phone: args.phone },
+            data: { helperUserIds: [...claim.helperUserIds, args.userId] },
+        });
+    }
     void publishChangeServer(["messages"]);
     return row;
 }

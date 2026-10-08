@@ -2,20 +2,23 @@
 
 /**
  * MessageAlertPopup — a customer's WhatsApp message pops up on whatever screen
- * staff are on. Mounted once in the office layout and once in the POS layout
- * (as CallFollowUpPopup), so it is never tied to the Messages screen.
+ * staff are on, and is ANSWERED FROM THE POPUP, like a call is logged from the
+ * call popup. Mounted once in the office layout and once in the POS layout (as
+ * CallFollowUpPopup), so it is never tied to the Messages screen — which stays
+ * open to everyone with the page, as before.
  *
  * WHO SEES WHICH CHAT (MessageClaim):
- *  - nobody handling it yet → everyone who may open CRM → Messages;
- *  - claimed → its owner and invited helpers only;
- *  - …until its oldest unread message has waited MESSAGE_CLAIM_FALLBACK_MS,
- *    then everyone again — an owner who has gone for tea cannot sit on it.
- * The first reply claims the chat on the server; "Take it" here claims it
- * without replying.
+ *  - nobody in the conversation yet → everyone who may open CRM → Messages;
+ *  - once someone has replied → only the people in it: the first to reply
+ *    (owner), anyone else who replied, and anyone invited. "Ask the accountant
+ *    about the bill" is an Invite (or Hand over) right on the card;
+ *  - …until a message has waited MESSAGE_CLAIM_FALLBACK_MS unanswered, then
+ *    everyone again — nobody can sit on a customer.
  *
- * STAYS UNTIL ACTED ON. A card leaves when someone opens the chat (that marks it
- * seen for the whole shop), or when this person closes it — and then only until
- * the customer writes again.
+ * A REPLY CLOSES IT FOR EVERYONE. Sending marks the customer's messages read
+ * (server side, sendReply), so the card leaves every screen at once. The card
+ * also leaves when someone opens the chat on the Messages screen, or when this
+ * person closes it — and then only until the customer writes again.
  *
  * COST. One read of /api/messages/alerts per realtime "messages" signal, none on
  * a timer: the answer carries every chat with its claim, and the 10-minute
@@ -29,24 +32,27 @@ import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
-import { MessageCircle, X, Hand } from "lucide-react";
+import { MessageCircle, X, Send, Users, ArrowRightLeft, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { canOpenPage } from "@/shared/lib/auth/pageAccess";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { MESSAGE_CLAIM_FALLBACK_MS } from "@/shared/lib/constants/polling";
 import { extractApiError } from "@/shared/lib/api";
+import StaffPickerDialog, { type PickMode, type Staff } from "./StaffPickerDialog";
 
 const MESSAGES_HREF = "/office/crm/messages";
 const DISMISS_KEY = "message-alert-dismissed:v1";
 const MAX_CARDS = 3;
 
-type Staff = { id: number; name: string };
 type Alert = {
     phone: string;
     name: string;
     lastId: number;
     body: string;
+    /** Up to the last 3 unread messages, oldest first. */
+    recent: string[];
     count: number;
     lastAt: string;
     firstAt: string;
@@ -78,6 +84,8 @@ function chime() {
     } catch { /* no audio */ }
 }
 
+const inChat = (a: Alert, me: number) => !!a.claim && (a.claim.owner.id === me || a.claim.helpers.some((h) => h.id === me));
+
 export default function MessageAlertPopup() {
     const router = useRouter();
     const pathname = usePathname();
@@ -92,7 +100,9 @@ export default function MessageAlertPopup() {
     const [items, setItems] = useState<Alert[]>([]);
     const [dismissed, setDismissed] = useState<Record<string, number>>({});
     const [now, setNow] = useState(() => Date.now());
-    const [busy, setBusy] = useState<string | null>(null);
+    const [drafts, setDrafts] = useState<Record<string, string>>({});
+    const [sending, setSending] = useState<string | null>(null);
+    const [pick, setPick] = useState<{ mode: PickMode; alert: Alert } | null>(null);
     const notified = useRef<Set<number> | null>(null);
 
     useEffect(() => { setDismissed(loadDismissed()); }, []);
@@ -118,8 +128,7 @@ export default function MessageAlertPopup() {
         if (!me) return [];
         return items.filter((a) => {
             if ((dismissed[a.phone] ?? 0) >= a.lastId) return false;
-            if (!a.claim) return true;
-            if (a.claim.owner.id === me || a.claim.helpers.some((h) => h.id === me)) return true;
+            if (!a.claim || inChat(a, me)) return true;
             return now - new Date(a.firstAt).getTime() >= MESSAGE_CLAIM_FALLBACK_MS;
         });
     }, [items, dismissed, me, now]);
@@ -138,9 +147,9 @@ export default function MessageAlertPopup() {
         if (typeof Notification !== "undefined" && Notification.permission === "granted") {
             const a = fresh[0];
             const n = new Notification(`WhatsApp · ${a.name}`, { body: a.body.slice(0, 120), tag: `wa-${a.phone}` });
-            n.onclick = () => { window.focus(); router.push(`${MESSAGES_HREF}?phone=${a.phone}`); n.close(); };
+            n.onclick = () => { window.focus(); n.close(); };
         }
-    }, [visible, allowed, onMessagesScreen, router]);
+    }, [visible, allowed, onMessagesScreen]);
 
     useEffect(() => {
         if (allowed && typeof Notification !== "undefined" && Notification.permission === "default") {
@@ -153,68 +162,118 @@ export default function MessageAlertPopup() {
         saveDismissed(next);
         setDismissed(next);
     };
-    const open = (a: Alert) => router.push(`${MESSAGES_HREF}?phone=${a.phone}`);
-    const take = async (a: Alert) => {
-        setBusy(a.phone);
+
+    const send = async (a: Alert) => {
+        const text = (drafts[a.phone] ?? "").trim();
+        if (!text || sending) return;
+        setSending(a.phone);
         try {
-            await axios.post("/api/messages/claim", { phone: a.phone, action: "take" });
-            open(a);
+            await axios.post("/api/messages/reply", { phone: a.phone, text });
+            setDrafts((d) => ({ ...d, [a.phone]: "" }));
+            // Gone at once here; the server marked it read for everyone else.
+            setItems((list) => list.filter((x) => x.phone !== a.phone));
+            toast.success(`Replied to ${a.name}`);
         } catch (e) {
-            toast.error(extractApiError(e, "Could not take the chat"));
+            toast.error(extractApiError(e, "Reply not sent"));
         } finally {
-            setBusy(null);
+            setSending(null);
         }
     };
 
-    if (!allowed || onMessagesScreen || visible.length === 0) return null;
+    const claim = async (a: Alert, mode: PickMode, s: Staff) => {
+        setPick(null);
+        try {
+            await axios.post("/api/messages/claim", { phone: a.phone, action: mode, userId: s.id });
+            toast.success(mode === "handover" ? `Handed over to ${s.name}` : `${s.name} invited`);
+            void load();
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not update who handles this chat"));
+        }
+    };
+
+    if (!allowed || onMessagesScreen || !me) return null;
     const shown = visible.slice(0, MAX_CARDS);
     const more = visible.length - shown.length;
 
     return (
-        <div className="fixed bottom-4 right-4 z-[60] flex w-80 flex-col gap-2">
-            {shown.map((a) => {
-                const mine = a.claim?.owner.id === me;
-                const waitedOut = a.claim && !mine && !a.claim.helpers.some((h) => h.id === me);
-                return (
-                    <div key={a.phone} className="rounded-lg border border-green-300 bg-background p-3 shadow-lg dark:border-green-800">
-                        <div className="flex items-start gap-2">
-                            <MessageCircle className="mt-0.5 size-4 shrink-0 text-green-600" />
-                            <div className="min-w-0 flex-1">
-                                <div className="flex items-center justify-between gap-2">
-                                    <span className="truncate text-sm font-semibold">{a.name}</span>
-                                    {a.count > 1 && <span className="rounded-full bg-green-600 px-1.5 text-[11px] text-white">{a.count}</span>}
+        <>
+            {shown.length > 0 && (
+                <div className="fixed bottom-4 right-4 z-[60] flex w-96 flex-col gap-2">
+                    {shown.map((a) => {
+                        const mine = inChat(a, me);
+                        const isOwner = a.claim?.owner.id === me;
+                        return (
+                            <div key={a.phone} className="rounded-lg border border-green-300 bg-background p-3 shadow-lg dark:border-green-800">
+                                <div className="flex items-start gap-2">
+                                    <MessageCircle className="mt-0.5 size-4 shrink-0 text-green-600" />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="truncate text-sm font-semibold">{a.name}</span>
+                                            {a.count > 1 && <span className="rounded-full bg-green-600 px-1.5 text-[11px] text-white">{a.count}</span>}
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground">
+                                            {!a.claim
+                                                ? "New — nobody has answered yet"
+                                                : mine
+                                                    ? (isOwner ? "Your chat" : `With ${a.claim.owner.name} — you were invited`)
+                                                    : `${a.claim.owner.name} has not answered for 10 min`}
+                                        </p>
+                                    </div>
+                                    <button onClick={() => router.push(`${MESSAGES_HREF}?phone=${a.phone}`)} className="text-muted-foreground hover:text-foreground" title="Open the full chat">
+                                        <ExternalLink className="size-4" />
+                                    </button>
+                                    <button onClick={() => close(a)} className="text-muted-foreground hover:text-foreground" title="Close until they write again">
+                                        <X className="size-4" />
+                                    </button>
                                 </div>
-                                <p className="line-clamp-2 text-sm text-muted-foreground">{a.body}</p>
-                                <p className="mt-1 text-[11px] text-muted-foreground">
-                                    {!a.claim
-                                        ? "New — nobody has taken it yet"
-                                        : mine
-                                            ? "Your chat"
-                                            : waitedOut
-                                                ? `${a.claim.owner.name} has not answered for 10 min`
-                                                : `${a.claim.owner.name} invited you`}
-                                </p>
+                                <div className="mt-2 space-y-1">
+                                    {a.recent.map((b, i) => (
+                                        <p key={i} className="w-fit max-w-full whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1 text-sm">{b}</p>
+                                    ))}
+                                </div>
+                                {canReply && (
+                                    <>
+                                        <div className="mt-2 flex items-end gap-2">
+                                            <Textarea
+                                                value={drafts[a.phone] ?? ""}
+                                                onChange={(e) => setDrafts((d) => ({ ...d, [a.phone]: e.target.value }))}
+                                                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(a); } }}
+                                                placeholder="Type a reply — Enter sends"
+                                                rows={1}
+                                                className="min-h-9 resize-none text-sm"
+                                            />
+                                            <Button size="icon" disabled={sending === a.phone || !(drafts[a.phone] ?? "").trim()} onClick={() => void send(a)} title="Send on WhatsApp">
+                                                <Send className="size-4" />
+                                            </Button>
+                                        </div>
+                                        <div className="mt-1.5 flex justify-end gap-1">
+                                            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setPick({ mode: "invite", alert: a })}>
+                                                <Users className="mr-1 size-3" /> Invite
+                                            </Button>
+                                            {(isOwner || !a.claim) && (
+                                                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setPick({ mode: "handover", alert: a })}>
+                                                    <ArrowRightLeft className="mr-1 size-3" /> Hand over
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
                             </div>
-                            <button onClick={() => close(a)} className="text-muted-foreground hover:text-foreground" title="Close until they write again">
-                                <X className="size-4" />
-                            </button>
-                        </div>
-                        <div className="mt-2 flex justify-end gap-2">
-                            {canReply && !mine && (
-                                <Button size="sm" variant="outline" disabled={busy === a.phone} onClick={() => void take(a)}>
-                                    <Hand className="mr-1 size-3.5" /> Take it
-                                </Button>
-                            )}
-                            <Button size="sm" onClick={() => open(a)}>Open</Button>
-                        </div>
-                    </div>
-                );
-            })}
-            {more > 0 && (
-                <button onClick={() => router.push(MESSAGES_HREF)} className="self-end rounded-md bg-green-600 px-2 py-1 text-xs text-white shadow">
-                    +{more} more waiting
-                </button>
+                        );
+                    })}
+                    {more > 0 && (
+                        <button onClick={() => router.push(MESSAGES_HREF)} className="self-end rounded-md bg-green-600 px-2 py-1 text-xs text-white shadow">
+                            +{more} more waiting
+                        </button>
+                    )}
+                </div>
             )}
-        </div>
+            <StaffPickerDialog
+                mode={pick?.mode ?? null}
+                exclude={[me, ...(pick?.alert.claim ? [pick.alert.claim.owner.id, ...pick.alert.claim.helpers.map((h) => h.id)] : [])]}
+                onClose={() => setPick(null)}
+                onPick={(s) => pick && void claim(pick.alert, pick.mode, s)}
+            />
+        </>
     );
 }

@@ -15,6 +15,8 @@ import { claimsByPhone, ownersByPhone } from "@/modules/message/lib/customerMess
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 const SCAN = 200;
+/** Unread messages a popup card shows, newest last. */
+const RECENT = 3;
 
 export async function GET() {
     const { response } = await requireAuth();
@@ -27,13 +29,13 @@ export async function GET() {
             select: { id: true, phone: true, body: true, senderName: true, occurredAt: true },
         });
 
-        type Chat = { phone: string; lastId: number; body: string; senderName: string | null; lastAt: Date; firstAt: Date; count: number };
+        type Chat = { phone: string; lastId: number; body: string; recent: string[]; senderName: string | null; lastAt: Date; firstAt: Date; count: number };
         const byPhone = new Map<string, Chat>();
         for (const r of rows) {
             const phone = r.phone!;
             const c = byPhone.get(phone);
-            if (!c) byPhone.set(phone, { phone, lastId: r.id, body: r.body, senderName: r.senderName, lastAt: r.occurredAt, firstAt: r.occurredAt, count: 1 });
-            else { c.count++; c.firstAt = r.occurredAt; c.senderName ??= r.senderName; }
+            if (!c) byPhone.set(phone, { phone, lastId: r.id, body: r.body, recent: [r.body], senderName: r.senderName, lastAt: r.occurredAt, firstAt: r.occurredAt, count: 1 });
+            else { c.count++; c.firstAt = r.occurredAt; if (c.recent.length < RECENT) c.recent.unshift(r.body); c.senderName ??= r.senderName; }
         }
         const phones = [...byPhone.keys()];
         const [owners, claims] = await Promise.all([ownersByPhone(phones), claimsByPhone(phones)]);
@@ -43,6 +45,7 @@ export async function GET() {
             name: owners.get(c.phone)?.name ?? c.senderName ?? `+91 ${c.phone}`,
             lastId: c.lastId,
             body: c.body,
+            recent: c.recent,
             count: c.count,
             lastAt: c.lastAt.toISOString(),
             /** The oldest unread one — what the 10-minute hand-back is measured from. */
