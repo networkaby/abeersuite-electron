@@ -65,6 +65,28 @@ export default function AppProductView({ product: p, similar }: { product: ShopP
 
     return (
         <>
+            {/* Top bar, Flipkart-style: back, a full search box, cart — stays on screen. */}
+            <header className="sticky top-0 z-20 flex items-center gap-2 bg-primary/10 px-2 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] backdrop-blur">
+                <button type="button" onClick={() => router.back()} className="flex size-10 shrink-0 items-center justify-center rounded-full active:bg-black/5" aria-label="Back">
+                    <ChevronLeft className="size-6" />
+                </button>
+                <Link
+                    href={`${APP}/search`}
+                    className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border-2 border-primary/60 bg-background px-3 text-[15px] text-muted-foreground"
+                >
+                    <Search className="size-5 shrink-0" />
+                    <span className="truncate">Search for products</span>
+                </Link>
+                <Link href={`${APP}/cart`} className="relative flex size-10 shrink-0 items-center justify-center rounded-full active:bg-black/5" aria-label="Cart">
+                    <ShoppingCart className="size-6" />
+                    {cartCount > 0 && (
+                        <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                            {cartCount}
+                        </span>
+                    )}
+                </Link>
+            </header>
+
             {/* Photos, edge to edge. */}
             <div className="relative bg-white">
                 <ul
@@ -84,38 +106,22 @@ export default function AppProductView({ product: p, similar }: { product: ShopP
                         ))}
                     </div>
                 )}
-                <div className="absolute inset-x-0 top-0 flex items-center gap-2 px-3 pt-[calc(0.5rem+env(safe-area-inset-top))]">
-                    <button type="button" onClick={() => router.back()} className={roundButton} aria-label="Back">
-                        <ChevronLeft className="size-6" />
+                <div className="absolute right-3 top-3 flex flex-col gap-2">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            toggleWish(p.id);
+                            toast(wish ? "Removed from wishlist" : "Saved to wishlist");
+                        }}
+                        className={roundButton}
+                        aria-label={wish ? "Remove from wishlist" : "Save to wishlist"}
+                    >
+                        <Heart className={`size-5 ${wish ? "fill-rose-500 text-rose-500" : ""}`} />
                     </button>
-                    <span className="flex-1" />
-                    {/* Changed their mind? Straight to search, as in Flipkart / Amazon. */}
-                    <Link href={`${APP}/search`} className={roundButton} aria-label="Search">
-                        <Search className="size-5" />
-                    </Link>
                     <button type="button" onClick={() => void share()} className={roundButton} aria-label="Share">
                         <Share2 className="size-5" />
                     </button>
-                    <Link href={`${APP}/cart`} className={`relative ${roundButton}`} aria-label="Cart">
-                        <ShoppingCart className="size-5" />
-                        {cartCount > 0 && (
-                            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
-                                {cartCount}
-                            </span>
-                        )}
-                    </Link>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => {
-                        toggleWish(p.id);
-                        toast(wish ? "Removed from wishlist" : "Saved to wishlist");
-                    }}
-                    className={`absolute bottom-3 right-3 ${roundButton}`}
-                    aria-label={wish ? "Remove from wishlist" : "Save to wishlist"}
-                >
-                    <Heart className={`size-5 ${wish ? "fill-rose-500 text-rose-500" : ""}`} />
-                </button>
             </div>
 
             <div className="space-y-2 border-b bg-background px-4 py-4">
@@ -170,7 +176,7 @@ export default function AppProductView({ product: p, similar }: { product: ShopP
             )}
 
             {/* Room for the fixed bar, so it never covers the last line. */}
-            <div className="h-[calc(4.5rem+env(safe-area-inset-bottom))]" aria-hidden />
+            <div className="h-[calc(5rem+env(safe-area-inset-bottom))]" aria-hidden />
             <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background pb-[env(safe-area-inset-bottom)]">
                 <div className="mx-auto flex max-w-xl gap-2 p-2">
                     {p.orderable ? (
@@ -178,16 +184,19 @@ export default function AppProductView({ product: p, similar }: { product: ShopP
                             <button
                                 type="button"
                                 onClick={addToCart}
-                                className="h-12 flex-1 rounded-xl border border-border text-[15px] font-semibold active:bg-muted"
+                                className={`flex h-14 w-16 shrink-0 flex-col items-center justify-center rounded-xl border text-[10px] font-medium active:bg-muted ${inCart ? "border-primary text-primary" : "border-border"}`}
+                                aria-label={inCart ? "In cart" : "Add to cart"}
                             >
-                                {inCart ? "In cart" : "Add to cart"}
+                                <ShoppingCart className="size-5" />
+                                {inCart ? "In cart" : "Add"}
                             </button>
                             <button
                                 type="button"
                                 onClick={buyNow}
-                                className="h-12 flex-1 rounded-xl bg-amber-400 text-[15px] font-semibold text-amber-950 active:bg-amber-300"
+                                className="flex h-14 flex-1 flex-col items-center justify-center rounded-xl bg-amber-400 text-amber-950 active:bg-amber-300"
                             >
-                                {p.stockStatus === "backorder" ? "Order now" : "Buy now"}
+                                <span className="text-base font-semibold leading-tight">{p.stockStatus === "backorder" ? "Order now" : "Buy now"}</span>
+                                <span className="text-sm leading-tight">at {formatRupeesFromPaise(p.pricePaise)}</span>
                             </button>
                         </>
                     ) : (
