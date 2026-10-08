@@ -23,11 +23,19 @@
  * A REPLY CLOSES IT FOR EVERYONE. Sending marks the customer's messages read
  * (server side, sendReply), so the card leaves every screen at once. The card
  * also leaves when someone opens the chat on the Messages screen, or when this
- * person closes it — and then only until the customer writes again.
+ * person closes it — and then only until the customer writes again. The ✕ is
+ * offered only to the one handling a chat two or more people share; everyone
+ * else minimises instead.
  *
  * COST. One read of /api/messages/alerts per realtime "messages" signal, none on
  * a timer: the answer carries every chat with its claim, and the 10-minute
  * hand-back is worked out here against a local clock.
+ *
+ * MINIMISE + MOVE. The – button folds the cards into a green chat bubble with
+ * the waiting count; new messages still chime and notify but do not unfold it.
+ * The cards (by their header) and the bubble drag anywhere; both the position
+ * and the folded state are remembered on this computer. Double-click the
+ * header to send it back to the bottom-right corner.
  *
  * Hidden on the Messages screen itself, which already shows all of this.
  */
@@ -37,7 +45,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
-import { MessageCircle, X, Send, Users, ArrowRightLeft, ExternalLink } from "lucide-react";
+import { MessageCircle, X, Send, Users, ArrowRightLeft, ExternalLink, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { canOpenPage } from "@/shared/lib/auth/pageAccess";
@@ -45,11 +53,55 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { MESSAGE_CLAIM_FALLBACK_MS } from "@/shared/lib/constants/polling";
 import { extractApiError } from "@/shared/lib/api";
 import StaffPickerDialog, { type PickMode, type Staff } from "./StaffPickerDialog";
-import MentionTextarea, { mentionedStaff } from "./MentionTextarea";
+import MentionTextarea, { mentionTargets } from "./MentionTextarea";
 
 const MESSAGES_HREF = "/office/crm/messages";
 const DISMISS_KEY = "message-alert-dismissed:v1";
 const MAX_CARDS = 3;
+const PLACE_KEY = "message-alert-place:v1";
+const EDGE = 16;
+
+/** Where the popup sits: its distance from the window's right and bottom edges. */
+type Place = { right: number; bottom: number; minimised: boolean };
+function loadPlace(): Place {
+    try { return { right: EDGE, bottom: EDGE, minimised: false, ...JSON.parse(window.localStorage.getItem(PLACE_KEY) ?? "{}") }; }
+    catch { return { right: EDGE, bottom: EDGE, minimised: false }; }
+}
+function savePlace(p: Place) {
+    try { window.localStorage.setItem(PLACE_KEY, JSON.stringify(p)); } catch { /* private mode */ }
+}
+
+/**
+ * Drag by pointer. Returns a pointerdown handler; `onClick` fires instead when
+ * the pointer barely moved, so the bubble can be both dragged and clicked.
+ * Clamped so the box stays on screen.
+ */
+function useDrag(place: Place, setPlace: (p: Place) => void) {
+    return (e: React.PointerEvent<HTMLElement>, box: HTMLElement | null, onClick?: () => void) => {
+        if (e.button !== 0 || (e.target as HTMLElement).closest("button:not([data-drag]),textarea,input")) return;
+        const start = { x: e.clientX, y: e.clientY, right: place.right, bottom: place.bottom };
+        const w = box?.offsetWidth ?? 60, h = box?.offsetHeight ?? 60;
+        let moved = false, last = place;
+        const move = (ev: PointerEvent) => {
+            const dx = ev.clientX - start.x, dy = ev.clientY - start.y;
+            if (!moved && Math.abs(dx) + Math.abs(dy) < 5) return;
+            moved = true;
+            last = {
+                ...place,
+                right: Math.min(Math.max(start.right - dx, 0), Math.max(window.innerWidth - w, 0)),
+                bottom: Math.min(Math.max(start.bottom - dy, 0), Math.max(window.innerHeight - h, 0)),
+            };
+            setPlace(last);
+        };
+        const up = () => {
+            window.removeEventListener("pointermove", move);
+            window.removeEventListener("pointerup", up);
+            if (moved) savePlace(last); else onClick?.();
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+    };
+}
 
 type Alert = {
     phone: string;
@@ -113,8 +165,25 @@ export default function MessageAlertPopup() {
     const [sending, setSending] = useState<string | null>(null);
     const [pick, setPick] = useState<{ mode: PickMode; alert: Alert } | null>(null);
     const notified = useRef<Set<number> | null>(null);
+    const [place, setPlace] = useState<Place>({ right: EDGE, bottom: EDGE, minimised: false });
+    const boxRef = useRef<HTMLDivElement>(null);
+    const bubbleRef = useRef<HTMLButtonElement>(null);
+    const drag = useDrag(place, setPlace);
+    const changePlace = (p: Place) => { setPlace(p); savePlace(p); };
 
-    useEffect(() => { setDismissed(loadDismissed()); }, []);
+    useEffect(() => { setDismissed(loadDismissed()); setPlace(loadPlace()); }, []);
+
+    // A smaller window must not strand the popup off screen.
+    useEffect(() => {
+        const fit = () => setPlace((p) => ({
+            ...p,
+            right: Math.min(p.right, Math.max(window.innerWidth - 80, 0)),
+            bottom: Math.min(p.bottom, Math.max(window.innerHeight - 80, 0)),
+        }));
+        fit();
+        window.addEventListener("resize", fit);
+        return () => window.removeEventListener("resize", fit);
+    }, []);
 
     const load = useCallback(async () => {
         try {
@@ -186,11 +255,13 @@ export default function MessageAlertPopup() {
         if (!text || sending) return;
         setSending(a.phone);
         try {
-            const mentions = (await mentionedStaff(text)).filter((m) => m.id !== me);
-            if (mentions.length) {
+            const target = await mentionTargets(text, me);
+            if (target && !target.ids.length) { toast.error("Nobody else in that mention can take this chat"); return; }
+            if (target) {
                 // A staff note — the chat passes to them and this person steps out.
-                await axios.post("/api/messages/note", { phone: a.phone, text, mentionIds: mentions.map((m) => m.id) });
-                toast.success(`Passed to ${mentions.map((m) => m.name).join(", ")} — not sent to the customer`);
+                // A group mention is each of its members mentioned one by one.
+                await axios.post("/api/messages/note", { phone: a.phone, text, mentionIds: target.ids });
+                toast.success(`Passed to ${target.label} — not sent to the customer`);
             } else {
                 await axios.post("/api/messages/reply", { phone: a.phone, text });
                 toast.success(`Replied to ${a.name}`);
@@ -222,14 +293,32 @@ export default function MessageAlertPopup() {
 
     return (
         <>
-            {shown.length > 0 && (
-                <div className="fixed bottom-4 right-4 z-[60] flex w-96 flex-col gap-2">
+            {shown.length > 0 && place.minimised && (
+                <button
+                    ref={bubbleRef}
+                    data-drag
+                    style={{ right: place.right, bottom: place.bottom }}
+                    onPointerDown={(e) => drag(e, bubbleRef.current, () => changePlace({ ...place, minimised: false }))}
+                    className="fixed z-[60] flex size-12 touch-none items-center justify-center rounded-full bg-green-600 text-white shadow-lg hover:bg-green-700"
+                    title="WhatsApp chats waiting — click to open, drag to move"
+                >
+                    <MessageCircle className="size-6" />
+                    <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1 text-center text-[11px] font-semibold leading-5">{visible.length}</span>
+                </button>
+            )}
+            {shown.length > 0 && !place.minimised && (
+                <div ref={boxRef} style={{ right: place.right, bottom: place.bottom }} className="fixed z-[60] flex w-96 max-w-[calc(100vw-1rem)] flex-col gap-2">
                     {shown.map((a) => {
                         const mine = inChat(a, me);
                         const isOwner = a.claim?.owner.id === me;
                         return (
                             <div key={a.phone} className="rounded-lg border border-green-300 bg-background p-3 shadow-lg dark:border-green-800">
-                                <div className="flex items-start gap-2">
+                                <div
+                                    className="flex cursor-move touch-none select-none items-start gap-2"
+                                    title="Drag to move · double-click to reset"
+                                    onPointerDown={(e) => drag(e, boxRef.current)}
+                                    onDoubleClick={() => changePlace({ ...place, right: EDGE, bottom: EDGE })}
+                                >
                                     <MessageCircle className="mt-0.5 size-4 shrink-0 text-green-600" />
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-2">
@@ -247,9 +336,16 @@ export default function MessageAlertPopup() {
                                     <button onClick={() => router.push(`${MESSAGES_HREF}?phone=${a.phone}`)} className="text-muted-foreground hover:text-foreground" title="Open the full chat">
                                         <ExternalLink className="size-4" />
                                     </button>
-                                    <button onClick={() => close(a)} className="text-muted-foreground hover:text-foreground" title="Close until they write again">
-                                        <X className="size-4" />
+                                    <button onClick={() => changePlace({ ...place, minimised: true })} className="text-muted-foreground hover:text-foreground" title="Minimise to a chat bubble">
+                                        <Minus className="size-4" />
                                     </button>
+                                    {/* Only the one handling a shared chat may close it — anyone
+                                        else minimises, so a customer is never closed unanswered. */}
+                                    {isOwner && a.claim!.helpers.length > 0 && (
+                                        <button onClick={() => close(a)} className="text-muted-foreground hover:text-foreground" title="Close until they write again">
+                                            <X className="size-4" />
+                                        </button>
+                                    )}
                                 </div>
                                 <div className="mt-2 space-y-1">
                                     {a.recent.map((b, i) => (

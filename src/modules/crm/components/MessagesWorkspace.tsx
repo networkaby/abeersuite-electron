@@ -16,7 +16,7 @@ import { extractApiError } from "@/shared/lib/api";
 import { useRealtimeTopics } from "@/shared/hooks";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import { cn } from "@/shared/lib/format/utils";
-import MentionTextarea, { mentionedStaff } from "@/modules/message/components/MentionTextarea";
+import MentionTextarea, { mentionTargets } from "@/modules/message/components/MentionTextarea";
 import StaffPickerDialog, { type PickMode, type Staff } from "@/modules/message/components/StaffPickerDialog";
 import { MessageMedia, captionOf, type MediaInfo } from "./MessageMedia";
 
@@ -206,13 +206,14 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
         if ((!text && !file) || !thread || sending) return;
         // An @mention makes it a staff note — never sent to the customer.
         if (!file) {
-            const mentions = (await mentionedStaff(text)).filter((m) => m.id !== me);
-            if (mentions.length) {
+            const target = await mentionTargets(text, me);
+            if (target && !target.ids.length) { toast.error("Nobody else in that mention can take this chat"); return; }
+            if (target) {
                 setSending(true);
                 try {
-                    await axios.post("/api/messages/note", { phone: thread.phone, text, mentionIds: mentions.map((m) => m.id) });
+                    await axios.post("/api/messages/note", { phone: thread.phone, text, mentionIds: target.ids });
                     setDraft("");
-                    toast.success(`Passed to ${mentions.map((m) => m.name).join(", ")} — not sent to the customer`);
+                    toast.success(`Passed to ${target.label} — not sent to the customer`);
                     void loadThread(thread.phone);
                     void loadList(1);
                 } catch (e) {

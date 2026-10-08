@@ -7,16 +7,21 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { extractApiError } from "@/shared/lib/api";
 
-export type Staff = { id: number; name: string };
+/** `position` = the title(s) of the Position(s) that give them chat access. */
+export type Staff = { id: number; name: string; position?: string };
+/** @All / @Department / @Branch — a mention of the group mentions each member. */
+export type StaffGroup = { kind: "all" | "department" | "branch"; id: string; name: string; memberIds: number[] };
+type Directory = { staff: Staff[]; groups: StaffGroup[] };
 export type PickMode = "invite" | "handover";
 
 /** The staff list is the same for every chat — fetched once per page load. */
-let staffCache: Promise<Staff[]> | null = null;
-export function loadStaff(): Promise<Staff[]> {
-    staffCache ??= axios.get<{ staff: Staff[] }>("/api/messages/claim").then((r) => r.data.staff)
-        .catch((e) => { staffCache = null; throw e; });
-    return staffCache;
+let directoryCache: Promise<Directory> | null = null;
+export function loadDirectory(): Promise<Directory> {
+    directoryCache ??= axios.get<Directory>("/api/messages/claim").then((r) => r.data)
+        .catch((e) => { directoryCache = null; throw e; });
+    return directoryCache;
 }
+export const loadStaff = (): Promise<Staff[]> => loadDirectory().then((d) => d.staff);
 
 /**
  * Pick a colleague to invite onto a customer chat, or to hand it over to.
@@ -51,6 +56,7 @@ export default function StaffPickerDialog({ mode, exclude, onPick, onClose }: {
                     {list.map((s) => (
                         <button key={s.id} className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted" onClick={() => { setQ(""); onPick(s); }}>
                             {s.name}
+                            {s.position && <span className="ml-1 text-xs text-muted-foreground">· {s.position}</span>}
                         </button>
                     ))}
                     {staff == null && <p className="p-2 text-sm text-muted-foreground">Loading…</p>}
