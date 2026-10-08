@@ -48,9 +48,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 shippingAddress: true,
             },
         });
-        if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
-        if (order.personId !== customerId) {
-            return NextResponse.json({ error: "This order is not yours." }, { status: 403 });
+        // Somebody else's order answers exactly like a missing one — never confirm it exists.
+        if (!order || order.personId !== customerId) {
+            return NextResponse.json({ error: "Order not found" }, { status: 404 });
         }
         if (order.paymentMethod !== "ONLINE") {
             return NextResponse.json({ error: "This order is not an online-payment order." }, { status: 400 });

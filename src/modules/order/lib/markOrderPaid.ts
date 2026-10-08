@@ -44,9 +44,9 @@ export async function markOrderPaid(
             shippingChargePaise: true,
         },
     });
-    if (!order) return { ok: false, error: "Order not found", status: 404 };
-    if (opts.customerId != null && order.personId !== opts.customerId) {
-        return { ok: false, error: "This order is not yours.", status: 403 };
+    // Somebody else's order answers exactly like a missing one — never confirm it exists.
+    if (!order || (opts.customerId != null && order.personId !== opts.customerId)) {
+        return { ok: false, error: "Order not found", status: 404 };
     }
     if (order.paymentMethod !== "ONLINE") {
         return { ok: false, error: "This order is not an online-payment order.", status: 400 };

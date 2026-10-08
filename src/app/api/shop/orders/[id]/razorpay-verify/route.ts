@@ -37,9 +37,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             where: { ticketId: id },
             select: { ticketId: true, personId: true, razorpayOrderId: true },
         });
-        if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
-        if (order.personId !== customerId) {
-            return NextResponse.json({ error: "This order is not yours." }, { status: 403 });
+        // Somebody else's order answers exactly like a missing one — never confirm it exists.
+        if (!order || order.personId !== customerId) {
+            return NextResponse.json({ error: "Order not found" }, { status: 404 });
         }
         // The paid order_id must be the one we created for this order.
         if (order.razorpayOrderId !== razorpay_order_id) {

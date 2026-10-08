@@ -1,4 +1,5 @@
 import "server-only";
+import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { getPortalAccountOptions } from "@/shared/lib/auth/portalAccountContext";
 import { DELIVERY_STAGE_LABEL } from "@/modules/delivery/lib/shiprocketStatus";
@@ -24,6 +25,27 @@ type AddrJson = {
 };
 
 /**
+ * The one rule for "this order is the customer's": the order Ticket sits on one
+ * of their accounts (personal or a linked company), or they placed it. Every
+ * customer-facing order screen filters through this, so a typed or guessed
+ * order number never opens somebody else's order.
+ */
+export async function customerOrderTicketWhere(customerId: number): Promise<Prisma.TicketWhereInput> {
+    const accountIds = (await getPortalAccountOptions(customerId)).map((o) => o.accountId);
+    return ownedOrderWhere(customerId, accountIds);
+}
+
+function ownedOrderWhere(customerId: number, accountIds: number[]): Prisma.TicketWhereInput {
+    return {
+        order: { isNot: null },
+        OR: [
+            { accountId: { in: accountIds.length > 0 ? accountIds : [-1] } },
+            { order: { personId: customerId } },
+        ],
+    };
+}
+
+/**
  * A customer's REAL orders across every profile they belong to (personal +
  * linked company accounts) — an order is a Ticket (flavour "order") +
  * TicketOrder detail — newest first, with the live delivery stage and the posted
@@ -40,11 +62,7 @@ export async function loadPortalOrders(customerId: number, onlyOrderId?: number)
     const tickets = await prisma.ticket.findMany({
         where: {
             ...(onlyOrderId != null ? { id: onlyOrderId } : {}),
-            order: { isNot: null },
-            OR: [
-                { accountId: { in: accountIds.length > 0 ? accountIds : [-1] } },
-                { order: { personId: customerId } },
-            ],
+            ...ownedOrderWhere(customerId, accountIds),
         },
         orderBy: { id: "desc" },
         take: 100,

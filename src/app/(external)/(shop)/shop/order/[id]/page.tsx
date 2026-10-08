@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { Button } from "@/components/ui/button";
@@ -6,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { getPayableOnlineGateways } from "@/shared/lib/payments/activeOnlineGateway";
 import OnlinePayPanel from "@/modules/external/shop/OnlinePayPanel";
 import { DELIVERY_STAGE_LABEL } from "@/modules/delivery/lib/shiprocketStatus";
+import { customerOrderTicketWhere } from "@/modules/external/portal/portalOrders";
 
 export default async function ShopOrderConfirmationPage({
     params,
@@ -25,11 +28,30 @@ export default async function ShopOrderConfirmationPage({
         );
     }
 
+    // Only the customer's own order opens here (order numbers are sequential, so
+    // anyone could otherwise walk them). Signed out → sign in and come back, with
+    // ?pay=failed kept so a PayU / Cashfree return still shows its message. Signed
+    // in but not theirs (or staff) → the same "Order not found" as a bad number.
+    const session = await auth();
+    const user = session?.user as { kind?: string; id?: string | number } | undefined;
+    if (!user) {
+        const back = `/shop/order/${orderId}${pay ? `?pay=${encodeURIComponent(pay)}` : ""}`;
+        redirect(`/login?callbackUrl=${encodeURIComponent(back)}`);
+    }
+    const customerId = Number(user.id);
+    const notFoundView = (
+        <main className="mx-auto max-w-lg px-4 py-8">
+            <p>Order not found.</p>
+        </main>
+    );
+    if (user.kind !== "customer" || !Number.isFinite(customerId)) return notFoundView;
+
     // An order is a Ticket (flavour "order") + TicketOrder detail (keyed by ticketId).
-    const order = await prisma.ticketOrder.findUnique({
-        where: { ticketId: orderId },
+    const order = await prisma.ticketOrder.findFirst({
+        where: { ticketId: orderId, ticket: await customerOrderTicketWhere(customerId) },
         select: {
             ticketId: true,
+            personId: true,
             legacyStatus: true,
             paymentMethod: true,
             paidAt: true,
@@ -51,13 +73,7 @@ export default async function ShopOrderConfirmationPage({
         },
     });
 
-    if (!order) {
-        return (
-            <main className="mx-auto max-w-lg px-4 py-8">
-                <p>Order not found.</p>
-            </main>
-        );
-    }
+    if (!order) return notFoundView;
 
     // Friendly courier name the customer picked (the service/courier), falling
     // back to the raw kind for older orders.
@@ -77,16 +93,19 @@ export default async function ShopOrderConfirmationPage({
 
     const grand = order.totalPaise + order.shippingChargePaise;
     const unpaidOnline = order.paymentMethod === "ONLINE" && order.legacyStatus === "PENDING_PAYMENT";
+    // The pay routes take payment only from whoever placed the order, so a company
+    // colleague who can see it gets no Pay panel that would just refuse them.
+    const canPay = unpaidOnline && order.personId === customerId;
     // Every enabled online gateway is offered as its own pay option; the one chosen
     // at checkout (snapshot on the order) is pre-selected.
-    const gateways = unpaidOnline ? await getPayableOnlineGateways() : [];
+    const gateways = canPay ? await getPayableOnlineGateways() : [];
     const chosenProvider =
         (order.shippingAddress as { onlineProvider?: string } | null)?.onlineProvider ?? null;
     const payFailed = pay === "failed";
     // Auto-launch the pre-chosen gateway on first arrival (skip the picker); on a
     // failed/cancelled return, show the picker so they can retry or switch.
     const autoLaunch =
-        unpaidOnline && !payFailed && !!chosenProvider && gateways.some((g) => g.provider === chosenProvider);
+        canPay && !payFailed && !!chosenProvider && gateways.some((g) => g.provider === chosenProvider);
 
     return (
         <main className="mx-auto max-w-lg px-4 py-8 space-y-5">
@@ -124,7 +143,7 @@ export default async function ShopOrderConfirmationPage({
                 </p>
             ) : null}
 
-            {unpaidOnline && gateways.length > 0 ? (
+            {canPay && gateways.length > 0 ? (
                 <OnlinePayPanel
                     orderId={order.ticketId}
                     amountLabel={formatRupeesFromPaise(grand)}
