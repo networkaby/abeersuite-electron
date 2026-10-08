@@ -33,9 +33,10 @@
  *
  * MINIMISE + MOVE. The – button folds the cards into a green chat bubble with
  * the waiting count; new messages still chime and notify but do not unfold it.
- * The cards (by their header) and the bubble drag anywhere; both the position
- * and the folded state are remembered on this computer. Double-click the
- * header to send it back to the bottom-right corner.
+ * Each card drags on its own by its header, out of the stack, and keeps that
+ * spot while its chat waits; double-click puts it back in the stack (and, on
+ * a stacked card, sends the stack home to the bottom-right). The bubble drags
+ * too. Spots and the folded state are remembered on this computer.
  *
  * Hidden on the Messages screen itself, which already shows all of this.
  */
@@ -71,36 +72,49 @@ function savePlace(p: Place) {
     try { window.localStorage.setItem(PLACE_KEY, JSON.stringify(p)); } catch { /* private mode */ }
 }
 
+/** A card the person dragged out of the stack, keyed by phone. */
+const CARDS_KEY = "message-alert-cards:v1";
+type Spot = { right: number; bottom: number };
+function loadCards(): Record<string, Spot> {
+    try { return JSON.parse(window.localStorage.getItem(CARDS_KEY) ?? "{}") as Record<string, Spot>; } catch { return {}; }
+}
+function saveCards(c: Record<string, Spot>) {
+    try { window.localStorage.setItem(CARDS_KEY, JSON.stringify(c)); } catch { /* private mode */ }
+}
+/** Keep a box of size w×h fully on screen. */
+const clampSpot = (sp: Spot, w: number, h: number): Spot => ({
+    right: Math.min(Math.max(sp.right, 0), Math.max(window.innerWidth - w, 0)),
+    bottom: Math.min(Math.max(sp.bottom, 0), Math.max(window.innerHeight - h, 0)),
+});
+
 /**
- * Drag by pointer. Returns a pointerdown handler; `onClick` fires instead when
- * the pointer barely moved, so the bubble can be both dragged and clicked.
- * Clamped so the box stays on screen.
+ * Drag `box` by pointer from spot `from`. `onMove` gets each new spot, `onDone`
+ * the final one; `onClick` fires instead when the pointer barely moved, so the
+ * bubble can be both dragged and clicked. Buttons and text boxes inside never
+ * start a drag.
  */
-function useDrag(place: Place, setPlace: (p: Place) => void) {
-    return (e: React.PointerEvent<HTMLElement>, box: HTMLElement | null, onClick?: () => void) => {
-        if (e.button !== 0 || (e.target as HTMLElement).closest("button:not([data-drag]),textarea,input")) return;
-        const start = { x: e.clientX, y: e.clientY, right: place.right, bottom: place.bottom };
-        const w = box?.offsetWidth ?? 60, h = box?.offsetHeight ?? 60;
-        let moved = false, last = place;
-        const move = (ev: PointerEvent) => {
-            const dx = ev.clientX - start.x, dy = ev.clientY - start.y;
-            if (!moved && Math.abs(dx) + Math.abs(dy) < 5) return;
-            moved = true;
-            last = {
-                ...place,
-                right: Math.min(Math.max(start.right - dx, 0), Math.max(window.innerWidth - w, 0)),
-                bottom: Math.min(Math.max(start.bottom - dy, 0), Math.max(window.innerHeight - h, 0)),
-            };
-            setPlace(last);
-        };
-        const up = () => {
-            window.removeEventListener("pointermove", move);
-            window.removeEventListener("pointerup", up);
-            if (moved) savePlace(last); else onClick?.();
-        };
-        window.addEventListener("pointermove", move);
-        window.addEventListener("pointerup", up);
+function startDrag(
+    e: React.PointerEvent<HTMLElement>, box: HTMLElement | null, from: Spot,
+    onMove: (sp: Spot) => void, onDone: (sp: Spot) => void, onClick?: () => void,
+) {
+    if (e.button !== 0 || (e.target as HTMLElement).closest("button:not([data-drag]),textarea,input")) return;
+    const x0 = e.clientX, y0 = e.clientY;
+    const w = box?.offsetWidth ?? 60, h = box?.offsetHeight ?? 60;
+    let moved = false, last = from;
+    const move = (ev: PointerEvent) => {
+        const dx = ev.clientX - x0, dy = ev.clientY - y0;
+        if (!moved && Math.abs(dx) + Math.abs(dy) < 5) return;
+        moved = true;
+        last = clampSpot({ right: from.right - dx, bottom: from.bottom - dy }, w, h);
+        onMove(last);
     };
+    const up = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        if (moved) onDone(last); else onClick?.();
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
 }
 
 type Alert = {
@@ -159,6 +173,7 @@ export default function MessageAlertPopup() {
     const onMessagesScreen = pathname?.startsWith(MESSAGES_HREF) ?? false;
 
     const [items, setItems] = useState<Alert[]>([]);
+    const [loaded, setLoaded] = useState(false);
     const [dismissed, setDismissed] = useState<Record<string, number>>({});
     const [now, setNow] = useState(() => Date.now());
     const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -168,10 +183,26 @@ export default function MessageAlertPopup() {
     const [place, setPlace] = useState<Place>({ right: EDGE, bottom: EDGE, minimised: false });
     const boxRef = useRef<HTMLDivElement>(null);
     const bubbleRef = useRef<HTMLButtonElement>(null);
-    const drag = useDrag(place, setPlace);
     const changePlace = (p: Place) => { setPlace(p); savePlace(p); };
+    const dragStack = (e: React.PointerEvent<HTMLElement>, box: HTMLElement | null, onClick?: () => void) =>
+        startDrag(e, box, place, (sp) => setPlace({ ...place, ...sp }), (sp) => changePlace({ ...place, ...sp }), onClick);
+    // Cards moved on their own; the rest stay in the stack.
+    const [cards, setCards] = useState<Record<string, Spot>>({});
+    const changeCard = (phone: string, sp: Spot | null) => setCards((c) => {
+        const next = { ...c };
+        if (sp) next[phone] = sp; else delete next[phone];
+        saveCards(next);
+        return next;
+    });
+    const dragCard = (e: React.PointerEvent<HTMLElement>, phone: string) => {
+        const card = (e.currentTarget as HTMLElement).closest<HTMLElement>("[data-card]");
+        if (!card) return;
+        const r = card.getBoundingClientRect();
+        const from = cards[phone] ?? { right: window.innerWidth - r.right, bottom: window.innerHeight - r.bottom };
+        startDrag(e, card, from, (sp) => setCards((c) => ({ ...c, [phone]: sp })), (sp) => changeCard(phone, sp));
+    };
 
-    useEffect(() => { setDismissed(loadDismissed()); setPlace(loadPlace()); }, []);
+    useEffect(() => { setDismissed(loadDismissed()); setPlace(loadPlace()); setCards(loadCards()); }, []);
 
     // A smaller window must not strand the popup off screen.
     useEffect(() => {
@@ -189,6 +220,7 @@ export default function MessageAlertPopup() {
         try {
             const { data } = await axios.get<{ items: Alert[] }>("/api/messages/alerts");
             setItems(data.items);
+            setLoaded(true);
             setNow(Date.now());
         } catch { /* the next signal tries again */ }
     }, []);
@@ -217,6 +249,16 @@ export default function MessageAlertPopup() {
         });
     }, [items, dismissed, me, now]);
     const hasCards = visible.length > 0;
+
+    // A moved card's spot lasts only while its chat is waiting.
+    useEffect(() => {
+        if (!loaded) return; // nothing fetched yet — keep every saved spot
+        const live = new Set(visible.map((a) => a.phone));
+        if (Object.keys(cards).every((ph) => live.has(ph))) return;
+        const next = Object.fromEntries(Object.entries(cards).filter(([ph]) => live.has(ph)));
+        setCards(next);
+        saveCards(next);
+    }, [visible, cards, loaded]);
 
     // The stack grows upward from its spot; when it is taller than the room
     // above, it slides down so its top never leaves the screen.
@@ -302,6 +344,90 @@ export default function MessageAlertPopup() {
     if (!allowed || onMessagesScreen || !me) return null;
     const shown = visible.slice(0, MAX_CARDS);
     const more = visible.length - shown.length;
+    const stacked = shown.filter((a) => !cards[a.phone]);
+
+    const renderCard = (a: Alert) => {
+        const mine = inChat(a, me);
+        const isOwner = a.claim?.owner.id === me;
+        return (
+            <div key={a.phone} data-card className="rounded-lg border border-green-300 bg-background p-3 shadow-lg dark:border-green-800">
+                <div
+                    className="flex cursor-move touch-none select-none items-start gap-2"
+                    title="Drag to move this chat · double-click to put it back"
+                    onPointerDown={(e) => dragCard(e, a.phone)}
+                    onDoubleClick={() => cards[a.phone] ? changeCard(a.phone, null) : changePlace({ ...place, right: EDGE, bottom: EDGE })}
+                >
+                    <MessageCircle className="mt-0.5 size-4 shrink-0 text-green-600" />
+                    <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                            <span className="truncate text-sm font-semibold">{a.name}</span>
+                            {a.count > 1 && <span className="rounded-full bg-green-600 px-1.5 text-[11px] text-white">{a.count}</span>}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                            {!a.claim
+                                ? "New — nobody has answered yet"
+                                : mine
+                                    ? (a.note ? `${a.note.by} passed this to you` : isOwner ? "Your chat" : `With ${a.claim.owner.name} — you were invited`)
+                                    : `${a.claim.owner.name} has not answered for 10 min`}
+                        </p>
+                    </div>
+                    <button onClick={() => router.push(`${MESSAGES_HREF}?phone=${a.phone}`)} className="text-muted-foreground hover:text-foreground" title="Open the full chat">
+                        <ExternalLink className="size-4" />
+                    </button>
+                    <button onClick={() => changePlace({ ...place, minimised: true })} className="text-muted-foreground hover:text-foreground" title="Minimise to a chat bubble">
+                        <Minus className="size-4" />
+                    </button>
+                    {/* Only the one handling a shared chat may close it — anyone
+                        else minimises, so a customer is never closed unanswered. */}
+                    {isOwner && a.claim!.helpers.length > 0 && (
+                        <button onClick={() => close(a)} className="text-muted-foreground hover:text-foreground" title="Close until they write again">
+                            <X className="size-4" />
+                        </button>
+                    )}
+                </div>
+                <div className="mt-2 space-y-1">
+                    {a.recent.map((b, i) => (
+                        <p key={i} className="w-fit max-w-full whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1 text-sm">{b}</p>
+                    ))}
+                    {a.note && (
+                        <p className="whitespace-pre-wrap break-words rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-50">
+                            <span className="text-[11px] font-medium">{a.note.by} · staff note</span><br />{a.note.text}
+                        </p>
+                    )}
+                </div>
+                {canReply && (
+                    <>
+                        {/^\s*@|\s@\S/.test(drafts[a.phone] ?? "") && (
+                            <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-300">With an @mention this is a staff note — the customer will not see it.</p>
+                        )}
+                        <div className="mt-2 flex items-end gap-2">
+                            <MentionTextarea
+                                value={drafts[a.phone] ?? ""}
+                                onChange={(text) => setDrafts((d) => ({ ...d, [a.phone]: text }))}
+                                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(a); } }}
+                                placeholder="Reply, or @name for a staff note"
+                                className="text-sm"
+                            />
+                            <Button size="icon" disabled={sending === a.phone || !(drafts[a.phone] ?? "").trim()} onClick={() => void send(a)} title="Send on WhatsApp">
+                                <Send className="size-4" />
+                            </Button>
+                        </div>
+                        <div className="mt-1.5 flex justify-end gap-1">
+                            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setPick({ mode: "invite", alert: a })}>
+                                <Users className="mr-1 size-3" /> Invite
+                            </Button>
+                            {(isOwner || !a.claim) && (
+                                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setPick({ mode: "handover", alert: a })}>
+                                    <ArrowRightLeft className="mr-1 size-3" /> Hand over
+                                </Button>
+                            )}
+                        </div>
+                    </>
+                )}
+            </div>
+        );
+    };
+
 
     return (
         <>
@@ -310,7 +436,7 @@ export default function MessageAlertPopup() {
                     ref={bubbleRef}
                     data-drag
                     style={{ right: place.right, bottom: place.bottom }}
-                    onPointerDown={(e) => drag(e, bubbleRef.current, () => changePlace({ ...place, minimised: false }))}
+                    onPointerDown={(e) => dragStack(e, bubbleRef.current, () => changePlace({ ...place, minimised: false }))}
                     className="fixed z-[60] flex size-12 touch-none items-center justify-center rounded-full bg-green-600 text-white shadow-lg hover:bg-green-700"
                     title="WhatsApp chats waiting — click to open, drag to move"
                 >
@@ -318,89 +444,18 @@ export default function MessageAlertPopup() {
                     <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1 text-center text-[11px] font-semibold leading-5">{visible.length}</span>
                 </button>
             )}
-            {shown.length > 0 && !place.minimised && (
+            {!place.minimised && shown.filter((a) => cards[a.phone]).map((a) => {
+                // A card moved on its own; kept on screen if the window shrank.
+                const sp = clampSpot(cards[a.phone], 384, 140);
+                return (
+                    <div key={a.phone} style={{ right: sp.right, bottom: sp.bottom }} className="fixed z-[60] w-96 max-w-[calc(100vw-1rem)]">
+                        {renderCard(a)}
+                    </div>
+                );
+            })}
+            {stacked.length > 0 && !place.minimised && (
                 <div ref={boxRef} style={{ right: place.right, bottom: Math.max(0, Math.min(place.bottom, (typeof window === "undefined" ? 0 : window.innerHeight) - boxH - 8)) }} className="fixed z-[60] flex w-96 max-w-[calc(100vw-1rem)] flex-col gap-2">
-                    {shown.map((a) => {
-                        const mine = inChat(a, me);
-                        const isOwner = a.claim?.owner.id === me;
-                        return (
-                            <div key={a.phone} className="rounded-lg border border-green-300 bg-background p-3 shadow-lg dark:border-green-800">
-                                <div
-                                    className="flex cursor-move touch-none select-none items-start gap-2"
-                                    title="Drag to move · double-click to reset"
-                                    onPointerDown={(e) => drag(e, boxRef.current)}
-                                    onDoubleClick={() => changePlace({ ...place, right: EDGE, bottom: EDGE })}
-                                >
-                                    <MessageCircle className="mt-0.5 size-4 shrink-0 text-green-600" />
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex items-center gap-2">
-                                            <span className="truncate text-sm font-semibold">{a.name}</span>
-                                            {a.count > 1 && <span className="rounded-full bg-green-600 px-1.5 text-[11px] text-white">{a.count}</span>}
-                                        </div>
-                                        <p className="text-[11px] text-muted-foreground">
-                                            {!a.claim
-                                                ? "New — nobody has answered yet"
-                                                : mine
-                                                    ? (a.note ? `${a.note.by} passed this to you` : isOwner ? "Your chat" : `With ${a.claim.owner.name} — you were invited`)
-                                                    : `${a.claim.owner.name} has not answered for 10 min`}
-                                        </p>
-                                    </div>
-                                    <button onClick={() => router.push(`${MESSAGES_HREF}?phone=${a.phone}`)} className="text-muted-foreground hover:text-foreground" title="Open the full chat">
-                                        <ExternalLink className="size-4" />
-                                    </button>
-                                    <button onClick={() => changePlace({ ...place, minimised: true })} className="text-muted-foreground hover:text-foreground" title="Minimise to a chat bubble">
-                                        <Minus className="size-4" />
-                                    </button>
-                                    {/* Only the one handling a shared chat may close it — anyone
-                                        else minimises, so a customer is never closed unanswered. */}
-                                    {isOwner && a.claim!.helpers.length > 0 && (
-                                        <button onClick={() => close(a)} className="text-muted-foreground hover:text-foreground" title="Close until they write again">
-                                            <X className="size-4" />
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="mt-2 space-y-1">
-                                    {a.recent.map((b, i) => (
-                                        <p key={i} className="w-fit max-w-full whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1 text-sm">{b}</p>
-                                    ))}
-                                    {a.note && (
-                                        <p className="whitespace-pre-wrap break-words rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-50">
-                                            <span className="text-[11px] font-medium">{a.note.by} · staff note</span><br />{a.note.text}
-                                        </p>
-                                    )}
-                                </div>
-                                {canReply && (
-                                    <>
-                                        {/^\s*@|\s@\S/.test(drafts[a.phone] ?? "") && (
-                                            <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-300">With an @mention this is a staff note — the customer will not see it.</p>
-                                        )}
-                                        <div className="mt-2 flex items-end gap-2">
-                                            <MentionTextarea
-                                                value={drafts[a.phone] ?? ""}
-                                                onChange={(text) => setDrafts((d) => ({ ...d, [a.phone]: text }))}
-                                                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(a); } }}
-                                                placeholder="Reply, or @name for a staff note"
-                                                className="text-sm"
-                                            />
-                                            <Button size="icon" disabled={sending === a.phone || !(drafts[a.phone] ?? "").trim()} onClick={() => void send(a)} title="Send on WhatsApp">
-                                                <Send className="size-4" />
-                                            </Button>
-                                        </div>
-                                        <div className="mt-1.5 flex justify-end gap-1">
-                                            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setPick({ mode: "invite", alert: a })}>
-                                                <Users className="mr-1 size-3" /> Invite
-                                            </Button>
-                                            {(isOwner || !a.claim) && (
-                                                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setPick({ mode: "handover", alert: a })}>
-                                                    <ArrowRightLeft className="mr-1 size-3" /> Hand over
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        );
-                    })}
+                    {stacked.map(renderCard)}
                     {more > 0 && (
                         <button onClick={() => router.push(MESSAGES_HREF)} className="self-end rounded-md bg-green-600 px-2 py-1 text-xs text-white shadow">
                             +{more} more waiting
