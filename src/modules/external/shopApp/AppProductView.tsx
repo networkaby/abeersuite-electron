@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronDown, ChevronLeft, Heart, MapPin, Share2, ShoppingCart, Truck } from "lucide-react";
+import { ChevronDown, ChevronLeft, Heart, MapPin, Search, Share2, ShoppingCart, Truck } from "lucide-react";
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import AppProductRail from "@/modules/external/shopApp/AppProductRail";
 import { useCartCount } from "@/modules/external/shopApp/CustomerAppShell";
@@ -89,6 +89,10 @@ export default function AppProductView({ product: p, similar }: { product: ShopP
                         <ChevronLeft className="size-6" />
                     </button>
                     <span className="flex-1" />
+                    {/* Changed their mind? Straight to search, as in Flipkart / Amazon. */}
+                    <Link href={`${APP}/search`} className={roundButton} aria-label="Search">
+                        <Search className="size-5" />
+                    </Link>
                     <button type="button" onClick={() => void share()} className={roundButton} aria-label="Share">
                         <Share2 className="size-5" />
                     </button>
