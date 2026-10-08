@@ -30,3 +30,8 @@ export function toAppHref(href: string): string {
     }
     return APP;
 }
+
+/** Sign in, then come back to `back` (an app screen). */
+export function appLoginPath(back: string): string {
+    return `/login?callbackUrl=${encodeURIComponent(back)}`;
+}

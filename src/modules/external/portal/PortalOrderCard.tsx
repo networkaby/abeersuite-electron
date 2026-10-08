@@ -1,5 +1,6 @@
 "use client";
 
+import { JOURNEY, STAGE_ORDER, type PortalOrderDto } from "@/modules/external/portal/portalOrderTypes";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,58 +15,14 @@ import { ChevronDown, Download, ListOrdered, ReceiptText, Truck } from "lucide-r
 // dialog saves it as PDF (the unified print contract — templates stay
 // customisable under Settings → Print templates).
 
-export type PortalOrderDto = {
-    id: number;
-    createdAt: string; // ISO
-    accountLabel: string;
-    // Pipeline stage
-    statusId: string | null;
-    statusLabel: string | null;
-    statusColor: string | null;
-    // Payment
-    isPaid: boolean;
-    isCod: boolean;
-    paidAt: string | null;
-    gatewayLabel: string | null;
-    // Money
-    goodsPaise: number;
-    shippingPaise: number;
-    tierDiscountPaise: number;
-    tierLabel: string | null;
-    couponDiscountPaise: number;
-    couponCode: string | null;
-    loyaltyRedeemPaise: number;
-    loyaltyRedeemPoints: number;
-    // Lines
-    lines: { name: string; quantity: number; amountPaise: number }[];
-    // Ship to
-    address: string | null;
-    shipName: string | null;
-    // Courier / delivery
-    courierLabel: string | null;
-    deliveryStageLabel: string | null;
-    awb: string | null;
-    trackingUrl: string | null;
-    shippedAt: string | null;
-    deliveredAt: string | null;
-    // Linked invoice (posted ONLINE_INVOICE)
-    invoice: { detailId: number; voucherNo: string; placeOfSupply: string | null } | null;
-};
 
-// Forward journey; index = how far the order has come (S42 New … S47 Delivered).
-const JOURNEY: { stage: string; label: string }[] = [
-    { stage: "S42", label: "Order placed" },
-    { stage: "S44", label: "Confirmed" },
-    { stage: "S45", label: "Packing" },
-    { stage: "S46", label: "Dispatched" },
-    { stage: "S47", label: "Delivered" },
-];
-const STAGE_ORDER = ["S42", "S43", "S44", "S45", "S46", "S47"];
 
 const dt = (iso: string | null) =>
     iso
         ? new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })
         : null;
+
+export type { PortalOrderDto };
 
 export default function PortalOrderCard({ order }: { order: PortalOrderDto }) {
     const [open, setOpen] = useState(false);

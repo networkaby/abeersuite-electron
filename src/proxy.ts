@@ -8,7 +8,7 @@ import { canOpenPage, NO_ACCESS_HOME, NO_ACCESS_PARAM } from "@/shared/lib/auth/
 import { isPhoneAppPath, isPhoneRequest, PHONE_APP_HOME, PHONE_APP_FORGOT, PHONE_APP_INSTALL, PHONE_APP_LOGIN } from "@/shared/lib/device/phone";
 import { isPhoneOnlyApi, isPhoneOnlyPage, isPhoneOnlySession, phoneOnlyMayCall } from "@/shared/lib/auth/phoneOnly";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
-import { isShopNativePath, isShopNativeRequest, SHOP_APP_INSTALL, SHOP_NATIVE_DEV_COOKIE } from "@/shared/lib/device/shopApp";
+import { isShopNativePath, isShopNativeRequest, isShopNativeUserAgent, SHOP_APP_INSTALL, SHOP_NATIVE_DEV_COOKIE, SHOP_NATIVE_HOME } from "@/shared/lib/device/shopApp";
 
 function isPublicPath(pathname: string): boolean {
     if (pathname === "/" || pathname === "/login") return true;
@@ -79,6 +79,14 @@ const pageProxy = auth((req) => {
         !isShopNativeRequest(req.headers.get("user-agent") ?? "", req.cookies.get(SHOP_NATIVE_DEV_COOKIE)?.value)
     ) {
         return NextResponse.redirect(new URL(SHOP_APP_INSTALL, req.url));
+    }
+    // Inside the app, a payment gateway's return to the website's order page
+    // (PayU, Cashfree) lands on the app's own order screen instead.
+    const appOrder = pathname.match(/^\/shop\/order\/(\d+)$/);
+    if (appOrder && isShopNativeUserAgent(req.headers.get("user-agent") ?? "")) {
+        const dest = new URL(`${SHOP_NATIVE_HOME}/order/${appOrder[1]}`, req.url);
+        dest.search = req.nextUrl.search;
+        return NextResponse.redirect(dest);
     }
 
     if (pathname === "/portal/login") {

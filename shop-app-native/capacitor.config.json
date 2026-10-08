@@ -6,7 +6,12 @@
   "backgroundColor": "#eff4fb",
   "server": {
     "url": "https://shop.networkservice.in/m-shop-app",
-    "errorPath": "offline.html"
+    "errorPath": "offline.html",
+    "allowNavigation": [
+      "*.razorpay.com",
+      "*.payu.in",
+      "*.cashfree.com"
+    ]
   },
   "android": {
     "allowMixedContent": false,
