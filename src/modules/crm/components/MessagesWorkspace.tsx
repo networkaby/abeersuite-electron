@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import {
     MessageCircle, Mail, PhoneIncoming, PhoneOutgoing, PhoneMissed, Ticket, Check, CheckCheck,
     AlertCircle, Search, Send, Paperclip, X, UserPlus, User, Building2, ShieldAlert, RefreshCw, Lock, FileText, Hand, Users, ArrowRightLeft,
+    AtSign, Hash, MessageSquarePlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import { cn } from "@/shared/lib/format/utils";
 import MentionTextarea, { mentionTargets } from "@/modules/message/components/MentionTextarea";
 import StaffPickerDialog, { type PickMode, type Staff } from "@/modules/message/components/StaffPickerDialog";
+import TeamRoomPane, { dmPartnerId, type Room } from "@/modules/message/components/TeamRoomPane";
 import { MessageMedia, captionOf, type MediaInfo } from "./MessageMedia";
 
 // ── Wire types (mirror /api/messages/*) ─────────────────────────────────────────
@@ -51,13 +53,32 @@ interface Thread {
     items: (ThreadMessage | ThreadCall)[];
 }
 
-type Filter = "all" | "unread" | "open" | "unknown";
+type Filter = "all" | "unread" | "open" | "unknown" | "team" | "groups";
 const FILTERS: { key: Filter; label: string }[] = [
     { key: "all", label: "All" },
     { key: "unread", label: "Unread" },
     { key: "open", label: "Open ticket" },
     { key: "unknown", label: "Unknown" },
+    { key: "team", label: "Team" },
+    { key: "groups", label: "Groups" },
 ];
+/** Filters that list customers; Team / Groups list only staff rooms. */
+const CUSTOMER_FILTERS: Filter[] = ["all", "unread", "open", "unknown"];
+
+type StaffUser = { id: number; name: string };
+/** Everyone a staff chat can be with — fetched once per page load. */
+let usersCache: Promise<StaffUser[]> | null = null;
+function loadUsers(): Promise<StaffUser[]> {
+    usersCache ??= axios.get<StaffUser[]>("/api/users").then((r) => r.data.map((u) => ({ id: u.id, name: u.name })))
+        .catch((e) => { usersCache = null; throw e; });
+    return usersCache;
+}
+
+/** One row of the merged list: a customer number, a staff room, or a colleague to start a chat with. */
+type Row =
+    | { kind: "customer"; key: string; at: string; c: Conversation }
+    | { kind: "room"; key: string; at: string; room: Room; title: string }
+    | { kind: "start"; key: string; at: string; user: StaffUser };
 
 /** The source logo every message carries. */
 function ChannelIcon({ channel, className }: { channel: string; className?: string }) {
@@ -96,7 +117,8 @@ function Ticks({ m }: { m: ThreadMessage }) {
 }
 
 export default function MessagesWorkspace({ canReply, canTicket }: { canReply: boolean; canTicket: boolean }) {
-    const [filter, setFilter] = useState<Filter>("all");
+    const wantFilter = useSearchParams().get("filter") as Filter | null;
+    const [filter, setFilter] = useState<Filter>(wantFilter && FILTERS.some((f) => f.key === wantFilter) ? wantFilter : "all");
     const [query, setQuery] = useState("");
     const [list, setList] = useState<Conversation[]>([]);
     const [hasMore, setHasMore] = useState(false);
@@ -117,7 +139,48 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
     const me = Number((useSession().data?.user as { id?: string } | undefined)?.id ?? 0);
     const [pick, setPick] = useState<PickMode | null>(null);
 
+    // ── Staff chats (team Inbox rooms) beside the customers ──────────────────
+    const [rooms, setRooms] = useState<Room[]>([]);
+    const [users, setUsers] = useState<StaffUser[]>([]);
+    const [roomId, setRoomId] = useState<string | null>(null);
+    const meName = (useSession().data?.user as { name?: string } | undefined)?.name ?? undefined;
+    const loadRooms = useCallback(async () => {
+        try {
+            const { data } = await axios.get<Room[]>("/api/inbox/rooms");
+            // System / personal notification rooms stay with the bell.
+            setRooms(data.filter((r) => r.type === "ORG_GROUP" || r.type === "DIRECT_MESSAGE"));
+        } catch { /* customers still work without it */ }
+    }, []);
+    useEffect(() => { void loadRooms(); loadUsers().then(setUsers).catch(() => {}); }, [loadRooms]);
+    // A new room / being added announces "chat"; a message in a background room
+    // reaches GlobalInboxListener, which fires "inbox:unread".
+    useRealtimeTopics(["chat"], () => void loadRooms());
+    useEffect(() => {
+        const h = () => void loadRooms();
+        window.addEventListener("inbox:unread", h);
+        return () => window.removeEventListener("inbox:unread", h);
+    }, [loadRooms]);
+    const roomTitle = (r: Room) => (r.type === "DIRECT_MESSAGE" && me ? users.find((u) => u.id === dmPartnerId(r, me))?.name ?? r.name : r.name);
+    const openRoom = (id: string) => {
+        setRoomId(id);
+        setSelected(null);
+        setThread(null);
+    };
+    const startDm = async (userId: number) => {
+        try {
+            const { data } = await axios.post<{ id: string }>(`/api/inbox/direct/${userId}`);
+            await loadRooms();
+            setQuery("");
+            openRoom(data.id);
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not open the chat"));
+        }
+    };
+
+    const staffSearch = query.trim().startsWith("@");
+    const showCustomers = CUSTOMER_FILTERS.includes(filter) && !staffSearch;
     const loadList = useCallback(async (p = 1) => {
+        if (!showCustomers) { setList([]); setHasMore(false); setListLoading(false); return; }
         try {
             const { data } = await axios.get<ConversationsResponse>("/api/messages/conversations", {
                 params: { filter, q: query.trim() || undefined, page: p },
@@ -131,7 +194,7 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
         } finally {
             setListLoading(false);
         }
-    }, [filter, query]);
+    }, [filter, query, showCustomers]);
 
     // Search waits for typing to settle; a filter change reloads at once.
     useEffect(() => {
@@ -151,6 +214,7 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
     }, []);
 
     const openConversation = (phone: string) => {
+        setRoomId(null);
         setSelected(phone);
         setThread(null);
         setThreadLoading(true);
@@ -285,6 +349,32 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
         }
     };
 
+    // ── The merged list ──────────────────────────────────────────────────────
+    const q = query.trim().replace(/^@/, "").toLowerCase();
+    const roomRows: Row[] = filter === "open" || filter === "unknown" ? [] : rooms
+        .filter((r) => filter !== "team" || r.type === "DIRECT_MESSAGE")
+        .filter((r) => filter !== "groups" || r.type === "ORG_GROUP")
+        .filter((r) => !staffSearch || r.type === "DIRECT_MESSAGE")
+        .filter((r) => filter !== "unread" || r.unreadCount > 0)
+        .map((r) => ({ kind: "room" as const, key: `r:${r.id}`, at: r.latestMessage?.createdAt ?? "", room: r, title: roomTitle(r) }))
+        .filter((r) => !q || r.title.toLowerCase().includes(q));
+    // "@name" (and the Team chip) also offer colleagues there is no chat with yet.
+    const dmWith = new Set(rooms.filter((r) => r.type === "DIRECT_MESSAGE" && me).map((r) => dmPartnerId(r, me)));
+    const startRows: Row[] = staffSearch || filter === "team"
+        ? users.filter((u) => u.id !== me && !dmWith.has(u.id) && (!q || u.name.toLowerCase().includes(q)))
+            .slice(0, staffSearch ? 8 : 50)
+            .map((u) => ({ kind: "start" as const, key: `u:${u.id}`, at: "", user: u }))
+        : [];
+    // A staff room older than the last customer loaded waits for "Load more",
+    // so paging never shuffles rows already on screen.
+    const oldest = hasMore && list.length ? list[list.length - 1].last.at : "";
+    const rows: Row[] = [
+        ...list.map((c) => ({ kind: "customer" as const, key: `c:${c.phone}`, at: c.last.at, c })),
+        ...roomRows.filter((r) => !oldest || r.at >= oldest),
+    ].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).concat(startRows);
+    const roomUnread = rooms.reduce((n, r) => n + r.unreadCount, 0);
+    const activeRoom = roomId ? rooms.find((r) => r.id === roomId) ?? null : null;
+
     return (
         <div className="grid h-full min-h-0 grid-cols-[320px_minmax(0,1fr)]">
             {/* ── Conversation list ─────────────────────────────────────────── */}
@@ -293,15 +383,15 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
                     <div className="flex items-center justify-between">
                         <h1 className="text-base font-semibold">Messages</h1>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            {totalUnread > 0 && <span>{totalUnread} unread</span>}
-                            <Button variant="ghost" size="icon" className="size-7" onClick={() => void loadList(1)} title="Refresh">
+                            {totalUnread + roomUnread > 0 && <span>{totalUnread + roomUnread} unread</span>}
+                            <Button variant="ghost" size="icon" className="size-7" onClick={() => { void loadList(1); void loadRooms(); }} title="Refresh">
                                 <RefreshCw className="size-3.5" />
                             </Button>
                         </div>
                     </div>
                     <div className="relative">
                         <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
-                        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name, mobile or message" className="pl-8" />
+                        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Name, mobile, message — or @staff" className="pl-8" />
                     </div>
                     <div className="flex flex-wrap gap-1">
                         {FILTERS.map((f) => (
@@ -320,39 +410,83 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto">
                     {listLoading && <p className="p-4 text-sm text-muted-foreground">Loading…</p>}
-                    {!listLoading && list.length === 0 && (
+                    {!listLoading && rows.length === 0 && (
                         <p className="p-4 text-sm text-muted-foreground">
-                            No messages yet. Customer replies to WhatsApp bills land here.
+                            {showCustomers ? "No messages yet. Customer replies to WhatsApp bills land here." : "No staff chats here yet."}
                         </p>
                     )}
-                    {list.map((c) => (
-                        <button
-                            key={c.phone}
-                            onClick={() => openConversation(c.phone)}
-                            className={cn(
-                                "block w-full border-b px-3 py-2 text-left hover:bg-muted/60",
-                                selected === c.phone && "bg-primary/10",
-                            )}
-                        >
-                            <div className="flex items-center justify-between gap-2">
-                                <span className={cn("truncate text-sm", c.unread ? "font-semibold" : "font-medium")}>
-                                    {!c.customer && <UserPlus className="mr-1 inline size-3.5 text-amber-600" aria-label="Not a party yet" />}
-                                    {displayName(c)}
-                                </span>
-                                <span className="shrink-0 text-xs text-muted-foreground">{shortTime(c.last.at)}</span>
-                            </div>
-                            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                                <span className="flex min-w-0 items-center gap-1">
-                                    <ChannelIcon channel={c.last.channel} className="shrink-0" />
-                                    <span className="truncate">{c.last.direction === "OUT" ? "You: " : c.last.direction === "NOTE" ? "Note: " : ""}{c.last.body}</span>
-                                </span>
-                                <span className="flex shrink-0 items-center gap-1">
-                                    {c.openTicketId && <span className="rounded bg-sky-100 px-1 text-sky-800 dark:bg-sky-900 dark:text-sky-100">#{c.openTicketId}</span>}
-                                    {c.unread > 0 && <span className="rounded-full bg-green-600 px-1.5 text-[11px] text-white">{c.unread}</span>}
-                                </span>
-                            </div>
-                        </button>
-                    ))}
+                    {rows.map((row) => {
+                        if (row.kind === "start") {
+                            return (
+                                <button
+                                    key={row.key}
+                                    onClick={() => void startDm(row.user.id)}
+                                    className="flex w-full items-center gap-1.5 border-b px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted/60"
+                                >
+                                    <MessageSquarePlus className="size-3.5 shrink-0 text-violet-600" />
+                                    Start chat with <span className="truncate font-medium text-foreground">{row.user.name}</span>
+                                </button>
+                            );
+                        }
+                        if (row.kind === "room") {
+                            const r = row.room;
+                            const dm = r.type === "DIRECT_MESSAGE";
+                            const Icon = dm ? AtSign : Hash;
+                            const last = r.latestMessage;
+                            return (
+                                <button
+                                    key={row.key}
+                                    onClick={() => openRoom(r.id)}
+                                    className={cn("block w-full border-b px-3 py-2 text-left hover:bg-muted/60", roomId === r.id && "bg-primary/10")}
+                                >
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className={cn("flex min-w-0 items-center gap-1 text-sm", r.unreadCount ? "font-semibold" : "font-medium")}>
+                                            <Icon className={cn("size-3.5 shrink-0", dm ? "text-violet-600" : "text-blue-600")} aria-label={dm ? "Staff chat" : "Staff group"} />
+                                            <span className="truncate">{row.title}</span>
+                                        </span>
+                                        {last && <span className="shrink-0 text-xs text-muted-foreground">{shortTime(last.createdAt)}</span>}
+                                    </div>
+                                    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                                        <span className="truncate">
+                                            {last ? `${!dm && last.senderUser?.name ? `${last.senderUser.name}: ` : ""}${last.body}` : "No messages yet"}
+                                        </span>
+                                        {r.unreadCount > 0 && (
+                                            <span className={cn("shrink-0 rounded-full px-1.5 text-[11px] text-white", dm ? "bg-violet-600" : "bg-blue-600")}>{r.unreadCount}</span>
+                                        )}
+                                    </div>
+                                </button>
+                            );
+                        }
+                        const c = row.c;
+                        return (
+                            <button
+                                key={row.key}
+                                onClick={() => openConversation(c.phone)}
+                                className={cn(
+                                    "block w-full border-b px-3 py-2 text-left hover:bg-muted/60",
+                                    selected === c.phone && "bg-primary/10",
+                                )}
+                            >
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className={cn("truncate text-sm", c.unread ? "font-semibold" : "font-medium")}>
+                                        {!c.customer && <UserPlus className="mr-1 inline size-3.5 text-amber-600" aria-label="Not a party yet" />}
+                                        {displayName(c)}
+                                    </span>
+                                    <span className="shrink-0 text-xs text-muted-foreground">{shortTime(c.last.at)}</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                                    <span className="flex min-w-0 items-center gap-1">
+                                        <ChannelIcon channel={c.last.channel} className="shrink-0" />
+                                        <span className="truncate">{c.last.direction === "OUT" ? "You: " : c.last.direction === "NOTE" ? "Note: " : ""}{c.last.body}</span>
+                                    </span>
+                                    <span className="flex shrink-0 items-center gap-1">
+                                        {c.openTicketId && <span className="rounded bg-sky-100 px-1 text-sky-800 dark:bg-sky-900 dark:text-sky-100">#{c.openTicketId}</span>}
+                                        {c.unread > 0 && <span className="rounded-full bg-green-600 px-1.5 text-[11px] text-white">{c.unread}</span>}
+                                    </span>
+                                </div>
+                            </button>
+                        );
+                    })}
                     {hasMore && (
                         <div className="p-2 text-center">
                             <Button variant="ghost" size="sm" onClick={() => void loadList(page + 1)}>Load more</Button>
@@ -362,6 +496,17 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
             </aside>
 
             {/* ── Thread ───────────────────────────────────────────────────── */}
+            {activeRoom ? (
+                <TeamRoomPane
+                    key={activeRoom.id}
+                    room={activeRoom}
+                    title={roomTitle(activeRoom)}
+                    currentUserId={me || undefined}
+                    currentUserName={meName}
+                    onRead={(id) => setRooms((prev) => prev.map((r) => (r.id === id ? { ...r, unreadCount: 0 } : r)))}
+                    onSent={() => void loadRooms()}
+                />
+            ) : (
             <section className="flex min-h-0 flex-col">
                 {!selected && (
                     <div className="m-auto text-sm text-muted-foreground">Pick a conversation on the left.</div>
@@ -564,6 +709,7 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
                     </>
                 )}
             </section>
+            )}
 
             <StaffPickerDialog
                 mode={pick}
