@@ -12,7 +12,7 @@ export type PickMode = "invite" | "handover";
 
 /** The staff list is the same for every chat — fetched once per page load. */
 let staffCache: Promise<Staff[]> | null = null;
-function loadStaff(): Promise<Staff[]> {
+export function loadStaff(): Promise<Staff[]> {
     staffCache ??= axios.get<{ staff: Staff[] }>("/api/messages/claim").then((r) => r.data.staff)
         .catch((e) => { staffCache = null; throw e; });
     return staffCache;

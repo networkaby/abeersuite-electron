@@ -11,12 +11,12 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime } from "@/shared/lib/format";
 import { extractApiError } from "@/shared/lib/api";
 import { useRealtimeTopics } from "@/shared/hooks";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import { cn } from "@/shared/lib/format/utils";
+import MentionTextarea, { mentionedStaff } from "@/modules/message/components/MentionTextarea";
 import StaffPickerDialog, { type PickMode, type Staff } from "@/modules/message/components/StaffPickerDialog";
 import { MessageMedia, captionOf, type MediaInfo } from "./MessageMedia";
 
@@ -204,6 +204,25 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
         const text = draft.trim();
         const file = attach;
         if ((!text && !file) || !thread || sending) return;
+        // An @mention makes it a staff note — never sent to the customer.
+        if (!file) {
+            const mentions = (await mentionedStaff(text)).filter((m) => m.id !== me);
+            if (mentions.length) {
+                setSending(true);
+                try {
+                    await axios.post("/api/messages/note", { phone: thread.phone, text, mentionIds: mentions.map((m) => m.id) });
+                    setDraft("");
+                    toast.success(`Passed to ${mentions.map((m) => m.name).join(", ")} — not sent to the customer`);
+                    void loadThread(thread.phone);
+                    void loadList(1);
+                } catch (e) {
+                    toast.error(extractApiError(e, "Note not saved"));
+                } finally {
+                    setSending(false);
+                }
+                return;
+            }
+        }
         setSending(true);
         // Show it straight away (a local preview for a file); the server copy replaces it on reload.
         const localUrl = file ? URL.createObjectURL(file) : null;
@@ -324,7 +343,7 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
                             <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                                 <span className="flex min-w-0 items-center gap-1">
                                     <ChannelIcon channel={c.last.channel} className="shrink-0" />
-                                    <span className="truncate">{c.last.direction === "OUT" ? "You: " : ""}{c.last.body}</span>
+                                    <span className="truncate">{c.last.direction === "OUT" ? "You: " : c.last.direction === "NOTE" ? "Note: " : ""}{c.last.body}</span>
                                 </span>
                                 <span className="flex shrink-0 items-center gap-1">
                                     {c.openTicketId && <span className="rounded bg-sky-100 px-1 text-sky-800 dark:bg-sky-900 dark:text-sky-100">#{c.openTicketId}</span>}
@@ -442,6 +461,16 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
                                         </div>
                                     );
                                 }
+                                if (it.direction === "NOTE") {
+                                    return (
+                                        <div key={`m${it.id}`} className="flex justify-center">
+                                            <div className="max-w-[75%] rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-50">
+                                                <div className="text-[11px] opacity-80">{it.sentBy ?? "Staff"} · staff note, not sent to the customer · {formatDateTime(it.at)}</div>
+                                                <div className="whitespace-pre-wrap break-words">{it.body}</div>
+                                            </div>
+                                        </div>
+                                    );
+                                }
                                 const out = it.direction === "OUT";
                                 const link = billLink(it.billKind, it.billRefId);
                                 return (
@@ -511,20 +540,18 @@ export default function MessagesWorkspace({ canReply, canTicket }: { canReply: b
                                         <Button variant="ghost" size="icon" onClick={() => fileRef.current?.click()} disabled={sending} title="Attach a photo or file">
                                             <Paperclip className="size-4" />
                                         </Button>
-                                        <Textarea
+                                        <MentionTextarea
                                             value={draft}
-                                            onChange={(e) => setDraft(e.target.value)}
+                                            onChange={setDraft}
                                             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
-                                            placeholder={attach ? "Add a caption (optional)" : `Reply to ${displayName(thread)}`}
-                                            rows={1}
-                                            className="min-h-9 resize-none"
+                                            placeholder={attach ? "Add a caption (optional)" : `Reply to ${displayName(thread)}, or @name for a staff note`}
                                         />
                                         <Button onClick={() => void send()} disabled={sending || (!draft.trim() && !attach)} size="icon" title="Send">
                                             <Send className="size-4" />
                                         </Button>
                                     </div>
                                     <p className="mt-1 text-[11px] text-muted-foreground">
-                                        Free reply open for {hoursLeft(thread.replyWindow.closesAt)} h more. Enter sends, Shift+Enter adds a line.
+                                        Free reply open for {hoursLeft(thread.replyWindow.closesAt)} h more. Enter sends, Shift+Enter adds a line. @name = staff note, passes the chat to them.
                                     </p>
                                 </>
                             ) : (

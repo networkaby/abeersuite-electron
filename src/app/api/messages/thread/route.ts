@@ -139,7 +139,7 @@ export async function PATCH(req: Request) {
         const phone = phoneMatchKey(data.phone);
         if (!phone) return NextResponse.json({ error: "Not a valid number" }, { status: 400 });
         if (data.seen) {
-            await prisma.message.updateMany({ where: { phone, direction: "IN", seenAt: null }, data: { seenAt: new Date() } });
+            await prisma.message.updateMany({ where: { phone, direction: { in: ["IN", "NOTE"] }, seenAt: null }, data: { seenAt: new Date() } });
         }
         if (data.spam !== undefined) {
             await prisma.message.updateMany({ where: { phone }, data: { spam: data.spam } });

@@ -392,7 +392,7 @@ export async function sendReply(args: { phone: string; text: string; userId: num
     // A reply answers what the customer wrote: their messages are read for the
     // whole shop, so the new-message popup closes everywhere.
     await prisma.message.updateMany({
-        where: { phone: args.phone, direction: "IN", seenAt: null },
+        where: { phone: args.phone, direction: { in: ["IN", "NOTE"] }, seenAt: null },
         data: { seenAt: new Date() },
     });
     // Replying puts you in the conversation: the first to reply owns it, anyone
@@ -411,9 +411,44 @@ export async function sendReply(args: { phone: string; text: string; userId: num
     return row;
 }
 
+/**
+ * A staff note on a customer's chat that @mentions colleagues — never sent to
+ * the customer. Stored as a Message with direction "NOTE" (seenAt = when a
+ * mentioned person dealt with it). The chat passes to the people mentioned:
+ * the first becomes owner, the rest helpers, and the writer steps OUT — no more
+ * popups for them until someone mentions them back.
+ */
+export async function addMentionNote(args: { phone: string; text: string; userId: number; mentionIds: number[] }) {
+    const ids = Array.from(new Set(args.mentionIds.filter((id) => id !== args.userId)));
+    if (!ids.length) throw new ReplyRefusedError("Mention a colleague (type @ and pick a name).");
+    const row = await prisma.message.create({
+        data: {
+            channel: "WHATSAPP",
+            direction: "NOTE",
+            phone: args.phone,
+            kind: "note",
+            body: args.text,
+            sentByUserId: args.userId,
+            occurredAt: new Date(),
+        },
+    });
+    await prisma.messageClaim.upsert({
+        where: { phone: args.phone },
+        create: { phone: args.phone, ownerUserId: ids[0], helperUserIds: ids.slice(1) },
+        update: { ownerUserId: ids[0], helperUserIds: ids.slice(1) },
+    });
+    void publishChangeServer(["messages"]);
+    return row;
+}
+
 // ── Who is handling a chat (MessageClaim) ─────────────────────────────────────────
 
-export type ClaimView = { owner: { id: number; name: string }; helpers: { id: number; name: string }[] };
+export type ClaimView = {
+    owner: { id: number; name: string };
+    helpers: { id: number; name: string }[];
+    /** When the chat last changed hands — the 10-minute hand-back counts from here too. */
+    since: string;
+};
 
 /** Each number's claim with staff names — one query for the claims, one for the names. */
 export async function claimsByPhone(phones: string[]): Promise<Map<string, ClaimView>> {
@@ -429,6 +464,7 @@ export async function claimsByPhone(phones: string[]): Promise<Map<string, Claim
         out.set(c.phone, {
             owner: { id: c.ownerUserId, name: name.get(c.ownerUserId) ?? "Staff" },
             helpers: c.helperUserIds.map((id) => ({ id, name: name.get(id) ?? "Staff" })),
+            since: c.updatedAt.toISOString(),
         });
     }
     return out;

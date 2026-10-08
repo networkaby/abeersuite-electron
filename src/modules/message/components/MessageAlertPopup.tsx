@@ -15,6 +15,11 @@
  *  - …until a message has waited MESSAGE_CLAIM_FALLBACK_MS unanswered, then
  *    everyone again — nobody can sit on a customer.
  *
+ * @MENTION PASSES IT ON. "@Naba what time can they collect?" is a STAFF NOTE,
+ * never sent to the customer: Naba becomes the one handling the chat, sees the
+ * note on his popup, and the writer steps out — no more popups for them on this
+ * customer until someone mentions them back.
+ *
  * A REPLY CLOSES IT FOR EVERYONE. Sending marks the customer's messages read
  * (server side, sendReply), so the card leaves every screen at once. The card
  * also leaves when someone opens the chat on the Messages screen, or when this
@@ -34,13 +39,13 @@ import axios from "axios";
 import { toast } from "sonner";
 import { MessageCircle, X, Send, Users, ArrowRightLeft, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { canOpenPage } from "@/shared/lib/auth/pageAccess";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { MESSAGE_CLAIM_FALLBACK_MS } from "@/shared/lib/constants/polling";
 import { extractApiError } from "@/shared/lib/api";
 import StaffPickerDialog, { type PickMode, type Staff } from "./StaffPickerDialog";
+import MentionTextarea, { mentionedStaff } from "./MentionTextarea";
 
 const MESSAGES_HREF = "/office/crm/messages";
 const DISMISS_KEY = "message-alert-dismissed:v1";
@@ -55,8 +60,12 @@ type Alert = {
     recent: string[];
     count: number;
     lastAt: string;
-    firstAt: string;
-    claim: { owner: Staff; helpers: Staff[] } | null;
+    /** Oldest unread customer message — null when only a staff note is waiting. */
+    firstAt: string | null;
+    /** The newest unanswered @mention note on this chat. */
+    note: { by: string; text: string; at: string } | null;
+    /** `since` = when the chat last changed hands. */
+    claim: { owner: Staff; helpers: Staff[]; since: string } | null;
 };
 
 /** phone → the newest message id this person closed the card on. */
@@ -129,7 +138,13 @@ export default function MessageAlertPopup() {
         return items.filter((a) => {
             if ((dismissed[a.phone] ?? 0) >= a.lastId) return false;
             if (!a.claim || inChat(a, me)) return true;
-            return now - new Date(a.firstAt).getTime() >= MESSAGE_CLAIM_FALLBACK_MS;
+            // Only an unanswered CUSTOMER message goes back to everyone; a note
+            // is for the people it mentions.
+            // The clock restarts whenever the chat changes hands, so whoever it
+            // was just passed to gets their own 10 minutes.
+            if (a.firstAt == null) return false;
+            const waitingSince = Math.max(new Date(a.firstAt).getTime(), new Date(a.claim.since).getTime());
+            return now - waitingSince >= MESSAGE_CLAIM_FALLBACK_MS;
         });
     }, [items, dismissed, me, now]);
 
@@ -146,7 +161,10 @@ export default function MessageAlertPopup() {
         chime();
         if (typeof Notification !== "undefined" && Notification.permission === "granted") {
             const a = fresh[0];
-            const n = new Notification(`WhatsApp · ${a.name}`, { body: a.body.slice(0, 120), tag: `wa-${a.phone}` });
+            const n = new Notification(
+                a.note ? `${a.note.by} mentioned you · ${a.name}` : `WhatsApp · ${a.name}`,
+                { body: (a.note?.text ?? a.body).slice(0, 120), tag: `wa-${a.phone}` },
+            );
             n.onclick = () => { window.focus(); n.close(); };
         }
     }, [visible, allowed, onMessagesScreen]);
@@ -168,11 +186,18 @@ export default function MessageAlertPopup() {
         if (!text || sending) return;
         setSending(a.phone);
         try {
-            await axios.post("/api/messages/reply", { phone: a.phone, text });
+            const mentions = (await mentionedStaff(text)).filter((m) => m.id !== me);
+            if (mentions.length) {
+                // A staff note — the chat passes to them and this person steps out.
+                await axios.post("/api/messages/note", { phone: a.phone, text, mentionIds: mentions.map((m) => m.id) });
+                toast.success(`Passed to ${mentions.map((m) => m.name).join(", ")} — not sent to the customer`);
+            } else {
+                await axios.post("/api/messages/reply", { phone: a.phone, text });
+                toast.success(`Replied to ${a.name}`);
+            }
             setDrafts((d) => ({ ...d, [a.phone]: "" }));
-            // Gone at once here; the server marked it read for everyone else.
+            // Gone at once here; the server has it for everyone else.
             setItems((list) => list.filter((x) => x.phone !== a.phone));
-            toast.success(`Replied to ${a.name}`);
         } catch (e) {
             toast.error(extractApiError(e, "Reply not sent"));
         } finally {
@@ -215,7 +240,7 @@ export default function MessageAlertPopup() {
                                             {!a.claim
                                                 ? "New — nobody has answered yet"
                                                 : mine
-                                                    ? (isOwner ? "Your chat" : `With ${a.claim.owner.name} — you were invited`)
+                                                    ? (a.note ? `${a.note.by} passed this to you` : isOwner ? "Your chat" : `With ${a.claim.owner.name} — you were invited`)
                                                     : `${a.claim.owner.name} has not answered for 10 min`}
                                         </p>
                                     </div>
@@ -230,17 +255,24 @@ export default function MessageAlertPopup() {
                                     {a.recent.map((b, i) => (
                                         <p key={i} className="w-fit max-w-full whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1 text-sm">{b}</p>
                                     ))}
+                                    {a.note && (
+                                        <p className="whitespace-pre-wrap break-words rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-50">
+                                            <span className="text-[11px] font-medium">{a.note.by} · staff note</span><br />{a.note.text}
+                                        </p>
+                                    )}
                                 </div>
                                 {canReply && (
                                     <>
+                                        {/^\s*@|\s@\S/.test(drafts[a.phone] ?? "") && (
+                                            <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-300">With an @mention this is a staff note — the customer will not see it.</p>
+                                        )}
                                         <div className="mt-2 flex items-end gap-2">
-                                            <Textarea
+                                            <MentionTextarea
                                                 value={drafts[a.phone] ?? ""}
-                                                onChange={(e) => setDrafts((d) => ({ ...d, [a.phone]: e.target.value }))}
+                                                onChange={(text) => setDrafts((d) => ({ ...d, [a.phone]: text }))}
                                                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(a); } }}
-                                                placeholder="Type a reply — Enter sends"
-                                                rows={1}
-                                                className="min-h-9 resize-none text-sm"
+                                                placeholder="Reply, or @name for a staff note"
+                                                className="text-sm"
                                             />
                                             <Button size="icon" disabled={sending === a.phone || !(drafts[a.phone] ?? "").trim()} onClick={() => void send(a)} title="Send on WhatsApp">
                                                 <Send className="size-4" />
