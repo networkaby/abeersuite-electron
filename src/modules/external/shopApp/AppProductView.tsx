@@ -106,22 +106,20 @@ export default function AppProductView({ product: p, similar }: { product: ShopP
                         ))}
                     </div>
                 )}
-                <div className="absolute right-3 top-3 flex flex-col gap-2">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            toggleWish(p.id);
-                            toast(wish ? "Removed from wishlist" : "Saved to wishlist");
-                        }}
-                        className={roundButton}
-                        aria-label={wish ? "Remove from wishlist" : "Save to wishlist"}
-                    >
-                        <Heart className={`size-5 ${wish ? "fill-rose-500 text-rose-500" : ""}`} />
-                    </button>
-                    <button type="button" onClick={() => void share()} className={roundButton} aria-label="Share">
-                        <Share2 className="size-5" />
-                    </button>
-                </div>
+                <button type="button" onClick={() => void share()} className={`absolute right-3 top-3 ${roundButton}`} aria-label="Share">
+                    <Share2 className="size-5" />
+                </button>
+                <button
+                    type="button"
+                    onClick={() => {
+                        toggleWish(p.id);
+                        toast(wish ? "Removed from wishlist" : "Saved to wishlist");
+                    }}
+                    className={`absolute bottom-3 right-3 ${roundButton}`}
+                    aria-label={wish ? "Remove from wishlist" : "Save to wishlist"}
+                >
+                    <Heart className={`size-5 ${wish ? "fill-rose-500 text-rose-500" : ""}`} />
+                </button>
             </div>
 
             <div className="space-y-2 border-b bg-background px-4 py-4">
@@ -176,7 +174,7 @@ export default function AppProductView({ product: p, similar }: { product: ShopP
             )}
 
             {/* Room for the fixed bar, so it never covers the last line. */}
-            <div className="h-[calc(5rem+env(safe-area-inset-bottom))]" aria-hidden />
+            <div className="h-[calc(4.5rem+env(safe-area-inset-bottom))]" aria-hidden />
             <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background pb-[env(safe-area-inset-bottom)]">
                 <div className="mx-auto flex max-w-xl gap-2 p-2">
                     {p.orderable ? (
@@ -184,19 +182,16 @@ export default function AppProductView({ product: p, similar }: { product: ShopP
                             <button
                                 type="button"
                                 onClick={addToCart}
-                                className={`flex h-14 w-16 shrink-0 flex-col items-center justify-center rounded-xl border text-[10px] font-medium active:bg-muted ${inCart ? "border-primary text-primary" : "border-border"}`}
-                                aria-label={inCart ? "In cart" : "Add to cart"}
+                                className="h-12 flex-1 rounded-xl border border-border text-[15px] font-semibold active:bg-muted"
                             >
-                                <ShoppingCart className="size-5" />
-                                {inCart ? "In cart" : "Add"}
+                                {inCart ? "In cart" : "Add to cart"}
                             </button>
                             <button
                                 type="button"
                                 onClick={buyNow}
-                                className="flex h-14 flex-1 flex-col items-center justify-center rounded-xl bg-amber-400 text-amber-950 active:bg-amber-300"
+                                className="h-12 flex-1 rounded-xl bg-amber-400 text-[15px] font-semibold text-amber-950 active:bg-amber-300"
                             >
-                                <span className="text-base font-semibold leading-tight">{p.stockStatus === "backorder" ? "Order now" : "Buy now"}</span>
-                                <span className="text-sm leading-tight">at {formatRupeesFromPaise(p.pricePaise)}</span>
+                                {p.stockStatus === "backorder" ? "Order now" : "Buy now"}
                             </button>
                         </>
                     ) : (
