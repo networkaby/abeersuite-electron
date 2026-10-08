@@ -216,6 +216,18 @@ export default function MessageAlertPopup() {
             return now - waitingSince >= MESSAGE_CLAIM_FALLBACK_MS;
         });
     }, [items, dismissed, me, now]);
+    const hasCards = visible.length > 0;
+
+    // The stack grows upward from its spot; when it is taller than the room
+    // above, it slides down so its top never leaves the screen.
+    const [boxH, setBoxH] = useState(0);
+    useEffect(() => {
+        const el = boxRef.current;
+        if (!el) return;
+        const ro = new ResizeObserver(() => setBoxH(el.offsetHeight));
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [place.minimised, hasCards]);
 
     // Sound + a Windows notification for each message that newly reaches this
     // person. The first answer after mount only primes the set — a reload must
@@ -307,7 +319,7 @@ export default function MessageAlertPopup() {
                 </button>
             )}
             {shown.length > 0 && !place.minimised && (
-                <div ref={boxRef} style={{ right: place.right, bottom: place.bottom }} className="fixed z-[60] flex w-96 max-w-[calc(100vw-1rem)] flex-col gap-2">
+                <div ref={boxRef} style={{ right: place.right, bottom: Math.max(0, Math.min(place.bottom, (typeof window === "undefined" ? 0 : window.innerHeight) - boxH - 8)) }} className="fixed z-[60] flex w-96 max-w-[calc(100vw-1rem)] flex-col gap-2">
                     {shown.map((a) => {
                         const mine = inChat(a, me);
                         const isOwner = a.claim?.owner.id === me;

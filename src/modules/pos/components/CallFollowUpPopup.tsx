@@ -571,10 +571,16 @@ export default function CallFollowUpPopup() {
                     onPointerMove={onDragMove}
                     onPointerUp={onDragEnd}
                     style={pos ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto" } : undefined}
-                    className="fixed bottom-4 right-4 z-50 flex touch-none items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-lg transition hover:opacity-90"
+                    // A round bubble like the WhatsApp one, parked just left of it.
+                    className="fixed bottom-4 right-20 z-50 flex size-12 touch-none items-center justify-center rounded-full bg-sky-600 text-white shadow-lg ring-4 ring-sky-600/25 transition hover:bg-sky-700"
+                    title={`${groups.length}${morePending ? "+" : ""} call${groups.length > 1 ? "s" : ""} to log — click to open, drag to move`}
+                    aria-label={`${groups.length} calls to log`}
                 >
-                    <PhoneIncoming size={15} />
-                    {groups.length}{morePending ? "+" : ""} call{groups.length > 1 ? "s" : ""} to log
+                    <span className="absolute inset-0 animate-ping rounded-full bg-sky-500/30" />
+                    <PhoneIncoming size={22} className="relative" />
+                    <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-red-600 px-1 text-center text-[11px] font-semibold leading-5">
+                        {groups.length}{morePending ? "+" : ""}
+                    </span>
                 </button>
             )}
 
