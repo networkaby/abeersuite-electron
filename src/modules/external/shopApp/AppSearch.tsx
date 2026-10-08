@@ -97,7 +97,7 @@ export default function AppSearch({ products, categories }: { products: Suggesti
                         value={q}
                         onChange={(e) => setQ(e.target.value)}
                         placeholder="Search laptops, printers, CCTV…"
-                        className="h-10 min-w-0 flex-1 bg-transparent text-base outline-none"
+                        className="h-10 min-w-0 flex-1 bg-transparent text-base outline-none [&::-webkit-search-cancel-button]:hidden"
                         autoComplete="off"
                     />
                     {q && (
