@@ -89,7 +89,7 @@ type Run = { kind: "matched" | "suggested"; first: boolean; last: boolean; size:
 // One row of the merged table. Both sides share a signed delta — money into the
 // bank is positive — so a statement line and the book entry that explains it
 // carry the same number and sort next to each other.
-type MergedRowBase = { key: string; date: string; delta: number; sug?: Suggestion; run?: Run; strongBelow?: boolean };
+type MergedRowBase = { key: string; date: string; delta: number; sug?: Suggestion; run?: Run; strongBelow?: boolean; isDateStart?: boolean; isDateEnd?: boolean };
 type MergedRow =
     | (MergedRowBase & { kind: "st"; st: StatementLineView })
     | (MergedRowBase & { kind: "gl"; gl: GlLineView });
@@ -348,9 +348,12 @@ export function BankReconciliationPage() {
         // A heavy rule closes a group and opens the next one, AND closes each day
         // so the day's cumulative closing balance clearly precedes the next day's first row.
         sortedRows.forEach((r, i) => {
+            const prev = sortedRows[i - 1];
             const next = sortedRows[i + 1];
+            r.isDateStart = i === 0 || prev?.date.slice(0, 10) !== r.date.slice(0, 10);
+            r.isDateEnd = next != null && next.date.slice(0, 10) !== r.date.slice(0, 10);
             r.strongBelow = next != null && (
-                next.date !== r.date
+                r.isDateEnd
                 || r.run?.last === true
                 || next.run?.first === true
             );
@@ -768,7 +771,21 @@ export function BankReconciliationPage() {
                                                 {data.statementLines.length === 0 ? "No statement lines in this period — upload the bank statement." : `Nothing ${filter === "all" ? "" : filter} here.`}
                                             </td></tr>
                                         )}
-                                        {stPage.pageRows.map((r) => <StatementRowView key={r.id} r={r} selected={selSt.has(r.id)} onToggle={() => setSelSt((s0) => toggle(s0, r.id))} onUnmatch={() => void unmatch(r.match!.groupId)} onBook={(k) => bookIt([r], k)} busy={busy != null} glById={data.glLines} agreed={isAgreed(r.date, s.agreedThrough)} hint={hints.get(r.id)} />)}
+                                        {stPage.pageRows.map((r, i) => (
+                                            <StatementRowView
+                                                key={r.id}
+                                                r={r}
+                                                isDateStart={i === 0 || stPage.pageRows[i - 1].date.slice(0, 10) !== r.date.slice(0, 10)}
+                                                selected={selSt.has(r.id)}
+                                                onToggle={() => setSelSt((s0) => toggle(s0, r.id))}
+                                                onUnmatch={() => void unmatch(r.match!.groupId)}
+                                                onBook={(k) => bookIt([r], k)}
+                                                busy={busy != null}
+                                                glById={data.glLines}
+                                                agreed={isAgreed(r.date, s.agreedThrough)}
+                                                hint={hints.get(r.id)}
+                                            />
+                                        ))}
                                     </tbody>
                                 </table>
                             </div>
@@ -798,7 +815,17 @@ export function BankReconciliationPage() {
                                         {glPage.pageRows.length === 0 && (
                                             <tr><td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">Nothing {filter === "all" ? "" : filter} here.</td></tr>
                                         )}
-                                        {glPage.pageRows.map((r) => <GlRowView key={r.id} r={r} selected={selGl.has(r.id)} onToggle={() => setSelGl((s0) => toggle(s0, r.id))} onUnmatch={() => void unmatch(r.match!.groupId)} busy={busy != null} />)}
+                                        {glPage.pageRows.map((r, i) => (
+                                            <GlRowView
+                                                key={r.id}
+                                                r={r}
+                                                isDateStart={i === 0 || glPage.pageRows[i - 1].date.slice(0, 10) !== r.date.slice(0, 10)}
+                                                selected={selGl.has(r.id)}
+                                                onToggle={() => setSelGl((s0) => toggle(s0, r.id))}
+                                                onUnmatch={() => void unmatch(r.match!.groupId)}
+                                                busy={busy != null}
+                                            />
+                                        ))}
                                     </tbody>
                                 </table>
                             </div>
@@ -960,9 +987,12 @@ function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGro
         <tr className={cn(
             "border-b border-l-[3px]",
             isSt ? "border-l-sky-500" : "border-l-violet-500",
-            // A group is closed and the next one opened by a rule you cannot
-            // miss; everything else keeps the hairline.
-            row.strongBelow ? "border-b-2 border-b-foreground/30" : "border-b-border/60",
+            // Date boundary gets a prominent yellow divider line; regular group boundary keeps subtle rule.
+            row.isDateEnd
+                ? "border-b-2 border-b-amber-400 dark:border-b-amber-500"
+                : row.strongBelow
+                    ? "border-b-2 border-b-foreground/25"
+                    : "border-b-border/60",
             background,
             frozen && "opacity-60",
         )}>
@@ -1001,7 +1031,17 @@ function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGro
                     </button>
                 )}
             </td>
-            <td className="whitespace-nowrap px-2 py-1.5 align-top">{formatDate(r.date)}</td>
+            <td className="whitespace-nowrap px-2 py-1.5 align-top">
+                {row.isDateStart ? (
+                    <span className="inline-block rounded px-1.5 py-0.5 text-[11px] font-bold bg-slate-200/90 text-slate-800 border border-slate-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700 shadow-sm">
+                        {formatDate(r.date)}
+                    </span>
+                ) : (
+                    <span className="text-[11px] font-mono text-muted-foreground/60 pl-1.5">
+                        {formatDate(r.date)}
+                    </span>
+                )}
+            </td>
             <td className="px-2 py-1.5 align-top">
                 {isSt ? (
                     <div className="line-clamp-2 break-words" title={row.st.narration}>{row.st.narration}</div>
@@ -1055,17 +1095,22 @@ function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGro
     );
 }
 
-function StatementRowView({ r, selected, onToggle, onUnmatch, onBook, busy, glById, agreed, hint }: {
+function StatementRowView({ r, selected, onToggle, onUnmatch, onBook, busy, glById, agreed, hint, isDateStart }: {
     r: StatementLineView; selected: boolean; onToggle: () => void; onUnmatch: () => void;
     onBook: (kind: "PAYMENT" | "RECEIPT" | "CONTRA") => void; busy: boolean; glById: GlLineView[];
-    agreed: boolean; hint?: RefHint;
+    agreed: boolean; hint?: RefHint; isDateStart?: boolean;
 }) {
     const matched = r.match != null && !r.match.stale;
     const partners = matched ? r.match!.glLineIds.map((id) => glById.find((g) => g.id === id)?.voucherNo ?? `#${id}`) : [];
     const matchGap = matched ? matchGapDays(r.date, r.match!.glLineIds, glById) : 0;
     const frozen = r.locked || r.inOpening;
     return (
-        <tr className={cn("hover:bg-muted/40", selected ? "bg-primary/15" : matched ? "bg-emerald-50/40 dark:bg-emerald-950/20" : "", frozen && "opacity-60")}>
+        <tr className={cn(
+            "hover:bg-muted/40",
+            isDateStart && "border-t-2 border-t-amber-400 dark:border-t-amber-500",
+            selected ? "bg-primary/15" : matched ? "bg-emerald-50/40 dark:bg-emerald-950/20" : "",
+            frozen && "opacity-60",
+        )}>
             <td className="px-2 py-1.5 align-top">
                 {!matched && !frozen && (
                     <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select statement line ${formatDate(r.date)} ${r.narration}`} />
@@ -1073,7 +1118,17 @@ function StatementRowView({ r, selected, onToggle, onUnmatch, onBook, busy, glBy
                 {matched && <CheckCircle2 size={13} className="text-green-600" />}
                 {r.locked && <Lock size={11} className="text-muted-foreground" />}
             </td>
-            <td className="whitespace-nowrap px-2 py-1.5 align-top">{formatDate(r.date)}</td>
+            <td className="whitespace-nowrap px-2 py-1.5 align-top">
+                {isDateStart ? (
+                    <span className="inline-block rounded px-1.5 py-0.5 text-[11px] font-bold bg-slate-200/90 text-slate-800 border border-slate-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700 shadow-sm">
+                        {formatDate(r.date)}
+                    </span>
+                ) : (
+                    <span className="text-[11px] font-mono text-muted-foreground/60 pl-1.5">
+                        {formatDate(r.date)}
+                    </span>
+                )}
+            </td>
             <td className="px-2 py-1.5 align-top">
                 <div className="line-clamp-2 break-words" title={r.narration}>{r.narration}</div>
                 <div className="flex flex-wrap gap-x-2 text-[10px] text-muted-foreground">
@@ -1108,16 +1163,31 @@ function StatementRowView({ r, selected, onToggle, onUnmatch, onBook, busy, glBy
     );
 }
 
-function GlRowView({ r, selected, onToggle, onUnmatch, busy }: { r: GlLineView; selected: boolean; onToggle: () => void; onUnmatch: () => void; busy: boolean }) {
+function GlRowView({ r, selected, onToggle, onUnmatch, busy, isDateStart }: { r: GlLineView; selected: boolean; onToggle: () => void; onUnmatch: () => void; busy: boolean; isDateStart?: boolean }) {
     const matched = r.match != null;
     return (
-        <tr className={cn("hover:bg-muted/40", selected ? "bg-primary/15" : matched ? "bg-emerald-50/40 dark:bg-emerald-950/20" : "", r.locked && "opacity-60")}>
+        <tr className={cn(
+            "hover:bg-muted/40",
+            isDateStart && "border-t-2 border-t-amber-400 dark:border-t-amber-500",
+            selected ? "bg-primary/15" : matched ? "bg-emerald-50/40 dark:bg-emerald-950/20" : "",
+            r.locked && "opacity-60",
+        )}>
             <td className="px-2 py-1.5 align-top">
                 {!matched && !r.locked && <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select book entry ${r.voucherNo}`} />}
                 {matched && <CheckCircle2 size={13} className="text-green-600" />}
                 {r.locked && <Lock size={11} className="text-muted-foreground" />}
             </td>
-            <td className="whitespace-nowrap px-2 py-1.5 align-top">{formatDate(r.date)}</td>
+            <td className="whitespace-nowrap px-2 py-1.5 align-top">
+                {isDateStart ? (
+                    <span className="inline-block rounded px-1.5 py-0.5 text-[11px] font-bold bg-slate-200/90 text-slate-800 border border-slate-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700 shadow-sm">
+                        {formatDate(r.date)}
+                    </span>
+                ) : (
+                    <span className="text-[11px] font-mono text-muted-foreground/60 pl-1.5">
+                        {formatDate(r.date)}
+                    </span>
+                )}
+            </td>
             <td className="whitespace-nowrap px-2 py-1.5 align-top">
                 {(() => {
                     const glSource = voucherSourceForType(r.voucherType);
