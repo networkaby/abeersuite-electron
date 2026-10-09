@@ -109,6 +109,7 @@ export interface GlLineView {
 export interface StatementLineView {
     id: number;
     importId: number;
+    seq: number;
     date: string;
     narration: string;
     reference: string | null;
@@ -289,8 +290,8 @@ export async function loadReconciliation(accountId: number, fromIso: string, toI
         }),
         prisma.bankStatementLine.findMany({
             where: { accountId, date: { lte: to } },
-            orderBy: [{ date: "asc" }, { seq: "asc" }],
-            select: { id: true, importId: true, date: true, narration: true, reference: true, withdrawal: true, deposit: true, balance: true },
+            orderBy: [{ date: "asc" }, { importId: "asc" }, { seq: "asc" }, { id: "asc" }],
+            select: { id: true, importId: true, seq: true, date: true, narration: true, reference: true, withdrawal: true, deposit: true, balance: true },
         }),
         prisma.bankStatementImport.findMany({
             where: { accountId },
@@ -430,6 +431,7 @@ export async function loadReconciliation(accountId: number, fromIso: string, toI
             return {
                 id: s.id,
                 importId: s.importId,
+                seq: s.seq,
                 date: d,
                 narration: s.narration,
                 reference: s.reference,

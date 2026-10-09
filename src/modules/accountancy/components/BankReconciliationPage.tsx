@@ -223,13 +223,23 @@ export function BankReconciliationPage() {
         return out;
     }, [data]);
 
-    // Merged: both sides in one list, date first, then the signed amount, so an
-    // equal pair lands on consecutive rows. Bank before books on a tie.
+    // Merged: both sides in one list, preserving the bank statement's sequential
+    // order so the running balance flows naturally and the last bank row of each day
+    // reflects the day's cumulative closing balance. Matched or suggested book
+    // entries sit directly adjacent to their corresponding statement line.
     const mergedRows = useMemo<MergedRow[]>(() => {
         const rows: MergedRow[] = [
             ...stRows.map((r): MergedRow => ({ kind: "st", key: `s${r.id}`, date: r.date, delta: (r.deposit ?? 0) - (r.withdrawal ?? 0), st: r })),
             ...glRows.map((r): MergedRow => ({ kind: "gl", key: `g${r.id}`, date: r.date, delta: (r.debit ?? 0) - (r.credit ?? 0), gl: r })),
         ];
+
+        // Global statement order lookup so bank statement lines strictly follow statement sequence
+        const stIndexMap = new Map<number, number>();
+        (data?.statementLines ?? []).forEach((s, idx) => stIndexMap.set(s.id, idx));
+
+        const stMap = new Map<number, StatementLineView>();
+        (data?.statementLines ?? []).forEach((s) => stMap.set(s.id, s));
+
         // Same date, same signed amount, still open, and both sides present —
         // that is a pair worth pointing at. Direction has to agree too, so a
         // deposit never pairs with a payment of the same size. Worked out
@@ -247,21 +257,72 @@ export function BankReconciliationPage() {
             for (const r of group) r.sug = { key, first: false, last: false, stIds, glIds, size: group.length };
         }
 
-        // Date, then amount — which already puts a group's rows together. Then
-        // group members ahead of anything else carrying that same date and
-        // amount, so a matched or locked row can never sit inside a group and
-        // break it in two. Bank above, books below, always.
-        rows.sort((a, b) =>
-            a.date.localeCompare(b.date)
-            || a.delta - b.delta
-            || (a.sug ? 0 : 1) - (b.sug ? 0 : 1)
-            || (a.kind === b.kind ? 0 : a.kind === "st" ? -1 : 1));
+        // For suggestion pairing: if a bucket has multiple St lines and GL lines on the same date,
+        // pair them in chronological order so each GL line anchors next to its suggested St line.
+        const sugGlAnchorMap = new Map<number, number>();
+        for (const [, group] of bucket) {
+            const stGroup = group.filter((r): r is MergedRow & { kind: "st" } => r.kind === "st")
+                .sort((a, b) => (stIndexMap.get(a.st.id) ?? 0) - (stIndexMap.get(b.st.id) ?? 0));
+            const glGroup = group.filter((r): r is MergedRow & { kind: "gl" } => r.kind === "gl");
+            if (stGroup.length === 0 || glGroup.length === 0) continue;
+            glGroup.forEach((g, i) => {
+                const targetSt = stGroup[Math.min(i, stGroup.length - 1)];
+                sugGlAnchorMap.set(g.gl.id, stIndexMap.get(targetSt.st.id) ?? 0);
+            });
+        }
+
+        type RowOrderInfo = {
+            row: MergedRow;
+            stOrder: number;
+            anchor: number;
+            kindRank: number;
+        };
+
+        const infoList: RowOrderInfo[] = rows.map((r) => {
+            if (r.kind === "st") {
+                const idx = stIndexMap.get(r.st.id) ?? 0;
+                return { row: r, stOrder: idx, anchor: idx, kindRank: 0 };
+            }
+            // GL row: check if matched to any statement line on the same date
+            if (r.gl.match) {
+                const sameDateSt = r.gl.match.statementLineIds
+                    .map((id) => stMap.get(id))
+                    .filter((s): s is StatementLineView => s != null && s.date === r.date);
+                if (sameDateSt.length > 0) {
+                    const maxStIdx = Math.max(...sameDateSt.map((s) => stIndexMap.get(s.id) ?? 0));
+                    return { row: r, stOrder: maxStIdx, anchor: maxStIdx, kindRank: 1 };
+                }
+            }
+            if (r.sug && sugGlAnchorMap.has(r.gl.id)) {
+                const a = sugGlAnchorMap.get(r.gl.id)!;
+                return { row: r, stOrder: a, anchor: a, kindRank: 1 };
+            }
+            // Standalone book entry without statement match on this date
+            return { row: r, stOrder: Number.MAX_SAFE_INTEGER, anchor: Number.MAX_SAFE_INTEGER, kindRank: 2 };
+        });
+
+        // 1. Date order (chronological by day)
+        // 2. Anchor (statement transaction sequence order)
+        // 3. kindRank (Bank statement row above, matching/suggested Books row below)
+        // 4. stOrder (bank statement sequence tie-breaker)
+        // 5. delta and voucher id for multiple books rows
+        infoList.sort((a, b) =>
+            a.row.date.localeCompare(b.row.date)
+            || a.anchor - b.anchor
+            || a.kindRank - b.kindRank
+            || (a.row.kind === "st" && b.row.kind === "st" ? a.stOrder - b.stOrder : 0)
+            || a.row.delta - b.row.delta
+            || (a.row.kind === "gl" && b.row.kind === "gl" ? a.row.gl.voucherId - b.row.gl.voucherId : 0)
+            || a.row.key.localeCompare(b.row.key)
+        );
+
+        const sortedRows = infoList.map((x) => x.row);
 
         // first / last off the final order — cheap now that a group is known to
         // be contiguous, and still right if that ever stops being true.
-        rows.forEach((r, i) => {
+        sortedRows.forEach((r, i) => {
             if (!r.sug) return;
-            r.sug = { ...r.sug, first: rows[i - 1]?.sug?.key !== r.sug.key, last: rows[i + 1]?.sug?.key !== r.sug.key };
+            r.sug = { ...r.sug, first: sortedRows[i - 1]?.sug?.key !== r.sug.key, last: sortedRows[i + 1]?.sug?.key !== r.sug.key };
         });
 
         // What each row belongs to: a suggestion, an existing match, or nothing.
@@ -273,24 +334,29 @@ export function BankReconciliationPage() {
             const g = r.kind === "st" ? (r.st.match && !r.st.match.stale ? r.st.match.groupId : null) : (r.gl.match?.groupId ?? null);
             return g ? `m:${g}` : `x:${r.key}`;
         };
-        const keys = rows.map(keyOf);
-        for (let i = 0; i < rows.length;) {
+        const keys = sortedRows.map(keyOf);
+        for (let i = 0; i < sortedRows.length;) {
             let j = i;
-            while (j + 1 < rows.length && keys[j + 1] === keys[i]) j++;
+            while (j + 1 < sortedRows.length && keys[j + 1] === keys[i]) j++;
             if (j > i) {
                 const kind = keys[i].startsWith("s:") ? "suggested" : "matched";
-                for (let k = i; k <= j; k++) rows[k].run = { kind, first: k === i, last: k === j, size: j - i + 1 };
+                for (let k = i; k <= j; k++) sortedRows[k].run = { kind, first: k === i, last: k === j, size: j - i + 1 };
             }
             i = j + 1;
         }
-        // A heavy rule closes a group and opens the next one. Rows outside any
-        // group keep the hairline, or the whole table reads as bars.
-        rows.forEach((r, i) => {
-            const next = rows[i + 1];
-            r.strongBelow = next != null && (r.run?.last === true || next.run?.first === true);
+
+        // A heavy rule closes a group and opens the next one, AND closes each day
+        // so the day's cumulative closing balance clearly precedes the next day's first row.
+        sortedRows.forEach((r, i) => {
+            const next = sortedRows[i + 1];
+            r.strongBelow = next != null && (
+                next.date !== r.date
+                || r.run?.last === true
+                || next.run?.first === true
+            );
         });
-        return rows;
-    }, [stRows, glRows]);
+        return sortedRows;
+    }, [stRows, glRows, data]);
 
     const selectGroup = (sug: Suggestion) => { setSelSt(new Set(sug.stIds)); setSelGl(new Set(sug.glIds)); };
 
