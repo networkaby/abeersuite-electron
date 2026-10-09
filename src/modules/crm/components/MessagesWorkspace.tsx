@@ -572,41 +572,37 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                     </div>
                                 </header>
 
-                                <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-muted/40 px-3 py-1.5 text-xs md:px-4">
-                                    <Hand className="size-3.5 shrink-0 text-muted-foreground" />
-                                    <span className="min-w-0 flex-1 truncate">
-                                        {thread.claim ? (
-                                            <span>
-                                                Handled by <b>{thread.claim.owner.id === me ? "you" : thread.claim.owner.name}</b>
-                                                {thread.claim.helpers.length > 0 && <> · with {thread.claim.helpers.map((h) => (h.id === me ? "you" : h.name)).join(", ")}</>}
-                                            </span>
-                                        ) : (
-                                            <span className="text-muted-foreground">Unclaimed — first reply takes it.</span>
-                                        )}
-                                    </span>
-                                    {canReply && (
-                                        <span className="flex shrink-0 gap-1">
-                                            {thread.claim?.owner.id !== me && (
-                                                <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => void changeClaim({ action: "take" }, "You are handling this chat")}>
-                                                    <Hand className="mr-1 size-3" /> Take
-                                                </Button>
-                                            )}
-                                            <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => openPicker("invite")}>
-                                                <Users className="mr-1 size-3" /> Invite
-                                            </Button>
-                                            {thread.claim?.owner.id === me && (
-                                                <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => openPicker("handover")}>
-                                                    <ArrowRightLeft className="mr-1 size-3" /> Handover
-                                                </Button>
-                                            )}
-                                            {thread.claim?.helpers.some((h) => h.id === me) && (
-                                                <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => void changeClaim({ action: "leave" }, "You left this chat")}>
-                                                    Leave
-                                                </Button>
-                                            )}
+                                {thread.claim && (
+                                    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-muted/40 px-3 py-1 text-xs md:px-4">
+                                        <Hand className="size-3.5 shrink-0 text-muted-foreground" />
+                                        <span className="min-w-0 flex-1 truncate">
+                                            Handled by <b>{thread.claim.owner.id === me ? "you" : thread.claim.owner.name}</b>
+                                            {thread.claim.helpers.length > 0 && <> · with {thread.claim.helpers.map((h) => (h.id === me ? "you" : h.name)).join(", ")}</>}
                                         </span>
-                                    )}
-                                </div>
+                                        {canReply && (
+                                            <span className="flex shrink-0 gap-1">
+                                                {thread.claim.owner.id !== me && (
+                                                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => void changeClaim({ action: "take" }, "You are handling this chat")}>
+                                                        <Hand className="mr-1 size-3" /> Take over
+                                                    </Button>
+                                                )}
+                                                <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => openPicker("invite")}>
+                                                    <Users className="mr-1 size-3" /> Invite
+                                                </Button>
+                                                {thread.claim.owner.id === me && (
+                                                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => openPicker("handover")}>
+                                                        <ArrowRightLeft className="mr-1 size-3" /> Handover
+                                                    </Button>
+                                                )}
+                                                {thread.claim.helpers.some((h) => h.id === me) && (
+                                                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => void changeClaim({ action: "leave" }, "You left this chat")}>
+                                                        Leave
+                                                    </Button>
+                                                )}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
 
                         {thread.ticket && (
                             <a
