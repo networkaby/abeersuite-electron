@@ -313,7 +313,71 @@
   !insertmacro MUI_PAGE_FINISH
 !macroend
 
+;  ── One install, one set of shortcuts ───────────────────────────────────────
+;
+; The setup asks "only for me" or "anyone who uses this computer", and over time a
+; PC can end up with both: a copy in Program Files AND one under
+; %LOCALAPPDATA%\Programs, or one copy with its shortcuts left in both Start Menus.
+; Both copies open the same counter database (it lives in the user's %APPDATA%,
+; whoever installed), so the one just picked is kept and the other goes.
+;
+; electron-builder already removes a per-user copy when installing for everyone,
+; but passes --keep-shortcuts, which is how the per-user Start Menu link survives.
+; The other direction (installing for me over a for-everyone copy) it never does.
+;
+; The old copy is removed with its own uninstaller and `--updated`, the same flag a
+; normal update uses, so customUnInstall keeps the counter's data, auto-start and the
+; firewall rule. Removing a Program Files copy needs a UAC prompt, so it only happens
+; when someone is at the setup — a silent auto-update leaves it for the next manual run.
+!macro removeOtherInstall
+  Push $0
+  Push $1
+  ${If} $installMode != "all"
+  ${AndIfNot} ${Silent}
+    ReadRegStr $0 HKLM "${INSTALL_REGISTRY_KEY}" InstallLocation
+    ReadRegStr $1 HKLM "${UNINSTALL_REGISTRY_KEY}" UninstallString
+    ${If} $0 != ""
+    ${AndIf} $0 != "$INSTDIR"
+    ${AndIf} $1 != ""
+      !insertmacro sayStep "Removing the older AbeerSuite copy in $0..."
+      !insertmacro GetInQuotes $1 "$1"
+      ${If} ${FileExists} "$1"
+        CopyFiles /SILENT "$1" "$PLUGINSDIR\other-uninstaller.exe"
+        ExecWait '"$PLUGINSDIR\other-uninstaller.exe" /S /allusers /KEEP_APP_DATA --updated _?=$0' $1
+        DetailPrint "Older copy uninstaller returned $1."
+      ${EndIf}
+    ${EndIf}
+  ${EndIf}
+
+  ; Shortcuts in the other scope, whichever way round. A for-everyone Start Menu or
+  ; Public Desktop link needs admin rights; without them the Delete simply fails.
+  ${If} $installMode == "all"
+    SetShellVarContext current
+  ${Else}
+    SetShellVarContext all
+  ${EndIf}
+  Delete "$SMPROGRAMS\${SHORTCUT_NAME}.lnk"
+  Delete "$DESKTOP\${SHORTCUT_NAME}.lnk"
+  ${If} $installMode == "all"
+    SetShellVarContext all
+  ${Else}
+    SetShellVarContext current
+  ${EndIf}
+
+  ; electron-builder never recreates a deleted Desktop icon on an update — it reads
+  ; the missing link as "the user removed it". The owner wants it back every time.
+  ${IfNot} ${FileExists} "$newDesktopLink"
+    CreateShortCut "$newDesktopLink" "$appExe" "" "$appExe" 0 "" "" "${APP_DESCRIPTION}"
+    ClearErrors
+    WinShell::SetLnkAUMI "$newDesktopLink" "${APP_ID}"
+  ${EndIf}
+  System::Call 'shell32::SHChangeNotify(i, i, i, i) v (0x08000000, 0, 0, 0)'
+  Pop $1
+  Pop $0
+!macroend
+
 !macro customInstall
+  !insertmacro removeOtherInstall
   !insertmacro ensureVcRuntime
   !insertmacro ensureCounterSetup
   !insertmacro sayStep "Finishing up..."
