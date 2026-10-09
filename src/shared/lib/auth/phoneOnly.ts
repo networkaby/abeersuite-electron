@@ -23,6 +23,9 @@ const PHONE_ONLY_APIS = [
     "/api/accountancy/vouchers", // Quick Receive / Pay / Expense
     "/api/hr/activity",          // the attendance heartbeat (ActivityPulse)
     "/api/counter/status",       // the status stores woken at sign-in
+    "/api/messages",             // mobile inbox & customer WhatsApp chats
+    "/api/inbox",                // mobile staff chat rooms
+    "/api/users",                // mobile staff directory
 ];
 
 /** Office catalogue reads a phone screen holds on the device (one full download,

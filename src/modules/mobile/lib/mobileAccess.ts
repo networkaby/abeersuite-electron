@@ -28,3 +28,11 @@ export const PARTY_DETAIL_PERMISSIONS = PARTY_TICKS;
 
 /** One voucher opens from a party's Vouchers tab or from the Day Book. */
 export const VOUCHER_VIEW_PERMISSIONS = [...PARTY_TICKS, PERMISSIONS.MOBILE_DAYBOOK_VIEW] as const;
+
+/** Inbox opens with mobile inbox view, messages reply, or CRM messages permission. */
+export const INBOX_PERMISSIONS = [
+    PERMISSIONS.MOBILE_INBOX_VIEW,
+    PERMISSIONS.MESSAGES_REPLY,
+    "ui:sidebar:crm:messages",
+] as const;
+

@@ -41,6 +41,7 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     { id: "mobile:payables:view", label: "Mobile: payables", module: "mobile", description: "Phone app: whom we owe — total, age, and each supplier's unpaid bills." },
     { id: "mobile:daybook:view", label: "Mobile: day book", module: "mobile", description: "Phone app: every voucher of a chosen day." },
     { id: "mobile:photos:edit", label: "Mobile: photos", module: "mobile", description: "Phone app: take or pick shop photos for products, brands, groups and categories. A photo that makes a product shop-ready lists it, as the office photo save does." },
+    { id: "mobile:inbox:view", label: "Mobile: inbox", module: "mobile", description: "Phone app: read and reply to customer WhatsApp messages and chats." },
 
     // customers — Contacts (Person + Company) share ONE flat set. Contacts carry no
     // branch, so there is no radius to enforce: any branch may CRUD (gated only by

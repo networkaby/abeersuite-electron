@@ -54,6 +54,7 @@ works.
 | Day Book | `mobile:daybook:view` | `/api/mobile/daybook` |
 | Voucher (opened from a party's Vouchers tab or the Day Book) | any party tick or `mobile:daybook:view` | `/api/mobile/vouchers/[id]` |
 | Photos | `mobile:photos:edit` | `/api/mobile/photos/signature`, `/photos/product/[id]`, `/photos/master/[kind]/[id]` |
+| Inbox | `mobile:inbox:view` | `/api/messages`, `/api/inbox`, `/api/users` |
 
 - A party's bills open on any of the three party ticks (`PARTY_TICKS` /
   `PARTY_DETAIL_PERMISSIONS`), because receivables and payables open them too.
@@ -377,6 +378,16 @@ party screen's bottom tab.
   sets `imageUrl` only; name, slug and description stay on Ecommerce → Masters.
 - Both APIs accept only links on our own Cloudinary cloud (`isOwnPhotoUrl`). A save
   announces `catalogue` (`topics.ts`), so office screens and tills pick it up.
+
+### Inbox
+Owner, 2026-10-09: WhatsApp conversations and customer chats available in the staff mobile app (`/m-staff-app/inbox`).
+Guarded by `mobile:inbox:view` (plus `messages:reply` / `ui:sidebar:crm:messages`).
+- **Responsive workspace:** Embeds [`MessagesWorkspace`](../src/modules/crm/components/MessagesWorkspace.tsx) inside [`MobileInbox`](../src/modules/mobile/components/MobileInbox.tsx).
+- On mobile screen widths:
+  - If no conversation/room is selected: displays the conversation list full-width with all search filters (All / Unread / Open ticket / Unknown / Team / Groups).
+  - When a conversation or team room is selected: hides the list and displays the chat pane full-width with a `← Back` button in the header to return to the list.
+- Reuses all CRM message features: Meta WhatsApp Cloud conversations, direct R2 media uploads / attachments, @mentions, claim/handover, and staff team rooms.
+- Phone-only sessions: `PHONE_ONLY_APIS` permits `/api/messages`, `/api/inbox`, and `/api/users`.
 
 ---
 

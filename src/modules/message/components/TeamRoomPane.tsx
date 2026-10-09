@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Send, MessageSquare, Loader2, Hash, AtSign, Bell } from "lucide-react";
+import { Send, MessageSquare, Loader2, Hash, AtSign, Bell, ChevronLeft } from "lucide-react";
 import { extractApiError } from "@/shared/lib/api";
 import { GatedLink } from "@/shared/components/GatedLink";
 import { supabase } from "@/shared/lib/supabase/supabaseClient";
@@ -123,6 +123,8 @@ export default function TeamRoomPane({
     onRead?: (roomId: string) => void;
     /** After the server saved this person's own message — a list can refresh its preview. */
     onSent?: () => void;
+    /** Back button for mobile view */
+    onBack?: () => void;
 }) {
     const roomId = room.id;
     const [messages, setMessages] = useState<Message[]>([]);
@@ -265,7 +267,17 @@ export default function TeamRoomPane({
     return (
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {/* Room header */}
-            <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-6 py-3">
+            <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-4 py-3 md:px-6">
+                {onBack && (
+                    <button
+                        type="button"
+                        onClick={onBack}
+                        className="mr-1 -ml-1 rounded-md p-1 hover:bg-muted md:hidden"
+                        aria-label="Back to chat list"
+                    >
+                        <ChevronLeft className="size-5" />
+                    </button>
+                )}
                 {room.type === "DIRECT_MESSAGE" ? (
                     <AtSign size={16} className="text-muted-foreground" />
                 ) : room.type === "SYSTEM_INBOX" ? (

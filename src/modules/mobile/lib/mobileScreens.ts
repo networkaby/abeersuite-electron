@@ -1,11 +1,11 @@
-import { BookOpen, Boxes, Camera, HandCoins, Users, Wallet, type LucideIcon } from "lucide-react";
+import { BookOpen, Boxes, Camera, HandCoins, MessageSquare, Users, Wallet, type LucideIcon } from "lucide-react";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
 
 /** Side-menu headings, in the order they are listed. */
-export const MOBILE_GROUPS = ["Stock", "Parties", "Accounts"] as const;
+export const MOBILE_GROUPS = ["Stock", "Parties", "Messages", "Accounts"] as const;
 export type MobileGroup = (typeof MOBILE_GROUPS)[number];
 
 export type MobileScreen = {
@@ -76,6 +76,15 @@ export const MOBILE_SCREENS: MobileScreen[] = [
         suppliers: true,
     },
     {
+        href: `${PHONE_APP_HOME}/inbox`,
+        group: "Messages",
+        tab: "Inbox",
+        label: "Inbox",
+        hint: "Customer WhatsApp chats",
+        icon: MessageSquare,
+        permission: PERMISSIONS.MOBILE_INBOX_VIEW,
+    },
+    {
         href: `${PHONE_APP_HOME}/daybook`,
         group: "Accounts",
         tab: "Day Book",
@@ -110,6 +119,16 @@ export function seesSuppliers(permissions: readonly string[]): boolean {
 
 export function holdsScreen(permissions: readonly string[], screen: MobileScreen): boolean {
     if (screen.suppliers && !seesSuppliers(permissions)) return false;
+    if (screen.permission === PERMISSIONS.MOBILE_INBOX_VIEW) {
+        if (
+            permissions.includes(PERMISSIONS.MOBILE_INBOX_VIEW) ||
+            permissions.includes(PERMISSIONS.MESSAGES_REPLY) ||
+            permissions.includes("ui:sidebar:crm:messages") ||
+            permissions.includes(PERMISSIONS.ADMIN_BYPASS)
+        ) {
+            return true;
+        }
+    }
     return permissions.includes(screen.permission) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
 }
 

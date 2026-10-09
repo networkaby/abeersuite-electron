@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
     MessageCircle, Mail, PhoneIncoming, PhoneOutgoing, PhoneMissed, Ticket, Check, CheckCheck,
     AlertCircle, Search, Send, Paperclip, X, UserPlus, User, Building2, ShieldAlert, RefreshCw, Lock, FileText, Hand, Users, ArrowRightLeft,
-    AtSign, Hash, MessageSquarePlus,
+    AtSign, Hash, MessageSquarePlus, ChevronLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -385,11 +385,15 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
     ].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).concat(startRows);
     const roomUnread = rooms.reduce((n, r) => n + r.unreadCount, 0);
     const activeRoom = roomId ? rooms.find((r) => r.id === roomId) ?? null : null;
+    const isDetailOpen = Boolean(selected || roomId);
 
     return (
-        <div className="grid h-full min-h-0 grid-cols-[320px_minmax(0,1fr)]">
+        <div className="relative flex h-full min-h-0 w-full overflow-hidden md:grid md:grid-cols-[320px_minmax(0,1fr)]">
             {/* ── Conversation list ─────────────────────────────────────────── */}
-            <aside className="flex min-h-0 flex-col border-r">
+            <aside className={cn(
+                "flex h-full min-h-0 flex-col border-r bg-background",
+                isDetailOpen ? "hidden md:flex" : "flex flex-1 w-full"
+            )}>
                 <div className="space-y-2 border-b p-3">
                     <div className="flex items-center justify-between">
                         <h1 className="text-base font-semibold">Messages</h1>
@@ -506,36 +510,51 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                 </div>
             </aside>
 
-            {/* ── Thread ───────────────────────────────────────────────────── */}
-            {activeRoom ? (
-                <TeamRoomPane
-                    key={activeRoom.id}
-                    room={activeRoom}
-                    title={roomTitle(activeRoom)}
-                    currentUserId={me || undefined}
-                    currentUserName={meName}
-                    onRead={(id) => setRooms((prev) => prev.map((r) => (r.id === id ? { ...r, unreadCount: 0 } : r)))}
-                    onSent={() => void loadRooms()}
-                />
-            ) : (
-            <section className="flex min-h-0 flex-col">
-                {!selected && (
-                    <div className="m-auto text-sm text-muted-foreground">Pick a conversation on the left.</div>
-                )}
-                {selected && threadLoading && !thread && <p className="p-4 text-sm text-muted-foreground">Loading…</p>}
-                {thread && (
-                    <>
-                        <header className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
-                            <div className="min-w-0">
-                                <div className="flex items-center gap-2 font-medium">
-                                    {thread.customer?.kind === "company" ? <Building2 className="size-4" /> : <User className="size-4" />}
-                                    <span className="truncate">{displayName(thread)}</span>
-                                    {thread.customer
-                                        ? <span className="rounded bg-amber-100 px-1.5 text-[11px] text-amber-800 dark:bg-amber-900 dark:text-amber-100">Customer</span>
-                                        : <span className="rounded bg-muted px-1.5 text-[11px] text-muted-foreground">Not a party</span>}
-                                </div>
-                                <div className="text-xs text-muted-foreground">+91 {thread.phone}{thread.senderName && thread.customer ? ` · WhatsApp name: ${thread.senderName}` : ""}</div>
-                            </div>
+            {/* ── Thread / Room ───────────────────────────────────────────── */}
+            <div className={cn(
+                "flex h-full min-h-0 flex-col bg-background",
+                !isDetailOpen ? "hidden md:flex" : "flex flex-1 w-full"
+            )}>
+                {activeRoom ? (
+                    <TeamRoomPane
+                        key={activeRoom.id}
+                        room={activeRoom}
+                        title={roomTitle(activeRoom)}
+                        currentUserId={me || undefined}
+                        currentUserName={meName}
+                        onRead={(id) => setRooms((prev) => prev.map((r) => (r.id === id ? { ...r, unreadCount: 0 } : r)))}
+                        onSent={() => void loadRooms()}
+                        onBack={() => setRoomId(null)}
+                    />
+                ) : (
+                    <section className="flex h-full min-h-0 flex-col">
+                        {!selected && (
+                            <div className="m-auto text-sm text-muted-foreground">Pick a conversation on the left.</div>
+                        )}
+                        {selected && threadLoading && !thread && <p className="p-4 text-sm text-muted-foreground">Loading…</p>}
+                        {thread && (
+                            <>
+                                <header className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 md:px-4">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelected(null)}
+                                            className="rounded-md p-1.5 hover:bg-muted md:hidden"
+                                            aria-label="Back to chat list"
+                                        >
+                                            <ChevronLeft className="size-5" />
+                                        </button>
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2 font-medium">
+                                                {thread.customer?.kind === "company" ? <Building2 className="size-4" /> : <User className="size-4" />}
+                                                <span className="truncate">{displayName(thread)}</span>
+                                                {thread.customer
+                                                    ? <span className="rounded bg-amber-100 px-1.5 text-[11px] text-amber-800 dark:bg-amber-900 dark:text-amber-100">Customer</span>
+                                                    : <span className="rounded bg-muted px-1.5 text-[11px] text-muted-foreground">Not a party</span>}
+                                            </div>
+                                            <div className="text-xs text-muted-foreground">+91 {thread.phone}{thread.senderName && thread.customer ? ` · WhatsApp name: ${thread.senderName}` : ""}</div>
+                                        </div>
+                                    </div>
                             <div className="flex gap-2">
                                 {!thread.customer && (
                                     <Button size="sm" variant="outline" onClick={() => setNewPartyPhone(thread.phone)}>
@@ -721,6 +740,7 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                 )}
             </section>
             )}
+            </div>
 
             <StaffPickerDialog
                 mode={pick}
