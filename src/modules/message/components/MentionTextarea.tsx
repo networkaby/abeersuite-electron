@@ -86,6 +86,12 @@ export default function MentionTextarea({ value, onChange, onKeyDown, className,
         requestAnimationFrame(() => { ref.current?.focus(); ref.current?.setSelectionRange(pos, pos); });
     };
 
+    useEffect(() => {
+        if (!value && ref.current) {
+            ref.current.style.height = "auto";
+        }
+    }, [value]);
+
     return (
         <div className="relative flex-1">
             {hits.length > 0 && (
@@ -108,7 +114,12 @@ export default function MentionTextarea({ value, onChange, onKeyDown, className,
                 ref={ref}
                 value={value}
                 rows={1}
-                className={cn("min-h-9 resize-none", className)}
+                className={cn("min-h-9 max-h-32 resize-none py-2 text-sm", className)}
+                onInput={(e) => {
+                    const el = e.currentTarget;
+                    el.style.height = "auto";
+                    el.style.height = `${Math.min(128, el.scrollHeight)}px`;
+                }}
                 onChange={(e) => {
                     onChange(e.target.value);
                     setQuery(mentionQuery(e.target.value, e.target.selectionStart));

@@ -120,7 +120,10 @@ function QuickEntryButton({ permissions }: { permissions: string[] }) {
     const pathname = usePathname();
     const [open, setOpen] = useState(false);
     const quick = quickEntryFor(permissions);
-    const onEntry = pathname.startsWith(`${PHONE_APP_HOME}/quick`) || /\/(pay|receive)$/.test(pathname);
+    const onEntry =
+        pathname.startsWith(`${PHONE_APP_HOME}/quick`) ||
+        /\/(pay|receive)$/.test(pathname) ||
+        pathname.startsWith(`${PHONE_APP_HOME}/inbox`);
     if ((!quick.pay && !quick.receive) || onEntry) return null;
 
     const choice = "flex items-center gap-3 rounded-xl border bg-background px-4 py-4 text-left font-medium shadow-sm active:bg-muted";
