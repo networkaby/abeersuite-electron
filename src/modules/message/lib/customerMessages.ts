@@ -32,7 +32,16 @@ import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 /** Meta allows free text only this long after the customer's last message. */
 export const REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-export type CustomerOwner = { kind: "person" | "company"; id: number; name: string };
+export type CustomerOwner = {
+    kind: "person" | "company";
+    id: number;
+    name: string;
+    avatarUrl?: string | null;
+    address?: string | null;
+    accountId?: number | null;
+    balance?: number | null;
+    normalBalance?: "DEBIT" | "CREDIT" | null;
+};
 
 /**
  * Phone match keys → the customer each one belongs to. One index-backed IN
@@ -46,15 +55,51 @@ export async function ownersByPhone(keys: string[]): Promise<Map<string, Custome
         where: { phone: { in: unique.flatMap(phoneKeyVariants) } },
         select: {
             phone: true,
-            person: { select: { id: true, name: true } },
-            company: { select: { id: true, name: true } },
+            person: {
+                select: {
+                    id: true,
+                    name: true,
+                    avatarUrl: true,
+                    address: true,
+                    account: { select: { id: true, balance: true, normalBalance: true } },
+                },
+            },
+            company: {
+                select: {
+                    id: true,
+                    name: true,
+                    address: true,
+                    account: { select: { id: true, balance: true, normalBalance: true } },
+                },
+            },
         },
     });
     for (const row of rows) {
         const key = phoneMatchKey(row.phone);
         if (!key || owners.has(key)) continue;
-        if (row.person) owners.set(key, { kind: "person", id: row.person.id, name: row.person.name });
-        else if (row.company) owners.set(key, { kind: "company", id: row.company.id, name: row.company.name });
+        if (row.person) {
+            owners.set(key, {
+                kind: "person",
+                id: row.person.id,
+                name: row.person.name,
+                avatarUrl: row.person.avatarUrl,
+                address: row.person.address,
+                accountId: row.person.account?.id ?? null,
+                balance: row.person.account ? Number(row.person.account.balance) : null,
+                normalBalance: (row.person.account?.normalBalance as "DEBIT" | "CREDIT") ?? null,
+            });
+        } else if (row.company) {
+            owners.set(key, {
+                kind: "company",
+                id: row.company.id,
+                name: row.company.name,
+                avatarUrl: null,
+                address: row.company.address,
+                accountId: row.company.account?.id ?? null,
+                balance: row.company.account ? Number(row.company.account.balance) : null,
+                normalBalance: (row.company.account?.normalBalance as "DEBIT" | "CREDIT") ?? null,
+            });
+        }
     }
     return owners;
 }
