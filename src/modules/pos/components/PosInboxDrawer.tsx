@@ -75,7 +75,7 @@ export function PosInboxDrawer({
                             <MessagesWorkspace
                                 customers={canOpenPage("/office/crm/messages", permissions)}
                                 canReply={can(PERMISSIONS.MESSAGES_REPLY)}
-                                canTicket={can(PERMISSIONS.HELP_CREATE)}
+                                canTicket={can(PERMISSIONS.HELP_CREATE) || can(PERMISSIONS.DEALS_CREATE)}
                                 openPhone={openPhone}
                             />
                         )}

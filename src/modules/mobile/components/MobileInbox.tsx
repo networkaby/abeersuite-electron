@@ -23,7 +23,7 @@ export default function MobileInbox() {
                     <MessagesWorkspace
                         customers={true}
                         canReply={can(PERMISSIONS.MESSAGES_REPLY)}
-                        canTicket={can(PERMISSIONS.HELP_CREATE)}
+                        canTicket={can(PERMISSIONS.HELP_CREATE) || can(PERMISSIONS.DEALS_CREATE)}
                     />
                 </Suspense>
             </div>
