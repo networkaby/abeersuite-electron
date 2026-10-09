@@ -590,7 +590,7 @@ export function BankReconciliationPage() {
             {data && s && (
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                     {/* Reconciliation statement — hidden on demand, the table takes the space */}
-                    <div className={cn("border-b bg-card px-6 py-3", !showStats && "hidden")}>
+                    <div className={cn("border-b border-amber-200/80 bg-amber-50/90 dark:border-yellow-900/40 dark:bg-yellow-950/25 px-6 py-3", !showStats && "hidden")}>
                         <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3 lg:grid-cols-6">
                                 <Stat label="Balance as per books" value={s.booksBalance} />
@@ -603,16 +603,16 @@ export function BankReconciliationPage() {
                             <div className="flex flex-col items-end gap-1.5">
                                 <ReconciledBadge accountId={data.account.id} reconciledThrough={data.account.lock} reconciledAt={data.account.reconciledAt} onSaved={() => { reload(); ledgersQ.reload(); }} />
                                 {s.suggestedReconciledThrough && s.suggestedReconciledThrough !== data.account.lock && (
-                                    <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" disabled={busy != null} onClick={() => void lockUpto(s.suggestedReconciledThrough!)}>
+                                    <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs bg-white/70 hover:bg-white dark:bg-card" disabled={busy != null} onClick={() => void lockUpto(s.suggestedReconciledThrough!)}>
                                         <Lock size={12} className="mr-1" /> Lock upto {formatDate(s.suggestedReconciledThrough)}
                                     </Button>
                                 )}
                                 {s.openingCover && !s.openingCover.agrees && s.openingCover.bankOpening != null && (
-                                    <span className="text-[11px] text-amber-600" title="Bank lines before the year the books begin stay open until the two openings agree.">
+                                    <span className="text-[11px] font-medium text-amber-800 dark:text-amber-300" title="Bank lines before the year the books begin stay open until the two openings agree.">
                                         Opening on {formatDate(s.openingCover.fyStart)}: books {fmt(s.openingCover.booksOpening)}, bank {fmt(s.openingCover.bankOpening)} — check the opening balance
                                     </span>
                                 )}
-                                {s.counts.stale > 0 && <span className="text-[11px] text-amber-600">{s.counts.stale} match(es) point at a changed voucher — auto-match clears them</span>}
+                                {s.counts.stale > 0 && <span className="text-[11px] font-medium text-amber-800 dark:text-amber-300">{s.counts.stale} match(es) point at a changed voucher — auto-match clears them</span>}
                             </div>
                         </div>
                     </div>
@@ -660,7 +660,7 @@ export function BankReconciliationPage() {
                             <Link2 size={14} className="mr-1" /> Match {selSt.size ? `${selSt.size} ↔ ${selGl.size}` : ""}
                         </Button>
                         {(selSt.size > 0 || selGl.size > 0) && (
-                            <span className={cn("text-xs font-mono", canMatch ? "text-green-700" : "text-amber-600")}>
+                            <span className={cn("rounded px-2 py-0.5 text-xs font-mono font-medium border", canMatch ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300" : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300")}>
                                 {fmt(stTotal)} vs {fmt(glTotal)}
                             </span>
                         )}
@@ -684,7 +684,7 @@ export function BankReconciliationPage() {
                                     <Link href={accountLedgerUrl(data.account.id, { from, to })} className="text-primary hover:underline">open ledger</Link>
                                 </span>
                             </div>
-                            <div className="min-h-0 flex-1 overflow-auto" onContextMenu={onContainerContextMenu}>
+                            <div className="min-h-0 flex-1 overflow-auto bg-card" onContextMenu={onContainerContextMenu}>
                                 <table className="w-full text-xs">
                                     <thead className="sticky top-0 z-10 text-muted-foreground" style={moduleTableHeadStyle("accountancy")}>
                                         <tr>
@@ -850,9 +850,8 @@ export function BankReconciliationPage() {
 // row up to the last day books and bank are proven to agree — same closing
 // balance AND every row ticked (see agreementRun). Where the colour stops is
 // where the mismatch starts.
-// Orange: it has to stand out on rows already tinted green (ticked), sky and
-// violet, and amber is taken by the same-date marks and the reference hint.
-const AGREED_CELL = "bg-orange-300 font-semibold text-orange-950 dark:bg-orange-600/60 dark:text-orange-50";
+// Soft amber: comfortable on eyes, readable, and distinct from green matched rows.
+const AGREED_CELL = "bg-amber-100/70 font-semibold text-amber-950 border-x border-amber-200/60 dark:bg-amber-950/40 dark:text-amber-100 dark:border-amber-900/30";
 const AGREED_TITLE = "Books and bank agree up to here, and every row is ticked";
 
 function isAgreed(date: string, through: string | null) {
@@ -869,7 +868,7 @@ function AgreedLegend({ summary }: { summary: ReconPayload["summary"] }) {
         ].filter(Boolean).join(", ")}.`;
     return (
         <span className="inline-flex items-center gap-1 font-normal normal-case" title={why}>
-            <span className="h-3 w-3 rounded-sm bg-orange-300 dark:bg-orange-600/60" />
+            <span className="h-3 w-3 rounded-sm bg-amber-200 border border-amber-300 dark:bg-amber-900/60 dark:border-amber-800" />
             {summary.agreedThrough
                 ? <>books = bank, all ticked · through {formatDate(summary.agreedThrough)}</>
                 : <>books = bank, all ticked · not from the first day</>}
@@ -903,9 +902,9 @@ function OpeningTag() {
 function Stat({ label, value, hint, sub, emphasis, warn }: { label: string; value: number | null; hint?: string; sub?: string; emphasis?: boolean; warn?: boolean }) {
     return (
         <div className="min-w-0">
-            <div className="truncate text-[11px] text-muted-foreground" title={hint ?? label}>{label}</div>
-            <div className={cn("font-mono", emphasis && "font-semibold", warn && "text-amber-600")}>{value == null ? "—" : fmt(value)}</div>
-            {(sub ?? hint) && <div className={cn("truncate text-[10px]", warn ? "text-amber-600" : "text-muted-foreground")}>{sub ?? hint}</div>}
+            <div className="truncate text-[11px] font-medium text-amber-900/75 dark:text-yellow-200/70" title={hint ?? label}>{label}</div>
+            <div className={cn("font-mono text-amber-950 dark:text-yellow-100", emphasis && "font-bold text-[13px]", warn && "text-amber-800 dark:text-amber-300 font-semibold")}>{value == null ? "—" : fmt(value)}</div>
+            {(sub ?? hint) && <div className={cn("truncate text-[10px]", warn ? "text-amber-800 dark:text-amber-300 font-medium" : "text-amber-900/65 dark:text-yellow-200/60")}>{sub ?? hint}</div>}
         </div>
     );
 }
@@ -951,12 +950,12 @@ function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGro
     // the row's own colour rather than washing it with a neutral, which read as
     // the bank tint and made a hovered Books row look like a Bank row.
     const background = selected
-        ? "bg-primary/20 hover:bg-primary/30"
+        ? "bg-primary/15 hover:bg-primary/25"
         : matched
-            ? "bg-green-100/70 hover:bg-green-200/80 dark:bg-green-900/25 dark:hover:bg-green-900/45"
+            ? "bg-emerald-50/40 hover:bg-emerald-100/50 dark:bg-emerald-950/20 dark:hover:bg-emerald-900/35"
             : isSt
-                ? "bg-sky-100/60 hover:bg-sky-200/90 dark:bg-sky-950/40 dark:hover:bg-sky-900/50"
-                : "bg-violet-100/60 hover:bg-violet-200/90 dark:bg-violet-950/40 dark:hover:bg-violet-900/50";
+                ? "bg-sky-50/35 hover:bg-sky-100/45 dark:bg-sky-950/25 dark:hover:bg-sky-900/40"
+                : "bg-slate-50/70 hover:bg-slate-100/70 dark:bg-slate-900/25 dark:hover:bg-slate-800/40";
     return (
         <tr className={cn(
             "border-b border-l-[3px]",
@@ -1066,7 +1065,7 @@ function StatementRowView({ r, selected, onToggle, onUnmatch, onBook, busy, glBy
     const matchGap = matched ? matchGapDays(r.date, r.match!.glLineIds, glById) : 0;
     const frozen = r.locked || r.inOpening;
     return (
-        <tr className={cn("hover:bg-muted/40", selected ? "bg-primary/15" : matched && "bg-green-50/40 dark:bg-green-900/10", frozen && "opacity-60")}>
+        <tr className={cn("hover:bg-muted/40", selected ? "bg-primary/15" : matched ? "bg-emerald-50/40 dark:bg-emerald-950/20" : "", frozen && "opacity-60")}>
             <td className="px-2 py-1.5 align-top">
                 {!matched && !frozen && (
                     <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select statement line ${formatDate(r.date)} ${r.narration}`} />
@@ -1112,7 +1111,7 @@ function StatementRowView({ r, selected, onToggle, onUnmatch, onBook, busy, glBy
 function GlRowView({ r, selected, onToggle, onUnmatch, busy }: { r: GlLineView; selected: boolean; onToggle: () => void; onUnmatch: () => void; busy: boolean }) {
     const matched = r.match != null;
     return (
-        <tr className={cn("hover:bg-muted/40", selected ? "bg-primary/15" : matched && "bg-green-50/40 dark:bg-green-900/10", r.locked && "opacity-60")}>
+        <tr className={cn("hover:bg-muted/40", selected ? "bg-primary/15" : matched ? "bg-emerald-50/40 dark:bg-emerald-950/20" : "", r.locked && "opacity-60")}>
             <td className="px-2 py-1.5 align-top">
                 {!matched && !r.locked && <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select book entry ${r.voucherNo}`} />}
                 {matched && <CheckCircle2 size={13} className="text-green-600" />}
