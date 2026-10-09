@@ -40,7 +40,8 @@ import { EditLedgerDialog, type EditableLedger } from "@/modules/accountancy/com
 import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
 import { ReconciledBadge } from "@/modules/accountancy/components/ReconciledBadge";
 import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
-import { voucherSourceForType } from "@/modules/accountancy/lib/voucherUrls";
+import { voucherSourceForType, referenceHref } from "@/modules/accountancy/lib/voucherUrls";
+import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkContextMenu";
 import { groupReportUrl } from "@/modules/accountancy/lib/groupReportUrl";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -168,6 +169,7 @@ export function AccountLedgerExplorer({
 }: AccountLedgerExplorerProps) {
     const router = useRouter();
     const params = useSearchParams();
+    const { menu: linkMenu, close: closeLinkMenu, onContainerContextMenu } = useLinkContextMenu();
 
     const [allAccounts, setAllAccounts] = useState<LedgerListItem[]>([]);
     const [groupTree, setGroupTree] = useState<GroupTreeNode[]>([]);
@@ -528,7 +530,7 @@ export function AccountLedgerExplorer({
                                 </div>
 
                                 {/* Table */}
-                                <div className="flex-1 overflow-auto">
+                                <div className="flex-1 overflow-auto" onContextMenu={onContainerContextMenu}>
                                     <table className="w-full text-sm">
                                         <thead className="sticky top-0 z-10">
                                             <tr className="bg-muted/60 border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
@@ -588,16 +590,30 @@ export function AccountLedgerExplorer({
                                                         </span>
                                                     </td>
                                                     <td className="px-4 py-2.5">
-                                                        {row.source ? (
-                                                            <Link
-                                                                href={row.source.url}
-                                                                className={`inline-block text-xs px-2 py-0.5 border rounded-sm font-mono font-medium hover:underline ${SOURCE_COLOR[row.source.kind]}`}
-                                                            >
-                                                                {row.source.reference ?? row.source.number}
-                                                            </Link>
-                                                        ) : (
-                                                            <span className="font-mono text-xs text-muted-foreground">{row.reference}</span>
-                                                        )}
+                                                        {(() => {
+                                                            const source = voucherSourceForType(row.voucherType);
+                                                            const rawId = source === "inv" && row.source ? row.source.id : row.journalEntryId;
+                                                            const href = row.source?.url ?? referenceHref(source, rawId, row.voucherType);
+                                                            if (!href) return <span className="font-mono text-xs text-muted-foreground">{row.reference}</span>;
+                                                            if (row.source) {
+                                                                return (
+                                                                    <Link
+                                                                        href={href}
+                                                                        className={`inline-block text-xs px-2 py-0.5 border rounded-sm font-mono font-medium hover:underline ${SOURCE_COLOR[row.source.kind]}`}
+                                                                    >
+                                                                        {row.source.reference ?? row.source.number ?? row.reference}
+                                                                    </Link>
+                                                                );
+                                                            }
+                                                            return (
+                                                                <Link
+                                                                    href={href}
+                                                                    className="font-mono text-xs text-primary font-medium hover:underline"
+                                                                >
+                                                                    {row.reference}
+                                                                </Link>
+                                                            );
+                                                        })()}
                                                     </td>
                                                     <td className="px-4 py-2.5">
                                                         <p className="text-sm">{row.description}</p>
@@ -682,6 +698,8 @@ export function AccountLedgerExplorer({
                     refreshDetail();
                 }}
             />
+
+            <LinkContextMenu menu={linkMenu} onClose={closeLinkMenu} />
         </div>
     );
 }

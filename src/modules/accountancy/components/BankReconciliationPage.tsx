@@ -43,6 +43,8 @@ import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
 import { indianFiscalYearStart, formatDateInput } from "@/modules/accountancy/lib/period";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { stashDuplicate } from "@/modules/accountancy/lib/duplicate";
+import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkContextMenu";
+import { voucherSourceForType, referenceHref } from "@/modules/accountancy/lib/voucherUrls";
 import { ReconciledBadge } from "./ReconciledBadge";
 import { BankStatementImportDialog } from "./BankStatementImportDialog";
 import type { ReconPayload, StatementLineView, GlLineView } from "@/modules/accountancy/lib/bankReconciliation";
@@ -103,6 +105,7 @@ function money(n: number | null | undefined) {
 
 export function BankReconciliationPage() {
     const search = useSearchParams();
+    const { menu: linkMenu, close: closeLinkMenu, onContainerContextMenu } = useLinkContextMenu();
     const today = formatDateInput(new Date());
     const [selectedId, setSelectedId] = useState<number | null>(() => {
         const q = Number(search.get("account"));
@@ -615,7 +618,7 @@ export function BankReconciliationPage() {
                                     <Link href={accountLedgerUrl(data.account.id, { from, to })} className="text-primary hover:underline">open ledger</Link>
                                 </span>
                             </div>
-                            <div className="min-h-0 flex-1 overflow-auto">
+                            <div className="min-h-0 flex-1 overflow-auto" onContextMenu={onContainerContextMenu}>
                                 <table className="w-full text-xs">
                                     <thead className="sticky top-0 z-10 text-muted-foreground" style={moduleTableHeadStyle("accountancy")}>
                                         <tr>
@@ -712,7 +715,7 @@ export function BankReconciliationPage() {
                                 <span>Books · {data.account.name} · {glRows.length}</span>
                                 <Link href={accountLedgerUrl(data.account.id, { from, to })} className="font-normal normal-case text-primary hover:underline">open ledger</Link>
                             </div>
-                            <div className="min-h-0 flex-1 overflow-auto">
+                            <div className="min-h-0 flex-1 overflow-auto" onContextMenu={onContainerContextMenu}>
                                 <table className="w-full text-xs">
                                     <thead className="sticky top-0 z-10 text-muted-foreground" style={moduleTableHeadStyle("accountancy")}>
                                         <tr>
@@ -772,6 +775,7 @@ export function BankReconciliationPage() {
                 />
             )}
             <GlVoucherDialog kind={bookKind} onClose={() => { setBookKind(null); setBookingLines([]); reload(); }} onSaved={(id, posted) => void afterBooked(id, posted)} />
+            <LinkContextMenu menu={linkMenu} onClose={closeLinkMenu} />
         </div>
     );
 }
@@ -938,9 +942,15 @@ function MergedRowView({ row, selected, onToggle, onUnmatch, onBook, onSelectGro
                     <div className="line-clamp-2 break-words" title={row.st.narration}>{row.st.narration}</div>
                 ) : (
                     <div className="flex flex-wrap items-baseline gap-x-2">
-                        {row.gl.source
-                            ? <Link href={row.gl.source.url} className="font-medium text-primary hover:underline">{row.gl.voucherNo}</Link>
-                            : <span className="font-medium">{row.gl.voucherNo}</span>}
+                        {(() => {
+                            const glSource = voucherSourceForType(row.gl.voucherType);
+                            const glHref = row.gl.source?.url ?? referenceHref(glSource, row.gl.voucherId, row.gl.voucherType);
+                            return glHref ? (
+                                <Link href={glHref} className="font-medium text-primary hover:underline">{row.gl.voucherNo}</Link>
+                            ) : (
+                                <span className="font-medium">{row.gl.voucherNo}</span>
+                            );
+                        })()}
                         <span className="text-[10px] uppercase text-muted-foreground">{row.gl.voucherType}</span>
                         <span className="line-clamp-2 break-words" title={row.gl.description}>{row.gl.description}</span>
                     </div>
@@ -1044,9 +1054,15 @@ function GlRowView({ r, selected, onToggle, onUnmatch, busy }: { r: GlLineView; 
             </td>
             <td className="whitespace-nowrap px-2 py-1.5 align-top">{formatDate(r.date)}</td>
             <td className="whitespace-nowrap px-2 py-1.5 align-top">
-                {r.source
-                    ? <Link href={r.source.url} className="text-primary hover:underline">{r.voucherNo}</Link>
-                    : <span>{r.voucherNo}</span>}
+                {(() => {
+                    const glSource = voucherSourceForType(r.voucherType);
+                    const glHref = r.source?.url ?? referenceHref(glSource, r.voucherId, r.voucherType);
+                    return glHref ? (
+                        <Link href={glHref} className="text-primary hover:underline">{r.voucherNo}</Link>
+                    ) : (
+                        <span>{r.voucherNo}</span>
+                    );
+                })()}
                 <div className="text-[10px] text-muted-foreground">{r.voucherType}</div>
             </td>
             <td className="px-2 py-1.5 align-top">
