@@ -29,21 +29,62 @@ export function MessageMedia({ m }: { m: MediaInfo }) {
     }
     if (type.startsWith("image/")) {
         return (
-            <a href={m.mediaUrl} target="_blank" rel="noreferrer" className="block">
-                {/* eslint-disable-next-line @next/next/no-img-element -- signed, expiring R2 link; next/image would cache it */}
-                <img src={m.mediaUrl} alt={m.fileName ?? "Photo"} className="max-h-64 max-w-full rounded-md object-contain" loading="lazy" />
-            </a>
+            <div className="relative group inline-block">
+                <a href={m.mediaUrl} target="_blank" rel="noreferrer" className="block">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- signed, expiring R2 link; next/image would cache it */}
+                    <img src={m.mediaUrl} alt={m.fileName ?? "Photo"} className="max-h-64 max-w-full rounded-md object-contain" loading="lazy" />
+                </a>
+                {m.downloadUrl && (
+                    <a
+                        href={m.downloadUrl}
+                        download={m.fileName ?? "image.jpg"}
+                        title="Download image"
+                        className="absolute bottom-2 right-2 flex size-7 items-center justify-center rounded-full bg-black/60 text-white opacity-80 hover:opacity-100 transition-opacity hover:bg-black/80 shadow"
+                    >
+                        <Download className="size-4" />
+                    </a>
+                )}
+            </div>
         );
     }
     if (type.startsWith("video/")) {
-        return <video src={m.mediaUrl} controls preload="metadata" className="max-h-64 max-w-full rounded-md" />;
+        return (
+            <div className="relative group inline-block">
+                <video src={m.mediaUrl} controls preload="metadata" className="max-h-64 max-w-full rounded-md" />
+                {m.downloadUrl && (
+                    <a
+                        href={m.downloadUrl}
+                        download={m.fileName ?? "video.mp4"}
+                        title="Download video"
+                        className="absolute top-2 right-2 flex size-7 items-center justify-center rounded-full bg-black/60 text-white opacity-80 hover:opacity-100 transition-opacity hover:bg-black/80 shadow"
+                    >
+                        <Download className="size-4" />
+                    </a>
+                )}
+            </div>
+        );
     }
     if (type.startsWith("audio/")) {
-        return <audio src={m.mediaUrl} controls preload="none" className="w-64 max-w-full" />;
+        return (
+            <div className="flex items-center gap-2">
+                <audio src={m.mediaUrl} controls preload="none" className="w-60 max-w-full" />
+                {m.downloadUrl && (
+                    <a
+                        href={m.downloadUrl}
+                        download={m.fileName ?? "voice-note.ogg"}
+                        title="Download audio"
+                        className="flex size-7 shrink-0 items-center justify-center rounded-full border bg-background/80 text-foreground hover:bg-background shadow-sm"
+                    >
+                        <Download className="size-3.5" />
+                    </a>
+                )}
+            </div>
+        );
     }
     return (
         <a
             href={m.downloadUrl ?? m.mediaUrl}
+            download={m.fileName ?? "Document"}
             target="_blank"
             rel="noreferrer"
             className="flex items-center gap-2 rounded-md border bg-background/60 px-2 py-1.5 hover:bg-background"

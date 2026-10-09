@@ -140,18 +140,19 @@ export const COUNTER_ENV_CLOUDINARY_KEYS: readonly string[] = [
 ];
 
 /**
- * Mail-forwarding keys — Me → Security → Forward Email (`src/shared/lib/email/cloudflareRouting.ts`)
- * reads and sets where a staff address forwards, and renames the handle.
+ * Cloudflare keys — Me → Security → Forward Email (`src/shared/lib/email/cloudflareRouting.ts`)
+ * and Cloudflare R2 bucket storage for WhatsApp attachments (`src/shared/lib/storage/r2.ts`).
  *
- * `GET /api/users/[id]/forward-email` is a read, so `v_live` never relays it — without
- * these keys the card only says "Mail forwarding is set from the office website."
- * Granted to `office` on the owner's call (2026-09-28), same as Cloudinary. The cost:
- * whoever holds an office installer can change the domain's mail routing (not read mail).
+ * Mail forwarding and attachment signing/viewing are reads, so `v_live` never relays them — without
+ * these keys the desktop app says "Attachment not saved".
+ * Granted to `office` desktop variant; cost: puts R2 storage keys on every office till.
  */
 export const COUNTER_ENV_CLOUDFLARE_KEYS: readonly string[] = [
     "CLOUDFLARE_API_TOKEN",
     "CLOUDFLARE_ACCOUNT_ID",
     "CLOUDFLARE_ZONE_ID",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
 ];
 
 /**

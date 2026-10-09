@@ -7,7 +7,7 @@ import { phoneMatchKey } from "@/shared/lib/format";
 import { ReplyRefusedError, sendReply } from "@/modules/message/lib/customerMessages";
 
 // POST /api/messages/reply — { phone, text, media? }: a staff reply on WhatsApp.
-// `media` is a file the browser already PUT to R2 via /api/messages/upload-url;
+// `media` is a file the browser/client already uploaded directly to R2 via /api/messages/upload-url (presigned PUT);
 // `text` is then its caption and may be empty.
 // Checked at the API (not only the button): every reply is a paid Meta message.
 
