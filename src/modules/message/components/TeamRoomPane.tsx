@@ -113,6 +113,7 @@ export default function TeamRoomPane({
     currentUserName,
     onRead,
     onSent,
+    onBack,
 }: {
     room: Pick<Room, "id" | "type" | "name">;
     /** Header name — the colleague's name for a DM, the room name otherwise. */
