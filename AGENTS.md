@@ -10,11 +10,13 @@
 
 eye on bug during any work.
 
+allowed to read, check and analyze without asking.
+
 ## 2. Product
 
 Every printable document must be customizable through the print template.
 
-**Never `<input type="number">`.** The spinner steals the scroll wheel, paste
+**Never** `<input type="number">`**.** The spinner steals the scroll wheel, paste
 breaks, and the browser silently blanks a value it dislikes instead of telling
 the user. Use `NumericInput` from `src/shared` (it binds a string and clamps on
 blur). A box that must stay uncontrolled uses `type="text"` with `inputMode`,
@@ -42,7 +44,7 @@ Before creating shared code: check `src/shared/` → extend existing if possible
 
 Read `docs/seeds.md` first — it owns the scripts and the dev loop. The rules that live here:
 
-- Every schema / permission / master-data / config change updates **generic catalog, personal snapshot and the DB in the same commit**. Permissions: add to `src/shared/lib/auth/permissionCatalog.ts` + `src/shared/lib/constants/permissions.ts`, then `pnpm prisma db seed` (a `ui:sidebar:*` link needs no seed — the Departments / Role save creates its row on first use). (There is no `apply-permissions` script any more — the catalog IS the source of truth and both seeds apply it in full.)
+- Every schema / permission / master-data / config change updates **generic catalog, personal snapshot and the DB in the same commit**. Permissions: add to `src/shared/lib/auth/permissionCatalog.ts` + `src/shared/lib/constants/permissions.ts`, then `pnpm prisma db seed` (a `ui:sidebar:`\* link needs no seed — the Departments / Role save creates its row on first use). (There is no `apply-permissions` script any more — the catalog IS the source of truth and both seeds apply it in full.)
 - A full `pnpm prisma db seed` also runs the **R1 top-up**: it grants R1 every non-`systemOnly` permission in the catalog. If a permission has been deliberately taken away from R1 in the Role Matrix, a reseed puts it back.
 - Small change → **targeted idempotent script, never a full seed**. Full `pnpm prisma db seed` for reset, drift recovery, full config reassertion — and now for shipping a permission.
 - Ownership: code → `permissionCatalog.ts` (+ `codeOwnedCatalog.ts` for constraints / series); our real setup → `bootstrap-seed.ts`; brands → `helper-brands.ts`; everything else configured (categories, product groups, chart of accounts, POS, RBAC grants) → `personal.local.json`. **Never capture passwords.**
@@ -80,7 +82,7 @@ When the owner says **"do a release"** (or release / publish / ship a version), 
 6. `pnpm electron:release` — pack, `verify:package` gate, tag `v<version>`, push tag to `origin`, publish. **A** `-` **in the version makes it a test build**: `1.3.1-pre.1` goes to `GITHUB_UPDATE_REPO_2` only, marked a GitHub prerelease; a version with no `-` goes to every `GITHUB_UPDATE_REPO_N`. Counters update from repo 1, so a test build never reaches a till. The gate is automatic — never use `RELEASE_ONLY_REPO` to get it.
 7. `git push production main --tags`.
 8. `git checkout dev && git merge --ff-only main && git push origin dev`.
-9. `git checkout d_office && git merge --ff-only main && git push origin d_office && git checkout main` — **`d_office` ends level with `main`, exactly like `dev`.** It is the deploy branch: Vercel is connected to it on `origin`, so this push is what puts the office site live and runs `prisma migrate deploy` through `vercel-build`. Pushing `main` deploys nothing, nor does `dev`, and `production` has no `d_office`. **Ask before pushing** — a production deploy needs the owner's word — but only the timing is a question, never whether `d_office` should be level; on a no, fast-forward locally and hand over the push command. On a schema release the counters take the build first (§3), and `pnpm db:migrate:status` says whether the migration is still pending or already reached live.
+9. `git checkout d_office && git merge --ff-only main && git push origin d_office && git checkout main` — `d_office` **ends level with** `main`**, exactly like** `dev`**.** It is the deploy branch: Vercel is connected to it on `origin`, so this push is what puts the office site live and runs `prisma migrate deploy` through `vercel-build`. Pushing `main` deploys nothing, nor does `dev`, and `production` has no `d_office`. **Ask before pushing** — a production deploy needs the owner's word — but only the timing is a question, never whether `d_office` should be level; on a no, fast-forward locally and hand over the push command. On a schema release the counters take the build first (§3), and `pnpm db:migrate:status` says whether the migration is still pending or already reached live.
 10. Report: `main`, `dev` and `d_office` all on the released commit, both remotes level, and installer + blockmap + `latest.yml` + notes present on every release repo. Say plainly if the `d_office` push is still outstanding — the office site is running old code until it lands.
 
 **Ask the owner to join hand** at any step needing their eyes or their machine, rather than guessing or skipping it — the notes and their urgency tier, the `.env` variant (`APP_MODE`, `LANDING_PAGE`), the `d_office` push that deploys the office site, a push they would rather run, and anything else that would be a guess. Say plainly what you need and wait. Handing a step back is not stopping the release: do everything either side of it, and pick the list up where you left off. No smoke-test stop — the owner has already tested before saying "release".

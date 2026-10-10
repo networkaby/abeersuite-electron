@@ -513,7 +513,7 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
             {/* ── Thread / Room ───────────────────────────────────────────── */}
             <div className={cn(
                 "flex h-full min-h-0 flex-col bg-background",
-                !isDetailOpen ? "hidden md:flex" : "flex flex-1 w-full"
+                !isDetailOpen ? "hidden md:flex" : "fixed inset-0 z-30 flex flex-1 w-full flex-col bg-background md:relative md:inset-auto md:z-auto md:h-full"
             )}>
                 {activeRoom ? (
                     <TeamRoomPane
@@ -534,77 +534,79 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                         {selected && threadLoading && !thread && <p className="p-4 text-sm text-muted-foreground">Loading…</p>}
                         {thread && (
                             <>
-                                <header className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 md:px-4">
+                                <header className="flex shrink-0 items-center justify-between gap-2 border-b bg-background px-3 py-2 pt-[calc(0.5rem+env(safe-area-inset-top))] md:px-4 md:pt-2">
                                     <div className="flex items-center gap-1.5 min-w-0">
                                         <button
                                             type="button"
                                             onClick={() => setSelected(null)}
-                                            className="rounded-md p-1.5 hover:bg-muted md:hidden"
+                                            className="rounded-md p-1.5 hover:bg-muted active:bg-muted md:hidden"
                                             aria-label="Back to chat list"
                                         >
                                             <ChevronLeft className="size-5" />
                                         </button>
                                         <div className="min-w-0">
-                                            <div className="flex items-center gap-2 font-medium">
-                                                {thread.customer?.kind === "company" ? <Building2 className="size-4" /> : <User className="size-4" />}
-                                                <span className="truncate">{displayName(thread)}</span>
+                                            <div className="flex items-center gap-1.5 font-medium">
+                                                {thread.customer?.kind === "company" ? <Building2 className="size-4 shrink-0" /> : <User className="size-4 shrink-0" />}
+                                                <span className="truncate text-sm font-semibold">{displayName(thread)}</span>
                                                 {thread.customer
-                                                    ? <span className="rounded bg-amber-100 px-1.5 text-[11px] text-amber-800 dark:bg-amber-900 dark:text-amber-100">Customer</span>
-                                                    : <span className="rounded bg-muted px-1.5 text-[11px] text-muted-foreground">Not a party</span>}
+                                                    ? <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-100">Customer</span>
+                                                    : <span className="shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground">Not a party</span>}
                                             </div>
-                                            <div className="text-xs text-muted-foreground">+91 {thread.phone}{thread.senderName && thread.customer ? ` · WhatsApp name: ${thread.senderName}` : ""}</div>
+                                            <div className="truncate text-xs text-muted-foreground">+91 {thread.phone}{thread.senderName && thread.customer ? ` · WA: ${thread.senderName}` : ""}</div>
                                         </div>
                                     </div>
-                            <div className="flex gap-2">
-                                {!thread.customer && (
-                                    <Button size="sm" variant="outline" onClick={() => setNewPartyPhone(thread.phone)}>
-                                        <UserPlus className="mr-1 size-4" /> Create party
-                                    </Button>
-                                )}
-                                {thread.customer && (
-                                    <Button size="sm" variant="outline" asChild>
-                                        <a href={`/office/customers/all?${thread.customer.kind === "person" ? "personId" : "companyId"}=${thread.customer.id}`}>Party</a>
-                                    </Button>
-                                )}
-                                <Button size="sm" variant="ghost" onClick={toggleSpam} title={thread.spam ? "Not spam" : "Mark this number spam"}>
-                                    <ShieldAlert className="size-4" />
-                                </Button>
-                            </div>
-                        </header>
+                                    <div className="flex shrink-0 items-center gap-1">
+                                        {!thread.customer && (
+                                            <Button size="sm" variant="outline" className="h-8 px-2 text-xs" onClick={() => setNewPartyPhone(thread.phone)}>
+                                                <UserPlus className="mr-1 size-3.5" /> <span className="hidden sm:inline">Create </span>party
+                                            </Button>
+                                        )}
+                                        {thread.customer && (
+                                            <Button size="sm" variant="outline" className="h-8 px-2 text-xs" asChild>
+                                                <a href={`/office/customers/all?${thread.customer.kind === "person" ? "personId" : "companyId"}=${thread.customer.id}`}>Party</a>
+                                            </Button>
+                                        )}
+                                        <Button size="sm" variant="ghost" className="size-8 p-0" onClick={toggleSpam} title={thread.spam ? "Not spam" : "Mark this number spam"}>
+                                            <ShieldAlert className="size-4" />
+                                        </Button>
+                                    </div>
+                                </header>
 
-                        <div className="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-4 py-1.5 text-xs">
-                            <Hand className="size-3.5 text-muted-foreground" />
-                            {thread.claim ? (
-                                <span>
-                                    Handled by <b>{thread.claim.owner.id === me ? "you" : thread.claim.owner.name}</b>
-                                    {thread.claim.helpers.length > 0 && <> · with {thread.claim.helpers.map((h) => (h.id === me ? "you" : h.name)).join(", ")}</>}
-                                </span>
-                            ) : (
-                                <span className="text-muted-foreground">Nobody has taken this chat yet — the first reply takes it.</span>
-                            )}
-                            {canReply && (
-                                <span className="ml-auto flex gap-1">
-                                    {thread.claim?.owner.id !== me && (
-                                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => void changeClaim({ action: "take" }, "You are handling this chat")}>
-                                            <Hand className="mr-1 size-3" /> Take it
-                                        </Button>
+                                <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-muted/40 px-3 py-1.5 text-xs md:px-4">
+                                    <Hand className="size-3.5 shrink-0 text-muted-foreground" />
+                                    <span className="min-w-0 flex-1 truncate">
+                                        {thread.claim ? (
+                                            <span>
+                                                Handled by <b>{thread.claim.owner.id === me ? "you" : thread.claim.owner.name}</b>
+                                                {thread.claim.helpers.length > 0 && <> · with {thread.claim.helpers.map((h) => (h.id === me ? "you" : h.name)).join(", ")}</>}
+                                            </span>
+                                        ) : (
+                                            <span className="text-muted-foreground">Unclaimed — first reply takes it.</span>
+                                        )}
+                                    </span>
+                                    {canReply && (
+                                        <span className="flex shrink-0 gap-1">
+                                            {thread.claim?.owner.id !== me && (
+                                                <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => void changeClaim({ action: "take" }, "You are handling this chat")}>
+                                                    <Hand className="mr-1 size-3" /> Take
+                                                </Button>
+                                            )}
+                                            <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => openPicker("invite")}>
+                                                <Users className="mr-1 size-3" /> Invite
+                                            </Button>
+                                            {thread.claim?.owner.id === me && (
+                                                <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => openPicker("handover")}>
+                                                    <ArrowRightLeft className="mr-1 size-3" /> Handover
+                                                </Button>
+                                            )}
+                                            {thread.claim?.helpers.some((h) => h.id === me) && (
+                                                <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => void changeClaim({ action: "leave" }, "You left this chat")}>
+                                                    Leave
+                                                </Button>
+                                            )}
+                                        </span>
                                     )}
-                                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => openPicker("invite")}>
-                                        <Users className="mr-1 size-3" /> Invite
-                                    </Button>
-                                    {thread.claim?.owner.id === me && (
-                                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => openPicker("handover")}>
-                                            <ArrowRightLeft className="mr-1 size-3" /> Hand over
-                                        </Button>
-                                    )}
-                                    {thread.claim?.helpers.some((h) => h.id === me) && (
-                                        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => void changeClaim({ action: "leave" }, "You left this chat")}>
-                                            Leave
-                                        </Button>
-                                    )}
-                                </span>
-                            )}
-                        </div>
+                                </div>
 
                         {thread.ticket && (
                             <a
@@ -691,21 +693,21 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                             <div ref={bottomRef} />
                         </div>
 
-                        <footer className="border-t px-4 py-2">
+                        <footer className="shrink-0 border-t bg-background px-2.5 py-2 pb-[max(0.6rem,env(safe-area-inset-bottom))] md:px-4 md:py-2.5">
                             {!canReply ? (
                                 <p className="text-xs text-muted-foreground">You can read these messages. Replying needs the &ldquo;Reply to customer messages&rdquo; tick on your role.</p>
                             ) : thread.replyWindow.open ? (
                                 <>
                                     {attach && (
-                                        <div className="mb-1 inline-flex max-w-full items-center gap-1 rounded-md border bg-muted px-2 py-0.5 text-xs">
+                                        <div className="mb-1.5 inline-flex max-w-full items-center gap-1 rounded-md border bg-muted px-2 py-0.5 text-xs">
                                             <Paperclip className="size-3 shrink-0" />
                                             <span className="truncate">{attach.name}</span>
                                             <span className="opacity-60">{Math.max(1, Math.round(attach.size / 1024))} KB</span>
                                             <button onClick={() => setAttach(null)} title="Remove" className="ml-1"><X className="size-3" /></button>
                                         </div>
                                     )}
-                                    <div className="flex items-end gap-2">
-                                        <span className="mb-2 inline-flex items-center gap-1 text-xs text-muted-foreground"><ChannelIcon channel="WHATSAPP" /> WhatsApp</span>
+                                    <div className="flex items-end gap-1.5 md:gap-2">
+                                        <span className="mb-2 hidden sm:inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground"><ChannelIcon channel="WHATSAPP" /> WhatsApp</span>
                                         <input
                                             ref={fileRef}
                                             type="file"
@@ -713,26 +715,28 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                             accept="image/jpeg,image/png,video/mp4,video/3gpp,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
                                             onChange={(e) => { setAttach(e.target.files?.[0] ?? null); e.target.value = ""; }}
                                         />
-                                        <Button variant="ghost" size="icon" onClick={() => fileRef.current?.click()} disabled={sending} title="Attach a photo or file">
+                                        <Button variant="ghost" size="icon" className="size-9 shrink-0" onClick={() => fileRef.current?.click()} disabled={sending} title="Attach a photo or file">
                                             <Paperclip className="size-4" />
                                         </Button>
                                         <MentionTextarea
                                             value={draft}
                                             onChange={setDraft}
                                             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
-                                            placeholder={attach ? "Add a caption (optional)" : `Reply to ${displayName(thread)}, or @name for a staff note`}
+                                            placeholder={attach ? "Add a caption (optional)" : "Reply, or @name for note…"}
                                         />
-                                        <Button onClick={() => void send()} disabled={sending || (!draft.trim() && !attach)} size="icon" title="Send">
+                                        <Button onClick={() => void send()} disabled={sending || (!draft.trim() && !attach)} size="icon" className="size-9 shrink-0" title="Send">
                                             <Send className="size-4" />
                                         </Button>
                                     </div>
-                                    <p className="mt-1 text-[11px] text-muted-foreground">
-                                        Free reply open for {hoursLeft(thread.replyWindow.closesAt)} h more. Enter sends, Shift+Enter adds a line. @name = staff note, passes the chat to them.
+                                    <p className="mt-1 flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
+                                        <span>Free reply: {hoursLeft(thread.replyWindow.closesAt)} h left.</span>
+                                        <span className="hidden md:inline"> Enter sends, Shift+Enter adds a line.</span>
+                                        <span>@name = staff note</span>
                                     </p>
                                 </>
                             ) : (
                                 <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                                    <Lock className="size-3.5" /> More than 24 hours since the customer last wrote. WhatsApp only allows an approved template now.
+                                    <Lock className="size-3.5 shrink-0" /> More than 24 hours since customer last wrote. WhatsApp only allows approved templates.
                                 </p>
                             )}
                         </footer>

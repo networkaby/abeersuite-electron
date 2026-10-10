@@ -268,7 +268,7 @@ export default function TeamRoomPane({
     return (
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {/* Room header */}
-            <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-4 py-3 md:px-6">
+            <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-4 py-3 pt-[calc(0.5rem+env(safe-area-inset-top))] md:px-6 md:pt-3">
                 {onBack && (
                     <button
                         type="button"
@@ -379,7 +379,7 @@ export default function TeamRoomPane({
             </div>
 
             {/* Composer */}
-            <div className="shrink-0 border-t border-border bg-card px-6 py-3">
+            <div className="shrink-0 border-t border-border bg-card px-4 py-3 pb-[max(0.6rem,env(safe-area-inset-bottom))] md:px-6 md:py-3">
                 {room.type === "SYSTEM_INBOX" ? (
                     <p className="py-1 text-sm italic text-muted-foreground">System inbox is read-only.</p>
                 ) : (
