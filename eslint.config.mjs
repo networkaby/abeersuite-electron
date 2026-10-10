@@ -85,6 +85,9 @@ const eslintConfig = defineConfig([
     // Same reasoning as sync-engine: the thermal printer bridge is plain CommonJS moved
     // in wholesale from the standalone combined-bridge service, run as a child process.
     "hardware-bridge/**",
+    // Native mobile projects (Android Gradle build artifacts and CJS scripts)
+    "phone-app/**",
+    "shop-app-native/**",
   ]),
 ]);
 

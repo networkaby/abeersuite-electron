@@ -7,7 +7,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
     MessageCircle, Mail, PhoneIncoming, PhoneOutgoing, PhoneMissed, Ticket, Check, CheckCheck,
-    AlertCircle, Search, Send, Paperclip, X, UserPlus, User, Building2, ShieldAlert, RefreshCw, Lock, FileText, Hand, Users, ArrowRightLeft,
+    AlertCircle, Search, Send, Paperclip, X, UserPlus, ShieldAlert, RefreshCw, Lock, FileText, Hand, Users, ArrowRightLeft,
     AtSign, Hash, MessageSquarePlus, ChevronLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,9 +21,20 @@ import MentionTextarea, { mentionTargets } from "@/modules/message/components/Me
 import StaffPickerDialog, { type PickMode, type Staff } from "@/modules/message/components/StaffPickerDialog";
 import TeamRoomPane, { dmPartnerId, type Room } from "@/modules/message/components/TeamRoomPane";
 import { MessageMedia, captionOf, type MediaInfo } from "./MessageMedia";
+import { CustomerAvatar } from "./CustomerAvatar";
+import { CustomerProfileDialog } from "./CustomerProfileDialog";
 
 // ── Wire types (mirror /api/messages/*) ─────────────────────────────────────────
-type Owner = { kind: "person" | "company"; id: number; name: string };
+type Owner = {
+    kind: "person" | "company";
+    id: number;
+    name: string;
+    avatarUrl?: string | null;
+    address?: string | null;
+    accountId?: number | null;
+    balance?: number | null;
+    normalBalance?: "DEBIT" | "CREDIT" | null;
+};
 interface Conversation {
     phone: string;
     customer: Owner | null;
@@ -146,6 +157,7 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
     const [attach, setAttach] = useState<File | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
     const [newPartyPhone, setNewPartyPhone] = useState<string | null>(null);
+    const [showProfile, setShowProfile] = useState(false);
     const bottomRef = useRef<HTMLDivElement>(null);
     const me = Number((useSession().data?.user as { id?: string } | undefined)?.id ?? 0);
     const [pick, setPick] = useState<PickMode | null>(null);
@@ -436,10 +448,14 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                 <button
                                     key={row.key}
                                     onClick={() => void startDm(row.user.id)}
-                                    className="flex w-full items-center gap-1.5 border-b px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted/60"
+                                    className="flex w-full items-center gap-2.5 border-b px-3 py-2 text-left text-sm text-muted-foreground hover:bg-muted/60"
                                 >
-                                    <MessageSquarePlus className="size-3.5 shrink-0 text-violet-600" />
-                                    Start chat with <span className="truncate font-medium text-foreground">{row.user.name}</span>
+                                    <div className="flex size-[38px] shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                                        <MessageSquarePlus className="size-4 shrink-0" />
+                                    </div>
+                                    <div className="min-w-0 flex-1 truncate">
+                                        Start chat with <span className="font-medium text-foreground">{row.user.name}</span>
+                                    </div>
                                 </button>
                             );
                         }
@@ -454,20 +470,29 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                     onClick={() => openRoom(r.id)}
                                     className={cn("block w-full border-b px-3 py-2 text-left hover:bg-muted/60", roomId === r.id && "bg-primary/10")}
                                 >
-                                    <div className="flex items-center justify-between gap-2">
-                                        <span className={cn("flex min-w-0 items-center gap-1 text-sm", r.unreadCount ? "font-semibold" : "font-medium")}>
-                                            <Icon className={cn("size-3.5 shrink-0", dm ? "text-violet-600" : "text-blue-600")} aria-label={dm ? "Staff chat" : "Staff group"} />
-                                            <span className="truncate">{row.title}</span>
-                                        </span>
-                                        {last && <span className="shrink-0 text-xs text-muted-foreground">{shortTime(last.createdAt)}</span>}
-                                    </div>
-                                    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                                        <span className="truncate">
-                                            {last ? `${!dm && last.senderUser?.name ? `${last.senderUser.name}: ` : ""}${last.body}` : "No messages yet"}
-                                        </span>
-                                        {r.unreadCount > 0 && (
-                                            <span className={cn("shrink-0 rounded-full px-1.5 text-[11px] text-white", dm ? "bg-violet-600" : "bg-blue-600")}>{r.unreadCount}</span>
-                                        )}
+                                    <div className="flex items-center gap-2.5">
+                                        <div className={cn(
+                                            "flex size-[38px] shrink-0 items-center justify-center rounded-full font-semibold text-xs",
+                                            dm ? "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                                        )}>
+                                            <Icon className="size-4 shrink-0" aria-label={dm ? "Staff chat" : "Staff group"} />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className={cn("truncate text-sm", r.unreadCount ? "font-semibold" : "font-medium")}>
+                                                    {row.title}
+                                                </span>
+                                                {last && <span className="shrink-0 text-xs text-muted-foreground">{shortTime(last.createdAt)}</span>}
+                                            </div>
+                                            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                                                <span className="truncate">
+                                                    {last ? `${!dm && last.senderUser?.name ? `${last.senderUser.name}: ` : ""}${last.body}` : "No messages yet"}
+                                                </span>
+                                                {r.unreadCount > 0 && (
+                                                    <span className={cn("shrink-0 rounded-full px-1.5 text-[11px] text-white font-medium", dm ? "bg-violet-600" : "bg-blue-600")}>{r.unreadCount}</span>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
                                 </button>
                             );
@@ -482,22 +507,33 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                     selected === c.phone && "bg-primary/10",
                                 )}
                             >
-                                <div className="flex items-center justify-between gap-2">
-                                    <span className={cn("truncate text-sm", c.unread ? "font-semibold" : "font-medium")}>
-                                        {!c.customer && <UserPlus className="mr-1 inline size-3.5 text-amber-600" aria-label="Not a party yet" />}
-                                        {displayName(c)}
-                                    </span>
-                                    <span className="shrink-0 text-xs text-muted-foreground">{shortTime(c.last.at)}</span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                                    <span className="flex min-w-0 items-center gap-1">
-                                        <ChannelIcon channel={c.last.channel} className="shrink-0" />
-                                        <span className="truncate">{c.last.direction === "OUT" ? "You: " : c.last.direction === "NOTE" ? "Note: " : ""}{c.last.body}</span>
-                                    </span>
-                                    <span className="flex shrink-0 items-center gap-1">
-                                        {c.openTicketId && <span className="rounded bg-sky-100 px-1 text-sky-800 dark:bg-sky-900 dark:text-sky-100">#{c.openTicketId}</span>}
-                                        {c.unread > 0 && <span className="rounded-full bg-green-600 px-1.5 text-[11px] text-white">{c.unread}</span>}
-                                    </span>
+                                <div className="flex items-center gap-2.5">
+                                    <CustomerAvatar
+                                        name={displayName(c)}
+                                        avatarUrl={c.customer?.avatarUrl}
+                                        kind={c.customer?.kind}
+                                        phone={c.phone}
+                                        sizePx={38}
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className={cn("truncate text-sm", c.unread ? "font-semibold" : "font-medium")}>
+                                                {!c.customer && <UserPlus className="mr-1 inline size-3.5 text-amber-600" aria-label="Not a party yet" />}
+                                                {displayName(c)}
+                                            </span>
+                                            <span className="shrink-0 text-xs text-muted-foreground">{shortTime(c.last.at)}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                                            <span className="flex min-w-0 items-center gap-1">
+                                                <ChannelIcon channel={c.last.channel} className="shrink-0" />
+                                                <span className="truncate">{c.last.direction === "OUT" ? "You: " : c.last.direction === "NOTE" ? "Note: " : ""}{c.last.body}</span>
+                                            </span>
+                                            <span className="flex shrink-0 items-center gap-1">
+                                                {c.openTicketId && <span className="rounded bg-sky-100 px-1 text-sky-800 dark:bg-sky-900 dark:text-sky-100">#{c.openTicketId}</span>}
+                                                {c.unread > 0 && <span className="rounded-full bg-green-600 px-1.5 text-[11px] text-white font-medium">{c.unread}</span>}
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
                             </button>
                         );
@@ -535,25 +571,40 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                         {thread && (
                             <>
                                 <header className="flex shrink-0 items-center justify-between gap-2 border-b bg-background px-3 py-2 pt-[calc(0.5rem+env(safe-area-inset-top))] md:px-4 md:pt-2">
-                                    <div className="flex items-center gap-1.5 min-w-0">
+                                    <div className="flex items-center gap-2 min-w-0">
                                         <button
                                             type="button"
                                             onClick={() => setSelected(null)}
-                                            className="rounded-md p-1.5 hover:bg-muted active:bg-muted md:hidden"
+                                            className="rounded-md p-1.5 hover:bg-muted active:bg-muted md:hidden shrink-0"
                                             aria-label="Back to chat list"
                                         >
                                             <ChevronLeft className="size-5" />
                                         </button>
-                                        <div className="min-w-0">
-                                            <div className="flex items-center gap-1.5 font-medium">
-                                                {thread.customer?.kind === "company" ? <Building2 className="size-4 shrink-0" /> : <User className="size-4 shrink-0" />}
-                                                <span className="truncate text-sm font-semibold">{displayName(thread)}</span>
-                                                {thread.customer
-                                                    ? <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-100">Customer</span>
-                                                    : <span className="shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground">Not a party</span>}
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowProfile(true)}
+                                            className="flex items-center gap-2.5 min-w-0 text-left hover:opacity-80 active:opacity-70 transition-opacity"
+                                            title="View customer profile"
+                                        >
+                                            <CustomerAvatar
+                                                name={displayName(thread)}
+                                                avatarUrl={thread.customer?.avatarUrl}
+                                                kind={thread.customer?.kind}
+                                                phone={thread.phone}
+                                                sizePx={38}
+                                            />
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-1.5 font-medium">
+                                                    <span className="truncate text-sm font-semibold">{displayName(thread)}</span>
+                                                    {thread.customer
+                                                        ? <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-100">Customer</span>
+                                                        : <span className="shrink-0 rounded bg-muted px-1 text-[10px] text-muted-foreground">Not a party</span>}
+                                                </div>
+                                                <div className="truncate text-xs text-muted-foreground">
+                                                    +91 {thread.phone}{thread.senderName && thread.customer ? ` · WA: ${thread.senderName}` : ""}
+                                                </div>
                                             </div>
-                                            <div className="truncate text-xs text-muted-foreground">+91 {thread.phone}{thread.senderName && thread.customer ? ` · WA: ${thread.senderName}` : ""}</div>
-                                        </div>
+                                        </button>
                                     </div>
                                     <div className="flex shrink-0 items-center gap-1">
                                         {!thread.customer && (
@@ -562,8 +613,8 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                             </Button>
                                         )}
                                         {thread.customer && (
-                                            <Button size="sm" variant="outline" className="h-8 px-2 text-xs" asChild>
-                                                <a href={`/office/customers/all?${thread.customer.kind === "person" ? "personId" : "companyId"}=${thread.customer.id}`}>Party</a>
+                                            <Button size="sm" variant="outline" className="h-8 px-2 text-xs" onClick={() => setShowProfile(true)}>
+                                                Profile
                                             </Button>
                                         )}
                                         <Button size="sm" variant="ghost" className="size-8 p-0" onClick={toggleSpam} title={thread.spam ? "Not spam" : "Mark this number spam"}>
@@ -757,6 +808,23 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                 onOpenChange={(o) => { if (!o) { setNewPartyPhone(null); refresh(); } }}
                 initialPhone={newPartyPhone ?? undefined}
             />
+
+            {thread && (
+                <CustomerProfileDialog
+                    open={showProfile}
+                    onOpenChange={setShowProfile}
+                    customer={thread.customer}
+                    phone={thread.phone}
+                    senderName={thread.senderName}
+                    spam={thread.spam}
+                    ticket={thread.ticket}
+                    onToggleSpam={toggleSpam}
+                    onCreateParty={() => {
+                        setShowProfile(false);
+                        setNewPartyPhone(thread.phone);
+                    }}
+                />
+            )}
         </div>
     );
 }
