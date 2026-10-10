@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-    MessageCircle, Mail, PhoneIncoming, PhoneOutgoing, PhoneMissed, Ticket, Check, CheckCheck,
+    Mail, PhoneIncoming, PhoneOutgoing, PhoneMissed, Ticket, Check, CheckCheck,
     AlertCircle, Search, Send, Paperclip, X, UserPlus, ShieldAlert, RefreshCw, Lock, FileText, Hand, Users, ArrowRightLeft,
     AtSign, Hash, MessageSquarePlus, ChevronLeft, Briefcase, LifeBuoy,
 } from "lucide-react";
@@ -23,6 +23,8 @@ import TeamRoomPane, { dmPartnerId, type Room } from "@/modules/message/componen
 import { MessageMedia, captionOf, type MediaInfo } from "./MessageMedia";
 import { CustomerAvatar } from "./CustomerAvatar";
 import { CustomerProfileDialog } from "./CustomerProfileDialog";
+import { WhatsAppIcon } from "@/shared/components/WhatsAppIcon";
+
 
 // ── Wire types (mirror /api/messages/*) ─────────────────────────────────────────
 type Owner = {
@@ -67,7 +69,7 @@ interface Thread {
 type Filter = "all" | "unread" | "open" | "unknown" | "team" | "groups";
 const FILTERS: { key: Filter; label: string }[] = [
     { key: "all", label: "All" },
-    { key: "unread", label: "Unread" },
+    { key: "unread", label: "Unreplied" },
     { key: "open", label: "Open ticket" },
     { key: "unknown", label: "Unknown" },
     { key: "team", label: "Team" },
@@ -91,10 +93,25 @@ type Row =
     | { kind: "room"; key: string; at: string; room: Room; title: string }
     | { kind: "start"; key: string; at: string; user: StaffUser };
 
-/** The source logo every message carries. */
-function ChannelIcon({ channel, className }: { channel: string; className?: string }) {
+const NUMBER_COLORS = [
+    "#25D366", // WhatsApp standard green
+    "#2563EB", // Royal blue
+    "#7C3AED", // Violet
+    "#EA580C", // Orange
+    "#0D9488", // Teal
+    "#DB2777", // Rose
+];
+function numberColor(num?: string | null): string {
+    if (!num) return "#25D366";
+    let hash = 0;
+    for (let i = 0; i < num.length; i++) hash = (hash * 31 + num.charCodeAt(i)) >>> 0;
+    return NUMBER_COLORS[hash % NUMBER_COLORS.length];
+}
+
+/** The source logo every message carries — distinct brand color per business number. */
+function ChannelIcon({ channel, businessNumber, className }: { channel: string; businessNumber?: string | null; className?: string }) {
     if (channel === "EMAIL") return <Mail className={cn("size-3.5", className)} aria-label="Email" />;
-    return <MessageCircle className={cn("size-3.5 text-green-600", className)} aria-label="WhatsApp" />;
+    return <WhatsAppIcon className={cn("size-3.5", className)} color={numberColor(businessNumber)} />;
 }
 
 function displayName(c: { customer: Owner | null; senderName: string | null; phone: string }) {
@@ -108,6 +125,15 @@ function shortTime(iso: string) {
         ? d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })
         : d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
+
+function messageTime(iso: string) {
+    const d = new Date(iso);
+    const today = new Date();
+    const isToday = d.toDateString() === today.toDateString();
+    const timeStr = d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+    return isToday ? timeStr : `${d.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}, ${timeStr}`;
+}
+
 
 function hoursLeft(closesAt: string | null) {
     if (!closesAt) return 0;
@@ -137,7 +163,8 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
 }) {
     const searchParams = useSearchParams();
     const filters = customers ? FILTERS : FILTERS.filter((f) => f.key === "team" || f.key === "groups");
-    const wantFilter = searchParams.get("filter") as Filter | null;
+    const rawFilter = searchParams.get("filter") as Filter | null;
+    const wantFilter = rawFilter === "team" && customers ? null : rawFilter;
     const [filter, setFilter] = useState<Filter>(
         wantFilter && filters.some((f) => f.key === wantFilter) ? wantFilter : filters[0].key,
     );
@@ -733,43 +760,45 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                     <div key={`m${it.id}`} className={cn("flex", out ? "justify-end" : "justify-start")}>
                                         <div
                                             className={cn(
-                                                "max-w-[75%] rounded-lg px-3 py-2 text-sm",
-                                                out ? "bg-green-100 text-green-950 dark:bg-green-950 dark:text-green-50" : "bg-muted",
+                                                "max-w-[78%] rounded-2xl px-3 py-1.5 text-sm shadow-xs",
+                                                out
+                                                    ? "rounded-tr-xs bg-[#dcf8c6] text-stone-900 dark:bg-[#005c4b] dark:text-stone-100"
+                                                    : "rounded-tl-xs bg-white text-stone-900 border border-stone-200/60 dark:bg-[#202c33] dark:text-stone-100 dark:border-white/5",
                                                 it.ticketId && "ring-1 ring-sky-400",
                                             )}
                                         >
-                                            <div className="mb-0.5 flex flex-wrap items-center gap-1 text-[11px] opacity-80">
-                                                <ChannelIcon channel={it.channel} />
-                                                <span>{it.channel === "EMAIL" ? "Email" : "WhatsApp"}</span>
-                                                {it.businessNumber && <span title="Our number this came in on">· via …{it.businessNumber.slice(-5)}</span>}
-                                                {out && <span>· {it.sentBy ?? "System"}</span>}
-                                                {it.billKind && (
-                                                    <span className="inline-flex items-center gap-0.5">
-                                                        · <FileText className="size-3" />
-                                                        {link ? <a href={link} target="_blank" rel="noreferrer" className="underline">{out ? "Bill" : "Reply to bill"}</a> : "Bill"}
-                                                    </span>
-                                                )}
-                                                {it.ticketId && <span className="inline-flex items-center gap-0.5">· <Ticket className="size-3" />#{it.ticketId}</span>}
-                                            </div>
+                                            {(it.ticketId || it.billKind) && (
+                                                <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                                                    {it.ticketId && (
+                                                        <span className="inline-flex items-center gap-0.5 rounded bg-sky-100 px-1 py-0.5 text-[10px] font-medium text-sky-800 dark:bg-sky-950 dark:text-sky-300">
+                                                            <Ticket className="size-3" /> #{it.ticketId}
+                                                        </span>
+                                                    )}
+                                                    {it.billKind && (
+                                                        <span className="inline-flex items-center gap-0.5 rounded bg-black/5 px-1 py-0.5 text-[10px] font-medium text-foreground/80 dark:bg-white/10">
+                                                            <FileText className="size-3" />
+                                                            {link ? <a href={link} target="_blank" rel="noreferrer" className="underline">{out ? "Bill" : "Reply to bill"}</a> : "Bill"}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
                                             <MessageMedia m={it} />
                                             {captionOf(it.body, !!(it.mediaUrl || it.mediaType)) && (
                                                 <div className="whitespace-pre-wrap break-words">{captionOf(it.body, !!(it.mediaUrl || it.mediaType))}</div>
                                             )}
-                                            <div className="mt-0.5 flex items-center justify-end gap-2 text-[11px] opacity-70">
-                                                {!out && !it.ticketId && canTicket && (
-                                                    <button
-                                                        className="underline text-sky-600 dark:text-sky-400 hover:opacity-80"
-                                                        onClick={() => setTicketModalMessageId(it.id)}
-                                                    >
-                                                        {thread.ticket ? `+ Add to #${thread.ticket.id}` : "+ Ticket"}
-                                                    </button>
+                                            <div className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-60 select-none">
+                                                {!out && (
+                                                    <span title={it.businessNumber ? `via …${it.businessNumber.slice(-5)}` : (it.channel === "EMAIL" ? "Email" : "WhatsApp")}>
+                                                        <ChannelIcon channel={it.channel} businessNumber={it.businessNumber} className="size-3 inline-block" />
+                                                    </span>
                                                 )}
-                                                <span>{formatDateTime(it.at)}</span>
+                                                <span>{messageTime(it.at)}</span>
                                                 {out && <Ticks m={it} />}
                                             </div>
                                         </div>
                                     </div>
                                 );
+
                             })}
                             <div ref={bottomRef} />
                         </div>

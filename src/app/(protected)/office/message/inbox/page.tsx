@@ -12,7 +12,7 @@ export default async function InboxPage() {
     // Staff chats now live beside the customers in CRM → Messages; only staff
     // without CRM keep this standalone page.
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    if (hasModuleNavAccess(permissions, "crm")) redirect("/office/crm/messages?filter=team");
+    if (hasModuleNavAccess(permissions, "crm")) redirect("/office/crm/messages?filter=all");
 
     return (
         <Suspense fallback={
