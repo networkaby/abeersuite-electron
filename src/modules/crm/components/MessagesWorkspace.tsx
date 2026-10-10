@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
     MessageCircle, Mail, PhoneIncoming, PhoneOutgoing, PhoneMissed, Ticket, Check, CheckCheck,
     AlertCircle, Search, Send, Paperclip, X, UserPlus, ShieldAlert, RefreshCw, Lock, FileText, Hand, Users, ArrowRightLeft,
-    AtSign, Hash, MessageSquarePlus, ChevronLeft,
+    AtSign, Hash, MessageSquarePlus, ChevronLeft, Briefcase, LifeBuoy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,7 +57,7 @@ interface Thread {
     customer: Owner | null;
     senderName: string | null;
     spam: boolean;
-    ticket: { id: number; title: string | null; priority: string; status: string | null; assignee: string | null } | null;
+    ticket: { id: number; title: string | null; priority: string; status: string | null; assignee: string | null; kind?: string | null; href?: string | null } | null;
     /** Who is handling this chat (MessageClaim) — null until someone replies or takes it. */
     claim: { owner: Staff; helpers: Staff[] } | null;
     replyWindow: { open: boolean; closesAt: string | null };
@@ -161,6 +161,8 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
     const bottomRef = useRef<HTMLDivElement>(null);
     const me = Number((useSession().data?.user as { id?: string } | undefined)?.id ?? 0);
     const [pick, setPick] = useState<PickMode | null>(null);
+    const [ticketModalMessageId, setTicketModalMessageId] = useState<number | null>(null);
+    const [ticketSubmitting, setTicketSubmitting] = useState(false);
 
     // ── Staff chats (team Inbox rooms) beside the customers ──────────────────
     const [rooms, setRooms] = useState<Room[]>([]);
@@ -349,14 +351,32 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
         }
     };
 
-    const raiseTicket = async (messageId: number, ticketId?: number) => {
+    const raiseTicket = async (opts: { messageId?: number; ticketId?: number; kind?: "help" | "deal" }) => {
         try {
-            const { data } = await axios.post<{ ticketId: number }>(`/api/messages/${messageId}/ticket`, ticketId ? { ticketId } : {});
-            toast.success(ticketId ? `Added to ticket #${data.ticketId}` : `Ticket #${data.ticketId} raised`);
+            setTicketSubmitting(true);
+            const targetMessageId = (opts.messageId && opts.messageId > 0)
+                ? opts.messageId
+                : (thread?.items.find((it) => it.type === "message") as ThreadMessage | undefined)?.id;
+            if (!targetMessageId) {
+                toast.error("No message in conversation to convert yet.");
+                return;
+            }
+            const payload = opts.ticketId ? { ticketId: opts.ticketId } : { kind: opts.kind ?? "help" };
+            const { data } = await axios.post<{ ticketId: number }>(`/api/messages/${targetMessageId}/ticket`, payload);
+            toast.success(
+                opts.ticketId
+                    ? `Mapped conversation to ticket #${data.ticketId}`
+                    : opts.kind === "deal"
+                        ? `Deal lead #${data.ticketId} created & conversation mapped`
+                        : `Help ticket #${data.ticketId} raised & conversation mapped`
+            );
+            setTicketModalMessageId(null);
             if (thread) void loadThread(thread.phone);
             void loadList(1);
         } catch (e) {
-            toast.error(extractApiError(e, "Could not raise the ticket"));
+            toast.error(extractApiError(e, "Could not create/link ticket"));
+        } finally {
+            setTicketSubmitting(false);
         }
     };
 
@@ -617,6 +637,17 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                                 Profile
                                             </Button>
                                         )}
+                                        {canTicket && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-8 px-2 text-xs text-sky-700 border-sky-300 hover:bg-sky-50 dark:text-sky-300 dark:border-sky-800 dark:hover:bg-sky-950"
+                                                onClick={() => setTicketModalMessageId(-1)}
+                                                title="Create Deal or Help Ticket from this conversation"
+                                            >
+                                                <Ticket className="mr-1 size-3.5" /> + Ticket
+                                            </Button>
+                                        )}
                                         <Button size="sm" variant="ghost" className="size-8 p-0" onClick={toggleSpam} title={thread.spam ? "Not spam" : "Mark this number spam"}>
                                             <ShieldAlert className="size-4" />
                                         </Button>
@@ -657,11 +688,11 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
 
                         {thread.ticket && (
                             <a
-                                href={`/office/help?ticket=${thread.ticket.id}`}
+                                href={thread.ticket.href ?? `/office/help?ticket=${thread.ticket.id}`}
                                 className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-900 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-100"
                             >
                                 <span className="flex items-center gap-2">
-                                    <Ticket className="size-4" /> Open ticket #{thread.ticket.id} · {thread.ticket.title ?? "Help"}
+                                    <Ticket className="size-4" /> Open {thread.ticket.kind === "deal" ? "deal" : thread.ticket.kind === "repair" ? "repair" : "ticket"} #{thread.ticket.id} · {thread.ticket.title ?? "Ticket"}
                                 </span>
                                 <span className="text-xs">
                                     {[thread.ticket.status, thread.ticket.assignee ? `Assigned: ${thread.ticket.assignee}` : "Not assigned", thread.ticket.priority].filter(Boolean).join(" · ")}
@@ -726,7 +757,10 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                             )}
                                             <div className="mt-0.5 flex items-center justify-end gap-2 text-[11px] opacity-70">
                                                 {!out && !it.ticketId && canTicket && (
-                                                    <button className="underline" onClick={() => void raiseTicket(it.id, thread.ticket?.id)}>
+                                                    <button
+                                                        className="underline text-sky-600 dark:text-sky-400 hover:opacity-80"
+                                                        onClick={() => setTicketModalMessageId(it.id)}
+                                                    >
                                                         {thread.ticket ? `+ Add to #${thread.ticket.id}` : "+ Ticket"}
                                                     </button>
                                                 )}
@@ -824,6 +858,86 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                         setNewPartyPhone(thread.phone);
                     }}
                 />
+            )}
+
+            {ticketModalMessageId !== null && thread && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="w-full max-w-sm rounded-lg border bg-background p-5 shadow-lg space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-base font-semibold text-foreground">Create or Link Ticket</h3>
+                            <button
+                                type="button"
+                                onClick={() => setTicketModalMessageId(null)}
+                                className="rounded-md p-1 hover:bg-muted text-muted-foreground"
+                            >
+                                <X className="size-4" />
+                            </button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            Map this conversation (+91 {thread.phone}) to a ticket. All unlinked messages will be connected and logged to ticket history.
+                        </p>
+
+                        <div className="space-y-2 pt-1">
+                            <button
+                                type="button"
+                                disabled={ticketSubmitting}
+                                onClick={() => void raiseTicket({ messageId: ticketModalMessageId, kind: "deal" })}
+                                className="flex w-full items-center gap-3 rounded-lg border p-3 text-left hover:bg-muted/70 transition-colors disabled:opacity-50"
+                            >
+                                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                                    <Briefcase className="size-4" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="text-sm font-medium text-foreground">Create Deal Lead</div>
+                                    <div className="text-xs text-muted-foreground">For sales quote, pricing inquiry, product lead</div>
+                                </div>
+                            </button>
+
+                            <button
+                                type="button"
+                                disabled={ticketSubmitting}
+                                onClick={() => void raiseTicket({ messageId: ticketModalMessageId, kind: "help" })}
+                                className="flex w-full items-center gap-3 rounded-lg border p-3 text-left hover:bg-muted/70 transition-colors disabled:opacity-50"
+                            >
+                                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+                                    <LifeBuoy className="size-4" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="text-sm font-medium text-foreground">Create Help Desk Ticket</div>
+                                    <div className="text-xs text-muted-foreground">For customer support, complaint, service triage</div>
+                                </div>
+                            </button>
+
+                            {thread.ticket && (
+                                <button
+                                    type="button"
+                                    disabled={ticketSubmitting}
+                                    onClick={() => void raiseTicket({ messageId: ticketModalMessageId, ticketId: thread.ticket!.id })}
+                                    className="flex w-full items-center gap-3 rounded-lg border border-primary/40 bg-primary/5 p-3 text-left hover:bg-primary/10 transition-colors disabled:opacity-50"
+                                >
+                                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary">
+                                        <Ticket className="size-4" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="text-sm font-medium text-foreground">Map to Active #{thread.ticket.id}</div>
+                                        <div className="text-xs text-muted-foreground truncate">{thread.ticket.title ?? "Current Ticket"} ({thread.ticket.status})</div>
+                                    </div>
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="flex justify-end pt-2">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={ticketSubmitting}
+                                onClick={() => setTicketModalMessageId(null)}
+                            >
+                                Cancel
+                            </Button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

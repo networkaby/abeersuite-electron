@@ -216,7 +216,7 @@ export async function buildCustomerTimeline(ref: CustomerRef, limit = 20): Promi
         // Customer messages (WhatsApp …) — matched by phone, the same as calls.
         callKeys.length
             ? prisma.message.findMany({
-                where: { phone: { in: callKeys }, spam: false, direction: { not: "NOTE" } }, // staff @mention notes are internal
+                where: { phone: { in: callKeys }, spam: false, direction: { not: "NOTE" }, ticketId: null }, // ticket-linked chats live in ticket history; staff @mention notes are internal
                 orderBy: { occurredAt: "desc" },
                 take: limit,
                 select: { id: true, channel: true, direction: true, body: true, occurredAt: true, ticketId: true },

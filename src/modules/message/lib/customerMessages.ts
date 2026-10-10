@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { phoneMatchKey, phoneKeyVariants } from "@/shared/lib/format";
 import { getHelpPipeline } from "@/modules/help/lib/helpPipeline";
+import { getDealsPipeline } from "@/modules/deals/lib/dealsPipeline";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
 import {
@@ -406,6 +407,38 @@ async function maybeSendTicketAutoReplyMenu(args: {
     }
 }
 
+/**
+ * Record a message directly into the ticket's activity timeline (TicketLog).
+ * Keeps ticket history authoritative and informative across repairs, deals, and helpdesk.
+ */
+async function logMessageToTicket(args: {
+    ticketId: number;
+    authorName: string;
+    text: string;
+    direction: "IN" | "OUT";
+    occurredAt?: Date;
+    userId?: number;
+}): Promise<void> {
+    if (!args.ticketId || !args.text) return;
+    try {
+        const isOut = args.direction === "OUT";
+        const prefix = isOut ? `💬 WhatsApp (Staff - ${args.authorName}): ` : `💬 WhatsApp (${args.authorName}): `;
+        await prisma.ticketLog.create({
+            data: {
+                ticketId: args.ticketId,
+                kind: "NOTE",
+                visibility: "PUBLIC",
+                note: `${prefix}${args.text}`,
+                author: { userName: args.authorName, userId: args.userId, channel: "WHATSAPP" },
+                createdAt: args.occurredAt ?? new Date(),
+            },
+        });
+    } catch (e) {
+        // Non-blocking log creation
+        console.error("[messages] could not log message to ticket", e);
+    }
+}
+
 
 // ── Meta webhook payload (only the parts we read) ───────────────────────────────
 type WaInbound = {
@@ -570,6 +603,20 @@ export async function ingestInbound(value: WaChangeValue): Promise<number> {
                 },
             });
             stored++;
+
+            if (ticketId && phone && !spam) {
+                const senderName = names.get(m.from) ?? owner?.name ?? "Customer";
+                const bodyText = inboundBody(m);
+                if (bodyText) {
+                    await logMessageToTicket({
+                        ticketId,
+                        authorName: senderName,
+                        text: bodyText,
+                        direction: "IN",
+                        occurredAt: metaTime(m.timestamp),
+                    });
+                }
+            }
 
             if (menuAck) {
                 await sendMenuAcknowledgment({
@@ -739,6 +786,16 @@ export async function sendReply(args: { phone: string; text: string; userId: num
             occurredAt: new Date(),
         },
     });
+    if (ticketId) {
+        const staffUser = await prisma.user.findUnique({ where: { id: args.userId }, select: { name: true } });
+        await logMessageToTicket({
+            ticketId,
+            authorName: staffUser?.name ?? "Staff",
+            text: args.text || (media ? `[${waMediaTypeFor(media.type)}]` : "Message"),
+            direction: "OUT",
+            userId: args.userId,
+        });
+    }
     // A reply answers what the customer wrote: their messages are read for the
     // whole shop, so the new-message popup closes everywhere.
     await prisma.message.updateMany({
@@ -859,10 +916,15 @@ export async function changeClaim(phone: string, callerId: number, a: ClaimActio
 }
 
 /**
- * Raise a help ticket from a message, or join it to an existing ticket.
- * The message (and any later unlinked messages from the same number) carry it.
+ * Raise a help or deal ticket from a message, or join it to an existing ticket.
+ * Maps the conversation's unlinked messages to the ticket and logs them into ticket history.
  */
-export async function ticketFromMessage(messageId: number, userId: number, existingTicketId?: number | null) {
+export async function ticketFromMessage(
+    messageId: number,
+    userId: number,
+    existingTicketId?: number | null,
+    kind: "help" | "deal" = "help"
+) {
     const msg = await prisma.message.findUnique({
         where: { id: messageId },
         select: { id: true, phone: true, body: true, senderName: true, occurredAt: true },
@@ -870,51 +932,118 @@ export async function ticketFromMessage(messageId: number, userId: number, exist
     if (!msg) throw new ReplyRefusedError("Message not found.");
 
     let ticketId = existingTicketId ?? null;
+    const owner = msg.phone ? (await ownersByPhone([msg.phone])).get(msg.phone) ?? null : null;
+    const author = await buildActorSnapshot(userId);
+
     if (ticketId == null) {
-        const pipeline = await getHelpPipeline(prisma);
-        const entry = pipeline?.statuses.find((s) => s.isEntryPoint) ?? pipeline?.statuses[0];
-        if (!pipeline || !entry) throw new ReplyRefusedError("Help Desk pipeline is not set up.");
-        const owner = msg.phone ? (await ownersByPhone([msg.phone])).get(msg.phone) ?? null : null;
-        const author = await buildActorSnapshot(userId);
-        const subject = msg.body.split("\n")[0].slice(0, 120) || "WhatsApp message";
-        const ticket = await prisma.ticket.create({
-            data: {
-                sourceCounterId: await sourceCounterId(),
-                pipelineId: pipeline.id,
-                status: entry.id,
-                title: subject,
-                category: "OTHER",
-                notes: msg.body,
-                createdBy: author,
-                help: {
-                    create: {
-                        contactName: owner?.name ?? msg.senderName ?? null,
-                        phone: msg.phone,
-                        personId: owner?.kind === "person" ? owner.id : null,
-                        companyId: owner?.kind === "company" ? owner.id : null,
-                        inquiryType: "OTHER",
-                        subject,
+        if (kind === "deal") {
+            const pipeline = await getDealsPipeline(prisma);
+            const entry = pipeline?.statuses.find((s) => s.isEntryPoint) ?? pipeline?.statuses[0];
+            if (!pipeline || !entry) throw new ReplyRefusedError("Deals pipeline is not set up.");
+            const subject = msg.body.split("\n")[0].slice(0, 120) || "WhatsApp lead";
+            const ticket = await prisma.ticket.create({
+                data: {
+                    sourceCounterId: await sourceCounterId(),
+                    pipelineId: pipeline.id,
+                    status: entry.id,
+                    title: subject,
+                    priority: "MEDIUM",
+                    notes: msg.body,
+                    createdBy: author,
+                    deal: {
+                        create: {
+                            contactName: owner?.name ?? msg.senderName ?? null,
+                            phone: msg.phone,
+                            personId: owner?.kind === "person" ? owner.id : null,
+                            companyId: owner?.kind === "company" ? owner.id : null,
+                            source: "WHATSAPP",
+                        },
                     },
                 },
-            },
-            select: { id: true, status: true },
-        });
-        await prisma.ticketLog.create({
-            data: { ticketId: ticket.id, status: ticket.status, note: "Help ticket raised from a WhatsApp message", author },
-        });
-        ticketId = ticket.id;
+                select: { id: true, status: true },
+            });
+            await prisma.ticketLog.create({
+                data: { ticketId: ticket.id, status: ticket.status, note: "Deal lead created from a WhatsApp message", author },
+            });
+            ticketId = ticket.id;
+        } else {
+            const pipeline = await getHelpPipeline(prisma);
+            const entry = pipeline?.statuses.find((s) => s.isEntryPoint) ?? pipeline?.statuses[0];
+            if (!pipeline || !entry) throw new ReplyRefusedError("Help Desk pipeline is not set up.");
+            const subject = msg.body.split("\n")[0].slice(0, 120) || "WhatsApp message";
+            const ticket = await prisma.ticket.create({
+                data: {
+                    sourceCounterId: await sourceCounterId(),
+                    pipelineId: pipeline.id,
+                    status: entry.id,
+                    title: subject,
+                    category: "OTHER",
+                    notes: msg.body,
+                    createdBy: author,
+                    help: {
+                        create: {
+                            contactName: owner?.name ?? msg.senderName ?? null,
+                            phone: msg.phone,
+                            personId: owner?.kind === "person" ? owner.id : null,
+                            companyId: owner?.kind === "company" ? owner.id : null,
+                            inquiryType: "OTHER",
+                            subject,
+                        },
+                    },
+                },
+                select: { id: true, status: true },
+            });
+            await prisma.ticketLog.create({
+                data: { ticketId: ticket.id, status: ticket.status, note: "Help ticket raised from a WhatsApp message", author },
+            });
+            ticketId = ticket.id;
+        }
     }
 
-    // This message, plus the later ones from the same number still unlinked.
-    await prisma.message.updateMany({
-        where: {
-            OR: [
-                { id: msg.id },
-                ...(msg.phone ? [{ phone: msg.phone, ticketId: null, occurredAt: { gt: msg.occurredAt } }] : []),
-            ],
-        },
-        data: { ticketId },
-    });
+    // Map this message plus all other unlinked messages in this conversation to the ticket
+    if (msg.phone) {
+        const unlinkedMsgs = await prisma.message.findMany({
+            where: {
+                phone: msg.phone,
+                ticketId: null,
+            },
+            orderBy: { occurredAt: "asc" },
+            select: { id: true, direction: true, body: true, senderName: true, sentByUserId: true, occurredAt: true },
+        });
+
+        for (const m of unlinkedMsgs) {
+            const isOut = m.direction === "OUT";
+            let authorName = isOut ? "Staff" : (m.senderName ?? owner?.name ?? "Customer");
+            if (isOut && m.sentByUserId) {
+                const u = await prisma.user.findUnique({ where: { id: m.sentByUserId }, select: { name: true } });
+                if (u?.name) authorName = u.name;
+            }
+            await logMessageToTicket({
+                ticketId,
+                authorName,
+                text: m.body,
+                direction: m.direction as "IN" | "OUT",
+                occurredAt: m.occurredAt,
+                userId: m.sentByUserId ?? undefined,
+            });
+        }
+
+        await prisma.message.updateMany({
+            where: {
+                OR: [
+                    { id: msg.id },
+                    { phone: msg.phone, ticketId: null },
+                ],
+            },
+            data: { ticketId },
+        });
+    } else {
+        await prisma.message.update({
+            where: { id: msg.id },
+            data: { ticketId },
+        });
+    }
+
     void publishChangeServer(["messages", "tickets"]);
     return ticketId;
 }

@@ -49,9 +49,12 @@ export async function GET(req: Request) {
             ? await prisma.ticket.findUnique({
                 where: { id: ticketId },
                 select: {
-                    id: true, title: true, priority: true,
+                    id: true, title: true, priority: true, pipelineId: true,
                     ticketStatus: { select: { label: true, color: true } },
                     assignedPosition: ASSIGNED_POSITION_SELECT,
+                    repair: { select: { ticketId: true } },
+                    deal: { select: { ticketId: true } },
+                    help: { select: { ticketId: true } },
                 },
             })
             : null;
@@ -113,6 +116,12 @@ export async function GET(req: Request) {
                     priority: ticket.priority,
                     status: ticket.ticketStatus?.label ?? null,
                     assignee: ticket.assignedPosition?.holders.map((h) => h.user.name).join(", ") || ticket.assignedPosition?.title || null,
+                    kind: ticket.repair ? "repair" : ticket.deal ? "deal" : "help",
+                    href: ticket.repair
+                        ? `/office/repairing/tickets/${ticket.id}`
+                        : ticket.deal
+                            ? `/office/crm/deals`
+                            : `/office/help?ticket=${ticket.id}`,
                 }
                 : null,
             claim: claims.get(phone) ?? null,

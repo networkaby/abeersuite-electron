@@ -16,7 +16,7 @@ export default async function MessagesPage() {
 
     return (
         <div className="h-full">
-            <MessagesWorkspace canReply={can(PERMISSIONS.MESSAGES_REPLY)} canTicket={can(PERMISSIONS.HELP_CREATE)} />
+            <MessagesWorkspace canReply={can(PERMISSIONS.MESSAGES_REPLY)} canTicket={can(PERMISSIONS.HELP_CREATE) || can(PERMISSIONS.DEALS_CREATE)} />
         </div>
     );
 }
