@@ -214,6 +214,7 @@ export async function sendDueReminder(args: {
                 prevBalance: "",
                 balance: "",
                 device: "",
+                subject: "",
                 shop: getOrganisation().brandName,
                 link: `${WA_BILL_LINK_BASE}${DUE_LINK_CODE}`,
                 app: WA_APP_LINK,

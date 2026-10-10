@@ -65,7 +65,9 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
         viewBtn !== current.draft.viewButton ||
         appBtn !== current.draft.appButton;
     const errors = useMemo(() => checkBody(draft, kind), [draft, kind]);
-    const status = STATUS_LABEL[current.status] ?? STATUS_LABEL.DRAFT;
+    const status = current.kind === "TICKET_AUTO_REPLY"
+        ? { text: "Active (24h Service Window)", className: "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200" }
+        : (STATUS_LABEL[current.status] ?? STATUS_LABEL.DRAFT);
     const locked = current.status === "PENDING";
 
     function replace(t: WaTemplateView) {
@@ -165,8 +167,14 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                         }`}
                     >
                         <span>{WA_TEMPLATE_LABEL[t.kind]}</span>
-                        <span className={`text-xs ${t.enabled && t.approved ? "text-emerald-600" : "text-muted-foreground"}`}>
-                            {t.enabled && t.approved ? "On" : "Off"}
+                        <span className={`text-xs ${
+                            t.kind === "TICKET_AUTO_REPLY"
+                                ? (t.autoSend ? "text-emerald-600" : "text-muted-foreground")
+                                : (t.enabled && t.approved ? "text-emerald-600" : "text-muted-foreground")
+                        }`}>
+                            {t.kind === "TICKET_AUTO_REPLY"
+                                ? (t.autoSend ? "On" : "Off")
+                                : (t.enabled && t.approved ? "On" : "Off")}
                         </span>
                     </button>
                 ))}
@@ -174,7 +182,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
 
             {/* Editor */}
             <div className="min-w-0 space-y-4 rounded-lg border p-4">
-                {!templateApiReady && (
+                {!templateApiReady && current.kind !== "TICKET_AUTO_REPLY" && (
                     <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">
                         Sending for approval is not set up on this server — <code>META_WA_BUSINESS_ACCOUNT_ID</code> is missing.
                     </p>
@@ -191,14 +199,16 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                             Check now
                         </Button>
                     )}
-                    <label className="ml-auto flex items-center gap-2 text-sm">
-                        <Switch checked={enabled} onCheckedChange={setEnabled} />
-                        Send on WhatsApp
-                    </label>
+                    {current.kind !== "TICKET_AUTO_REPLY" && (
+                        <label className="ml-auto flex items-center gap-2 text-sm">
+                            <Switch checked={enabled} onCheckedChange={setEnabled} />
+                            Send on WhatsApp
+                        </label>
+                    )}
                     {/* Due reminders go by Settings → Due Reminders' rules, not on a save. */}
                     {!isDueKind(current.kind) && (
                         <label
-                            className="flex items-center gap-2 text-sm"
+                            className={`flex items-center gap-2 text-sm ${current.kind === "TICKET_AUTO_REPLY" ? "ml-auto" : ""}`}
                             title="On: goes by itself when the document is saved. Off: only from the 3-dot menu's Send on WhatsApp."
                         >
                             <Switch checked={autoSend} onCheckedChange={setAutoSend} />
@@ -209,7 +219,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                 {current.status === "REJECTED" && current.rejectReason && (
                     <p className="text-sm text-red-600">Meta&apos;s reason: {current.rejectReason}</p>
                 )}
-                {enabled && !current.approved && (
+                {current.kind !== "TICKET_AUTO_REPLY" && enabled && !current.approved && (
                     <p className="text-xs text-muted-foreground">
                         Switched on, but nothing is approved yet — no WhatsApp goes out until Meta approves.
                     </p>
@@ -246,45 +256,53 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                     ))}
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                        <Label htmlFor="wa-view">&ldquo;View&rdquo; button (opens the document)</Label>
-                        <Input
-                            id="wa-view"
-                            maxLength={25}
-                            placeholder="Blank = no button"
-                            value={draft.viewButton ?? ""}
-                            onChange={(e) => setDraft({ ...draft, viewButton: e.target.value })}
-                            disabled={locked}
-                        />
+                {current.kind !== "TICKET_AUTO_REPLY" && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="wa-view">&ldquo;View&rdquo; button (opens the document)</Label>
+                            <Input
+                                id="wa-view"
+                                maxLength={25}
+                                placeholder="Blank = no button"
+                                value={draft.viewButton ?? ""}
+                                onChange={(e) => setDraft({ ...draft, viewButton: e.target.value })}
+                                disabled={locked}
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="wa-app">&ldquo;Get the app&rdquo; button</Label>
+                            <Input
+                                id="wa-app"
+                                maxLength={25}
+                                placeholder="Blank = no button"
+                                value={draft.appButton ?? ""}
+                                onChange={(e) => setDraft({ ...draft, appButton: e.target.value })}
+                                disabled={locked}
+                            />
+                        </div>
                     </div>
-                    <div className="space-y-1.5">
-                        <Label htmlFor="wa-app">&ldquo;Get the app&rdquo; button</Label>
-                        <Input
-                            id="wa-app"
-                            maxLength={25}
-                            placeholder="Blank = no button"
-                            value={draft.appButton ?? ""}
-                            onChange={(e) => setDraft({ ...draft, appButton: e.target.value })}
-                            disabled={locked}
-                        />
-                    </div>
-                </div>
+                )}
                 {locked && <p className="text-xs text-muted-foreground">Wording is locked while Meta checks it.</p>}
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <Button onClick={save} disabled={!dirty || busy !== null}>
                         {busy === "save" ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                         Save
                     </Button>
-                    <Button
-                        variant="secondary"
-                        onClick={submit}
-                        disabled={!templateApiReady || errors.length > 0 || busy !== null || locked || alreadyApproved}
-                    >
-                        {busy === "submit" ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                        Send for approval
-                    </Button>
+                    {current.kind !== "TICKET_AUTO_REPLY" ? (
+                        <Button
+                            variant="secondary"
+                            onClick={submit}
+                            disabled={!templateApiReady || errors.length > 0 || busy !== null || locked || alreadyApproved}
+                        >
+                            {busy === "submit" ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+                            Send for approval
+                        </Button>
+                    ) : (
+                        <span className="text-xs text-muted-foreground ml-2">
+                            Works within the 24h customer window — no Meta template approval required.
+                        </span>
+                    )}
                 </div>
 
                 <div className="space-y-1.5 border-t pt-3">
@@ -317,6 +335,14 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                 <div className="rounded-lg bg-[#e5ddd5] p-3 dark:bg-[#0b141a]">
                     <div className="max-w-[300px] rounded-lg rounded-tl-none bg-white p-2.5 text-sm text-[#111b21] shadow-sm dark:bg-[#202c33] dark:text-[#e9edef]">
                         <p className="whitespace-pre-wrap break-words">{fillBody(draft.body, sampleValuesFor(kind))}</p>
+                        {kind === "TICKET_AUTO_REPLY" && (
+                            <div className="mt-2.5 pt-2 border-t border-dashed border-gray-200 dark:border-gray-700 text-xs space-y-1.5 opacity-90">
+                                <p className="font-medium text-amber-700 dark:text-amber-400">📌 Repair #2051 — HP Laptop 15s <i>(Diagnosing)</i></p>
+                                <p>1️⃣ Yes, my message is about this repair</p>
+                                <p>2️⃣ No, I want to discuss something new</p>
+                                <p className="text-[11px] italic text-muted-foreground pt-0.5">👉 Please reply with 1 or 2.</p>
+                            </div>
+                        )}
                         <p className="mt-1 text-right text-[10px] opacity-60">10:42</p>
                     </div>
                     {[viewBtn, appBtn].filter(Boolean).map((b) => (

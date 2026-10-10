@@ -11,14 +11,15 @@ import {
     WA_BILL_LINK_BASE,
     WA_TEMPLATE_LABEL,
     autoKindForVoucherType,
+    fillBody,
     type WaFieldValues,
     type WaTemplateKind,
 } from "./billTemplates";
-import { getApprovedWaTemplate, isAutoSend } from "./waTemplateStore";
+import { getApprovedWaTemplate, getWaTemplateDraft, isAutoSend } from "./waTemplateStore";
 import { recordBillMessage } from "@/modules/message/lib/customerMessages";
 
 export { autoKindForVoucherType };
-import { isBillSendConfigured, sendBillTemplate } from "./metaTemplates";
+import { isBillSendConfigured, sendBillTemplate, sendTextMessage } from "./metaTemplates";
 
 /**
  * Tell the customer about a saved document — app notification AND WhatsApp,
@@ -69,6 +70,28 @@ export async function notifyRepair(kind: "REPAIR_RECEIVED" | "REPAIR_READY", tic
         return await notifyTicket(kind, ticketId);
     } catch (e) {
         console.error(`[notify-bill] ${kind} ticket ${ticketId} failed`, e);
+        return { status: "skipped", reason: "error" };
+    }
+}
+
+export async function notifyDealCreated(ticketId: number, mode: SendMode = {}): Promise<NotifyResult> {
+    try {
+        const stop = await allowed("DEAL_CREATED", mode);
+        if (stop) return stop;
+        return await notifyTicketDeal(ticketId);
+    } catch (e) {
+        console.error(`[notify-deal] ticket ${ticketId} failed`, e);
+        return { status: "skipped", reason: "error" };
+    }
+}
+
+export async function notifyHelpCreated(ticketId: number, mode: SendMode = {}): Promise<NotifyResult> {
+    try {
+        const stop = await allowed("HELP_CREATED", mode);
+        if (stop) return stop;
+        return await notifyTicketHelp(ticketId);
+    } catch (e) {
+        console.error(`[notify-help] ticket ${ticketId} failed`, e);
         return { status: "skipped", reason: "error" };
     }
 }
@@ -158,6 +181,7 @@ async function notifyVoucher(kind: WaTemplateKind, uvId: number): Promise<Notify
             prevBalance: bal ? balanceText(bal.before) : "Nil",
             balance: bal ? balanceText(bal.after) : "Nil",
             device: "",
+            subject: "",
             shop: getOrganisation().brandName,
             link: `${WA_BILL_LINK_BASE}${uvId}`,
             app: WA_APP_LINK,
@@ -198,6 +222,7 @@ async function notifyTicket(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: 
             balance: "",
             date: day.format(t.createdAt),
             device: deviceName,
+            subject: "",
             shop: getOrganisation().brandName,
             link: `${WA_BILL_LINK_BASE}${code}`,
             app: WA_APP_LINK,
@@ -207,6 +232,134 @@ async function notifyTicket(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: 
             body: ready ? `Job ${jobNo} · ready for pickup · tap for details` : `${deviceName} · tap to track`,
         },
         summary: ready ? `Repair ${jobNo} ready · ${deviceName}` : `Repair ${jobNo} received · ${deviceName}`,
+    });
+}
+
+async function notifyTicketDeal(ticketId: number): Promise<NotifyResult> {
+    const t = await prisma.ticket.findUnique({
+        where: { id: ticketId },
+        select: {
+            id: true,
+            title: true,
+            createdAt: true,
+            deal: {
+                select: {
+                    contactName: true,
+                    phone: true,
+                    personId: true,
+                    person: { select: { id: true, name: true, phones: phonesSelect } },
+                    companyId: true,
+                    company: { select: { id: true, name: true, phones: phonesSelect } },
+                },
+            },
+        },
+    });
+    const deal = t?.deal;
+    if (!t || !deal) return { status: "skipped", reason: "no deal" };
+
+    const customerName = deal.contactName || deal.person?.name || deal.company?.name || "Customer";
+    const subject = t.title || "Sales enquiry";
+    const code = `t${ticketId}`;
+
+    let phones: PhoneRow[] = [];
+    if (deal.person?.phones?.length) {
+        phones = deal.person.phones;
+    } else if (deal.company?.phones?.length) {
+        phones = deal.company.phones;
+    } else if (deal.phone) {
+        phones = [{ phone: deal.phone, isPrimary: true, verifiedAt: new Date() }];
+    }
+    if (!phones.length) return { status: "skipped", reason: "no customer phone" };
+
+    return deliver({
+        kind: "DEAL_CREATED",
+        refId: ticketId,
+        linkCode: code,
+        personId: deal.personId ?? null,
+        phones,
+        values: {
+            customer: customerName,
+            subject,
+            shop: getOrganisation().brandName,
+            link: `${WA_BILL_LINK_BASE}${code}`,
+            app: WA_APP_LINK,
+            billNo: "",
+            amount: "",
+            date: day.format(t.createdAt),
+            device: "",
+            prevBalance: "",
+            balance: "",
+        },
+        push: {
+            title: `Enquiry noted · ${getOrganisation().brandName}`,
+            body: `${subject} · tap to view`,
+        },
+        summary: `Enquiry noted: ${subject}`,
+    });
+}
+
+async function notifyTicketHelp(ticketId: number): Promise<NotifyResult> {
+    const t = await prisma.ticket.findUnique({
+        where: { id: ticketId },
+        select: {
+            id: true,
+            title: true,
+            createdAt: true,
+            help: {
+                select: {
+                    contactName: true,
+                    subject: true,
+                    phone: true,
+                    personId: true,
+                    person: { select: { id: true, name: true, phones: phonesSelect } },
+                    companyId: true,
+                    company: { select: { id: true, name: true, phones: phonesSelect } },
+                },
+            },
+        },
+    });
+    const help = t?.help;
+    if (!t || !help) return { status: "skipped", reason: "no help ticket" };
+
+    const customerName = help.contactName || help.person?.name || help.company?.name || "Customer";
+    const subject = help.subject || t.title || "Support request";
+    const jobNo = `#${ticketId}`;
+    const code = `t${ticketId}`;
+
+    let phones: PhoneRow[] = [];
+    if (help.person?.phones?.length) {
+        phones = help.person.phones;
+    } else if (help.company?.phones?.length) {
+        phones = help.company.phones;
+    } else if (help.phone) {
+        phones = [{ phone: help.phone, isPrimary: true, verifiedAt: new Date() }];
+    }
+    if (!phones.length) return { status: "skipped", reason: "no customer phone" };
+
+    return deliver({
+        kind: "HELP_CREATED",
+        refId: ticketId,
+        linkCode: code,
+        personId: help.personId ?? null,
+        phones,
+        values: {
+            customer: customerName,
+            subject,
+            billNo: jobNo,
+            shop: getOrganisation().brandName,
+            link: `${WA_BILL_LINK_BASE}${code}`,
+            app: WA_APP_LINK,
+            amount: "",
+            date: day.format(t.createdAt),
+            device: "",
+            prevBalance: "",
+            balance: "",
+        },
+        push: {
+            title: `Support request ${jobNo} received`,
+            body: `${subject} · tap to track`,
+        },
+        summary: `Support ticket ${jobNo} received · ${subject}`,
     });
 }
 
@@ -286,7 +439,21 @@ export async function sendPushAndWhatsApp(d: {
 async function sendWhatsApp(kind: WaTemplateKind, linkCode: string, mobile: string | null, values: WaFieldValues): Promise<WaOutcome> {
     if (!mobile) return { status: "no-mobile" };
     const tpl = await getApprovedWaTemplate(kind);
-    if (!tpl) return { status: "disabled" };
+    if (!tpl) {
+        if (kind === "DEAL_CREATED" || kind === "HELP_CREATED") {
+            const draft = await getWaTemplateDraft(kind);
+            const text = fillBody(draft.body, values);
+            if (text && isBillSendConfigured()) {
+                try {
+                    const extId = await sendTextMessage(mobile, text);
+                    if (extId) return { status: "sent", messageId: extId };
+                } catch {
+                    // Falls through to disabled
+                }
+            }
+        }
+        return { status: "disabled" };
+    }
     if (!isBillSendConfigured()) return { status: "not-configured" };
     try {
         const messageId = await sendBillTemplate({ mobile10: mobile, name: tpl.name, approved: tpl.draft, values, linkCode });

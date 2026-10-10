@@ -22,6 +22,10 @@ import {
     WA_TICKET_AUTO_REPLY_COOLDOWN_MS,
 } from "@/shared/lib/constants/whatsapp";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
+import { isAutoSend, getWaTemplateDraft } from "@/shared/lib/whatsapp/waTemplateStore";
+import { fillBody } from "@/shared/lib/whatsapp/billTemplates";
+import { getOrganisation } from "@/shared/lib/org/getOrganisation";
+import { notifyDealCreated, notifyHelpCreated } from "@/shared/lib/whatsapp/notifyBill";
 
 /**
  * Customer messages — the logic behind the Meta webhook and the Messages screen.
@@ -226,11 +230,14 @@ const NUM_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣"];
 /** Build the WhatsApp interactive numbered auto-reply menu for a customer with active tickets. */
 export function buildTicketAutoReplyMenu(
     customerName: string | null,
-    tickets: ActiveTicketSummary[]
+    tickets: ActiveTicketSummary[],
+    customGreetingHeader?: string
 ): string {
-    const greeting = customerName
-        ? `Hello *${customerName}*, welcome back to Abeer Computer & CCTV! 👋`
-        : `Hello, welcome back to Abeer Computer & CCTV! 👋`;
+    const brand = getOrganisation().brandName;
+    const defaultGreeting = customerName
+        ? `Hello *${customerName}*, welcome back to ${brand}! 👋`
+        : `Hello, welcome back to ${brand}! 👋`;
+    const greeting = customGreetingHeader?.trim() || defaultGreeting;
 
     if (tickets.length === 1) {
         const t = tickets[0];
@@ -372,6 +379,9 @@ async function maybeSendTicketAutoReplyMenu(args: {
 }): Promise<void> {
     if (!isBillSendConfigured()) return;
 
+    const autoSendOn = await isAutoSend("TICKET_AUTO_REPLY");
+    if (!autoSendOn) return;
+
     const activeTickets = await findCustomerActiveTickets(args.phone, args.owner);
     if (!activeTickets.length) return;
 
@@ -383,7 +393,12 @@ async function maybeSendTicketAutoReplyMenu(args: {
     if (recentOut) return;
 
     const customerName = args.owner?.name ?? args.senderName ?? null;
-    const menuText = buildTicketAutoReplyMenu(customerName, activeTickets);
+    const draft = await getWaTemplateDraft("TICKET_AUTO_REPLY");
+    const greetingHeader = fillBody(draft.body, {
+        customer: customerName ?? "there",
+        shop: getOrganisation().brandName,
+    });
+    const menuText = buildTicketAutoReplyMenu(customerName, activeTickets, greetingHeader);
     const fromNumberId = args.businessNumberId || conversationNumberId() || null;
 
     try {
@@ -685,6 +700,8 @@ export async function recordBillMessage(args: {
     body: string;
 }): Promise<void> {
     try {
+        const isTicketMsg = args.billKind.startsWith("REPAIR_") || args.billKind === "DEAL_CREATED" || args.billKind === "HELP_CREATED";
+        const ticketId = isTicketMsg ? args.billRefId : null;
         await prisma.message.create({
             data: {
                 channel: "WHATSAPP",
@@ -697,10 +714,20 @@ export async function recordBillMessage(args: {
                 externalId: args.externalId,
                 billKind: args.billKind,
                 billRefId: args.billRefId,
+                ticketId,
                 status: "sent",
                 occurredAt: new Date(),
             },
         });
+        if (ticketId) {
+            await logMessageToTicket({
+                ticketId,
+                authorName: "System",
+                text: args.body,
+                direction: "OUT",
+                occurredAt: new Date(),
+            });
+        }
     } catch (e) {
         console.error("[messages] could not record bill message", e);
     }
@@ -966,6 +993,7 @@ export async function ticketFromMessage(
                 data: { ticketId: ticket.id, status: ticket.status, note: "Deal lead created from a WhatsApp message", author },
             });
             ticketId = ticket.id;
+            void notifyDealCreated(ticket.id).catch((err) => console.error("[notify-deal] error:", err));
         } else {
             const pipeline = await getHelpPipeline(prisma);
             const entry = pipeline?.statuses.find((s) => s.isEntryPoint) ?? pipeline?.statuses[0];
@@ -997,6 +1025,7 @@ export async function ticketFromMessage(
                 data: { ticketId: ticket.id, status: ticket.status, note: "Help ticket raised from a WhatsApp message", author },
             });
             ticketId = ticket.id;
+            void notifyHelpCreated(ticket.id).catch((err) => console.error("[notify-help] error:", err));
         }
     }
 

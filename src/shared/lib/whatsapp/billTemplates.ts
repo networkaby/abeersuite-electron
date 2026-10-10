@@ -27,6 +27,9 @@ export const WA_TEMPLATE_KINDS = [
     "REPAIR_READY",
     "DUE_SOFT",
     "DUE_FIRM",
+    "DEAL_CREATED",
+    "HELP_CREATED",
+    "TICKET_AUTO_REPLY",
 ] as const;
 export type WaTemplateKind = (typeof WA_TEMPLATE_KINDS)[number];
 
@@ -41,6 +44,9 @@ export const WA_TEMPLATE_LABEL: Record<WaTemplateKind, string> = {
     REPAIR_READY: "Repair ready",
     DUE_SOFT: "Due reminder – soft",
     DUE_FIRM: "Due reminder – firm",
+    DEAL_CREATED: "Deal / Sales enquiry",
+    HELP_CREATED: "Help desk support ticket",
+    TICKET_AUTO_REPLY: "Active ticket auto-reply menu",
 };
 
 /** When each kind goes out by itself (Auto send on) — shown on its card. Any of
@@ -56,6 +62,9 @@ export const WA_TEMPLATE_WHEN: Record<WaTemplateKind, string> = {
     REPAIR_READY: "A repair stage with the action \"Tell customer: repair ready\" is completed.",
     DUE_SOFT: "Send reminder on Receivables, Send to all, or a Soft rule under Settings → Due Reminders.",
     DUE_FIRM: "Send reminder on Receivables, Send to all, or a Firm rule under Settings → Due Reminders.",
+    DEAL_CREATED: "A new deal or sales enquiry is created from customer chat or CRM.",
+    HELP_CREATED: "A new help desk support ticket is created from customer chat or Help module.",
+    TICKET_AUTO_REPLY: "A customer with open tickets or deals sends an incoming WhatsApp message.",
 };
 
 /** Auto send starts on for every kind except Estimate — staff often make rough
@@ -115,6 +124,7 @@ export const WA_FIELDS = [
     { key: "amount", label: "Amount", sample: "1,250.00" },
     { key: "date", label: "Date", sample: "06 Oct 2026" },
     { key: "device", label: "Device", sample: "HP Laptop 15s" },
+    { key: "subject", label: "Subject / Enquiry", sample: "CCTV camera quote" },
     // The party balance the print template shows (Previous / Closing), worded
     // for a customer: "Rs 2,500.00 due" / "Rs 300.00 advance" / "Nil".
     { key: "prevBalance", label: "Previous balance", sample: "Rs 2,500.00 due" },
@@ -129,11 +139,17 @@ export type WaFieldValues = Record<WaFieldKey, string>;
 const VOUCHER_ONLY = new Set<string>(["amount", "prevBalance", "balance"]);
 /** A due reminder: {amount} is the balance due, {date} the oldest unpaid bill's date. */
 const DUE_FIELDS = new Set<string>(["customer", "amount", "date", "shop", "link", "app"]);
+const DEAL_FIELDS = new Set<string>(["customer", "subject", "shop", "link", "app", "date"]);
+const HELP_FIELDS = new Set<string>(["customer", "subject", "billNo", "shop", "link", "app", "date"]);
+const AUTO_REPLY_FIELDS = new Set<string>(["customer", "shop"]);
 
 /** Fields a kind can fill: a repair has a device and no money; a voucher the reverse. */
 export function fieldsFor(kind: WaTemplateKind): readonly (typeof WA_FIELDS)[number][] {
     if (isDueKind(kind)) return WA_FIELDS.filter((f) => DUE_FIELDS.has(f.key));
-    return WA_FIELDS.filter((f) => (isRepairKind(kind) ? !VOUCHER_ONLY.has(f.key) : f.key !== "device"));
+    if (kind === "DEAL_CREATED") return WA_FIELDS.filter((f) => DEAL_FIELDS.has(f.key));
+    if (kind === "HELP_CREATED") return WA_FIELDS.filter((f) => HELP_FIELDS.has(f.key));
+    if (kind === "TICKET_AUTO_REPLY") return WA_FIELDS.filter((f) => AUTO_REPLY_FIELDS.has(f.key));
+    return WA_FIELDS.filter((f) => (isRepairKind(kind) ? !VOUCHER_ONLY.has(f.key) && f.key !== "subject" : f.key !== "device" && f.key !== "subject"));
 }
 
 const FIELD_KEYS = new Set<string>(WA_FIELDS.map((f) => f.key));
@@ -253,6 +269,29 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
         viewButton: "Pay now",
         appButton: "Get our app",
     },
+    DEAL_CREATED: {
+        body:
+            "Hello {customer}, thank you for contacting {shop}! 👋\n\n" +
+            "We have noted your enquiry regarding {subject}. Our team will review the details and get back to you with the best options shortly.\n\n" +
+            "Tap View details to check your enquiry anytime.",
+        viewButton: "View details",
+        appButton: "Get our app",
+    },
+    HELP_CREATED: {
+        body:
+            "Hello {customer}, thank you for reaching out to {shop}! 👋\n\n" +
+            "We have received your message regarding {subject}. Our support team is attending to it and will reply to you here shortly.\n\n" +
+            "Tap View ticket to follow updates.",
+        viewButton: "View ticket",
+        appButton: "Get our app",
+    },
+    TICKET_AUTO_REPLY: {
+        body:
+            "Hello {customer}, welcome back to {shop}! 👋\n\n" +
+            "We noticed you have active job(s) with us. Please let us know if your message is about an existing ticket or something new:",
+        viewButton: null,
+        appButton: null,
+    },
 };
 
 /** Bill link and app link — the button URLs Meta approves. The bill button's
@@ -299,6 +338,9 @@ const SAMPLE_DOC_NO: Record<WaTemplateKind, string> = {
     REPAIR_READY: "#2051",
     DUE_SOFT: "",
     DUE_FIRM: "",
+    DEAL_CREATED: "",
+    HELP_CREATED: "#1042",
+    TICKET_AUTO_REPLY: "",
 };
 
 export function sampleValuesFor(kind: WaTemplateKind): WaFieldValues {

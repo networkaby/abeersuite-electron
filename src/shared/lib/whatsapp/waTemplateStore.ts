@@ -101,6 +101,11 @@ export async function isAutoSend(kind: WaTemplateKind): Promise<boolean> {
     return (await cached(kind)).autoSend;
 }
 
+/** The saved draft wording for this kind (whether approved yet or not). */
+export async function getWaTemplateDraft(kind: WaTemplateKind): Promise<WaTemplateDraft> {
+    return (await getOne(kind)).draft;
+}
+
 /** Per kind: can staff send it by hand now, and if not, why. Feeds the 3-dot
  *  menus and the repair ticket, which grey the item out with the reason. */
 export async function waSendStates(): Promise<Record<WaTemplateKind, WaSendState>> {
