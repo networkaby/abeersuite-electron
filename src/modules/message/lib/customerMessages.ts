@@ -18,6 +18,7 @@ import {
     WA_KEEP_INBOUND_MAX_BYTES,
     WA_MEDIA_LINK_SECONDS,
     WA_SEND_LIMIT_BYTES,
+    WA_TICKET_AUTO_REPLY_COOLDOWN_MS,
 } from "@/shared/lib/constants/whatsapp";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 
@@ -131,6 +132,280 @@ export async function openTicketForPhone(phone: string, owner: CustomerOwner | n
     });
     return open?.id ?? null;
 }
+
+export type ActiveTicketSummary = {
+    id: number;
+    title: string;
+    pipelineName: string;
+    statusLabel: string;
+    kind: "repair" | "deal" | "help" | "order" | "ticket";
+};
+
+/**
+ * Find active (unclosed) tickets and deals for a customer across repair, deal, help, and orders.
+ * Returns up to 3 most recently updated items.
+ */
+export async function findCustomerActiveTickets(
+    phone: string,
+    owner: CustomerOwner | null
+): Promise<ActiveTicketSummary[]> {
+    const orConditions: Record<string, unknown>[] = [
+        { deal: { phone: { endsWith: phone } } },
+        { help: { phone: { endsWith: phone } } },
+        { order: { guestPhone: { endsWith: phone } } },
+    ];
+    if (owner?.accountId) {
+        orConditions.push({ accountId: owner.accountId });
+        orConditions.push({ repair: { device: { accountId: owner.accountId } } });
+    }
+    if (owner?.kind === "person") {
+        orConditions.push({ deal: { personId: owner.id } });
+        orConditions.push({ help: { personId: owner.id } });
+        orConditions.push({ order: { personId: owner.id } });
+    } else if (owner?.kind === "company") {
+        orConditions.push({ deal: { companyId: owner.id } });
+        orConditions.push({ help: { companyId: owner.id } });
+    }
+
+    const tickets = await prisma.ticket.findMany({
+        where: {
+            closedAt: null,
+            OR: orConditions,
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 3,
+        select: {
+            id: true,
+            title: true,
+            pipeline: { select: { name: true } },
+            ticketStatus: { select: { label: true } },
+            repair: {
+                select: {
+                    ticketNo: true,
+                    device: { select: { type: true, brand: true, model: true } },
+                },
+            },
+            deal: { select: { contactName: true } },
+            help: { select: { subject: true } },
+            order: { select: { legacyStatus: true } },
+        },
+    });
+
+    return tickets.map((t) => {
+        let kind: ActiveTicketSummary["kind"] = "ticket";
+        let displayTitle = t.title || "Inquiry";
+        if (t.repair) {
+            kind = "repair";
+            const dev = t.repair.device;
+            const devDesc = [dev?.brand, dev?.model].filter(Boolean).join(" ");
+            displayTitle = devDesc ? `${devDesc} Repair` : (t.repair.ticketNo ? `Repair #${t.repair.ticketNo}` : (t.title || "Device Repair"));
+        } else if (t.deal) {
+            kind = "deal";
+            displayTitle = t.title || "Sales Deal";
+        } else if (t.help) {
+            kind = "help";
+            displayTitle = t.help.subject || t.title || "Support Request";
+        } else if (t.order) {
+            kind = "order";
+            displayTitle = t.title || `Order #${t.id}`;
+        }
+
+        return {
+            id: t.id,
+            title: displayTitle,
+            pipelineName: t.pipeline?.name || "Support",
+            statusLabel: t.ticketStatus?.label || "Active",
+            kind,
+        };
+    });
+}
+
+const NUM_EMOJIS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣"];
+
+/** Build the WhatsApp interactive numbered auto-reply menu for a customer with active tickets. */
+export function buildTicketAutoReplyMenu(
+    customerName: string | null,
+    tickets: ActiveTicketSummary[]
+): string {
+    const greeting = customerName
+        ? `Hello *${customerName}*, welcome back to Abeer Computer & CCTV! 👋`
+        : `Hello, welcome back to Abeer Computer & CCTV! 👋`;
+
+    if (tickets.length === 1) {
+        const t = tickets[0];
+        const kindLabel = t.kind === "repair" ? "Repair" : t.kind === "deal" ? "Deal" : "Ticket";
+        return `${greeting}
+
+You currently have an active job with us:
+📌 *${kindLabel} #${t.id}* — ${t.title} _(${t.statusLabel})_
+
+1️⃣ Yes, my message is about this ${t.kind === "repair" ? "repair" : "ticket"}
+2️⃣ No, I want to discuss something new
+
+👉 _Please reply with 1 or 2._`;
+    }
+
+    const options = tickets.map((t, idx) => {
+        const emoji = NUM_EMOJIS[idx] || `${idx + 1}️⃣`;
+        const kindLabel = t.kind === "repair" ? "Repair" : t.kind === "deal" ? "Deal" : "Ticket";
+        return `${emoji} *${kindLabel} #${t.id}* — ${t.title} _(${t.statusLabel})_`;
+    });
+    const nextEmoji = NUM_EMOJIS[tickets.length] || `${tickets.length + 1}️⃣`;
+    options.push(`${nextEmoji} Something new / Speak with our support team`);
+
+    const choices = Array.from({ length: tickets.length + 1 }, (_, i) => String(i + 1)).join(", ");
+
+    return `${greeting}
+
+We noticed you have active job(s) with us. Please let us know what your message is about:
+
+${options.join("\n")}
+
+👉 _Please reply with ${choices}._`;
+}
+
+/** Check if the customer's incoming message is replying to our ticket auto-reply menu. */
+async function checkTicketMenuReply(args: {
+    phone: string;
+    text: string;
+    owner: CustomerOwner | null;
+}): Promise<{ handled: boolean; ticketId: number | null; ackText: string }> {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const lastOut = await prisma.message.findFirst({
+        where: { phone: args.phone, direction: "OUT" },
+        orderBy: { occurredAt: "desc" },
+        select: { id: true, body: true, occurredAt: true },
+    });
+    if (!lastOut || lastOut.occurredAt < twoHoursAgo || !lastOut.body.includes("👉 _Please reply with")) {
+        return { handled: false, ticketId: null, ackText: "" };
+    }
+
+    const match = args.text.trim().match(/^([1-4])(?:[.\-)]|\s+|$)\s*([\s\S]*)$/);
+    if (!match) return { handled: false, ticketId: null, ackText: "" };
+
+    const choice = parseInt(match[1], 10);
+    const extraText = match[2]?.trim() || "";
+    const activeTickets = await findCustomerActiveTickets(args.phone, args.owner);
+    if (!activeTickets.length) return { handled: false, ticketId: null, ackText: "" };
+
+    let routedTicketId: number | null = null;
+    let ackText = "";
+
+    if (activeTickets.length === 1) {
+        const t = activeTickets[0];
+        const kindLabel = t.kind === "repair" ? "Repair" : "Ticket";
+        if (choice === 1) {
+            routedTicketId = t.id;
+            ackText = extraText
+                ? `✅ Thank you! Your message has been connected to *${kindLabel} #${t.id}* (${t.title}). Our team will update you shortly.`
+                : `✅ Thank you! You are now connected to *${kindLabel} #${t.id}* (${t.title}). Please let us know how we can help you with this.`;
+        } else if (choice === 2) {
+            routedTicketId = null;
+            ackText = extraText
+                ? `✅ Got it! Your message has been received by our support team. An executive will attend to you shortly.`
+                : `✅ Got it! Please tell us how we can help you today, and an executive will assist you.`;
+        } else {
+            return { handled: false, ticketId: null, ackText: "" };
+        }
+    } else {
+        if (choice >= 1 && choice <= activeTickets.length) {
+            const t = activeTickets[choice - 1];
+            const kindLabel = t.kind === "repair" ? "Repair" : "Ticket";
+            routedTicketId = t.id;
+            ackText = extraText
+                ? `✅ Thank you! Your message has been connected to *${kindLabel} #${t.id}* (${t.title}). Our team will update you shortly.`
+                : `✅ Thank you! You are now connected to *${kindLabel} #${t.id}* (${t.title}). Please let us know how we can help you with this.`;
+        } else if (choice === activeTickets.length + 1) {
+            routedTicketId = null;
+            ackText = extraText
+                ? `✅ Got it! Your message has been received by our support team. An executive will attend to you shortly.`
+                : `✅ Got it! Please tell us how we can help you today, and an executive will assist you.`;
+        } else {
+            return { handled: false, ticketId: null, ackText: "" };
+        }
+    }
+
+    return { handled: true, ticketId: routedTicketId, ackText };
+}
+
+/** Send the acknowledgment confirmation after the customer made a menu selection. */
+async function sendMenuAcknowledgment(args: {
+    phone: string;
+    ticketId: number | null;
+    text: string;
+    businessNumberId: string | null;
+}): Promise<void> {
+    if (!isBillSendConfigured() || !args.text) return;
+    const fromNumberId = args.businessNumberId || conversationNumberId() || null;
+    try {
+        const extId = await sendTextMessage(args.phone, args.text, fromNumberId);
+        await prisma.message.create({
+            data: {
+                channel: "WHATSAPP",
+                direction: "OUT",
+                phone: args.phone,
+                address: args.phone,
+                businessNumberId: fromNumberId,
+                kind: "text",
+                body: args.text,
+                externalId: extId,
+                ticketId: args.ticketId,
+                status: "sent",
+                occurredAt: new Date(),
+            },
+        });
+    } catch (e) {
+        console.error("[messages] could not send menu acknowledgment", e);
+    }
+}
+
+/**
+ * Send the ticket auto-reply menu if this customer has active tickets/deals
+ * and has not had an interaction with us in the last 6 hours (cooldown).
+ */
+async function maybeSendTicketAutoReplyMenu(args: {
+    phone: string;
+    owner: CustomerOwner | null;
+    senderName: string | null;
+    businessNumberId: string | null;
+}): Promise<void> {
+    if (!isBillSendConfigured()) return;
+
+    const activeTickets = await findCustomerActiveTickets(args.phone, args.owner);
+    if (!activeTickets.length) return;
+
+    const cutoff = new Date(Date.now() - WA_TICKET_AUTO_REPLY_COOLDOWN_MS);
+    const recentOut = await prisma.message.findFirst({
+        where: { phone: args.phone, direction: "OUT", occurredAt: { gte: cutoff } },
+        select: { id: true },
+    });
+    if (recentOut) return;
+
+    const customerName = args.owner?.name ?? args.senderName ?? null;
+    const menuText = buildTicketAutoReplyMenu(customerName, activeTickets);
+    const fromNumberId = args.businessNumberId || conversationNumberId() || null;
+
+    try {
+        const extId = await sendTextMessage(args.phone, menuText, fromNumberId);
+        await prisma.message.create({
+            data: {
+                channel: "WHATSAPP",
+                direction: "OUT",
+                phone: args.phone,
+                address: args.phone,
+                businessNumberId: fromNumberId,
+                kind: "text",
+                body: menuText,
+                externalId: extId,
+                status: "sent",
+                occurredAt: new Date(),
+            },
+        });
+    } catch (e) {
+        console.error("[messages] could not send ticket auto-reply menu", e);
+    }
+}
+
 
 // ── Meta webhook payload (only the parts we read) ───────────────────────────────
 type WaInbound = {
@@ -255,7 +530,21 @@ export async function ingestInbound(value: WaChangeValue): Promise<number> {
                 select: { billKind: true, billRefId: true },
             })
             : null;
-        const ticketId = phone && !spam ? await openTicketForPhone(phone, owner) : null;
+        let ticketId = phone && !spam ? await openTicketForPhone(phone, owner) : null;
+        let menuAck: { ticketId: number | null; ackText: string } | null = null;
+
+        if (phone && !spam) {
+            const menuReply = await checkTicketMenuReply({
+                phone,
+                text: inboundBody(m),
+                owner,
+            });
+            if (menuReply.handled) {
+                ticketId = menuReply.ticketId;
+                menuAck = { ticketId: menuReply.ticketId, ackText: menuReply.ackText };
+            }
+        }
+
         const media = await keepInboundMedia(m);
 
         try {
@@ -281,6 +570,22 @@ export async function ingestInbound(value: WaChangeValue): Promise<number> {
                 },
             });
             stored++;
+
+            if (menuAck) {
+                await sendMenuAcknowledgment({
+                    phone: phone!,
+                    ticketId: menuAck.ticketId,
+                    text: menuAck.ackText,
+                    businessNumberId: value.metadata?.phone_number_id ?? null,
+                });
+            } else if (phone && !spam) {
+                await maybeSendTicketAutoReplyMenu({
+                    phone,
+                    owner,
+                    senderName: names.get(m.from) ?? null,
+                    businessNumberId: value.metadata?.phone_number_id ?? null,
+                });
+            }
         } catch (e) {
             // Lost a race with a concurrent retry of the same message — fine.
             if ((e as { code?: string })?.code !== "P2002") throw e;

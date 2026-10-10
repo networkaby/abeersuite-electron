@@ -36,3 +36,6 @@ export const WA_SEND_LIMIT_BYTES = {
 export const WA_KEEP_INBOUND_MAX_BYTES = 100 * 1024 * 1024;
 /** How long a signed view / download link to an attachment stays valid. */
 export const WA_MEDIA_LINK_SECONDS = 60 * 60;
+/** Cooldown between ticket auto-reply menus sent to the same phone (ms). Default 6 hours. */
+export const WA_TICKET_AUTO_REPLY_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
