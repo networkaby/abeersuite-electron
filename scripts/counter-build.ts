@@ -141,9 +141,9 @@ function run(): void {
     // dev-mode LayoutRoutes, `next build`'s typecheck fails with a "not assignable"
     // constraint error comparing the two. Drop it so the build only typechecks
     // against the route set it just generated; `next dev` regenerates it on its own.
-    const devTypesDir = path.join(__dirname, "..", ".next", "dev", "types");
-    if (fs.existsSync(devTypesDir)) {
-        fs.rmSync(devTypesDir, { recursive: true, force: true });
+    const devDir = path.join(__dirname, "..", ".next", "dev");
+    if (fs.existsSync(devDir)) {
+        fs.rmSync(devDir, { recursive: true, force: true });
     }
     execFileSync("node", [require.resolve("next/dist/bin/next"), "build"], {
         stdio: "inherit",
