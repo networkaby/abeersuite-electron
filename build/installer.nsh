@@ -321,57 +321,141 @@
 ; Both copies open the same counter database (it lives in the user's %APPDATA%,
 ; whoever installed), so the one just picked is kept and the other goes.
 ;
-; electron-builder already removes a per-user copy when installing for everyone,
-; but passes --keep-shortcuts, which is how the per-user Start Menu link survives.
-; The other direction (installing for me over a for-everyone copy) it never does.
-;
-; The old copy is removed with its own uninstaller and `--updated`, the same flag a
-; normal update uses, so customUnInstall keeps the counter's data, auto-start and the
-; firewall rule. Removing a Program Files copy needs a UAC prompt, so it only happens
-; when someone is at the setup — a silent auto-update leaves it for the next manual run.
+; On an update or reinstall:
+;   1. Both locations ("only me" and "all user") are audited for previous installs
+;      and leftover files. If the install location changed or an older copy exists
+;      outside $INSTDIR, its uninstaller is run, remaining files in that folder are
+;      cleared, and old registry entries are pruned.
+;   2. Leftover shortcuts in the other scope are deleted so no stale icons survive.
+;   3. The desktop icon and Start Menu shortcut in the active scope are ALWAYS
+;      recreated fresh with the updated icon (critical for festive/event theme icon
+;      updates), and the Windows Explorer icon cache is immediately flushed via
+;      SHChangeNotify.
 !macro removeOtherInstall
   Push $0
   Push $1
-  ${If} $installMode != "all"
-  ${AndIfNot} ${Silent}
+  Push $2
+  Push $3
+
+  ; 1. Check the OTHER install mode location and standard folders
+  ${If} $installMode == "all"
+    ; Current is All Users. Check per-user (HKCU)
+    StrCpy $2 "HKCU"
+    ReadRegStr $0 HKCU "${INSTALL_REGISTRY_KEY}" InstallLocation
+    ReadRegStr $1 HKCU "${UNINSTALL_REGISTRY_KEY}" UninstallString
+    ${If} $0 == ""
+    ${OrIfNot} ${FileExists} "$0\*.*"
+      ; Check default per-user paths
+      ${If} ${FileExists} "$LOCALAPPDATA\Programs\${PRODUCT_FILENAME}\*.*"
+        StrCpy $0 "$LOCALAPPDATA\Programs\${PRODUCT_FILENAME}"
+      ${ElseIf} ${FileExists} "$LOCALAPPDATA\Programs\abeersuite-electron\*.*"
+        StrCpy $0 "$LOCALAPPDATA\Programs\abeersuite-electron"
+      ${EndIf}
+    ${EndIf}
+  ${Else}
+    ; Current is Per-User. Check all users (HKLM)
+    StrCpy $2 "HKLM"
     ReadRegStr $0 HKLM "${INSTALL_REGISTRY_KEY}" InstallLocation
     ReadRegStr $1 HKLM "${UNINSTALL_REGISTRY_KEY}" UninstallString
-    ${If} $0 != ""
-    ${AndIf} $0 != "$INSTDIR"
-    ${AndIf} $1 != ""
-      !insertmacro sayStep "Removing the older AbeerSuite copy in $0..."
-      !insertmacro GetInQuotes $1 "$1"
-      ${If} ${FileExists} "$1"
-        CopyFiles /SILENT "$1" "$PLUGINSDIR\other-uninstaller.exe"
-        ExecWait '"$PLUGINSDIR\other-uninstaller.exe" /S /allusers /KEEP_APP_DATA --updated _?=$0' $1
-        DetailPrint "Older copy uninstaller returned $1."
+    ${If} $0 == ""
+    ${OrIfNot} ${FileExists} "$0\*.*"
+      ; Check default all-users paths
+      ${If} ${FileExists} "$PROGRAMFILES64\${PRODUCT_FILENAME}\*.*"
+        StrCpy $0 "$PROGRAMFILES64\${PRODUCT_FILENAME}"
+      ${ElseIf} ${FileExists} "$PROGRAMFILES\${PRODUCT_FILENAME}\*.*"
+        StrCpy $0 "$PROGRAMFILES\${PRODUCT_FILENAME}"
       ${EndIf}
     ${EndIf}
   ${EndIf}
 
-  ; Shortcuts in the other scope, whichever way round. A for-everyone Start Menu or
-  ; Public Desktop link needs admin rights; without them the Delete simply fails.
+  ; If an older/alternative install was found and it is NOT our current target directory $INSTDIR:
+  ${If} $0 != ""
+  ${AndIf} $0 != "$INSTDIR"
+  ${AndIf} ${FileExists} "$0\*.*"
+    ; Safety check: ensure $0 is not a system root folder
+    ${If} $0 != "$PROGRAMFILES"
+    ${AndIf} $0 != "$PROGRAMFILES64"
+    ${AndIf} $0 != "$LOCALAPPDATA"
+    ${AndIf} $0 != "$LOCALAPPDATA\Programs"
+    ${AndIf} $0 != "$WINDIR"
+    ${AndIf} $0 != "$SYSDIR"
+      !insertmacro sayStep "Removing older AbeerSuite copy in $0..."
+
+      ; Step A: Run old uninstaller if present
+      StrCpy $3 ""
+      ${If} $1 != ""
+        !insertmacro GetInQuotes $3 "$1"
+      ${ElseIf} ${FileExists} "$0\Uninstall ${PRODUCT_FILENAME}.exe"
+        StrCpy $3 "$0\Uninstall ${PRODUCT_FILENAME}.exe"
+      ${EndIf}
+
+      ${If} $3 != ""
+      ${AndIf} ${FileExists} "$3"
+        CopyFiles /SILENT "$3" "$PLUGINSDIR\other-uninstaller.exe"
+        ${If} $2 == "HKLM"
+          ExecWait '"$PLUGINSDIR\other-uninstaller.exe" /S /allusers /KEEP_APP_DATA --updated _?=$0' $1
+        ${Else}
+          ExecWait '"$PLUGINSDIR\other-uninstaller.exe" /S /currentuser /KEEP_APP_DATA --updated _?=$0' $1
+        ${EndIf}
+        Delete "$PLUGINSDIR\other-uninstaller.exe"
+        DetailPrint "Older copy uninstaller returned $1."
+      ${EndIf}
+
+      ; Step B: Remove leftover files from old location
+      ${If} ${FileExists} "$0\*.*"
+        ${If} ${FileExists} "$0\${PRODUCT_FILENAME}.exe"
+        ${OrIf} ${FileExists} "$0\resources"
+        ${OrIf} ${FileExists} "$0\Uninstall ${PRODUCT_FILENAME}.exe"
+          DetailPrint "Removing leftover files from old location: $0"
+          RMDir /r "$0"
+        ${EndIf}
+      ${EndIf}
+
+      ; Step C: Clean up stale registry keys in the other hive
+      ${If} $2 == "HKLM"
+        DeleteRegKey HKLM "${INSTALL_REGISTRY_KEY}"
+        DeleteRegKey HKLM "${UNINSTALL_REGISTRY_KEY}"
+      ${Else}
+        DeleteRegKey HKCU "${INSTALL_REGISTRY_KEY}"
+        DeleteRegKey HKCU "${UNINSTALL_REGISTRY_KEY}"
+      ${EndIf}
+    ${EndIf}
+  ${EndIf}
+
+  ; 2. Check and clean up leftover shortcuts in the OTHER scope
   ${If} $installMode == "all"
     SetShellVarContext current
   ${Else}
     SetShellVarContext all
   ${EndIf}
+  DetailPrint "Removing any leftover shortcuts from other location..."
   Delete "$SMPROGRAMS\${SHORTCUT_NAME}.lnk"
   Delete "$DESKTOP\${SHORTCUT_NAME}.lnk"
+  RMDir "$SMPROGRAMS\${SHORTCUT_NAME}"
+
+  ; 3. Recreate icons in the ACTIVE scope (always refreshed for updated/festive icons)
   ${If} $installMode == "all"
     SetShellVarContext all
   ${Else}
     SetShellVarContext current
   ${EndIf}
 
-  ; electron-builder never recreates a deleted Desktop icon on an update — it reads
-  ; the missing link as "the user removed it". The owner wants it back every time.
-  ${IfNot} ${FileExists} "$newDesktopLink"
-    CreateShortCut "$newDesktopLink" "$appExe" "" "$appExe" 0 "" "" "${APP_DESCRIPTION}"
-    ClearErrors
-    WinShell::SetLnkAUMI "$newDesktopLink" "${APP_ID}"
-  ${EndIf}
-  System::Call 'shell32::SHChangeNotify(i, i, i, i) v (0x08000000, 0, 0, 0)'
+  DetailPrint "Recreating desktop and Start Menu shortcuts with updated icon..."
+  Delete "$newDesktopLink"
+  CreateShortCut "$newDesktopLink" "$appExe" "" "$appExe" 0 "" "" "${APP_DESCRIPTION}"
+  ClearErrors
+  WinShell::SetLnkAUMI "$newDesktopLink" "${APP_ID}"
+
+  Delete "$newStartMenuLink"
+  CreateShortCut "$newStartMenuLink" "$appExe" "" "$appExe" 0 "" "" "${APP_DESCRIPTION}"
+  ClearErrors
+  WinShell::SetLnkAUMI "$newStartMenuLink" "${APP_ID}"
+
+  ; Flush Windows shell icon cache immediately (SHCNE_ASSOCCHANGED with SHCNF_FLUSH)
+  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0x1000, i 0, i 0)'
+
+  Pop $3
+  Pop $2
   Pop $1
   Pop $0
 !macroend

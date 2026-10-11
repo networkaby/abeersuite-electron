@@ -158,7 +158,37 @@ try {
 }
 catch { Write-Log "Could not update the uninstall entry (cosmetic): $_" }
 
-# ── 7. Tidy up ──────────────────────────────────────────────────────────────
+# ── 7. Recreate desktop shortcut with the updated icon ──────────────────────
+# Critical for seasonal / festive event icon updates so Windows Explorer
+# refreshes and displays the new icon on the desktop immediately.
+try {
+    $desktopPath = [Environment]::GetFolderPath('Desktop')
+    $shortcutPath = Join-Path $desktopPath 'AbeerSuite.lnk'
+    $commonDesktop = [Environment]::GetFolderPath('CommonDesktopDirectory')
+    $commonShortcut = Join-Path $commonDesktop 'AbeerSuite.lnk'
+
+    # If installed per-user, remove any stale Public Desktop link
+    if ($InstallDir.StartsWith($env:LOCALAPPDATA, [StringComparison]::OrdinalIgnoreCase)) {
+        if (Test-Path -LiteralPath $commonShortcut) {
+            Remove-Item -LiteralPath $commonShortcut -Force -ErrorAction SilentlyContinue
+            Write-Log "Removed stale public desktop shortcut: $commonShortcut"
+        }
+    }
+
+    # Recreate the desktop shortcut pointing to index 0 of the new executable
+    $wsh = New-Object -ComObject WScript.Shell
+    $shortcut = $wsh.CreateShortcut($shortcutPath)
+    $shortcut.TargetPath = $appExe
+    $shortcut.WorkingDirectory = $InstallDir
+    $shortcut.IconLocation = "$appExe,0"
+    $shortcut.Description = "AbeerSuite Desktop Operating System"
+    $shortcut.Save()
+    [System.Runtime.InteropServices.Marshal]::ReleaseComObject($wsh) | Out-Null
+    Write-Log "Recreated desktop shortcut with new icon: $shortcutPath"
+}
+catch { Write-Log "Could not refresh desktop shortcut: $_" }
+
+# ── 8. Tidy up ──────────────────────────────────────────────────────────────
 # Best effort only. Whatever survives here is cleared on the next boot by
 # repairAfterSwap() in electron/stagedUpdate.ts, on a counter already known to be running.
 try { Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue } catch { }

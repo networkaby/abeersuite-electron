@@ -45,7 +45,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { writeJsonAtomic } from "./stateFile";
 import * as path from "node:path";
-import { app } from "electron";
+import { app, shell } from "electron";
 
 const SWAP_SCRIPT_NAME = "swap-update.ps1";
 
@@ -367,6 +367,72 @@ export function cleanupStaging(keep?: string): void {
 }
 
 /**
+ * Ensures the desktop shortcut exists and points to the current executable with the
+ * updated icon, and removes any leftover/stale shortcut or files in the other location.
+ */
+function refreshShortcutsAndLocations(): void {
+    try {
+        const exe = app.getPath("exe");
+        const dir = path.dirname(exe);
+        const desktopDir = app.getPath("desktop");
+        const userShortcut = path.join(desktopDir, "AbeerSuite.lnk");
+
+        // Public desktop shortcut path
+        const publicDesktop = path.join(process.env.PUBLIC || "C:\\Users\\Public", "Desktop", "AbeerSuite.lnk");
+
+        const isPerUser = exe.toLowerCase().includes("appdata\\local");
+
+        // If running per-user and a public shortcut exists, remove it to prevent stale/duplicate icons
+        if (isPerUser && fs.existsSync(publicDesktop)) {
+            try {
+                fs.unlinkSync(publicDesktop);
+            } catch {
+                // best-effort
+            }
+        }
+
+        // Recreate the active desktop shortcut with current icon
+        const op = fs.existsSync(userShortcut) ? "replace" : "create";
+        shell.writeShortcutLink(userShortcut, op, {
+            target: exe,
+            cwd: dir,
+            description: "AbeerSuite Desktop Operating System",
+            appUserModelId: "com.abeersuite.desktop",
+            icon: exe,
+            iconIndex: 0,
+        });
+
+        // Also check if the other location has leftover files and remove them if safe
+        if (isPerUser) {
+            // Check default machine directories if accessible
+            const p64 = path.join(process.env.ProgramFiles || "C:\\Program Files", "AbeerSuite");
+            if (fs.existsSync(p64) && p64.toLowerCase() !== dir.toLowerCase()) {
+                try {
+                    fs.rmSync(p64, { recursive: true, force: true });
+                } catch {
+                    // requires elevation, best-effort
+                }
+            }
+        } else {
+            // Running machine-wide; check per-user directory
+            const localApp = process.env.LOCALAPPDATA;
+            if (localApp) {
+                const userDir = path.join(localApp, "Programs", "AbeerSuite");
+                if (fs.existsSync(userDir) && userDir.toLowerCase() !== dir.toLowerCase()) {
+                    try {
+                        fs.rmSync(userDir, { recursive: true, force: true });
+                    } catch {
+                        // best-effort
+                    }
+                }
+            }
+        }
+    } catch (err) {
+        console.warn("[StagedUpdate] Could not refresh shortcuts or check locations:", err);
+    }
+}
+
+/**
  * Boot-time tidy-up, called once the new version is up.
  *
  * The helper removes the old folder itself, but it is a detached script racing a PC that
@@ -380,6 +446,7 @@ export function repairAfterSwap(): void {
         // process started at all, the swap either completed or never began.
         cleanupStaging();
         staged = null;
+        refreshShortcutsAndLocations();
     } catch (err) {
         console.warn("[StagedUpdate] Post-update tidy-up failed (harmless):", err);
     }
