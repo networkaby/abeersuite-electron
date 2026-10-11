@@ -77,14 +77,25 @@ function writeConfig(syncUrl: string): string | null {
         return null;
     }
 
+    const file = configFilePath();
+    let registryPath: string | undefined;
+    try {
+        if (fs.existsSync(file)) {
+            const prev = JSON.parse(fs.readFileSync(file, "utf8"));
+            if (prev?.registryPath && typeof prev.registryPath === "string") {
+                registryPath = prev.registryPath;
+            }
+        }
+    } catch { /* ignore */ }
+
     const config = {
         sourceUrl,
         localUrl: syncUrl,
         supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || undefined,
         supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || undefined,
+        ...(registryPath ? { registryPath } : {}),
     };
 
-    const file = configFilePath();
     try {
         writeJsonAtomic(file, config, { mode: 0o600 });
         return file;

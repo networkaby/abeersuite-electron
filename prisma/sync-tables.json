@@ -10,6 +10,9 @@
         "balance"
       ]
     },
+    "BankStatementMatch": {
+      "strategy": "full"
+    },
     "CustomerGroup": {
       "strategy": "full"
     },
@@ -167,9 +170,7 @@
       "pk": [
         "id"
       ],
-      "strategy": "child",
-      "parent": "BankStatementLine",
-      "fk": "statementLineId"
+      "strategy": "full"
     },
     "BiGstPlanningConfig": {
       "n": 6,

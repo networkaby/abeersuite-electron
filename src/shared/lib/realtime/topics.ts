@@ -151,6 +151,7 @@ export const TOPIC_MODELS: Readonly<Record<Topic, readonly string[]>> = {
         "UniversalVoucher", "VoucherDetail", "VoucherAllocation", "VoucherSeries", "VoucherSeriesCounter",
         "Account", "PosShift", "PosHandover", "GiftCard", "LoyaltyAccount", "CouponRedemption",
         "RedemptionHold", "AdditionalCostAllocation", "AuditLog",
+        "BankStatementImport", "BankStatementLine", "BankStatementMatch",
     ],
     stock: ["InvProduct", "InvProductBranch", "UniversalVoucher"],
     tickets: [
