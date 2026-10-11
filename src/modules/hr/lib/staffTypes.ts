@@ -101,4 +101,6 @@ export interface StaffDetail {
      * ledger held on the payroll run, not a per-person setting.
      */
     ledger: { id: number; name: string; balance: number; normalBalance: "DEBIT" | "CREDIT" | null } | null;
+    /** The next sequential employee code ("EMP-786"...) for appointing or assigning. */
+    nextStaffCode?: string;
 }

@@ -21,7 +21,7 @@ model StaffProfile {
   userId Int  @id
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  /// Free text ("EMP-001"); unique when set. No series — a staff id is typed once.
+  /// Auto-generated employee code ("EMP-786", "EMP-787"...) starting from 786; unique when set. Editable if custom ID is needed.
   staffCode      String?   @unique
   joinedOn       DateTime? @db.Date
   /// No sign-in from this date (inclusive). Null = current staff. Set through the

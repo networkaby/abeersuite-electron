@@ -56,7 +56,7 @@ export default function AppointStaffDialog({ detail, canAppointSeat, onClose, on
     const [employmentType, setEmploymentType] = useState<EmploymentType>(
         (profile?.employmentType as EmploymentType) ?? "FULL_TIME",
     );
-    const [staffCode, setStaffCode] = useState(profile?.staffCode ?? "");
+    const [staffCode, setStaffCode] = useState(profile?.staffCode ?? detail.nextStaffCode ?? "");
     const [positionId, setPositionId] = useState<string | null>(null);
     const [lines, setLines] = useState<Draft[]>(() =>
         DEFAULT_SALARY_LINES.map((l) => ({ name: l.name, kind: l.kind, amount: "" })),
@@ -156,14 +156,14 @@ export default function AppointStaffDialog({ detail, canAppointSeat, onClose, on
                         )}
                     </Field>
 
-                    <Field label="Staff ID" hint="Free text — EMP-001, or whatever the shop uses.">
+                    <Field label="Staff ID" hint="Auto-generated (starts from EMP-786) — edit only if your shop uses a custom ID.">
                         {(id) => (
                             <Input
                                 id={id}
                                 value={staffCode}
                                 onChange={(e) => setStaffCode(e.target.value)}
-                                placeholder="EMP-001"
-                                className="h-9 text-sm"
+                                placeholder={detail.nextStaffCode ?? "EMP-786"}
+                                className="h-9 text-sm font-mono"
                             />
                         )}
                     </Field>

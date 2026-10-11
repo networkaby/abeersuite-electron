@@ -12,7 +12,7 @@ import { STAFF_USER_SELECT, shapeStaffUser } from "@/shared/lib/users/staffSelec
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 import { moneyNumber } from "@/shared/lib/format/moneyInr";
 import {
-    STAFF_PROFILE_INCLUDE, ensureStaffProfile, dateOnlyFromIso,
+    STAFF_PROFILE_INCLUDE, ensureStaffProfile, generateNextStaffCode, dateOnlyFromIso,
     toStaffProfileDto, toStaffSalaryDto, type StaffProfileWithRels,
 } from "@/modules/hr/lib/staffProfileServer";
 import type { StaffDetail } from "@/modules/hr/lib/staffTypes";
@@ -61,7 +61,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ userId: st
         if (userId == null) return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
         const user = await prisma.user.findUnique({ where: { id: userId }, select: DETAIL_SELECT });
         if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
-        return NextResponse.json(toDetail(user));
+        const nextStaffCode = await generateNextStaffCode(prisma);
+        return NextResponse.json({ ...toDetail(user), nextStaffCode });
     } catch (e) {
         return handleApiError(e, "Failed to fetch the staff record");
     }
@@ -99,9 +100,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ userId
             bankJson = r.value ?? Prisma.DbNull;
         }
 
+        let resolvedStaffCode: string | undefined;
+        if (body.staffCode !== undefined) {
+            const trimmed = body.staffCode?.trim();
+            resolvedStaffCode = trimmed || (await generateNextStaffCode(prisma));
+        }
+
         const optDate = (v: string | null | undefined) => (v === undefined ? undefined : v ? dateOnlyFromIso(v) : null);
         const data = pickDefined({
-            staffCode:        body.staffCode === undefined ? undefined : (body.staffCode?.trim() || null),
+            staffCode:        resolvedStaffCode,
             joinedOn:         optDate(body.joinedOn),
             leftOn:           optDate(body.leftOn),
             leftReason:       body.leftReason,

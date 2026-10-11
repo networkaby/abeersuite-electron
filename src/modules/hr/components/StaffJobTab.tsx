@@ -122,14 +122,14 @@ export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
             )}
 
             <fieldset disabled={disabled} className="grid gap-4 border-0 p-0 sm:grid-cols-2">
-                <Field label="Staff ID" hint="Free text — EMP-001, or whatever the shop uses. Must be unique.">
+                <Field label="Staff ID" hint="Auto-generated (starts from EMP-786) — edit only if your shop uses a custom ID code. Must be unique.">
                     {(id) => (
                         <div className="flex items-center gap-1">
                             <Input
                                 id={id}
                                 defaultValue={profile?.staffCode ?? ""}
-                                placeholder="EMP-001"
-                                className="h-9 text-sm"
+                                placeholder={detail.nextStaffCode ?? "EMP-786"}
+                                className="h-9 text-sm font-mono"
                                 onBlur={(e) => void save({
                                     key: "staffCode",
                                     original: profile?.staffCode ?? "",
