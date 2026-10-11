@@ -12,6 +12,7 @@ import { useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { IdCard, Plus, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
 import { useApiResource } from "@/shared/hooks";
@@ -25,6 +26,8 @@ interface PositionRow {
     title: string;
     branch: { id: string; name: string } | null;
     department: { id: string; name: string } | null;
+    parent?: { id: string; title: string } | null;
+    roleTemplates?: { id: string; label: string; color: string }[];
 }
 
 export default function StaffSeatsCard({ detail, canEdit, onChanged }: {
@@ -116,27 +119,52 @@ export default function StaffSeatsCard({ detail, canEdit, onChanged }: {
             {user.positions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No seat yet.</p>
             ) : (
-                <ul className="space-y-1.5">
-                    {user.positions.map((p) => (
-                        <li key={p.id} className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
-                            <span className="min-w-0 text-sm">
-                                <span className="font-medium">{p.title}</span>
-                                <span className="text-muted-foreground"> · {positionScopeLabel(p, { withDepartment: true })}</span>
-                            </span>
-                            {canEdit && (
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => vacate(p.id, p.title)}
-                                    disabled={busy}
-                                    aria-label={`Vacate ${p.title}`}
-                                >
-                                    <X size={14} />
-                                </Button>
-                            )}
-                        </li>
-                    ))}
+                <ul className="space-y-2">
+                    {user.positions.map((p) => {
+                        const reportsTo = p.parent ? p.parent.title : "Executive Council";
+                        const isExec = !p.parent;
+                        return (
+                            <li key={p.id} className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2.5">
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="font-medium text-sm text-foreground">{p.title}</span>
+                                        <span className="text-xs text-muted-foreground">· {positionScopeLabel(p, { withDepartment: true })}</span>
+                                    </div>
+                                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                                        {p.roleTemplates && p.roleTemplates.length > 0 && (
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-muted-foreground">Role{p.roleTemplates.length > 1 ? "s" : ""}:</span>
+                                                {p.roleTemplates.map((r) => (
+                                                    <Badge key={r.id} className={`${r.color} text-[10px] px-1.5 py-0`}>
+                                                        {r.label}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <div className="flex items-center gap-1 text-muted-foreground">
+                                            <span>Reports to:</span>
+                                            <span className={isExec ? "font-medium text-orange-600 dark:text-orange-400" : "font-medium text-foreground"}>
+                                                {reportsTo}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                {canEdit && (
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => vacate(p.id, p.title)}
+                                        disabled={busy}
+                                        aria-label={`Vacate ${p.title}`}
+                                        className="shrink-0 text-muted-foreground hover:text-destructive"
+                                    >
+                                        <X size={14} />
+                                    </Button>
+                                )}
+                            </li>
+                        );
+                    })}
                 </ul>
             )}
         </div>

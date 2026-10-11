@@ -20,6 +20,7 @@ export interface PositionChipPosition {
     title: string;
     branch: { id: string; name: string } | null;
     department: { id: string; name: string } | null;
+    parent?: { id: string; title: string } | null;
     roleTemplates: { id: string; label: string; color: string }[];
 }
 
@@ -38,6 +39,7 @@ export function PositionChip({ position, compact }: {
         ? primaryRole.color.split(" ").find((c) => c.startsWith("bg-")) ?? "bg-muted-foreground/40"
         : "bg-muted-foreground/40";
     const roleTitle = position.roleTemplates.map((r) => r.label).join(", ");
+    const reportsTo = position.parent ? position.parent.title : "Executive Council";
 
     const isOrgWide = position.branch === null;
     const where = [isOrgWide ? "Org-wide" : position.branch!.name, position.department?.name]
@@ -47,7 +49,11 @@ export function PositionChip({ position, compact }: {
         return (
             <div
                 className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2 py-0.5 text-xs"
-                title={[`${position.title} · ${where}`, roleTitle && `Roles: ${roleTitle}`].filter(Boolean).join("\n")}
+                title={[
+                    `${position.title} · ${where}`,
+                    roleTitle && `Roles: ${roleTitle}`,
+                    `Reports to: ${reportsTo}`,
+                ].filter(Boolean).join("\n")}
             >
                 <span className={`h-2 w-2 shrink-0 rounded-full ${dotColor}`} />
                 <span className="font-medium text-foreground">{position.title}</span>

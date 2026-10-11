@@ -41,6 +41,13 @@ const PROFILE_SELECT = {
                     id: true, title: true,
                     branch:     { select: { id: true, name: true } },
                     department: { select: { id: true, name: true } },
+                    parent:     { select: { id: true, title: true } },
+                    roleTemplates: {
+                        orderBy: { roleId: "asc" as const },
+                        include: {
+                            role: { select: { id: true, label: true, color: true } },
+                        },
+                    },
                 },
             },
         },
@@ -67,7 +74,7 @@ export async function GET(
 
 // Flatten `userPositions` and derive `branches`/`departments` from the user's
 // Position assignments so the client UI keeps the legacy field shape.
-function shapeUser<T extends { userPositions: { position: { id: string; title: string; branch: { id: string; name: string } | null; department: { id: string; name: string } | null } }[] }>(u: T) {
+function shapeUser<T extends { userPositions: { position: { id: string; title: string; branch: { id: string; name: string } | null; department: { id: string; name: string } | null; parent?: { id: string; title: string } | null; roleTemplates?: { role: { id: string; label: string; color: string } }[] } }[] }>(u: T) {
     const branchMap = new Map<string, { id: string; name: string }>();
     const deptMap   = new Map<string, { id: string; name: string }>();
     for (const up of u.userPositions) {
@@ -77,7 +84,14 @@ function shapeUser<T extends { userPositions: { position: { id: string; title: s
     const { userPositions, ...rest } = u;
     return {
         ...rest,
-        positions:   userPositions.map(up => up.position),
+        positions:   userPositions.map(up => {
+            const { roleTemplates, ...pos } = up.position;
+            return {
+                ...pos,
+                parent: pos.parent ?? null,
+                roleTemplates: roleTemplates ? roleTemplates.map(r => r.role) : [],
+            };
+        }),
         branches:    [...branchMap.values()],
         departments: [...deptMap.values()],
     };
@@ -138,6 +152,13 @@ const PUT_SELECT = {
                     id: true, title: true,
                     branch:     { select: { id: true, name: true } },
                     department: { select: { id: true, name: true } },
+                    parent:     { select: { id: true, title: true } },
+                    roleTemplates: {
+                        orderBy: { roleId: "asc" as const },
+                        include: {
+                            role: { select: { id: true, label: true, color: true } },
+                        },
+                    },
                 },
             },
         },

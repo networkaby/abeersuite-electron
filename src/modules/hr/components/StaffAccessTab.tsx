@@ -4,7 +4,7 @@
 // and sign-in email, where their company mail forwards, and a new password.
 // Every write goes through the same `/api/users/[id]` routes as Admin → Users,
 // so the two pages can never disagree, and a change on either shows on both
-// (`settings`). Role and Reports to live on the Job tab (StaffRoleFields).
+// (`settings`). Role and reporting line belong to Positions (Seats on the Job tab).
 
 import { useState } from "react";
 import axios from "axios";

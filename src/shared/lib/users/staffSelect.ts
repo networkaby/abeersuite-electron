@@ -33,6 +33,7 @@ export const STAFF_USER_SELECT = {
                     title:        true,
                     branch:       { select: { id: true, name: true } },
                     department:   { select: { id: true, name: true } },
+                    parent:       { select: { id: true, title: true } },
                     roleTemplates: {
                         orderBy: { roleId: "asc" as const },
                         include: {
@@ -62,6 +63,7 @@ export type StaffPosition = {
     title: string;
     branch: { id: string; name: string } | null;
     department: { id: string; name: string } | null;
+    parent?: { id: string; title: string } | null;
     roleTemplates: { id: string; label: string; color: string }[];
 };
 
@@ -71,7 +73,11 @@ export function shapeStaffUser(u: StaffUserRow) {
     // directly (cleaner than `userPositions: [{ position: {...} }]`).
     const positions: StaffPosition[] = userPositions.map((up) => {
         const { roleTemplates, ...pos } = up.position;
-        return { ...pos, roleTemplates: roleTemplates.map((row) => row.role) };
+        return {
+            ...pos,
+            parent: pos.parent ?? null,
+            roleTemplates: roleTemplates.map((row) => row.role),
+        };
     });
     // Derive `branches`/`departments` from the user's positions so callers
     // that used to read these arrays off User keep working.
