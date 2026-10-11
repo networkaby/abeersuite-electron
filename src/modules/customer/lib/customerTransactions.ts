@@ -48,6 +48,7 @@ const VOUCHER_SELECT = {
             partyAccountId: true,
             voucherNo: true,
             date: true,
+            sourceCreatedAt: true,
             type: true,
             branch: { select: { name: true } },
         },
@@ -65,6 +66,7 @@ const LEG_SELECT = {
             type: true,
             voucherNo: true,
             date: true,
+            sourceCreatedAt: true,
             createdById: true,
             branch: { select: { name: true } },
         },
@@ -80,6 +82,7 @@ type RawVoucher = {
         partyAccountId: number | null;
         voucherNo: string | null;
         date: Date;
+        sourceCreatedAt: Date | null;
         type: string;
         branch: { name: string } | null;
     } | null;
@@ -90,6 +93,7 @@ type SpineHeader = {
     type: string;
     voucherNo: string | null;
     date: Date;
+    sourceCreatedAt: Date | null;
     createdById: number | null;
     branch: { name: string } | null;
 };
@@ -157,6 +161,7 @@ export function buildOpeningVoucherRow(
         canLink: false,
         branch: { name: "" },
         createdBy: { name: "" },
+        sourceCreatedAt: null,
     };
 }
 
@@ -273,6 +278,7 @@ export async function loadCustomerTransactionVouchers(
             canLink: canLinkOf(settled.state, movement),
             branch: uv?.branch ?? { name: "" },
             createdById: uv?.createdById ?? null,
+            sourceCreatedAt: uv?.sourceCreatedAt?.toISOString() ?? null,
         };
     });
 
@@ -300,6 +306,7 @@ export async function loadCustomerTransactionVouchers(
                 canLink: canLinkOf(settled.state, movement),
                 branch: uv.branch ?? { name: "" },
                 createdById: uv.createdById,
+                sourceCreatedAt: uv.sourceCreatedAt?.toISOString() ?? null,
             };
         });
 
@@ -312,7 +319,14 @@ export async function loadCustomerTransactionVouchers(
     );
 
     const rows: TxInvVoucher[] = merged
-        .sort((a, b) => +new Date(b.date) - +new Date(a.date))
+        .sort((a, b) => {
+            const dateDiff = +new Date(b.date) - +new Date(a.date);
+            if (dateDiff !== 0) return dateDiff;
+            const timeA = a.sourceCreatedAt ? +new Date(a.sourceCreatedAt) : 0;
+            const timeB = b.sourceCreatedAt ? +new Date(b.sourceCreatedAt) : 0;
+            if (timeA && timeB && timeA !== timeB) return timeB - timeA;
+            return (b.universalVoucherId ?? b.id) - (a.universalVoucherId ?? a.id);
+        })
         .map(({ createdById, ...r }) => ({
             ...r,
             createdBy: { name: createdById != null ? (creatorById.get(createdById) ?? "") : "" },

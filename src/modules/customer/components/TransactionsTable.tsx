@@ -58,6 +58,7 @@ export type TxInvVoucher = {
     canLink: boolean;
     branch:    { name: string };
     createdBy: { name: string };
+    sourceCreatedAt?: string | null;
 };
 
 // `TxInvoice` and the parallel Invoice array were retired with the
@@ -100,25 +101,26 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
     const [linkVoucherId, setLinkVoucherId] = useState<number | null>(null);
 
     type Row = {
-        rowKey:     string;
-        id:         number;
-        uvId:       number | null;
-        source:     VoucherSource;
-        ref:        string;
-        type:       string;
-        kind:       string;
-        date:       string;
-        total:      number;
-        paid:       number;
-        movement:   number;
-        settlement: SettlementState | null;
-        open:       number;
-        canLink:    boolean;
-        url:        string | null;
-        branchName: string | null;
-        createdBy:  string | null;
-        balance:    number; // running balance — set in second pass below
-        isOpening:  boolean;
+        rowKey:          string;
+        id:              number;
+        uvId:            number | null;
+        source:          VoucherSource;
+        ref:             string;
+        type:            string;
+        kind:            string;
+        date:            string;
+        sourceCreatedAt: string | null;
+        total:           number;
+        paid:            number;
+        movement:        number;
+        settlement:      SettlementState | null;
+        open:            number;
+        canLink:         boolean;
+        url:             string | null;
+        branchName:      string | null;
+        createdBy:       string | null;
+        balance:         number; // running balance — set in second pass below
+        isOpening:       boolean;
     };
 
     // "OPENING" is this table's own synthetic row, not a real voucher type, so the
@@ -128,44 +130,46 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
 
     // Build raw rows (balance will be filled below)
     const rawRows: Omit<Row, "balance">[] = invVouchers.map((v) => ({
-        rowKey:     v.rowKey,
-        id:         v.id,
-        uvId:       v.universalVoucherId,
-        source:     v.source,
-        ref:        v.reference,
-        type:       formatType(v.type),
-        kind:       v.type,
-        date:       v.date,
-        total:      Number(v.totalAmount),
-        paid:       Number(v.amountPaid),
-        movement:   Number(v.movement),
-        settlement: v.settlement,
-        open:       Number(v.settlementOpen),
-        canLink:    v.canLink,
-        url:        v.type === "OPENING" ? null : referenceHref(v.source, v.id, v.type),
-        branchName: v.branch.name || null,
-        createdBy:  v.createdBy.name || null,
-        isOpening:  v.type === "OPENING",
+        rowKey:          v.rowKey,
+        id:              v.id,
+        uvId:            v.universalVoucherId,
+        source:          v.source,
+        ref:             v.reference,
+        type:            formatType(v.type),
+        kind:            v.type,
+        date:            v.date,
+        sourceCreatedAt: v.sourceCreatedAt ?? null,
+        total:           Number(v.totalAmount),
+        paid:            Number(v.amountPaid),
+        movement:        Number(v.movement),
+        settlement:      v.settlement,
+        open:            Number(v.settlementOpen),
+        canLink:         v.canLink,
+        url:             v.type === "OPENING" ? null : referenceHref(v.source, v.id, v.type),
+        branchName:      v.branch.name || null,
+        createdBy:       v.createdBy.name || null,
+        isOpening:       v.type === "OPENING",
     }));
 
-    // Running balance: sort chronologically (oldest first), accumulate each
-    // row's own ledger movement, then attach to each row. The movement comes
-    // from the server (the party's GL legs) — a cash bill is settled at the
-    // counter and moves nothing, a receipt brings the balance down.
-    const ascending = [...rawRows].sort(
-        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-    let runningBalance = 0;
-    const balanceMap = new Map<string, number>();
-    for (const r of ascending) {
-        runningBalance += r.movement;
-        balanceMap.set(r.rowKey, runningBalance);
-    }
+    // Display newest first. When calendar dates tie (@db.Date), tie-break using
+    // wall-clock sourceCreatedAt, then spine universalVoucherId.
+    const sortedRaw = [...rawRows].sort((a, b) => {
+        const d = new Date(b.date).getTime() - new Date(a.date).getTime();
+        if (d !== 0) return d;
+        const timeA = a.sourceCreatedAt ? new Date(a.sourceCreatedAt).getTime() : 0;
+        const timeB = b.sourceCreatedAt ? new Date(b.sourceCreatedAt).getTime() : 0;
+        if (timeA && timeB && timeA !== timeB) return timeB - timeA;
+        return (b.uvId ?? b.id) - (a.uvId ?? a.id);
+    });
 
-    // Display newest first
-    const rows: Row[] = rawRows
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        .map((r) => ({ ...r, balance: balanceMap.get(r.rowKey) ?? 0 }));
+    // Running balance strictly follows the table's visual sort order:
+    // Accumulate from bottom (oldest row, index N-1) to top (newest row, index 0).
+    const rows: Row[] = sortedRaw.map((r) => ({ ...r, balance: 0 }));
+    let runningBalance = 0;
+    for (let i = rows.length - 1; i >= 0; i--) {
+        runningBalance += rows[i].movement;
+        rows[i].balance = runningBalance;
+    }
 
     const money = (n: number) => formatRupeesFromPaise(Math.round(n * 100));
 
