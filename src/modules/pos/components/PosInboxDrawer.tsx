@@ -14,6 +14,7 @@ import { X, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MessagesWorkspace } from "@/modules/crm/components";
 import { canOpenPage } from "@/shared/lib/auth/pageAccess";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { setChatDrawerOpen } from "@/modules/message/lib/chatDrawer";
 
@@ -28,7 +29,7 @@ export function PosInboxDrawer({
     openPhone?: string | null;
 }) {
     const permissions = (useSession().data?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const can = (id: string) => permissions.includes(id) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+    const can = (id: string) => hasPermissionWithScope(permissions, id);
 
     useEffect(() => {
         setChatDrawerOpen(open);
@@ -54,7 +55,7 @@ export function PosInboxDrawer({
             />
             {/* The drawer — slides in from the right edge. */}
             <aside
-                className={`fixed inset-y-0 right-0 z-50 flex w-[1000px] max-w-[95vw] flex-col border-l border-border bg-background shadow-2xl transition-transform duration-200 ease-out ${open ? "translate-x-0" : "translate-x-full"}`}
+                className={`fixed inset-y-0 right-0 z-50 flex w-250 max-w-[95vw] flex-col border-l border-border bg-background shadow-2xl transition-transform duration-200 ease-out ${open ? "translate-x-0" : "translate-x-full"}`}
                 aria-hidden={!open}
                 inert={!open}
             >
@@ -75,7 +76,7 @@ export function PosInboxDrawer({
                             <MessagesWorkspace
                                 customers={canOpenPage("/office/crm/messages", permissions)}
                                 canReply={can(PERMISSIONS.MESSAGES_REPLY)}
-                                canTicket={can(PERMISSIONS.HELP_CREATE) || can(PERMISSIONS.DEALS_CREATE)}
+                                canTicket={can(PERMISSIONS.HELP_CREATE) || can(PERMISSIONS.DEALS_CREATE) || can(PERMISSIONS.TICKETS_CREATE)}
                                 openPhone={openPhone}
                             />
                         )}

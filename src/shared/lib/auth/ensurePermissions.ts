@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { PERMISSION_CATALOG } from "./permissionCatalog";
 
 const CATALOG_BY_ID = new Map(PERMISSION_CATALOG.map((p) => [p.id, p]));
@@ -20,11 +20,11 @@ const CATALOG_BY_ID = new Map(PERMISSION_CATALOG.map((p) => [p.id, p]));
 export async function ensureCatalogPermissions(ids: readonly string[]): Promise<string[]> {
     const wanted = [...new Set(ids)].filter((id) => CATALOG_BY_ID.has(id));
     if (!wanted.length) return [];
-    const have = await prisma.permission.findMany({ where: { id: { in: wanted } }, select: { id: true } });
+    const have = await prismaAuthoritative.permission.findMany({ where: { id: { in: wanted } }, select: { id: true } });
     const haveIds = new Set(have.map((p) => p.id));
     const missing = wanted.filter((id) => !haveIds.has(id));
     if (!missing.length) return [];
-    await prisma.permission.createMany({
+    await prismaAuthoritative.permission.createMany({
         data: missing.map((id) => {
             const p = CATALOG_BY_ID.get(id)!;
             return { id, label: p.label, module: p.module, description: p.description, systemOnly: p.systemOnly ?? false };

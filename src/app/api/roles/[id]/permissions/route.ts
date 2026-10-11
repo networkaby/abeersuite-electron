@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
@@ -23,7 +23,7 @@ export async function PUT(
         const { data, error } = await validateRequest(req, rolePermissionsSchema);
         if (error) return error;
 
-        const role = await prisma.role.findUnique({ where: { id: roleId }, select: { id: true } });
+        const role = await prismaAuthoritative.role.findUnique({ where: { id: roleId }, select: { id: true } });
         if (!role) return NextResponse.json({ error: "Role not found" }, { status: 404 });
 
         // NO department-pool filter here, on purpose. A department's pool is an
@@ -42,7 +42,7 @@ export async function PUT(
         // Drop ids with no Permission row even after that (unknown to code too —
         // e.g. a label renamed without a pinned `sidebarKey`). Sending one would
         // fail the createMany on a foreign key.
-        const known = await prisma.permission.findMany({
+        const known = await prismaAuthoritative.permission.findMany({
             where: { id: { in: sentIds } },
             select: { id: true },
         });

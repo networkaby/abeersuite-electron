@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { useSession } from "next-auth/react";
 import MobileHeader from "./MobileHeader";
 import { MessagesWorkspace } from "@/modules/crm/components";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 /**
@@ -13,7 +14,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
  */
 export default function MobileInbox() {
     const permissions = (useSession().data?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    const can = (id: string) => permissions.includes(id) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+    const can = (id: string) => hasPermissionWithScope(permissions, id);
 
     return (
         <div className="flex flex-1 flex-col h-[calc(100dvh-4rem-env(safe-area-inset-bottom))] overflow-hidden">
@@ -23,7 +24,7 @@ export default function MobileInbox() {
                     <MessagesWorkspace
                         customers={true}
                         canReply={can(PERMISSIONS.MESSAGES_REPLY)}
-                        canTicket={can(PERMISSIONS.HELP_CREATE) || can(PERMISSIONS.DEALS_CREATE)}
+                        canTicket={can(PERMISSIONS.HELP_CREATE) || can(PERMISSIONS.DEALS_CREATE) || can(PERMISSIONS.TICKETS_CREATE)}
                     />
                 </Suspense>
             </div>

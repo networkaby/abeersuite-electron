@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
-import { hasModuleNavAccess } from "@/shared/lib/auth/permissionScope";
+import { hasModuleNavAccess, hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { MessagesWorkspace } from "@/modules/crm/components";
 
@@ -12,11 +12,14 @@ export default async function MessagesPage() {
     if (!hasModuleNavAccess(permissions, "crm")) {
         redirect("/office/work-flow-inbox");
     }
-    const can = (id: string) => permissions.includes(id) || permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+    const can = (id: string) => hasPermissionWithScope(permissions, id);
 
     return (
         <div className="h-full">
-            <MessagesWorkspace canReply={can(PERMISSIONS.MESSAGES_REPLY)} canTicket={can(PERMISSIONS.HELP_CREATE) || can(PERMISSIONS.DEALS_CREATE)} />
+            <MessagesWorkspace
+                canReply={can(PERMISSIONS.MESSAGES_REPLY)}
+                canTicket={can(PERMISSIONS.HELP_CREATE) || can(PERMISSIONS.DEALS_CREATE) || can(PERMISSIONS.TICKETS_CREATE)}
+            />
         </div>
     );
 }

@@ -11074,6 +11074,10 @@
       "permissionId": "mobile:photos:edit"
     },
     {
+      "departmentId": "DEP-SALES",
+      "permissionId": "mobile:inbox:view"
+    },
+    {
       "departmentId": "DEP-OP",
       "permissionId": "ui:sidebar:settings:screen-size"
     },
@@ -11928,6 +11932,18 @@
     {
       "departmentId": "DEP-OP",
       "permissionId": "mobile:daybook:view"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "mobile:inbox:view"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "mobile:photos:edit"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "mobile:app:access"
     }
   ],
   "positions": [

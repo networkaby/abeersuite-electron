@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, requireAnyPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
@@ -20,7 +20,7 @@ export async function GET() {
     const { response } = await requireAuth();
     if (response) return response;
     try {
-        const roles = await prisma.role.findMany({
+        const roles = await prismaAuthoritative.role.findMany({
             orderBy: { id: "asc" },
             include: {
                 permissions: { include: { permission: true } },
