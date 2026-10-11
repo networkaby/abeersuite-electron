@@ -8,7 +8,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
 import { effectiveAccountBalance, toNumber } from "@/modules/accountancy/lib/balance";
-import { type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
+import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
 import { ALIAS_MAX_LENGTH, aliasKeyOf, aliasRows } from "@/modules/accountancy/lib/accountAlias";
 import { toDateOnly, toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 
@@ -21,8 +21,11 @@ type AccountWithGroup = Awaited<ReturnType<typeof prisma.account.findMany>>[numb
 const withAliases = { select: { alias: true }, orderBy: { id: "asc" } } as const;
 
 function serializeLedger<T extends AccountWithGroup>(a: T) {
+    const normalBalance = a.normalBalance
+        ?? (a.group?.type ? defaultNormalBalanceForGroupType(a.group.type) : "DEBIT");
     return {
         ...a,
+        normalBalance,
         aliases: (a.aliases ?? []).map((x) => x.alias),
         balance: effectiveAccountBalance(a),
         openingBalance: a.openingBalance != null ? toNumber(a.openingBalance) : null,

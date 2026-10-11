@@ -48,6 +48,7 @@ function Pill({
     href,
     detail,
     colorClass,
+    normalSide = "DEBIT",
 }: {
     icon: React.ReactNode;
     label: string;
@@ -57,11 +58,13 @@ function Pill({
     href?: string;
     detail?: { name: string; balance: number }[];
     colorClass?: string;
+    normalSide?: "DEBIT" | "CREDIT";
 }) {
     const [open, setOpen] = useState(false);
     const router = useRouter();
     const negative = value < 0;
     const hasDropdown = !!detail && detail.length > 1;
+    const sideSuffix = normalSide === "CREDIT" ? "(Dr)" : "(Cr)";
 
     return (
         <div className="relative">
@@ -77,7 +80,7 @@ function Pill({
                 <span className="shrink-0 opacity-90">{icon}</span>
                 <span className="text-muted-foreground">{label}</span>
                 <span className="font-mono font-semibold">₹{fmt(Math.abs(value))}</span>
-                {negative && <span className="text-[10px] text-red-500">(Dr)</span>}
+                {negative && <span className="text-[10px] text-red-500">{sideSuffix}</span>}
             </button>
 
             {/* Sub-account dropdown */}
@@ -311,6 +314,7 @@ export default function FinanceTopBar({
                         value={data.payables}
                         href={openable("/office/accountancy/reports/payables")}
                         colorClass="text-amber-700 dark:text-amber-400"
+                        normalSide="CREDIT"
                     />
                 </>
             ) : canView ? (

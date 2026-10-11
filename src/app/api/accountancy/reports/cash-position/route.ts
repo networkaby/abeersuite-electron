@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { businessToday } from "@/shared/lib/format/formatDate";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { closingFromCache, isUnchangedSince, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
+import { parseBank } from "@/modules/accountancy/lib/bankParticulars";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 
 // GET /api/accountancy/reports/cash-position
-// Returns current-day totals for Cash-in-Hand, Bank Accounts, Receivables, Payables.
+// Returns current-day totals for Cash-in-Hand, Bank Accounts (including Bank OD with OD Limit - balance), Receivables, Payables.
 // Used by the FinanceTopBar component. Lightweight: closing-only (no range aggregation).
 
 function findGroup(nodes: GroupNode[], name: string): GroupNode | undefined {
@@ -21,6 +24,14 @@ function findGroup(nodes: GroupNode[], name: string): GroupNode | undefined {
 function flattenLedgers(node: GroupNode): { name: string; balance: number }[] {
     const out = node.ledgers.map((l) => ({ name: l.name, balance: l.closing }));
     for (const c of node.children) out.push(...flattenLedgers(c));
+    return out;
+}
+
+type LedgerNodeWithId = { id: number; name: string; closing: number };
+
+function flattenLedgerNodes(node: GroupNode): LedgerNodeWithId[] {
+    const out: LedgerNodeWithId[] = node.ledgers.map((l) => ({ id: l.id, name: l.name, closing: l.closing }));
+    for (const c of node.children) out.push(...flattenLedgerNodes(c));
     return out;
 }
 
@@ -62,20 +73,48 @@ export async function GET(req: Request) {
 
         const tree = await buildGroupTree(aggMap);
 
-        const cashGroup    = findGroup(tree, "Cash-in-Hand");
-        const bankGroup    = findGroup(tree, "Bank Accounts");
-        const debtorsGroup = findGroup(tree, "Sundry Debtors");
-        const creditorsGroup = findGroup(tree, "Sundry Creditors");
+        const cashGroup      = findGroup(tree, ACCOUNT_GROUPS.CASH_IN_HAND);
+        const bankGroup      = findGroup(tree, ACCOUNT_GROUPS.BANK_ACCOUNTS);
+        const bankOdGroup    = findGroup(tree, ACCOUNT_GROUPS.BANK_OD);
+        const debtorsGroup   = findGroup(tree, ACCOUNT_GROUPS.SUNDRY_DEBTORS);
+        const creditorsGroup = findGroup(tree, ACCOUNT_GROUPS.SUNDRY_CREDITORS);
+
+        const regularBankAccounts = bankGroup ? flattenLedgers(bankGroup) : [];
+
+        // For Bank OD accounts: header card considers (OD Limit - balance)
+        let odBankAccounts: { name: string; balance: number }[] = [];
+        if (bankOdGroup) {
+            const odNodes = flattenLedgerNodes(bankOdGroup);
+            if (odNodes.length > 0) {
+                const odAccounts = await prisma.account.findMany({
+                    where: { id: { in: odNodes.map((n) => n.id) } },
+                    select: { id: true, bankJson: true },
+                });
+                const bankJsonMap = new Map(odAccounts.map((a) => [a.id, a.bankJson]));
+                odBankAccounts = odNodes.map((n) => {
+                    const rawLimit = parseBank(bankJsonMap.get(n.id)).limit;
+                    const limitNum = Number(rawLimit);
+                    const limit = rawLimit !== "" && Number.isFinite(limitNum) ? limitNum : 0;
+                    return {
+                        name: n.name,
+                        balance: Number((limit - n.closing).toFixed(2)),
+                    };
+                });
+            }
+        }
+
+        const allBankAccounts = [...regularBankAccounts, ...odBankAccounts];
+        const totalBank = Number(allBankAccounts.reduce((sum, a) => sum + a.balance, 0).toFixed(2));
 
         return NextResponse.json({
             asOf: asOf.toISOString(),
             computedAt: now.toISOString(),
             cash:        sumGroup(cashGroup),
-            bank:        sumGroup(bankGroup),
+            bank:        totalBank,
             receivables: sumGroup(debtorsGroup),
             payables:    sumGroup(creditorsGroup),
-            cashAccounts: cashGroup    ? flattenLedgers(cashGroup)    : [],
-            bankAccounts: bankGroup    ? flattenLedgers(bankGroup)    : [],
+            cashAccounts: cashGroup ? flattenLedgers(cashGroup) : [],
+            bankAccounts: allBankAccounts,
         });
     } catch (err) {
         return handleApiError(err);

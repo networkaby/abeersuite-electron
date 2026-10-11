@@ -85,8 +85,9 @@ export function fmt(n: number) {
  */
 export function formatDrCr(balance: number, normalBalance: "DEBIT" | "CREDIT" | null): string {
     if (balance === 0) return "0.00";
+    const nb = normalBalance ?? "DEBIT";
     const sign = balance < 0
-        ? (normalBalance === "DEBIT" ? "Cr" : "Dr")
-        : (normalBalance === "DEBIT" ? "Dr" : "Cr");
+        ? (nb === "DEBIT" ? "Cr" : "Dr")
+        : (nb === "DEBIT" ? "Dr" : "Cr");
     return `${fmt(Math.abs(balance))} ${sign}`;
 }

@@ -118,10 +118,6 @@ export function BookPage({
     const [to, setTo]     = useState(formatDateInput(new Date()));
     const groupNames = Array.isArray(groupName) ? groupName : [groupName];
     const groupKey = groupNames.join("|");
-    // Multiple groups render as their own labeled sections (e.g. "Loans" vs
-    // "Credit Card") instead of merging into one alphabetical list.
-    const sectioned = groupNames.length > 1;
-
     // A reply for dates the screen has moved away from is dropped (useApiResource),
     // and a live update keeps the table on screen while it re-reads. Every voucher
     // touching a cash/bank/loan ledger moves these balances, so the book follows
@@ -140,6 +136,14 @@ export function BookPage({
             return { name, node: found ? pruneGroups(found, others) : null };
         });
     }, [data, groupKey]);
+
+    // Multiple groups render as their own labeled sections (e.g. "Bank Accounts" vs
+    // "Bank OD A/c") when more than one section has ledgers. If only one section
+    // has ledgers, keep the table clean with no redundant section headers or grand total.
+    const sectioned = useMemo(() => {
+        if (!sections) return false;
+        return sections.filter((s) => s.node && flattenLedgers(s.node).length > 0).length > 1;
+    }, [sections]);
 
     // A book with a single ledger opens it — once per period. It used to fire again
     // on every live update, pulling the reader back to that ledger mid-work.

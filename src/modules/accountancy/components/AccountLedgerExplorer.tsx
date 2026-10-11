@@ -43,6 +43,7 @@ import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActi
 import { voucherSourceForType, referenceHref } from "@/modules/accountancy/lib/voucherUrls";
 import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkContextMenu";
 import { groupReportUrl } from "@/modules/accountancy/lib/groupReportUrl";
+import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -387,7 +388,7 @@ export function AccountLedgerExplorer({
                                                     : "bg-muted text-foreground",
                                         )}
                                     >
-                                        {drCr(a.balance, a.normalBalance)}
+                                        {drCr(a.balance, a.normalBalance ?? (a.group?.type ? defaultNormalBalanceForGroupType(a.group.type as GroupTypeStr) : "DEBIT"))}
                                     </span>
                                 </div>
                             </div>
