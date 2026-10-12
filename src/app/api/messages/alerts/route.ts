@@ -15,7 +15,9 @@ import { CALL_POPUP_MAX_AGE_MS, MESSAGE_FOLLOWUP_START, MESSAGE_REPLY_WINDOW_MS 
 // answered chat stays (`waiting: false`) for MESSAGE_REPLY_WINDOW_MS after the
 // customer's last message, so staff can watch for a follow-up and close it.
 // Plus every unanswered staff @mention note of the last day — a mention only
-// passes the chat on, it never answers the customer.
+// passes the chat on, it never answers the customer. A customer message from
+// before a staff Close is dropped altogether — Close is how staff clear a chat
+// that needs no answer (a shop's auto-reply to our bill).
 //
 // The popup decides per staff member who sees which row (owner and helpers at
 // once, everyone after MESSAGE_CLAIM_FALLBACK_MS for a waiting customer), so
@@ -64,7 +66,17 @@ export async function GET() {
 
         const phonesSeen = [...new Set([...inRows, ...notes].map((r) => r.phone!))];
         const owners = await ownersByPhone(phonesSeen);
-        const contact = await lastContactByPhone(phonesSeen, owners, { since: from, visits: true });
+        const [contact, closes] = await Promise.all([
+            lastContactByPhone(phonesSeen, owners, { since: from, visits: true }),
+            // Staff Close (or the customer's /new) clears the chat off the popup.
+            // A TIMEOUT or AFTER_TEMPLATE close is conversation mapping, not that.
+            prisma.messageConversation.groupBy({
+                by: ["phone"],
+                where: { phone: { in: phonesSeen }, closedReason: { in: ["STAFF", "CUSTOMER"] }, closedAt: { gte: from } },
+                _max: { closedAt: true },
+            }),
+        ]);
+        const closedAt = new Map(closes.map((g) => [g.phone, g._max.closedAt?.getTime() ?? 0]));
 
         const byPhone = new Map<string, Chat>();
         const chatOf = (phone: string, id: number, at: Date) => {
@@ -77,6 +89,7 @@ export async function GET() {
         };
         for (const r of inRows) { // newest first
             const phone = r.phone!;
+            if ((closedAt.get(phone) ?? 0) >= r.occurredAt.getTime()) continue; // closed after it — off the popup
             const answered = (contact.get(phone) ?? 0) >= r.occurredAt.getTime();
             const fresh = now - r.occurredAt.getTime() < MESSAGE_REPLY_WINDOW_MS;
             if (answered && !byPhone.has(phone) && !fresh) continue; // answered long ago — nothing to show

@@ -161,8 +161,25 @@ export async function closeConversation(phone: string, reason: "STAFF" | "CUSTOM
         where: { phone, closedAt: null },
         data: { closedAt: new Date(), closedReason: reason, closedByUserId: userId ?? null },
     });
-    if (count) void publishChangeServer(["messages"]);
-    return count > 0;
+    let done = count > 0;
+    // Nothing open, but the latest conversation is a quiet AFTER_TEMPLATE one:
+    // staff's Close still counts — it is what takes the message off the popup.
+    if (!done && reason === "STAFF") {
+        const quiet = await prisma.messageConversation.findFirst({
+            where: { phone },
+            orderBy: { startedAt: "desc" },
+            select: { id: true, closedReason: true },
+        });
+        if (quiet?.closedReason === "AFTER_TEMPLATE") {
+            await prisma.messageConversation.update({
+                where: { id: quiet.id },
+                data: { closedAt: new Date(), closedReason: "STAFF", closedByUserId: userId ?? null },
+            });
+            done = true;
+        }
+    }
+    if (done) void publishChangeServer(["messages"]);
+    return done;
 }
 
 /** The conversation a staff-side row (reply, note) belongs to: the open one,
@@ -435,6 +452,54 @@ function ackForTicket(t: ActiveTicketSummary | null, ticketId: number, withText:
         : `✅ Thank you! You are now connected to ${label}. Please let us know how we can help you with this.`;
 }
 
+/** True when our latest message to this number is a template (bill, receipt …)
+ *  sent within the conversation timeout and the customer has not written since —
+ *  i.e. this incoming message is the first one after it. */
+async function firstReplyAfterTemplate(phone: string, at: Date): Promise<boolean> {
+    const last = await prisma.message.findFirst({
+        where: { phone, direction: { in: ["IN", "OUT"] }, occurredAt: { lte: at } },
+        orderBy: { occurredAt: "desc" },
+        select: { direction: true, kind: true, occurredAt: true },
+    });
+    return !!last && last.direction === "OUT" && last.kind === "template"
+        && at.getTime() - last.occurredAt.getTime() <= WA_CONVERSATION_TIMEOUT_MS;
+}
+
+/**
+ * Staff's "Send menu": the number's latest conversation was a quiet
+ * AFTER_TEMPLATE one, staff judged the message real — open an ASKING
+ * conversation and send the ticket menu. False when not applicable.
+ */
+export async function sendMenuAfterTemplate(phone: string): Promise<boolean> {
+    if (!(await menuAfterTemplateApplies(phone))) return false;
+    const owner = (await ownersByPhone([phone])).get(phone) ?? null;
+    const active = await findCustomerActiveTickets(phone, owner);
+    const last = await prisma.message.findFirst({
+        where: { phone, direction: "IN" },
+        orderBy: { occurredAt: "desc" },
+        select: { senderName: true, businessNumberId: true },
+    });
+    const opened = await openConversation(phone, "ASKING", new Date(), active.map((t) => t.id));
+    await sendTicketMenu({ phone, conversationId: opened.id, customerName: owner?.name ?? last?.senderName ?? null, active, businessNumberId: last?.businessNumberId ?? null });
+    void publishChangeServer(["messages"]);
+    return true;
+}
+
+/** Whether "Send menu" applies: no open conversation, the latest one closed as
+ *  AFTER_TEMPLATE, the customer has active jobs and the menu is switched on. */
+export async function menuAfterTemplateApplies(phone: string): Promise<boolean> {
+    if (await currentConversation(phone, { ignoreTimeout: true })) return false;
+    const latest = await prisma.messageConversation.findFirst({
+        where: { phone },
+        orderBy: { startedAt: "desc" },
+        select: { closedReason: true },
+    });
+    if (latest?.closedReason !== "AFTER_TEMPLATE") return false;
+    if (!isBillSendConfigured() || !(await isAutoSend("TICKET_AUTO_REPLY"))) return false;
+    const owner = (await ownersByPhone([phone])).get(phone) ?? null;
+    return (await findCustomerActiveTickets(phone, owner)).length > 0;
+}
+
 /**
  * Decide the conversation an incoming message belongs to, and what (if
  * anything) to send back once it is stored:
@@ -458,6 +523,14 @@ async function routeInbound(args: {
     if (command) await closeConversation(phone, "CUSTOMER");
 
     let conv = await currentConversation(phone, { at });
+    if (!conv && !command && (await firstReplyAfterTemplate(phone, at))) {
+        // Likely the customer's own WhatsApp Business greeting / away message
+        // answering our bill — no menu (saves a send). Born closed, so their
+        // next message opens a normal conversation. The popup still raises it.
+        const quiet = await openConversation(phone, "NEW", at);
+        await prisma.messageConversation.update({ where: { id: quiet.id }, data: { closedAt: at, closedReason: "AFTER_TEMPLATE" } });
+        return { conv: quiet, afterStore: null };
+    }
     if (!conv) {
         const active = await findCustomerActiveTickets(phone, owner);
         const menuOn = active.length > 0 && isBillSendConfigured() && (await isAutoSend("TICKET_AUTO_REPLY"));

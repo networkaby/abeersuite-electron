@@ -6,7 +6,7 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { phoneMatchKey } from "@/shared/lib/format";
 import { isMissedCall } from "@/shared/lib/calls";
 import { ASSIGNED_POSITION_SELECT } from "@/shared/lib/api/ticketSelects";
-import { claimsByPhone, conversationsByPhone, mediaLink, ownersByPhone, replyWindowOpen } from "@/modules/message/lib/customerMessages";
+import { claimsByPhone, conversationsByPhone, mediaLink, menuAfterTemplateApplies, ownersByPhone, replyWindowOpen } from "@/modules/message/lib/customerMessages";
 
 // /api/messages/thread?phone=<10 digits>
 //
@@ -48,6 +48,16 @@ export async function GET(req: Request) {
         // The open conversation decides the ticket shown — never a guess from older messages.
         const conversation = conversations.get(phone) ?? null;
         const ticketId = conversation?.topic === "TICKET" ? conversation.ticketId : null;
+        // Nothing open and the latest conversation was held back as a likely
+        // auto-reply to our bill (AFTER_TEMPLATE): staff can still Close it (off
+        // the popup) or, judging it real, send the ticket menu.
+        const latestConv = conversation ? null : await prisma.messageConversation.findFirst({
+            where: { phone },
+            orderBy: { startedAt: "desc" },
+            select: { closedReason: true },
+        });
+        const afterTemplate = latestConv?.closedReason === "AFTER_TEMPLATE";
+        const menuAvailable = afterTemplate && (await menuAfterTemplateApplies(phone));
         const ticket = ticketId
             ? await prisma.ticket.findUnique({
                 where: { id: ticketId },
@@ -130,6 +140,8 @@ export async function GET(req: Request) {
                 : null,
             claim: claims.get(phone) ?? null,
             conversation,
+            afterTemplate,
+            menuAvailable,
             replyWindow: { open: window.open, closesAt: window.closesAt?.toISOString() ?? null },
             items,
         });

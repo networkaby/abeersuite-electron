@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
     Mail, PhoneIncoming, PhoneOutgoing, PhoneMissed, Ticket, Check, CheckCheck,
     AlertCircle, Search, Send, Paperclip, X, UserPlus, ShieldAlert, RefreshCw, Lock, FileText, Hand, Users, ArrowRightLeft,
-    AtSign, Hash, MessageSquarePlus, ChevronLeft, Briefcase, LifeBuoy,
+    AtSign, Hash, MessageSquarePlus, ChevronLeft, Briefcase, LifeBuoy, ListOrdered,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,6 +67,10 @@ interface Thread {
     claim: { owner: Staff; helpers: Staff[] } | null;
     /** The open conversation (MessageConversation) — null when none is open. */
     conversation: { id: number; topic: Topic; ticketId: number | null; startedAt: string } | null;
+    /** Latest conversation was held back as a likely auto-reply to our bill — no menu went out. */
+    afterTemplate?: boolean;
+    /** That held-back chat qualifies for the ticket menu (active jobs, menu on). */
+    menuAvailable?: boolean;
     replyWindow: { open: boolean; closesAt: string | null };
     items: (ThreadMessage | ThreadCall)[];
 }
@@ -453,6 +457,18 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
         }
     };
 
+    const sendMenu = async () => {
+        if (!thread) return;
+        try {
+            await axios.post("/api/messages/conversation", { phone: thread.phone, action: "menu" });
+            toast.success("Menu sent — the customer's pick maps the chat");
+            void loadThread(thread.phone);
+            void loadList(1);
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not send the menu"));
+        }
+    };
+
     const toggleSpam = async () => {
         if (!thread) return;
         try {
@@ -722,7 +738,18 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                             </Button>
                                         )}
                                         {thread.conversation && <TopicChip topic={thread.conversation.topic} ticketId={thread.conversation.ticketId} />}
-                                        {canReply && thread.conversation && (
+                                        {canReply && !thread.conversation && thread.menuAvailable && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-8 px-2 text-xs"
+                                                onClick={() => void sendMenu()}
+                                                title="This message came right after our bill, so no menu went out (likely an auto-reply). It is real — send the ticket menu now"
+                                            >
+                                                <ListOrdered className="mr-1 size-3.5" /> Send menu
+                                            </Button>
+                                        )}
+                                        {canReply && (thread.conversation || thread.afterTemplate) && (
                                             <Button
                                                 size="sm"
                                                 variant="outline"
