@@ -40,6 +40,7 @@ interface Candidate {
 }
 /** One WhatsApp message of an unsaved number (from /api/messages/thread). */
 interface CallerMessage { type: "message"; id: number; at: string; direction: string; kind: string; body: string; sentBy: string | null }
+type ThreadItem = CallerMessage | { type: "call" };
 interface CandidatesResponse { candidates: Candidate[]; total: number; nextCursor: number | null; truncated: boolean }
 
 type TimelineSource = "sale" | "payment" | "repair" | "inquiry" | "deal" | "note" | "call" | "message" | "meeting" | "task";
@@ -509,8 +510,8 @@ export default function ReconnectWorkspace({
         try {
             const [calls, thread] = await Promise.all([
                 axios.get<{ items: CallerCall[] }>(`/api/calls?phone=${encodeURIComponent(phone)}&direction=all`),
-                axios.get<{ items: (CallerMessage | { type: "call" })[] }>(`/api/messages/thread?phone=${encodeURIComponent(phone)}`)
-                    .catch(() => ({ data: { items: [] as CallerMessage[] } })), // messages are extra — never block the call log
+                axios.get<{ items: ThreadItem[] }>(`/api/messages/thread?phone=${encodeURIComponent(phone)}`)
+                    .catch(() => ({ data: { items: [] as ThreadItem[] } })), // messages are extra — never block the call log
             ]);
             setCallerCalls(calls.data.items);
             // Newest first, like the call list.
