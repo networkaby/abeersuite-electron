@@ -15,6 +15,8 @@ import { Textarea } from "@/components/ui/textarea";
 import {
     WA_TEMPLATE_LABEL,
     WA_TEMPLATE_WHEN,
+    WA_CALL_BUTTON,
+    WA_FOOTER,
     fieldsFor,
     sampleValuesFor,
     checkBody,
@@ -352,6 +354,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                                 <p className="text-[11px] italic text-muted-foreground pt-0.5">👉 Please reply with 1 or 2.</p>
                             </div>
                         )}
+                        <p className="mt-1.5 text-xs opacity-60">{WA_FOOTER}</p>
                         <p className="mt-1 text-right text-[10px] opacity-60">10:42</p>
                     </div>
                     {[viewBtn, appBtn].filter(Boolean).map((b) => (
@@ -362,6 +365,11 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                             ↗ {b}
                         </div>
                     ))}
+                    {kind !== "TICKET_AUTO_REPLY" && (
+                        <div className="mt-1 max-w-[300px] rounded-lg bg-white py-2 text-center text-sm text-sky-600 shadow-sm dark:bg-[#202c33] dark:text-sky-400">
+                            📞 {WA_CALL_BUTTON.text}
+                        </div>
+                    )}
                 </div>
                 {current.approved && !alreadyApproved && (
                     <div className="space-y-1">

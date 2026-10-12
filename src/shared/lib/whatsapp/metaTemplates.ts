@@ -3,6 +3,8 @@ import { WA_CONVERSATION_NUMBER_ID } from "@/shared/lib/constants/whatsapp";
 import {
     WA_APP_LINK,
     WA_BILL_LINK_BASE,
+    WA_CALL_BUTTON,
+    WA_FOOTER,
     bodyFieldOrder,
     sampleValuesFor,
     toMetaBody,
@@ -72,7 +74,9 @@ async function graph<T>(path: string, init?: { method?: string; body?: unknown }
     return json;
 }
 
-/** Meta's component list for a draft — body plus the optional URL buttons. */
+/** Meta's component list for a draft — body, the fixed customer-care footer,
+ *  the optional URL buttons and a Call us button (last, so the View button
+ *  stays index 0 when sending). */
 function components(kind: WaTemplateKind, draft: WaTemplateDraft) {
     const order = bodyFieldOrder(draft.body);
     const samples = sampleValuesFor(kind);
@@ -82,6 +86,7 @@ function components(kind: WaTemplateKind, draft: WaTemplateDraft) {
             text: toMetaBody(draft.body.trim()),
             ...(order.length ? { example: { body_text: [order.map((k) => samples[k])] } } : {}),
         },
+        { type: "FOOTER", text: WA_FOOTER },
     ];
     const buttons: unknown[] = [];
     if (draft.viewButton?.trim()) {
@@ -94,6 +99,9 @@ function components(kind: WaTemplateKind, draft: WaTemplateDraft) {
     }
     if (draft.appButton?.trim()) {
         buttons.push({ type: "URL", text: draft.appButton.trim(), url: WA_APP_LINK });
+    }
+    if (kind !== "TICKET_AUTO_REPLY") {
+        buttons.push({ type: "PHONE_NUMBER", text: WA_CALL_BUTTON.text, phone_number: WA_CALL_BUTTON.phone });
     }
     if (buttons.length) list.push({ type: "BUTTONS", buttons });
     return list;

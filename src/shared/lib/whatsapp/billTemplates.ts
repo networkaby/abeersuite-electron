@@ -168,6 +168,20 @@ const PORTAL_LINE =
     "All your bills, payments, warranty details and repair status are available anytime " +
     "in your account on our website and app. Tap Get our app to install it.";
 
+/** Customer care — call or WhatsApp. Ends every default body. */
+const CARE_NO = COMPANY_DETAILS.contact.phone.replace(/^\+91\s*/, "");
+const HELP_LINE = `\n\nNeed help? Call or WhatsApp us at ${CARE_NO}.`;
+
+const SHOP_ADDRESS = [COMPANY_DETAILS.address.line1, COMPANY_DETAILS.address.line2, COMPANY_DETAILS.address.pin]
+    .filter(Boolean)
+    .join(", ");
+
+/** Fixed grey line under every template (Meta: max 60 chars, no fields). */
+export const WA_FOOTER = `${COMPANY_DETAILS.brandName} · Call/WhatsApp ${CARE_NO}`.slice(0, 60);
+
+/** One-tap "Call us" button on every template that has buttons — Meta wants E.164. */
+export const WA_CALL_BUTTON = { text: "Call us", phone: COMPANY_DETAILS.contact.phone.replace(/\s+/g, "") };
+
 /** "Bill no: {billNo}\nDate: {date}\nAmount: Rs {amount}" block. */
 const docLines = (noLabel: string, amountLabel = "Amount") =>
     `${noLabel}: {billNo}\nDate: {date}\n${amountLabel}: Rs {amount}\n\n`;
@@ -185,7 +199,8 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             docLines("Bill no") +
             BALANCE_LINES +
             "Tap View bill to see or download this bill.\n\n" +
-            PORTAL_LINE,
+            PORTAL_LINE +
+            HELP_LINE,
         viewButton: "View bill",
         appButton: "Get our app",
     },
@@ -195,7 +210,8 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             docLines("Receipt no") +
             BALANCE_LINES +
             "Tap View receipt to see or download this receipt.\n\n" +
-            PORTAL_LINE,
+            PORTAL_LINE +
+            HELP_LINE,
         viewButton: "View receipt",
         appButton: "Get our app",
     },
@@ -204,7 +220,8 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             "Dear {customer}, your return at {shop} has been accepted.\n\n" +
             docLines("Credit note no") +
             "Tap View credit note to see or download it.\n\n" +
-            PORTAL_LINE,
+            PORTAL_LINE +
+            HELP_LINE,
         viewButton: "View credit note",
         appButton: "Get our app",
     },
@@ -213,7 +230,8 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             "Dear {customer}, your refund from {shop} has been paid.\n\n" +
             docLines("Refund no") +
             "Tap View refund to see or download the slip.\n\n" +
-            PORTAL_LINE,
+            PORTAL_LINE +
+            HELP_LINE,
         viewButton: "View refund",
         appButton: "Get our app",
     },
@@ -222,7 +240,8 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             "Dear {customer}, your order at {shop} has been booked.\n\n" +
             docLines("Order no", "Order value") +
             "Tap View order to see its details. We will inform you when it is ready.\n\n" +
-            PORTAL_LINE,
+            PORTAL_LINE +
+            HELP_LINE,
         viewButton: "View order",
         appButton: "Get our app",
     },
@@ -231,7 +250,8 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             "Dear {customer}, here is the estimate you asked for at {shop}.\n\n" +
             docLines("Estimate no") +
             "Tap View estimate to see or download it.\n\n" +
-            PORTAL_LINE,
+            PORTAL_LINE +
+            HELP_LINE,
         viewButton: "View estimate",
         appButton: "Get our app",
     },
@@ -240,7 +260,8 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             "Dear {customer}, we have received your {device} for repair at {shop}.\n\n" +
             "Job no: {billNo}\nDate: {date}\n\n" +
             "Tap Track repair to follow its status.\n\n" +
-            PORTAL_LINE,
+            PORTAL_LINE +
+            HELP_LINE,
         viewButton: "Track repair",
         appButton: "Get our app",
     },
@@ -249,7 +270,9 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             "Dear {customer}, your {device} is ready for pickup at {shop}.\n\n" +
             "Job no: {billNo}\n\n" +
             "Please show this message when you collect it. Tap Track repair to see the details.\n\n" +
-            PORTAL_LINE,
+            `Shop address: ${SHOP_ADDRESS}\n\n` +
+            PORTAL_LINE +
+            HELP_LINE,
         viewButton: "Track repair",
         appButton: "Get our app",
     },
@@ -258,14 +281,16 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
         body:
             "Dear {customer}, this is a friendly reminder from {shop}.\n\n" +
             "Balance due: Rs {amount}\n\n" +
-            "Tap Pay now to see your bills and pay by UPI. Please ignore this message if you have already paid. Thank you.",
+            "Tap Pay now to see your bills and pay by UPI. Please ignore this message if you have already paid. Thank you." +
+            HELP_LINE,
         viewButton: "Pay now",
         appButton: "Get our app",
     },
     DUE_FIRM: {
         body:
             "Dear {customer}, Rs {amount} has been due at {shop} since {date}.\n\n" +
-            "Please clear it at the earliest. Tap Pay now to see your bills and pay by UPI. Please ignore this message if you have already paid.",
+            "Please clear it at the earliest. Tap Pay now to see your bills and pay by UPI. Please ignore this message if you have already paid." +
+            HELP_LINE,
         viewButton: "Pay now",
         appButton: "Get our app",
     },
@@ -273,7 +298,8 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
         body:
             "Hello {customer}, thank you for contacting {shop}! 👋\n\n" +
             "We have noted your enquiry regarding {subject}. Our team will review the details and get back to you with the best options shortly.\n\n" +
-            "Tap View details to check your enquiry anytime.",
+            "Tap View details to check your enquiry anytime." +
+            HELP_LINE,
         viewButton: "View details",
         appButton: "Get our app",
     },
@@ -281,7 +307,8 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
         body:
             "Hello {customer}, thank you for reaching out to {shop}! 👋\n\n" +
             "We have received your message regarding {subject}. Our support team is attending to it and will reply to you here shortly.\n\n" +
-            "Tap View ticket to follow updates.",
+            "Tap View ticket to follow updates." +
+            HELP_LINE,
         viewButton: "View ticket",
         appButton: "Get our app",
     },
