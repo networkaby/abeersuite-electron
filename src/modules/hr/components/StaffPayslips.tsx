@@ -29,7 +29,7 @@ import { formatDayBasis, formatDayBasisLong, formatPeriod, type PayslipDto } fro
 
 export default function StaffPayslips({ userId }: { userId: number }) {
     // No `loading`: the table is always mounted and says "Reading…" in its body.
-    const { data, error, reload } = useApiResource<PayslipDto[]>(`/api/hr/staff/${userId}/payslips`);
+    const { data, error, reload } = useApiResource<PayslipDto[]>(`/api/hr/staff/${userId}/payslips`, { topics: ["ledger"] });
     const [open, setOpen] = useState<Set<number>>(new Set());
 
     const toggle = (id: number) => setOpen((prev) => {

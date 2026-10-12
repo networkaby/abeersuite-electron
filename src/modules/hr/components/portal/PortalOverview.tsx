@@ -37,7 +37,7 @@ export default function PortalOverview({ userId, me, staff, nav, onRequestLeave 
 }) {
     const data = me.data;
     // The latest slip only — the list lives on Pay → Payslips.
-    const slips = useApiResource<PayslipDto[]>(`/api/hr/staff/${userId}/payslips`);
+    const slips = useApiResource<PayslipDto[]>(`/api/hr/staff/${userId}/payslips`, { topics: ["ledger"] });
     const lastSlip = slips.data?.[0] ?? null;
 
     const view = data ? (() => {

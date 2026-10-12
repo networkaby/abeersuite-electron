@@ -70,6 +70,7 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
     ].filter(Boolean).join("&");
     const { data, loading, refreshing, error, reload } = useApiResource<PayrollPreview>(
         `/api/hr/payroll/preview${qs ? `?${qs}` : ""}`,
+        { topics: ["settings", "ledger"] },
     );
 
     // The server's answer is the truth about the period until the user edits it.

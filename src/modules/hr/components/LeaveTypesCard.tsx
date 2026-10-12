@@ -32,7 +32,7 @@ const toText = (n: number | null) => (n === null ? "" : String(n));
 type Field = "yearlyQuota";
 
 export default function LeaveTypesCard({ canEdit }: { canEdit: boolean }) {
-    const { data, loading, error, reload } = useApiResource<LeaveTypeDto[]>("/api/hr/leave-types");
+    const { data, loading, error, reload } = useApiResource<LeaveTypeDto[]>("/api/hr/leave-types", { topics: ["settings"] });
 
     // The server's answer is the truth; `edits` is only what has been typed over
     // it since. Held this way rather than copied into state, so a box being typed

@@ -119,7 +119,7 @@ export function PosScreenShell({
     const openChatHere = useCallback((phone: string) => { setChatPhone(phone); setChatOpen(true); }, []);
     useOpenChatRequests(openChatHere);
     const explorerOpen = useExplorerStore((s) => s.open);
-    const { data: taskPositions = [] } = useApiResource<TaskPositionOption[]>("/api/positions");
+    const { data: taskPositions = [] } = useApiResource<TaskPositionOption[]>("/api/positions", { topics: ["settings"] });
     const chatUnread = useInboxUnread();
 
     // Auto-focus the party picker on mount so the cashier can start typing

@@ -38,7 +38,7 @@ export default function PayrollPayTab({ canPay, onPaid }: {
     canPay: boolean;
     onPaid: () => void;
 }) {
-    const { data, refreshing, error, reload } = useApiResource<PayableStaffDto[]>("/api/hr/payroll/payable");
+    const { data, refreshing, error, reload } = useApiResource<PayableStaffDto[]>("/api/hr/payroll/payable", { topics: ["ledger"] });
     const { accounts } = useGlAccounts();
 
     const [sourceId, setSourceId] = useState<number | null>(null);

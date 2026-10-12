@@ -37,7 +37,7 @@ export default function StaffSeatsCard({ detail, canEdit, onChanged }: {
     onChanged: () => void;
 }) {
     const { user } = detail;
-    const { data: positions } = useApiResource<PositionRow[]>(canEdit ? "/api/positions" : null);
+    const { data: positions } = useApiResource<PositionRow[]>(canEdit ? "/api/positions" : null, { topics: ["settings"] });
     const [busy, setBusy] = useState(false);
     const [picking, setPicking] = useState(false);
 

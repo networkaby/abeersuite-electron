@@ -34,7 +34,7 @@ export function LoyaltyPanel({ accountId, canManage = false }: { accountId: numb
     // One customer's wallet: a reply for the customer the screen has moved away
     // from is dropped (useApiResource), and a reload after an adjustment keeps
     // the wallet on screen while it re-reads.
-    const { data: wallet = null, loading, error, reload: load } = useApiResource<Wallet>(`/api/loyalty/${accountId}`);
+    const { data: wallet = null, loading, error, reload: load } = useApiResource<Wallet>(`/api/loyalty/${accountId}`, { topics: ["ledger"] });
     useEffect(() => { if (error) toast.error("Failed to load loyalty wallet"); }, [error]);
     const [deltaStr, setDeltaStr] = useState("");
     const [note, setNote] = useState("");
