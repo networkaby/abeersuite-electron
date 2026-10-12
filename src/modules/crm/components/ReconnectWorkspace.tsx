@@ -271,6 +271,8 @@ export default function ReconnectWorkspace({
 
     // ── Selection + right pane ──
     const [selected, setSelected] = useState<Candidate | null>(null);
+    const selectedRef = useRef(selected);
+    useEffect(() => { selectedRef.current = selected; });
     const [leadPhone, setLeadPhone] = useState<string | null>(null);
     const [callerCalls, setCallerCalls] = useState<CallerCall[] | null>(null);
     const [callerMessages, setCallerMessages] = useState<CallerMessage[] | null>(null);
@@ -419,7 +421,15 @@ export default function ReconnectWorkspace({
 
     // A call logged or a customer contacted from another desk changes who is
     // still worth reconnecting with — and the saved lists this works from.
-    useRealtimeTopics(["parties", "tickets"], () => { loadSaved(); loadList(); });
+    // The open customer's timeline / items reload quietly too, so a note logged
+    // on another machine appears here without a blank flash.
+    useRealtimeTopics(["parties", "tickets"], () => {
+        loadSaved(); loadList();
+        if (!selected) return;
+        if (selected.kind === "caller") { if (selected.phone) void loadCallerCalls(selected.phone, true); return; }
+        void loadTimeline(selected, true);
+        if (items !== null) void loadItems(selected, true);
+    });
 
     const saveNew = async () => {
         if (!newName.trim()) return;
@@ -478,48 +488,53 @@ export default function ReconnectWorkspace({
         }
     };
 
-    const loadTimeline = useCallback(async (c: Candidate) => {
-        setLoadingTimeline(true);
-        setTimeline(null);
+    const loadTimeline = useCallback(async (c: Candidate, quiet = false) => {
+        if (!quiet) { setLoadingTimeline(true); setTimeline(null); }
         try {
             const res = await axios.get<Timeline>(`/api/crm/reconnect/timeline?kind=${c.kind}&id=${c.id}`);
+            // A quiet refresh that lands after the user picked someone else is dropped.
+            if (quiet && selectedRef.current !== c) return;
             setTimeline(res.data);
         } catch {
-            toast.error("Failed to load timeline");
+            if (!quiet) toast.error("Failed to load timeline");
         } finally {
-            setLoadingTimeline(false);
+            if (!quiet) setLoadingTimeline(false);
         }
     }, []);
 
-    const loadItems = useCallback(async (c: Candidate) => {
-        setLoadingItems(true);
+    const loadItems = useCallback(async (c: Candidate, quiet = false) => {
+        if (!quiet) setLoadingItems(true);
         try {
             const res = await axios.get<{ items: PurchasedItem[] }>(`/api/crm/reconnect/items?kind=${c.kind}&id=${c.id}`);
+            if (quiet && selectedRef.current !== c) return;
             setItems(res.data.items);
         } catch {
-            toast.error("Failed to load items");
+            if (!quiet) toast.error("Failed to load items");
         } finally {
-            setLoadingItems(false);
+            if (!quiet) setLoadingItems(false);
         }
     }, []);
 
-    const loadCallerCalls = useCallback(async (phone: string) => {
-        setLoadingCallerCalls(true);
-        setCallerCalls(null);
-        setCallerMessages(null);
+    const loadCallerCalls = useCallback(async (phone: string, quiet = false) => {
+        if (!quiet) {
+            setLoadingCallerCalls(true);
+            setCallerCalls(null);
+            setCallerMessages(null);
+        }
         try {
             const [calls, thread] = await Promise.all([
                 axios.get<{ items: CallerCall[] }>(`/api/calls?phone=${encodeURIComponent(phone)}&direction=all`),
                 axios.get<{ items: ThreadItem[] }>(`/api/messages/thread?phone=${encodeURIComponent(phone)}`)
                     .catch(() => ({ data: { items: [] as ThreadItem[] } })), // messages are extra — never block the call log
             ]);
+            if (quiet && selectedRef.current?.phone !== phone) return;
             setCallerCalls(calls.data.items);
             // Newest first, like the call list.
             setCallerMessages(thread.data.items.filter((i): i is CallerMessage => i.type === "message").reverse());
         } catch {
-            toast.error("Failed to load call log");
+            if (!quiet) toast.error("Failed to load call log");
         } finally {
-            setLoadingCallerCalls(false);
+            if (!quiet) setLoadingCallerCalls(false);
         }
     }, []);
 
