@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,8 @@ export default function InventoryWarrantyTermsPage() {
     useEffect(() => {
         load();
     }, []);
+
+    useRealtimeTopics(["catalogue"], load);
 
     const cancel = () => {
         setAdding(false);

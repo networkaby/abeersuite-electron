@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
@@ -93,12 +94,15 @@ export default function ProductForm({
     // the default gate until loaded.
     const [rules, setRules] = useState<ShopPublishRules>(DEFAULT_SHOP_PUBLISH_RULES);
 
-    useEffect(() => {
+    const loadRules = useCallback(() => {
         axios
             .get<{ rules: ShopPublishRules }>("/api/ecommerce/publish-rules")
             .then((r) => setRules(r.data.rules))
             .catch(() => setRules(DEFAULT_SHOP_PUBLISH_RULES));
     }, []);
+    useEffect(loadRules, [loadRules]);
+    // The publish rules are reference data — the form fields themselves never refresh under the editor.
+    useRealtimeTopics(["catalogue"], loadRules);
 
     // ── Naming convention (Settings → Naming Convention) ──────────────────
     // Slug is built from the product's masters (brand / group / model / …),

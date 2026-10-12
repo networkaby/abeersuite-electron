@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Loader2, RefreshCw, Save, Send, SendHorizontal } from "lucide-react";
 import { extractApiError } from "@/shared/lib/api";
@@ -132,6 +133,14 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
             setBusy(null);
         }
     }
+
+    // Another desk saving a template (or Meta's answer landing) shows here — but
+    // never over wording that is being typed.
+    useRealtimeTopics(["settings"], () => {
+        axios.get(`/api/settings/whatsapp-templates`)
+            .then(({ data }) => setTemplates(data.templates))
+            .catch(() => {});
+    }, !dirty && busy === null);
 
     async function sendTest() {
         setBusy("test");

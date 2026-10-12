@@ -27,6 +27,7 @@ import {
     type ShopOutOfStockPolicy,
 } from "@/modules/ecommerce/lib/shopStock";
 import { getWithRetry } from "@/shared/lib/http/getWithRetry";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 // Retry transient GET failures (dev-compile hiccups) a couple of times so the
 // page reflects the real saved state instead of silently falling back to a
@@ -36,17 +37,22 @@ export default function EcommerceSettingsPage() {
     const [rulesLoaded, setRulesLoaded] = useState(false);
     const [rulesError, setRulesError] = useState(false);
     const [saving, setSaving] = useState(false);
+    // Last copy the server answered with — a live refresh only lands while the
+    // screen still matches it, so it never wipes a switch the owner has flipped.
+    const [savedRules, setSavedRules] = useState<ShopPublishRules | null>(null);
 
     const [policy, setPolicy] = useState<ShopOutOfStockPolicy>(DEFAULT_OUT_OF_STOCK_POLICY);
     const [policyLoaded, setPolicyLoaded] = useState(false);
     const [policyError, setPolicyError] = useState(false);
     const [savingPolicy, setSavingPolicy] = useState(false);
+    const [savedPolicy, setSavedPolicy] = useState<ShopOutOfStockPolicy | null>(null);
 
     const loadRules = useCallback(async () => {
         setRulesError(false);
         try {
             const data = await getWithRetry<{ rules: ShopPublishRules }>("/api/ecommerce/publish-rules");
             setRules(data.rules);
+            setSavedRules(data.rules);
             setRulesLoaded(true);
         } catch {
             setRulesError(true);
@@ -58,6 +64,7 @@ export default function EcommerceSettingsPage() {
         try {
             const data = await getWithRetry<{ policy: ShopOutOfStockPolicy }>("/api/ecommerce/stock-policy");
             setPolicy(data.policy);
+            setSavedPolicy(data.policy);
             setPolicyLoaded(true);
         } catch {
             setPolicyError(true);
@@ -69,11 +76,17 @@ export default function EcommerceSettingsPage() {
         void loadPolicy();
     }, [loadRules, loadPolicy]);
 
+    const rulesDirty = savedRules !== null && JSON.stringify(rules) !== JSON.stringify(savedRules);
+    const policyDirty = savedPolicy !== null && policy !== savedPolicy;
+    useRealtimeTopics(["catalogue"], () => { void loadRules(); }, !rulesDirty && !saving);
+    useRealtimeTopics(["catalogue"], () => { void loadPolicy(); }, !policyDirty && !savingPolicy);
+
     const save = async () => {
         setSaving(true);
         try {
             const { data } = await axios.put<{ rules: ShopPublishRules }>("/api/ecommerce/publish-rules", rules);
             setRules(data.rules);
+            setSavedRules(data.rules);
             toast.success("Publish rules saved");
         } catch {
             toast.error("Failed to save publish rules");
@@ -89,6 +102,7 @@ export default function EcommerceSettingsPage() {
                 policy,
             });
             setPolicy(data.policy);
+            setSavedPolicy(data.policy);
             toast.success("Out-of-stock policy saved");
         } catch {
             toast.error("Failed to save policy");

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
 import { parseDigitsInput } from "@/shared/lib/format";
@@ -26,6 +27,8 @@ import {
     resolveTemplateForFormat,
     REPAIR_DOCUMENT_KINDS,
     POS_DOCUMENT_KINDS,
+    rowToVoucherTemplateDefaults,
+    type VoucherPrintTemplateRow,
     type VoucherTemplateDefaults,
     type VoucherTemplateKind,
     type PaperFormat,
@@ -174,6 +177,25 @@ export function VoucherTemplatesPanel({ initialTemplates, organisation }: Props)
     const current = working.get(selectedKind);
     const baseline = saved.get(selectedKind);
     const isDirty = !!current && !!baseline && JSON.stringify(current) !== JSON.stringify(baseline);
+
+    // A template saved on another desk lands here for every kind that has no
+    // unsaved edits of its own; a kind being edited keeps the working copy.
+    useRealtimeTopics(["settings"], () => {
+        axios.get<{ templates: VoucherPrintTemplateRow[] }>("/api/settings/voucher-templates")
+            .then(({ data }) => {
+                const w = new Map(working);
+                const sv = new Map(saved);
+                for (const row of data.templates) {
+                    const t = rowToVoucherTemplateDefaults(row);
+                    if (JSON.stringify(w.get(t.kind)) !== JSON.stringify(sv.get(t.kind))) continue;
+                    w.set(t.kind, t);
+                    sv.set(t.kind, t);
+                }
+                setWorking(w);
+                setSaved(sv);
+            })
+            .catch(() => {});
+    }, !saving && !resetting);
 
     // Computed before any early return so React Hook ordering stays stable.
     const sample = useMemo(() => buildSampleForKind(selectedKind), [selectedKind]);

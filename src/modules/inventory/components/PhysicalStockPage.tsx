@@ -23,6 +23,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { extractApiError } from "@/shared/lib/api";
 import { http } from "@/shared/lib/http";
 import { BranchRequired } from "@/shared/components/BranchRequired";
@@ -175,6 +176,20 @@ export function PhysicalStockPage() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [form.lines.length]);
+
+    // The "in system" figure is reference data: a sale at the till while the count
+    // is being taken moves it here. The counted quantities are never touched.
+    useRealtimeTopics(["stock"], () => {
+        const ids = [...new Set(form.lines.map((l) => l.productId).filter((id) => id > 0))];
+        for (const id of ids) {
+            axios.get<{ stock: number | null }>(`/api/inventory/products/${id}`)
+                .then((r) => setForm((f) => ({
+                    ...f,
+                    lines: f.lines.map((row) => row.productId === id ? { ...row, currentStock: r.data.stock ?? 0 } : row),
+                })))
+                .catch(() => { /* keep the figure on screen */ });
+        }
+    }, form.lines.length > 0);
 
     // ── Scan-to-add ─────────────────────────────────────────────────────────
 

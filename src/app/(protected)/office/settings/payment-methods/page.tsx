@@ -50,6 +50,7 @@ import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/compone
 import { isOdGroupName } from "@/modules/accountancy/lib/bankParticulars";
 import { Landmark } from "lucide-react";
 import { getWithRetry } from "@/shared/lib/http/getWithRetry";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 
 // ── Types mirroring the API ───────────────────────────────────────────────────
 
@@ -229,6 +230,9 @@ export default function PaymentMethodsSettingsPage() {
     useEffect(() => {
         void load();
     }, [load]);
+    // The list and the ledgers it settles into follow changes; the open dialog keeps its own form.
+    useRealtimeTopics(["settings"], () => { void load(); });
+    useRealtimeTopics(["ledger"], loadGlAccounts);
 
     const provider: PaymentGatewayProvider | undefined = useMemo(
         () => getGatewayProvider(form.provider),

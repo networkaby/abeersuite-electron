@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import {
     AlertCircle, AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown,
@@ -161,6 +162,12 @@ export default function NeedsAttentionPage() {
     };
 
     useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // Live refresh swaps the rows only — no spinner, groups stay as opened, typed edits stay.
+    useRealtimeTopics(["catalogue", "stock"], () => {
+        axios.get<PricingItem[]>("/api/pricing-strategy/items?onlyAttention=1")
+            .then((r) => setItems(r.data))
+            .catch(() => {});
+    });
 
     const prevView = useRef(view);
     useEffect(() => {

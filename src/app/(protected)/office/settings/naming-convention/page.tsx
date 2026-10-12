@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { ArrowDown, ArrowUp, Plus, Trash2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -250,11 +251,9 @@ export default function NamingConventionPage() {
     const [saving, setSaving] = useState(false);
     const [attrKeys, setAttrKeys] = useState<Array<{ key: string; name: string }>>([]);
 
-    useEffect(() => {
-        Promise.all([
-            axios
-                .get<NamingConfigShape>("/api/inventory/naming-config")
-                .then((r) => setCfg({ ...DEFAULT_NAMING_CONFIG, ...r.data })),
+    // The attribute keys are a reference list, so they follow changes; the config
+    // itself is the form being edited and is read once.
+    const loadAttrKeys = useCallback(() =>
             axios
                 .get<Array<{ key: string; name: string; isActive: boolean }>>("/api/inventory/attribute-masters")
                 .then((r) => {
@@ -264,11 +263,19 @@ export default function NamingConventionPage() {
                             .filter((m) => m.isActive)
                             .filter((m) => { if (seen.has(m.key)) return false; seen.add(m.key); return true; }),
                     );
-                }),
+                }), []);
+    useRealtimeTopics(["catalogue"], () => { void loadAttrKeys().catch(() => {}); });
+
+    useEffect(() => {
+        Promise.all([
+            axios
+                .get<NamingConfigShape>("/api/inventory/naming-config")
+                .then((r) => setCfg({ ...DEFAULT_NAMING_CONFIG, ...r.data })),
+            loadAttrKeys(),
         ])
             .catch(() => toast.error("Failed to load naming config"))
             .finally(() => setLoading(false));
-    }, []);
+    }, [loadAttrKeys]);
 
     const offlinePreview = useMemo(() => buildOfflineName(PREVIEW_MASTERS, cfg), [cfg]);
     const onlinePreview = useMemo(() => buildOnlineName(PREVIEW_MASTERS, cfg), [cfg]);

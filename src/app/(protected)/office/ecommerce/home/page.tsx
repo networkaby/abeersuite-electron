@@ -37,6 +37,7 @@ import BannerSlidesEditor from "@/modules/ecommerce/components/homeEditor/Banner
 import TrustItemsEditor from "@/modules/ecommerce/components/homeEditor/TrustItemsEditor";
 import HeadingEditor from "@/modules/ecommerce/components/homeEditor/HeadingEditor";
 import { getWithRetry } from "@/shared/lib/http/getWithRetry";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
@@ -453,6 +454,9 @@ export default function CustomizeHomePage() {
     const [loaded, setLoaded] = useState(false);
     const [loadError, setLoadError] = useState(false);
     const [saving, setSaving] = useState(false);
+    // The layout as the server last answered it — a live refresh only lands while
+    // the editor still matches it, so it never wipes an unsaved arrangement.
+    const [savedJson, setSavedJson] = useState<string | null>(null);
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
     const [addType, setAddType] = useState<HomeSectionType>("promoBanner");
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -472,6 +476,7 @@ export default function CustomizeHomePage() {
         try {
             const data = await getWithRetry<{ layout: HomeSectionInstance[] }>("/api/ecommerce/home-layout");
             setInstances(data.layout);
+            setSavedJson(JSON.stringify(data.layout));
             setLoaded(true);
         } catch {
             setLoadError(true);
@@ -486,7 +491,10 @@ export default function CustomizeHomePage() {
     // the storefront itself renders from, so a previewed rail / category grid /
     // deal shows the actual products a customer would see. Failure is
     // non-fatal: content-only sections (hero, banners, trust) still preview.
-    useEffect(() => {
+    const layoutDirty = savedJson !== null && JSON.stringify(instances) !== savedJson;
+    useRealtimeTopics(["catalogue"], () => { void load(); }, !layoutDirty && !saving);
+
+    const loadPreview = useCallback(() => {
         void (async () => {
             const [products, brands] = await Promise.all([
                 axios
@@ -501,6 +509,8 @@ export default function CustomizeHomePage() {
             setPreviewData({ products, brands });
         })();
     }, []);
+    useEffect(loadPreview, [loadPreview]);
+    useRealtimeTopics(["catalogue", "stock"], loadPreview);
 
     const updateInstance = (id: string, patch: Partial<HomeSectionInstance>) => {
         setInstances((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
@@ -629,6 +639,7 @@ export default function CustomizeHomePage() {
         try {
             const { data } = await axios.put<{ layout: HomeSectionInstance[] }>("/api/ecommerce/home-layout", instances);
             setInstances(data.layout);
+            setSavedJson(JSON.stringify(data.layout));
             setFallbacksUnlocked(false);
             toast.success("Home page layout saved");
         } catch {

@@ -14,6 +14,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { BadgeIndianRupee, Clock4, CalendarHeart, CalendarX2, TriangleAlert } from "lucide-react";
 import { NumericInput } from "@/shared/components/NumericInput";
@@ -247,6 +248,19 @@ export default function PayRulesCard({ canEdit }: { canEdit: boolean }) {
         })();
         return () => { alive = false; };
     }, []);
+
+    // Rules saved on another desk land here — never while this desk is mid-edit
+    // (a keystroke sets `saving` until its write lands).
+    useRealtimeTopics(["settings"], () => {
+        invalidateOrgDefaultsCache();
+        getOrgDefaults()
+            .then((d) => {
+                const rules = parsePayRules(d.hrPayRulesJson);
+                setValues(toDraft(rules));
+                setLateStyle(rules.latePenaltyStyle);
+            })
+            .catch(() => {});
+    }, loaded && !saving);
 
     const num = (key: string) => {
         const n = Number(values[key]);

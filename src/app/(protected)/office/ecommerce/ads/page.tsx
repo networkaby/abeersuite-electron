@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/shared/lib/format/utils";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
 import { getWithRetry } from "@/shared/lib/http/getWithRetry";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import {
@@ -163,6 +164,8 @@ export default function EcommerceAdsPage() {
 
     const categories = useMemo(() => [...new Set(products.map((p) => p.category))].sort(), [products]);
     const dirty = loaded && JSON.stringify(ads) !== savedJson;
+    // Ads saved on another desk land here unless this desk has unsaved edits.
+    useRealtimeTopics(["catalogue"], () => { void load(); }, !dirty);
     const selected = ads.find((a) => a.id === selectedId) ?? null;
 
     const update = (id: string, patch: Partial<ShopAd>) =>

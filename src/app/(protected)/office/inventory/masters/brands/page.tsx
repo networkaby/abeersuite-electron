@@ -27,7 +27,7 @@ export default function InventoryBrandsPage() {
     // Spike for the masters template: the list, its first-load spinner and the
     // post-save refetch come from the shared hook. `reload()` keeps the rows on
     // screen while it re-fetches, so a save no longer flashes the table blank.
-    const { data: rows = [], loading, error, reload } = useApiResource<Row[]>("/api/inventory/brands");
+    const { data: rows = [], loading, error, reload } = useApiResource<Row[]>("/api/inventory/brands", { topics: ["catalogue"] });
     const [adding, setAdding] = useState(false);
     const [editId, setEditId] = useState<number | null>(null);
     const [form, setForm] = useState(empty);

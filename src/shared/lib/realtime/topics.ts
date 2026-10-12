@@ -76,7 +76,7 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
     [/^\/api\/coupons/,                             ["catalogue"]],
     [/^\/api\/(ecommerce|shop)\/products/,          ["catalogue"]],
     [/^\/api\/pos\/services/,                       ["catalogue"]],
-    [/^\/api\/ecommerce\/(home-layout|publish-rules|stock-policy)/, ["catalogue"]],
+    [/^\/api\/ecommerce\/(home-layout|publish-rules|stock-policy|ads)/, ["catalogue"]],
     // The phone app's Photos screen: a product's gallery or a brand/group/category image.
     [/^\/api\/mobile\/photos\/(product|master)\//,  ["catalogue"]],
 
@@ -107,6 +107,7 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
     // HR & People — the staff record is org config like users and positions.
     [/^\/api\/hr\//,                                 ["settings"]],
     [/^\/api\/pos\/counters/,                       ["settings"]],
+    [/^\/api\/due-reminders/,                       ["settings"]],
 
     // ── Chat room discovery ──────────────────────────────────────────────────
     // A new message riding an existing room delivers over its OWN "room:<id>"

@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,12 @@ export function TaxClassificationClient({ canEdit }: Props) {
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { reload(); }, [reload]);
+    // A product re-classed on another desk: swap the figures in without the spinner.
+    useRealtimeTopics(["catalogue"], () => {
+        axios.get<GstClassificationPayload>("/api/accountancy/reports/gst-classification")
+            .then((r) => setData(r.data))
+            .catch(() => {});
+    });
 
     const drillToRate = (rateId: number | null) => {
         setRateFilter(rateId);

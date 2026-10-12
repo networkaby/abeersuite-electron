@@ -7,6 +7,7 @@
 import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Eye, Loader2, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -85,6 +86,12 @@ export function DueRemindersPanel() {
             .then((r) => { apply(r.data.settings); setLog(r.data.log); })
             .catch((e) => toast.error(extractApiError(e, "Could not load Due Reminders")));
     }, []);
+    // Only the send log follows changes — the settings above are the form being edited.
+    useRealtimeTopics(["settings", "ledger"], () => {
+        axios.get<{ log: ReminderLogRow[] }>("/api/due-reminders/settings")
+            .then((r) => setLog(r.data.log))
+            .catch(() => {});
+    });
 
     const { hits } = usePartySearch(excludeText, { group: "Sundry Debtors" });
     const addExcluded = (accountId: number | null, name: string) => {

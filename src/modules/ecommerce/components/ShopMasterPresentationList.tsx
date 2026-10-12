@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, ImageIcon, Pencil, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -68,8 +69,8 @@ export default function ShopMasterPresentationList({
     const [saving, setSaving] = useState(false);
     const [search, setSearch] = useState("");
 
-    const load = () => {
-        setLoading(true);
+    const load = (silent = false) => {
+        if (!silent) setLoading(true);
         axios
             .get<ShopMasterRow[]>(apiBase)
             .then((r) => setRows(r.data.map((x) => ({ ...x, parentId: hierarchical ? x.parentId : null }))))
@@ -81,6 +82,8 @@ export default function ShopMasterPresentationList({
         load();
         // eslint-disable-next-line react-hooks/exhaustive-deps -- apiBase/hierarchical are fixed per tab, not reactive
     }, [apiBase]);
+    // Rows refresh in place; the edit form holds its own copy.
+    useRealtimeTopics(["catalogue"], () => load(true));
 
     const normalizedSearch = search.trim().toLowerCase();
     const searchedRows = normalizedSearch
