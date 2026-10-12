@@ -5,6 +5,7 @@ import { dutyHoursFor, dutyMinutesFor, gradeDay, lateMinutes, overtimeMinutes, s
 import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import { shopDateFromIso, type SeasonalHours } from "@/shared/lib/hr/seasonalHours";
 import { EMPTY_ATTENDANCE_EFFECT, lateDutyCutMinutes, type AttendanceEffect, type PayRules } from "@/shared/lib/hr/payRules";
+import { reviewOf } from "@/shared/lib/hr/attendanceReview";
 import { perDayPaise, perHourPaise, weekdayOf } from "./payrollProrate";
 import type { SalaryLine } from "./salaryLines";
 import { holidayDatesFor } from "./attendanceCalendar";
@@ -89,7 +90,7 @@ export async function attendanceEffectFor(
         }),
         prisma.attendanceDay.findMany({
             where: { userId, date: { gte: dateOf(fromIso), lte: dateOf(toIso) } },
-            select: { date: true, status: true, source: true, workedMinutes: true, firstInAt: true },
+            select: { date: true, status: true, source: true, workedMinutes: true, firstInAt: true, review: true, reviewedMinutes: true },
         }),
         prisma.leaveRequest.findMany({
             where: {
@@ -130,7 +131,12 @@ export async function attendanceEffectFor(
         const day = iso(r.date);
         const hours = hoursOn(day);
         const duty = dutyMinutesFor(profile?.dutyMinutes, hours.start, hours.end);
-        const measured = r.source === "COUNTER" && r.workedMinutes > 0;
+        // A till day nobody has accepted says nothing at all — not an absence,
+        // not overtime, not lateness (owner, 2026-10-12: auto attendance is on
+        // trial). Waiting and rejected days are ordinary days. attendanceReview.ts.
+        const review = reviewOf(r);
+        if (review && review !== "ACCEPTED") continue;
+        const measured = review === "ACCEPTED";
 
         // An absence nobody asked for — charged whichever hand wrote the day,
         // because "he did not come" needs no clock to establish.

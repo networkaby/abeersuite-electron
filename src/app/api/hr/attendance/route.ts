@@ -20,7 +20,8 @@ import type { AttendanceStatus, LeaveKind } from "@/shared/lib/schemas/hrAttenda
 //       calendar by the caller (attendanceCalendar.ts) — the API does not
 //       invent rows. People who had left before `from` are not listed.
 //   PUT { userId, date, status | null, note? }   — mark one day from the office.
-//       null removes the mark, so the day reads off the calendar again.
+//       null removes the mark: the day reads off the calendar again, or — when
+//       the till measured it — goes back to the till's own record.
 
 const dayOf = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -132,7 +133,15 @@ export async function PUT(req: Request) {
     try {
         const date = dayOf(data.date);
         if (data.status === null) {
-            await prisma.attendanceDay.deleteMany({ where: { userId: data.userId, date } });
+            // A day the till measured keeps its measurement: clearing the office
+            // mark hands the day back to the clock (and to Employee Activity's
+            // review) instead of deleting the minutes underneath it. A day only
+            // the office ever wrote has nothing under it, and goes.
+            const back = await prisma.attendanceDay.updateMany({
+                where: { userId: data.userId, date, OR: [{ workedMinutes: { gt: 0 } }, { firstInAt: { not: null } }] },
+                data:  { status: "PRESENT", source: "COUNTER", note: null, markedById: null },
+            });
+            if (!back.count) await prisma.attendanceDay.deleteMany({ where: { userId: data.userId, date } });
             return NextResponse.json({ ok: true, cleared: true });
         }
         const row = await prisma.attendanceDay.upsert({

@@ -12,6 +12,7 @@ import { dutyHoursFor, dutyMinutesFor, idleLimitMinutesFor, lateMinutes } from "
 import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import { loadPayRules } from "@/modules/hr/lib/payRulesServer";
 import { lateDutyCutMinutes } from "@/shared/lib/hr/payRules";
+import { reviewOf } from "@/shared/lib/hr/attendanceReview";
 import { shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
 import { holidayDatesFor, isoDaysBetween, weekdayOf } from "@/modules/hr/lib/attendanceCalendar";
 import { attendanceEffectFor } from "@/modules/hr/lib/payRulesApply";
@@ -34,7 +35,7 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
         loadPayRules(),
         prisma.attendanceDay.findMany({
             where:  { userId, date: { gte: dayOf(from), lte: dayOf(to) } },
-            select: { date: true, status: true, source: true, firstInAt: true, lastSeenAt: true, workedMinutes: true, note: true },
+            select: { date: true, status: true, source: true, firstInAt: true, lastSeenAt: true, workedMinutes: true, note: true, review: true, reviewedMinutes: true },
         }),
         prisma.attendanceSpan.findMany({
             where:   { userId, date: { gte: dayOf(from), lte: dayOf(to) } },
@@ -121,8 +122,10 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
         // was shut cannot be arrived late for. Counting one of those here would
         // spend a free late day the payslip never spent, and from then on every
         // later day would disagree with payroll about whether it was charged.
-        const measured = row?.source === "COUNTER" && (row?.workedMinutes ?? 0) > 0;
-        const judged = measured && !weeklyOff && !holidayName;
+        // …and only once the day has been ACCEPTED: a waiting or rejected till
+        // day is not judged by payroll, so it must not spend a free late day here.
+        const review = row ? reviewOf(row) : null;
+        const judged = review === "ACCEPTED" && !weeklyOff && !holidayName;
         let lateCharged = false;
         if (lateBy > 0 && judged) {
             lateSoFar += 1;
@@ -146,6 +149,7 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
             leaveKind: leaveKindOn(iso),
             status: row?.status ?? "",
             manual: row?.source === "OFFICE",
+            review,
             weeklyOff,
             holidayName,
             // The rule's own function, not a second copy of it. A "pay" style

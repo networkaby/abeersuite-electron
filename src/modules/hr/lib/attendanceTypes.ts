@@ -2,6 +2,7 @@
 
 import type { AttendanceStatus, LeaveKind, LeaveStatus } from "@/shared/lib/schemas/hrAttendanceSchema";
 import type { SeasonalHours } from "@/shared/lib/hr/seasonalHours";
+import type { AttendanceReview } from "@/shared/lib/hr/attendanceReview";
 
 export interface AttendanceMark {
     status: AttendanceStatus;
@@ -65,6 +66,55 @@ export interface RegisterPayload {
     to: string;
     people: RegisterPerson[];
     holidays: HolidayDto[];
+}
+
+/**
+ * One person on one day, as Employee Activity's day review shows it: what the
+ * till measured, what that grades to against THAT day's duty, and the owner's
+ * decision on it. Every minute figure is the clock's own, before any decision.
+ */
+export interface DayReviewRow {
+    userId: number;
+    name: string;
+    avatarUrl: string | null;
+    role: string | null;
+    /**
+     * CLOCK  — the till measured minutes; a decision is wanted.
+     * OFFICE — a person marked the day; it already is a decision.
+     * IDLE   — a till row with no minutes measured; nothing to decide.
+     * NONE   — no row at all; the calendar answers (paid as a normal day).
+     */
+    kind: "CLOCK" | "OFFICE" | "IDLE" | "NONE";
+    /** The stored status, when there is a row. */
+    status: AttendanceStatus | null;
+    firstInAt: string | null;
+    /** The shift close, or failing that the last sign of life. */
+    lastOutAt: string | null;
+    workedMinutes: number;
+    dutyMinutes: number;
+    dutyStart: string;
+    dutyEnd: string;
+    /** What the minutes grade to — PRESENT · HALF_DAY · ABSENT. */
+    grade: "PRESENT" | "HALF_DAY" | "ABSENT";
+    lateBy: number;
+    overtimeMinutes: number;
+    shortMinutes: number;
+    weeklyOff: boolean;
+    holidayName: string | null;
+    leaveKind: LeaveKind | null;
+    note: string | null;
+    review: AttendanceReview | null;
+    reviewedBy: string | null;
+    reviewedAt: string | null;
+}
+
+export interface DayReviewPayload {
+    date: string;
+    /** Today in shop time. Only days before it can be decided — today is still running. */
+    today: string;
+    rows: DayReviewRow[];
+    /** Every past day with at least one till day waiting, oldest first. */
+    waitingDates: string[];
 }
 
 export interface LeaveRequestDto {

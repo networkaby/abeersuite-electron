@@ -7,6 +7,7 @@
 import type { DutyGrade } from "@/shared/lib/hr/dutyTime";
 import { earlyMinutes, gradeDay, overtimeMinutes, shortMinutes } from "@/shared/lib/hr/dutyTime";
 import type { AttendanceEffect, PayRules } from "@/shared/lib/hr/payRules";
+import type { AttendanceReview } from "@/shared/lib/hr/attendanceReview";
 import type { PayslipAttendanceData, PayslipAttendanceDay } from "@/shared/components/print/PayslipBody";
 
 /** One active stretch, as the screens want it: ISO instants, minutes, why it ended. */
@@ -64,6 +65,12 @@ export interface DayBreakup {
     status: string;
     /** True when the office typed the status and the clock was overruled. */
     manual: boolean;
+    /**
+     * The owner's decision on a till-measured day — null when there is nothing
+     * to decide (an office mark, or no minutes). Only ACCEPTED reaches pay;
+     * see `shared/lib/hr/attendanceReview.ts`.
+     */
+    review: AttendanceReview | null;
     /**
      * The day the shop was shut for this person — their own weekly off, or a
      * holiday that applies to their branch. Hours worked on such a day are not
@@ -147,6 +154,7 @@ export function buildDayBreakup(input: {
     leaveKind: string | null;
     status: string;
     manual: boolean;
+    review: AttendanceReview | null;
     weeklyOff: boolean;
     holidayName: string | null;
     latePenaltyMinutes: number;
@@ -177,6 +185,7 @@ export function buildDayBreakup(input: {
         grade: gradeDay(input.workedMinutes, input.dutyMinutes),
         status: input.status,
         manual: input.manual,
+        review: input.review,
         weeklyOff: input.weeklyOff,
         holidayName: input.holidayName,
         latePenaltyMinutes: input.latePenaltyMinutes,

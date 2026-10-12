@@ -5,9 +5,11 @@
 // the chosen person's month filling the main area on the right, day by day, down
 // to the stretches they were actually active.
 //
-// It only reads. Marking a day by hand stays on the Attendance register next
-// door, which is the whole month for everybody and the place HR overrules the
-// clock — one screen for the override, one for the working behind it.
+// With nobody picked, the main area is the DAY REVIEW (owner, 2026-10-12): one
+// day, the whole staff, and Accept / Reject / Mark on what the till measured —
+// auto attendance is on trial, and its minutes reach no pay until accepted
+// there. See AttendanceDayReview. The month-for-everybody grid stays on the
+// Attendance register next door.
 //
 // The left list rides the register's own payload, so it costs no extra read
 // (AGENTS §7): the same rows that grid draws, counted into P / A / L.
@@ -31,8 +33,9 @@ import { DATE_PRESET_LABELS, presetRangeOf, type DatePresetKey } from "@/shared/
 import { isoDaysBetween, summarise, holidayDatesFor } from "../lib/attendanceCalendar";
 import type { RegisterPayload } from "../lib/attendanceTypes";
 import AttendanceBreakup from "./AttendanceBreakup";
+import AttendanceDayReview from "./AttendanceDayReview";
 
-export default function AttendanceExplorer() {
+export default function AttendanceExplorer({ canEdit }: { canEdit: boolean }) {
     const router = useRouter();
     const searchParams = useSearchParams();
     const selectedId = Number(searchParams.get("user") ?? 0) || null;
@@ -176,20 +179,11 @@ export default function AttendanceExplorer() {
                         </div>
                     ) : selectedId && !data ? (
                         // A link straight to ?user=<id> arrives before the staff read
-                        // lands. "Pick somebody on the left" under a heading that names
-                        // nobody would be a lie for the second it is on screen.
+                        // lands. The day review under a heading that names nobody would
+                        // flash up for the second before the person's month replaces it.
                         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Reading…</div>
                     ) : (
-                        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-                            <Users size={28} className="text-muted-foreground/50" />
-                            <h1 className="text-base font-semibold tracking-tight">Employee Activity</h1>
-                            <p className="max-w-md text-xs text-muted-foreground">
-                                Pick somebody on the left to see their days one card at a time — when they came in,
-                                how many times they were active, the hours granted on their own, what the lateness
-                                cost and why each day reads the way it does. Marking a day by hand is on the
-                                Attendance register.
-                            </p>
-                        </div>
+                        <AttendanceDayReview canEdit={canEdit} onOpenPerson={select} />
                     )}
                 </section>
             </div>

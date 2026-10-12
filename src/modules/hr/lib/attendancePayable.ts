@@ -4,6 +4,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { dutyHoursFor, dutyMinutesFor, gradeDay } from "@/shared/lib/hr/dutyTime";
 import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import { shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
+import { reviewOf } from "@/shared/lib/hr/attendanceReview";
 import { unpaidLeaveDaysFor } from "./leaveBalance";
 
 /**
@@ -29,6 +30,10 @@ import { unpaidLeaveDaysFor } from "./leaveBalance";
  * overrules the clock, here as everywhere. Note the consequence, which is the
  * point of the whole exercise: a counter day stored as PRESENT can still come
  * out HALF or ABSENT once the hours are counted.
+ *
+ * …but only once somebody has ACCEPTED that day (owner, 2026-10-12 — auto
+ * attendance is on trial). A till day still waiting, or rejected, is a normal
+ * paid day here whatever its minutes say. See `shared/lib/hr/attendanceReview.ts`.
  */
 export async function nonPayableDays(userId: number, fromIso: string, toIso: string): Promise<Map<string, 0 | 0.5>> {
     const from = new Date(`${fromIso}T00:00:00.000Z`);
@@ -41,7 +46,7 @@ export async function nonPayableDays(userId: number, fromIso: string, toIso: str
         // filtering by status first would hide exactly those days from payroll.
         prisma.attendanceDay.findMany({
             where: { userId, date: { gte: from, lte: to } },
-            select: { date: true, status: true, source: true, workedMinutes: true },
+            select: { date: true, status: true, source: true, workedMinutes: true, review: true, reviewedMinutes: true },
         }),
         unpaidLeaveDaysFor(userId, fromIso, toIso),
     ]);
@@ -63,10 +68,9 @@ export async function nonPayableDays(userId: number, fromIso: string, toIso: str
     const out = new Map<string, 0 | 0.5>();
     for (const r of rows) {
         const iso = r.date.toISOString().slice(0, 10);
-        const status =
-            r.source === "COUNTER" && r.workedMinutes > 0
-                ? gradeDay(r.workedMinutes, dutyOnDay(iso))
-                : r.status;
+        const review = reviewOf(r);
+        if (review && review !== "ACCEPTED") continue;   // the clock has no say yet
+        const status = review ? gradeDay(r.workedMinutes, dutyOnDay(iso)) : r.status;
         if (status === "ABSENT") out.set(iso, 0);
         else if (status === "HALF_DAY") out.set(iso, 0.5);
         else if (status === "LEAVE" && unpaid.has(iso)) out.set(iso, 0);

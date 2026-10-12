@@ -13,6 +13,7 @@ import type { PayslipCommissionData, PayslipAttendanceData } from "@/shared/comp
 import { loadPayRules } from "./payRulesServer";
 import { dutyMinutesFor } from "@/shared/lib/hr/dutyTime";
 import { EMPTY_ATTENDANCE_EFFECT } from "@/shared/lib/hr/payRules";
+import { reviewOf } from "@/shared/lib/hr/attendanceReview";
 import { prorate, inclusiveDays, payDaysOf } from "./payrollProrate";
 import type { PayrollLineDto, PayrollRunDetail, PayrollRunRow, PayrollRunStatus, PayrollVoucherState } from "./payrollTypes";
 import { formatPeriod } from "./payrollTypes";
@@ -140,6 +141,13 @@ export interface PayrollCandidate {
     commissionBreakup: PayslipCommissionData | null;
     /** How that commission was arrived at, for the breakup. Null when there is none. */
     commissionBasis: string | null;
+    /**
+     * Till days in the period nobody has accepted or rejected yet on Employee
+     * Activity — paid as normal days for now — and the first of them, so the
+     * sheet can link straight to it. 0 / null when everything is decided.
+     */
+    waitingDays: number;
+    firstWaitingDate: string | null;
     included: boolean;
     skipReason: string | null;
 }
@@ -192,6 +200,7 @@ export async function buildPayrollCandidates(
     // Commission is owned by the Commission page, not by HR. One call for the
     // whole run — and today it always comes back empty, so nothing changes.
     const commissions = await commissionForPeriod(db, users.map((u) => u.id), fromIso, toIso);
+    const waiting = await waitingTillDays(db, fromIso, toIso);
     const out: PayrollCandidate[] = [];
 
     for (const u of users) {
@@ -224,7 +233,12 @@ export async function buildPayrollCandidates(
             // pay heads and the slip's working, so the three cannot disagree.
             const hours = await loadHoursBreakup(u.id, fromIso, toIso);
             const effect = hours?.effect ?? { ...EMPTY_ATTENDANCE_EFFECT };
-            attendance = hours ? freezeAttendanceForPayslip(hours.days, ctx.rules, effect) : null;
+            // The slip accounts only the days that reached the pay: a till day
+            // still waiting, or rejected, was paid as a normal day, and printing
+            // its minutes beside that pay would contradict it.
+            attendance = hours
+                ? freezeAttendanceForPayslip(hours.days.filter((d) => d.review === null || d.review === "ACCEPTED"), ctx.rules, effect)
+                : null;
             const latest = p!.salaries[p!.salaries.length - 1];
             ruleLines = payRuleLines(
                 effect,
@@ -286,9 +300,36 @@ export async function buildPayrollCandidates(
             commissionBasis: commLine ? (comm?.basis ?? null) : null,
             commissionBreakup: commLine ? (comm?.breakup ?? null) : null,
             attendance,
+            waitingDays: waiting.get(u.id)?.count ?? 0,
+            firstWaitingDate: waiting.get(u.id)?.first ?? null,
             included: skipReason === null,
             skipReason,
         });
+    }
+    return out;
+}
+
+/**
+ * Per person, the till days in [fromIso, toIso] still waiting for a decision.
+ * One read for the whole run — only measured till rows can be waiting, and the
+ * decision itself is judged by `reviewOf`, never re-implemented here.
+ */
+async function waitingTillDays(
+    db: Prisma.TransactionClient,
+    fromIso: string,
+    toIso: string,
+): Promise<Map<number, { count: number; first: string }>> {
+    const rows = await db.attendanceDay.findMany({
+        where:   { date: { gte: dateOnly(fromIso), lte: dateOnly(toIso) }, source: "COUNTER", workedMinutes: { gt: 0 } },
+        orderBy: { date: "asc" },
+        select:  { userId: true, date: true, source: true, workedMinutes: true, review: true, reviewedMinutes: true },
+    });
+    const out = new Map<number, { count: number; first: string }>();
+    for (const r of rows) {
+        if (reviewOf(r) !== "WAITING") continue;
+        const hit = out.get(r.userId);
+        if (hit) hit.count += 1;
+        else out.set(r.userId, { count: 1, first: toDateOnlyUtc(r.date) });
     }
     return out;
 }
@@ -399,6 +440,8 @@ export function toRunDetail(
         // stale the day the scheme is renamed, and the amount is the record.
         commissionPaise: l.commissionPaise,
         commissionBasis: null,
+        waitingDays: 0,
+        firstWaitingDate: null,
         included: l.included,
         skipReason: l.skipReason,
     });

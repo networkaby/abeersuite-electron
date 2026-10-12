@@ -33,6 +33,18 @@ export const attendanceMarkSchema = z.object({
     note:   z.string().trim().max(200).nullable().optional(),
 });
 
+/**
+ * POST /api/hr/attendance/review — Accept / Reject the till's figures for one
+ * day, several people at once. `review: null` takes the decision back.
+ */
+export const attendanceReviewSchema = z.object({
+    date:      isoDate,
+    decisions: z.array(z.object({
+        userId: z.number().int().positive(),
+        review: z.enum(["ACCEPTED", "REJECTED"]).nullable(),
+    })).min(1, "Nothing to decide"),
+});
+
 export const holidayCreateSchema = z.object({
     date:     isoDate,
     name:     z.string().trim().min(1, "A holiday needs a name").max(80),

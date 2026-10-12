@@ -71,6 +71,13 @@ export interface PayrollLineDto {
     commissionPaise: number;
     /** How it was worked out, for the breakup. Null on a stored run and while there are no schemes. */
     commissionBasis: string | null;
+    /**
+     * Till days in the period still waiting for Accept / Reject on Employee
+     * Activity — paid as normal days until decided. Preview only: 0 / null on a
+     * stored run, whose figures are frozen whatever is decided later.
+     */
+    waitingDays: number;
+    firstWaitingDate: string | null;
     ledger: { id: number; name: string } | null;
     included: boolean;
     /** Why the generator could not pay them. Null on a normal line. */

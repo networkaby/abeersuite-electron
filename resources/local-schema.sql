@@ -1641,6 +1641,10 @@ CREATE TABLE IF NOT EXISTS "attendance_days" (
     "counterId" INTEGER,
     "note" TEXT,
     "markedById" INTEGER,
+    "review" TEXT,
+    "reviewedById" INTEGER,
+    "reviewedAt" TIMESTAMP(3),
+    "reviewedMinutes" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -1664,6 +1668,14 @@ ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "note" TEXT;
 ALTER TABLE "attendance_days" ALTER COLUMN "note" DROP NOT NULL;
 ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "markedById" INTEGER;
 ALTER TABLE "attendance_days" ALTER COLUMN "markedById" DROP NOT NULL;
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "review" TEXT;
+ALTER TABLE "attendance_days" ALTER COLUMN "review" DROP NOT NULL;
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "reviewedById" INTEGER;
+ALTER TABLE "attendance_days" ALTER COLUMN "reviewedById" DROP NOT NULL;
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "reviewedAt" TIMESTAMP(3);
+ALTER TABLE "attendance_days" ALTER COLUMN "reviewedAt" DROP NOT NULL;
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "reviewedMinutes" INTEGER;
+ALTER TABLE "attendance_days" ALTER COLUMN "reviewedMinutes" DROP NOT NULL;
 ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 

@@ -36,6 +36,18 @@ model AttendanceDay {
   note      String?
   /// Who marked it from the office; null when the till did.
   markedById Int?
+  /// The owner's decision on a day the TILL measured (owner, 2026-10-12: auto
+  /// attendance is still on trial, so the clock changes no pay until a person
+  /// says so). ACCEPTED | REJECTED, null = waiting. Only an ACCEPTED day's
+  /// minutes reach payroll; waiting and rejected days are paid as normal days.
+  /// Read through `reviewOf` (shared/lib/hr/attendanceReview.ts), never raw.
+  review          String?
+  reviewedById    Int?
+  reviewedAt      DateTime?
+  /// `workedMinutes` at the moment of the decision. A till that adds minutes
+  /// afterwards (a late sync) makes the two differ, and the day reads as
+  /// waiting again — a decision only covers the figures it was made on.
+  reviewedMinutes Int?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @default(now()) @updatedAt
 
