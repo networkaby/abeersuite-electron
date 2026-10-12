@@ -19,7 +19,8 @@ import {
     WA_KEEP_INBOUND_MAX_BYTES,
     WA_MEDIA_LINK_SECONDS,
     WA_SEND_LIMIT_BYTES,
-    WA_TICKET_AUTO_REPLY_COOLDOWN_MS,
+    WA_CONVERSATION_NEW_COMMANDS,
+    WA_CONVERSATION_TIMEOUT_MS,
 } from "@/shared/lib/constants/whatsapp";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { isAutoSend, getWaTemplateDraft } from "@/shared/lib/whatsapp/waTemplateStore";
@@ -110,32 +111,116 @@ export async function ownersByPhone(keys: string[]): Promise<Map<string, Custome
     return owners;
 }
 
+// ── Conversations (MessageConversation) ─────────────────────────────────────────
+//
+// A conversation is a run of messages with one number about ONE thing. Its topic
+// decides which ticket a message joins — never a guess from older messages.
+// See prisma/schema/messages.prisma for the full rule.
+
+export type ConversationTopic = "ASKING" | "TICKET" | "NEW";
+type ConversationRow = { id: number; topic: string; ticketId: number | null; menuTicketIds: number[]; lastMessageAt: Date };
+const CONVERSATION_SELECT = { id: true, topic: true, ticketId: true, menuTicketIds: true, lastMessageAt: true } as const;
+
+/** True when the customer's whole message is one of the "start over" commands. */
+export function isNewConversationCommand(text: string): boolean {
+    const t = text.trim().toLowerCase();
+    return (WA_CONVERSATION_NEW_COMMANDS as readonly string[]).includes(t);
+}
+
 /**
- * The customer's open help ticket, if any — the one a new message joins.
- * First the ticket their latest linked message sits on (staff chose it), then
- * any open help ticket raised for this customer or this number.
+ * The number's open conversation, or null. One that has gone quiet past the
+ * timeout is closed here (lazily — no cron) unless `ignoreTimeout`: a staff
+ * reply continues the last conversation however old it is.
  */
-export async function openTicketForPhone(phone: string, owner: CustomerOwner | null): Promise<number | null> {
-    const lastLinked = await prisma.message.findFirst({
-        where: { phone, ticketId: { not: null } },
-        orderBy: { occurredAt: "desc" },
-        select: { ticketId: true },
+export async function currentConversation(phone: string, opts: { ignoreTimeout?: boolean; at?: Date } = {}): Promise<ConversationRow | null> {
+    const conv = await prisma.messageConversation.findFirst({
+        where: { phone, closedAt: null },
+        orderBy: { startedAt: "desc" },
+        select: CONVERSATION_SELECT,
     });
-    if (lastLinked?.ticketId) {
-        const t = await prisma.ticket.findUnique({ where: { id: lastLinked.ticketId }, select: { closedAt: true } });
-        if (t && !t.closedAt) return lastLinked.ticketId;
+    if (!conv || opts.ignoreTimeout) return conv;
+    const now = opts.at ?? new Date();
+    if (now.getTime() - conv.lastMessageAt.getTime() <= WA_CONVERSATION_TIMEOUT_MS) return conv;
+    await prisma.messageConversation.update({
+        where: { id: conv.id },
+        data: { closedAt: new Date(conv.lastMessageAt.getTime() + WA_CONVERSATION_TIMEOUT_MS), closedReason: "TIMEOUT" },
+    });
+    return null;
+}
+
+function openConversation(phone: string, topic: ConversationTopic, at: Date, menuTicketIds: number[] = []) {
+    return prisma.messageConversation.create({
+        data: { phone, topic, menuTicketIds, startedAt: at, lastMessageAt: at },
+        select: CONVERSATION_SELECT,
+    });
+}
+
+/** End the number's open conversation (staff Close, or the customer's /new). */
+export async function closeConversation(phone: string, reason: "STAFF" | "CUSTOMER", userId?: number): Promise<boolean> {
+    const { count } = await prisma.messageConversation.updateMany({
+        where: { phone, closedAt: null },
+        data: { closedAt: new Date(), closedReason: reason, closedByUserId: userId ?? null },
+    });
+    if (count) void publishChangeServer(["messages"]);
+    return count > 0;
+}
+
+/** The conversation a staff-side row (reply, note) belongs to: the open one,
+ *  else a fresh NEW one — staff writing first starts a conversation. */
+async function conversationForStaff(phone: string, at: Date): Promise<ConversationRow> {
+    return (await currentConversation(phone, { ignoreTimeout: true })) ?? openConversation(phone, "NEW", at);
+}
+
+async function touchConversation(id: number, at: Date) {
+    await prisma.messageConversation.updateMany({ where: { id, lastMessageAt: { lt: at } }, data: { lastMessageAt: at } });
+}
+
+/**
+ * Put a conversation on a ticket: the topic becomes TICKET and every message in
+ * it that is not on a ticket yet moves there and is written into the ticket's
+ * history — in order, with one query for the staff names.
+ */
+export async function attachConversationToTicket(conversationId: number, ticketId: number, owner: CustomerOwner | null): Promise<void> {
+    await prisma.messageConversation.update({ where: { id: conversationId }, data: { topic: "TICKET", ticketId } });
+    const loose = await prisma.message.findMany({
+        where: { conversationId, ticketId: null, direction: { in: ["IN", "OUT"] } },
+        orderBy: { occurredAt: "asc" },
+        select: { id: true, direction: true, body: true, senderName: true, sentByUserId: true, occurredAt: true },
+    });
+    if (!loose.length) return;
+    const staffIds = Array.from(new Set(loose.map((m) => m.sentByUserId).filter((v): v is number => v != null)));
+    const staff = staffIds.length ? await prisma.user.findMany({ where: { id: { in: staffIds } }, select: { id: true, name: true } }) : [];
+    const staffName = new Map(staff.map((u) => [u.id, u.name]));
+    for (const m of loose) {
+        const isOut = m.direction === "OUT";
+        await logMessageToTicket({
+            ticketId,
+            authorName: isOut
+                ? (m.sentByUserId != null ? staffName.get(m.sentByUserId) ?? "Staff" : "System")
+                : (m.senderName ?? owner?.name ?? "Customer"),
+            text: m.body,
+            direction: isOut ? "OUT" : "IN",
+            occurredAt: m.occurredAt,
+            userId: m.sentByUserId ?? undefined,
+        });
     }
-    const pipeline = await getHelpPipeline(prisma);
-    if (!pipeline) return null;
-    const or: Record<string, unknown>[] = [{ phone: { endsWith: phone } }];
-    if (owner?.kind === "person") or.push({ personId: owner.id });
-    if (owner?.kind === "company") or.push({ companyId: owner.id });
-    const open = await prisma.ticket.findFirst({
-        where: { pipelineId: pipeline.id, closedAt: null, help: { OR: or } },
-        orderBy: { createdAt: "desc" },
-        select: { id: true },
+    await prisma.message.updateMany({ where: { id: { in: loose.map((m) => m.id) } }, data: { ticketId } });
+}
+
+export type ConversationView = { id: number; topic: ConversationTopic; ticketId: number | null; startedAt: string };
+
+/** The open (not timed-out) conversation of each number — one query. */
+export async function conversationsByPhone(phones: string[]): Promise<Map<string, ConversationView>> {
+    const out = new Map<string, ConversationView>();
+    const unique = Array.from(new Set(phones.filter(Boolean)));
+    if (!unique.length) return out;
+    const rows = await prisma.messageConversation.findMany({
+        where: { phone: { in: unique }, closedAt: null, lastMessageAt: { gte: new Date(Date.now() - WA_CONVERSATION_TIMEOUT_MS) } },
+        orderBy: { startedAt: "asc" },
+        select: { id: true, phone: true, topic: true, ticketId: true, startedAt: true },
     });
-    return open?.id ?? null;
+    for (const r of rows) out.set(r.phone, { id: r.id, topic: r.topic as ConversationTopic, ticketId: r.ticketId, startedAt: r.startedAt.toISOString() });
+    return out;
 }
 
 export type ActiveTicketSummary = {
@@ -272,81 +357,30 @@ ${options.join("\n")}
 👉 _Please reply with ${choices}._`;
 }
 
-/** Check if the customer's incoming message is replying to our ticket auto-reply menu. */
-async function checkTicketMenuReply(args: {
-    phone: string;
-    text: string;
-    owner: CustomerOwner | null;
-}): Promise<{ handled: boolean; ticketId: number | null; ackText: string }> {
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-    const lastOut = await prisma.message.findFirst({
-        where: { phone: args.phone, direction: "OUT" },
-        orderBy: { occurredAt: "desc" },
-        select: { id: true, body: true, occurredAt: true },
-    });
-    if (!lastOut || lastOut.occurredAt < twoHoursAgo || !lastOut.body.includes("👉 _Please reply with")) {
-        return { handled: false, ticketId: null, ackText: "" };
-    }
-
-    const match = args.text.trim().match(/^([1-4])(?:[.\-)]|\s+|$)\s*([\s\S]*)$/);
-    if (!match) return { handled: false, ticketId: null, ackText: "" };
-
-    const choice = parseInt(match[1], 10);
-    const extraText = match[2]?.trim() || "";
-    const activeTickets = await findCustomerActiveTickets(args.phone, args.owner);
-    if (!activeTickets.length) return { handled: false, ticketId: null, ackText: "" };
-
-    let routedTicketId: number | null = null;
-    let ackText = "";
-
-    if (activeTickets.length === 1) {
-        const t = activeTickets[0];
-        const kindLabel = t.kind === "repair" ? "Repair" : "Ticket";
-        if (choice === 1) {
-            routedTicketId = t.id;
-            ackText = extraText
-                ? `✅ Thank you! Your message has been connected to *${kindLabel} #${t.id}* (${t.title}). Our team will update you shortly.`
-                : `✅ Thank you! You are now connected to *${kindLabel} #${t.id}* (${t.title}). Please let us know how we can help you with this.`;
-        } else if (choice === 2) {
-            routedTicketId = null;
-            ackText = extraText
-                ? `✅ Got it! Your message has been received by our support team. An executive will attend to you shortly.`
-                : `✅ Got it! Please tell us how we can help you today, and an executive will assist you.`;
-        } else {
-            return { handled: false, ticketId: null, ackText: "" };
-        }
-    } else {
-        if (choice >= 1 && choice <= activeTickets.length) {
-            const t = activeTickets[choice - 1];
-            const kindLabel = t.kind === "repair" ? "Repair" : "Ticket";
-            routedTicketId = t.id;
-            ackText = extraText
-                ? `✅ Thank you! Your message has been connected to *${kindLabel} #${t.id}* (${t.title}). Our team will update you shortly.`
-                : `✅ Thank you! You are now connected to *${kindLabel} #${t.id}* (${t.title}). Please let us know how we can help you with this.`;
-        } else if (choice === activeTickets.length + 1) {
-            routedTicketId = null;
-            ackText = extraText
-                ? `✅ Got it! Your message has been received by our support team. An executive will attend to you shortly.`
-                : `✅ Got it! Please tell us how we can help you today, and an executive will assist you.`;
-        } else {
-            return { handled: false, ticketId: null, ackText: "" };
-        }
-    }
-
-    return { handled: true, ticketId: routedTicketId, ackText };
+/** Which menu option a reply picks: a ticket id, "NEW", or null (not a pick).
+ *  "2", "2.", "2) my screen" all pick option 2. */
+function parseMenuChoice(text: string, menuTicketIds: number[]): number | "NEW" | null {
+    const m = text.trim().match(/^(\d{1,2})(?:[.\-)]|\s|$)/);
+    if (!m) return null;
+    const n = parseInt(m[1], 10);
+    if (n >= 1 && n <= menuTicketIds.length) return menuTicketIds[n - 1];
+    if (n === menuTicketIds.length + 1) return "NEW";
+    return null;
 }
 
-/** Send the acknowledgment confirmation after the customer made a menu selection. */
-async function sendMenuAcknowledgment(args: {
+/** Send an automatic text in a conversation and store it on the thread. Never throws. */
+async function sendAutoText(args: {
     phone: string;
-    ticketId: number | null;
     text: string;
+    conversationId: number;
+    ticketId: number | null;
     businessNumberId: string | null;
 }): Promise<void> {
     if (!isBillSendConfigured() || !args.text) return;
     const fromNumberId = args.businessNumberId || conversationNumberId() || null;
     try {
         const extId = await sendTextMessage(args.phone, args.text, fromNumberId);
+        const at = new Date();
         await prisma.message.create({
             data: {
                 channel: "WHATSAPP",
@@ -358,68 +392,101 @@ async function sendMenuAcknowledgment(args: {
                 body: args.text,
                 externalId: extId,
                 ticketId: args.ticketId,
+                conversationId: args.conversationId,
                 status: "sent",
-                occurredAt: new Date(),
+                occurredAt: at,
             },
         });
+        await touchConversation(args.conversationId, at);
     } catch (e) {
-        console.error("[messages] could not send menu acknowledgment", e);
+        console.error("[messages] could not send automatic reply", e);
     }
 }
 
-/**
- * Send the ticket auto-reply menu if this customer has active tickets/deals
- * and has not had an interaction with us in the last 6 hours (cooldown).
- */
-async function maybeSendTicketAutoReplyMenu(args: {
+/** The selection menu, sent once when a conversation opens with active jobs. */
+async function sendTicketMenu(args: {
     phone: string;
+    conversationId: number;
+    customerName: string | null;
+    active: ActiveTicketSummary[];
+    businessNumberId: string | null;
+}): Promise<void> {
+    const draft = await getWaTemplateDraft("TICKET_AUTO_REPLY");
+    const greetingHeader = fillBody(draft.body, {
+        customer: args.customerName ?? "there",
+        shop: getOrganisation().brandName,
+    });
+    await sendAutoText({
+        phone: args.phone,
+        text: buildTicketAutoReplyMenu(args.customerName, args.active, greetingHeader),
+        conversationId: args.conversationId,
+        ticketId: null,
+        businessNumberId: args.businessNumberId,
+    });
+}
+
+const ACK_NEW_WITH_TEXT = "✅ Got it! Your message has been received by our support team. An executive will attend to you shortly.";
+const ACK_NEW_EMPTY = "✅ Got it! Please tell us how we can help you today, and an executive will assist you.";
+
+function ackForTicket(t: ActiveTicketSummary | null, ticketId: number, withText: boolean): string {
+    const label = `*${t?.kind === "repair" ? "Repair" : t?.kind === "deal" ? "Deal" : "Ticket"} #${ticketId}*${t ? ` (${t.title})` : ""}`;
+    return withText
+        ? `✅ Thank you! Your message has been connected to ${label}. Our team will update you shortly.`
+        : `✅ Thank you! You are now connected to ${label}. Please let us know how we can help you with this.`;
+}
+
+/**
+ * Decide the conversation an incoming message belongs to, and what (if
+ * anything) to send back once it is stored:
+ *   - /new (or another command) ends the current conversation;
+ *   - no open conversation -> open one: ASKING + the menu when the customer has
+ *     active jobs, otherwise NEW;
+ *   - ASKING and the message is a menu pick -> TICKET (the whole conversation
+ *     moves onto that ticket) or NEW, with an acknowledgement;
+ *   - anything else just follows the conversation's topic — never re-asked.
+ */
+async function routeInbound(args: {
+    phone: string;
+    text: string;
+    at: Date;
     owner: CustomerOwner | null;
     senderName: string | null;
     businessNumberId: string | null;
-}): Promise<void> {
-    if (!isBillSendConfigured()) return;
+}): Promise<{ conv: ConversationRow; afterStore: (() => Promise<void>) | null }> {
+    const { phone, text, at, owner } = args;
+    const command = isNewConversationCommand(text);
+    if (command) await closeConversation(phone, "CUSTOMER");
 
-    const autoSendOn = await isAutoSend("TICKET_AUTO_REPLY");
-    if (!autoSendOn) return;
-
-    const activeTickets = await findCustomerActiveTickets(args.phone, args.owner);
-    if (!activeTickets.length) return;
-
-    const cutoff = new Date(Date.now() - WA_TICKET_AUTO_REPLY_COOLDOWN_MS);
-    const recentOut = await prisma.message.findFirst({
-        where: { phone: args.phone, direction: "OUT", occurredAt: { gte: cutoff } },
-        select: { id: true },
-    });
-    if (recentOut) return;
-
-    const customerName = args.owner?.name ?? args.senderName ?? null;
-    const draft = await getWaTemplateDraft("TICKET_AUTO_REPLY");
-    const greetingHeader = fillBody(draft.body, {
-        customer: customerName ?? "there",
-        shop: getOrganisation().brandName,
-    });
-    const menuText = buildTicketAutoReplyMenu(customerName, activeTickets, greetingHeader);
-    const fromNumberId = args.businessNumberId || conversationNumberId() || null;
-
-    try {
-        const extId = await sendTextMessage(args.phone, menuText, fromNumberId);
-        await prisma.message.create({
-            data: {
-                channel: "WHATSAPP",
-                direction: "OUT",
-                phone: args.phone,
-                address: args.phone,
-                businessNumberId: fromNumberId,
-                kind: "text",
-                body: menuText,
-                externalId: extId,
-                status: "sent",
-                occurredAt: new Date(),
-            },
-        });
-    } catch (e) {
-        console.error("[messages] could not send ticket auto-reply menu", e);
+    let conv = await currentConversation(phone, { at });
+    if (!conv) {
+        const active = await findCustomerActiveTickets(phone, owner);
+        const menuOn = active.length > 0 && isBillSendConfigured() && (await isAutoSend("TICKET_AUTO_REPLY"));
+        const opened = await openConversation(phone, menuOn ? "ASKING" : "NEW", at, menuOn ? active.map((t) => t.id) : []);
+        const base = { phone, conversationId: opened.id, businessNumberId: args.businessNumberId };
+        const afterStore = menuOn
+            ? () => sendTicketMenu({ ...base, customerName: owner?.name ?? args.senderName, active })
+            : command
+                ? () => sendAutoText({ ...base, text: ACK_NEW_EMPTY, ticketId: null })
+                : null;
+        return { conv: opened, afterStore };
     }
+
+    if (conv.topic === "ASKING") {
+        const pick = parseMenuChoice(text, conv.menuTicketIds);
+        if (pick == null) return { conv, afterStore: null };
+        const withText = text.trim().replace(/^\d{1,2}[.\-)]?\s*/, "").length > 0;
+        const base = { phone, conversationId: conv.id, businessNumberId: args.businessNumberId };
+        if (pick === "NEW") {
+            await prisma.messageConversation.update({ where: { id: conv.id }, data: { topic: "NEW" } });
+            conv = { ...conv, topic: "NEW" };
+            return { conv, afterStore: () => sendAutoText({ ...base, text: withText ? ACK_NEW_WITH_TEXT : ACK_NEW_EMPTY, ticketId: null }) };
+        }
+        await attachConversationToTicket(conv.id, pick, owner);
+        conv = { ...conv, topic: "TICKET", ticketId: pick };
+        const t = (await findCustomerActiveTickets(phone, owner)).find((x) => x.id === pick) ?? null;
+        return { conv, afterStore: () => sendAutoText({ ...base, text: ackForTicket(t, pick, withText), ticketId: pick }) };
+    }
+    return { conv, afterStore: null };
 }
 
 /**
@@ -578,20 +645,14 @@ export async function ingestInbound(value: WaChangeValue): Promise<number> {
                 select: { billKind: true, billRefId: true },
             })
             : null;
-        let ticketId = phone && !spam ? await openTicketForPhone(phone, owner) : null;
-        let menuAck: { ticketId: number | null; ackText: string } | null = null;
-
-        if (phone && !spam) {
-            const menuReply = await checkTicketMenuReply({
-                phone,
-                text: inboundBody(m),
-                owner,
-            });
-            if (menuReply.handled) {
-                ticketId = menuReply.ticketId;
-                menuAck = { ticketId: menuReply.ticketId, ackText: menuReply.ackText };
-            }
-        }
+        const text = inboundBody(m);
+        const at = metaTime(m.timestamp);
+        const senderName = names.get(m.from) ?? null;
+        const route = phone && !spam
+            ? await routeInbound({ phone, text, at, owner, senderName, businessNumberId: value.metadata?.phone_number_id ?? null })
+            : null;
+        const conv = route?.conv ?? null;
+        const ticketId = conv?.topic === "TICKET" ? conv.ticketId : null;
 
         const media = await keepInboundMedia(m);
 
@@ -602,52 +663,35 @@ export async function ingestInbound(value: WaChangeValue): Promise<number> {
                     direction: "IN",
                     phone,
                     address: m.from,
-                    senderName: names.get(m.from) ?? null,
+                    senderName,
                     businessNumberId: value.metadata?.phone_number_id ?? null,
                     businessNumber: value.metadata?.display_phone_number ?? null,
                     kind: m.type ?? "text",
-                    body: inboundBody(m),
+                    body: text,
                     ...media,
                     externalId: m.id,
                     replyToExternalId: m.context?.id ?? null,
                     billKind: repliedTo?.billKind ?? null,
                     billRefId: repliedTo?.billRefId ?? null,
                     ticketId,
+                    conversationId: conv?.id ?? null,
                     spam,
-                    occurredAt: metaTime(m.timestamp),
+                    occurredAt: at,
                 },
             });
             stored++;
 
-            if (ticketId && phone && !spam) {
-                const senderName = names.get(m.from) ?? owner?.name ?? "Customer";
-                const bodyText = inboundBody(m);
-                if (bodyText) {
-                    await logMessageToTicket({
-                        ticketId,
-                        authorName: senderName,
-                        text: bodyText,
-                        direction: "IN",
-                        occurredAt: metaTime(m.timestamp),
-                    });
-                }
-            }
-
-            if (menuAck) {
-                await sendMenuAcknowledgment({
-                    phone: phone!,
-                    ticketId: menuAck.ticketId,
-                    text: menuAck.ackText,
-                    businessNumberId: value.metadata?.phone_number_id ?? null,
-                });
-            } else if (phone && !spam) {
-                await maybeSendTicketAutoReplyMenu({
-                    phone,
-                    owner,
-                    senderName: names.get(m.from) ?? null,
-                    businessNumberId: value.metadata?.phone_number_id ?? null,
+            if (ticketId && text) {
+                await logMessageToTicket({
+                    ticketId,
+                    authorName: senderName ?? owner?.name ?? "Customer",
+                    text,
+                    direction: "IN",
+                    occurredAt: at,
                 });
             }
+            if (conv) await touchConversation(conv.id, at);
+            if (route?.afterStore) await route.afterStore();
         } catch (e) {
             // Lost a race with a concurrent retry of the same message — fine.
             if ((e as { code?: string })?.code !== "P2002") throw e;
@@ -702,6 +746,8 @@ export async function recordBillMessage(args: {
     try {
         const isTicketMsg = args.billKind.startsWith("REPAIR_") || args.billKind === "DEAL_CREATED" || args.billKind === "HELP_CREATED";
         const ticketId = isTicketMsg ? args.billRefId : null;
+        const phone = phoneMatchKey(args.mobile10);
+        const conv = phone ? await currentConversation(phone) : null;
         await prisma.message.create({
             data: {
                 channel: "WHATSAPP",
@@ -715,6 +761,7 @@ export async function recordBillMessage(args: {
                 billKind: args.billKind,
                 billRefId: args.billRefId,
                 ticketId,
+                conversationId: conv?.id ?? null,
                 status: "sent",
                 occurredAt: new Date(),
             },
@@ -775,7 +822,6 @@ export async function sendReply(args: { phone: string; text: string; userId: num
     if (!open) {
         throw new ReplyRefusedError("More than 24 hours since the customer last wrote. WhatsApp only allows an approved template now.");
     }
-    const owner = (await ownersByPhone([args.phone])).get(args.phone) ?? null;
     // Old rows carry no number = the main one, the only one back then.
     const from = fromNumberId ?? process.env.META_WA_PHONE_NUMBER_ID ?? null;
     const media = args.media ?? null;
@@ -795,7 +841,9 @@ export async function sendReply(args: { phone: string; text: string; userId: num
             fromNumberId: from,
         })
         : await sendTextMessage(args.phone, args.text, from);
-    const ticketId = await openTicketForPhone(args.phone, owner);
+    const at = new Date();
+    const conv = await conversationForStaff(args.phone, at);
+    const ticketId = conv.topic === "TICKET" ? conv.ticketId : null;
     const row = await prisma.message.create({
         data: {
             channel: "WHATSAPP",
@@ -808,11 +856,13 @@ export async function sendReply(args: { phone: string; text: string; userId: num
             ...(media ? { mediaKey: media.key, mediaType: media.type, fileName: media.name, mediaSize: media.size } : {}),
             externalId,
             ticketId,
+            conversationId: conv.id,
             sentByUserId: args.userId,
             status: "sent",
-            occurredAt: new Date(),
+            occurredAt: at,
         },
     });
+    await touchConversation(conv.id, at);
     if (ticketId) {
         const staffUser = await prisma.user.findUnique({ where: { id: args.userId }, select: { name: true } });
         await logMessageToTicket({
@@ -855,11 +905,13 @@ export async function sendReply(args: { phone: string; text: string; userId: num
 export async function addMentionNote(args: { phone: string; text: string; userId: number; mentionIds: number[] }) {
     const ids = Array.from(new Set(args.mentionIds.filter((id) => id !== args.userId)));
     if (!ids.length) throw new ReplyRefusedError("Mention a colleague (type @ and pick a name).");
+    const conv = await currentConversation(args.phone, { ignoreTimeout: true });
     const row = await prisma.message.create({
         data: {
             channel: "WHATSAPP",
             direction: "NOTE",
             phone: args.phone,
+            conversationId: conv?.id ?? null,
             kind: "note",
             body: args.text,
             sentByUserId: args.userId,
@@ -954,7 +1006,7 @@ export async function ticketFromMessage(
 ) {
     const msg = await prisma.message.findUnique({
         where: { id: messageId },
-        select: { id: true, phone: true, body: true, senderName: true, occurredAt: true },
+        select: { id: true, phone: true, body: true, senderName: true, occurredAt: true, conversationId: true },
     });
     if (!msg) throw new ReplyRefusedError("Message not found.");
 
@@ -1029,48 +1081,16 @@ export async function ticketFromMessage(
         }
     }
 
-    // Map this message plus all other unlinked messages in this conversation to the ticket
+    // The whole conversation goes onto the ticket — this one only, never the
+    // number's older conversations. A message from before conversations existed
+    // joins the open conversation (or starts one) so follow-ups stay on the ticket.
+    let conversationId: number | null = null;
     if (msg.phone) {
-        const unlinkedMsgs = await prisma.message.findMany({
-            where: {
-                phone: msg.phone,
-                ticketId: null,
-            },
-            orderBy: { occurredAt: "asc" },
-            select: { id: true, direction: true, body: true, senderName: true, sentByUserId: true, occurredAt: true },
-        });
-
-        for (const m of unlinkedMsgs) {
-            const isOut = m.direction === "OUT";
-            let authorName = isOut ? "Staff" : (m.senderName ?? owner?.name ?? "Customer");
-            if (isOut && m.sentByUserId) {
-                const u = await prisma.user.findUnique({ where: { id: m.sentByUserId }, select: { name: true } });
-                if (u?.name) authorName = u.name;
-            }
-            await logMessageToTicket({
-                ticketId,
-                authorName,
-                text: m.body,
-                direction: m.direction as "IN" | "OUT",
-                occurredAt: m.occurredAt,
-                userId: m.sentByUserId ?? undefined,
-            });
-        }
-
-        await prisma.message.updateMany({
-            where: {
-                OR: [
-                    { id: msg.id },
-                    { phone: msg.phone, ticketId: null },
-                ],
-            },
-            data: { ticketId },
-        });
+        conversationId = msg.conversationId ?? (await conversationForStaff(msg.phone, new Date())).id;
+        if (!msg.conversationId) await prisma.message.update({ where: { id: msg.id }, data: { conversationId } });
+        await attachConversationToTicket(conversationId, ticketId, owner);
     } else {
-        await prisma.message.update({
-            where: { id: msg.id },
-            data: { ticketId },
-        });
+        await prisma.message.update({ where: { id: msg.id }, data: { ticketId } });
     }
 
     // The chat's own record that staff took it up — and the mark that answers
@@ -1083,6 +1103,7 @@ export async function ticketFromMessage(
                 direction: "NOTE",
                 phone: msg.phone,
                 kind: "ticket",
+                conversationId,
                 body: existingTicketId ? `Linked to ticket #${ticketId}` : `${kind === "deal" ? "Deal" : "Help ticket"} #${ticketId} raised from this chat`,
                 ticketId,
                 sentByUserId: userId,

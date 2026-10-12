@@ -36,6 +36,13 @@ export const WA_SEND_LIMIT_BYTES = {
 export const WA_KEEP_INBOUND_MAX_BYTES = 100 * 1024 * 1024;
 /** How long a signed view / download link to an attachment stays valid. */
 export const WA_MEDIA_LINK_SECONDS = 60 * 60;
-/** Cooldown between ticket auto-reply menus sent to the same phone (ms). Default 6 hours. */
-export const WA_TICKET_AUTO_REPLY_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+/**
+ * A customer conversation ends after this long with no message either way; the
+ * next message opens a fresh one (and the selection menu is asked again).
+ * Tune from how customers actually write.
+ */
+export const WA_CONVERSATION_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+/** A customer message that is exactly one of these (any case) ends the current
+ *  conversation and starts a new one. */
+export const WA_CONVERSATION_NEW_COMMANDS = ["/new", "#new", "/start", "new"] as const;
 

@@ -62,7 +62,10 @@ model Message {
   billRefId Int?
 
   /// The ticket this message is part of. Plain scalar, like Call.ticketId.
-  ticketId     Int?
+  ticketId       Int?
+  /// The MessageConversation this message belongs to. Plain scalar, no FK.
+  /// Null on rows from before conversations existed.
+  conversationId Int?
   /// Staff member who sent an OUT reply; null for IN rows and system sends.
   sentByUserId Int?
 
@@ -85,6 +88,43 @@ model Message {
 
   @@index([phone, occurredAt])
   @@index([occurredAt])
+  @@index([ticketId])
+  @@index([conversationId])
+  @@index([updatedAt])
+}
+
+// ── One conversation with a customer ───────────────────────────────────────────
+//
+// A run of messages with one number that is about ONE thing. The customer's
+// first message opens it; if they have active jobs they get the selection menu
+// once, and their answer (or staff's "+ Ticket") fixes the topic. Follow-ups in
+// the same conversation are never asked again — they follow the topic.
+//
+// It ends when staff press Close, the customer sends /new (see
+// WA_CONVERSATION_NEW_COMMANDS), or nothing is said for
+// WA_CONVERSATION_TIMEOUT_MS (closed lazily, by the next message). A ticket
+// closing does NOT end it. The next message opens a fresh conversation.
+model MessageConversation {
+  id             Int       @id @default(autoincrement())
+  /// Last-10-digit match key, as Message.phone.
+  phone          String
+  /// ASKING (menu sent, waiting for the customer's pick) | TICKET (about
+  /// `ticketId`) | NEW (something new — staff may raise a ticket).
+  topic          String    @default("NEW")
+  ticketId       Int?
+  /// The tickets the menu offered, in menu order: reply "2" = menuTicketIds[1].
+  menuTicketIds  Int[]     @default([])
+  startedAt      DateTime  @default(now())
+  /// Last message either way — the timeout counts from here.
+  lastMessageAt  DateTime  @default(now())
+  closedAt       DateTime?
+  /// STAFF | CUSTOMER | TIMEOUT
+  closedReason   String?
+  closedByUserId Int?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now()) @updatedAt
+
+  @@index([phone, closedAt])
   @@index([ticketId])
   @@index([updatedAt])
 }

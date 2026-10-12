@@ -6,13 +6,13 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { phoneMatchKey } from "@/shared/lib/format";
 import { isMissedCall } from "@/shared/lib/calls";
 import { ASSIGNED_POSITION_SELECT } from "@/shared/lib/api/ticketSelects";
-import { claimsByPhone, mediaLink, openTicketForPhone, ownersByPhone, replyWindowOpen } from "@/modules/message/lib/customerMessages";
+import { claimsByPhone, conversationsByPhone, mediaLink, ownersByPhone, replyWindowOpen } from "@/modules/message/lib/customerMessages";
 
 // /api/messages/thread?phone=<10 digits>
 //
-// GET   — one customer's conversation: their messages and calls by time, the
-//         customer the number belongs to, the open ticket, and whether a free
-//         reply is still allowed. Read-only (the screen polls it).
+// GET   — one customer's thread: their messages and calls by time, the
+//         customer the number belongs to, the open conversation (topic) and its
+//         ticket, and whether a free reply is still allowed. Read-only.
 // PATCH — { phone, seen: true } marks their messages read;
 //         { phone, spam: boolean } flags / clears the number, as on the Call Log.
 
@@ -31,7 +31,7 @@ export async function GET(req: Request) {
             take: THREAD_LIMIT,
         });
         const oldest = messages[messages.length - 1]?.occurredAt;
-        const [owners, calls, window, claims] = await Promise.all([
+        const [owners, calls, window, claims, conversations] = await Promise.all([
             ownersByPhone([phone]),
             prisma.call.findMany({
                 where: { phone, spam: false, ...(oldest && messages.length === THREAD_LIMIT ? { occurredAt: { gte: oldest } } : {}) },
@@ -41,10 +41,13 @@ export async function GET(req: Request) {
             }),
             replyWindowOpen(phone),
             claimsByPhone([phone]),
+            conversationsByPhone([phone]),
         ]);
         const customer = owners.get(phone) ?? null;
 
-        const ticketId = await openTicketForPhone(phone, customer);
+        // The open conversation decides the ticket shown — never a guess from older messages.
+        const conversation = conversations.get(phone) ?? null;
+        const ticketId = conversation?.topic === "TICKET" ? conversation.ticketId : null;
         const ticket = ticketId
             ? await prisma.ticket.findUnique({
                 where: { id: ticketId },
@@ -87,6 +90,7 @@ export async function GET(req: Request) {
                 billKind: m.billKind,
                 billRefId: m.billRefId,
                 ticketId: m.ticketId,
+                conversationId: m.conversationId,
                 status: m.status,
                 deliveredAt: m.deliveredAt?.toISOString() ?? null,
                 readAt: m.readAt?.toISOString() ?? null,
@@ -125,6 +129,7 @@ export async function GET(req: Request) {
                 }
                 : null,
             claim: claims.get(phone) ?? null,
+            conversation,
             replyWindow: { open: window.open, closesAt: window.closesAt?.toISOString() ?? null },
             items,
         });

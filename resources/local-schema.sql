@@ -3051,6 +3051,7 @@ CREATE TABLE IF NOT EXISTS "Message" (
     "billKind" TEXT,
     "billRefId" INTEGER,
     "ticketId" INTEGER,
+    "conversationId" INTEGER,
     "sentByUserId" INTEGER,
     "status" TEXT,
     "deliveredAt" TIMESTAMP(3),
@@ -3097,6 +3098,8 @@ ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "billRefId" INTEGER;
 ALTER TABLE "Message" ALTER COLUMN "billRefId" DROP NOT NULL;
 ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "ticketId" INTEGER;
 ALTER TABLE "Message" ALTER COLUMN "ticketId" DROP NOT NULL;
+ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "conversationId" INTEGER;
+ALTER TABLE "Message" ALTER COLUMN "conversationId" DROP NOT NULL;
 ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "sentByUserId" INTEGER;
 ALTER TABLE "Message" ALTER COLUMN "sentByUserId" DROP NOT NULL;
 ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "status" TEXT;
@@ -3113,6 +3116,41 @@ ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "spam" BOOLEAN NOT NULL DEFAULT f
 ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "occurredAt" TIMESTAMP(3) NOT NULL;
 ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "MessageConversation" (
+    "id" SERIAL NOT NULL,
+    "phone" TEXT NOT NULL,
+    "topic" TEXT NOT NULL DEFAULT 'NEW',
+    "ticketId" INTEGER,
+    "menuTicketIds" INTEGER[] DEFAULT ARRAY[]::INTEGER[],
+    "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastMessageAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "closedAt" TIMESTAMP(3),
+    "closedReason" TEXT,
+    "closedByUserId" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "MessageConversation_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "MessageConversation" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "MessageConversation" ADD COLUMN IF NOT EXISTS "phone" TEXT NOT NULL;
+ALTER TABLE "MessageConversation" ADD COLUMN IF NOT EXISTS "topic" TEXT NOT NULL DEFAULT 'NEW';
+ALTER TABLE "MessageConversation" ADD COLUMN IF NOT EXISTS "ticketId" INTEGER;
+ALTER TABLE "MessageConversation" ALTER COLUMN "ticketId" DROP NOT NULL;
+ALTER TABLE "MessageConversation" ADD COLUMN IF NOT EXISTS "menuTicketIds" INTEGER[] DEFAULT ARRAY[]::INTEGER[];
+ALTER TABLE "MessageConversation" ALTER COLUMN "menuTicketIds" DROP NOT NULL;
+ALTER TABLE "MessageConversation" ADD COLUMN IF NOT EXISTS "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "MessageConversation" ADD COLUMN IF NOT EXISTS "lastMessageAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "MessageConversation" ADD COLUMN IF NOT EXISTS "closedAt" TIMESTAMP(3);
+ALTER TABLE "MessageConversation" ALTER COLUMN "closedAt" DROP NOT NULL;
+ALTER TABLE "MessageConversation" ADD COLUMN IF NOT EXISTS "closedReason" TEXT;
+ALTER TABLE "MessageConversation" ALTER COLUMN "closedReason" DROP NOT NULL;
+ALTER TABLE "MessageConversation" ADD COLUMN IF NOT EXISTS "closedByUserId" INTEGER;
+ALTER TABLE "MessageConversation" ALTER COLUMN "closedByUserId" DROP NOT NULL;
+ALTER TABLE "MessageConversation" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "MessageConversation" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "MessageClaim" (
@@ -5544,7 +5582,19 @@ CREATE INDEX IF NOT EXISTS "Message_occurredAt_idx" ON "Message"("occurredAt");
 CREATE INDEX IF NOT EXISTS "Message_ticketId_idx" ON "Message"("ticketId");
 
 -- CreateIndex
+CREATE INDEX IF NOT EXISTS "Message_conversationId_idx" ON "Message"("conversationId");
+
+-- CreateIndex
 CREATE INDEX IF NOT EXISTS "Message_updatedAt_idx" ON "Message"("updatedAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "MessageConversation_phone_closedAt_idx" ON "MessageConversation"("phone", "closedAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "MessageConversation_ticketId_idx" ON "MessageConversation"("ticketId");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "MessageConversation_updatedAt_idx" ON "MessageConversation"("updatedAt");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "MessageClaim_updatedAt_idx" ON "MessageClaim"("updatedAt");
@@ -8078,6 +8128,13 @@ DO $$ BEGIN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "MessageClaim";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "MessageClaim"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('phone');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."MessageConversation"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "MessageConversation";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "MessageConversation"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;
 DO $$ BEGIN

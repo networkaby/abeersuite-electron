@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import axios from "axios";
@@ -43,14 +43,17 @@ interface Conversation {
     senderName: string | null;
     unread: number;
     openTicketId: number | null;
+    /** The open conversation's topic — null when none is open. */
+    topic: Topic | null;
     last: { id: number; channel: string; direction: string; kind: string; body: string; at: string };
 }
+type Topic = "ASKING" | "TICKET" | "NEW";
 interface ConversationsResponse { items: Conversation[]; page: number; hasMore: boolean; totalUnread: number }
 
 type ThreadMessage = {
     type: "message"; id: number; at: string; channel: string; direction: string; kind: string; body: string;
     senderName: string | null; businessNumber?: string | null; sentBy: string | null; billKind: string | null; billRefId: number | null;
-    ticketId: number | null; status: string | null; deliveredAt: string | null; readAt: string | null; error: string | null;
+    ticketId: number | null; conversationId?: number | null; status: string | null; deliveredAt: string | null; readAt: string | null; error: string | null;
     pending?: boolean;
 } & MediaInfo;
 type ThreadCall = { type: "call"; id: number; at: string; direction: string; missed: boolean; durationSec: number; note: string | null };
@@ -62,6 +65,8 @@ interface Thread {
     ticket: { id: number; title: string | null; priority: string; status: string | null; assignee: string | null; kind?: string | null; href?: string | null } | null;
     /** Who is handling this chat (MessageClaim) — null until someone replies or takes it. */
     claim: { owner: Staff; helpers: Staff[] } | null;
+    /** The open conversation (MessageConversation) — null when none is open. */
+    conversation: { id: number; topic: Topic; ticketId: number | null; startedAt: string } | null;
     replyWindow: { open: boolean; closesAt: string | null };
     items: (ThreadMessage | ThreadCall)[];
 }
@@ -143,6 +148,21 @@ function hoursLeft(closesAt: string | null) {
 function billLink(kind: string | null, refId: number | null) {
     if (!kind || refId == null) return null;
     return `/portal/b/${kind.startsWith("REPAIR") ? `t${refId}` : refId}`;
+}
+
+/** What the open conversation is about: waiting for the customer's pick, a new
+ *  request (staff may raise a ticket), or ticket #N. */
+function TopicChip({ topic, ticketId }: { topic: Topic | null; ticketId: number | null }) {
+    if (topic === "TICKET" && ticketId) {
+        return <span className="shrink-0 rounded bg-sky-100 px-1 text-xs text-sky-800 dark:bg-sky-900 dark:text-sky-100">#{ticketId}</span>;
+    }
+    if (topic === "ASKING") {
+        return <span className="shrink-0 rounded bg-amber-100 px-1 text-xs text-amber-800 dark:bg-amber-900 dark:text-amber-100" title="Menu sent — waiting for the customer to pick">Asking</span>;
+    }
+    if (topic === "NEW") {
+        return <span className="shrink-0 rounded bg-emerald-100 px-1 text-xs text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100" title="Something new — raise a ticket if needed">New</span>;
+    }
+    return null;
 }
 
 function Ticks({ m }: { m: ThreadMessage }) {
@@ -312,7 +332,7 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
         void loadList(1);
         if (selected) void loadThread(selected);
     }, [loadList, loadThread, selected]);
-    useRealtimeTopics(["messages", "tickets"], refresh, true, ["Message", "MessageClaim", "Call", "Ticket"]);
+    useRealtimeTopics(["messages", "tickets"], refresh, true, ["Message", "MessageClaim", "MessageConversation", "Call", "Ticket"]);
 
     useEffect(() => { bottomRef.current?.scrollIntoView({ block: "end" }); }, [thread?.items.length, selected]);
 
@@ -404,6 +424,30 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
             toast.error(extractApiError(e, "Could not create/link ticket"));
         } finally {
             setTicketSubmitting(false);
+        }
+    };
+
+    // Indexes of thread items where a new conversation begins (not the first one shown).
+    const conversationStarts = useMemo(() => {
+        const starts = new Set<number>();
+        let prev: number | null = null;
+        thread?.items.forEach((it, i) => {
+            if (it.type !== "message" || it.conversationId == null) return;
+            if (prev != null && it.conversationId !== prev) starts.add(i);
+            prev = it.conversationId;
+        });
+        return starts;
+    }, [thread]);
+
+    const closeConversation = async () => {
+        if (!thread) return;
+        try {
+            await axios.post("/api/messages/conversation", { phone: thread.phone, action: "close" });
+            toast.success("Conversation closed — the customer's next message starts a new one");
+            void loadThread(thread.phone);
+            void loadList(1);
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not close the conversation"));
         }
     };
 
@@ -576,7 +620,7 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                                 <span className="truncate">{c.last.direction === "OUT" ? "You: " : c.last.direction === "NOTE" ? "Note: " : ""}{c.last.body}</span>
                                             </span>
                                             <span className="flex shrink-0 items-center gap-1">
-                                                {c.openTicketId && <span className="rounded bg-sky-100 px-1 text-sky-800 dark:bg-sky-900 dark:text-sky-100">#{c.openTicketId}</span>}
+                                                <TopicChip topic={c.topic} ticketId={c.openTicketId} />
                                                 {c.unread > 0 && <span className="rounded-full bg-green-600 px-1.5 text-[11px] text-white font-medium">{c.unread}</span>}
                                             </span>
                                         </div>
@@ -675,6 +719,18 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                                 <Ticket className="mr-1 size-3.5" /> + Ticket
                                             </Button>
                                         )}
+                                        {thread.conversation && <TopicChip topic={thread.conversation.topic} ticketId={thread.conversation.ticketId} />}
+                                        {canReply && thread.conversation && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-8 px-2 text-xs"
+                                                onClick={() => void closeConversation()}
+                                                title="End this conversation — the customer's next message starts a new one and is asked again"
+                                            >
+                                                <X className="mr-1 size-3.5" /> Close
+                                            </Button>
+                                        )}
                                         <Button size="sm" variant="ghost" className="size-8 p-0" onClick={toggleSpam} title={thread.spam ? "Not spam" : "Mark this number spam"}>
                                             <ShieldAlert className="size-4" />
                                         </Button>
@@ -729,7 +785,14 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
 
                         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
                             {thread.items.length === 0 && <p className="text-sm text-muted-foreground">Nothing here yet.</p>}
-                            {thread.items.map((it) => {
+                            {thread.items.map((it, i) => (
+                                <Fragment key={`${it.type}${it.id}`}>
+                                {conversationStarts.has(i) && (
+                                    <div className="flex items-center gap-2 py-1 text-[11px] text-muted-foreground">
+                                        <span className="h-px flex-1 bg-border" />New conversation · {formatDateTime(it.at)}<span className="h-px flex-1 bg-border" />
+                                    </div>
+                                )}
+                                {(() => {
                                 if (it.type === "call") {
                                     const Icon = it.missed ? PhoneMissed : it.direction === "OUTGOING" ? PhoneOutgoing : PhoneIncoming;
                                     return (
@@ -798,8 +861,9 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                         </div>
                                     </div>
                                 );
-
-                            })}
+                                })()}
+                                </Fragment>
+                            ))}
                             <div ref={bottomRef} />
                         </div>
 
@@ -903,7 +967,7 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                             </button>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                            Map this conversation (+91 {thread.phone}) to a ticket. All unlinked messages will be connected and logged to ticket history.
+                            Map this conversation (+91 {thread.phone}) to a ticket. Every message of the current conversation moves onto it and is logged to ticket history; follow-ups stay on it until the conversation closes.
                         </p>
 
                         <div className="space-y-2 pt-1">

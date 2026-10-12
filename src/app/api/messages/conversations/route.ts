@@ -5,16 +5,18 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { phoneMatchKey } from "@/shared/lib/format";
 import { ownersByPhone } from "@/modules/message/lib/customerMessages";
+import { WA_CONVERSATION_TIMEOUT_MS } from "@/shared/lib/constants/whatsapp";
 
 // GET /api/messages/conversations — the Messages screen's left list: one row per
-// customer number, newest first, with its unread count and open ticket.
+// customer number, newest first, with its unread count and the topic of its
+// open conversation (asking / ticket #N / new).
 //
-//   filter = all | unread | open (has an open ticket) | unknown (no party yet)
+//   filter = all | unread | open (conversation is on a ticket) | unknown (no party yet)
 //   q      = number, message text, or customer name
 //   page   = 1-based, PAGE_SIZE rows each
 //
-// One query for the page (DISTINCT ON phone), one for the owners, one for the
-// open tickets — never a query per conversation.
+// One query for the page (DISTINCT ON phone, open conversation joined in) and
+// one for the owners — never a query per conversation.
 
 const PAGE_SIZE = 50;
 /** `unknown` is decided after the owner lookup, so it scans this many rows. */
@@ -31,6 +33,7 @@ type Row = {
     occurredAt: Date;
     unread: number;
     openTicketId: number | null;
+    topic: string | null;
 };
 
 export async function GET(req: Request) {
@@ -63,7 +66,7 @@ export async function GET(req: Request) {
 
         const having: Prisma.Sql[] = [];
         if (filter === "unread") having.push(Prisma.sql`u.n > 0`);
-        if (filter === "open") having.push(Prisma.sql`t.id IS NOT NULL`);
+        if (filter === "open") having.push(Prisma.sql`c.topic = 'TICKET'`);
 
         const unknown = filter === "unknown";
         const take = unknown ? UNKNOWN_SCAN : PAGE_SIZE + 1;
@@ -82,16 +85,17 @@ export async function GET(req: Request) {
                 WHERE direction = 'IN' AND "seenAt" IS NULL AND spam = false
                 GROUP BY phone
             ),
-            open_ticket AS (
-                SELECT DISTINCT ON (m.phone) m.phone, t.id
-                FROM "Message" m JOIN "Ticket" t ON t.id = m."ticketId"
-                WHERE t."closedAt" IS NULL
-                ORDER BY m.phone, m."occurredAt" DESC
+            conv AS (
+                SELECT DISTINCT ON (c.phone) c.phone, c.topic, c."ticketId"
+                FROM "MessageConversation" c
+                WHERE c."closedAt" IS NULL AND c."lastMessageAt" >= ${new Date(Date.now() - WA_CONVERSATION_TIMEOUT_MS)}
+                ORDER BY c.phone, c."startedAt" DESC
             )
-            SELECT l.*, COALESCE(u.n, 0) AS unread, t.id AS "openTicketId"
+            SELECT l.*, COALESCE(u.n, 0) AS unread, c.topic,
+                   CASE WHEN c.topic = 'TICKET' THEN c."ticketId" END AS "openTicketId"
             FROM latest l
             LEFT JOIN unread u ON u.phone = l.phone
-            LEFT JOIN open_ticket t ON t.phone = l.phone
+            LEFT JOIN conv c ON c.phone = l.phone
             ${having.length ? Prisma.sql`WHERE ${Prisma.join(having, " AND ")}` : Prisma.empty}
             ORDER BY l."occurredAt" DESC
             LIMIT ${take} OFFSET ${skip}
@@ -104,6 +108,8 @@ export async function GET(req: Request) {
             senderName: r.senderName,
             unread: r.unread,
             openTicketId: r.openTicketId,
+            /** The open conversation's topic: ASKING | TICKET | NEW, null = none open. */
+            topic: r.topic,
             last: {
                 id: r.id,
                 channel: r.channel,
