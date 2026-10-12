@@ -427,14 +427,16 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
         }
     };
 
-    // Indexes of thread items where a new conversation begins (not the first one shown).
+    // Indexes of thread items where a conversation begins — after older messages
+    // or after the previous conversation; never above the very first message.
     const conversationStarts = useMemo(() => {
         const starts = new Set<number>();
-        let prev: number | null = null;
+        let prev: number | null | undefined;
         thread?.items.forEach((it, i) => {
-            if (it.type !== "message" || it.conversationId == null) return;
-            if (prev != null && it.conversationId !== prev) starts.add(i);
-            prev = it.conversationId;
+            if (it.type !== "message") return;
+            const cid = it.conversationId ?? null;
+            if (prev !== undefined && cid != null && cid !== prev) starts.add(i);
+            prev = cid;
         });
         return starts;
     }, [thread]);
