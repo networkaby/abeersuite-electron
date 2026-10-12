@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { Loader2, Undo2, RefreshCw, Trash2, ShieldAlert, FileClock } from "lucide-react";
+import { Loader2, Undo2, RefreshCw, Trash2, ShieldAlert, FileClock, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ import { voucherTypeLabel } from "@/shared/lib/format/voucherTypeLabel";
 import { extractApiError } from "@/shared/lib/api";
 import { auditSnapshotKind } from "@/shared/lib/accountancy/auditSnapshotKind";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { AuditSnapshotDialog } from "./AuditSnapshotDialog";
 
 interface AuditRow {
     id: number;
@@ -45,6 +46,7 @@ export function RecycleBin() {
     const [includeRestored, setIncludeRestored] = useState(false);
     const [busyId, setBusyId] = useState<number | null>(null);
     const [confirmPurgeId, setConfirmPurgeId] = useState<number | null>(null);
+    const [viewId, setViewId] = useState<number | null>(null);
 
     // Permanent delete is SUPER ADMIN only. `admin:bypass` is a code-only sentinel
     // (never seeded, un-grantable in the Role Matrix) held solely by the env super
@@ -251,6 +253,9 @@ export function RecycleBin() {
                                     <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{formatDate(row.createdAt)}</td>
                                     <td className="px-4 py-2.5">
                                         <div className="flex items-center justify-end gap-2">
+                                            <Button size="sm" variant="ghost" className="h-7" title="See what this copy holds — read-only" onClick={() => setViewId(row.id)}>
+                                                <Eye size={13} className="mr-1" /> View
+                                            </Button>
                                             {row.restoredAt ? (
                                                 <Badge variant="outline" className="text-xs">Restored{row.restoredBy ? ` · ${row.restoredBy.name}` : ""}</Badge>
                                             ) : (
@@ -290,6 +295,7 @@ export function RecycleBin() {
                     </table>
                 )}
             </div>
+            <AuditSnapshotDialog auditId={viewId} onClose={() => setViewId(null)} />
             <div className="border-t px-6 py-2 text-[11px] text-muted-foreground">
                 Note: links to orders, tickets and deals are not reconnected on restore.
                 {isSuperAdmin && " A pre-edit copy can be destroyed on its own; deleting a deleted voucher removes every copy of it and frees its number if it was the last one issued."}

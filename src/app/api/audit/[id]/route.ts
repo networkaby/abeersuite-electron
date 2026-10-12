@@ -35,7 +35,34 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         if (!userCanRestoreAudit(user!, audit.entityType, audit.subtype)) {
             return NextResponse.json({ error: "You do not have permission to view this voucher kind." }, { status: 403 });
         }
-        return NextResponse.json(audit);
+        // The copy holds bare product / account ids. Resolve them to today's names
+        // in two batched lookups so the viewer reads like a voucher, not a dump.
+        const snap = (audit.snapshot ?? {}) as {
+            lines?: { productId?: number; accountId?: number }[];
+            journalEntry?: { lines?: { accountId?: number }[] } | null;
+            partyAccountId?: number | null;
+        };
+        const productIds = new Set<number>();
+        const accountIds = new Set<number>();
+        for (const l of snap.lines ?? []) {
+            if (typeof l.productId === "number") productIds.add(l.productId);
+            if (typeof l.accountId === "number") accountIds.add(l.accountId);
+        }
+        for (const l of snap.journalEntry?.lines ?? []) {
+            if (typeof l.accountId === "number") accountIds.add(l.accountId);
+        }
+        if (typeof snap.partyAccountId === "number") accountIds.add(snap.partyAccountId);
+        const [products, accounts] = await Promise.all([
+            productIds.size ? prisma.invProduct.findMany({ where: { id: { in: [...productIds] } }, select: { id: true, name: true } }) : [],
+            accountIds.size ? prisma.account.findMany({ where: { id: { in: [...accountIds] } }, select: { id: true, name: true } }) : [],
+        ]);
+        return NextResponse.json({
+            ...audit,
+            names: {
+                products: Object.fromEntries(products.map((p) => [p.id, p.name])),
+                accounts: Object.fromEntries(accounts.map((a) => [a.id, a.name])),
+            },
+        });
     } catch (e) {
         return handleApiError(e, "Failed to read audit entry");
     }
