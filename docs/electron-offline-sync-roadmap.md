@@ -410,7 +410,13 @@ office means the request runs here with `live`'s existing outage fallback. Three
    that already holds the save; a timeout falls back to the Realtime path above. A
    safety-net cycle in the way is stepped aside and resumed afterwards, and routes that
    add a shift's children (Rcv, Exp, cash drop, the sale's surplus receipt) bump the
-   shift row so those `child` tables ride the same pull.
+   shift row so those `child` tables ride the same pull. Since 2026-10-12 that is
+   no longer left to each route: every `child` table on Supabase carries a
+   `sync_touch_parent` trigger (migration `20261012230000_sync_touch_parent`) that
+   moves the parent on any insert, update or delete, and `pnpm sync:tables:check`
+   fails when a child table lacks one. Children under an `append` parent
+   (`BankStatementLine`, `WallPostComment`, `WallPostLike`) are still reached only
+   by reconciliation.
 3. **Every write is forwarded.** There is no segment allowlist: any non-GET `/api/*`
    call goes to the office, minus this machine's own routes (`auth`, `counter`, `health`,
    `sync`, `pos/counters`, backup/restore) and bodies over 4 MB. A full build running in

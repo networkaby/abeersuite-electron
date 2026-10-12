@@ -30,7 +30,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { QueryStateBlock } from "@/shared/components/QueryStateBlock";
 import UserAvatar from "@/shared/components/UserAvatar";
-import { useApiResource } from "@/shared/hooks";
+import { useApiResource, useRealtimeTopics } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
 import { ATTENDANCE_REVIEW_LABELS, type AttendanceReview, type AttendanceReviewDecision } from "@/shared/lib/hr/attendanceReview";
@@ -71,6 +71,9 @@ export default function AttendanceDayReview({ canEdit }: { canEdit: boolean }) {
         `/api/hr/attendance/review${dateParam ? `?date=${dateParam}` : ""}`,
         { keepPrevious: true },
     );
+    // A mark or decision made on another machine — or this one's own save once
+    // the replica has it — re-reads the day.
+    useRealtimeTopics(["settings"], reload);
     const date = dateParam ?? data?.date ?? "";
     const today = data?.today ?? "";
 

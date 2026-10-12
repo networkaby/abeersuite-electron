@@ -412,6 +412,77 @@ function loadRegistry(): Registry {
     return JSON.parse(readFileSync(REGISTRY, "utf8")) as Registry;
 }
 
+/**
+ * ── Child tables must move their parent ──────────────────────────────────────
+ * A `child` set is re-pulled only when its parent's watermark moves. A save that
+ * writes the child alone — an office attendance mark, a payroll line, a ticket
+ * participant — leaves the parent still, and the replica never sees the change:
+ * the web shows it, the desktop app quietly does not.
+ *
+ * So Supabase carries an AFTER trigger on every child table that touches the
+ * parent (`sync_touch_parent`, migration `20261012230000_sync_touch_parent`). It
+ * lives on the server only — the replica is built from `local-schema.sql`, which
+ * comes from the schema, not the migrations, so the worker's own child replaces
+ * never fire it. `--check` fails when a child table has no trigger, so a new one
+ * cannot slip through; `--touch-sql` prints the SQL to fold into a new migration.
+ *
+ * A parent that is itself a child gets a no-op write, which fires ITS trigger and
+ * walks up to the first watermark ancestor. A `full` ancestor needs nothing — it
+ * re-pulls every set each cycle. An `append` ancestor has no column to move; those
+ * are listed as gaps.
+ */
+type TouchStep = { table: string; fk: string; parentTable: string; parentPk: string; parentCol: string | null };
+
+function childTouchPlan(tables: Record<string, TableEntry>): { steps: TouchStep[]; gaps: string[] } {
+    const steps: TouchStep[] = [];
+    const gaps: string[] = [];
+    const rootOf = (name: string): TableEntry => {
+        let t = tables[name];
+        while (t?.strategy === "child" && t.parent) t = tables[t.parent];
+        return t;
+    };
+    for (const [name, t] of Object.entries(tables)) {
+        if (t.strategy !== "child" || !t.parent || !t.fk) continue;
+        const parent = tables[t.parent];
+        const root = rootOf(t.parent);
+        if (!parent || !root || root.strategy === "full") continue;
+        if (root.strategy !== "watermark") {
+            gaps.push(`${name} -> ${t.parent} (${root.strategy})`);
+            continue;
+        }
+        steps.push({
+            table: t.table,
+            fk: t.fk,
+            parentTable: parent.table,
+            parentPk: parent.pk[0],
+            parentCol: parent.strategy === "watermark" ? parent.column! : null,
+        });
+    }
+    steps.sort((a, b) => a.table.localeCompare(b.table));
+    return { steps, gaps: gaps.sort() };
+}
+
+const touchMarker = (s: TouchStep) => `-- sync-touch: ${s.table} -> ${s.parentTable}`;
+
+function renderTouchSql(steps: TouchStep[]): string {
+    const lines = steps.map((s) => [
+        touchMarker(s),
+        `DROP TRIGGER IF EXISTS "sync_touch_parent" ON "${s.table}";`,
+        `CREATE TRIGGER "sync_touch_parent" AFTER INSERT OR UPDATE OR DELETE ON "${s.table}"`,
+        `    FOR EACH ROW EXECUTE FUNCTION sync_touch_parent('${s.fk}', '${s.parentTable}', '${s.parentPk}', '${s.parentCol ?? ""}');`,
+    ].join("\n"));
+    return lines.join("\n\n") + "\n";
+}
+
+function checkTouchTriggers(steps: TouchStep[]): string[] {
+    const dir = join(process.cwd(), "prisma", "migrations");
+    const sql = readdirSync(dir)
+        .filter((d) => existsSync(join(dir, d, "migration.sql")))
+        .map((d) => readFileSync(join(dir, d, "migration.sql"), "utf8"))
+        .join("\n");
+    return steps.filter((s) => !sql.includes(touchMarker(s))).map((s) => s.table);
+}
+
 function main(): void {
     const check = process.argv.includes("--check");
 
@@ -466,6 +537,19 @@ function main(): void {
     }
 
     const serialized = JSON.stringify(next, null, 2) + "\n";
+
+    const touch = childTouchPlan(tables);
+    if (process.argv.includes("--touch-sql")) {
+        process.stdout.write(renderTouchSql(touch.steps));
+        return;
+    }
+    if (touch.gaps.length) console.warn(`[sync-registry] child sets under an append-only parent (edits reach the replica only via reconciliation): ${touch.gaps.join(", ")}`);
+    const untouched = checkTouchTriggers(touch.steps);
+    if (untouched.length) {
+        console.error(`[sync-registry] child tables with no sync_touch_parent trigger — their edits never reach a replica: ${untouched.join(", ")}`);
+        console.error("  Fold `npx tsx scripts/gen-sync-registry.ts --touch-sql` output for them into a new migration.");
+        process.exit(1);
+    }
 
     if (check) {
         // Compare PARSED content, not raw text. Git normalises line endings on this
