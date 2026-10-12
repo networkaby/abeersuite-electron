@@ -119,6 +119,9 @@ export default function LedgersPage() {
     const router = useRouter();
 
     const [tree, setTree] = useState<GroupNode[]>([]);
+    // Group picker list for the dialogs. A search trims `tree` to the matching
+    // ledgers' groups, so only an unfiltered load may refresh this.
+    const [groupOptions, setGroupOptions] = useState<ReturnType<typeof flattenGroups>>([]);
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
@@ -142,6 +145,7 @@ export default function LedgersPage() {
             .then((r) => {
                 if (seq !== loadSeq.current) return; // a newer search is in flight
                 setTree(r.data);
+                if (!query) setGroupOptions(flattenGroups(r.data));
                 setExpanded((prev) => {
                     if (prev.size > 0) return prev;
                     return new Set(r.data.map((g) => g.id));
@@ -163,8 +167,6 @@ export default function LedgersPage() {
         });
 
     const allFlat = allGroupsFlat(tree);
-    // Depth-tagged copy for the dialogs' group picker (indents sub-groups).
-    const groupOptions = flattenGroups(tree);
     // While searching, every group opens so the matches are visible.
     const flat = flattenVisible(tree, query ? new Set(allFlat.map((g) => g.id)) : expanded);
     const ledgerCount = countLedgers(tree);
