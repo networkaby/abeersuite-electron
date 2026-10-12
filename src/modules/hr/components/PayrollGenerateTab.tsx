@@ -52,10 +52,13 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
     // where the last run finished, and the screen does not.
     const [from, setFrom] = useState<string | null>(null);
     const [to, setTo] = useState<string | null>(null);
-    // Payroll is normally run for a whole calendar month, so that is the
-    // default way to pick the period; "Custom" reveals the two date boxes for
-    // the odd run that does not line up with a month.
-    const [mode, setMode] = useState<"month" | "custom">("month");
+    // Owner, 2026-10-12: open on the two date boxes — From the first unpaid
+    // day, Till today — so the screen says plainly that it is paying every
+    // day still owed. The month box used to open showing only the month the
+    // period STARTED in while the period ran on to today, and picking that
+    // same month changed nothing. "By month" is one click away, and switching
+    // to it snaps the period to that whole month (see `switchMode`).
+    const [mode, setMode] = useState<"month" | "custom">("custom");
     const [q, setQ] = useState("");
     const [open, setOpen] = useState<Set<number>>(new Set());
     const [saving, setSaving] = useState(false);
@@ -86,6 +89,17 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
         setFrom(`${ym}-01`);
         setTo(iso(last > today ? today : last));
         setOpen(new Set());
+    };
+
+    // The month box can only honestly show a month when the period IS that
+    // month, so moving to it pays the month the period starts in.
+    const switchMode = () => {
+        if (mode === "custom") {
+            if (month) pickMonth(month);
+            setMode("month");
+        } else {
+            setMode("custom");
+        }
     };
 
     const rows = useMemo(() => {
@@ -175,7 +189,7 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
                     variant="ghost"
                     size="sm"
                     className="h-9"
-                    onClick={() => setMode((m) => (m === "month" ? "custom" : "month"))}
+                    onClick={switchMode}
                 >
                     {mode === "month" ? "Custom dates" : "By month"}
                 </Button>
