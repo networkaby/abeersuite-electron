@@ -133,6 +133,17 @@ function restoreOrphans(dir: string): void {
     }
 }
 
+// Synchronous probe: a child node tries to connect and exits 0 if something answers.
+function isPortInUse(port: number): boolean {
+    const probe = `require("net").connect(${port},"127.0.0.1").on("connect",()=>process.exit(0)).on("error",()=>process.exit(1))`;
+    try {
+        execFileSync(process.execPath, ["-e", probe], { stdio: "ignore", timeout: 3000 });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 function run(): void {
     // A prior `next dev` run leaves `.next/dev/types` with a route set generated
     // from the FULL app tree (before any exclusion above). tsconfig.json includes
@@ -141,6 +152,12 @@ function run(): void {
     // dev-mode LayoutRoutes, `next build`'s typecheck fails with a "not assignable"
     // constraint error comparing the two. Drop it so the build only typechecks
     // against the route set it just generated; `next dev` regenerates it on its own.
+    // A running `next dev` keeps writing into `.next/dev`, so the delete below
+    // races it and dies with a bare ENOTEMPTY. Stop early with a clear message.
+    if (isPortInUse(3000)) {
+        console.error("[counter-build] Port 3000 is in use — stop `next dev` first, then rerun the build.");
+        process.exit(1);
+    }
     const devDir = path.join(__dirname, "..", ".next", "dev");
     if (fs.existsSync(devDir)) {
         fs.rmSync(devDir, { recursive: true, force: true });
