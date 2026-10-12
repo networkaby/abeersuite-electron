@@ -6,7 +6,7 @@ import { handleApiError, prismaUniqueError, validateRequest } from "@/shared/lib
 import { staffSalaryCreateSchema } from "@/shared/lib/schemas/hrSchema";
 import { salaryTotals } from "@/modules/hr/lib/salaryLines";
 import { payDaysOf } from "@/modules/hr/lib/payrollProrate";
-import { ensureStaffProfile, dateOnlyFromIso, toStaffSalaryDto } from "@/modules/hr/lib/staffProfileServer";
+import { ensureStaffProfile, dateOnlyFromIso, toStaffSalaryDto, touchStaffProfile } from "@/modules/hr/lib/staffProfileServer";
 
 // POST /api/hr/staff/[userId]/salary — add a salary revision.
 //
@@ -33,7 +33,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
         const { grossPaise, netPaise } = salaryTotals(body.lines);
         const row = await prisma.$transaction(async (tx) => {
             await ensureStaffProfile(tx, user);
-            return tx.staffSalary.create({
+            const created = await tx.staffSalary.create({
                 data: {
                     userId,
                     effectiveFrom: dateOnlyFromIso(body.effectiveFrom),
@@ -45,6 +45,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
                     createdById: caller.id,
                 },
             });
+            await touchStaffProfile(tx, userId);
+            return created;
         });
         return NextResponse.json(toStaffSalaryDto(row));
     } catch (e) {

@@ -123,3 +123,21 @@ export function toStaffSalaryDto(s: StaffProfileWithRels["salaries"][number]): S
 export function dateOnlyFromIso(isoDate: string): Date {
     return new Date(`${isoDate}T00:00:00.000Z`);
 }
+
+/**
+ * Bump a staff profile's `updatedAt` after its child rows (e.g. StaffSalary) change.
+ *
+ * `StaffSalary` is a `child` table in `prisma/sync-tables.json`: the sync worker
+ * pulls a profile's children only when the profile row itself moved. Touching the
+ * parent in the same transaction makes the child ride the very next pull.
+ */
+export async function touchStaffProfile(
+    tx: Prisma.TransactionClient | typeof prisma,
+    userId: number,
+): Promise<void> {
+    await tx.staffProfile.updateMany({
+        where: { userId },
+        data: { updatedAt: new Date() },
+    });
+}
+
