@@ -5,7 +5,7 @@ import { dutyHoursFor, dutyMinutesFor, gradeDay, lateMinutes, overtimeMinutes, s
 import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import { shopDateFromIso, type SeasonalHours } from "@/shared/lib/hr/seasonalHours";
 import { EMPTY_ATTENDANCE_EFFECT, lateDutyCutMinutes, type AttendanceEffect, type PayRules } from "@/shared/lib/hr/payRules";
-import { reviewOf } from "@/shared/lib/hr/attendanceReview";
+import { ATTENDANCE_SOURCE_SELECT, autoCounts, lateOf, workedOf } from "@/shared/lib/hr/attendanceSource";
 import { perDayPaise, perHourPaise, weekdayOf } from "./payrollProrate";
 import type { SalaryLine } from "./salaryLines";
 import { holidayDatesFor } from "./attendanceCalendar";
@@ -90,7 +90,7 @@ export async function attendanceEffectFor(
         }),
         prisma.attendanceDay.findMany({
             where: { userId, date: { gte: dateOf(fromIso), lte: dateOf(toIso) } },
-            select: { date: true, status: true, source: true, workedMinutes: true, firstInAt: true, review: true, reviewedMinutes: true },
+            select: { date: true, status: true, firstInAt: true, ...ATTENDANCE_SOURCE_SELECT },
         }),
         prisma.leaveRequest.findMany({
             where: {
@@ -131,28 +131,26 @@ export async function attendanceEffectFor(
         const day = iso(r.date);
         const hours = hoursOn(day);
         const duty = dutyMinutesFor(profile?.dutyMinutes, hours.start, hours.end);
-        // A till day nobody has accepted says nothing at all — not an absence,
-        // not overtime, not lateness (owner, 2026-10-12: auto attendance is on
-        // trial). Waiting and rejected days are ordinary days. attendanceReview.ts.
-        const review = reviewOf(r);
-        if (review && review !== "ACCEPTED") continue;
-        const measured = review === "ACCEPTED";
+        // Auto pays on the activity card's minutes — corrected where a person
+        // fixed them; manual pays on the mark. attendanceSource.ts.
+        const measured = autoCounts(r);
+        const worked = workedOf(r);
 
         // An absence nobody asked for — charged whichever hand wrote the day,
         // because "he did not come" needs no clock to establish.
-        const status = measured ? gradeDay(r.workedMinutes, duty) : r.status;
+        const status = measured ? gradeDay(worked, duty) : r.status;
         if (status === "ABSENT" && !grantedLeave(day)) out.unaskedAbsentDays += 1;
 
         if (!measured) continue;   // the office's mark stands; nothing to count
 
         // A day the shop was shut is not part of the netting at all — every
         // minute of it is extra by definition, and paid at its own rate.
-        if (holidays.has(day)) { out.holidayMinutes += r.workedMinutes; continue; }
-        if (offDays.has(weekdayOf(day))) { out.weeklyOffMinutes += r.workedMinutes; continue; }
+        if (holidays.has(day)) { out.holidayMinutes += worked; continue; }
+        if (offDays.has(weekdayOf(day))) { out.weeklyOffMinutes += worked; continue; }
 
-        surplus += overtimeMinutes(r.workedMinutes, duty);
+        surplus += overtimeMinutes(worked, duty);
 
-        const short = shortMinutes(r.workedMinutes, duty);
+        const short = shortMinutes(worked, duty);
         if (short > 0 && status !== "ABSENT") {
             // Payroll has already withheld half of a half day; only the rest is
             // his debt here, or the same hour is taken from him twice.
@@ -161,8 +159,8 @@ export async function attendanceEffectFor(
         }
 
         // Lateness, against the opening that applied on that very day.
-        const late = lateMinutes(r.firstInAt, hours.start, undefined, rules.lateGraceMinutes);
-        if (late && late > 0) {
+        const late = lateOf(r, lateMinutes(r.firstInAt, hours.start, undefined, rules.lateGraceMinutes) ?? 0);
+        if (late > 0) {
             out.lateDays += 1;
             if (out.lateDays > rules.lateFreeDays) {
                 out.chargedLateDays += 1;

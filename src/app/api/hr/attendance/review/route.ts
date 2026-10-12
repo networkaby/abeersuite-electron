@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
+import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
-import { attendanceReviewSchema, type AttendanceStatus, type LeaveKind } from "@/shared/lib/schemas/hrAttendanceSchema";
+import { attendanceDaySourceSchema, type AttendanceStatus, type LeaveKind } from "@/shared/lib/schemas/hrAttendanceSchema";
 import { businessTodayIso, toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import { dutyHoursFor, dutyMinutesFor, gradeDay, lateMinutes, overtimeMinutes, shortMinutes } from "@/shared/lib/hr/dutyTime";
 import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import { shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
-import { reviewOf } from "@/shared/lib/hr/attendanceReview";
+import { ATTENDANCE_SOURCE_SELECT, lateOf, workedOf } from "@/shared/lib/hr/attendanceSource";
 import { loadPayRules } from "@/modules/hr/lib/payRulesServer";
 import { holidayDatesFor, weekdayOf } from "@/modules/hr/lib/attendanceCalendar";
 import { USER_BRANCHES_SELECT, branchIdsFrom } from "@/modules/hr/lib/staffBranchesServer";
@@ -16,17 +17,17 @@ import type { DayReviewPayload, DayReviewRow } from "@/modules/hr/lib/attendance
 
 // /api/hr/attendance/review — Employee Activity's day review.
 //
-// Owner, 2026-10-12: auto attendance is on trial, so the till's figures reach
-// no pay until somebody accepts them — and that is decided at the source, one
-// day for the whole staff at a time. `shared/lib/hr/attendanceReview.ts` is the
-// rule every pay reader follows; this route only shows the day and records the
-// decision.
+// Owner, 2026-10-13: a day carries both the till's figures (auto) and the
+// office's mark (manual), and a toggle picks which one pays — the Attendance
+// page's mark flips it to manual. Auto's figures can be corrected one by one on
+// the activity card. `shared/lib/hr/attendanceSource.ts` is the rule every pay
+// reader follows; this route only shows the day and records the change.
 //
 //   GET  ?date=YYYY-MM-DD   (default: yesterday)
-//        Everybody on the staff that day, with the clock's figures graded
-//        against THAT day's duty, and the decision standing on each.
-//   POST { date, decisions: [{ userId, review: ACCEPTED | REJECTED | null }] }
-//        Records the decisions, each against the minutes it was made on.
+//        Everybody on the staff that day: both sides, which one pays, and
+//        auto's figures graded against THAT day's duty.
+//   POST { date, userId, useManual?, overrideWorkedMinutes?, overrideLateMinutes? }
+//        Flips the side, or corrects / restores a till figure.
 
 const dayOf = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -41,7 +42,7 @@ export async function GET(req: Request) {
         if (!ISO.test(date)) return NextResponse.json({ error: "Bad date" }, { status: 400 });
         const on = dayOf(date);
 
-        const [seasonal, rules, users, marks, leaves, holidays, waiting] = await Promise.all([
+        const [seasonal, rules, users, marks, leaves, holidays] = await Promise.all([
             loadSeasonalHours(),
             loadPayRules(),
             prisma.user.findMany({
@@ -55,8 +56,8 @@ export async function GET(req: Request) {
             prisma.attendanceDay.findMany({
                 where:  { date: on },
                 select: {
-                    userId: true, status: true, source: true, firstInAt: true, lastOutAt: true, lastSeenAt: true,
-                    workedMinutes: true, note: true, review: true, reviewedMinutes: true, reviewedById: true, reviewedAt: true,
+                    userId: true, status: true, manualStatus: true, firstInAt: true, lastOutAt: true, lastSeenAt: true,
+                    note: true, correctedById: true, ...ATTENDANCE_SOURCE_SELECT,
                 },
             }),
             prisma.leaveRequest.findMany({
@@ -67,37 +68,11 @@ export async function GET(req: Request) {
                 where:  { date: on },
                 select: { id: true, date: true, name: true, branchId: true },
             }),
-            // Every past day still waiting, for "next day waiting". The same test
-            // as `reviewOf`, said as a filter so it is one cheap read rather than
-            // every till row ever written: a measured till day with no decision,
-            // or one whose minutes moved after it was decided.
-            //
-            // A model read on purpose, never `$queryRaw`: on a counter writing to
-            // the office, a raw query rides the WRITE client to Supabase instead
-            // of the replica (prismaClient.ts) — and broke this screen there.
-            prisma.attendanceDay.findMany({
-                where: {
-                    source: "COUNTER",
-                    workedMinutes: { gt: 0 },
-                    date: { lt: dayOf(today) },
-                    OR: [
-                        { review: null },
-                        { review: { notIn: ["ACCEPTED", "REJECTED"] } },
-                        { reviewedMinutes: null },
-                        { reviewedMinutes: { lt: prisma.attendanceDay.fields.workedMinutes } },
-                        { reviewedMinutes: { gt: prisma.attendanceDay.fields.workedMinutes } },
-                    ],
-                },
-                distinct: ["date"],
-                orderBy:  { date: "asc" },
-                take:     400,
-                select:   { date: true },
-            }),
         ]);
 
-        const reviewerIds = [...new Set(marks.map((m) => m.reviewedById).filter((v): v is number => v != null))];
-        const reviewers = reviewerIds.length
-            ? new Map((await prisma.user.findMany({ where: { id: { in: reviewerIds } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]))
+        const correctorIds = [...new Set(marks.map((m) => m.correctedById).filter((v): v is number => v != null))];
+        const correctors = correctorIds.length
+            ? new Map((await prisma.user.findMany({ where: { id: { in: correctorIds } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]))
             : new Map<number, string>();
         const markOf = new Map(marks.map((m) => [m.userId, m]));
         const leaveOf = new Map(leaves.map((l) => [l.userId, l.kind as LeaveKind]));
@@ -115,39 +90,38 @@ export async function GET(req: Request) {
             const m = markOf.get(u.id) ?? null;
             const hours = dutyHoursFor(p?.dutyStart, p?.dutyEnd, { on: shopDateFromIso(date), seasonal });
             const duty = dutyMinutesFor(p?.dutyMinutes, hours.start, hours.end);
-            const worked = m?.workedMinutes ?? 0;
+            const worked = m ? workedOf(m) : 0;
+            const tillLate = lateMinutes(m?.firstInAt ?? null, hours.start, undefined, rules.lateGraceMinutes) ?? 0;
+            const corrected = { worked: m?.overrideWorkedMinutes != null, late: m?.overrideLateMinutes != null };
             const holiday = holidayDtos.find((h) => holidayDatesFor([h], branchIdsFrom(u)).size > 0) ?? null;
-            const review = m ? reviewOf(m) : null;
 
             rows.push({
                 userId: u.id, name: u.name, avatarUrl: u.avatarUrl, role: u.role,
-                kind: !m ? "NONE" : m.source === "OFFICE" ? "OFFICE" : review ? "CLOCK" : "IDLE",
-                status: (m?.status as AttendanceStatus | undefined) ?? null,
+                uses: !m ? null : m.source === "OFFICE" ? "MANUAL" : "AUTO",
+                canAuto: !!m && (m.workedMinutes > 0 || !!m.firstInAt || corrected.worked),
+                // An office mark from before `manualStatus` existed is its status.
+                manualStatus: (m?.manualStatus ?? (m?.source === "OFFICE" ? m.status : null)) as AttendanceStatus | null,
                 firstInAt: m?.firstInAt?.toISOString() ?? null,
                 lastOutAt: (m?.lastOutAt ?? m?.lastSeenAt)?.toISOString() ?? null,
                 workedMinutes: worked,
+                lateBy: m ? lateOf(m, tillLate) : tillLate,
+                till: { workedMinutes: m?.workedMinutes ?? 0, lateBy: tillLate },
+                corrected,
+                correctedBy: corrected.worked || corrected.late ? (correctors.get(m!.correctedById ?? 0) ?? null) : null,
                 dutyMinutes: duty,
                 dutyStart: hours.start,
                 dutyEnd: hours.end,
                 grade: gradeDay(worked, duty),
-                lateBy: lateMinutes(m?.firstInAt ?? null, hours.start, undefined, rules.lateGraceMinutes) ?? 0,
                 overtimeMinutes: overtimeMinutes(worked, duty),
                 shortMinutes: shortMinutes(worked, duty),
                 weeklyOff: (p?.weeklyOff ?? [0]).includes(weekdayOf(date)),
                 holidayName: holiday?.name ?? null,
                 leaveKind: leaveOf.get(u.id) ?? null,
                 note: m?.note ?? null,
-                review,
-                // Who decided is only worth naming while the decision stands.
-                reviewedBy: review === "ACCEPTED" || review === "REJECTED" ? (reviewers.get(m!.reviewedById ?? 0) ?? null) : null,
-                reviewedAt: review === "ACCEPTED" || review === "REJECTED" ? (m!.reviewedAt?.toISOString() ?? null) : null,
             });
         }
 
-        const payload: DayReviewPayload = {
-            date, today, rows,
-            waitingDates: waiting.map((w) => toDateOnlyUtc(w.date)),
-        };
+        const payload: DayReviewPayload = { date, today, rows };
         return NextResponse.json(payload);
     } catch (e) {
         return handleApiError(e, "Failed to read the day");
@@ -157,42 +131,46 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
     const { user, response } = await requirePermission(PERMISSIONS.HR_ATTENDANCE_EDIT);
     if (response) return response;
-    const { data, error } = await validateRequest(req, attendanceReviewSchema);
+    const { data, error } = await validateRequest(req, attendanceDaySourceSchema);
     if (error) return error;
 
-    // Today is still being worked — its minutes are not final, and a yes given
-    // at noon would not cover the afternoon.
-    if (data.date >= businessTodayIso()) {
-        return NextResponse.json({ error: "Only a finished day can be decided — today is still running." }, { status: 422 });
+    const correcting = data.overrideWorkedMinutes !== undefined || data.overrideLateMinutes !== undefined;
+    // Today is still being worked — a corrected figure typed at noon would
+    // freeze the afternoon out of it.
+    if (correcting && data.date >= businessTodayIso()) {
+        return NextResponse.json({ error: "Only a finished day can be corrected — today is still running." }, { status: 422 });
     }
 
     try {
-        const date = dayOf(data.date);
-        const updated = await prisma.$transaction(async (tx) => {
-            // Read first: each decision is pinned to the minutes it was made on
-            // (`reviewedMinutes`), and Prisma cannot copy one column into another
-            // in an update. One row per person, so this stays a staff-sized loop.
-            const rows = await tx.attendanceDay.findMany({
-                where:  { date, userId: { in: data.decisions.map((d) => d.userId) }, source: "COUNTER", workedMinutes: { gt: 0 } },
-                select: { id: true, userId: true, workedMinutes: true },
-            });
-            const byUser = new Map(rows.map((r) => [r.userId, r]));
-            let n = 0;
-            for (const d of data.decisions) {
-                const row = byUser.get(d.userId);
-                if (!row) continue;   // an office mark or an idle row — nothing to decide
-                await tx.attendanceDay.update({
-                    where: { id: row.id },
-                    data: d.review
-                        ? { review: d.review, reviewedById: user!.id, reviewedAt: new Date(), reviewedMinutes: row.workedMinutes }
-                        : { review: null, reviewedById: null, reviewedAt: null, reviewedMinutes: null },
-                });
-                n += 1;
-            }
-            return n;
+        const row = await prisma.attendanceDay.findUnique({
+            where:  { userId_date: { userId: data.userId, date: dayOf(data.date) } },
+            select: { id: true, status: true, manualStatus: true, source: true, workedMinutes: true, firstInAt: true, overrideWorkedMinutes: true },
         });
-        return NextResponse.json({ ok: true, updated });
+        if (!row) return NextResponse.json({ error: "Nothing recorded on this day — mark it on the Attendance page." }, { status: 404 });
+
+        // An office mark from before `manualStatus` existed is its status.
+        const mark = row.manualStatus ?? (row.source === "OFFICE" ? row.status : null);
+        const patch: Prisma.AttendanceDayUpdateInput = {};
+        if (correcting) {
+            if (data.overrideWorkedMinutes !== undefined) patch.overrideWorkedMinutes = data.overrideWorkedMinutes;
+            if (data.overrideLateMinutes !== undefined) patch.overrideLateMinutes = data.overrideLateMinutes;
+            patch.correctedById = user!.id;
+            patch.correctedAt = new Date();
+        }
+        if (data.useManual === true) {
+            if (!mark) return NextResponse.json({ error: "No manual mark on this day yet — pick one first." }, { status: 422 });
+            Object.assign(patch, { source: "OFFICE", status: mark, manualStatus: mark });
+        } else if (data.useManual === false) {
+            const worked = data.overrideWorkedMinutes !== undefined ? data.overrideWorkedMinutes : row.overrideWorkedMinutes;
+            if (!(row.workedMinutes > 0 || row.firstInAt || worked != null)) {
+                return NextResponse.json({ error: "The till recorded nothing on this day — there is no auto to use." }, { status: 422 });
+            }
+            // The mark stays in `manualStatus`, so switching back costs nothing.
+            Object.assign(patch, { source: "COUNTER", status: "PRESENT", manualStatus: mark });
+        }
+        await prisma.attendanceDay.update({ where: { id: row.id }, data: patch });
+        return NextResponse.json({ ok: true });
     } catch (e) {
-        return handleApiError(e, "Failed to record the decision");
+        return handleApiError(e, "Failed to save the day");
     }
 }

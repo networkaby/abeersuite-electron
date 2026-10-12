@@ -17,13 +17,18 @@ import { QueryStateBlock } from "@/shared/components/QueryStateBlock";
 import { useApiResource } from "@/shared/hooks";
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
 import { todayIso } from "@/shared/lib/format/formatDate";
+import { toast } from "sonner";
 import { cn } from "@/shared/lib/format/utils";
+import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { totalBreakup } from "../lib/attendanceBreakup";
 import type { HoursPayload } from "../lib/attendanceHoursTypes";
-import DayActivityCard from "./DayActivityCard";
+import { saveCorrection } from "../lib/attendanceDayClient";
+import DayActivityCard, { type CorrectableField } from "./DayActivityCard";
 
-export default function AttendanceBreakup({ userId, from, to }: {
+export default function AttendanceBreakup({ userId, from, to, canEdit }: {
     userId: number;
+    /** May correct the till's figures on a finished day's card. Off on the staff portal. */
+    canEdit?: boolean;
     /** The range to show, owned by the explorer so the list beside it agrees. */
     from: string;
     to: string;
@@ -40,6 +45,16 @@ export default function AttendanceBreakup({ userId, from, to }: {
     // a month of cards is a long way to scroll to reach it.
     const ordered = useMemo(() => [...days].reverse(), [days]);
     const effect = data?.effect;
+
+    const correct = (date: string) => async (field: CorrectableField, minutes: number | null) => {
+        try {
+            await saveCorrection(userId, date, field, minutes);
+            await reload();
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not save the correction"));
+            throw e;
+        }
+    };
 
     return (
         <div className="flex min-h-0 flex-1 flex-col">
@@ -110,7 +125,10 @@ export default function AttendanceBreakup({ userId, from, to }: {
                     )}
 
                     {ordered.map((d) => (
-                        <DayActivityCard key={d.date} day={d} rules={rules} idleLimitMinutes={data.idleLimitMinutes} isToday={d.date === today} />
+                        <DayActivityCard
+                            key={d.date} day={d} rules={rules} idleLimitMinutes={data.idleLimitMinutes} isToday={d.date === today}
+                            onCorrect={canEdit && d.tracked && d.date < today ? correct(d.date) : undefined}
+                        />
                     ))}
                 </div>
             )}

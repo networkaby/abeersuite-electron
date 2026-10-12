@@ -51,7 +51,7 @@ export async function applyLeaveDecision(
             const date = new Date(`${iso}T00:00:00.000Z`);
             const existing = await tx.attendanceDay.findUnique({ where: { userId_date: { userId: before.userId, date } }, select: { id: true } });
             if (existing) continue;
-            await tx.attendanceDay.create({ data: { userId: before.userId, date, status: "LEAVE", source: "OFFICE", note: leaveTag(id), markedById: decidedById } });
+            await tx.attendanceDay.create({ data: { userId: before.userId, date, status: "LEAVE", manualStatus: "LEAVE", source: "OFFICE", note: leaveTag(id), markedById: decidedById } });
         }
     } else if (before.status === "APPROVED") {
         await tx.attendanceDay.deleteMany({ where: { userId: before.userId, status: "LEAVE", note: leaveTag(id) } });

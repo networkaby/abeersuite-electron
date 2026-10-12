@@ -20,8 +20,10 @@ import type { AttendanceStatus, LeaveKind } from "@/shared/lib/schemas/hrAttenda
 //       calendar by the caller (attendanceCalendar.ts) — the API does not
 //       invent rows. People who had left before `from` are not listed.
 //   PUT { userId, date, status | null, note? }   — mark one day from the office.
-//       null removes the mark: the day reads off the calendar again, or — when
-//       the till measured it — goes back to the till's own record.
+//       The mark is the day's MANUAL side and switches the day to it
+//       (attendanceSource.ts); the till's figures stay underneath. null removes
+//       the mark: the day reads off the calendar again, or — when the till
+//       measured it — goes back to auto.
 
 const dayOf = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -134,20 +136,20 @@ export async function PUT(req: Request) {
         const date = dayOf(data.date);
         if (data.status === null) {
             // A day the till measured keeps its measurement: clearing the office
-            // mark hands the day back to the clock (and to Employee Activity's
-            // review) instead of deleting the minutes underneath it. A day only
-            // the office ever wrote has nothing under it, and goes.
+            // mark hands the day back to auto instead of deleting the minutes
+            // underneath it. A day only the office ever wrote has nothing under
+            // it, and goes.
             const back = await prisma.attendanceDay.updateMany({
                 where: { userId: data.userId, date, OR: [{ workedMinutes: { gt: 0 } }, { firstInAt: { not: null } }] },
-                data:  { status: "PRESENT", source: "COUNTER", note: null, markedById: null },
+                data:  { status: "PRESENT", source: "COUNTER", manualStatus: null, note: null, markedById: null },
             });
             if (!back.count) await prisma.attendanceDay.deleteMany({ where: { userId: data.userId, date } });
             return NextResponse.json({ ok: true, cleared: true });
         }
         const row = await prisma.attendanceDay.upsert({
             where: { userId_date: { userId: data.userId, date } },
-            create: { userId: data.userId, date, status: data.status, source: "OFFICE", note: data.note ?? null, markedById: user.id },
-            update: { status: data.status, source: "OFFICE", note: data.note ?? null, markedById: user.id },
+            create: { userId: data.userId, date, status: data.status, manualStatus: data.status, source: "OFFICE", note: data.note ?? null, markedById: user.id },
+            update: { status: data.status, manualStatus: data.status, source: "OFFICE", note: data.note ?? null, markedById: user.id },
             select: { status: true, source: true, firstInAt: true, lastOutAt: true, note: true },
         });
         return NextResponse.json({ ok: true, mark: { ...row, firstInAt: row.firstInAt?.toISOString() ?? null, lastOutAt: row.lastOutAt?.toISOString() ?? null } });

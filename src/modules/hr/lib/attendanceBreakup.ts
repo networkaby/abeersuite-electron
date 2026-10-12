@@ -7,7 +7,6 @@
 import type { DutyGrade } from "@/shared/lib/hr/dutyTime";
 import { earlyMinutes, gradeDay, overtimeMinutes, shortMinutes } from "@/shared/lib/hr/dutyTime";
 import type { AttendanceEffect, PayRules } from "@/shared/lib/hr/payRules";
-import type { AttendanceReview } from "@/shared/lib/hr/attendanceReview";
 import type { PayslipAttendanceData, PayslipAttendanceDay } from "@/shared/components/print/PayslipBody";
 
 /** One active stretch, as the screens want it: ISO instants, minutes, why it ended. */
@@ -32,7 +31,10 @@ export interface DayBreakup {
     spans: SpanDto[];
     /** HOW MANY TIMES they were active. The count the owner asked for. */
     activeCount: number;
-    /** Minutes credited — the day row's own total, never re-derived from the spans. */
+    /**
+     * Minutes credited — the day row's own total, never re-derived from the
+     * spans — or the figure a person corrected it to on the card.
+     */
     workedMinutes: number;
     /** What the day owed, resolved for THAT date (the shop's opening moves). */
     dutyMinutes: number;
@@ -66,11 +68,15 @@ export interface DayBreakup {
     /** True when the office typed the status and the clock was overruled. */
     manual: boolean;
     /**
-     * The owner's decision on a till-measured day — null when there is nothing
-     * to decide (an office mark, or no minutes). Only ACCEPTED reaches pay;
-     * see `shared/lib/hr/attendanceReview.ts`.
+     * The till's own figures, before any correction, and which of them a person
+     * corrected on the card. The card shows the till's beside a corrected one —
+     * an override that hides what it overrode is how a dispute starts.
+     * `shared/lib/hr/attendanceSource.ts`.
      */
-    review: AttendanceReview | null;
+    till: { workedMinutes: number; lateBy: number };
+    corrected: { worked: boolean; late: boolean };
+    /** The office's mark kept on the day, also while the day runs on auto. */
+    manualStatus: string | null;
     /**
      * The day the shop was shut for this person — their own weekly off, or a
      * holiday that applies to their branch. Hours worked on such a day are not
@@ -154,7 +160,9 @@ export function buildDayBreakup(input: {
     leaveKind: string | null;
     status: string;
     manual: boolean;
-    review: AttendanceReview | null;
+    till: DayBreakup["till"];
+    corrected: DayBreakup["corrected"];
+    manualStatus: string | null;
     weeklyOff: boolean;
     holidayName: string | null;
     latePenaltyMinutes: number;
@@ -185,7 +193,9 @@ export function buildDayBreakup(input: {
         grade: gradeDay(input.workedMinutes, input.dutyMinutes),
         status: input.status,
         manual: input.manual,
-        review: input.review,
+        till: input.till,
+        corrected: input.corrected,
+        manualStatus: input.manualStatus,
         weeklyOff: input.weeklyOff,
         holidayName: input.holidayName,
         latePenaltyMinutes: input.latePenaltyMinutes,

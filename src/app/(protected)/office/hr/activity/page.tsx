@@ -8,7 +8,7 @@ import AttendanceExplorer from "@/modules/hr/components/AttendanceExplorer";
 // Directory: the staff on the left, and on the right the chosen person's month —
 // the day-by-day breakup and the log of every stretch they were active — or,
 // with nobody chosen, the day review: one day for the whole staff, where the
-// till's figures are accepted or rejected before they may touch any pay.
+// day is paid on Auto (the activity card, correctable) or Manual (the mark).
 //
 // The Attendance register next door stays what it always was: the month for
 // everybody, and the place a day is marked by hand.

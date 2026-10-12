@@ -5,10 +5,9 @@
 // the chosen person's month filling the main area on the right, day by day, down
 // to the stretches they were actually active.
 //
-// With nobody picked, the main area is the DAY REVIEW (owner, 2026-10-12): one
-// day, the whole staff, and Accept / Reject / Mark on what the till measured —
-// auto attendance is on trial, and its minutes reach no pay until accepted
-// there. See AttendanceDayReview. The month-for-everybody grid stays on the
+// With nobody picked, the main area is the DAY REVIEW: one day, the whole staff,
+// and which side each day is paid on — Auto (the activity card, correctable) or
+// Manual (the Attendance page's mark). See AttendanceDayReview. The month-for-everybody grid stays on the
 // Attendance register next door.
 //
 // The left list rides the register's own payload, so it costs no extra read
@@ -175,7 +174,7 @@ export default function AttendanceExplorer({ canEdit }: { canEdit: boolean }) {
                                 onTo={setTo}
                             />
 
-                            <AttendanceBreakup userId={selected.person.id} from={from} to={to} />
+                            <AttendanceBreakup userId={selected.person.id} from={from} to={to} canEdit={canEdit} />
                         </div>
                     ) : selectedId && !data ? (
                         // A link straight to ?user=<id> arrives before the staff read

@@ -1641,10 +1641,11 @@ CREATE TABLE IF NOT EXISTS "attendance_days" (
     "counterId" INTEGER,
     "note" TEXT,
     "markedById" INTEGER,
-    "review" TEXT,
-    "reviewedById" INTEGER,
-    "reviewedAt" TIMESTAMP(3),
-    "reviewedMinutes" INTEGER,
+    "manualStatus" TEXT,
+    "overrideWorkedMinutes" INTEGER,
+    "overrideLateMinutes" INTEGER,
+    "correctedById" INTEGER,
+    "correctedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -1668,14 +1669,16 @@ ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "note" TEXT;
 ALTER TABLE "attendance_days" ALTER COLUMN "note" DROP NOT NULL;
 ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "markedById" INTEGER;
 ALTER TABLE "attendance_days" ALTER COLUMN "markedById" DROP NOT NULL;
-ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "review" TEXT;
-ALTER TABLE "attendance_days" ALTER COLUMN "review" DROP NOT NULL;
-ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "reviewedById" INTEGER;
-ALTER TABLE "attendance_days" ALTER COLUMN "reviewedById" DROP NOT NULL;
-ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "reviewedAt" TIMESTAMP(3);
-ALTER TABLE "attendance_days" ALTER COLUMN "reviewedAt" DROP NOT NULL;
-ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "reviewedMinutes" INTEGER;
-ALTER TABLE "attendance_days" ALTER COLUMN "reviewedMinutes" DROP NOT NULL;
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "manualStatus" TEXT;
+ALTER TABLE "attendance_days" ALTER COLUMN "manualStatus" DROP NOT NULL;
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "overrideWorkedMinutes" INTEGER;
+ALTER TABLE "attendance_days" ALTER COLUMN "overrideWorkedMinutes" DROP NOT NULL;
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "overrideLateMinutes" INTEGER;
+ALTER TABLE "attendance_days" ALTER COLUMN "overrideLateMinutes" DROP NOT NULL;
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "correctedById" INTEGER;
+ALTER TABLE "attendance_days" ALTER COLUMN "correctedById" DROP NOT NULL;
+ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "correctedAt" TIMESTAMP(3);
+ALTER TABLE "attendance_days" ALTER COLUMN "correctedAt" DROP NOT NULL;
 ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE "attendance_days" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 

@@ -36,18 +36,18 @@ model AttendanceDay {
   note      String?
   /// Who marked it from the office; null when the till did.
   markedById Int?
-  /// The owner's decision on a day the TILL measured (owner, 2026-10-12: auto
-  /// attendance is still on trial, so the clock changes no pay until a person
-  /// says so). ACCEPTED | REJECTED, null = waiting. Only an ACCEPTED day's
-  /// minutes reach payroll; waiting and rejected days are paid as normal days.
-  /// Read through `reviewOf` (shared/lib/hr/attendanceReview.ts), never raw.
-  review          String?
-  reviewedById    Int?
-  reviewedAt      DateTime?
-  /// `workedMinutes` at the moment of the decision. A till that adds minutes
-  /// afterwards (a late sync) makes the two differ, and the day reads as
-  /// waiting again — a decision only covers the figures it was made on.
-  reviewedMinutes Int?
+  /// Owner, 2026-10-13: a day carries BOTH answers and a toggle picks which
+  /// one pays. `source` is the toggle — OFFICE = manual, COUNTER = auto — and
+  /// `status` is what the chosen side says. `manualStatus` keeps the office's
+  /// own mark (P / half / absent / leave) while the day runs on auto, so
+  /// switching back costs nothing. Read through `shared/lib/hr/attendanceSource.ts`.
+  manualStatus          String?
+  /// Corrections to the till's figures, made on the activity card. Null = the
+  /// till's own value stands. They only matter while the day runs on auto.
+  overrideWorkedMinutes Int?
+  overrideLateMinutes   Int?
+  correctedById         Int?
+  correctedAt           DateTime?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @default(now()) @updatedAt
 

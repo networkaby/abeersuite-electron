@@ -34,15 +34,18 @@ export const attendanceMarkSchema = z.object({
 });
 
 /**
- * POST /api/hr/attendance/review — Accept / Reject the till's figures for one
- * day, several people at once. `review: null` takes the decision back.
+ * POST /api/hr/attendance/review — one person's day on Employee Activity.
+ * `useManual` flips which side pays (attendanceSource.ts); the overrides
+ * correct the till's figures on the activity card, null handing a figure back
+ * to the till. Fields left out are left alone.
  */
-export const attendanceReviewSchema = z.object({
-    date:      isoDate,
-    decisions: z.array(z.object({
-        userId: z.number().int().positive(),
-        review: z.enum(["ACCEPTED", "REJECTED"]).nullable(),
-    })).min(1, "Nothing to decide"),
+const dayMinutes = z.number().int().min(0, "Cannot be below 0").max(1440, "A day has only 24 hours");
+export const attendanceDaySourceSchema = z.object({
+    date:                  isoDate,
+    userId:                z.number().int().positive(),
+    useManual:             z.boolean().optional(),
+    overrideWorkedMinutes: dayMinutes.nullable().optional(),
+    overrideLateMinutes:   dayMinutes.nullable().optional(),
 });
 
 export const holidayCreateSchema = z.object({

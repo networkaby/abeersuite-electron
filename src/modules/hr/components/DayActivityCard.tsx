@@ -13,8 +13,15 @@
 // arrive from the server, worked out by the very functions payroll uses — a card
 // that did its own arithmetic would be a second opinion, and the whole point is
 // that there is only one.
+//
+// Owner, 2026-10-13: the card is the AUTO side of the day, and a wrong figure is
+// corrected right here rather than the whole day being refused. Given
+// `onCorrect`, Worked and Late by are editable; a corrected figure shows the
+// till's own beside it and can be handed back. The server re-works the day.
 
-import { ArrowRight } from "lucide-react";
+import { useState } from "react";
+import { ArrowRight, Check, Pencil, Undo2, X } from "lucide-react";
+import { NumericInput } from "@/shared/components/NumericInput";
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
 import { cn } from "@/shared/lib/format/utils";
 import type { PayRules } from "@/shared/lib/hr/payRules";
@@ -49,12 +56,17 @@ const GRADE_TONE: Record<string, string> = {
     HOLIDAY:     "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300",
 };
 
-export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday }: {
+/** Which of the till's figures a person may correct on the card. */
+export type CorrectableField = "worked" | "late";
+
+export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday, onCorrect }: {
     day: DayBreakup;
     rules: PayRules;
     /** The gap after which the clock stops counting — why "away" was not credited. */
     idleLimitMinutes: number;
     isToday: boolean;
+    /** Correct (minutes) or hand back to the till (null). Absent = read-only card. */
+    onCorrect?: (field: CorrectableField, minutes: number | null) => Promise<void>;
 }) {
     const first = day.spans[0]?.startedAt ?? null;
     const last = day.spans.length ? day.spans[day.spans.length - 1].endedAt : null;
@@ -115,10 +127,19 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday 
             <div className="grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-3 sm:grid-cols-4 lg:grid-cols-8">
                 <Figure label="Duty window" value={`${day.dutyStart}–${day.dutyEnd}`} hint="The shop's hours on this very date — they move through the year" />
                 <Figure label="Duty owed" value={formatWorked(day.dutyMinutes)} hint="What this day owed" />
-                <Figure label="Worked" value={formatWorked(day.workedMinutes)} strong hint="Credited by the clock itself, stretch by stretch" />
+                <CorrectableFigure
+                    label="Worked" minutes={day.workedMinutes} till={day.till.workedMinutes} corrected={day.corrected.worked}
+                    strong hint="Credited by the clock itself, stretch by stretch"
+                    onCorrect={onCorrect && ((m) => onCorrect("worked", m))}
+                />
                 <Figure label="Times active" value={String(day.activeCount)} hint="Separate stretches at the machine" />
                 <Figure label="Away" value={orDash(day.idleMinutes)} hint={`Between stretches. A gap past ${idleLimitMinutes} min stops the clock — not counted, not paid`} />
-                <Figure label="Late by" value={orDash(day.lateBy)} tone={day.lateBy > 0 ? "warn" : undefined} hint={`Against ${day.dutyStart}, after ${rules.lateGraceMinutes} min of grace`} />
+                <CorrectableFigure
+                    label="Late by" minutes={day.lateBy} till={day.till.lateBy} corrected={day.corrected.late}
+                    tone={day.lateBy > 0 ? "warn" : undefined} dashZero
+                    hint={`Against ${day.dutyStart}, after ${rules.lateGraceMinutes} min of grace`}
+                    onCorrect={onCorrect && ((m) => onCorrect("late", m))}
+                />
                 {/* A day the shop was shut owes nothing, so it cannot be left early
                     and cannot fall short. The rules agree — `attendanceEffectFor`
                     takes such a day out of the netting entirely and pays every
@@ -269,6 +290,93 @@ function Figure({ label, value, hint, strong, tone }: {
             )}>
                 {value}
             </div>
+        </div>
+    );
+}
+
+/**
+ * A figure the till measured that a person may correct. Shows the corrected
+ * value with the till's own beside it, so the override never hides what it
+ * overrode; ↺ hands the figure back to the till.
+ */
+function CorrectableFigure({ label, minutes, till, corrected, hint, strong, tone, dashZero, onCorrect }: {
+    label: string;
+    minutes: number;
+    till: number;
+    corrected: boolean;
+    hint?: string;
+    strong?: boolean;
+    tone?: "good" | "warn";
+    dashZero?: boolean;
+    onCorrect?: (minutes: number | null) => Promise<void>;
+}) {
+    const [editing, setEditing] = useState(false);
+    const [h, setH] = useState("");
+    const [m, setM] = useState("");
+    const [saving, setSaving] = useState(false);
+
+    const start = () => {
+        setH(String(Math.floor(minutes / 60)));
+        setM(String(minutes % 60));
+        setEditing(true);
+    };
+    const save = async (value: number | null) => {
+        if (!onCorrect) return;
+        setSaving(true);
+        try {
+            await onCorrect(value);
+            setEditing(false);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (editing) {
+        return (
+            <div title={hint}>
+                <div className="text-[11px] text-muted-foreground">{label}</div>
+                <form
+                    className="flex items-center gap-1"
+                    onSubmit={(e) => { e.preventDefault(); void save((Number(h) || 0) * 60 + (Number(m) || 0)); }}
+                >
+                    <NumericInput value={h} onValueChange={setH} min={0} max={24} className="h-7 w-10 px-1 text-xs" aria-label={`${label} hours`} autoFocus />
+                    <span className="text-xs text-muted-foreground">h</span>
+                    <NumericInput value={m} onValueChange={setM} min={0} max={59} className="h-7 w-10 px-1 text-xs" aria-label={`${label} minutes`} />
+                    <span className="text-xs text-muted-foreground">m</span>
+                    <button type="submit" disabled={saving} className="rounded p-0.5 text-emerald-600 hover:bg-muted" aria-label="Save the correction"><Check size={13} /></button>
+                    <button type="button" disabled={saving} onClick={() => setEditing(false)} className="rounded p-0.5 text-muted-foreground hover:bg-muted" aria-label="Cancel"><X size={13} /></button>
+                </form>
+            </div>
+        );
+    }
+
+    const show = dashZero ? orDash(minutes) : formatWorked(minutes);
+    return (
+        <div title={hint}>
+            <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                {label}
+                {corrected && <span className="rounded bg-sky-500/15 px-1 text-[10px] font-medium text-sky-700 dark:text-sky-400">corrected</span>}
+            </div>
+            <div className="flex items-center gap-1">
+                <span className={cn(
+                    "font-mono text-sm tabular-nums",
+                    strong && "font-semibold",
+                    corrected ? "text-sky-700 dark:text-sky-400" : tone === "good" ? "text-emerald-600 dark:text-emerald-400" : tone === "warn" && "text-amber-600 dark:text-amber-400",
+                )}>
+                    {show}
+                </span>
+                {onCorrect && (
+                    <button type="button" onClick={start} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={`Correct ${label}`} title="Correct the till's figure">
+                        <Pencil size={11} />
+                    </button>
+                )}
+                {onCorrect && corrected && (
+                    <button type="button" disabled={saving} onClick={() => void save(null)} className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={`Hand ${label} back to the till`} title="Use the till's figure again">
+                        <Undo2 size={11} />
+                    </button>
+                )}
+            </div>
+            {corrected && <div className="font-mono text-[10px] tabular-nums text-muted-foreground">till: {dashZero ? orDash(till) : formatWorked(till)}</div>}
         </div>
     );
 }

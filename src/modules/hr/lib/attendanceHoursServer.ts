@@ -12,7 +12,7 @@ import { dutyHoursFor, dutyMinutesFor, idleLimitMinutesFor, lateMinutes } from "
 import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import { loadPayRules } from "@/modules/hr/lib/payRulesServer";
 import { lateDutyCutMinutes } from "@/shared/lib/hr/payRules";
-import { reviewOf } from "@/shared/lib/hr/attendanceReview";
+import { ATTENDANCE_SOURCE_SELECT, autoCounts, lateOf, workedOf } from "@/shared/lib/hr/attendanceSource";
 import { shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
 import { holidayDatesFor, isoDaysBetween, weekdayOf } from "@/modules/hr/lib/attendanceCalendar";
 import { attendanceEffectFor } from "@/modules/hr/lib/payRulesApply";
@@ -35,7 +35,7 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
         loadPayRules(),
         prisma.attendanceDay.findMany({
             where:  { userId, date: { gte: dayOf(from), lte: dayOf(to) } },
-            select: { date: true, status: true, source: true, firstInAt: true, lastSeenAt: true, workedMinutes: true, note: true, review: true, reviewedMinutes: true },
+            select: { date: true, status: true, firstInAt: true, lastSeenAt: true, note: true, manualStatus: true, ...ATTENDANCE_SOURCE_SELECT },
         }),
         prisma.attendanceSpan.findMany({
             where:   { userId, date: { gte: dayOf(from), lte: dayOf(to) } },
@@ -114,7 +114,10 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
         });
         const duty = dutyMinutesFor(user.staffProfile?.dutyMinutes, hours.start, hours.end);
 
-        const lateBy = lateMinutes(row?.firstInAt ?? null, hours.start, undefined, rules.lateGraceMinutes) ?? 0;
+        // The clock's lateness, and the one the day stands on — a correction
+        // made on the card wins (attendanceSource.ts).
+        const tillLate = lateMinutes(row?.firstInAt ?? null, hours.start, undefined, rules.lateGraceMinutes) ?? 0;
+        const lateBy = row ? lateOf(row, tillLate) : tillLate;
         const weeklyOff = offDays.has(weekdayOf(iso));
         const holidayName = myHolidays.get(iso) ?? null;
         // Exactly the days `attendanceEffectFor` judges, and no others: a day the
@@ -122,10 +125,7 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
         // was shut cannot be arrived late for. Counting one of those here would
         // spend a free late day the payslip never spent, and from then on every
         // later day would disagree with payroll about whether it was charged.
-        // …and only once the day has been ACCEPTED: a waiting or rejected till
-        // day is not judged by payroll, so it must not spend a free late day here.
-        const review = row ? reviewOf(row) : null;
-        const judged = review === "ACCEPTED" && !weeklyOff && !holidayName;
+        const judged = !!row && autoCounts(row) && !weeklyOff && !holidayName;
         let lateCharged = false;
         if (lateBy > 0 && judged) {
             lateSoFar += 1;
@@ -140,7 +140,7 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
             tracked: spans.length > 0,
             spans,
             lastSeenAt: row?.lastSeenAt?.toISOString() ?? null,
-            workedMinutes: row?.workedMinutes ?? 0,
+            workedMinutes: row ? workedOf(row) : 0,
             dutyMinutes: duty,
             lateBy,
             dutyStart: hours.start,
@@ -149,7 +149,9 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
             leaveKind: leaveKindOn(iso),
             status: row?.status ?? "",
             manual: row?.source === "OFFICE",
-            review,
+            till: { workedMinutes: row?.workedMinutes ?? 0, lateBy: tillLate },
+            corrected: { worked: row?.overrideWorkedMinutes != null, late: row?.overrideLateMinutes != null },
+            manualStatus: row?.manualStatus ?? null,
             weeklyOff,
             holidayName,
             // The rule's own function, not a second copy of it. A "pay" style

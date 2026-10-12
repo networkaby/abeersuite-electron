@@ -27,7 +27,6 @@
 // Where the From date came from is said in the sentence below instead.
 
 import { Fragment, useMemo, useState } from "react";
-import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
 import { AlertTriangle, CalendarRange, ChevronDown, ChevronRight, Search } from "lucide-react";
@@ -136,13 +135,6 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
 
     const blocked = !!data?.overlapRunId;
 
-    // Till days nobody has accepted or rejected yet. They do not stop a run —
-    // they are paid as normal days — but the sheet says so, because accepting
-    // one later cannot change a run already generated.
-    const waiting = (data?.lines ?? []).filter((l) => l.waitingDays > 0);
-    const waitingDays = waiting.reduce((n, l) => n + l.waitingDays, 0);
-    const firstWaiting = waiting.map((l) => l.firstWaitingDate).filter((d): d is string => !!d).sort()[0] ?? null;
-
     // Said in one always-present line rather than as a hint under the From
     // field, so the toolbar is the same height before and after the fetch.
     const startedNote = data?.startedFrom === "after-last-run"
@@ -239,19 +231,6 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
                 </p>
             )}
 
-            {!!waitingDays && (
-                <p className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
-                    <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-600" />
-                    <span>
-                        {waitingDays} till {waitingDays === 1 ? "day" : "days"} across {waiting.length}{" "}
-                        {waiting.length === 1 ? "person" : "people"} still waiting in Employee Activity. Until they are
-                        accepted they are paid as normal days — no half day, absence, overtime or penalty from the
-                        clock.{" "}
-                        <Link href={reviewHref(firstWaiting)} className="font-medium underline">Review them</Link>
-                    </span>
-                </p>
-            )}
-
             {/* Errors only. The spinner is deliberately not used here: swapping a
                 centred spinner for the table is the biggest jump on the page. */}
             {error && <QueryStateBlock loading={false} error={error} hasData={!!data} onRetry={reload} />}
@@ -323,15 +302,6 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
                                                 <span className="font-medium">{l.staffName}</span>
                                                 {l.staffCode && <span className="ml-2 text-xs text-muted-foreground">{l.staffCode}</span>}
                                                 {l.skipReason && <p className="text-xs text-amber-600">{l.skipReason}</p>}
-                                                {l.waitingDays > 0 && (
-                                                    <Link
-                                                        href={reviewHref(l.firstWaitingDate)}
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        className="block text-xs text-amber-600 hover:underline"
-                                                    >
-                                                        {l.waitingDays} {l.waitingDays === 1 ? "day" : "days"} waiting for review
-                                                    </Link>
-                                                )}
                                             </TableCell>
                                             <TableCell className="text-sm text-muted-foreground tabular-nums">
                                                 {formatDayBasis(l.paidDays, l.periodDays, l.payDays)}
@@ -356,11 +326,6 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
             </div>
         </div>
     );
-}
-
-/** Employee Activity's day review, opened on the given day when there is one. */
-function reviewHref(date: string | null): string {
-    return date ? `/office/hr/activity?date=${date}` : "/office/hr/activity";
 }
 
 /** The pay heads behind one person's figure, already proportioned. */
