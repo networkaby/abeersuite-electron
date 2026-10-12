@@ -19,12 +19,14 @@ public class MainActivity extends BridgeActivity {
         NsMessagingService.ensureChannel(this);
         askForNotifications();
         openFromNotification(getIntent());
+        openFromLink(getIntent());
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         openFromNotification(intent);
+        openFromLink(intent);
     }
 
     /** Android 13+ asks once; the answer is the customer's. Without it bills still come on WhatsApp. */
@@ -48,5 +50,15 @@ public class MainActivity extends BridgeActivity {
             String site = getString(R.string.ns_site);
             getBridge().getWebView().post(() -> getBridge().getWebView().loadUrl(site + path));
         }
+    }
+
+    /** A tapped shop.networkservice.in link (App Links — WhatsApp View bill / Open in app):
+     *  open it inside the app; proxy.ts maps it to the app screen. */
+    private void openFromLink(Intent intent) {
+        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction()) || intent.getData() == null) return;
+        String url = intent.getData().toString();
+        intent.setData(null);
+        if (!url.startsWith(getString(R.string.ns_site) + "/")) return;
+        getBridge().getWebView().post(() -> getBridge().getWebView().loadUrl(url));
     }
 }

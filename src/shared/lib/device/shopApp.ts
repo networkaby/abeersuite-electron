@@ -69,6 +69,8 @@ export function isShopNativeRequest(userAgent: string, devCookie: string | undef
 /** A website address that has its own screen in the app (inside the app only):
  *  an order page, a customer message's short link, the Social pages. Null for the rest. */
 export function appScreenFor(pathname: string): string | null {
+    // The "Open in app" button: in a browser it offers the download, in the app it opens home.
+    if (pathname === SHOP_APP_INSTALL) return SHOP_NATIVE_HOME;
     const order = pathname.match(/^\/shop\/order\/(\d+)$/);
     if (order) return `${SHOP_NATIVE_HOME}/order/${order[1]}`;
     const short = pathname.match(/^\/portal\/b\/([^/]+)$/);

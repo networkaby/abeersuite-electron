@@ -159,14 +159,14 @@ export type WaTemplateDraft = {
     body: string;
     /** "View" button text; null = no button. */
     viewButton: string | null;
-    /** "Get our app" button text; null = no button. */
+    /** "Open in app" button text; null = no button. */
     appButton: string | null;
 };
 
 /** Closing paragraph of every template — the customer's whole account is on the portal. */
 const PORTAL_LINE =
     "All your bills, payments, warranty details and repair status are available anytime " +
-    "in your account on our website and app. Tap Get our app to install it.";
+    "in your account on our website and app. Tap Open in app to see them.";
 
 /** Customer care — call or WhatsApp. Ends every default body. */
 const CARE_NO = COMPANY_DETAILS.contact.phone.replace(/^\+91\s*/, "");
@@ -175,9 +175,6 @@ const HELP_LINE = `\n\nNeed help? Call or WhatsApp us at ${CARE_NO}.`;
 const SHOP_ADDRESS = [COMPANY_DETAILS.address.line1, COMPANY_DETAILS.address.line2, COMPANY_DETAILS.address.pin]
     .filter(Boolean)
     .join(", ");
-
-/** Fixed grey line under every template (Meta: max 60 chars, no fields). */
-export const WA_FOOTER = `${COMPANY_DETAILS.brandName} · Call/WhatsApp ${CARE_NO}`.slice(0, 60);
 
 /** One-tap "Call us" button on every template that has buttons — Meta wants E.164. */
 export const WA_CALL_BUTTON = { text: "Call us", phone: COMPANY_DETAILS.contact.phone.replace(/\s+/g, "") };
@@ -202,7 +199,7 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             PORTAL_LINE +
             HELP_LINE,
         viewButton: "View bill",
-        appButton: "Get our app",
+        appButton: "Open in app",
     },
     RECEIPT: {
         body:
@@ -213,7 +210,7 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             PORTAL_LINE +
             HELP_LINE,
         viewButton: "View receipt",
-        appButton: "Get our app",
+        appButton: "Open in app",
     },
     SALE_RETURN: {
         body:
@@ -223,7 +220,7 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             PORTAL_LINE +
             HELP_LINE,
         viewButton: "View credit note",
-        appButton: "Get our app",
+        appButton: "Open in app",
     },
     REFUND: {
         body:
@@ -233,7 +230,7 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             PORTAL_LINE +
             HELP_LINE,
         viewButton: "View refund",
-        appButton: "Get our app",
+        appButton: "Open in app",
     },
     ORDER: {
         body:
@@ -243,7 +240,7 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             PORTAL_LINE +
             HELP_LINE,
         viewButton: "View order",
-        appButton: "Get our app",
+        appButton: "Open in app",
     },
     ESTIMATE: {
         body:
@@ -253,7 +250,7 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             PORTAL_LINE +
             HELP_LINE,
         viewButton: "View estimate",
-        appButton: "Get our app",
+        appButton: "Open in app",
     },
     REPAIR_RECEIVED: {
         body:
@@ -263,7 +260,7 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             PORTAL_LINE +
             HELP_LINE,
         viewButton: "Track repair",
-        appButton: "Get our app",
+        appButton: "Open in app",
     },
     REPAIR_READY: {
         body:
@@ -274,7 +271,7 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             PORTAL_LINE +
             HELP_LINE,
         viewButton: "Track repair",
-        appButton: "Get our app",
+        appButton: "Open in app",
     },
     // A reminder, not a sales push — kept free of offers so Meta files it as UTILITY.
     DUE_SOFT: {
@@ -284,7 +281,7 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             "Tap Pay now to see your bills and pay by UPI. Please ignore this message if you have already paid. Thank you." +
             HELP_LINE,
         viewButton: "Pay now",
-        appButton: "Get our app",
+        appButton: "Open in app",
     },
     DUE_FIRM: {
         body:
@@ -292,7 +289,7 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             "Please clear it at the earliest. Tap Pay now to see your bills and pay by UPI. Please ignore this message if you have already paid." +
             HELP_LINE,
         viewButton: "Pay now",
-        appButton: "Get our app",
+        appButton: "Open in app",
     },
     DEAL_CREATED: {
         body:
@@ -301,7 +298,7 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             "Tap View details to check your enquiry anytime." +
             HELP_LINE,
         viewButton: "View details",
-        appButton: "Get our app",
+        appButton: "Open in app",
     },
     HELP_CREATED: {
         body:
@@ -310,7 +307,7 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
             "Tap View ticket to follow updates." +
             HELP_LINE,
         viewButton: "View ticket",
-        appButton: "Get our app",
+        appButton: "Open in app",
     },
     TICKET_AUTO_REPLY: {
         body:

@@ -4,7 +4,6 @@ import {
     WA_APP_LINK,
     WA_BILL_LINK_BASE,
     WA_CALL_BUTTON,
-    WA_FOOTER,
     bodyFieldOrder,
     sampleValuesFor,
     toMetaBody,
@@ -74,8 +73,8 @@ async function graph<T>(path: string, init?: { method?: string; body?: unknown }
     return json;
 }
 
-/** Meta's component list for a draft — body, the fixed customer-care footer,
- *  the optional URL buttons and a Call us button (last, so the View button
+/** Meta's component list for a draft — body, the optional URL buttons and a
+ *  Call us button (last, so the View button
  *  stays index 0 when sending). */
 function components(kind: WaTemplateKind, draft: WaTemplateDraft) {
     const order = bodyFieldOrder(draft.body);
@@ -86,7 +85,6 @@ function components(kind: WaTemplateKind, draft: WaTemplateDraft) {
             text: toMetaBody(draft.body.trim()),
             ...(order.length ? { example: { body_text: [order.map((k) => samples[k])] } } : {}),
         },
-        { type: "FOOTER", text: WA_FOOTER },
     ];
     const buttons: unknown[] = [];
     if (draft.viewButton?.trim()) {
