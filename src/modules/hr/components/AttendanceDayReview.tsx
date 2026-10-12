@@ -19,11 +19,11 @@
 //
 // Decisions paint at once and roll back if the server refuses (AGENTS §7).
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { Check, ChevronLeft, ChevronRight, ListChecks, Undo2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ListChecks, Undo2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -36,6 +36,8 @@ import { formatWorked } from "@/shared/lib/hr/dutyTime";
 import { ATTENDANCE_REVIEW_LABELS, type AttendanceReview, type AttendanceReviewDecision } from "@/shared/lib/hr/attendanceReview";
 import { ATTENDANCE_STATUS_META, LEAVE_KIND_LABELS, type AttendanceStatus } from "@/shared/lib/schemas/hrAttendanceSchema";
 import type { DayReviewPayload, DayReviewRow } from "../lib/attendanceTypes";
+import type { HoursPayload } from "../lib/attendanceHoursTypes";
+import DayActivityCard from "./DayActivityCard";
 
 /** What a person may set by hand from here — the register's own four. */
 const MARKS: AttendanceStatus[] = ["PRESENT", "HALF_DAY", "ABSENT", "LEAVE"];
@@ -58,11 +60,7 @@ const fmtDay = (iso: string) => new Date(`${iso}T00:00:00.000Z`).toLocaleDateStr
     weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
 });
 
-export default function AttendanceDayReview({ canEdit, onOpenPerson }: {
-    canEdit: boolean;
-    /** Opens that person's month in the explorer. */
-    onOpenPerson: (userId: number) => void;
-}) {
+export default function AttendanceDayReview({ canEdit }: { canEdit: boolean }) {
     const router = useRouter();
     const searchParams = useSearchParams();
     // The day rides the URL (`?date=`), so Payroll can link straight to a day
@@ -149,6 +147,16 @@ export default function AttendanceDayReview({ canEdit, onOpenPerson }: {
         }
     };
 
+    // Rows opened to their day card. Tied to the day they were opened on, so
+    // moving to another day starts with every card shut.
+    const [opened, setOpened] = useState<{ date: string; ids: Set<number> }>({ date: "", ids: new Set() });
+    const openIds = opened.date === date ? opened.ids : new Set<number>();
+    const toggle = (id: number) => {
+        const ids = new Set(openIds);
+        if (ids.has(id)) ids.delete(id); else ids.add(id);
+        setOpened({ date, ids });
+    };
+
     const waitingIds = rows.filter((r) => r.review === "WAITING").map((r) => r.userId);
 
     return (
@@ -209,6 +217,7 @@ export default function AttendanceDayReview({ canEdit, onOpenPerson }: {
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            <TableHead className="w-8" />
                             <TableHead>Staff</TableHead>
                             <TableHead>In – out</TableHead>
                             <TableHead className="text-right">Worked</TableHead>
@@ -219,26 +228,25 @@ export default function AttendanceDayReview({ canEdit, onOpenPerson }: {
                     <TableBody>
                         {!data && (
                             <TableRow>
-                                <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">Reading…</TableCell>
+                                <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">Reading…</TableCell>
                             </TableRow>
                         )}
                         {data && !rows.length && (
                             <TableRow>
-                                <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">Nobody was on the staff that day.</TableCell>
+                                <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">Nobody was on the staff that day.</TableCell>
                             </TableRow>
                         )}
                         {rows.map((r) => (
-                            <TableRow key={r.userId}>
+                            <Fragment key={r.userId}>
+                            <TableRow className="cursor-pointer" title="Click to open the day card" onClick={() => toggle(r.userId)}>
+                                <TableCell className="text-muted-foreground">
+                                    {openIds.has(r.userId) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                </TableCell>
                                 <TableCell>
-                                    <button
-                                        type="button"
-                                        onClick={() => onOpenPerson(r.userId)}
-                                        title="Open their month"
-                                        className="flex items-center gap-2 text-left hover:underline"
-                                    >
+                                    <div className="flex items-center gap-2">
                                         <UserAvatar avatarUrl={r.avatarUrl} name={r.name} role={r.role} sizePx={24} className="shrink-0" />
                                         <span className="text-sm font-medium">{r.name}</span>
-                                    </button>
+                                    </div>
                                 </TableCell>
                                 <TableCell className="text-sm tabular-nums text-muted-foreground">
                                     {r.firstInAt || r.lastOutAt ? `${fmtTime(r.firstInAt)} – ${fmtTime(r.lastOutAt)}` : "—"}
@@ -252,7 +260,8 @@ export default function AttendanceDayReview({ canEdit, onOpenPerson }: {
                                     ) : "—"}
                                 </TableCell>
                                 <TableCell className="text-sm">{clockSays(r)}</TableCell>
-                                <TableCell>
+                                {/* Deciding must not open or shut the card. */}
+                                <TableCell onClick={(e) => e.stopPropagation()}>
                                     <Decision
                                         row={r}
                                         editable={editable && !busy}
@@ -261,11 +270,38 @@ export default function AttendanceDayReview({ canEdit, onOpenPerson }: {
                                     />
                                 </TableCell>
                             </TableRow>
+                            {openIds.has(r.userId) && <DayCardRow userId={r.userId} date={date} today={today} />}
+                            </Fragment>
                         ))}
                     </TableBody>
                 </Table>
             </div>
         </div>
+    );
+}
+
+/**
+ * The person's own day card under their row — the very card their month view
+ * draws, read only when opened (one person, one day) and cached by URL, so
+ * opening it again costs no read.
+ */
+function DayCardRow({ userId, date, today }: { userId: number; date: string; today: string }) {
+    const { data, error } = useApiResource<HoursPayload>(`/api/hr/attendance/hours?userId=${userId}&from=${date}&to=${date}`);
+    const day = data?.days.find((d) => d.date === date) ?? null;
+    return (
+        <TableRow className="bg-muted/30 hover:bg-muted/30">
+            <TableCell colSpan={6} className="py-3">
+                {error ? (
+                    <p className="text-sm text-destructive">{error}</p>
+                ) : !data ? (
+                    <p className="text-sm text-muted-foreground">Reading the day…</p>
+                ) : !day ? (
+                    <p className="text-sm text-muted-foreground">Not on the staff that day.</p>
+                ) : (
+                    <DayActivityCard day={day} rules={data.rules} idleLimitMinutes={data.idleLimitMinutes} isToday={date === today} />
+                )}
+            </TableCell>
+        </TableRow>
     );
 }
 

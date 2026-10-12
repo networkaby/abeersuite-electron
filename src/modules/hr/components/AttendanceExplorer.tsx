@@ -183,7 +183,7 @@ export default function AttendanceExplorer({ canEdit }: { canEdit: boolean }) {
                         // flash up for the second before the person's month replaces it.
                         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Reading…</div>
                     ) : (
-                        <AttendanceDayReview canEdit={canEdit} onOpenPerson={select} />
+                        <AttendanceDayReview canEdit={canEdit} />
                     )}
                 </section>
             </div>
