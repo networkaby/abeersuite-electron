@@ -41,6 +41,12 @@ const nextConfig: NextConfig = {
           // routes a counter actually uses while the window is still painting, so
           // that lazy cost lands in time we're already spending, not in front of staff.
           preloadEntriesOnStart: true,
+          // The standalone server lives inside the install folder, and on a "for
+          // everyone" install that is Program Files — read-only to the cashier. Every
+          // regenerated page then failed `mkdir .next\cache` with EPERM in main.log.
+          // Off, Next keeps those pages in its in-memory cache only; the pages the
+          // build prerendered are still read from disk as before.
+          isrFlushToDisk: false,
         }
       : {}),
   },
