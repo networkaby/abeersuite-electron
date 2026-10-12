@@ -14,7 +14,7 @@
 // days it claimed are freed, so the period can be generated again once whatever
 // was wrong is fixed. A posted run is never edited in place.
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { GatedLink } from "@/shared/components/GatedLink";
 import { useRouter } from "next/navigation";
@@ -33,7 +33,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DataPageHeader } from "@/shared/components/DataPageHeader";
 import { QueryStateBlock } from "@/shared/components/QueryStateBlock";
 import { TableEmptyRow } from "@/shared/components/DataTableStates";
-import { useApiResource, useRealtimeTopics } from "@/shared/hooks";
+import { useApiResource, useRealtimeTopics, useReplicaUpdate } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { formatDate } from "@/shared/lib/format/formatDate";
@@ -53,6 +53,22 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
     const url = `/api/hr/payroll/${runId}`;
     const { data, loading, refreshing, error, reload } = useApiResource<PayrollRunDetail>(url);
     useRealtimeTopics(["ledger"], reload);
+
+    // A window reading its local replica can open a run the moment Generate
+    // saves it, before the sync engine has pulled it down — the first read is
+    // a 404 that heals ~2s later. Until the run has been seen once, treat
+    // "not found" as "still arriving": re-read on the replica's own
+    // PayrollRun update, and give up after a grace period so a run that was
+    // really deleted still says so.
+    const [arrivalExpired, setArrivalExpired] = useState(false);
+    const notFound = !data && !!error && /not found/i.test(error);
+    const waitingForArrival = notFound && !arrivalExpired;
+    useReplicaUpdate(reload, ["PayrollRun", "PayrollRunLine"], waitingForArrival);
+    useEffect(() => {
+        if (!waitingForArrival) return;
+        const t = setTimeout(() => setArrivalExpired(true), 15_000);
+        return () => clearTimeout(t);
+    }, [waitingForArrival]);
 
     const [q, setQ] = useState("");
     const [busy, setBusy] = useState(false);
@@ -161,7 +177,7 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                     // appears with the data shifts the page under the pointer.
                     subtitle={data
                         ? `${data.headcount} staff · dated ${formatDate(data.postingDate)}${refreshing ? " · refreshing…" : ""}`
-                        : "Reading the run…"}
+                        : waitingForArrival ? "Waiting for this run to reach this computer…" : "Reading the run…"}
                     // Back first, then the wallet: this page is only ever
                     // reached from the run list, and there is no other way out.
                     icon={(
@@ -243,7 +259,7 @@ export default function PayrollRunWorkspace({ runId, canRun }: { runId: number; 
                     ) : null}
                 />
 
-                <QueryStateBlock loading={loading} error={error} hasData={!!data} onRetry={reload} />
+                <QueryStateBlock loading={loading || waitingForArrival} error={waitingForArrival ? null : error} hasData={!!data} onRetry={reload} />
 
                 {data && (
                     <>
