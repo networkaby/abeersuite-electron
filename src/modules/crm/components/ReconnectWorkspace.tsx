@@ -35,7 +35,11 @@ interface Candidate {
     ownerPositionId: string | null;
     lastActivityAt: string | null;
     dormantDays: number | null;
+    /** Unsaved numbers only: reached us by call, message or both. */
+    via?: "call" | "message" | "both";
 }
+/** One WhatsApp message of an unsaved number (from /api/messages/thread). */
+interface CallerMessage { type: "message"; id: number; at: string; direction: string; kind: string; body: string; sentBy: string | null }
 interface CandidatesResponse { candidates: Candidate[]; total: number; nextCursor: number | null; truncated: boolean }
 
 type TimelineSource = "sale" | "payment" | "repair" | "inquiry" | "deal" | "note" | "call" | "message" | "meeting" | "task";
@@ -77,7 +81,7 @@ const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
     { value: "deal", label: "Deal" },
     { value: "note", label: "Call / note" },
 ];
-const FILTER_KEYS = ["activity", "activityType", "callLog", "sold", "notSold", "warranty", "revenue", "profit", "stage", "group", "owner", "type", "includeUnsaved"] as const;
+const FILTER_KEYS = ["activity", "activityType", "callLog", "messages", "sold", "notSold", "warranty", "revenue", "profit", "stage", "group", "owner", "type", "includeUnsaved"] as const;
 type FilterKey = typeof FILTER_KEYS[number];
 const noFilters = (): Record<FilterKey, boolean> => Object.fromEntries(FILTER_KEYS.map((k) => [k, false])) as Record<FilterKey, boolean>;
 
@@ -223,6 +227,9 @@ export default function ReconnectWorkspace({
     const [callFromDays, setCallFromDays] = useState("");
     const [callToDays, setCallToDays] = useState("");
     const [callMissedMode, setCallMissedMode] = useState<MissedMode>("all");
+    const [msgDir, setMsgDir] = useState<"any" | "in" | "out">("in");
+    const [msgFromDays, setMsgFromDays] = useState("");
+    const [msgToDays, setMsgToDays] = useState("");
     const [soldCategoryId, setSoldCategoryId] = useState("");
     const [soldProductQ, setSoldProductQ] = useState("");
     const [soldFromDays, setSoldFromDays] = useState("");
@@ -265,6 +272,7 @@ export default function ReconnectWorkspace({
     const [selected, setSelected] = useState<Candidate | null>(null);
     const [leadPhone, setLeadPhone] = useState<string | null>(null);
     const [callerCalls, setCallerCalls] = useState<CallerCall[] | null>(null);
+    const [callerMessages, setCallerMessages] = useState<CallerMessage[] | null>(null);
     const [loadingCallerCalls, setLoadingCallerCalls] = useState(false);
     const [rightTab, setRightTab] = useState<"timeline" | "items">("timeline");
     const [timeline, setTimeline] = useState<Timeline | null>(null);
@@ -299,6 +307,11 @@ export default function ReconnectWorkspace({
             if (callFromDays.trim()) p.set("callFromDays", callFromDays.trim());
             if (callToDays.trim()) p.set("callToDays", callToDays.trim());
             if (callMissedMode !== "all") p.set("callMissed", callMissedMode);
+        }
+        if (enabled.messages) {
+            p.set("msgDirection", msgDir);
+            if (msgFromDays.trim()) p.set("msgFromDays", msgFromDays.trim());
+            if (msgToDays.trim()) p.set("msgToDays", msgToDays.trim());
         }
         if (enabled.sold && (soldCategoryId || soldProductQ.trim())) {
             if (soldCategoryId) p.set("soldCategoryId", soldCategoryId);
@@ -338,7 +351,7 @@ export default function ReconnectWorkspace({
         return p;
     }, [
         enabled, activity, activityType, activityPresence, activityFromDays, activityToDays,
-        callDir, callFromDays, callToDays, callMissedMode,
+        callDir, callFromDays, callToDays, callMissedMode, msgDir, msgFromDays, msgToDays,
         soldCategoryId, soldProductQ, soldFromDays, soldToDays,
         notSoldCategoryId, notSoldProductQ, notSoldFromDays, notSoldToDays,
         warrantyDays, warrantyTermIds, revenueMin, revenueMax, revenueFromDays, revenueToDays,
@@ -352,7 +365,7 @@ export default function ReconnectWorkspace({
     // ── Saved filters: capture the whole checklist state, and restore it ──────────
     const serializeFilters = (): Record<string, unknown> => ({
         enabled, activity, activityType, activityPresence, activityFromDays, activityToDays,
-        callDir, callFromDays, callToDays, callMissedMode,
+        callDir, callFromDays, callToDays, callMissedMode, msgDir, msgFromDays, msgToDays,
         soldCategoryId, soldProductQ, soldFromDays, soldToDays,
         notSoldCategoryId, notSoldProductQ, notSoldFromDays, notSoldToDays,
         warrantyDays, warrantyTermIds, revenueMin, revenueMax, revenueFromDays, revenueToDays,
@@ -371,6 +384,9 @@ export default function ReconnectWorkspace({
         setCallFromDays(s(p.callFromDays));
         setCallToDays(s(p.callToDays));
         setCallMissedMode(p.callMissed === "only" || p.callMissed === "exclude" ? p.callMissed : "all");
+        setMsgDir((p.msgDir as "any" | "in" | "out") ?? "in");
+        setMsgFromDays(s(p.msgFromDays));
+        setMsgToDays(s(p.msgToDays));
         setSoldCategoryId(s(p.soldCategoryId));
         setSoldProductQ(s(p.soldProductQ));
         setSoldFromDays(s(p.soldFromDays));
@@ -489,9 +505,16 @@ export default function ReconnectWorkspace({
     const loadCallerCalls = useCallback(async (phone: string) => {
         setLoadingCallerCalls(true);
         setCallerCalls(null);
+        setCallerMessages(null);
         try {
-            const res = await axios.get<{ items: CallerCall[] }>(`/api/calls?phone=${encodeURIComponent(phone)}&direction=all`);
-            setCallerCalls(res.data.items);
+            const [calls, thread] = await Promise.all([
+                axios.get<{ items: CallerCall[] }>(`/api/calls?phone=${encodeURIComponent(phone)}&direction=all`),
+                axios.get<{ items: (CallerMessage | { type: "call" })[] }>(`/api/messages/thread?phone=${encodeURIComponent(phone)}`)
+                    .catch(() => ({ data: { items: [] as CallerMessage[] } })), // messages are extra — never block the call log
+            ]);
+            setCallerCalls(calls.data.items);
+            // Newest first, like the call list.
+            setCallerMessages(thread.data.items.filter((i): i is CallerMessage => i.type === "message").reverse());
         } catch {
             toast.error("Failed to load call log");
         } finally {
@@ -504,6 +527,7 @@ export default function ReconnectWorkspace({
         setRightTab("timeline");
         setItems(null);
         setCallerCalls(null);
+        setCallerMessages(null);
         setShowDealForm(false); setDealTitle(""); setBody(""); setComposerKind("CALL");
         if (c.kind === "caller" && c.phone) {
             void loadCallerCalls(c.phone);
@@ -733,6 +757,17 @@ export default function ReconnectWorkspace({
                         </p>
                     </FilterRow>
 
+                    <FilterRow label="Messages" checked={enabled.messages} onToggle={toggle("messages")} summary={msgDir === "any" ? "any message" : msgDir === "in" ? "received" : "sent"}>
+                        <div className="flex gap-1">
+                            {([["in", "Received"], ["out", "Sent"], ["any", "Any"]] as const).map(([d, label]) => (
+                                <button key={d} type="button" onClick={() => setMsgDir(d)}
+                                    className={`flex-1 rounded-md px-2 py-1 text-xs font-medium ${msgDir === d ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>{label}</button>
+                            ))}
+                        </div>
+                        <DayWindow from={msgFromDays} setFrom={setMsgFromDays} to={msgToDays} setTo={setMsgToDays} />
+                        <p className="text-[11px] text-muted-foreground">Customers with a WhatsApp message of this direction in the window.</p>
+                    </FilterRow>
+
                     <FilterRow label="Sold item" checked={enabled.sold} onToggle={toggle("sold")} summary={[categories.find((c) => String(c.id) === soldCategoryId)?.name, soldProductQ.trim()].filter(Boolean).join(" · ")}>
                         <ItemPicker categoryId={soldCategoryId} setCategoryId={setSoldCategoryId} q={soldProductQ} setQ={setSoldProductQ} fromDays={soldFromDays} setFromDays={setSoldFromDays} toDays={soldToDays} setToDays={setSoldToDays} categories={categories} />
                         <p className="text-[11px] text-muted-foreground">We sold them this — pitch a related item (printer → ink).</p>
@@ -860,7 +895,7 @@ export default function ReconnectWorkspace({
                                 onClick={() => select(c)}
                                 className={`flex w-full items-center gap-2 border-b px-3 py-2 text-left hover:bg-muted/60 ${active ? "bg-muted" : ""}`}
                             >
-                                {c.kind === "company" ? <Building2 className="size-4 shrink-0 text-muted-foreground" /> : c.kind === "caller" ? <Phone className="size-4 shrink-0 text-amber-500" /> : <User className="size-4 shrink-0 text-muted-foreground" />}
+                                {c.kind === "company" ? <Building2 className="size-4 shrink-0 text-muted-foreground" /> : c.kind === "caller" ? (c.via === "message" ? <MessageCircle className="size-4 shrink-0 text-amber-500" /> : <Phone className="size-4 shrink-0 text-amber-500" />) : <User className="size-4 shrink-0 text-muted-foreground" />}
                                 <div className="min-w-0 flex-1">
                                     <div className="truncate text-sm font-medium">{c.name}</div>
                                     <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -901,12 +936,12 @@ export default function ReconnectWorkspace({
                             <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2">
-                                        {selected.kind === "company" ? <Building2 className="size-4 text-muted-foreground" /> : selected.kind === "caller" ? <Phone className="size-4 text-amber-500" /> : <User className="size-4 text-muted-foreground" />}
-                                        <h2 className="truncate text-lg font-semibold">{selected.kind === "caller" ? selected.phone : selected.name}</h2>
+                                        {selected.kind === "company" ? <Building2 className="size-4 text-muted-foreground" /> : selected.kind === "caller" ? (selected.via === "message" ? <MessageCircle className="size-4 text-amber-500" /> : <Phone className="size-4 text-amber-500" />) : <User className="size-4 text-muted-foreground" />}
+                                        <h2 className="truncate text-lg font-semibold">{selected.name}</h2>
                                     </div>
                                     <div className="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
                                         {selected.kind === "caller" ? (
-                                            <span className="inline-flex items-center gap-1 text-amber-600"><Phone className="size-3.5" /> Unknown caller · {agoShort(selected.lastActivityAt, now)}</span>
+                                            <span className="inline-flex items-center gap-1 text-amber-600"><Phone className="size-3.5" /> {selected.phone} · Unsaved number · {agoShort(selected.lastActivityAt, now)}</span>
                                         ) : (
                                             <>
                                                 {selected.phone ? <span className="inline-flex items-center gap-1"><Phone className="size-3.5" /> {selected.phone}</span> : <span className="italic">No phone on file</span>}
@@ -972,7 +1007,7 @@ export default function ReconnectWorkspace({
                                             <Phone className="size-4 text-amber-600 dark:text-amber-300" />
                                             <div>
                                                 <p className="text-sm font-medium">{selected.phone}</p>
-                                                <p className="text-[11px] text-muted-foreground">Called {agoShort(selected.lastActivityAt, now)}</p>
+                                                <p className="text-[11px] text-muted-foreground">{selected.via === "message" ? "Messaged" : selected.via === "both" ? "Called / messaged" : "Called"} {agoShort(selected.lastActivityAt, now)}</p>
                                             </div>
                                         </div>
                                         <Button size="sm" onClick={() => setLeadPhone(selected.phone ?? "")}>
@@ -982,7 +1017,7 @@ export default function ReconnectWorkspace({
 
                                     {/* Call log entries */}
                                     {loadingCallerCalls && <p className="text-sm text-muted-foreground">Loading calls…</p>}
-                                    {callerCalls && callerCalls.length === 0 && !loadingCallerCalls && (
+                                    {callerCalls && callerCalls.length === 0 && !loadingCallerCalls && !callerMessages?.length && (
                                         <p className="text-sm text-muted-foreground">No calls on record.</p>
                                     )}
                                     {callerCalls?.map((c) => (
@@ -1043,6 +1078,29 @@ export default function ReconnectWorkspace({
                                             </div>
                                         </div>
                                     ))}
+
+                                    {/* WhatsApp messages from / to this number */}
+                                    {callerMessages && callerMessages.length > 0 && (
+                                        <>
+                                            <div className="flex items-center gap-1.5 pt-1 text-xs font-semibold uppercase text-muted-foreground">
+                                                <MessageCircle className="size-3.5" /> Messages
+                                            </div>
+                                            {callerMessages.map((m) => (
+                                                <div key={m.id} className="flex items-start gap-2.5 rounded-lg border p-2.5">
+                                                    <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-green-600">
+                                                        <MessageCircle className="size-3.5" />
+                                                    </span>
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-baseline justify-between gap-2">
+                                                            <span className="text-sm font-medium">{m.direction === "IN" ? "Received" : `Sent${m.sentBy ? ` · ${m.sentBy}` : ""}`}</span>
+                                                            <span className="shrink-0 text-[11px] text-muted-foreground">{formatDateTime(m.at)}</span>
+                                                        </div>
+                                                        <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-muted-foreground">{m.body || `[${m.kind}]`}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </>
+                                    )}
                                 </div>
                             ) : rightTab === "timeline" ? (
                                 <>

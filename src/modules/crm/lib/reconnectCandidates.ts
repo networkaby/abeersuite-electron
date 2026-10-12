@@ -41,6 +41,8 @@ export interface ReconnectCandidate {
     lastActivityAt: string | null;
     /** Whole days since lastActivityAt; null = never any activity. */
     dormantDays: number | null;
+    /** Unsaved numbers only: did they reach us by call, message or both. */
+    via?: "call" | "message" | "both";
 }
 
 export interface ReconnectResult {
@@ -174,6 +176,17 @@ export async function findReconnectCandidates(filter: ReconnectFilterInput): Pro
         for (const h of helps) { if (h.personId) bump(lastAt, keyOf("person", h.personId), h.ticket.createdAt); else if (h.companyId) bump(lastAt, keyOf("company", h.companyId), h.ticket.createdAt); }
         for (const l of personLogs) if (l.personId) bump(lastAt, keyOf("person", l.personId), l._max.createdAt);
         for (const l of companyLogs) if (l.companyId) bump(lastAt, keyOf("company", l.companyId), l._max.createdAt);
+
+        // Calls and messages carry no customer FK — matched by phone, like the Call log filter.
+        const phoneToKey = await customerPhoneMap(idx);
+        const phoneKeys = [...phoneToKey.keys()];
+        if (phoneKeys.length) {
+            const [callMax, msgMax] = await Promise.all([
+                prisma.call.groupBy({ by: ["phone"], where: { phone: { in: phoneKeys }, spam: false }, _max: { occurredAt: true } }),
+                prisma.message.groupBy({ by: ["phone"], where: { phone: { in: phoneKeys }, spam: false }, _max: { occurredAt: true } }),
+            ]);
+            for (const r of [...callMax, ...msgMax]) { const k = r.phone ? phoneToKey.get(r.phone) : undefined; if (k) bump(lastAt, k, r._max.occurredAt); }
+        }
     }
 
     // ── 4. Assemble, apply activity mode + dormancy, rank, page ──────────────────
@@ -183,11 +196,11 @@ export async function findReconnectCandidates(filter: ReconnectFilterInput): Pro
         return { kind: c.kind, id: c.id, name: c.name, phone: c.phone, lifecycleStage: c.lifecycleStage, ownerPositionId: c.ownerPositionId, lastActivityAt: iso, dormantDays: iso ? daysSince(iso) : null };
     });
 
-    // ── 4b. Unknown callers from the Call table ────────────────────────────────
-    // People who called but aren't saved as Person/Company yet. Only included
-    // when the "Include unsaved" filter is ticked and kind includes "all".
+    // ── 4b. Unsaved numbers from the Call + Message tables ─────────────────────
+    // People who called or messaged but aren't saved as Person/Company yet. Only
+    // included when the "Include unsaved" filter is ticked and kind includes "all".
     if (filter.includeUnsaved && (kind === "all" || kind === "person")) {
-        const unknowns = await unknownCallers(idx, q);
+        const unknowns = await unsavedNumbers(q);
         rows.push(...unknowns);
     }
 
@@ -226,58 +239,92 @@ export async function findReconnectCandidates(filter: ReconnectFilterInput): Pro
  * sets: account-keyed (purchase / warranty / value) and customer-keyed (activity
  * type). null = that dimension imposes no constraint.
  */
-/**
- * Unknown callers — phones in the Call table that don't match any saved
- * Person/Company. These surface so staff can triage them into leads.
- * Only called when no segment filters are active (stage/group/owner).
- */
-async function unknownCallers(idx: UniverseIndex, q: string | undefined): Promise<ReconnectCandidate[]> {
+/** Phone match key → customer key, over every phone of the universe's customers. */
+async function customerPhoneMap(idx: UniverseIndex): Promise<Map<string, string>> {
     const { personIds, companyIds } = idx;
-    // Collect all phones already belonging to saved contacts.
-    const savedPhones = new Set<string>();
-    if (personIds.length || companyIds.length) {
-        const rows = await prisma.phone.findMany({
-            where: { OR: [{ personId: { in: personIds } }, { companyId: { in: companyIds } }] },
-            select: { phone: true },
+    const map = new Map<string, string>();
+    if (!personIds.length && !companyIds.length) return map;
+    const rows = await prisma.phone.findMany({
+        where: { OR: [{ personId: { in: personIds } }, { companyId: { in: companyIds } }] },
+        select: { phone: true, personId: true, companyId: true },
+    });
+    for (const p of rows) {
+        const k = phoneMatchKey(p.phone);
+        if (!k) continue;
+        const ck = p.personId ? keyOf("person", p.personId) : p.companyId ? keyOf("company", p.companyId) : null;
+        if (ck && !map.has(k)) map.set(k, ck);
+    }
+    return map;
+}
+
+/**
+ * Unsaved numbers — phones in the Call or Message table that don't match any
+ * saved Person/Company. These surface so staff can triage them into leads. One
+ * row per number, dated by its latest call or message. The search box matches
+ * the number's digits, and for messages also the sender's WhatsApp name.
+ */
+async function unsavedNumbers(q: string | undefined): Promise<ReconnectCandidate[]> {
+    // Numbers are stored as the last-10-digit match key, so "+91 98…" searches as "98…".
+    const digits = (q?.replace(/\D/g, "") ?? "").slice(-10);
+    const text = q?.trim() ?? "";
+
+    // Every number saved on ANY contact (inactive ones too — the universe may be
+    // search-trimmed, so it can't be the yardstick).
+    const savedRows = await prisma.phone.findMany({
+        where: { OR: [{ personId: { not: null } }, { companyId: { not: null } }] },
+        select: { phone: true },
+    });
+    const savedPhones = new Set(savedRows.map((r) => phoneMatchKey(r.phone)).filter((k): k is string => !!k));
+
+    const msgWhere: Prisma.MessageWhereInput = q
+        ? { spam: false, OR: [...(digits ? [{ phone: { contains: digits } }] : []), { senderName: { contains: text, mode: "insensitive" } }] }
+        : { spam: false, phone: { not: null } };
+    const [callRows, msgRows] = await Promise.all([
+        // A call has no name, so a letters-only search can't match one.
+        q && !digits ? Promise.resolve([]) : prisma.call.groupBy({ by: ["phone"], where: { phone: digits ? { contains: digits } : { not: null }, spam: false }, _max: { occurredAt: true } }),
+        prisma.message.groupBy({ by: ["phone"], where: msgWhere, _max: { occurredAt: true } }),
+    ]);
+
+    const byPhone = new Map<string, { at: number; via: "call" | "message" | "both" }>();
+    const fold = (phone: string | null, at: Date | null, via: "call" | "message") => {
+        if (!phone || savedPhones.has(phone)) return;
+        const t = at?.getTime() ?? 0;
+        const prev = byPhone.get(phone);
+        byPhone.set(phone, prev ? { at: Math.max(prev.at, t), via: prev.via === via ? via : "both" } : { at: t, via });
+    };
+    for (const r of callRows) fold(r.phone, r._max.occurredAt, "call");
+    for (const r of msgRows) fold(r.phone, r._max.occurredAt, "message");
+
+    const phones = [...byPhone.keys()];
+
+    // The sender's own WhatsApp name, when known — easier to recognise than a number.
+    const names = new Map<string, string>();
+    const msgPhones = phones.filter((p) => byPhone.get(p)!.via !== "call");
+    if (msgPhones.length) {
+        const rows = await prisma.message.findMany({
+            where: { phone: { in: msgPhones }, senderName: { not: null } },
+            distinct: ["phone"], orderBy: { occurredAt: "desc" },
+            select: { phone: true, senderName: true },
         });
-        for (const r of rows) {
-            const k = phoneMatchKey(r.phone);
-            if (k) savedPhones.add(k);
-        }
+        for (const r of rows) if (r.phone && r.senderName) names.set(r.phone, r.senderName);
     }
 
-    // Find distinct caller phones that are NOT in the saved set.
-    // Exclude spam and internal calls (phone = null).
-    const callerRows = await prisma.call.groupBy({
-        by: ["phone"],
-        where: { phone: { not: null }, spam: false },
-        _max: { occurredAt: true },
-        _count: { id: true },
-        having: { phone: { _count: { gt: 0 } } },
-    });
-
-    const results: ReconnectCandidate[] = [];
-    for (const row of callerRows) {
-        if (!row.phone || savedPhones.has(row.phone)) continue;
-        // If the search box is active, match against the raw phone number.
-        // We don't have the raw number here, so skip the q filter for unknowns
-        // when q is active — they'll appear when q is cleared.
-        if (q) continue;
-        const lastAt = row._max.occurredAt;
-        const iso = lastAt ? lastAt.toISOString() : null;
-        results.push({
-            kind: "caller",
+    return phones.map((phone) => {
+        const { at, via } = byPhone.get(phone)!;
+        const iso = at ? new Date(at).toISOString() : null;
+        return {
+            kind: "caller" as const,
             // Use a large offset + hash of phone to avoid ID conflicts with real records.
-            id: MAX_UNIVERSE + Math.abs(hashStr(row.phone)),
-            name: row.phone, // phone number as name — staff sees it and decides
-            phone: row.phone,
-            lifecycleStage: "LEAD",
+            id: MAX_UNIVERSE + Math.abs(hashStr(phone)),
+            name: names.get(phone) ?? phone, // WhatsApp name, else the number — staff sees it and decides
+            phone,
+            lifecycleStage: "LEAD" as ContactLifecycle,
             ownerPositionId: null,
             lastActivityAt: iso,
             dormantDays: iso ? daysSince(iso) : null,
-        });
-    }
-    return results;
+            via,
+        };
+    });
 }
 
 /** Simple string hash for deterministic synthetic IDs. */
@@ -293,6 +340,7 @@ async function computeRestrictions(
     const {
         activityType, activityPresence, activityFromDays, activityToDays,
         callDirection, callFromDays, callToDays, callMissed,
+        msgDirection, msgFromDays, msgToDays,
         soldCategoryId, soldProductQ, soldFromDays, soldToDays,
         notSoldCategoryId, notSoldProductQ, notSoldFromDays, notSoldToDays,
         warrantyEndingDays, warrantyTermIds,
@@ -339,6 +387,10 @@ async function computeRestrictions(
     if (callDirection) {
         andKeys(await callLogKeys(idx, callDirection, daysWindow(callFromDays, callToDays), callMissed));
     }
+    // Messages: a received / sent / any message over a window.
+    if (msgDirection) {
+        andKeys(await messageKeys(idx, msgDirection, daysWindow(msgFromDays, msgToDays)));
+    }
 
     return { accountKeep, keyKeep };
 }
@@ -356,17 +408,7 @@ async function callLogKeys(idx: UniverseIndex, direction: "any" | "in" | "out", 
 
     // (a) Auto calls in the Call table. Calls carry no customer FK — they match by
     // phone — so map the universe's phones → customer, then match calls by key.
-    const phoneRows = await prisma.phone.findMany({
-        where: { OR: [{ personId: { in: personIds } }, { companyId: { in: companyIds } }] },
-        select: { phone: true, personId: true, companyId: true },
-    });
-    const keyToCustomer = new Map<string, string>();
-    for (const p of phoneRows) {
-        const k = phoneMatchKey(p.phone);
-        if (!k) continue;
-        const ck = p.personId ? keyOf("person", p.personId) : p.companyId ? keyOf("company", p.companyId) : null;
-        if (ck && !keyToCustomer.has(k)) keyToCustomer.set(k, ck);
-    }
+    const keyToCustomer = await customerPhoneMap(idx);
     const phoneKeys = [...keyToCustomer.keys()];
     if (phoneKeys.length) {
         // A miscall is direction-specific: incoming = speech, outgoing = duration,
@@ -401,6 +443,26 @@ async function callLogKeys(idx: UniverseIndex, direction: "any" | "in" | "out", 
         for (const r of rows) { if (r.personId) keys.add(keyOf("person", r.personId)); else if (r.companyId) keys.add(keyOf("company", r.companyId)); }
     }
 
+    return keys;
+}
+
+/** Customer keys with ≥1 non-spam message (of the given direction) inside the
+ *  window — matched by phone, like the Call log. */
+async function messageKeys(idx: UniverseIndex, direction: "any" | "in" | "out", win: { from?: Date; to?: Date }): Promise<Set<string>> {
+    const keyToCustomer = await customerPhoneMap(idx);
+    const phoneKeys = [...keyToCustomer.keys()];
+    if (!phoneKeys.length) return new Set();
+    const dr = dateRange(win);
+    const rows = await prisma.message.groupBy({
+        by: ["phone"],
+        where: {
+            phone: { in: phoneKeys }, spam: false,
+            ...(dr ? { occurredAt: dr } : {}),
+            ...(direction !== "any" ? { direction: direction === "in" ? "IN" : "OUT" } : {}),
+        },
+    });
+    const keys = new Set<string>();
+    for (const r of rows) { const ck = r.phone ? keyToCustomer.get(r.phone) : undefined; if (ck) keys.add(ck); }
     return keys;
 }
 

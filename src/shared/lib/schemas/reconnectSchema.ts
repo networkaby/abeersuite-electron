@@ -96,6 +96,10 @@ export const reconnectFilterSchema = z.object({
     // Miscall lens on the call-log filter: absent = include all calls; "only" =
     // just miscalls (customers we missed); "exclude" = connected calls only.
     callMissed: z.enum(["only", "exclude"]).optional(),
+    // Messages (WhatsApp …): has a received / sent / any message over a days-ago window.
+    msgDirection: z.enum(["any", "in", "out"]).optional(),
+    msgFromDays: dayCount,
+    msgToDays: dayCount,
 
     // ── Sold-to-customer behaviour (NOT supplier procurement) ────────────────────
     // We SOLD them a category / product, over a "days ago" window (a past period /
@@ -129,8 +133,8 @@ export const reconnectFilterSchema = z.object({
     groupId: z.coerce.number().int().positive().optional(),
     ownerPositionId: z.string().trim().min(1).optional(),
     kind: z.enum(["person", "company", "all"]).default("all"),
-    // Include unsaved callers from the Call table (people who called but aren't
-    // a Person/Company yet) so staff can triage them into leads.
+    // Include unsaved numbers from the Call and Message tables (people who called
+    // or messaged but aren't a Person/Company yet) so staff can triage them into leads.
     includeUnsaved: z.coerce.boolean().default(false),
     q: z.string().trim().max(200).optional(),
 
