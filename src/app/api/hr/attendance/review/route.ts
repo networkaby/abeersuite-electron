@@ -68,16 +68,31 @@ export async function GET(req: Request) {
                 select: { id: true, date: true, name: true, branchId: true },
             }),
             // Every past day still waiting, for "next day waiting". The same test
-            // as `reviewOf`, said in SQL so it is one cheap read rather than every
-            // till row ever written: a measured till day with no decision, or one
-            // whose minutes moved after it was decided.
-            prisma.$queryRaw<{ date: Date }[]>`
-                SELECT DISTINCT "date" FROM "attendance_days"
-                WHERE "source" = 'COUNTER' AND "workedMinutes" > 0 AND "date" < ${dayOf(today)}
-                  AND ("review" IS NULL OR "review" NOT IN ('ACCEPTED', 'REJECTED')
-                       OR "reviewedMinutes" IS DISTINCT FROM "workedMinutes")
-                ORDER BY "date" ASC
-                LIMIT 400`,
+            // as `reviewOf`, said as a filter so it is one cheap read rather than
+            // every till row ever written: a measured till day with no decision,
+            // or one whose minutes moved after it was decided.
+            //
+            // A model read on purpose, never `$queryRaw`: on a counter writing to
+            // the office, a raw query rides the WRITE client to Supabase instead
+            // of the replica (prismaClient.ts) — and broke this screen there.
+            prisma.attendanceDay.findMany({
+                where: {
+                    source: "COUNTER",
+                    workedMinutes: { gt: 0 },
+                    date: { lt: dayOf(today) },
+                    OR: [
+                        { review: null },
+                        { review: { notIn: ["ACCEPTED", "REJECTED"] } },
+                        { reviewedMinutes: null },
+                        { reviewedMinutes: { lt: prisma.attendanceDay.fields.workedMinutes } },
+                        { reviewedMinutes: { gt: prisma.attendanceDay.fields.workedMinutes } },
+                    ],
+                },
+                distinct: ["date"],
+                orderBy:  { date: "asc" },
+                take:     400,
+                select:   { date: true },
+            }),
         ]);
 
         const reviewerIds = [...new Set(marks.map((m) => m.reviewedById).filter((v): v is number => v != null))];
