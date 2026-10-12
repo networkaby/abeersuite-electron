@@ -15,7 +15,7 @@
 //
 // Changes paint at once and roll back if the server refuses (AGENTS §7).
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
@@ -250,6 +250,9 @@ export default function AttendanceDayReview({ canEdit }: { canEdit: boolean }) {
                                 <DayCardRow
                                     userId={r.userId} date={date} today={today}
                                     canCorrect={editable && finished}
+                                    // The server's row, not the optimistic paint — the card must
+                                    // re-read only once the change has landed.
+                                    stamp={stampOf(data?.rows.find((x) => x.userId === r.userId))}
                                     onChanged={reload}
                                 />
                             )}
@@ -268,14 +271,22 @@ export default function AttendanceDayReview({ canEdit }: { canEdit: boolean }) {
  * opening it again costs no read. Corrections made on it re-read both the card
  * and the day's row.
  */
-function DayCardRow({ userId, date, today, canCorrect, onChanged }: {
+function DayCardRow({ userId, date, today, canCorrect, stamp, onChanged }: {
     userId: number;
     date: string;
     today: string;
     canCorrect: boolean;
+    /** The row's side and mark — when either moves, the open card re-reads. */
+    stamp: string;
     onChanged: () => Promise<unknown> | void;
 }) {
     const { data, error, reload } = useApiResource<HoursPayload>(`/api/hr/attendance/hours?userId=${userId}&from=${date}&to=${date}`);
+    const seen = useRef(stamp);
+    useEffect(() => {
+        if (seen.current === stamp) return;
+        seen.current = stamp;
+        void reload();
+    }, [stamp, reload]);
     const day = data?.days.find((d) => d.date === date) ?? null;
     const correct = async (field: "worked" | "late", minutes: number | null) => {
         try {
@@ -305,6 +316,8 @@ function DayCardRow({ userId, date, today, canCorrect, onChanged }: {
         </TableRow>
     );
 }
+
+const stampOf = (r: DayReviewRow | undefined) => `${r?.uses}|${r?.manualStatus}`;
 
 /** Auto's reading of the day in a phrase — or why there is nothing to read. */
 function autoSays(r: DayReviewRow): string {

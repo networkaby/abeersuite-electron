@@ -339,9 +339,9 @@ function CorrectableFigure({ label, minutes, till, corrected, hint, strong, tone
                     className="flex items-center gap-1"
                     onSubmit={(e) => { e.preventDefault(); void save((Number(h) || 0) * 60 + (Number(m) || 0)); }}
                 >
-                    <NumericInput value={h} onValueChange={setH} min={0} max={24} className="h-7 w-10 px-1 text-xs" aria-label={`${label} hours`} autoFocus />
+                    <NumericInput value={h} onValueChange={setH} min={0} max={24} className="h-7 w-12 px-1.5 text-center text-xs" aria-label={`${label} hours`} autoFocus />
                     <span className="text-xs text-muted-foreground">h</span>
-                    <NumericInput value={m} onValueChange={setM} min={0} max={59} className="h-7 w-10 px-1 text-xs" aria-label={`${label} minutes`} />
+                    <NumericInput value={m} onValueChange={setM} min={0} max={59} className="h-7 w-12 px-1.5 text-center text-xs" aria-label={`${label} minutes`} />
                     <span className="text-xs text-muted-foreground">m</span>
                     <button type="submit" disabled={saving} className="rounded p-0.5 text-emerald-600 hover:bg-muted" aria-label="Save the correction"><Check size={13} /></button>
                     <button type="button" disabled={saving} onClick={() => setEditing(false)} className="rounded p-0.5 text-muted-foreground hover:bg-muted" aria-label="Cancel"><X size={13} /></button>
