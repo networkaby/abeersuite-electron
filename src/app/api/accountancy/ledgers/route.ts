@@ -7,7 +7,8 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
-import { effectiveAccountBalance, toNumber } from "@/modules/accountancy/lib/balance";
+import { toNumber } from "@/modules/accountancy/lib/balance";
+import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
 import { ALIAS_MAX_LENGTH, aliasKeyOf, aliasRows } from "@/modules/accountancy/lib/accountAlias";
 import { toDateOnly, toDateOnlyUtc } from "@/shared/lib/format/formatDate";
@@ -20,14 +21,18 @@ type AccountWithGroup = Awaited<ReturnType<typeof prisma.account.findMany>>[numb
 // Every ledger read carries its alternate names; the client only wants strings.
 const withAliases = { select: { alias: true }, orderBy: { id: "asc" } } as const;
 
-function serializeLedger<T extends AccountWithGroup>(a: T) {
+// `balances` is summed from the GL lines (master opening folded in) by
+// `closingForAccounts`, never the `Account.balance` cache: a counter reads its
+// local replica, so the sum is a local indexed read, and a deleted voucher
+// drops out the moment sync lands it.
+function serializeLedger<T extends AccountWithGroup>(a: T, balances: Map<number, number>) {
     const normalBalance = a.normalBalance
         ?? (a.group?.type ? defaultNormalBalanceForGroupType(a.group.type) : "DEBIT");
     return {
         ...a,
         normalBalance,
         aliases: (a.aliases ?? []).map((x) => x.alias),
-        balance: effectiveAccountBalance(a),
+        balance: balances.get(a.id) ?? 0,
         openingBalance: a.openingBalance != null ? toNumber(a.openingBalance) : null,
         openingBalanceDate: a.openingBalanceDate ? toDateOnly(a.openingBalanceDate) : null,
         // Reconciliation watermark — mirror of the startOfDayUtc write in the
@@ -203,7 +208,8 @@ export async function GET(req: Request) {
                 }),
                 prisma.account.count({ where }),
             ]);
-            return NextResponse.json({ items: items.map((i) => serializeLedger(i)), total });
+            const balances = await closingForAccounts(null, items.map((i) => i.id));
+            return NextResponse.json({ items: items.map((i) => serializeLedger(i, balances)), total });
         }
 
         // ── Mode A: pure GL accounts, flat array (original behaviour) ──────────
@@ -219,7 +225,8 @@ export async function GET(req: Request) {
                 aliases: withAliases,
             },
         });
-        return NextResponse.json(ledgers.map((l) => serializeLedger(l)));
+        const balances = await closingForAccounts(null, ledgers.map((l) => l.id));
+        return NextResponse.json(ledgers.map((l) => serializeLedger(l, balances)));
     } catch (e) {
         return handleApiError(e, "Failed to fetch ledgers");
     }

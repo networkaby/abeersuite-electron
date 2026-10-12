@@ -11,13 +11,10 @@ import { handleApiError } from "@/shared/lib/api";
 // writes back any drift. Account.balance is a running cache maintained by
 // post helpers; if any helper drops a delta, the cache drifts.
 //
-// What still depends on it, and therefore what this repair is for: the ledgers
-// list and the finance top bar (`closingFromCache`) — the two surfaces that want
-// EVERY account at once, where summing the GL would be a full-ledger scan.
-// Nothing that decides anything reads it any more: the credit gate, the POS
-// customer panel, the party lists, the till figures and the party-delete guard
-// all sum their own accounts' lines (`closingForAccounts`). So drift here is now
-// a display matter, not a money matter. Dry-run with `?dryRun=1`.
+// Nothing reads it for display or decisions any more: the ledgers list, the
+// finance top bar, the credit gate, the party lists and the till figures all
+// sum the GL lines (`closingForAccounts` / `aggregateClosingAsOf`). Drift here
+// is now cosmetic; this repair just keeps the column honest. Dry-run with `?dryRun=1`.
 export async function POST(req: Request) {
     const { response } = await requireAuth();
     if (response) return response;

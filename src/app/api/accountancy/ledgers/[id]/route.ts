@@ -10,7 +10,8 @@ import { pickDefined } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
 import { resetReconciliationOnOpening } from "@/modules/accountancy/lib/reconciliation";
-import { effectiveAccountBalance, toNumber } from "@/modules/accountancy/lib/balance";
+import { toNumber } from "@/modules/accountancy/lib/balance";
+import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 import { toDateOnly } from "@/shared/lib/format/formatDate";
 import { ALIAS_MAX_LENGTH, aliasRows } from "@/modules/accountancy/lib/accountAlias";
 
@@ -198,10 +199,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             },
         });
         if (body.openingBalance !== undefined) await reconcileOpeningSuspense();
+        const balances = await closingForAccounts(null, [account.id]);
         return NextResponse.json({
             ...account,
             aliases: account.aliases.map((x) => x.alias),
-            balance: effectiveAccountBalance(account),
+            balance: balances.get(account.id) ?? 0,
             openingBalance: account.openingBalance != null ? toNumber(account.openingBalance) : null,
             openingBalanceDate: account.openingBalanceDate ? toDateOnly(account.openingBalanceDate) : null,
         });

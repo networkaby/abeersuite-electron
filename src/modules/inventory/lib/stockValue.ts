@@ -6,7 +6,7 @@
 // snapshot. The opening-value helper stays as-is (opening master fields are
 // still load-bearing).
 //
-// Pairs with `src/modules/accountancy/lib/effectiveBalance.ts` for the GL
+// Pairs with `aggregateClosingAsOf` in `aggregateLedger.ts` for the GL
 // side; see also `closingStock.ts` for the org-wide aggregate.
 
 import { valueStockBatch, type ValuationMethod } from "@/modules/inventory/lib/valuation";

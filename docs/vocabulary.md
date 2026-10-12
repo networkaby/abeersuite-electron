@@ -101,7 +101,7 @@ This file unifies what used to be two separate glossaries — the Transaction En
 
 | Term | What it is | Read it with |
 | --- | --- | --- |
-| **Cached balance** | `Account.balance` — a running total kept by increments on every post / cancel. Movements only; the master `openingBalance` is folded in at read time. | `effectiveAccountBalance`, `closingFromCache` |
+| **Cached balance** | `Account.balance` — a running total kept by increments on every post / cancel. Movements only; the master `openingBalance` is folded in at read time. | Not read for display — screens sum the GL (`closingForAccounts`, `aggregateClosingAsOf`). |
 | **Computed balance** | Summed from the account's own `VoucherGlLine` rows, plus its master opening. The ledger is the truth; this is that truth. | `closingForAccounts` (bounded), `aggregateClosingAsOf` (all) |
 
 **The rule — bounded set of accounts → compute; the whole chart at once → cache.**

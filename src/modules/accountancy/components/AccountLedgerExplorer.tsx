@@ -172,7 +172,6 @@ export function AccountLedgerExplorer({
     const params = useSearchParams();
     const { menu: linkMenu, close: closeLinkMenu, onContainerContextMenu } = useLinkContextMenu();
 
-    const [allAccounts, setAllAccounts] = useState<LedgerListItem[]>([]);
     const [groupTree, setGroupTree] = useState<GroupTreeNode[]>([]);
     const [createOpen, setCreateOpen] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
@@ -186,14 +185,14 @@ export function AccountLedgerExplorer({
     const [from, setFrom] = useState(params.get("from") ?? toIsoDate(indianFiscalYearStart()));
     const [to, setTo] = useState(params.get("to") ?? toIsoDate(new Date()));
 
-    const reloadAccounts = useCallback(() => {
-        return axios
-            .get<LedgerListItem[]>("/api/accountancy/ledgers?activeOnly=false")
-            .then((r) => setAllAccounts(r.data))
-            .catch(() => toast.error("Failed to load accounts"));
-    }, []);
-
-    useEffect(() => { reloadAccounts(); }, [reloadAccounts]);
+    // Balances on this list are summed from the GL lines (the replica on a
+    // counter), and re-read on every ledger change — a voucher posted or deleted
+    // anywhere moves the figure here without anyone pressing Refresh.
+    const {
+        data: accountsData, error: accountsError, reload: reloadAccounts,
+    } = useApiResource<LedgerListItem[]>("/api/accountancy/ledgers?activeOnly=false", { topics: ["ledger"] });
+    const allAccounts = useMemo(() => accountsData ?? [], [accountsData]);
+    useEffect(() => { if (accountsError) toast.error("Failed to load accounts"); }, [accountsError]);
 
     // Lightweight group tree (id/name/children only) — lets the list filter
     // walk descendants of groupNames dynamically instead of needing every
@@ -238,6 +237,7 @@ export function AccountLedgerExplorer({
         data: detailData, loading: detailLoading, error: detailError, reload: reloadDetail,
     } = useApiResource<LedgerDetail>(
         selectedId ? `/api/accountancy/reports/ledger/${selectedId}?from=${from}&to=${to}` : null,
+        { topics: ["ledger"] },
     );
     const detail = selectedId ? detailData ?? null : null;
     useEffect(() => { if (detailError) toast.error("Failed to load ledger"); }, [detailError]);

@@ -3,7 +3,7 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
 import { businessToday } from "@/shared/lib/format/formatDate";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { closingFromCache, isUnchangedSince, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
+import { aggregateClosingAsOf, isUnchangedSince, loadNormalBalanceMap } from "@/modules/accountancy/lib/aggregateLedger";
 import { buildGroupTree, type GroupNode } from "@/modules/accountancy/lib/groupTree";
 import { parseBank } from "@/modules/accountancy/lib/bankParticulars";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
@@ -57,11 +57,10 @@ export async function GET(req: Request) {
         const asOf = businessToday();
         asOf.setHours(23, 59, 59, 999);
 
-        // Cache-path read: the running Account.balance, not a whole-ledger
-        // re-sum. See closingFromCache() for why that is sound and what it
-        // corrects for.
+        // Summed from the GL lines, not the Account.balance cache — on a
+        // counter this is a local replica read, and it cannot drift.
         const nbMap = await loadNormalBalanceMap();
-        const closingMap = await closingFromCache(asOf, nbMap);
+        const closingMap = await aggregateClosingAsOf(asOf, nbMap);
 
         // Wrap into AccountAggregate shape for buildGroupTree
         const aggMap = new Map(

@@ -686,7 +686,7 @@ async function runAllocationDualTarget(): Promise<boolean> {
 }
 
 /** Shift cash reconciliation reads the till's BOOK BALANCE (the same
- *  effectiveAccountBalance shift open/close use), so every posting on the till
+ *  GL-summed figure shift open/close use), so every posting on the till
  *  moves "expected in drawer" with no per-type math. Post a POS sale with a ₹118
  *  cash tender + a ₹50 cash RECEIPT linked to a temporary shift, assert the till
  *  balance moved by 16800 paise and that sumShiftTendersByAccount (the

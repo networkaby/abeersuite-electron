@@ -1,5 +1,5 @@
 import { defaultNormalBalanceForGroupType } from "./groupNature";
-import { dateOnOrBefore, businessToday, startOfDayUtc, businessTodayIso } from "@/shared/lib/format/formatDate";
+import { businessToday, startOfDayUtc, businessTodayIso } from "@/shared/lib/format/formatDate";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { readCounterSetup } from "@/shared/lib/counter/releaseGuard";
@@ -9,63 +9,6 @@ export type LineForBalance = {
     type: "DEBIT" | "CREDIT";
     amount: { toString(): string } | number | string;
 };
-
-/** Minimal shape of an `Account` (+ group) needed to derive its list-view balance. */
-export type AccountForEffectiveBalance = {
-    balance: { toString(): string } | number | string;
-    normalBalance: "DEBIT" | "CREDIT" | null;
-    group: { type: "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE" } | null;
-    openingBalance: { toString(): string } | number | string | null;
-    openingBalanceType: "DEBIT" | "CREDIT" | null;
-    openingBalanceDate: Date | null;
-};
-
-/** Prisma `select` fields required to compute `effectiveAccountBalance` — spread
- *  this into any `tillAccount`/`account` select instead of hand-listing the
- *  fields, so every reader of an account's current balance folds in the
- *  master opening the same way (e.g. POS till accounts, which are routinely
- *  opened with a master `openingBalance` instead of a GL voucher). */
-export const EFFECTIVE_BALANCE_SELECT_FIELDS = {
-    balance: true,
-    normalBalance: true,
-    openingBalance: true,
-    openingBalanceType: true,
-    openingBalanceDate: true,
-    group: { select: { type: true } },
-} as const;
-
-/**
- * Cheap list-view balance: cached `Account.balance` (GL movements only) plus
- * the master opening balance folded in at read time.
- *
- * ── Use this only for a WHOLE-chart listing ────────────────────────────────
- * Every surface that shows a KNOWN, BOUNDED set of accounts now sums the GL
- * lines instead — `closingForAccounts` in `aggregateLedger`. Since each counter
- * carries a full local replica, a narrowed aggregate is an indexed local read,
- * and a figure that cannot drift beats a figure that is slightly cheaper. The
- * credit gate, the POS customer panel, the party lists and the party-delete
- * guard all went that way; `tillBalancesPaise` got there first.
- *
- * What is left here is the ledgers list — the entire chart of accounts at once,
- * where summing means a full-ledger scan on every request. That is the one case
- * where the cache still earns its place. `closingFromCache` is its equivalent
- * for the finance top bar.
- *
- * So: bounded set of accounts → `closingForAccounts`. Every account → this, or
- * `closingFromCache`. Reports that must be provably-from-truth →
- * `aggregateClosingAsOf` with no `accountIds`.
- */
-export function effectiveAccountBalance(a: AccountForEffectiveBalance): number {
-    const nb = a.normalBalance
-        ?? (a.group?.type ? defaultNormalBalanceForGroupType(a.group.type) : "DEBIT");
-    let bal = toNumber(a.balance);
-    if (a.openingBalance != null && a.openingBalanceType) {
-        if (!a.openingBalanceDate || dateOnOrBefore(a.openingBalanceDate, new Date())) {
-            bal += balanceDelta(nb, a.openingBalanceType, toNumber(a.openingBalance));
-        }
-    }
-    return bal;
-}
 
 export function toNumber(v: { toString(): string } | number | string): number {
     return typeof v === "number" ? v : Number(v);

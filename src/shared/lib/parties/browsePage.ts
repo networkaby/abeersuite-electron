@@ -6,8 +6,8 @@
  * ALPHABETICAL ONLY. Name-order is the one sort this page paginates server
  * side, because it is the one order both the server and the browser's party
  * cache can agree on without disagreement risk — both just alphabetise. Ledger
- * balance is a computed value (`effectiveAccountBalance` folds in an opening
- * balance conditionally), not a plain column a keyset cursor can walk, and the
+ * balance is a computed value (summed from the GL lines with the opening
+ * balance folded in), not a plain column a keyset cursor can walk, and the
  * cache never carries it at all (a directory must not paint a guessed number
  * where money is read). So an Amount-sorted view is not paginated here — it
  * stays what it already was, one unbounded fetch, client-sorted — and this
