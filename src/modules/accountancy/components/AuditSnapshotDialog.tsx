@@ -79,7 +79,7 @@ export function AuditSnapshotDialog({ auditId, onClose }: { auditId: number | nu
 
     return (
         <Dialog open={auditId != null} onOpenChange={(o) => { if (!o) onClose(); }}>
-            <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+            <DialogContent className="max-h-[92vh] w-[95vw] max-w-[95vw] overflow-y-auto sm:max-w-[min(1400px,95vw)]">
                 <DialogHeader>
                     <DialogTitle className="font-mono">{data?.originalRef || "Saved copy"}</DialogTitle>
                     <DialogDescription>
