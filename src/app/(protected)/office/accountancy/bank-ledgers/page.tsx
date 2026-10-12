@@ -13,7 +13,7 @@ export default function BankLedgersPage() {
     return (
         <AccountLedgerExplorer
             title="Bank Book"
-            panelTitle="Bank Accounts"
+            panelTitle="Bank & OD"
             panelIcon={<Banknote size={15} className="text-primary" />}
             groupNames={BANK_BOOK_GROUPS}
             emptyMessage="No bank accounts. Add ledgers under Bank Accounts or Bank OD A/c."

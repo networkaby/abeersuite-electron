@@ -4,6 +4,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { AccountAggregate } from "./aggregateLedger";
 import { groupSign, type GroupTypeStr } from "./groupNature";
+import { parseBank } from "./bankParticulars";
 
 export type LedgerNode = {
     id: number;
@@ -15,6 +16,7 @@ export type LedgerNode = {
     debits:  number;
     credits: number;
     closing: number;
+    limit?: number | null;
 };
 
 export type GroupNode = {
@@ -55,6 +57,7 @@ export async function buildGroupTree(
                 id: true, name: true,
                 normalBalance: true, groupId: true,
                 personId: true, companyId: true,
+                bankJson: true,
             },
             orderBy: [{ name: "asc" }],
         }),
@@ -102,6 +105,9 @@ export async function buildGroupTree(
         // `toPeriodOnlyTree` rebuilds the P&L from, which is why the P&L was
         // already correct and is untouched by this.
         const sign = groupSign(parent.type, a.normalBalance);
+        const rawLimit = a.bankJson ? parseBank(a.bankJson).limit : "";
+        const limitNum = Number(rawLimit);
+        const limit = rawLimit !== "" && Number.isFinite(limitNum) ? limitNum : null;
 
         parent.ledgers.push({
             id: a.id,
@@ -113,6 +119,7 @@ export async function buildGroupTree(
             debits:  agg?.debits  ?? 0,
             credits: agg?.credits ?? 0,
             closing: sign * (agg?.closing ?? 0),
+            limit,
         });
     }
 

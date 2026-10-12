@@ -22,6 +22,7 @@ import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { groupColor } from "@/shared/lib/format/groupColor";
 import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 
 type LedgerNode = {
     id:      number;
@@ -30,6 +31,7 @@ type LedgerNode = {
     debits:  number;
     credits: number;
     closing: number;
+    limit?:  number | null;
 };
 type GroupNode = {
     id:       number;
@@ -159,6 +161,31 @@ export function BookPage({
 
     const ledgers = sections?.flatMap((s) => (s.node ? flattenLedgers(s.node) : [])) ?? null;
     const grandTotal = ledgers && sectioned ? sumSection(ledgers) : null;
+
+    const hasBankOd = useMemo(() => {
+        if (!sections) return false;
+        return sections.some((s) => s.name === ACCOUNT_GROUPS.BANK_OD && s.node && flattenLedgers(s.node).length > 0);
+    }, [sections]);
+
+    const availableTotal = useMemo(() => {
+        if (!sections || !hasBankOd) return null;
+        let total = 0;
+        for (const sec of sections) {
+            if (!sec.node) continue;
+            const secLedgers = flattenLedgers(sec.node);
+            if (sec.name === ACCOUNT_GROUPS.BANK_OD) {
+                for (const l of secLedgers) {
+                    const limit = l.limit ?? 0;
+                    total += (limit - l.closing);
+                }
+            } else {
+                for (const l of secLedgers) {
+                    total += l.closing;
+                }
+            }
+        }
+        return Number(total.toFixed(2));
+    }, [sections, hasBankOd]);
 
     // Recursively render a group's own ledgers plus each child sub-group as its
     // own labeled block with a sub-total — e.g. within the Loans table, split
@@ -314,17 +341,24 @@ export function BookPage({
                         );
                     })}
 
-                    {/* Grand total across every section (Loans + Credit Card + BNPL, …). */}
+                    {/* Grand total across every section (Bank Accounts + Bank OD, Loans + Credit Card, …). */}
                     {grandTotal && (
                         <div className="rounded-lg border-2 border-primary/30 bg-primary/5 px-4 py-3 shadow-sm">
                             <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
                                 <span className="text-sm font-semibold text-primary">Grand Total — {title}</span>
-                                <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-                                    <span className="text-muted-foreground">Opening <b className="ml-1 font-mono font-semibold text-foreground">{dash(grandTotal.opening)}</b></span>
-                                    <span className="text-muted-foreground">Debit <b className="ml-1 font-mono font-semibold text-foreground">{dash(grandTotal.debits)}</b></span>
-                                    <span className="text-muted-foreground">Credit <b className="ml-1 font-mono font-semibold text-foreground">{dash(grandTotal.credits)}</b></span>
-                                    <span className="text-muted-foreground">Closing <b className="ml-1 font-mono font-semibold text-primary">{dash(grandTotal.closing)}</b></span>
-                                </div>
+                                {availableTotal !== null ? (
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <span className="text-muted-foreground">Available</span>
+                                        <b className="font-mono text-base font-bold text-primary">{fmt(availableTotal)}</b>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                                        <span className="text-muted-foreground">Opening <b className="ml-1 font-mono font-semibold text-foreground">{dash(grandTotal.opening)}</b></span>
+                                        <span className="text-muted-foreground">Debit <b className="ml-1 font-mono font-semibold text-foreground">{dash(grandTotal.debits)}</b></span>
+                                        <span className="text-muted-foreground">Credit <b className="ml-1 font-mono font-semibold text-foreground">{dash(grandTotal.credits)}</b></span>
+                                        <span className="text-muted-foreground">Closing <b className="ml-1 font-mono font-semibold text-primary">{dash(grandTotal.closing)}</b></span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
