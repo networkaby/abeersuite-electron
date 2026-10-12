@@ -452,7 +452,7 @@ async function routeInbound(args: {
     owner: CustomerOwner | null;
     senderName: string | null;
     businessNumberId: string | null;
-}): Promise<{ conv: ConversationRow; afterStore: (() => Promise<void>) | null }> {
+}): Promise<{ conv: ConversationRow; afterStore: (() => Promise<void>) | null; bareMenuPick?: boolean }> {
     const { phone, text, at, owner } = args;
     const command = isNewConversationCommand(text);
     if (command) await closeConversation(phone, "CUSTOMER");
@@ -479,12 +479,12 @@ async function routeInbound(args: {
         if (pick === "NEW") {
             await prisma.messageConversation.update({ where: { id: conv.id }, data: { topic: "NEW" } });
             conv = { ...conv, topic: "NEW" };
-            return { conv, afterStore: () => sendAutoText({ ...base, text: withText ? ACK_NEW_WITH_TEXT : ACK_NEW_EMPTY, ticketId: null }) };
+            return { conv, bareMenuPick: !withText, afterStore: () => sendAutoText({ ...base, text: withText ? ACK_NEW_WITH_TEXT : ACK_NEW_EMPTY, ticketId: null }) };
         }
         await attachConversationToTicket(conv.id, pick, owner);
         conv = { ...conv, topic: "TICKET", ticketId: pick };
         const t = (await findCustomerActiveTickets(phone, owner)).find((x) => x.id === pick) ?? null;
-        return { conv, afterStore: () => sendAutoText({ ...base, text: ackForTicket(t, pick, withText), ticketId: pick }) };
+        return { conv, bareMenuPick: !withText, afterStore: () => sendAutoText({ ...base, text: ackForTicket(t, pick, withText), ticketId: pick }) };
     }
     return { conv, afterStore: null };
 }
@@ -681,7 +681,8 @@ export async function ingestInbound(value: WaChangeValue): Promise<number> {
             });
             stored++;
 
-            if (ticketId && text) {
+            // A bare "1" answering the menu is not worth a line in the ticket's history.
+            if (ticketId && text && !route?.bareMenuPick) {
                 await logMessageToTicket({
                     ticketId,
                     authorName: senderName ?? owner?.name ?? "Customer",
