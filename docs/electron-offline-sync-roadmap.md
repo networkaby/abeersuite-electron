@@ -209,8 +209,9 @@ and reconcile run regardless), it only makes things happen sooner.
    webhooks (Shiprocket, Shipway).
 4. **Pull** — every counter's `sync-engine` hears the signal, settles 750 ms, and runs a
    cycle (four tables at a time, schema guard trusted from the last full check). When a
-   cycle actually wrote rows it prints `__SYNC_APPLIED__`; the worker (`index.js`) reads
-   that line whole and sends `{ type: "applied" }` over IPC, which `syncManager.ts`
+   cycle actually wrote rows it reports `applied` to the worker (`index.js`) over IPC —
+   the cycle runs in a resident `sync-once.js --serve` child on warm connections since
+   2026-10-12 — and the worker sends `{ type: "applied" }` on over IPC, which `syncManager.ts`
    forwards to every window as `sync:applied` (2026-10-01; it used to match the printed
    text, chunk by chunk).
 5. **Screens** — `useRealtimeTopics(topics, reload)` re-reads after a 600 ms settle, and

@@ -22,11 +22,17 @@ function stripSslMode(url) {
     return (url || "").replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
 }
 
-function pool(url, max) {
-    return new Pool({
+/**
+ * `opts.idleTimeoutMillis`: how long an unused connection stays open (pg's default, 10s,
+ * when absent; 0 keeps it). sync-once.js `--serve` passes 0 to hold its connections
+ * between cycles.
+ */
+function pool(url, max, opts = {}) {
+    const p = new Pool({
         connectionString: stripSslMode(url),
         ssl: isLocal(url) ? false : { rejectUnauthorized: false },
         max: max || 4,
+        idleTimeoutMillis: opts.idleTimeoutMillis ?? 10000,
         keepAlive: true,
         connectionTimeoutMillis: 15000,
         // Both sides render time the same way. The full-table content hash
@@ -35,6 +41,10 @@ function pool(url, max) {
         // in IST. Pinned rather than assumed.
         options: "-c timezone=UTC",
     });
+    // An idle connection the server or the network dropped. pg discards it and opens a
+    // new one when next needed; without a listener the event would crash the process.
+    p.on("error", (e) => console.error(`pool: idle connection lost (${e.message})`));
+    return p;
 }
 
 /**

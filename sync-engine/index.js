@@ -8,10 +8,16 @@
  * replica rather than only in theory, and it means a failing cycle can be reproduced
  * by hand with the exact same code path.
  *
- * Each cycle runs as a CHILD PROCESS. A sync touches every table and holds two
+ * Each cycle runs in a CHILD PROCESS. A sync touches every table and holds two
  * database connections; running it in-process for weeks means one leak, one wedged
  * connection, or one unhandled rejection takes the service down permanently. A child
  * that dies is just a failed cycle, and the next tick starts clean.
+ *
+ * The child is RESIDENT (`sync-once.js --serve`): it stays up between clean cycles so
+ * its Supabase connections stay warm, and is retired after RESIDENT_MAX_AGE_MS. A
+ * process per cycle reconnected every time, and the pooler's log of those connects is
+ * what ran the project past its free log-ingestion allowance (see serve()). A failed,
+ * stuck or pre-empted cycle still ends its process, exactly as before.
  *
  * Four things make a cycle happen:
  *   - a change signal from the app (fast path, ~1s)
@@ -50,6 +56,13 @@ const RETRY_MS = 60 * 1000;
 /** A cycle that has not finished by now is stuck; kill it and let the next one try. */
 const CYCLE_TIMEOUT_MS = 15 * 60 * 1000;
 
+/**
+ * How long one resident cycle process serves before it is replaced. Bounds whatever a
+ * long-lived process might accumulate; one reconnect an hour costs the pooler log
+ * nothing worth counting.
+ */
+const RESIDENT_MAX_AGE_MS = 60 * 60 * 1000;
+
 function log(msg) {
     console.log(`[${new Date().toISOString()}] ${msg}`);
 }
@@ -75,13 +88,9 @@ function tellApp(msg) {
     }
 }
 
-/** The line sync-once.js prints once a cycle's rows are queryable. */
-const APPLIED_MARK = "__SYNC_APPLIED__ ";
-
 /**
- * Feed a stream's chunks, get whole lines. A chunk can end mid-line, and the applied
- * line — a marker plus a JSON tail — must never be read in two halves. `flush` hands
- * over a last line with no newline once the stream closes.
+ * Feed a stream's chunks, get whole lines, so the log never shows a line in two
+ * halves. `flush` hands over a last line with no newline once the stream closes.
  */
 function lineReader(onLine) {
     let rest = "";
@@ -116,8 +125,15 @@ let shuttingDown = false;
 let relayQueue = [];
 /** The targeted pull the running cycle is serving, so its ids can be answered. */
 let inFlight = null;
-/** The running cycle's process, so a targeted pull can step it aside. */
+/** The running cycle's process, so a targeted pull can step it aside. Null when idle. */
 let child = null;
+/** The cycle process kept between cycles (sync-once.js --serve), and when it started. */
+let resident = null;
+let residentBornAt = 0;
+/** Ends the running cycle, once: on its `done` message, or on its process exiting. */
+let finishCycle = null;
+/** The running cycle has started reading the source table by table. */
+let reading = false;
 /** True while a cycle is being killed on purpose to make room for a targeted pull. */
 let preempting = false;
 /** The running cycle is the re-run of one that was stepped aside: it finishes. */
@@ -130,6 +146,57 @@ let pendingVerify = new Set();
 /** Set on schema drift (exit 4). A targeted pull cannot succeed until a deploy fixes
  *  it, so it is answered at once instead of spawning a doomed child per bill. */
 let schemaHalted = false;
+
+/** Ask an idle resident to close its connections and exit; the next cycle starts a new one. */
+function retireResident() {
+    const proc = resident;
+    resident = null;
+    if (!proc) return;
+    try {
+        proc.send({ type: "quit" });
+    } catch {
+        proc.kill("SIGKILL");
+    }
+}
+
+/** The resident cycle process, started (or replaced, once too old) as needed. */
+function getResident() {
+    if (resident && Date.now() - residentBornAt > RESIDENT_MAX_AGE_MS) retireResident();
+    if (resident) return resident;
+
+    const proc = spawn(process.execPath, [path.resolve(__dirname, "sync-once.js"), "--serve"], {
+        cwd: __dirname,
+        stdio: ["ignore", "pipe", "pipe", "ipc"],
+    });
+    const onLine = (line) => {
+        if (line.trim()) log(`  ${line.trimEnd()}`);
+    };
+    const out = lineReader(onLine);
+    const err = lineReader(onLine);
+    proc.stdout.on("data", out);
+    proc.stderr.on("data", err);
+    // `close`, not `exit`: the streams can still be delivering after the process ends.
+    proc.on("close", () => {
+        out.flush();
+        err.flush();
+    });
+    // Over IPC rather than read out of the log: `applied` arrives after the rows have
+    // committed and before `done`, on the same ordered channel.
+    proc.on("message", (msg) => {
+        if (!msg || proc !== child) return;
+        if (msg.type === "reading") reading = true;
+        else if (msg.type === "applied") tellApp({ type: "applied", rows: msg.rows, models: msg.models });
+        else if (msg.type === "done" && finishCycle) finishCycle(0);
+    });
+    proc.on("exit", (code) => {
+        if (proc === resident) resident = null;
+        if (proc === child && finishCycle) finishCycle(code);
+    });
+
+    resident = proc;
+    residentBornAt = Date.now();
+    return proc;
+}
 
 function scheduleNext(ms) {
     if (shuttingDown) return;
@@ -146,12 +213,20 @@ function scheduleNext(ms) {
 function runCycle(reason, targeted = null, opts = {}) {
     if (shuttingDown) return;
     if (running) {
+        // A change signal is sent after its write committed. A whole-table cycle that
+        // has not yet read its first table will see that write, so a second cycle for
+        // it would only find nothing — which is what most queued cycles did (2026-10-12:
+        // 85 queued of 226, 153 cycles pulling 0 rows). Not when the running cycle is a
+        // targeted pull, which reads only its own models, and not when the signal named
+        // a delete: that rides on the next cycle's --verify, already fixed for this one.
+        if (reason === "change signal" && !inFlight && !reading && pendingVerify.size === 0) return;
         // Never run two cycles at once: they would fight over the same tables and
         // the same watermarks. Remember that one is owed instead.
         queued = true;
         return;
     }
     running = true;
+    reading = false;
     inFlight = targeted;
     protectedCycle = !!opts.protected;
     log(`cycle start (${reason}${targeted ? `: ${targeted.models.length} model(s)` : ""}${opts.protected ? ", resumed" : ""})`);
@@ -161,7 +236,7 @@ function runCycle(reason, targeted = null, opts = {}) {
     const reasonArg = reason === "change signal" ? "signal"
         : reason === "queued signal" ? "queued"
             : reason;
-    const cycleArgs = [path.resolve(__dirname, "sync-once.js"), "--reason", reasonArg];
+    const cycleArgs = ["--reason", reasonArg];
     if (targeted && targeted.models.length > 0) cycleArgs.push("--only", targeted.models.join(","));
     // A relay cycle skips the reconcile pass, so the deletes wait for the next one.
     if (!targeted && pendingVerify.size > 0) {
@@ -169,40 +244,21 @@ function runCycle(reason, targeted = null, opts = {}) {
         log(`  reconciling now after office delete: ${[...pendingVerify].join(", ")}`);
         pendingVerify = new Set();
     }
-    child = spawn(process.execPath, cycleArgs, {
-        cwd: __dirname,
-        stdio: ["ignore", "pipe", "pipe"],
-    });
+    const proc = getResident();
+    child = proc;
 
     const kill = setTimeout(() => {
         log("cycle exceeded its timeout - killing it; the next tick will retry");
-        child.kill("SIGKILL");
+        proc.kill("SIGKILL");
     }, CYCLE_TIMEOUT_MS);
 
-    const onLine = (line) => {
-        if (!line.trim()) return;
-        log(`  ${line.trimEnd()}`);
-        if (!line.startsWith(APPLIED_MARK)) return;
-        try {
-            const info = JSON.parse(line.slice(APPLIED_MARK.length));
-            tellApp({ type: "applied", rows: info.rows, models: info.models });
-        } catch {
-            // A mangled line is a log message, not worth losing the worker over.
-        }
-    };
-    const out = lineReader(onLine);
-    const err = lineReader(onLine);
-    child.stdout.on("data", out);
-    child.stderr.on("data", err);
-    // `close`, not `exit`: the streams can still be delivering after the process ends.
-    child.on("close", () => {
-        out.flush();
-        err.flush();
-    });
-
-    child.on("exit", (code) => {
+    // `code` is the cycle's exit code: 0 from a `done` message (the process stays for
+    // the next cycle), anything else from the process exiting.
+    finishCycle = (code) => {
+        finishCycle = null;
         clearTimeout(kill);
         running = false;
+        reading = false;
         child = null;
         protectedCycle = false;
         const served = inFlight;
@@ -259,7 +315,14 @@ function runCycle(reason, targeted = null, opts = {}) {
             return;
         }
         scheduleNext(INTERVAL_MS);
-    });
+    };
+
+    try {
+        proc.send({ type: "run", args: cycleArgs });
+    } catch {
+        // Died between cycles: its exit ends this one as failed, and the retry starts fresh.
+        proc.kill("SIGKILL");
+    }
 }
 
 /** Fold every waiting targeted pull into one cycle: the union of their models, all
@@ -326,7 +389,10 @@ function shutdown(why, graceMs = SHUTDOWN_GRACE_MS) {
     // Waiting targeted pulls are not answered: the process is going, so a NOTIFY could
     // not be relied on anyway. The app's own timeout releases them.
     const cycle = child;
-    if (!cycle) process.exit(0);
+    if (!cycle) {
+        retireResident();
+        process.exit(0);
+    }
     // A cycle in flight gets `graceMs` to finish on its own; past that it is ended. It
     // is never left behind: an orphaned cycle kept writing into the replica after the
     // app had stopped syncing, and was still connected when PostgreSQL was stopped under

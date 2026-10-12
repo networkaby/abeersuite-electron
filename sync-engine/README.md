@@ -572,18 +572,30 @@ database connections; running it in-process for weeks means one leak or one wedg
 connection takes the service down permanently. A child that dies is just a failed
 cycle, and the next tick starts clean.
 
+**The cycle process is resident (2026-10-12).** `sync-once.js --serve` stays up between
+clean cycles and keeps one pair of pools, so its Supabase connections stay warm. A process
+per cycle reconnected up to five times a cycle, over a hundred cycles an hour per till, and
+the pooler logs every connect and disconnect at ~1 KB a line: ~64k lines a day, which ran
+the project past the free plan's 1 GB log ingestion. The worker sends `{ type: "run", args }`;
+the child answers `reading` (first source read), `applied`, and `done` on a clean cycle. A
+failed cycle still exits the process, a stuck or pre-empted one is still killed, and the
+resident is retired after an hour (`RESIDENT_MAX_AGE_MS`), so nothing broken outlives a cycle.
+
 Three things trigger a cycle: a change signal (~1s), the 10-minute interval (the
 safety net, since a signal is only ever a hint), and startup. A signal arriving
 mid-cycle queues one more rather than running two at once — concurrent cycles would
-fight over the same tables and watermarks.
+fight over the same tables and watermarks. Except (2026-10-12) when the running cycle is a
+whole-table one that has not yet sent `reading`: the signal's write committed before it was
+sent, so that cycle will see it. Never skipped under a targeted (relay) cycle, or when the
+signal named a delete.
 
 Schema drift backs off hard (3x interval) instead of retrying on the usual schedule:
 it is a fault only a deploy can fix, so retrying quickly would just bury the log.
 
 **Talking to the app (2026-10-01).** Under Electron the worker has an IPC channel
 (`electron/syncManager.ts`) and sends three messages: `{ type: "applied", rows, models }`
-when a cycle's `__SYNC_APPLIED__` line arrives (read as whole lines — a chunk can end
-mid-line), `{ type: "drift" }` on exit 4 and `{ type: "cycle-ok" }` on a clean cycle. The
+when the cycle reports `applied` over its own IPC channel (2026-10-12; before that, its
+printed `__SYNC_APPLIED__` line, which still prints for the log), `{ type: "drift" }` on exit 4 and `{ type: "cycle-ok" }` on a clean cycle. The
 app used to fish these out of the printed log by matching text chunk by chunk, two relays
 deep, so a reworded log line or a split chunk could lose one. By hand there is no channel
 and the log is all there is. A worker that crashes is restarted by the app with a backoff

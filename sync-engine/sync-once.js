@@ -18,6 +18,8 @@
  *   node sync-once.js --reason signal   what woke this cycle (index.js passes it);
  *                                       signal|queued|relay may trust a recent schema
  *                                       check; relay also skips the reconcile pass
+ *   node sync-once.js --serve           stay alive, run a cycle per IPC request on warm
+ *                                       connections (how index.js runs it; see serve())
  *
  * Config: config.json beside this file (see config.example.json).
  */
@@ -36,23 +38,33 @@ const schemaGuard = require("./lib/schemaGuard");
 const status = require("./lib/status");
 const { configPath } = require("./lib/configPath");
 
-const args = process.argv.slice(2);
-const DRY = args.includes("--dry-run");
-const onlyIdx = args.indexOf("--only");
-/** Model names to sync, or null for every table. A listed model's children come along. */
-const ONLY = onlyIdx >= 0 && args[onlyIdx + 1]
-    ? args[onlyIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
-    : null;
-const verifyIdx = args.indexOf("--verify");
-/** Models to reconcile this cycle regardless of when they were last proven. */
-const VERIFY_NOW = verifyIdx >= 0 && args[verifyIdx + 1]
-    ? args[verifyIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
-    : [];
-const reasonIdx = args.indexOf("--reason");
-/** Why this cycle runs: startup | interval | signal | queued | relay | manual (default).
- *  `relay` is the app's own targeted pull after a write it relayed to the office
- *  (lib/localSignal.js) — it holds a user's response, so it is kept as short as possible. */
-const REASON = reasonIdx >= 0 ? args[reasonIdx + 1] : "manual";
+/**
+ * One cycle's options, from command-line style arguments — `process.argv` when run by
+ * hand, the `run` message's `args` in `--serve` mode.
+ *
+ *   DRY         report only, write nothing
+ *   ONLY        model names to sync, or null for every table (children come along)
+ *   VERIFY_NOW  models to reconcile this cycle regardless of when they were last proven
+ *   REASON      startup | interval | signal | queued | relay | manual (default).
+ *               `relay` is the app's own targeted pull after a write it relayed to the
+ *               office (lib/localSignal.js) — it holds a user's response, so it is kept
+ *               as short as possible.
+ */
+function parseArgs(args) {
+    const list = (flag) => {
+        const i = args.indexOf(flag);
+        return i >= 0 && args[i + 1]
+            ? args[i + 1].split(",").map((s) => s.trim()).filter(Boolean)
+            : null;
+    };
+    const reasonIdx = args.indexOf("--reason");
+    return {
+        DRY: args.includes("--dry-run"),
+        ONLY: list("--only"),
+        VERIFY_NOW: list("--verify") || [],
+        REASON: reasonIdx >= 0 ? args[reasonIdx + 1] : "manual",
+    };
+}
 
 /**
  * Tables in flight at once, per pass.
@@ -209,8 +221,16 @@ async function repairReferencing(source, local, tables, fkCache, entry, deletedK
     return pulled;
 }
 
-async function main() {
-    const cfg = loadConfig();
+/**
+ * Run one cycle and return its exit code (0 ok, 1 a table failed). The fatal states —
+ * no config (2), missing grants (3), schema drift (4) — still exit the process.
+ *
+ * `pools` is `{ source, local }` held by `--serve` mode across cycles; without it the
+ * cycle opens its own and closes them when done. `hooks.onReading()` fires as the first
+ * table is read from the source; `hooks.onApplied(info)` fires with the applied line.
+ */
+async function main(opts, cfg, pools = null, hooks = {}) {
+    const { DRY, ONLY, VERIFY_NOW, REASON } = opts;
     const registryPath = cfg.registryPath
         ? path.resolve(__dirname, cfg.registryPath)
         : registryLib.defaultRegistryPath();
@@ -234,8 +254,9 @@ async function main() {
 
     // One long-lived client per side for the bookkeeping (guard, state, reconcile,
     // status), plus one per lane for the table passes below.
-    const sourcePool = pool(cfg.sourceUrl, CONCURRENCY + 1);
-    const localPool = pool(cfg.localUrl, CONCURRENCY + 1);
+    const ownPools = !pools;
+    const sourcePool = pools ? pools.source : pool(cfg.sourceUrl, CONCURRENCY + 1);
+    const localPool = pools ? pools.local : pool(cfg.localUrl, CONCURRENCY + 1);
     const source = await sourcePool.connect();
     const local = await localPool.connect();
 
@@ -389,6 +410,10 @@ async function main() {
                 loc.release();
             }
         };
+
+        // From here on the source is read table by table: a change committed before this
+        // moment is seen by this cycle, so a signal for it need not queue another (index.js).
+        if (hooks.onReading) hooks.onReading();
 
         // Pass 1: tables that stand on their own, CONCURRENCY at a time.
         await runLimited(order.independent.filter(want), CONCURRENCY, (model) => withLane(async (source, local) => {
@@ -728,8 +753,10 @@ async function main() {
     } finally {
         source.release();
         local.release();
-        await sourcePool.end();
-        await localPool.end();
+        if (ownPools) {
+            await sourcePool.end();
+            await localPool.end();
+        }
     }
 
     const secs = ((Date.now() - t0) / 1000).toFixed(1);
@@ -742,26 +769,90 @@ async function main() {
         console.log(`${verified} table(s) verified against source, ${repaired} row(s) repaired.`);
     }
 
-    // The one line in this program a machine reads. Printed AFTER every write has
-    // committed and the pools are closed, so a reader that acts on it is guaranteed the
-    // rows are already queryable -- which is the entire point: the app's screens used to
-    // re-read the replica in parallel with this process and routinely beat it there.
-    // Silent when nothing moved, so a no-op cycle wakes nobody. Rows repaired by the
-    // reconcile pass count: they change what the replica serves exactly as a pull does.
+    // The applied report. Made AFTER every write has committed, so a reader that acts on
+    // it is guaranteed the rows are already queryable -- which is the entire point: the
+    // app's screens used to re-read the replica in parallel with this process and
+    // routinely beat it there. Silent when nothing moved, so a no-op cycle wakes nobody.
+    // Rows repaired by the reconcile pass count: they change what the replica serves
+    // exactly as a pull does.
     if (!DRY && pulledTotal + repaired + rebuilt > 0) {
-        console.log(`__SYNC_APPLIED__ ${JSON.stringify({ rows: pulledTotal + repaired + rebuilt, models: [...changedModels] })}`);
+        const info = { rows: pulledTotal + repaired + rebuilt, models: [...changedModels] };
+        console.log(`__SYNC_APPLIED__ ${JSON.stringify(info)}`);
+        if (hooks.onApplied) hooks.onApplied(info);
     }
-    process.exit(failed === 0 ? 0 : 1);
+    return failed === 0 ? 0 : 1;
+}
+
+/**
+ * `--serve`: stay alive and run a cycle per `run` message from index.js, on ONE pair of
+ * pools held across cycles.
+ *
+ * A process per cycle opened up to five fresh Supabase connections every time, and a
+ * busy till runs well over a hundred cycles an hour, mostly finding nothing. Each
+ * connection is logged twice by the pooler (authenticated, terminated) at ~1 KB a line,
+ * which is what pushed the project past the free plan's log-ingestion allowance
+ * (2026-10-12: ~64k pooler lines a day). Warm connections cost none of that.
+ *
+ * Still a child process, so index.js keeps everything the separation bought: a stuck
+ * cycle is killed, a pre-empted one is killed. Only a clean cycle keeps the process —
+ * any failure exits, so a broken connection never carries into the next cycle — and
+ * index.js retires it on age as well.
+ *
+ *   in:  { type: "run", args }   { type: "quit" }
+ *   out: { type: "reading" }     { type: "applied", rows, models }   { type: "done", code: 0 }
+ */
+async function serve() {
+    const cfg = loadConfig();
+    // No idle timeout: the point is that the connections outlive the cycle. index.js
+    // retires this process on age, which closes them.
+    const pools = {
+        source: pool(cfg.sourceUrl, CONCURRENCY + 1, { idleTimeoutMillis: 0 }),
+        local: pool(cfg.localUrl, CONCURRENCY + 1, { idleTimeoutMillis: 0 }),
+    };
+    const send = (msg) => { try { process.send(msg); } catch { /* parent gone */ } };
+    const quit = async (code) => {
+        await Promise.allSettled([pools.source.end(), pools.local.end()]);
+        process.exit(code);
+    };
+    // The parent is gone (the app quit, or it was killed): nothing will ask for a cycle.
+    process.on("disconnect", () => void quit(0));
+    process.on("message", async (msg) => {
+        if (!msg) return;
+        if (msg.type === "quit") return quit(0);
+        if (msg.type !== "run") return;
+        let code;
+        try {
+            code = await main(parseArgs(msg.args || []), cfg, pools, {
+                onReading: () => send({ type: "reading" }),
+                onApplied: (info) => send({ type: "applied", ...info }),
+            });
+        } catch (e) {
+            console.error(e);
+            code = 1;
+        }
+        if (code === 0) send({ type: "done", code });
+        else await quit(code);
+    });
 }
 
 // Only when run as a command. Requiring this file (a test, a tool) must not start a
 // sync cycle as a side effect — and `repairReferencing` is worth being able to call
 // against a scratch pair of databases without provisioning all 116 tables.
 if (require.main === module) {
-    main().catch((e) => {
-        console.error(e);
-        process.exit(1);
-    });
+    const argv = process.argv.slice(2);
+    if (argv.includes("--serve")) {
+        serve().catch((e) => {
+            console.error(e);
+            process.exit(1);
+        });
+    } else {
+        main(parseArgs(argv), loadConfig())
+            .then((code) => process.exit(code))
+            .catch((e) => {
+                console.error(e);
+                process.exit(1);
+            });
+    }
 }
 
 module.exports = { repairReferencing };
