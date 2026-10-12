@@ -1073,6 +1073,25 @@ export async function ticketFromMessage(
         });
     }
 
+    // The chat's own record that staff took it up — and the mark that answers
+    // the customer for the follow-up popups (lastContactByPhone reads NOTE rows
+    // of kind "ticket"). Born seen: it is not an @mention for anyone.
+    if (msg.phone) {
+        await prisma.message.create({
+            data: {
+                channel: "WHATSAPP",
+                direction: "NOTE",
+                phone: msg.phone,
+                kind: "ticket",
+                body: existingTicketId ? `Linked to ticket #${ticketId}` : `${kind === "deal" ? "Deal" : "Help ticket"} #${ticketId} raised from this chat`,
+                ticketId,
+                sentByUserId: userId,
+                seenAt: new Date(),
+                occurredAt: new Date(),
+            },
+        });
+    }
+
     void publishChangeServer(["messages", "tickets"]);
     return ticketId;
 }

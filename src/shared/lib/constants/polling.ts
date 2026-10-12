@@ -140,6 +140,21 @@ export const CALL_POPUP_PUBLIC_AFTER_MS = 30 * 60 * 1000;   // 30 minutes
 export const MESSAGE_CLAIM_FALLBACK_MS = 10 * 60 * 1000;   // 10 minutes
 
 /**
+ * WhatsApp's customer-service window: a free-text reply is allowed only this
+ * long after the customer's last message. Past it the popup's reply box locks
+ * and asks staff to call; the card still waits until the customer is reached.
+ * Fixed by Meta — not a shop setting.
+ */
+export const MESSAGE_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;   // 24 hours
+
+/**
+ * Customer messages from before this moment never raise a "waiting" card —
+ * the follow-up rule (a message stays until the shop gets back to them) began
+ * here, and the chats already sitting unanswered were not to flood the popup.
+ */
+export const MESSAGE_FOLLOWUP_START = new Date("2026-10-12T12:00:00+05:30");
+
+/**
  * The shell's two status surfaces — /api/counter/status and /api/sync/status,
  * feeding the counter badge, the sync badge and the Electron window title.
  *

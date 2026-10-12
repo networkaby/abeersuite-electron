@@ -20,12 +20,17 @@
  * note on his popup, and the writer steps out — no more popups for them on this
  * customer until someone mentions them back.
  *
- * A REPLY CLOSES IT FOR EVERYONE. Sending marks the customer's messages read
- * (server side, sendReply), so the card leaves every screen at once. The card
- * also leaves when someone opens the chat on the Messages screen, or when this
- * person closes it — and then only until the customer writes again. The ✕ is
- * offered only to the one handling a chat two or more people share; everyone
- * else minimises instead.
+ * A MESSAGE WAITS LIKE A CALL. A customer's message stays on screen — no ✕,
+ * only minimise — until the shop gets back to them: a reply, a Help/Deal ticket
+ * raised from the card, a call logged, an activity on them in CRM → Reconnect,
+ * or a visit (bill or ticket). Any of these answers their waiting calls too;
+ * the server works it out (lastContactByPhone). Opening the chat is not an
+ * answer. The card counts down WhatsApp's 24-hour reply window; past it the
+ * reply box locks and asks staff to call — the card still waits for that call.
+ *
+ * AN ANSWERED CARD STAYS for the people in the chat, so they can watch for the
+ * customer's next message; now the ✕ is offered, and closes it until the
+ * customer writes again.
  *
  * COST. One read of /api/messages/alerts per realtime "messages" signal, none on
  * a timer: the answer carries every chat with its claim, and the 10-minute
@@ -46,12 +51,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
-import { MessageCircle, X, Send, Users, ArrowRightLeft, ExternalLink, Minus } from "lucide-react";
+import { MessageCircle, X, Send, Users, ArrowRightLeft, ExternalLink, Minus, Ticket, HandCoins, PhoneCall } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { canOpenPage } from "@/shared/lib/auth/pageAccess";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { MESSAGE_CLAIM_FALLBACK_MS } from "@/shared/lib/constants/polling";
+import { MESSAGE_CLAIM_FALLBACK_MS, MESSAGE_REPLY_WINDOW_MS } from "@/shared/lib/constants/polling";
 import { extractApiError } from "@/shared/lib/api";
 import StaffPickerDialog, { type PickMode, type Staff } from "./StaffPickerDialog";
 import MentionTextarea, { mentionTargets } from "./MentionTextarea";
@@ -123,12 +128,19 @@ type Alert = {
     name: string;
     lastId: number;
     body: string;
-    /** Up to the last 3 unread messages, oldest first. */
+    /** Newest customer message — a ticket is raised from it. */
+    lastInId: number | null;
+    /** Up to the last 3 customer messages (the waiting ones while any wait), oldest first. */
     recent: string[];
+    /** Customer messages still waiting for the shop to get back to them. */
     count: number;
     lastAt: string;
-    /** Oldest unread customer message — null when only a staff note is waiting. */
+    /** Newest customer message — the 24-hour reply window runs from it. */
+    lastInAt: string | null;
+    /** Oldest waiting customer message — null when none waits. */
     firstAt: string | null;
+    /** Some customer message is not answered yet — the card cannot be closed. */
+    waiting: boolean;
     /** The newest unanswered @mention note on this chat. */
     note: { by: string; text: string; at: string } | null;
     /** `since` = when the chat last changed hands. */
@@ -228,7 +240,8 @@ export default function MessageAlertPopup() {
         } catch { /* the next signal tries again */ }
     }, []);
     useEffect(() => { if (allowed) void load(); }, [allowed, load]);
-    useRealtimeTopics(["messages"], () => void load(), allowed, ["Message", "MessageClaim"]);
+    // A call logged, a ticket or a Reconnect activity answers a chat too.
+    useRealtimeTopics(["messages", "tickets"], () => void load(), allowed, ["Message", "MessageClaim", "Call", "Ticket", "TicketLog"]);
 
     // The hand-back to everyone is a matter of time passing, not of new data.
     useEffect(() => {
@@ -240,7 +253,10 @@ export default function MessageAlertPopup() {
     const visible = useMemo(() => {
         if (!me) return [];
         return items.filter((a) => {
-            if ((dismissed[a.phone] ?? 0) >= a.lastId) return false;
+            // Closing is only for an answered chat — a waiting one ignores it.
+            if (!a.waiting && (dismissed[a.phone] ?? 0) >= a.lastId) return false;
+            // An answered chat stays only with the people in it.
+            if (!a.waiting && !a.note) return inChat(a, me);
             if (!a.claim || inChat(a, me)) return true;
             // Only an unanswered CUSTOMER message goes back to everyone; a note
             // is for the people it mentions.
@@ -307,12 +323,16 @@ export default function MessageAlertPopup() {
         setDismissed(next);
     };
 
+    /** Past WhatsApp's 24 hours since their last message — only a call reaches them now. */
+    const locked = (a: Alert) => !!a.lastInAt && now - new Date(a.lastInAt).getTime() >= MESSAGE_REPLY_WINDOW_MS;
+
     const send = async (a: Alert) => {
         const text = (drafts[a.phone] ?? "").trim();
         if (!text || sending) return;
         setSending(a.phone);
         try {
             const target = await mentionTargets(text, me);
+            if (!target && locked(a)) { toast.error("24 hours have passed — WhatsApp will not deliver a reply. Call the customer."); return; }
             if (target && !target.ids.length) { toast.error("Nobody else in that mention can take this chat"); return; }
             if (target) {
                 // A staff note — the chat passes to them and this person steps out.
@@ -324,12 +344,30 @@ export default function MessageAlertPopup() {
                 toast.success(`Replied to ${a.name}`);
             }
             setDrafts((d) => ({ ...d, [a.phone]: "" }));
-            // Gone at once here; the server has it for everyone else.
-            setItems((list) => list.filter((x) => x.phone !== a.phone));
+            // A mention steps this person out — gone at once. A reply keeps the
+            // card, now answered, to watch for the customer's next message.
+            if (target) setItems((list) => list.filter((x) => x.phone !== a.phone));
+            else setItems((list) => list.map((x) => x.phone === a.phone ? { ...x, waiting: false, count: 0, firstAt: null } : x));
+            void load();
         } catch (e) {
             toast.error(extractApiError(e, "Reply not sent"));
         } finally {
             setSending(null);
+        }
+    };
+
+    const [raising, setRaising] = useState<string | null>(null);
+    const raiseTicket = async (a: Alert, kind: "help" | "deal") => {
+        if (!a.lastInId || raising) return;
+        setRaising(a.phone);
+        try {
+            const { data } = await axios.post<{ ticketId: number }>(`/api/messages/${a.lastInId}/ticket`, { kind });
+            toast.success(`${kind === "deal" ? "Deal" : "Help ticket"} #${data.ticketId} raised for ${a.name}`);
+            void load();
+        } catch (e) {
+            toast.error(extractApiError(e, "Ticket not raised"));
+        } finally {
+            setRaising(null);
         }
     };
 
@@ -352,6 +390,9 @@ export default function MessageAlertPopup() {
     const renderCard = (a: Alert) => {
         const mine = inChat(a, me);
         const isOwner = a.claim?.owner.id === me;
+        const isLocked = locked(a);
+        const leftMs = a.lastInAt ? new Date(a.lastInAt).getTime() + MESSAGE_REPLY_WINDOW_MS - now : 0;
+        const leftLabel = leftMs >= 3_600_000 ? `${Math.floor(leftMs / 3_600_000)}h left to reply` : `${Math.max(1, Math.ceil(leftMs / 60_000))} min left to reply`;
         return (
             <div key={a.phone} data-card className="rounded-lg border border-green-300 bg-background p-3 shadow-lg dark:border-green-800">
                 <div
@@ -367,7 +408,14 @@ export default function MessageAlertPopup() {
                             {a.count > 1 && <span className="rounded-full bg-green-600 px-1.5 text-[11px] text-white">{a.count}</span>}
                         </div>
                         <p className="text-[11px] text-muted-foreground">
-                            {!a.claim
+                            {a.waiting && (
+                                <span className={isLocked ? "font-medium text-red-600" : leftMs < 3 * 3_600_000 ? "font-medium text-amber-600" : ""}>
+                                    {isLocked ? "24h passed — call the customer" : leftLabel}{" · "}
+                                </span>
+                            )}
+                            {!a.waiting && !a.note
+                                ? "Answered — watching for their reply"
+                                : !a.claim
                                 ? "New — nobody has answered yet"
                                 : mine
                                     ? (a.note ? `${a.note.by} passed this to you` : isOwner ? "Your chat" : `With ${a.claim.owner.name} — you were invited`)
@@ -380,9 +428,9 @@ export default function MessageAlertPopup() {
                     <button onClick={() => changePlace({ ...place, minimised: true })} className="text-muted-foreground hover:text-foreground" title="Minimise to a chat bubble">
                         <Minus className="size-4" />
                     </button>
-                    {/* Only the one handling a shared chat may close it — anyone
-                        else minimises, so a customer is never closed unanswered. */}
-                    {isOwner && a.claim!.helpers.length > 0 && (
+                    {/* A waiting customer cannot be closed — only answered, or
+                        minimised. Once answered, close until they write again. */}
+                    {!a.waiting && (
                         <button onClick={() => close(a)} className="text-muted-foreground hover:text-foreground" title="Close until they write again">
                             <X className="size-4" />
                         </button>
@@ -398,6 +446,11 @@ export default function MessageAlertPopup() {
                         </p>
                     )}
                 </div>
+                {a.waiting && isLocked && (
+                    <p className="mt-2 flex items-center gap-1.5 rounded-md border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-100">
+                        <PhoneCall className="size-3.5 shrink-0" /> WhatsApp allows no reply after 24 hours. Call them — the logged call closes this.
+                    </p>
+                )}
                 {canReply && (
                     <>
                         {/^\s*@|\s@\S/.test(drafts[a.phone] ?? "") && (
@@ -408,7 +461,7 @@ export default function MessageAlertPopup() {
                                 value={drafts[a.phone] ?? ""}
                                 onChange={(text) => setDrafts((d) => ({ ...d, [a.phone]: text }))}
                                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(a); } }}
-                                placeholder="Reply, or @name for a staff note"
+                                placeholder={isLocked ? "Reply closed — @name for a staff note" : "Reply, or @name for a staff note"}
                                 className="text-sm"
                             />
                             <Button size="icon" disabled={sending === a.phone || !(drafts[a.phone] ?? "").trim()} onClick={() => void send(a)} title="Send on WhatsApp">
@@ -416,6 +469,16 @@ export default function MessageAlertPopup() {
                             </Button>
                         </div>
                         <div className="mt-1.5 flex justify-end gap-1">
+                            {a.waiting && a.lastInId && (
+                                <>
+                                    <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={raising === a.phone} onClick={() => void raiseTicket(a, "help")} title="Raise a Help Desk ticket from this message — answers it">
+                                        <Ticket className="mr-1 size-3" /> Help
+                                    </Button>
+                                    <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" disabled={raising === a.phone} onClick={() => void raiseTicket(a, "deal")} title="Raise a Deal from this message — answers it">
+                                        <HandCoins className="mr-1 size-3" /> Deal
+                                    </Button>
+                                </>
+                            )}
                             <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setPick({ mode: "invite", alert: a })}>
                                 <Users className="mr-1 size-3" /> Invite
                             </Button>

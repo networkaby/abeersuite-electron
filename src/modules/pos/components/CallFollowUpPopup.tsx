@@ -384,7 +384,8 @@ export default function CallFollowUpPopup() {
 
     const pollEnabled = extension !== "unknown";
     usePolling(() => void refresh(), CALL_POPUP_POLL_MS, pollEnabled);
-    useRealtimeTopics(["tickets"], () => void refresh(), pollEnabled);
+    // A WhatsApp reply to the caller answers their calls too (lastContactByPhone).
+    useRealtimeTopics(["tickets", "messages"], () => void refresh(), pollEnabled);
 
     // Fresh call, fresh form state.
     useEffect(() => {

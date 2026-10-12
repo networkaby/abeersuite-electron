@@ -4,6 +4,7 @@ import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { addTimelineLogSchema } from "@/shared/lib/schemas/reconnectSchema";
+import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 
 // POST /api/crm/reconnect/log
 // Append a note / call / meeting / task straight onto a customer's own timeline.
@@ -39,6 +40,9 @@ export async function POST(req: Request) {
             },
             select: { id: true, kind: true, note: true, dueAt: true, doneAt: true, createdAt: true, author: true },
         });
+        // Reaching the customer answers their waiting calls and messages — the
+        // follow-up popups re-read on this.
+        void publishChangeServer(["tickets"]);
         return NextResponse.json(log, { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to add to timeline");

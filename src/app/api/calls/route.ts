@@ -7,7 +7,8 @@ import {
     phoneMatchKey, phoneKeyVariants, normalizeDialedNumber, readCallerNumber, partialCliPrefixes,
 } from "@/shared/lib/format";
 import { isMissedCall, MISSED_CALL_WHERE, parseMissedMode } from "@/shared/lib/calls";
-import { counterPopupScope, customerKey, customerSeenSince } from "@/shared/lib/calls/followUp";
+import { counterPopupScope, customerKey, customerSeenSince, lastContactByPhone } from "@/shared/lib/calls/followUp";
+import { ownersByPhone } from "@/modules/message/lib/customerMessages";
 
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { Prisma } from "@/generated/prisma/client";
@@ -448,24 +449,18 @@ export async function GET(req: Request) {
         // note was typed. A note written late in the day about a morning call
         // must not swallow the calls that came in between.
         //
-        // This is deliberately narrow: only a logged CALL moves the line. An open
-        // help ticket does NOT silence a customer's future calls — they ring
-        // again precisely because something is still not right.
+        // Not only a logged CALL moves the line: getting back to the customer any
+        // other way does too — a WhatsApp reply, a ticket raised from their chat,
+        // or an activity logged on them in CRM → Reconnect (lastContactByPhone,
+        // the same rule the new-message popup closes on). An open help ticket on
+        // its own still does NOT silence future calls — they ring again
+        // precisely because something is still not right.
         //
         // The rows themselves are untouched and still on the CRM Call Log; like
         // the popup's three-day window, this only decides who gets reminded.
         let cutoffByPhone = new Map<string, number>();
         if (sinceLastLogged && keys.length) {
-            const logged = await prisma.call.groupBy({
-                by: ["phone"],
-                where: { phone: { in: keys }, OR: [{ note: { not: null } }, { ticketId: { not: null } }] },
-                _max: { occurredAt: true },
-            });
-            cutoffByPhone = new Map(
-                logged
-                    .filter((g): g is typeof g & { phone: string } => !!g.phone && !!g._max.occurredAt)
-                    .map((g) => [g.phone, g._max.occurredAt!.getTime()]),
-            );
+            cutoffByPhone = await lastContactByPhone(keys, await ownersByPhone(keys));
         }
         const answeredAlready = (phone: string | null, occurredAt: Date) => {
             if (!phone) return false;

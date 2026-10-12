@@ -112,3 +112,73 @@ export async function customerSeenSince(customers: CustomerRef[], since: Date): 
     }
     return seen;
 }
+
+/**
+ * When the shop last got back to each number — the one line that closes a
+ * waiting call AND a waiting message alike, whichever way it was answered:
+ *  - a call to/from the number logged with a note or a ticket (its occurredAt);
+ *  - a WhatsApp reply a staff member sent, or a Help/Deal ticket raised or
+ *    linked from the chat (the NOTE row `ticketFromMessage` leaves, kind
+ *    "ticket"). An @mention note only passes the chat on and never counts;
+ *  - a Call / Note / Meeting / Task logged on the customer in CRM → Reconnect;
+ *  - with `visits`, the customer seen at the shop (customerSeenSince).
+ * Anything that happened before the returned time is answered; anything after
+ * it is still waiting. `owners` maps a number to its customer (ownersByPhone)
+ * — numbers without one are judged on calls and replies only.
+ */
+export async function lastContactByPhone(
+    phones: string[],
+    owners: Map<string, CustomerRef>,
+    opts: { since?: Date; visits?: boolean } = {},
+): Promise<Map<string, number>> {
+    const out = new Map<string, number>();
+    const unique = [...new Set(phones.filter(Boolean))];
+    if (!unique.length) return out;
+    const bump = (phone: string, at: Date | number | null | undefined) => {
+        const t = at instanceof Date ? at.getTime() : at;
+        if (t && t > (out.get(phone) ?? 0)) out.set(phone, t);
+    };
+    const after = opts.since ? { gte: opts.since } : undefined;
+
+    const customers = [...new Map([...owners.values()].map((o) => [customerKey(o), { kind: o.kind, id: o.id }])).values()];
+    const phonesOf = new Map<string, string[]>();
+    for (const [phone, o] of owners) {
+        if (!unique.includes(phone)) continue;
+        const k = customerKey(o);
+        phonesOf.set(k, [...(phonesOf.get(k) ?? []), phone]);
+    }
+    const personIds = customers.filter((c) => c.kind === "person").map((c) => c.id);
+    const companyIds = customers.filter((c) => c.kind === "company").map((c) => c.id);
+
+    const [calls, messages, logs, seen] = await Promise.all([
+        prisma.call.groupBy({
+            by: ["phone"],
+            where: { phone: { in: unique }, occurredAt: after, OR: [{ note: { not: null } }, { ticketId: { not: null } }] },
+            _max: { occurredAt: true },
+        }),
+        prisma.message.groupBy({
+            by: ["phone"],
+            where: {
+                phone: { in: unique }, occurredAt: after,
+                OR: [{ direction: "OUT", sentByUserId: { not: null } }, { direction: "NOTE", kind: "ticket" }],
+            },
+            _max: { occurredAt: true },
+        }),
+        personIds.length || companyIds.length
+            ? prisma.ticketLog.groupBy({
+                by: ["personId", "companyId"],
+                where: { ticketId: null, createdAt: after, OR: [{ personId: { in: personIds } }, { companyId: { in: companyIds } }] },
+                _max: { createdAt: true },
+            })
+            : Promise.resolve([]),
+        opts.visits && customers.length && opts.since ? customerSeenSince(customers, opts.since) : Promise.resolve(new Map<string, number>()),
+    ]);
+    for (const g of calls) if (g.phone) bump(g.phone, g._max.occurredAt);
+    for (const g of messages) if (g.phone) bump(g.phone, g._max.occurredAt);
+    for (const g of logs) {
+        const key = g.personId ? `person:${g.personId}` : g.companyId ? `company:${g.companyId}` : null;
+        for (const phone of (key && phonesOf.get(key)) || []) bump(phone, g._max.createdAt);
+    }
+    for (const [key, at] of seen) for (const phone of phonesOf.get(key) ?? []) bump(phone, at);
+    return out;
+}
