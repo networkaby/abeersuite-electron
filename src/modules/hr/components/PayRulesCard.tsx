@@ -77,13 +77,13 @@ const OVERTIME_RULES: Rule[] = [
     },
     {
         key: "shortHoursRate",
-        label: "Hours still owed at month end",
+        label: "Pending duty at month end",
         suffix: "times the normal hour",
         step: 0.25,
         explain: (v) =>
             v === 0
-                ? "Hours still owed at month end are forgiven — nothing is cut."
-                : `Each hour still owed is cut at ${times(v)} the normal hour.`,
+                ? "Duty still pending at month end is forgiven — nothing is cut."
+                : `Each hour of duty still pending at month end is cut at ${times(v)} the normal hour.`,
     },
 ];
 
@@ -138,12 +138,12 @@ const ABSENCE_RULES: Rule[] = [
     {
         key: "absentPenaltyDays",
         label: "Absent without a granted leave",
-        suffix: "days of basic, on top",
+        suffix: "days of duty, to pending",
         step: 0.25,
         explain: (v) =>
             v === 0
                 ? "An unasked absence costs the day itself and nothing more — that day is already paid at zero."
-                : `Besides losing the day, each unasked absence cuts a further ${Number(v.toFixed(2))} day${v === 1 ? "" : "s"} of basic. Two such days in a month therefore cost about ${Number((2 * (1 + v)).toFixed(2))} days' pay.`,
+                : `Besides losing the day, each unasked absence adds ${Number(v.toFixed(2))} day${v === 1 ? "" : "s"} of duty to pending. Extra hours on later days make it up; what is still pending at month end is cut.`,
     },
     {
         key: "leaveNoticeDays",
@@ -182,7 +182,7 @@ interface LateField {
 
 const LATE_STYLES: { id: LatePenaltyStyle; label: string; fields: LateField[] }[] = [
     { id: "none", label: "Nothing more", fields: [] },
-    { id: "pay", label: "Cut from his pay", fields: [{ key: "latePenaltyDays", suffix: "days of basic", step: 0.25 }] },
+    { id: "pay", label: "Whole days of duty", fields: [{ key: "latePenaltyDays", suffix: "days of duty", step: 0.25 }] },
     {
         id: "timesLate",
         label: "Cut from his hours — by the lateness",
@@ -215,7 +215,7 @@ function explainLate(style: LatePenaltyStyle, v: number, v2: number): string {
         case "pay":
             return v === 0
                 ? "No penalty — late arrival costs only the minutes not worked."
-                : `Each charged late day cuts ${Number(v.toFixed(2))} day${v === 1 ? "" : "s"} of basic from the payslip.`;
+                : `Each charged late day adds ${Number(v.toFixed(2))} day${v === 1 ? "" : "s"} of duty to pending.`;
         case "timesLate":
             return v === 0
                 ? NOTHING_EXTRA
@@ -401,7 +401,7 @@ export default function PayRulesCard({ canEdit }: { canEdit: boolean }) {
                 {group(
                     "Overtime",
                     <Clock4 size={15} />,
-                    "Extra hours are netted over the month first — a day's extra hour pays back an hour fallen short elsewhere. Only what survives that is paid.",
+                    "A day's extra hours first make up the duty pending from earlier days — short duty and every penalty. Only after nothing is pending is the extra overtime, on that day. What is still pending at month end is cut.",
                     OVERTIME_RULES,
                 )}
 

@@ -329,7 +329,7 @@ export function PayslipBody({ data, thermal = false, showAttendance = true, show
                         <Row label={`Month · ${formatWorked(att.workedMinutes)} of ${formatWorked(att.dutyMinutes)}`} value={signed(att.accountedMinutes)} strong />
                         {inDays && <Row label="  = in days" value={inDays} />}
                         <Row label="Overtime payable" value={orDash(att.payableMinutes)} />
-                        <Row label="Hours owed" value={orDash(att.owedMinutes)} />
+                        <Row label="Pending duty" value={orDash(att.owedMinutes)} />
                     </>
                 )}
             </div>
@@ -458,16 +458,16 @@ export function PayslipBody({ data, thermal = false, showAttendance = true, show
                             <tr style={{ fontWeight: 700 }}>
                                 <td style={{ ...tight, borderBottom: "1px solid #999" }}>Month</td>
                                 <td style={{ ...tightNum, borderBottom: "1px solid #999" }}>{dayCount(att.days.length)}</td>
-                                <td style={{ ...tightNum, borderBottom: "1px solid #999" }}>{formatWorked(att.workedMinutes)} of {formatWorked(att.dutyMinutes)} owed</td>
+                                <td style={{ ...tightNum, borderBottom: "1px solid #999" }}>{formatWorked(att.workedMinutes)} of {formatWorked(att.dutyMinutes)} duty</td>
                                 <td style={{ ...tightNum, borderBottom: "1px solid #999" }}>{signed(att.accountedMinutes)}</td>
                             </tr>
                         </tbody>
                     </table>
                     <div style={{ marginTop: 4, color: "#444", fontSize: 10 }}>
                         {inDays && <>Accounted <b>{signed(att.accountedMinutes)}</b> = <b>{inDays}</b>.{" "}</>}
-                        Accounted is each day on its own. The month is then netted — overtime pays back the hours
-                        fallen short first — and only what survives reaches the pay heads:{" "}
-                        <b>overtime payable {orDash(att.payableMinutes)}</b> · <b>hours owed {orDash(att.owedMinutes)}</b>.
+                        Each day&apos;s extra first makes up the duty pending from earlier days (short duty and
+                        penalties); only what is left is overtime:{" "}
+                        <b>overtime payable {orDash(att.payableMinutes)}</b> · <b>pending duty at month end {orDash(att.owedMinutes)}</b>.
                         The day-by-day working is on your My Info page.
                     </div>
                 </div>

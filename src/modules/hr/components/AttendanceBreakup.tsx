@@ -72,23 +72,23 @@ export default function AttendanceBreakup({ userId, from, to, canEdit }: {
                             <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4 lg:grid-cols-7">
                                 <Tally label="Days measured" value={String(totals.days)} hint="Days the clock actually recorded stretches for" />
                                 <Tally label="Times active" value={String(totals.activeCount)} hint="Separate stretches across all these days" />
-                                <Tally label="Worked" value={formatWorked(totals.worked)} strong hint={`Of ${formatWorked(totals.duty)} owed`} />
+                                <Tally label="Worked" value={formatWorked(totals.worked)} strong hint={`Of ${formatWorked(totals.duty)} duty`} />
                                 <Tally
-                                    label="Accounted, before netting"
+                                    label="Accounted"
                                     value={formatWorked(totals.accounted)}
-                                    hint="Every day's own total added up — normal at 1×, overtime at its rate, late cuts and short days taken off. Payroll nets across the month before paying, so this is not yet money"
+                                    hint="Every day's own total added up — normal at 1×, made-up pending at 1×, overtime at its rate. Short duty and penalties go to pending instead"
                                 />
                                 <Tally
                                     label="Overtime payable"
                                     value={effect.payableMinutes > 0 ? formatWorked(effect.payableMinutes) : "—"}
                                     tone={effect.payableMinutes > 0 ? "good" : undefined}
-                                    hint="Extra hours left AFTER paying back the hours fallen short on other days"
+                                    hint="Each day's extra left after the pending duty was made up"
                                 />
                                 <Tally
-                                    label="Hours owed"
+                                    label="Pending duty"
                                     value={effect.owedMinutes > 0 ? formatWorked(effect.owedMinutes) : "—"}
                                     tone={effect.owedMinutes > 0 ? "warn" : undefined}
-                                    hint="Still short after the netting — this is what gets cut"
+                                    hint="Short duty and penalties not yet made up — what is left at month end is cut"
                                 />
                                 <Tally
                                     label="Late days"

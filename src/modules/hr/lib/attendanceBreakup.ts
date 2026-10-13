@@ -6,7 +6,7 @@
 
 import type { DutyGrade, GradeLimits } from "@/shared/lib/hr/dutyTime";
 import { earlyMinutes, gradeDay, lateMinutes, overtimeMinutes, shortMinutes } from "@/shared/lib/hr/dutyTime";
-import type { AttendanceEffect, PayRules } from "@/shared/lib/hr/payRules";
+import { pendingTotal, type AttendanceEffect, type PayRules, type PendingDay, type PendingItem } from "@/shared/lib/hr/payRules";
 import type { PayslipAttendanceData, PayslipAttendanceDay } from "@/shared/components/print/PayslipBody";
 
 /** One active stretch, as the screens want it: ISO instants, minutes, why it ended. */
@@ -129,6 +129,12 @@ export interface DayBreakup {
      * rather than discovering it on a payslip.
      */
     lateCharged: boolean;
+    /**
+     * This day's line of the pending-duty walk (`walkPendingDuty`): duty carried
+     * in from earlier days, what today made up, today's overtime, what today
+     * added. Null where payroll does not walk the day (before joining).
+     */
+    pending?: PendingDay | null;
 }
 
 /** Minutes between two ISO instants, never negative. */
@@ -294,7 +300,7 @@ export function buildDayBreakup(input: {
  * styles that are not a plain multiple ("10% of day / 5 min").
  */
 export interface AccountLine {
-    key: "duty" | "overtime" | "weeklyOff" | "holiday" | "late" | "short";
+    key: "pending" | "duty" | "madeUp" | "overtime" | "weeklyOff" | "holiday" | "late" | "short" | "absent";
     label: string;
     /** The raw minutes this line is about — the lateness itself for the late line. */
     minutes: number;
@@ -304,6 +310,8 @@ export interface AccountLine {
     accounted: number;
     /** Why it is what it is, when a reader would ask. */
     note: string | null;
+    /** Minutes this line sends to pending duty instead of taking off the day. */
+    toPending?: number;
 }
 
 export interface DayAccount {
@@ -319,9 +327,8 @@ const times = (n: number) => `× ${Number.isInteger(n) ? `${n}.0` : String(n)}`;
  *
  * Nothing is re-measured here: the overtime, the shortfall and the late cut
  * arrive already worked out. This only puts the rate beside each and adds the
- * column up. The total is the day ON ITS OWN — at month end payroll nets the
- * overtime against the short days and the late cuts first, and only what
- * survives meets a rate. The screen says so beside the figure.
+ * column up. Short duty and penalties are shown but not taken off: they go to
+ * pending duty, and only what is still pending at month end is cut.
  */
 export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
     const lines: AccountLine[] = [];
@@ -347,49 +354,72 @@ export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
         return { lines, total: sum(lines) };
     }
 
+    // Owner, 2026-10-13: the day first makes up the duty pending from earlier
+    // days; only after nothing is pending is the extra overtime. Every short and
+    // every penalty is not taken off the day — it goes to pending, and what is
+    // still pending at month end is cut once.
+    const p = day.pending;
+    const carried = p ? pendingTotal(p.before) : 0;
+    const madeUp = p ? p.madeUp : 0;
+    const overtime = p ? p.overtime : day.overtimeMinutes;
+    const addedOf = (kind: "short" | "late" | "absent") =>
+        (p?.added ?? []).filter((a) => a.kind === kind).reduce((t, a) => t + a.minutes, 0);
+
+    lines.push({
+        key: "pending", label: "Pending duty (earlier days)", minutes: carried, rateLabel: "", accounted: 0,
+        note: p && p.before.length ? pendingBreakup(p.before) : null,
+    });
+
     const normal = Math.min(day.workedMinutes, day.dutyMinutes);
     lines.push({ key: "duty", label: "Normal duty", minutes: normal, rateLabel: times(1), accounted: normal, note: null });
 
+    if (madeUp > 0) {
+        const left = pendingTotal(p?.after ?? []);
+        lines.push({
+            key: "madeUp", label: "Extra → made up pending", minutes: madeUp, rateLabel: times(1), accounted: madeUp,
+            note: left > 0 ? `still pending ${fmtShort(left)}` : "nothing pending now",
+        });
+    }
+
     lines.push({
-        key: "overtime", label: "Overtime", minutes: day.overtimeMinutes,
-        rateLabel: times(rules.overtimeRate), accounted: Math.round(day.overtimeMinutes * rules.overtimeRate),
-        note: day.overtimeMinutes > 0 ? "pays back short days first; only what survives the month is paid" : null,
+        key: "overtime", label: "Overtime", minutes: overtime,
+        rateLabel: times(rules.overtimeRate), accounted: Math.round(overtime * rules.overtimeRate),
+        note: day.overtimeMinutes > 0 && overtime === 0 ? "the extra went to make up pending duty" : null,
     });
 
-    lines.push(lateLine(day, rules));
+    lines.push(lateLine(day, rules, addedOf("late")));
 
-    // A half day has already lost half its duty on the payslip; only the rest is
-    // charged here, or the same hour is taken twice (the rule payroll follows).
+    const shortAdded = addedOf("short");
     const withheld = day.grade === "HALF_DAY" ? Math.round(day.dutyMinutes / 2) : 0;
-    const shortCharged = day.grade === "ABSENT" ? 0 : Math.max(0, day.shortMinutes - withheld);
     lines.push({
-        key: "short", label: "Short of duty", minutes: day.shortMinutes,
-        rateLabel: times(rules.shortHoursRate), accounted: -Math.round(shortCharged * rules.shortHoursRate),
+        key: "short", label: "Short of duty", minutes: day.shortMinutes, rateLabel: "", accounted: 0, toPending: shortAdded,
         note: day.grade === "ABSENT" && day.shortMinutes > 0
-            ? "the day is paid at zero already — not charged again"
-            : withheld > 0
-                ? `half the day (${fmtShort(withheld)}) is already withheld on the payslip — only the rest counts`
+            ? "the day is paid at zero already — not added to pending"
+            : shortAdded > 0
+                ? (withheld > 0 ? `half the day (${fmtShort(withheld)}) is already withheld on the payslip — only the rest is pending` : "made up by a later day's extra, or cut at month end")
                 : null,
     });
+
+    const absentAdded = addedOf("absent");
+    if (absentAdded > 0) {
+        lines.push({
+            key: "absent", label: "Absence penalty", minutes: absentAdded, rateLabel: "", accounted: 0, toPending: absentAdded,
+            note: "absent with no leave granted — the day itself is paid at zero",
+        });
+    }
 
     return { lines, total: sum(lines) };
 }
 
-function lateLine(day: DayBreakup, rules: PayRules): AccountLine {
+function lateLine(day: DayBreakup, rules: PayRules, added: number): AccountLine {
     const base = { key: "late" as const, label: "Late penalty", minutes: day.lateBy };
     if (day.lateBy <= 0) return { ...base, rateLabel: rateOfLate(rules), accounted: 0, note: null };
     if (!day.lateCharged) {
         const n = rules.lateFreeDays;
         return { ...base, rateLabel: rateOfLate(rules), accounted: 0, note: `not charged — inside the first ${n} free late ${n === 1 ? "day" : "days"}` };
     }
-    switch (rules.latePenaltyStyle) {
-        case "pay":
-            return { ...base, rateLabel: "money", accounted: 0, note: `${rules.latePenaltyDays} day${rules.latePenaltyDays === 1 ? "" : "s"} of basic off the payslip, not time` };
-        case "none":
-            return { ...base, rateLabel: "—", accounted: 0, note: "no late penalty is set" };
-        default:
-            return { ...base, rateLabel: rateOfLate(rules), accounted: -day.latePenaltyMinutes, note: "charged — the free late days are used up" };
-    }
+    if (rules.latePenaltyStyle === "none") return { ...base, rateLabel: "—", accounted: 0, note: "no late penalty is set" };
+    return { ...base, rateLabel: rateOfLate(rules), accounted: 0, toPending: added, note: "charged — the free late days are used up" };
 }
 
 /** The late rule as a short label — the multiple, or the slab, or the flat share. */
@@ -398,9 +428,19 @@ function rateOfLate(rules: PayRules): string {
         case "timesLate":    return `× ${rules.lateTimesLate}`;
         case "sharePerSlab": return `${rules.lateSlabPct}% of day / ${rules.lateSlabMinutes} min`;
         case "shareOfDay":   return `${rules.lateSharePct}% of day`;
-        case "pay":          return "money";
+        case "pay":          return `${rules.latePenaltyDays} day${rules.latePenaltyDays === 1 ? "" : "s"} of duty`;
         default:             return "—";
     }
+}
+
+const fmtDate = (iso: string) =>
+    new Date(`${iso}T00:00:00.000Z`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", timeZone: "UTC" });
+
+const PENDING_WORD = { short: "short", late: "late penalty", absent: "absence penalty" } as const;
+
+/** "02 Oct short 1h · 03 Oct absence penalty 10h" — the breakup of pending duty. */
+export function pendingBreakup(items: readonly PendingItem[]): string {
+    return items.map((i) => `${fmtDate(i.date)} ${PENDING_WORD[i.kind]} ${fmtShort(i.minutes)}`).join(" · ");
 }
 
 function sum(lines: readonly AccountLine[]): number {

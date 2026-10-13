@@ -15,7 +15,7 @@ import { lateDutyCutMinutes } from "@/shared/lib/hr/payRules";
 import { ATTENDANCE_SOURCE_SELECT, autoCounts, lateOf, workedOf } from "@/shared/lib/hr/attendanceSource";
 import { shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
 import { holidayDatesFor, isoDaysBetween, weekdayOf } from "@/modules/hr/lib/attendanceCalendar";
-import { attendanceEffectFor } from "@/modules/hr/lib/payRulesApply";
+import { attendanceLedgerFor } from "@/modules/hr/lib/payRulesApply";
 import { userBranchIds } from "@/modules/hr/lib/staffBranchesServer";
 import { buildDayBreakup, type DayBreakup, type SpanDto } from "@/modules/hr/lib/attendanceBreakup";
 import type { HoursPayload } from "@/modules/hr/lib/attendanceHoursTypes";
@@ -156,21 +156,23 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
             manualStatus: row?.manualStatus ?? null,
             weeklyOff,
             holidayName,
-            // The rule's own function, not a second copy of it. A "pay" style
-            // charges money rather than duty and correctly returns 0 here; the
-            // card reads the style off `rules` and says so in words.
+            // The rule's own function, not a second copy of it.
             latePenaltyMinutes: lateCharged ? lateDutyCutMinutes(rules, lateBy, duty) : 0,
             lateCharged,
             gradeLimits: rules,
         }));
     }
 
-    // The netting is payroll's own, run here rather than re-derived: overtime is
-    // only paid once it has made up the hours fallen short on other days, and a
-    // screen that adds the daily surpluses up by itself would promise more than
-    // the payslip pays. The reads it would make for the context are ones we have
+    // The pending-duty walk is payroll's own, run here rather than re-derived:
+    // overtime only counts once the duty pending from earlier days is made up,
+    // and a screen that worked it out by itself would promise more than the
+    // payslip pays. The reads it would make for the context are ones we have
     // already done, so it is handed them rather than repeating them.
-    const effect = await attendanceEffectFor({ rules, seasonal, holidays }, userId, from, to);
+    const { effect, days: ledger } = await attendanceLedgerFor({ rules, seasonal, holidays }, userId, from, to);
+    // Each card carries its own line of the walk — pending carried in, made up,
+    // overtime, added — so the card and the payslip are one calculation.
+    const pendingByIso = new Map(ledger.map((p) => [p.date, p]));
+    for (const d of days) d.pending = pendingByIso.get(d.date) ?? null;
 
     return {
         userId: user.id, userName: user.name, from, to, days, rules, effect,

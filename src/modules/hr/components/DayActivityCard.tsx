@@ -24,8 +24,8 @@ import { ArrowRight, Check, Pencil, Undo2, X } from "lucide-react";
 import { NumericInput } from "@/shared/components/NumericInput";
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
 import { cn } from "@/shared/lib/format/utils";
-import type { PayRules } from "@/shared/lib/hr/payRules";
-import { accountDay, type AccountLine, type DayBreakup, type TimelineRow } from "../lib/attendanceBreakup";
+import { pendingTotal, type PayRules } from "@/shared/lib/hr/payRules";
+import { accountDay, pendingBreakup, type AccountLine, type DayBreakup, type TimelineRow } from "../lib/attendanceBreakup";
 
 const fmtTime = (iso: string | null) =>
     iso ? new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "—";
@@ -101,6 +101,13 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                     </span>
                 </div>
                 {day.note && <p className="mt-1 text-xs text-muted-foreground">Note: {day.note}</p>}
+                {/* An absence penalty lands on a day with no stretches, and it is
+                    exactly the line a person asks about later. */}
+                {day.pending && day.pending.added.length > 0 && (
+                    <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                        +{formatWorked(pendingTotal(day.pending.added))} → pending ({pendingBreakup(day.pending.added)}) · pending after today: {formatWorked(pendingTotal(day.pending.after))}
+                    </p>
+                )}
             </article>
         );
     }
@@ -163,7 +170,7 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                     label="Over / short"
                     value={shut ? "—" : day.overtimeMinutes > 0 ? `+${formatWorked(day.overtimeMinutes)}` : day.shortMinutes > 0 ? `−${formatWorked(day.shortMinutes)}` : "—"}
                     tone={shut ? undefined : day.overtimeMinutes > 0 ? "good" : day.shortMinutes > 0 ? "warn" : undefined}
-                    hint={shut ? "Not judged — every minute of a shut day is granted at its own rate" : "Against the duty owed, before the month is netted"}
+                    hint={shut ? "Not judged — every minute of a shut day is granted at its own rate" : "Against the day's duty — extra first makes up pending duty, short goes to pending"}
                 />
             </div>
 
@@ -194,7 +201,9 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                             <td />
                             <td className="py-1 text-right font-mono tabular-nums">{signed(account.total)}</td>
                             <td className="hidden py-1 pl-3 text-[11px] font-normal text-muted-foreground sm:table-cell">
-                                {shut ? "paid at its own rate, outside the netting" : "the day on its own — before the month is netted"}
+                                {shut
+                                    ? "paid at its own rate, outside pending duty"
+                                    : `pending after today: ${day.pending && pendingTotal(day.pending.after) > 0 ? formatWorked(pendingTotal(day.pending.after)) : "nothing"}`}
                             </td>
                         </tr>
                     </tfoot>
@@ -239,8 +248,8 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                 question this whole screen exists to answer. */}
             <footer className="border-t border-border bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
                 {shut
-                    ? <>Worked {formatWorked(day.workedMinutes)} on a day the shop was shut — no duty owed</>
-                    : <>Worked {formatWorked(day.workedMinutes)} of {formatWorked(day.dutyMinutes)} owed ({day.dutyStart}–{day.dutyEnd})</>}
+                    ? <>Worked {formatWorked(day.workedMinutes)} on a day the shop was shut — no duty due</>
+                    : <>Worked {formatWorked(day.workedMinutes)} of {formatWorked(day.dutyMinutes)} due ({day.dutyStart}–{day.dutyEnd})</>}
                 {day.idleMinutes > 0 && <> · away {formatWorked(day.idleMinutes)} in between, not counted</>}
                 {!shut && day.lateBy > 0 && <> · late by {formatWorked(day.lateBy)}</>}
                 {!shut && day.leftEarlyBy > 0 && <> · left {formatWorked(day.leftEarlyBy)} early</>}
@@ -261,6 +270,7 @@ const signed = (minutes: number) =>
 
 function AccountRow({ line }: { line: AccountLine }) {
     const idle = line.minutes === 0 && line.accounted === 0;
+    const toPending = line.toPending ?? 0;
     return (
         <tr className={cn(idle && "text-muted-foreground/60")}>
             <td className="py-0.5">{line.label}</td>
@@ -270,8 +280,13 @@ function AccountRow({ line }: { line: AccountLine }) {
                 "py-0.5 text-right font-mono tabular-nums",
                 line.accounted < 0 && "text-amber-600 dark:text-amber-400",
                 line.accounted > 0 && line.key !== "duty" && "text-emerald-600 dark:text-emerald-400",
+                (toPending > 0 || (line.key === "pending" && line.minutes > 0)) && "text-amber-600 dark:text-amber-400",
             )}>
-                {line.key === "duty" ? (line.accounted > 0 ? formatWorked(line.accounted) : "—") : signed(line.accounted)}
+                {toPending > 0
+                    ? `+${formatWorked(toPending)} → pending`
+                    : line.key === "pending"
+                        ? (line.minutes > 0 ? `${formatWorked(line.minutes)} pending` : "—")
+                        : line.key === "duty" ? (line.accounted > 0 ? formatWorked(line.accounted) : "—") : signed(line.accounted)}
             </td>
             <td className="hidden py-0.5 pl-3 text-[11px] text-muted-foreground sm:table-cell">{line.note ?? ""}</td>
         </tr>

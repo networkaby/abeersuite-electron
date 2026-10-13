@@ -160,9 +160,9 @@ export function parsePayRules(v: unknown): PayRules {
 /**
  * Minutes of duty a single late day loses, beyond the lateness itself.
  *
- * Only the TIME styles answer here; "pay" and "none" cost no duty and return 0.
- * The cut can never exceed the day, however late he was and however small the
- * slab.
+ * "none" returns 0. "pay" returns its days of duty — it goes to pending duty
+ * like every other penalty. The other cuts can never exceed the day, however
+ * late he was and however small the slab.
  *
  * A part slab counts as a whole one — 12 minutes late against a 5-minute slab
  * is three slabs, not two and a bit. Rounding the other way would make the
@@ -182,6 +182,10 @@ export function lateDutyCutMinutes(rules: PayRules, lateMinutes: number, dutyMin
         }
         case "shareOfDay":
             return Math.min(dutyMinutes, Math.round((dutyMinutes * rules.lateSharePct) / 100));
+        case "pay":
+            // Days of duty, not rupees: every penalty goes to pending duty now
+            // (owner, 2026-10-13), and a day of duty × the hourly rate is a day's pay.
+            return Math.round(dutyMinutes * rules.latePenaltyDays);
         default:
             return 0;
     }
@@ -196,9 +200,9 @@ export function lateDutyCutMinutes(rules: PayRules, lateMinutes: number, dutyMin
  * their shape without dragging Prisma into the browser bundle.
  */
 export interface AttendanceEffect {
-    /** Extra minutes that survived the netting — paid at `overtimeRate`. */
+    /** Each day's overtime after pending duty was made up — paid at `overtimeRate`. */
     payableMinutes: number;
-    /** Minutes still owed after the netting — cut at `shortHoursRate`. */
+    /** Duty still pending at the end of the period — cut at `shortHoursRate`. */
     owedMinutes: number;
     /** Minutes worked on their own weekly off, and on a listed shop holiday. */
     weeklyOffMinutes: number;
@@ -216,7 +220,75 @@ export const EMPTY_ATTENDANCE_EFFECT: AttendanceEffect = {
     lateDays: 0, chargedLateDays: 0, unaskedAbsentDays: 0,
 };
 
-/** Days of basic a single charged late day costs. Only the "pay" style charges. */
-export function latePayCutDays(rules: PayRules): number {
-    return rules.latePenaltyStyle === "pay" ? rules.latePenaltyDays : 0;
+/**
+ * PENDING DUTY — the day-by-day ledger. Owner, 2026-10-13: *"day: add a row
+ * about previous short duty that need to recover; after no previous duty due,
+ * extra counted to overtime @ overtime rate for the day"* and *"all penalties
+ * go to pending, show breakup."*
+ *
+ * Walked oldest day first. A day's short duty and every penalty it earns (late,
+ * absence) join the pending list. A day's extra hours make up the pending list
+ * oldest item first; only what is left after nothing is pending is overtime, and
+ * it is overtime on THAT day. A short that comes after earned overtime does not
+ * take it back — it waits for a later extra, or is cut at month end.
+ *
+ * Today's own late penalty joins the list before today's extra is used, so a
+ * man who comes late and stays on makes the penalty up before earning overtime.
+ */
+export type PendingKind = "short" | "late" | "absent";
+
+export interface PendingItem {
+    /** The day the duty fell pending on. */
+    date: string;
+    kind: PendingKind;
+    minutes: number;
+}
+
+export interface PendingDayInput {
+    date: string;
+    /** Minutes worked beyond the day's duty. */
+    extra: number;
+    /** What the day adds to pending — its short, its penalties. */
+    adds: PendingItem[];
+}
+
+export interface PendingDay {
+    date: string;
+    /** Carried in from earlier days, still pending, with its breakup. */
+    before: PendingItem[];
+    /** What this day added. */
+    added: PendingItem[];
+    /** Extra minutes that went to make pending duty up. */
+    madeUp: number;
+    /** Extra minutes left once nothing was pending — paid at the overtime rate. */
+    overtime: number;
+    /** Still pending at the end of the day. */
+    after: PendingItem[];
+}
+
+export const pendingTotal = (items: readonly PendingItem[]) => items.reduce((t, i) => t + i.minutes, 0);
+
+export function walkPendingDuty(days: readonly PendingDayInput[]): PendingDay[] {
+    let pending: PendingItem[] = [];
+    const out: PendingDay[] = [];
+    for (const d of [...days].sort((a, b) => a.date.localeCompare(b.date))) {
+        const before = pending;
+        const added = d.adds.filter((a) => a.minutes > 0);
+        // Today's late penalty is due before today's extra hours are counted.
+        const late = added.filter((a) => a.kind === "late");
+        const rest = added.filter((a) => a.kind !== "late");
+        let queue = [...before, ...late].map((i) => ({ ...i }));
+        let extra = Math.max(0, d.extra);
+        let madeUp = 0;
+        while (extra > 0 && queue.length) {
+            const take = Math.min(extra, queue[0].minutes);
+            queue[0].minutes -= take;
+            extra -= take;
+            madeUp += take;
+            if (queue[0].minutes === 0) queue = queue.slice(1);
+        }
+        pending = [...queue, ...rest];
+        out.push({ date: d.date, before, added, madeUp, overtime: extra, after: pending });
+    }
+    return out;
 }
