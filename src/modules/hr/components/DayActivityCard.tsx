@@ -197,7 +197,10 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                         </tr>
                     </thead>
                     <tbody>
-                        {account.lines.map((l) => <AccountRow key={l.key} line={l} />)}
+                        {/* A line with nothing in it is hidden — normal duty always stays. */}
+                        {account.lines
+                            .filter((l) => l.key === "duty" || l.minutes > 0 || l.accounted !== 0)
+                            .map((l) => <AccountRow key={l.key} line={l} />)}
                     </tbody>
                     <tfoot>
                         <tr className="border-t border-border font-medium text-foreground">
@@ -224,9 +227,9 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                                 </tr>
                             </thead>
                             <tbody>
-                                <BalanceRow label="Earlier short" minutes={account.carry.before} note={account.carry.beforeNote} />
-                                <BalanceRow label="− Recovered today" minutes={account.carry.recovered} note={account.carry.recovered > 0 ? "by today's extra" : null} />
-                                <BalanceRow label="+ Today's short" minutes={account.carry.minutes} note={account.carry.note} warn />
+                                {account.carry.before > 0 && <BalanceRow label="Earlier short" minutes={account.carry.before} note={account.carry.beforeNote} />}
+                                {account.carry.recovered > 0 && <BalanceRow label="− Recovered today" minutes={account.carry.recovered} note="by today's extra" />}
+                                {account.carry.minutes > 0 && <BalanceRow label="+ Today's short" minutes={account.carry.minutes} note={account.carry.note} warn />}
                             </tbody>
                             <tfoot>
                                 <BalanceRow label="= Short carried forward" minutes={account.carry.after} strong warn
