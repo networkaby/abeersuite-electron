@@ -19,7 +19,6 @@ import {
     COUNTER_ENV_CONSTANTS,
     COUNTER_ENV_FILE,
     COUNTER_ENV_REQUIRED,
-    PLACEHOLDER_SECRET_VALUES,
     counterEnvCopiedFor,
     parseEnvFile,
 } from "./counterEnv";
@@ -96,11 +95,11 @@ function main(): void {
         written.set(key, value);
     }
 
-    // The office's session secret ships ONLY with a v_live build. Every other build
-    // keeps the per-machine secret `ensureAuthSecret` generates: its cookies never leave
-    // 127.0.0.1, so there is nothing to share and nothing worth putting in an installer.
-    if (written.get("WRITE_MODE") !== "v_live" && written.delete("AUTH_SECRET")) {
-        console.log("[generate-counter-env] AUTH_SECRET withheld — not a v_live build; each machine generates its own.");
+    // The office's session secret never ships. Every machine generates its own
+    // (`ensureAuthSecret`): its cookies never leave 127.0.0.1, and a v_live till signs
+    // in at the office with its own counter key instead (counter/relayKey.ts).
+    if (written.delete("AUTH_SECRET")) {
+        console.log("[generate-counter-env] AUTH_SECRET withheld — each machine generates its own.");
     }
 
     const missingRequired = COUNTER_ENV_REQUIRED.filter((key) => !written.has(key));
@@ -117,9 +116,7 @@ function main(): void {
         process.exit(1);
     }
 
-    // A v_live till relays its writes to the office and signs in there with the
-    // office's own session secret, so both must be present and the secret must be a
-    // real one — the repo's placeholder would let anyone forge a staff session.
+    // A v_live till relays its writes to the office, so it needs somewhere safe to send them.
     if (written.get("WRITE_MODE") === "v_live") {
         const problems: string[] = [];
         const apiUrl = written.get("WRITE_API_URL");
@@ -128,13 +125,7 @@ function main(): void {
         } else if (!relayTargetIsSafe(apiUrl)) {
             // Every relayed write carries the staff session cookie; across the WAN that
             // must be https. Plain http is allowed only for an office on this machine.
-            problems.push("WRITE_API_URL must be https:// (http:// only for localhost) — the relay forwards the session cookie");
-        }
-        const secret = written.get("AUTH_SECRET") ?? "";
-        if (!secret) {
-            problems.push("AUTH_SECRET is not set — every relayed write would be refused with 401");
-        } else if (PLACEHOLDER_SECRET_VALUES.has(secret) || secret.length < 32) {
-            problems.push("AUTH_SECRET is a placeholder or too short — set it to the office deployment's real secret");
+            problems.push("WRITE_API_URL must be https:// (http:// only for localhost) — the relay sends this counter's key");
         }
         if (problems.length > 0) {
             console.error(

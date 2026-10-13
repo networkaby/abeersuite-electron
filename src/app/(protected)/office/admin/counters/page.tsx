@@ -11,7 +11,7 @@ import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import {
-    Plus, Pencil, Trash2, X, Check, Monitor, Building2, ToggleLeft, ToggleRight, Lock, Unlock, Phone,
+    Plus, Pencil, Trash2, X, Check, Monitor, Building2, ToggleLeft, ToggleRight, Lock, Unlock, Phone, KeyRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,6 +88,8 @@ type Counter = {
     boundDeviceId: string | null;
     boundDeviceLabel: string | null;
     boundAt: string | null;
+    officeKeyIssuedAt: string | null;
+    officeKeyRevokedAt: string | null;
 };
 
 const EMPTY_FORM = { branchId: "", counterNumber: "", name: "" };
@@ -342,6 +344,19 @@ export default function CountersAdminPage() {
             void load();
         } catch (e: unknown) {
             toast.error(axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error ?? "Failed to release counter" : "Failed to release counter");
+        }
+    };
+
+    // The PC's own key for the office (v_live relay). Revoked, its saves run on the PC
+    // and sync up later; it cannot mint a new key until allowed again or re-bound.
+    const handleOfficeKey = async (c: Counter, revoke: boolean) => {
+        if (revoke && !(await confirmAction({ title: `Revoke the office key of "${c.name}"?`, body: `The PC stays signed in and keeps billing, but its saves stop going straight to the office — they are saved on the PC and sync up afterwards. Allow it again here when the PC is trusted.`, confirmLabel: "Revoke" }))) return;
+        try {
+            await axios.patch(`/api/pos/counters/${c.id}`, { revokeOfficeKey: revoke });
+            toast.success(revoke ? "Office key revoked" : "Office key allowed — the PC makes a new one on its next save");
+            void load();
+        } catch (e: unknown) {
+            toast.error(axios.isAxiosError(e) ? (e.response?.data as { error?: string })?.error ?? "Failed to update the office key" : "Failed to update the office key");
         }
     };
 
@@ -666,6 +681,15 @@ export default function CountersAdminPage() {
                                                                 <Lock size={11} /> Locked to {c.boundDeviceLabel ?? "a computer"}
                                                             </span>
                                                         )}
+                                                        {c.officeKeyRevokedAt ? (
+                                                            <span className="flex items-center gap-1 text-destructive">
+                                                                <KeyRound size={11} /> Office key revoked
+                                                            </span>
+                                                        ) : c.officeKeyIssuedAt && (
+                                                            <span className="flex items-center gap-1" title={`Renewed every 30 days; last ${new Date(c.officeKeyIssuedAt).toLocaleDateString()}`}>
+                                                                <KeyRound size={11} /> Office key
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     {/* Compact summary so the operator can see what's wired
                                                         without opening the edit form. CASH is always there. */}
@@ -683,6 +707,11 @@ export default function CountersAdminPage() {
                                                         {c.isActive ? "Active" : "Inactive"}
                                                     </Badge>
                                                     <div className="flex gap-1">
+                                                        {(c.officeKeyIssuedAt || c.officeKeyRevokedAt) && (
+                                                            <Button variant="outline" size="icon-sm" title={c.officeKeyRevokedAt ? "Allow office key" : "Revoke office key"} onClick={() => handleOfficeKey(c, !c.officeKeyRevokedAt)}>
+                                                                <KeyRound size={14} />
+                                                            </Button>
+                                                        )}
                                                         {c.boundDeviceId && (
                                                             <Button variant="outline" size="icon-sm" title="Release device lock" onClick={() => handleRelease(c)}>
                                                                 <Unlock size={14} />

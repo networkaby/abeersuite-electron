@@ -143,9 +143,9 @@ async function resolveSuperAdminId(prisma: PrismaClient, u: StaffAuthUser): Prom
  * pulls: a second call site with a thinner `include` would type-check and then
  * hand out a session with no permissions in it.
  */
-async function findStaffUser(prisma: PrismaClient, email: string) {
+async function findStaffUser(prisma: PrismaClient, email: string | { id: number }) {
     return prisma.user.findUnique({
-        where: { email },
+        where: typeof email === "string" ? { email } : email,
         include: {
             userRole: {
                 include: {
@@ -478,5 +478,19 @@ export async function authorizeStaffPin(
 
     await stampCounterPinLogin(prisma, user.id, "pin");
     await stampAttendanceIn(prisma, user.id, counterId);
+    return buildStaffAuthUser(prisma, user);
+}
+
+/**
+ * The staff session of a person a till's counter key speaks for (`counterRelayAuth.ts`).
+ *
+ * No password and no PIN: the till already proved who this is to itself, and the
+ * counter key proves the till. The authority is rebuilt from the database here, by
+ * the same `buildStaffAuthUser`, so a role change counts at the office on the very
+ * next save. Null for an unknown id or someone HR has marked as left.
+ */
+export async function staffAuthUserById(prisma: PrismaClient, id: number): Promise<StaffAuthUser | null> {
+    const user = await findStaffUser(prisma, { id });
+    if (!user || staffHasLeft(user.staffProfile)) return null;
     return buildStaffAuthUser(prisma, user);
 }

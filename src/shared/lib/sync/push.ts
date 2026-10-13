@@ -121,6 +121,12 @@ async function reconcileCounterBinding(
     payload: Record<string, unknown>,
     where: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+    // The office key columns are written only straight to Supabase (relayKey.ts, the
+    // bind / release routes). A replayed row carries the replica's older copy, which
+    // would roll a renewal back or lift a revoke — so a push never carries them.
+    const { relayKeyHash: _h, relayKeyPrevHash: _p, relayKeyIssuedAt: _i, relayKeyRevokedAt: _r, ...rest } = payload;
+    void _h; void _p; void _i; void _r;
+    payload = rest;
     const server = await (prismaLive as unknown as {
         posCounter: { findUnique: (a: unknown) => Promise<{ boundDeviceId: string | null; boundDeviceLabel: string | null; boundAt: Date | null; releasedAt: Date | null } | null> };
     }).posCounter.findUnique({

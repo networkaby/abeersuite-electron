@@ -10,11 +10,12 @@
  * its replica. The browser never knows: it still posts to 127.0.0.1, so there is no
  * CORS, no cookie problem and no UI change. `src/proxy.ts` calls `relayWrite()`.
  *
- * The office authenticates the relayed request from the SAME session cookie. That
- * works because the cookie name is pinned in `src/auth.ts` — Auth.js derives the
- * token's encryption key from the secret AND the cookie name — and `counter.env`
- * carries the office's `AUTH_SECRET`. The Cookie header is forwarded verbatim,
- * chunked cookies included.
+ * The office authenticates the relayed request by this COUNTER, not by the cashier's
+ * cookie: `Authorization: Counter <id>.<key>` (`relayKey.ts`) plus the user id of the
+ * till's own, still-valid session. The cookie never leaves the till — it is signed
+ * with this machine's own secret and means nothing at the office. The office half is
+ * `auth/counterRelayAuth.ts`. A till with no valid session, or no key, does not relay:
+ * the request runs here and the local route answers as it would anyway.
  *
  * ── The duplicate-bill rule — the one hard part ──────────────────────────────
  * If the office commits a sale and the response is then lost, running the request
@@ -28,9 +29,10 @@
  * Two exceptions, both because the status did NOT come from the app: a 502–504 with
  * no JSON body is Vercel's gateway speaking (a function cut off mid-flight may already
  * have committed), so it gets the same "may already be saved" answer; and a bare 401
- * — "Unauthorized" without a `code` — means the office could not decrypt this till's
- * cookie at all, a configuration fault that runs locally and pauses the relay, while
- * a `SESSION_REVOKED` 401 is the app's verdict and passes through like any other.
+ * — "Unauthorized" without a `code`, or `COUNTER_KEY_REFUSED` — means the office did
+ * not accept this till at all (an office deployment older than the counter key, or a
+ * revoked key), which runs locally and pauses the relay, while a `SESSION_REVOKED`
+ * 401 is the app's verdict and passes through like any other.
  * Each relay opens its own connection (no keep-alive) so a stale pooled socket can
  * never turn "the server closed an idle connection" into an uncertain save.
  *
@@ -71,6 +73,10 @@ import { isThisPcReleased, isThisPcWithoutCounter, readCounterSetup } from "@/sh
 import { modelsForTopics, topicsForApiPath } from "@/shared/lib/realtime/topics";
 import { RELAY_ACTIVE, RELAY_HEADER, contentLengthOf, decideRelay } from "./relayPolicy";
 import { pullAndWait } from "./replicaPull";
+import { getToken } from "next-auth/jwt";
+import { isStaffTokenRevoked, SESSION_COOKIE_NAME } from "@/auth";
+import { ACTING_USER_HEADER, COUNTER_KEY_REFUSED } from "@/shared/lib/auth/counterRelayAuth";
+import { counterAuthorization, forgetCounterKey } from "./relayKey";
 
 // ── Tuning ───────────────────────────────────────────────────────────────────
 
@@ -82,7 +88,7 @@ const RESPONSE_TIMEOUT_MS = 30_000;
  *  connect timeout on every bill of an office outage. */
 const BREAKER_MS = 15_000;
 /** After the office refuses this till's sign-in (401), skip relaying for this long:
- *  a secret or cookie-name mismatch is a configuration fault that a retry per bill
+ *  a revoked key or an office older than counter keys is not something a retry per bill
  *  cannot fix, and each attempt would otherwise bounce the cashier to the login page. */
 const AUTH_BREAKER_MS = 60_000;
 
@@ -95,6 +101,9 @@ const UNCERTAIN_MESSAGE =
  *  office runs `trustHost: true` and would otherwise compute its own base URL from a
  *  counter's loopback address. */
 const STRIP_REQUEST = new Set([
+    // This till's own sign-in: its cookie is signed with this machine's secret, and
+    // the office is signed in to with the counter key instead.
+    "cookie", "authorization", "x-abeer-acting-user",
     "host", "connection", "keep-alive", "transfer-encoding", "content-length", "expect",
     "upgrade", "accept-encoding",
     "x-forwarded-host", "x-forwarded-proto", "x-forwarded-for", "x-forwarded-port", "x-real-ip",
@@ -109,11 +118,13 @@ const STRIP_RESPONSE = new Set([
     "strict-transport-security", "alt-svc",
 ]);
 
-function outgoingHeaders(incoming: Headers, bodyLength: number): Record<string, string> {
+function outgoingHeaders(incoming: Headers, bodyLength: number, signIn: OfficeSignIn): Record<string, string> {
     const out: Record<string, string> = {};
     incoming.forEach((value, key) => {
         if (!STRIP_REQUEST.has(key.toLowerCase())) out[key] = value;
     });
+    out.authorization = signIn.authorization;
+    out[ACTING_USER_HEADER] = signIn.userId;
     // Plain bodies both ways: a decoded response is simpler to hand back than a
     // compressed one, and these are small JSON payloads.
     out["accept-encoding"] = "identity";
@@ -193,6 +204,40 @@ function toResponse(reply: OfficeReply): NextResponse {
     return new NextResponse(bytes, { status: reply.status, headers });
 }
 
+// ── Signing in at the office ─────────────────────────────────────────────────
+
+type OfficeSignIn = { authorization: string; userId: string };
+
+/** The counter key plus the person whose till session made this request — or null
+ *  when there is no valid session here (the local route will refuse it) or no key
+ *  (revoked, or never registered while the database was out of reach). */
+async function officeSignIn(req: NextRequest): Promise<OfficeSignIn | null> {
+    const token = await getToken({
+        req,
+        secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+        cookieName: SESSION_COOKIE_NAME,
+        salt: SESSION_COOKIE_NAME,
+    }).catch(() => null);
+    if (!token?.id || token.kind === "customer" || (await isStaffTokenRevoked(token))) return null;
+    // The env super admin's authority lives in env, not the database, so the office
+    // could not rebuild it — its saves run here.
+    const permissions = Array.isArray(token.permissions) ? token.permissions : [];
+    if (permissions.includes("admin:bypass") && token.roleLabel === "Super Admin") return null;
+    const authorization = await counterAuthorization();
+    return authorization ? { authorization, userId: String(token.id) } : null;
+}
+
+/** The office's answer code on a 401, or null when it carries none. */
+function replyCode(reply: OfficeReply): string | null {
+    if (!bodyIsJson(reply)) return null;
+    try {
+        const body = JSON.parse(reply.body.toString("utf8")) as { code?: unknown };
+        return typeof body.code === "string" ? body.code : null;
+    } catch {
+        return null;
+    }
+}
+
 // ── Entry point ──────────────────────────────────────────────────────────────
 
 let breakerUntil = 0;
@@ -202,16 +247,10 @@ function bodyIsJson(reply: OfficeReply): boolean {
     return typeof type === "string" && /^application\/json\b/i.test(type);
 }
 
-/** `requireAuth()` marks a revoked session with `code: "SESSION_REVOKED"`; a 401
- *  without it is the generic "Unauthorized" — the cookie did not decode at all. */
+/** `requireAuth()` (and the counter-key check, for someone HR marked as left) marks
+ *  a dead session with `code: "SESSION_REVOKED"`. */
 function isRevokedSession(reply: OfficeReply): boolean {
-    if (!bodyIsJson(reply)) return false;
-    try {
-        const body = JSON.parse(reply.body.toString("utf8")) as { code?: unknown };
-        return body.code === "SESSION_REVOKED";
-    } catch {
-        return false;
-    }
+    return replyCode(reply) === "SESSION_REVOKED";
 }
 
 /**
@@ -234,6 +273,8 @@ export async function relayWrite(req: NextRequest): Promise<Response | null> {
     if (!decision.relay) return null;
     if (Date.now() < breakerUntil) return null;
     if (isThisPcWithoutCounter() || (await isThisPcReleased())) return null;
+    const signIn = await officeSignIn(req);
+    if (!signIn) return null;
 
     const target = new URL(pathname + req.nextUrl.search, WRITE_API_URL!);
     // Reading the body here does not starve the local route on fallback: Next tees
@@ -242,7 +283,7 @@ export async function relayWrite(req: NextRequest): Promise<Response | null> {
 
     let reply: OfficeReply;
     try {
-        reply = await forward(target, req.method, outgoingHeaders(req.headers, body?.length ?? 0), body);
+        reply = await forward(target, req.method, outgoingHeaders(req.headers, body?.length ?? 0, signIn), body);
     } catch (err) {
         const code = err instanceof RelayError ? err.code : String(err);
         const sent = err instanceof RelayError ? err.sent : true;
@@ -258,15 +299,17 @@ export async function relayWrite(req: NextRequest): Promise<Response | null> {
     }
 
     if (reply.status === 401 && !isRevokedSession(reply)) {
-        // A bare 401 means the office could not decrypt the cookie this till minted:
-        // the secrets or the cookie name differ. (A revoked session says so with a
-        // `code`, and is passed through below so the browser signs the cashier out.)
+        // A bare 401 or COUNTER_KEY_REFUSED: the office did not accept this till — an
+        // office deployment older than the counter key (it ignores the key and sees no
+        // cookie), or a revoked key. (A revoked session says so with its own `code`,
+        // and is passed through below so the browser signs the cashier out.)
         // Nothing was written — requireAuth() runs before any work — so the request
         // runs here, where the local session check still applies, and the till keeps
         // billing instead of looping through the login page. Loud in the log, because
         // it means every write on this till is silently taking the slow path.
         breakerUntil = Date.now() + AUTH_BREAKER_MS;
-        console.error(`[writeRelay] office could not read this till's session cookie (401) on ${req.method} ${pathname} — check AUTH_SECRET and a stray per-machine .env; relay paused ${AUTH_BREAKER_MS / 1000}s.`);
+        if (replyCode(reply) === COUNTER_KEY_REFUSED) forgetCounterKey();
+        console.error(`[writeRelay] office did not accept this counter (401 ${replyCode(reply) ?? "no code"}) on ${req.method} ${pathname} — key revoked, or the office deployment predates counter keys; relay paused ${AUTH_BREAKER_MS / 1000}s.`);
         return null;
     }
     if (reply.status === 401) {

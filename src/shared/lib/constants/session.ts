@@ -28,6 +28,17 @@
  *  trading day sits quiet for six. It lapses every night and never mid-shift. */
 export const SESSION_IDLE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
+/** Re-issue the login cookie at most this often (seconds). It used to be every
+ *  request, and a request still in flight at Sign out put a fresh cookie back — the
+ *  till signed itself in again. The 6-hour clock above still rolls with use; it just
+ *  moves in 5-minute steps. */
+export const SESSION_RENEW_EVERY_S = 5 * 60;
+
+/** A till renews its counter key (the office sign-in for the v_live relay,
+ *  counter/relayKey.ts) this often. The key never expires on its own — only an
+ *  admin's revoke ends it; renewal just limits how long a copied key stays useful. */
+export const COUNTER_KEY_RENEW_MS = 30 * 24 * 60 * 60 * 1000;
+
 /** The same span in words, for the line shown to whoever was just signed out. */
 export const SESSION_IDLE_LABEL = `${SESSION_IDLE_MAX_AGE_MS / (60 * 60 * 1000)} hours`;
 

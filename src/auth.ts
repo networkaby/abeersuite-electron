@@ -1,11 +1,12 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { authorizeStaffCredentials } from "@/shared/lib/auth/authorizeStaff";
 import { authorizePortalCredentials } from "@/shared/lib/auth/authorizePortal";
 import { IS_PUBLIC } from "@/shared/lib/appMode";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
-import { DEFAULT_IDLE_LIMIT_MINUTES, SESSION_IDLE_MAX_AGE_MS } from "@/shared/lib/constants/session";
+import { DEFAULT_IDLE_LIMIT_MINUTES, SESSION_IDLE_MAX_AGE_MS, SESSION_RENEW_EVERY_S } from "@/shared/lib/constants/session";
+import { localSignOutAt, markLocalSignOut } from "@/shared/lib/auth/localSignOut";
 
 /**
  * One session-cookie NAME on every deployment, office and counters alike.
@@ -40,8 +41,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
      * for anyone who did not sign out. On live, user 38 last authenticated on 19 Sep
      * and was still validly signed in on the 21st.
      *
-     * 6 hours, measured since LAST USE (`updateAge: 0` re-issues the token on every
-     * request, re-signing it without reading the database). Checked against the
+     * 6 hours, measured since LAST USE (re-issued at most every 5 minutes —
+     * `SESSION_RENEW_EVERY_S`; it was every request, and a request still in flight
+     * at Sign out put a fresh cookie back, the "signs itself in again" blink). Checked against the
      * shop's own hours rather than picked as a round figure: tills open 10:30–12:20
      * and close 20:30–22:18, so the shortest night is about 12 hours — twice this —
      * while nothing inside a trading day sits quiet for 6. It therefore lapses every
@@ -55,7 +57,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     session: {
         strategy:  "jwt",
         maxAge:    SESSION_IDLE_MAX_AGE_MS / 1000,   // seconds
-        updateAge: 0,                                 // refresh on every use
+        updateAge: SESSION_RENEW_EVERY_S,             // renew at most this often
     },
     cookies: {
         sessionToken: {
@@ -69,75 +71,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     callbacks: {
         async jwt({ token, user }) {
             if (user) {
-                token.loginAt = Date.now();   // for server-side revocation
-                token.id = user.id;
-                token.role = "role" in user && typeof user.role === "string" ? user.role : "";
-                token.roles = "roles" in user && Array.isArray(user.roles) ? (user.roles as string[]) : [];
-                token.permissions =
-                    "permissions" in user && Array.isArray(user.permissions)
-                        ? (user.permissions as string[])
-                        : [];
-                token.rank = "rank" in user && typeof user.rank === "number" ? user.rank : 0;
-                // Carried on the token so the client's idle timer knows this person's
-                // own limit from the first render, with no request of its own.
-                token.idleLimitMinutes =
-                    "idleLimitMinutes" in user && typeof user.idleLimitMinutes === "number"
-                        ? user.idleLimitMinutes
-                        : DEFAULT_IDLE_LIMIT_MINUTES;
-                token.scope = "scope" in user && typeof user.scope === "string" ? user.scope : "OWN";
-                token.roleLabel =
-                    "roleLabel" in user && typeof user.roleLabel === "string" ? user.roleLabel : undefined;
-                token.roleColor =
-                    "roleColor" in user && typeof user.roleColor === "string" ? user.roleColor : undefined;
-                token.departmentIds =
-                    "departmentIds" in user && Array.isArray(user.departmentIds)
-                        ? (user.departmentIds as string[])
-                        : [];
-                token.branchIds =
-                    "branchIds" in user && Array.isArray(user.branchIds) ? (user.branchIds as string[]) : [];
-                token.title = "title" in user ? (user.title as string | undefined) : undefined;
-                // Every Position they hold, for the counter's sign-in card. Two short
-                // strings per seat, and almost everyone holds one.
-                token.seats = "seats" in user && Array.isArray(user.seats) ? user.seats : [];
-                token.avatarUrl = "avatarUrl" in user ? (user.avatarUrl as string | undefined) : undefined;
-                token.kind = "kind" in user && user.kind === "customer" ? "customer" : "staff";
-                // Phone app only (auth/phoneOnly.ts) — proxy.ts reads it off the token.
-                if ("phoneOnly" in user && user.phoneOnly === true) token.phoneOnly = true;
-                token.customerId =
-                    "customerId" in user && typeof user.customerId === "string" ? user.customerId : undefined;
-                token.activeAccountId =
-                    "activeAccountId" in user && typeof user.activeAccountId === "string"
-                        ? user.activeAccountId
-                        : undefined;
-                token.activeAccountType =
-                    "activeAccountType" in user && (user.activeAccountType === "personal" || user.activeAccountType === "company")
-                        ? user.activeAccountType
-                        : undefined;
+                fillTokenFromUser(token, user);
                 return token;
             }
             // ── Server-side revocation (staff only) ──────────────────────────
             // On every subsequent request, reject a token whose login predates the
-            // user's `tokensValidFrom` (bumped on sign-out). This is what makes
-            // "logout" actually invalidate a stateless JWT server-side — so a
-            // logged-out till can't keep transacting.
-            if (token.id && token.kind !== "customer") {
-                try {
-                    const u = await prisma.user.findUnique({
-                        where: { id: Number(token.id) },
-                        select: { tokensValidFrom: true },
-                    });
-                    const validFrom = u?.tokensValidFrom?.getTime();
-                    const loginAt = typeof token.loginAt === "number" ? token.loginAt : 0;
-                    // Need a loginAt to compare — tokens minted before this feature
-                    // have none, so they're left alone (a fresh login stamps it).
-                    if (validFrom && loginAt && loginAt < validFrom) {
-                        token.revoked = true;
-                    }
-                } catch {
-                    // DB hiccup → fail OPEN so a transient outage can't mass-logout
-                    // every cashier. prisma's read-retry makes this rare.
-                }
-            }
+            // user's `tokensValidFrom` (an admin's "end every login") or, on a till,
+            // this till's own sign-out mark — see `isStaffTokenRevoked`.
+            if (await isStaffTokenRevoked(token)) token.revoked = true;
             return token;
         },
         async session({ session, token }) {
@@ -211,48 +152,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         },
     },
     events: {
-        // Sign-out bumps tokensValidFrom → every existing token for this user is
-        // rejected on its next request (logout = log out of every tab/device).
-        //
-        // Authoritative on purpose: on a counter the ordinary client writes to the
-        // replica and queues the row for push, and `User` is a model a counter must
-        // never push — so the row dead-lettered and the shell showed "Sync error (1)"
-        // after every sign-out. Revocation is best-effort anyway; offline it is skipped.
+        // Sign-out ends THIS login only (owner, 2026-10-13). On a till it writes the
+        // till's own mark, so a cookie renewed by a request already in flight is
+        // refused here, and nothing else — the office site, other tills, the till's
+        // counter key — is touched. On the office site clearing the cookie is the
+        // whole of it. Ending every login of a person is an admin act
+        // (`revokeSessions.ts` → `User.tokensValidFrom`), no longer a side effect of
+        // pressing Sign out.
         async signOut(message) {
             const token = "token" in message ? message.token : null;
-            const id = token?.id;
-            if (!id || token?.kind === "customer") return;
-            const loginAt = typeof token.loginAt === "number" ? token.loginAt : 0;
-            let stamped: number;
-            try {
-                ({ count: stamped } = await prismaAuthoritative.user.updateMany({
-                    where: {
-                        id: Number(id),
-                        // Only a login that is still valid ends the others — the mirror
-                        // of the jwt check above. Signing out of one that was already
-                        // revoked (the browser does exactly that on SESSION_REVOKED)
-                        // would otherwise stamp "now" and throw the person out of the
-                        // fresh login they had just made on another device. A token
-                        // with no loginAt predates the check and stamps as before.
-                        ...(loginAt ? { OR: [{ tokensValidFrom: null }, { tokensValidFrom: { lte: new Date(loginAt) } }] } : {}),
-                    },
-                    data: { tokensValidFrom: new Date() },
-                }));
-            } catch {
-                return; // best-effort — don't block sign-out on a DB hiccup, or offline
-            }
-            // The stamp went to Supabase, but a counter checks sign-ins against its
-            // replica, which would go on accepting this very token until the worker
-            // next pulls `User`. A page request already in flight when Sign out
-            // cleared the cookie puts a renewed one back (`updateAge: 0`), and that
-            // cookie would open the app again. Pulled now, it is refused here too.
-            // Nothing stamped means the session was already dead in Supabase — the
-            // relay pulled `User` when the office said so — so there is nothing new
-            // to fetch, and the revoked-session sign-out is not held for it.
-            if (IS_COUNTER_PC && stamped > 0) {
-                const { pullAndWait } = await import("@/shared/lib/counter/replicaPull");
-                await pullAndWait(["User"]);
-            }
+            if (!token?.id || token.kind === "customer") return;
+            if (IS_COUNTER_PC) markLocalSignOut(String(token.id));
         },
     },
     providers: [
@@ -353,3 +263,84 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }),
     ],
 });
+
+/**
+ * Everything a staff or customer sign-in puts on the token. One copy, because the
+ * office mints the same token for a till's counter key (`counterRelayAuth.ts`) — a
+ * second copy would drift and hand relayed saves a different authority.
+ */
+export function fillTokenFromUser(token: Record<string, unknown>, user: { id?: string | null }): void {
+    token.loginAt = Date.now();   // for server-side revocation
+    token.id = user.id;
+    token.role = "role" in user && typeof user.role === "string" ? user.role : "";
+    token.roles = "roles" in user && Array.isArray(user.roles) ? (user.roles as string[]) : [];
+    token.permissions =
+        "permissions" in user && Array.isArray(user.permissions)
+            ? (user.permissions as string[])
+            : [];
+    token.rank = "rank" in user && typeof user.rank === "number" ? user.rank : 0;
+    // Carried on the token so the client's idle timer knows this person's
+    // own limit from the first render, with no request of its own.
+    token.idleLimitMinutes =
+        "idleLimitMinutes" in user && typeof user.idleLimitMinutes === "number"
+            ? user.idleLimitMinutes
+            : DEFAULT_IDLE_LIMIT_MINUTES;
+    token.scope = "scope" in user && typeof user.scope === "string" ? user.scope : "OWN";
+    token.roleLabel =
+        "roleLabel" in user && typeof user.roleLabel === "string" ? user.roleLabel : undefined;
+    token.roleColor =
+        "roleColor" in user && typeof user.roleColor === "string" ? user.roleColor : undefined;
+    token.departmentIds =
+        "departmentIds" in user && Array.isArray(user.departmentIds)
+            ? (user.departmentIds as string[])
+            : [];
+    token.branchIds =
+        "branchIds" in user && Array.isArray(user.branchIds) ? (user.branchIds as string[]) : [];
+    token.title = "title" in user ? (user.title as string | undefined) : undefined;
+    // Every Position they hold, for the counter's sign-in card. Two short
+    // strings per seat, and almost everyone holds one.
+    token.seats = "seats" in user && Array.isArray(user.seats) ? user.seats : [];
+    token.avatarUrl = "avatarUrl" in user ? (user.avatarUrl as string | undefined) : undefined;
+    token.kind = "kind" in user && user.kind === "customer" ? "customer" : "staff";
+    // Phone app only (auth/phoneOnly.ts) — proxy.ts reads it off the token.
+    if ("phoneOnly" in user && user.phoneOnly === true) token.phoneOnly = true;
+    token.customerId =
+        "customerId" in user && typeof user.customerId === "string" ? user.customerId : undefined;
+    token.activeAccountId =
+        "activeAccountId" in user && typeof user.activeAccountId === "string"
+            ? user.activeAccountId
+            : undefined;
+    token.activeAccountType =
+        "activeAccountType" in user && (user.activeAccountType === "personal" || user.activeAccountType === "company")
+            ? user.activeAccountType
+            : undefined;
+}
+
+/**
+ * Is this staff token dead? Two stamps can end it:
+ *
+ *   • `User.tokensValidFrom` — "end every login": a role / position / permission edit,
+ *     a password change (`revokeSessions.ts`). Everywhere, office and tills alike.
+ *   • On a till, this till's own sign-out mark (`localSignOut.ts`). A Sign out on one
+ *     till ends that till's login and nothing else (owner, 2026-10-13).
+ *
+ * Tokens minted before `loginAt` existed are left alone. A DB hiccup fails OPEN so a
+ * transient outage cannot mass-logout every cashier; prisma's read-retry makes it rare.
+ * Shared with the write relay, which must not speak for a login the till has ended.
+ */
+export async function isStaffTokenRevoked(token: Record<string, unknown>): Promise<boolean> {
+    if (!token.id || token.kind === "customer") return false;
+    const loginAt = typeof token.loginAt === "number" ? token.loginAt : 0;
+    if (!loginAt) return false;
+    if (IS_COUNTER_PC && loginAt < localSignOutAt(String(token.id))) return true;
+    try {
+        const u = await prisma.user.findUnique({
+            where: { id: Number(token.id) },
+            select: { tokensValidFrom: true },
+        });
+        const validFrom = u?.tokensValidFrom?.getTime();
+        return !!validFrom && loginAt < validFrom;
+    } catch {
+        return false;
+    }
+}

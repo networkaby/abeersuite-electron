@@ -153,13 +153,13 @@ function loadCounterEnv(): void {
 }
 
 /**
- * Session signing key: the baked one when the build ships it, else one per machine.
+ * Session signing key: one per machine.
  *
- * A build carries `AUTH_SECRET` in counter.env only for `WRITE_MODE=v_live`, where the
- * till relays its writes to the office and must present a cookie the office can decrypt
- * (see scripts/counterEnv.ts). Every other build ships none, and this generates one:
- * that counter's Next server serves only http://127.0.0.1, so its cookies never cross
- * machines, and a secret read off one such PC forges nothing on another. A placeholder
+ * No build ships `AUTH_SECRET` (scripts/counterEnv.ts), so this generates one: the
+ * counter's Next server serves only http://127.0.0.1, so its cookies never cross
+ * machines, and a secret read off one PC forges nothing on another or at the office. A
+ * `WRITE_MODE=v_live` till signs in at the office with its counter key instead
+ * (src/shared/lib/counter/relayKey.ts). A placeholder
  * from .env.example counts as absent — it would sign real cookies with a published string.
  *
  * Stored beside counter-installation-id.json, which survives upgrades, so an update does

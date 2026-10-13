@@ -193,6 +193,22 @@ async function phoneOnlyCaller(req: NextRequest): Promise<{ permissions: string[
  */
 export default async function proxy(req: NextRequest, event: NextFetchEvent) {
     if (req.nextUrl.pathname.startsWith("/api/")) {
+        // A v_live till's save, signed in by its counter key rather than a cookie
+        // (auth/counterRelayAuth.ts). Never on a counter: a till does not accept
+        // another till's key. Loaded only when the header is there.
+        if (!IS_COUNTER_PC && req.headers.get("authorization")?.startsWith("Counter ")) {
+            const { authenticateCounterRequest } = await import("@/shared/lib/auth/counterRelayAuth");
+            const result = await authenticateCounterRequest(req.headers);
+            if (result && !result.ok) {
+                return NextResponse.json({ error: result.error, code: result.code }, { status: result.status });
+            }
+            if (result?.ok) {
+                const headers = new Headers(req.headers);
+                headers.set("cookie", result.cookie);
+                headers.delete("authorization");
+                return NextResponse.next({ request: { headers } });
+            }
+        }
         if (!isPhoneOnlyApi(req.nextUrl.pathname)) {
             const phoneOnly = await phoneOnlyCaller(req);
             if (phoneOnly && !phoneOnlyMayCall(req.nextUrl.pathname, phoneOnly.permissions)) {

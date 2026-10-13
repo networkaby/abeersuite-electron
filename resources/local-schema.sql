@@ -3878,6 +3878,10 @@ CREATE TABLE IF NOT EXISTS "pos_counters" (
     "boundDeviceLabel" TEXT,
     "boundAt" TIMESTAMP(3),
     "releasedAt" TIMESTAMP(3),
+    "relayKeyHash" TEXT,
+    "relayKeyPrevHash" TEXT,
+    "relayKeyIssuedAt" TIMESTAMP(3),
+    "relayKeyRevokedAt" TIMESTAMP(3),
 
     CONSTRAINT "pos_counters_pkey" PRIMARY KEY ("id")
 );
@@ -3900,6 +3904,14 @@ ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "boundAt" TIMESTAMP(3);
 ALTER TABLE "pos_counters" ALTER COLUMN "boundAt" DROP NOT NULL;
 ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "releasedAt" TIMESTAMP(3);
 ALTER TABLE "pos_counters" ALTER COLUMN "releasedAt" DROP NOT NULL;
+ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "relayKeyHash" TEXT;
+ALTER TABLE "pos_counters" ALTER COLUMN "relayKeyHash" DROP NOT NULL;
+ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "relayKeyPrevHash" TEXT;
+ALTER TABLE "pos_counters" ALTER COLUMN "relayKeyPrevHash" DROP NOT NULL;
+ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "relayKeyIssuedAt" TIMESTAMP(3);
+ALTER TABLE "pos_counters" ALTER COLUMN "relayKeyIssuedAt" DROP NOT NULL;
+ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "relayKeyRevokedAt" TIMESTAMP(3);
+ALTER TABLE "pos_counters" ALTER COLUMN "relayKeyRevokedAt" DROP NOT NULL;
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "pos_counter_payment_accounts" (
