@@ -366,7 +366,9 @@ export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
         (p?.added ?? []).filter((a) => a.kind === kind).reduce((t, a) => t + a.minutes, 0);
 
     lines.push({
-        key: "pending", label: "Pending duty (earlier days)", minutes: carried, rateLabel: "", accounted: 0,
+        // The carried figure lives in the label, not the columns: it is a note
+        // of what earlier days left, never part of this day's total.
+        key: "pending", label: `Pending duty (earlier days, ${carried > 0 ? fmtShort(carried) : "nil"})`, minutes: 0, rateLabel: "", accounted: 0,
         note: p && p.before.length ? pendingBreakup(p.before) : null,
     });
 

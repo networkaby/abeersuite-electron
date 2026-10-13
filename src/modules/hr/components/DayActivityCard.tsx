@@ -269,10 +269,12 @@ const signed = (minutes: number) =>
     minutes === 0 ? "—" : minutes < 0 ? `−${formatWorked(-minutes)}` : formatWorked(minutes);
 
 function AccountRow({ line }: { line: AccountLine }) {
-    const idle = line.minutes === 0 && line.accounted === 0;
+    // A carried pending figure is read in its label, so it is never greyed.
+    const carried = line.key === "pending" && !!line.note;
+    const idle = line.minutes === 0 && line.accounted === 0 && !carried;
     const toPending = line.toPending ?? 0;
     return (
-        <tr className={cn(idle && "text-muted-foreground/60")}>
+        <tr className={cn(idle && "text-muted-foreground/60", carried && "text-amber-600 dark:text-amber-400")}>
             <td className="py-0.5">{line.label}</td>
             <td className="py-0.5 text-right font-mono tabular-nums">{line.minutes > 0 ? formatWorked(line.minutes) : "—"}</td>
             <td className="py-0.5 text-right font-mono tabular-nums text-muted-foreground">{line.rateLabel}</td>
@@ -280,13 +282,11 @@ function AccountRow({ line }: { line: AccountLine }) {
                 "py-0.5 text-right font-mono tabular-nums",
                 line.accounted < 0 && "text-amber-600 dark:text-amber-400",
                 line.accounted > 0 && line.key !== "duty" && "text-emerald-600 dark:text-emerald-400",
-                (toPending > 0 || (line.key === "pending" && line.minutes > 0)) && "text-amber-600 dark:text-amber-400",
+                toPending > 0 && "text-amber-600 dark:text-amber-400",
             )}>
                 {toPending > 0
                     ? `+${formatWorked(toPending)} → pending`
-                    : line.key === "pending"
-                        ? (line.minutes > 0 ? `${formatWorked(line.minutes)} pending` : "—")
-                        : line.key === "duty" ? (line.accounted > 0 ? formatWorked(line.accounted) : "—") : signed(line.accounted)}
+                    : line.key === "duty" ? (line.accounted > 0 ? formatWorked(line.accounted) : "—") : signed(line.accounted)}
             </td>
             <td className="hidden py-0.5 pl-3 text-[11px] text-muted-foreground sm:table-cell">{line.note ?? ""}</td>
         </tr>
