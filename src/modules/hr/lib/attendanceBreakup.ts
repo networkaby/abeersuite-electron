@@ -300,7 +300,7 @@ export function buildDayBreakup(input: {
  * styles that are not a plain multiple ("10% of day / 5 min").
  */
 export interface AccountLine {
-    key: "duty" | "madeUp" | "overtime" | "weeklyOff" | "holiday" | "late";
+    key: "duty" | "lateCover" | "madeUp" | "overtime" | "weeklyOff" | "holiday" | "late";
     label: string;
     /** The raw minutes this line is about — the lateness itself for the late line. */
     minutes: number;
@@ -395,6 +395,16 @@ export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
     // Always shown, above overtime: the extra recovers earlier short first,
     // and only what is left is overtime (30m short + 50m extra → 30m + 20m).
     // Normal duty never goes past the expected hours — the rest is extra.
+    // Today's extra pays today's late penalty first (owner, 2026-10-13).
+    const lateCut = day.lateCharged && rules.latePenaltyStyle !== "none" ? day.latePenaltyMinutes : 0;
+    const coveredLate = Math.min(day.overtimeMinutes, lateCut);
+    if (coveredLate > 0) {
+        lines.push({
+            key: "lateCover", label: "Extra — covers today's penalty", minutes: coveredLate, rateLabel: times(1), accounted: coveredLate,
+            note: coveredLate < lateCut ? "the rest of the penalty is carried as short" : "today's extra pays the penalty first",
+        });
+    }
+
     lines.push({
         key: "madeUp", label: "Short recovery", minutes: madeUp, rateLabel: times(1), accounted: madeUp,
         note: madeUp > 0
@@ -408,7 +418,7 @@ export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
         note: day.overtimeMinutes > 0 && overtime === 0 ? "the extra went to recover earlier short" : null,
     });
 
-    lines.push(lateLine(day, rules, addedOf("late")));
+    lines.push(lateLine(day, rules, lateCut));
 
     // What today leaves pending: everything after today, less what is still
     // left of the earlier days' pending (the extra makes that up first).

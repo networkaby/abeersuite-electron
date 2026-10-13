@@ -232,8 +232,10 @@ export const EMPTY_ATTENDANCE_EFFECT: AttendanceEffect = {
  * it is overtime on THAT day. A short that comes after earned overtime does not
  * take it back — it waits for a later extra, or is cut at month end.
  *
- * Today's own late penalty joins the list before today's extra is used, so a
- * man who comes late and stays on makes the penalty up before earning overtime.
+ * Today's own late penalty is settled inside the day before this walk sees it
+ * (owner, 2026-10-13: *"10 min late ×2 = 20, 25 min extra, so 5 × 1.5 is
+ * overtime"*) — `extra` arrives already net of it, and only a penalty bigger
+ * than the day's extra reaches the list.
  */
 export type PendingKind = "short" | "late" | "absent";
 
@@ -274,10 +276,7 @@ export function walkPendingDuty(days: readonly PendingDayInput[]): PendingDay[] 
     for (const d of [...days].sort((a, b) => a.date.localeCompare(b.date))) {
         const before = pending;
         const added = d.adds.filter((a) => a.minutes > 0);
-        // Today's late penalty is due before today's extra hours are counted.
-        const late = added.filter((a) => a.kind === "late");
-        const rest = added.filter((a) => a.kind !== "late");
-        let queue = [...before, ...late].map((i) => ({ ...i }));
+        let queue = before.map((i) => ({ ...i }));
         let extra = Math.max(0, d.extra);
         let madeUp = 0;
         while (extra > 0 && queue.length) {
@@ -287,7 +286,7 @@ export function walkPendingDuty(days: readonly PendingDayInput[]): PendingDay[] 
             madeUp += take;
             if (queue[0].minutes === 0) queue = queue.slice(1);
         }
-        pending = [...queue, ...rest];
+        pending = [...queue, ...added];
         out.push({ date: d.date, before, added, madeUp, overtime: extra, after: pending });
     }
     return out;

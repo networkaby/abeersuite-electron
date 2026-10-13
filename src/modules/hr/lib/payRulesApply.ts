@@ -166,7 +166,8 @@ export async function attendanceLedgerFor(
             if (holidays.has(day)) { out.holidayMinutes += worked; continue; }
             if (offDays.has(weekdayOf(day))) { out.weeklyOffMinutes += worked; continue; }
 
-            extra = overtimeMinutes(worked, duty);
+            const over = overtimeMinutes(worked, duty);
+            extra = over;
 
             const short = shortMinutes(worked, duty);
             if (short > 0 && status !== "ABSENT") {
@@ -182,7 +183,12 @@ export async function attendanceLedgerFor(
                 out.lateDays += 1;
                 if (out.lateDays > rules.lateFreeDays) {
                     out.chargedLateDays += 1;
-                    adds.push({ date: day, kind: "late", minutes: lateDutyCutMinutes(rules, late, duty) });
+                    // The day's own extra pays the penalty first; only what it
+                    // cannot cover is carried as short.
+                    const cut = lateDutyCutMinutes(rules, late, duty);
+                    const covered = Math.min(over, cut);
+                    extra = over - covered;
+                    adds.push({ date: day, kind: "late", minutes: cut - covered });
                 }
             }
         }
