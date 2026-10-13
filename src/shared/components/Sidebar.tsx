@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, type CSSProperties, type ReactNode } from "react";
+import { useState, useEffect, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { useResizable } from "@/shared/hooks/useResizable";
 import { usePanelStore } from "@/store/panelStore";
 import Link from "next/link";
@@ -8,11 +8,12 @@ import { usePathname } from "next/navigation";
 import { signOutTo } from "@/shared/lib/auth/signOutTo";
 import { captureMyDay } from "@/shared/lib/hr/myDay";
 import { getPriorInputAt } from "@/shared/components/ActivityPulse";
+import { getCounterLock, getServerCounterLock, lockCounter, subscribeCounterLock } from "@/shared/lib/auth/counterLock";
 import { useTheme } from "@/shared/components/ThemeProvider";
 import axios from "axios";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
-    Settings, ChevronDown, LogOut,
+    Settings, ChevronDown, LogOut, Lock,
     PanelLeftClose, PanelLeftOpen, Sun, Moon, ShieldCheck, RefreshCw,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -104,6 +105,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
     const { setOpen: openQuickTicket, setInitialPipelineId } = useQuickTicketStore();
     const openSlSearch = useSlSearchStore((s) => s.setOpen);
+    const counterLocks = useSyncExternalStore(subscribeCounterLock, getCounterLock, getServerCounterLock).enabled === true;
 
     // Live counts, so someone working in another module sees new arrivals without
     // refreshing. ONE poll feeds every badge here and in NotificationBell; chat
@@ -998,20 +1000,24 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                         )}
                     </Button>
 
-                    {/* Sign out */}
+                    {/* Sign out — on a counter, Lock: the screen is covered, the login
+                        stays, and the 4-digit PIN brings him back. A full sign-out is on
+                        the lock screen (owner, 2026-10-13). */}
                     <Button
                         type="button"
                         variant="ghost"
-                        onClick={() => void captureMyDay({ lastInputAt: getPriorInputAt() })
-                            .then(() => signOutTo("/staff/login"))}
-                        title={collapsed ? "Sign Out" : ""}
+                        onClick={() => counterLocks
+                            ? void lockCounter(getPriorInputAt())
+                            : void captureMyDay({ lastInputAt: getPriorInputAt() })
+                                .then(() => signOutTo("/staff/login"))}
+                        title={collapsed ? (counterLocks ? "Lock" : "Sign Out") : ""}
                         className={[
                             "h-auto w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-sm font-medium text-destructive transition-all duration-150 hover:bg-destructive/10",
                             collapsed ? "justify-center px-2" : "",
                         ].join(" ")}
                     >
-                        <LogOut size={17} className="shrink-0" />
-                        {!collapsed && <span className="truncate">Sign Out</span>}
+                        {counterLocks ? <Lock size={17} className="shrink-0" /> : <LogOut size={17} className="shrink-0" />}
+                        {!collapsed && <span className="truncate">{counterLocks ? "Lock" : "Sign Out"}</span>}
                     </Button>
                 </div>
 

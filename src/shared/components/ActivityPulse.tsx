@@ -6,13 +6,14 @@ import axios from "axios";
 import { toast } from "sonner";
 import { signOut } from "next-auth/react";
 import { markDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
+import { getCounterLock, isCounterLocked, lockCounter, onCounterUnlocked } from "@/shared/lib/auth/counterLock";
 import { captureMyDay } from "@/shared/lib/hr/myDay";
 import { idleLimitMsFor } from "@/shared/lib/hr/dutyTime";
 import { IDLE_WARNING_MS } from "@/shared/lib/constants/session";
 
 /**
- * Two jobs, one listener: keep the day's worked minutes honest, and sign out a
- * counter nobody is standing at.
+ * Two jobs, one listener: keep the day's worked minutes honest, and lock a counter
+ * nobody is standing at (off a counter: sign out).
  *
  *   • PULSE — every few minutes, but ONLY if a real click, key or touch has
  *     happened since the last one. That condition is the whole point. The app
@@ -20,10 +21,13 @@ import { IDLE_WARNING_MS } from "@/shared/lib/constants/session";
  *     machine left switched on would otherwise report a full working day to an
  *     empty shop. A poll is not a person.
  *
- *   • IDLE SIGN-OUT — no input for IDLE_LIMIT_MS and the session ends, with two
- *     minutes' warning first. The server counts nothing for that stretch either
- *     way (dutyTime.ts drops any gap longer than the limit), so the sign-out is
- *     about the till not being left open on somebody's name, not about the maths.
+ *   • LOCK AFTER — no input for the person's limit ("Lock after", HR → Job) and a
+ *     counter LOCKS (`CounterLock.tsx`): covered, login alive, PIN to come back.
+ *     Off a counter the session ends instead. Two minutes' warning first either
+ *     way. The server counts nothing for that stretch (dutyTime.ts drops any gap
+ *     longer than the limit), so this is about the till not being left open on
+ *     somebody's name, not about the maths. Nothing typed on the lock screen
+ *     counts as work.
  *
  * Mounted beside SessionWrapper in the protected layouts, so it exists only for
  * signed-in staff and never on the customer portal.
@@ -118,6 +122,7 @@ export default function ActivityPulse() {
         let sharedAt = 0;
 
         const onInput = () => {
+            if (isCounterLocked()) return;   // the lock screen is not work
             priorInputAtModule = lastInputAt.current;   // before this one overwrites it
             lastInputAt.current = Date.now();
             lastInputAtModule = lastInputAt.current;
@@ -142,11 +147,20 @@ export default function ActivityPulse() {
             warned.current = false;
         };
 
+        // Back through the lock: the clock starts again from now, or the next tick would
+        // find the old idle stretch and lock him straight out again.
+        const offUnlock = onCounterUnlocked(onInput);
+
         const tick = setInterval(() => {
+            if (isCounterLocked()) return;   // covered: nothing to warn, nothing to pulse
             const now = Date.now();
             const idleFor = now - lastInputAt.current;
 
-            // ── Idle: warn, then end it ──────────────────────────────────────
+            // ── Idle: warn, then lock (a counter) or end it ─────────────────────
+            if (idleFor >= idleLimitMs && getCounterLock().enabled) {
+                void lockCounter(lastInputAt.current);
+                return;
+            }
             if (idleFor >= idleLimitMs) {
                 markDeliberateSignOut(IDLE_SIGNED_OUT_MESSAGE);   // explained here, and in the other windows
                 toast.error(IDLE_SIGNED_OUT_MESSAGE);
@@ -163,7 +177,9 @@ export default function ActivityPulse() {
             }
             if (!warned.current && idleFor >= idleLimitMs - IDLE_WARNING_MS) {
                 warned.current = true;
-                toast("Still there? You will be signed out shortly.", { duration: IDLE_WARNING_MS });
+                toast(getCounterLock().enabled
+                    ? "Still there? The counter will lock shortly."
+                    : "Still there? You will be signed out shortly.", { duration: IDLE_WARNING_MS });
             }
 
             // ── Pulse: only when a person actually did something ─────────────
@@ -183,6 +199,7 @@ export default function ActivityPulse() {
         return () => {
             for (const e of ACTIVITY_EVENTS) window.removeEventListener(e, onInput);
             channel?.close();
+            offUnlock();
             clearInterval(tick);
         };
     }, [idleLimitMs]);

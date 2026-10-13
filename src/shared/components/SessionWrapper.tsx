@@ -9,8 +9,9 @@ import { attachChangePublisher } from "@/shared/lib/realtime/appChannel";
 import { OFFLINE_READ_ONLY, offlineReason } from "@/shared/lib/prisma/offlineError";
 import { toast } from "sonner";
 import { heardSignOutNotice, markDeliberateSignOut, wasDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
-import { SESSION_IDLE_LABEL, SESSION_REVOKED_MESSAGE } from "@/shared/lib/constants/session";
+import { LOGIN_IDLE_LABEL, SESSION_REVOKED_MESSAGE } from "@/shared/lib/constants/session";
 import ActivityPulse from "@/shared/components/ActivityPulse";
+import CounterLock from "@/shared/components/CounterLock";
 
 // Staff-only wrapper (mounted by every (protected) layout, never the portal).
 // Adds two layers that make "logout" actually stick across tabs:
@@ -82,7 +83,7 @@ function SessionGuard() {
             // crashed. The one case that needs no explanation is the person who chose
             // it: they know, and telling them their session expired would be nonsense.
             if (!wasDeliberateSignOut() && !redirecting) {
-                toast.error(`Signed out after ${SESSION_IDLE_LABEL} with nothing happening — please sign in again.`, { duration: DEAD_NOTICE_MS });
+                toast.error(`Signed out after ${LOGIN_IDLE_LABEL} with nothing happening — please sign in again.`, { duration: DEAD_NOTICE_MS });
                 goLogin(DEAD_NOTICE_MS);
             } else if (heardSignOutNotice() && !redirecting) {
                 // Another window ended it and said why (idle, revoked, released);
@@ -159,6 +160,8 @@ export default function SessionWrapper({
                 reason the guard is — the portal never mounts this wrapper. */}
             <ActivityPulse />
             {children}
+            {/* After the app, so the cover sits over it. Renders nothing off a counter. */}
+            <CounterLock />
         </SessionProvider>
     );
 }

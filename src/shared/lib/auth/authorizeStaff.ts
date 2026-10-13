@@ -6,7 +6,7 @@ import { isLoginBlocked, recordLoginFailure, clearLoginFailures } from "@/shared
 import { applyPermissionOverrides, normalizeCrudGrants } from "@/shared/lib/auth/crudLadder";
 import { positionScopeLabel } from "@/shared/lib/org/positionScope";
 import { CredentialsSignin } from "next-auth";
-import { pinClocksExpired, stampCounterPinLogin, thisCounterId } from "@/shared/lib/auth/counterPin";
+import { thisCounterId } from "@/shared/lib/auth/counterPin";
 import { isThisPcACounter } from "@/shared/lib/counter/releaseGuard";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
@@ -399,10 +399,6 @@ export async function authorizeStaffCredentials(
         staff.phoneOnly = true;
     }
 
-    // Typing the password here is exactly what the 10-day rule asks for — both clocks
-    // go back to zero, and the PIN this person set on this counter keeps working.
-    // A no-op for anyone who has no PIN, and off a counter entirely.
-    await stampCounterPinLogin(prisma, user.id, "password");
     // The first sign-in on a till marks the business day PRESENT (HR & People).
     { const counterId = thisCounterId(); if (counterId) await stampAttendanceIn(prisma, user.id, counterId); }
 
@@ -418,68 +414,6 @@ export class OutsideCounterSignin extends CredentialsSignin {
     code = OUTSIDE_COUNTER_SIGNIN_CODE;
 }
 
-
-/**
- * Sign in with a counter PIN instead of a password.
- *
- * Same session, same authority — `buildStaffAuthUser` is shared with the password path,
- * so six digits never buy a different set of permissions. What differs is everything
- * BEFORE that: where this is allowed to happen, and for how long it stays allowed.
- * `counterPin.ts` holds those rules and the reasoning behind them.
- *
- * Note what is missing here on purpose: the env super-admin bypass. That account has no
- * PIN row and must not be reachable by a six-digit guess on a shop floor.
- */
-export async function authorizeStaffPin(
-    prisma: PrismaClient,
-    email: string,
-    pin: string
-): Promise<StaffAuthUser | null> {
-    // Own key, own budget — a fumbled PIN must not lock the password the cashier
-    // still needs, and three tries is enough for a secret this short.
-    const throttleKey = `pin:${email}`;
-    if (isLoginBlocked(throttleKey, 3)) return null;
-
-    // Not a counter → not a credential. On the web deployment this is simply never set.
-    const counterId = thisCounterId();
-    if (!counterId) return null;
-
-    if (!isStaffEmailDomainAllowed(email)) return null;
-
-    const user = await findStaffUser(prisma, email);
-    if (!user) {
-        recordLoginFailure(throttleKey);
-        return null;
-    }
-
-    // Left staff are refused here too, off the replica's own copy of the record —
-    // /api/counter-pin/status says why, and the shell drops the face.
-    if (staffHasLeft(user.staffProfile)) {
-        recordLoginFailure(throttleKey);
-        return null;
-    }
-
-    const row = await prisma.userCounterPin.findUnique({
-        where: { userId_counterId: { userId: user.id, counterId } },
-    });
-    // No PIN on THIS counter — including the case where they hold one on another
-    // counter. That is the whole point of the per-counter row.
-    if (!row) return null;
-
-    // Password time. Not a failed attempt: the digits may well be right, so this must
-    // not eat the throttle budget, and the screen says why (see /api/counter-pin/status).
-    if (pinClocksExpired(row)) return null;
-
-    if (!await bcrypt.compare(pin, row.pinHash)) {
-        recordLoginFailure(throttleKey);
-        return null;
-    }
-    clearLoginFailures(throttleKey);
-
-    await stampCounterPinLogin(prisma, user.id, "pin");
-    await stampAttendanceIn(prisma, user.id, counterId);
-    return buildStaffAuthUser(prisma, user);
-}
 
 /**
  * The staff session of a person a till's counter key speaks for (`counterRelayAuth.ts`).

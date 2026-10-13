@@ -1,23 +1,15 @@
 /**
- * Does this person have a usable PIN on this counter, right now?
+ * Does this person have a PIN on this counter — and are they still on the staff?
  *
- * Asked by the sign-in shell before it puts a keypad up, and again when a PIN is
- * refused, so the screen can say WHICH refusal it was. That distinction is the whole
- * reason this route exists: "wrong PIN" and "the ten days are up" look identical to a
- * cashier at nine in the morning, and the second one is not a mistake they made. A
- * correct PIN refused in silence reads as a broken till.
+ * Asked by the sign-in screen: to remember on the face card whether a PIN exists (so
+ * "Set PIN" reads "Change PIN"), and when a face is tapped, so somebody HR has
+ * marked as left is told so instead of being refused in silence. The PIN itself
+ * only lifts the counter lock (`/api/counter-lock`); it never signs anyone in.
  *
  * Unauthenticated by necessity — nobody is signed in yet — and therefore deliberately
- * narrow:
- *   • it answers only inside a counter shell (`thisCounterId`), so it does not exist
- *     on the web deployment at all;
- *   • it answers only about the counter the asking PC holds;
- *   • it says whether a PIN is usable, never anything about the person, and never
- *     whether the account exists — an unknown email and one with no PIN on this
- *     counter give the same "none".
- *
- * Read against the ordinary client, which on a counter is the replica: the shell must
- * be able to draw its keypad with the line down.
+ * narrow: it answers only inside a counter shell (`thisCounterId`), only about the
+ * counter the asking PC holds, and an unknown email and one with no PIN on this
+ * counter give the same "none".
  */
 
 import { NextResponse } from "next/server";
@@ -25,7 +17,7 @@ import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { isLoginBlocked, recordLoginFailure } from "@/shared/lib/auth/loginRateLimit";
-import { pinClocksExpired, thisCounterId } from "@/shared/lib/auth/counterPin";
+import { thisCounterId } from "@/shared/lib/auth/counterPin";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 
 const schema = z.object({ email: z.string().email() });
@@ -34,7 +26,7 @@ const schema = z.object({ email: z.string().email() });
  *  drops the face card. The one answer that says something about the person,
  *  and deliberately so: a card that keeps failing in silence reads as a broken
  *  till, and the fact itself is one every colleague on the floor already knows. */
-export type CounterPinState = "none" | "ready" | "password-due" | "left";
+export type CounterPinState = "none" | "ready" | "left";
 
 export async function POST(req: Request) {
     const counterId = thisCounterId();
@@ -55,13 +47,11 @@ export async function POST(req: Request) {
     try {
         const row = await prisma.userCounterPin.findFirst({
             where: { counterId, user: { email } },
-            select: { lastPasswordAt: true, lastLoginAt: true, user: { select: { staffProfile: { select: { leftOn: true } } } } },
+            select: { user: { select: { staffProfile: { select: { leftOn: true } } } } },
         });
         if (!row) return NextResponse.json({ state: "none" satisfies CounterPinState });
         if (staffHasLeft(row.user.staffProfile)) return NextResponse.json({ state: "left" satisfies CounterPinState });
-        return NextResponse.json({
-            state: (pinClocksExpired(row) ? "password-due" : "ready") satisfies CounterPinState,
-        });
+        return NextResponse.json({ state: "ready" satisfies CounterPinState });
     } catch (e) {
         return handleApiError(e, "Could not check the PIN");
     }

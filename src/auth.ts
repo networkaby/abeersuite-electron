@@ -5,8 +5,9 @@ import { authorizeStaffCredentials } from "@/shared/lib/auth/authorizeStaff";
 import { authorizePortalCredentials } from "@/shared/lib/auth/authorizePortal";
 import { IS_PUBLIC } from "@/shared/lib/appMode";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
-import { DEFAULT_IDLE_LIMIT_MINUTES, SESSION_IDLE_MAX_AGE_MS, SESSION_RENEW_EVERY_S } from "@/shared/lib/constants/session";
+import { DEFAULT_IDLE_LIMIT_MINUTES, LOGIN_IDLE_MAX_AGE_MS, LOGIN_MAX_AGE_MS, SESSION_RENEW_EVERY_S } from "@/shared/lib/constants/session";
 import { localSignOutAt, markLocalSignOut } from "@/shared/lib/auth/localSignOut";
+import { clearLocalLock } from "@/shared/lib/auth/localLock";
 
 /**
  * One session-cookie NAME on every deployment, office and counters alike.
@@ -29,34 +30,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
     trustHost: true,
     /**
-     * A session ends overnight, so every morning starts with the PIN screen.
+     * A login lasts until one of two clocks runs out (owner, 2026-10-13): 3 days with
+     * nobody using it — this rolling cookie lifetime — or 10 days since the password
+     * was typed, checked on every request in `isStaffTokenRevoked`. Between those a
+     * counter only LOCKS (`CounterLock.tsx`) and its 4-digit PIN lifts the cover.
      *
-     * Three clocks, and each one has its own job — all three in constants/session.ts.
-     * The two PIN clocks (enforced in counterPin.ts) govern
-     * how long the PIN itself may stand in for a password — 10 days of regular use,
-     * or 3 days idle. This one governs something else entirely: how long you stay
-     * signed in WITHOUT signing in. Left at Auth.js's default it was 30 days and
-     * rolling, which meant a till in daily use never reached the sign-in screen at
-     * all — so the PIN was never asked for, and the 10-day password rule never ran
-     * for anyone who did not sign out. On live, user 38 last authenticated on 19 Sep
-     * and was still validly signed in on the 21st.
+     * It replaced a 6-hour lifetime that signed every till out each night, which is
+     * what made coming back slow. The idle limit per person ("Lock after", HR → Job)
+     * is the short clock now; this is only the backstop.
      *
-     * 6 hours, measured since LAST USE (re-issued at most every 5 minutes —
-     * `SESSION_RENEW_EVERY_S`; it was every request, and a request still in flight
-     * at Sign out put a fresh cookie back, the "signs itself in again" blink). Checked against the
-     * shop's own hours rather than picked as a round figure: tills open 10:30–12:20
-     * and close 20:30–22:18, so the shortest night is about 12 hours — twice this —
-     * while nothing inside a trading day sits quiet for 6. It therefore lapses every
-     * night and never mid-shift. A cashier who somehow does idle 6 hours in a day
-     * taps their photo and six digits again — the cheap way to be wrong.
-     *
-     * Do NOT tie this to PIN_PASSWORD_MAX_AGE_MS. They look like the same idea and
-     * are opposites: that one is how long the PIN lasts, this is how soon the PIN is
-     * asked for. Making this the longer of the two is what hid the bug above.
+     * Renewed at most every 5 minutes (`SESSION_RENEW_EVERY_S`) — it was every
+     * request, and a request still in flight at Sign out put a fresh cookie back.
      */
     session: {
         strategy:  "jwt",
-        maxAge:    SESSION_IDLE_MAX_AGE_MS / 1000,   // seconds
+        maxAge:    LOGIN_IDLE_MAX_AGE_MS / 1000,     // seconds
         updateAge: SESSION_RENEW_EVERY_S,             // renew at most this often
     },
     cookies: {
@@ -162,7 +150,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         async signOut(message) {
             const token = "token" in message ? message.token : null;
             if (!token?.id || token.kind === "customer") return;
-            if (IS_COUNTER_PC) markLocalSignOut(String(token.id));
+            if (IS_COUNTER_PC) {
+                markLocalSignOut(String(token.id));
+                clearLocalLock();   // a full sign-out leaves no cover behind for the next person
+            }
         },
     },
     providers: [
@@ -183,29 +174,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         prisma,
                         credentials.email as string,
                         credentials.password as string
-                    );
-                },
-            }),
-        ]),
-        // Counter PIN — the same staff session, reached by six digits instead of a
-        // password. Left off the public build with the staff provider above, and
-        // refused outright by `authorizeStaffPin` anywhere that is not a counter,
-        // so on the office deployment this provider exists but can never succeed.
-        ...(IS_PUBLIC ? [] : [
-            Credentials({
-                id: "credentials-staff-pin",
-                name: "Counter PIN",
-                credentials: {
-                    email: { label: "Email", type: "email" },
-                    pin: { label: "PIN", type: "password" },
-                },
-                async authorize(credentials) {
-                    if (!credentials?.email || !credentials?.pin) return null;
-                    const { authorizeStaffPin } = await import("@/shared/lib/auth/authorizeStaff");
-                    return authorizeStaffPin(
-                        prisma,
-                        credentials.email as string,
-                        credentials.pin as string
                     );
                 },
             }),
@@ -317,12 +285,14 @@ export function fillTokenFromUser(token: Record<string, unknown>, user: { id?: s
 }
 
 /**
- * Is this staff token dead? Two stamps can end it:
+ * Is this staff token dead? Two stamps and one clock can end it:
  *
  *   • `User.tokensValidFrom` — "end every login": a role / position / permission edit,
  *     a password change (`revokeSessions.ts`). Everywhere, office and tills alike.
  *   • On a till, this till's own sign-out mark (`localSignOut.ts`). A Sign out on one
  *     till ends that till's login and nothing else (owner, 2026-10-13).
+ *   • 10 days since the password was typed (`LOGIN_MAX_AGE_MS`). `loginAt` is only
+ *     ever minted by a password sign-in — the counter PIN unlocks, it never signs in.
  *
  * Tokens minted before `loginAt` existed are left alone. A DB hiccup fails OPEN so a
  * transient outage cannot mass-logout every cashier; prisma's read-retry makes it rare.
@@ -332,6 +302,7 @@ export async function isStaffTokenRevoked(token: Record<string, unknown>): Promi
     if (!token.id || token.kind === "customer") return false;
     const loginAt = typeof token.loginAt === "number" ? token.loginAt : 0;
     if (!loginAt) return false;
+    if (Date.now() - loginAt > LOGIN_MAX_AGE_MS) return true;
     if (IS_COUNTER_PC && loginAt < localSignOutAt(String(token.id))) return true;
     try {
         const u = await prisma.user.findUnique({

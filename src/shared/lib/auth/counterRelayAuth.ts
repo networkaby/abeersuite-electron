@@ -4,7 +4,7 @@ import { fillTokenFromUser, SESSION_COOKIE_NAME } from "@/auth";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { staffAuthUserById } from "@/shared/lib/auth/authorizeStaff";
 import { hashCounterKey } from "@/shared/lib/counter/counterKeyHash";
-import { SESSION_IDLE_MAX_AGE_MS, SESSION_REVOKED_MESSAGE } from "@/shared/lib/constants/session";
+import { LOGIN_IDLE_MAX_AGE_MS, SESSION_REVOKED_MESSAGE } from "@/shared/lib/constants/session";
 
 /**
  * The office half of the till's counter key (`counter/relayKey.ts` is the till half).
@@ -108,7 +108,7 @@ export async function authenticateCounterRequest(headers: Headers): Promise<Coun
         token,
         secret: (process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET)!,
         salt: SESSION_COOKIE_NAME,
-        maxAge: SESSION_IDLE_MAX_AGE_MS / 1000,
+        maxAge: LOGIN_IDLE_MAX_AGE_MS / 1000,
     });
     return { ok: true, cookie: sessionCookie(jwt), counterId };
 }

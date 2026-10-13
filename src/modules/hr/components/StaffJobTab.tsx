@@ -303,7 +303,7 @@ export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
                     )}
                 </Field>
 
-                <Field label="Signed out after" hint={`Minutes away from the app before this person is signed out — and the gap stops counting as duty. A counter hand needs a short one, a technician a long one. Blank = ${DEFAULT_IDLE_LIMIT_MINUTES}.`}>
+                <Field label="Lock after" hint={`Minutes away from the app before the counter locks (their 4-digit PIN opens it again) — and the gap stops counting as duty. On the office website or phone app they are signed out instead. A counter hand needs a short one, a technician a long one. Blank = ${DEFAULT_IDLE_LIMIT_MINUTES}.`}>
                     {(id) => (
                         <div className="flex items-center gap-1">
                             <Input
@@ -321,7 +321,7 @@ export default function StaffJobTab({ url, detail, canEdit, onChanged }: {
                                     next: v,
                                     write: (m) => patch({ idleLimitMinutes: m ? Number(m) : null }),
                                     revert: (m) => { e.target.value = m; },
-                                    label: "Signed out after",
+                                    label: "Lock after",
                                     onSaved: onChanged,
                                 }); }}
                             />

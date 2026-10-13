@@ -737,24 +737,6 @@ ipcMain.handle("shell:take-credentials", () => {
     return held;
 });
 
-/**
- * Sign in with a counter PIN. Same handoff as `shell:sign-in`, different field.
- *
- * Main checks nothing about the PIN itself — it cannot: the check needs the database,
- * and the rules around it (this counter only, the ten-day password clock) live in
- * `shared/lib/auth/counterPin.ts` where the server can enforce them. This only carries
- * the digits across to `/staff/login`.
- */
-ipcMain.handle("shell:sign-in-pin", async (_, credentials: { email: string; pin: string }) => {
-    if (!credentials || typeof credentials.email !== "string" || typeof credentials.pin !== "string") {
-        return { ok: false, error: "Enter your PIN." };
-    }
-    if (!serverUrl) return { ok: false, error: "Still starting. Try again in a moment." };
-    parkedCredentials = { email: credentials.email, pin: credentials.pin };
-    await loadApp(serverUrl);
-    return { ok: true };
-});
-
 // ── The face roster ─────────────────────────────────────────────────────────
 // Who has signed in on THIS PC, so the shell can offer a photograph to tap instead of
 // an email address to type. See rosterPath() for what this is and is not.
@@ -818,35 +800,6 @@ ipcMain.handle("shell:remember-user", async (_, who: {
  * action (`/api/me/counter-pin`); letting an unauthenticated screen reach an account
  * would be a door, not a convenience.
  */
-/**
- * Does this person have a usable PIN on this counter?
- *
- * Asked by the shell before it puts a keypad up — and it has to come through main,
- * because the shell is a `file://` page: a relative `fetch("/api/...")` there resolves
- * to `file:///api/...` and fails. That was the bug this replaces; the check looked
- * present and had never once run, so a password falling due was only discovered after
- * six digits had been typed.
- *
- * Null whenever the question cannot be answered — the server not up yet, or anything
- * thrown. The sign-in itself is the real check either way; this only decides whether
- * the cashier is shown a keypad or asked for their password.
- */
-ipcMain.handle("shell:pin-status", async (_, email: string): Promise<string | null> => {
-    if (typeof email !== "string" || !email.trim() || !serverUrl) return null;
-    try {
-        const res = await net.fetch(`${serverUrl}/api/counter-pin/status`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ email }),
-        });
-        if (!res.ok) return null;
-        const out = await res.json() as { state?: unknown };
-        return typeof out.state === "string" ? out.state : null;
-    } catch {
-        return null;
-    }
-});
-
 ipcMain.handle("shell:forget-user", (_, email: string) => {
     if (typeof email !== "string") return false;
     const key = email.trim().toLowerCase();
@@ -1395,12 +1348,10 @@ function shellQuery(): Record<string, string> {
  * "login outside counter" permission, and signing in behind its back would skip both.
  * So the shell saves the cashier the typing and the real page still does the work.
  *
- * Exactly ONE of `password` / `pin` is ever set, and they are separate fields on
- * purpose: `/staff/login` picks the auth provider from which one arrived. Reusing the
- * password field for six digits would let an older shell paired with a newer page
- * submit a PIN as a password — refused, but refused confusingly.
+ * Always a password: the counter PIN only unlocks a locked till (CounterLock.tsx),
+ * it never signs anyone in (owner, 2026-10-13).
  */
-let parkedCredentials: { email: string; password?: string; pin?: string; setPin?: boolean } | null = null;
+let parkedCredentials: { email: string; password: string; setPin?: boolean } | null = null;
 
 /** Tells the shell its button may go live. */
 function notifyServerReady(): void {

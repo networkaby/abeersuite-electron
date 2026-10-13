@@ -7,7 +7,7 @@ import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { refreshCounterStatus } from "@/shared/hooks/useCounterMode";
 import { refreshSyncStatus } from "@/shared/hooks/useSyncStatus";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { OUTSIDE_COUNTER_SIGNIN_CODE } from "@/shared/lib/constants/session";
+import { OUTSIDE_COUNTER_SIGNIN_CODE, PIN_LENGTH } from "@/shared/lib/constants/session";
 import { isPhoneAppPath, PHONE_APP_FORGOT, PHONE_APP_HOME } from "@/shared/lib/device/phone";
 import { isPhoneOnlySession } from "@/shared/lib/auth/phoneOnly";
 import {
@@ -29,7 +29,6 @@ import styles from "./login.module.css";
 import FaceGrid from "./FaceGrid";
 import TillCard from "./TillCard";
 import NextOpening from "./NextOpening";
-import PinPad from "./PinPad";
 import DesktopSiteNotice from "@/modules/mobile/components/DesktopSiteNotice";
 import { ShiftTakeoverDialog, type CounterTakeover } from "@/modules/pos/components/ShiftTakeoverDialog";
 import { fetchCounterTakeover } from "@/modules/pos/lib/currentShift";
@@ -128,11 +127,9 @@ function useLocalClock(): { greet: string; clock: string } {
 }
 
 /**
- * Does this person have a live PIN on this counter?
- *
- * Only so the shell knows whether to put a keypad up next time. Silent on every
- * failure — off a counter, offline, or on an older server the answer is simply "no
- * keypad", which costs one typed password and never a sign-in.
+ * Does this person have a PIN on this counter? Only so "Set PIN" can read "Change
+ * your PIN" — the PIN itself only unlocks a locked counter (CounterLock.tsx). Silent
+ * on every failure: the answer is simply "no".
  */
 async function hasCounterPin(email: string): Promise<boolean> {
     try {
@@ -143,9 +140,7 @@ async function hasCounterPin(email: string): Promise<boolean> {
         });
         if (!res.ok) return false;
         const out = await res.json() as { state?: string };
-        // "password-due" still means a PIN exists — the card should show, and the
-        // shell asks again when it is tapped.
-        return out.state === "ready" || out.state === "password-due";
+        return out.state === "ready";
     } catch {
         return false;
     }
@@ -154,8 +149,8 @@ async function hasCounterPin(email: string): Promise<boolean> {
 /** The phone-app sign-in shows no photograph — it costs mobile data for nothing. */
 const NO_PHOTOS: readonly string[] = [];
 
-/** A PIN box takes digits and nothing else — six of them. */
-const digitsOnly = (value: string) => value.replace(/\D/g, "").slice(0, 6);
+/** A PIN box takes digits and nothing else — four of them. */
+const digitsOnly = (value: string) => value.replace(/\D/g, "").slice(0, PIN_LENGTH);
 
 function StaffLoginForm() {
     const router = useRouter();
@@ -192,24 +187,19 @@ function StaffLoginForm() {
 
     // ── The sequence ────────────────────────────────────────────────────────
     //
-    //   faces ──tap a face with a PIN──→ keypad ──6 digits──→ signed in
-    //     ↑                                │ Back / Escape
-    //     │ Login with PIN                 └──────→ faces
-    //     │
-    //   password ──sign in──→ signed in ──(if Set PIN was pressed)──→ choosePin
+    //   faces ──tap a face──→ password (their email filled in) ──sign in──→ signed in
+    //     ↑                      │                                    │
+    //     └── Pick your photo ───┘          (if Set PIN was pressed) └──→ choosePin
     //
-    // The same four names, in the same order, as `resources/shell/login.html`. The shell
-    // paints these before this page exists and hands over; this page owns them for every
-    // OTHER arrival — a sign-out, a session expiry, a released counter, a proxy bounce —
-    // which is every arrival but one. Before this, all of those put a cashier in front of
-    // a bare email box on a PC that had a photograph of them on disk.
+    // The same names as `resources/shell/login.html`, which paints before this page
+    // exists and hands over; this page owns them for every OTHER arrival — a sign-out,
+    // an expiry, a released counter, a proxy bounce.
     //
+    // Signing in is always the password (owner, 2026-10-13: "pin is for only
+    // unlock"). The PIN set here only lifts a LOCKED counter (CounterLock.tsx), and
     // `choosePin` is only here: a PIN cannot be set before anyone is signed in.
-    const [stage, setStage] = useState<"faces" | "keypad" | "password" | "choosePin">("password");
+    const [stage, setStage] = useState<"faces" | "password" | "choosePin">("password");
     const [roster, setRoster] = useState<ShellRosterEntry[]>([]);
-    const [chosen, setChosen] = useState<ShellRosterEntry | null>(null);
-    const [padNote, setPadNote] = useState("Enter your 6-digit PIN");
-    const [padError, setPadError] = useState("");
     const [editing, setEditing] = useState(false);
     const [pin, setPin] = useState("");
     const [pinAgain, setPinAgain] = useState("");
@@ -222,14 +212,6 @@ function StaffLoginForm() {
     const { greet, clock } = useLocalClock();
     const backdrop = useBackdropPhoto(phoneApp ? NO_PHOTOS : LOGIN_BACKGROUNDS);
 
-    /**
-     * `kind` picks the provider, and nothing else changes.
-     *
-     * A PIN buys a faster way to prove who you are, never a shorter way in: the
-     * counter reconciliation, the released-PC reset and the "login outside counter"
-     * rule below run exactly the same for both, and both end up with the identical
-     * session (see shared/lib/auth/authorizeStaff.ts).
-     */
     /**
      * Into the app — unless another cashier's drawer is waiting on this counter.
      *
@@ -248,15 +230,12 @@ function StaffLoginForm() {
     const doSignIn = useCallback(async (
         emailValue: string,
         secret: string,
-        kind: "password" | "pin" = "password",
         setPin = false,
     ) => {
         setLoading(true);
         setError("");
 
-        const res = kind === "pin"
-            ? await signIn("credentials-staff-pin", { email: emailValue, pin: secret, redirect: false })
-            : await signIn("credentials-staff", { email: emailValue, password: secret, redirect: false });
+        const res = await signIn("credentials-staff", { email: emailValue, password: secret, redirect: false });
 
         if (res?.error && res.code === OUTSIDE_COUNTER_SIGNIN_CODE) {
             // The password was right; the server refused because this is not a counter
@@ -269,21 +248,10 @@ function StaffLoginForm() {
             // cloud — offline, that fails and reads as a wrong password. Say what it is:
             // this machine must be online to bind a counter before it can sign in offline.
             const unbound = isElectronEnvironment() && !(await getLocalCounterSetup());
-            const message = unbound
+            setError(unbound
                 ? "Sign-in failed. This PC is not set up as a counter yet, so it needs the internet to sign in and bind a counter. Check the connection, or the email and password."
-                : kind === "pin"
-                    ? "That PIN is not right."
-                    : "Invalid email or password";
-            // A refused PIN goes back to the KEYPAD with the reason — not to a bare
-            // password box, which is where it used to land with the keypad and the
-            // photograph gone.
-            if (kind === "pin" && !unbound && chosen) {
-                setPadError(message);
-                setStage("keypad");
-            } else {
-                setError(message);
-                setStage("password");
-            }
+                : "Invalid email or password");
+            setStage("password");
             setLoading(false);
         } else {
             const dest = callbackUrl.startsWith("/") ? callbackUrl : "/office/work-flow-inbox";
@@ -363,17 +331,14 @@ function StaffLoginForm() {
                     title: u.title,
                     seats: u.seats,
                     avatarUrl: u.avatarUrl,
-                    // Signed in BY a PIN is proof of one. Otherwise ask the server, so a
-                    // PIN set yesterday still puts a keypad up tomorrow.
-                    hasPin: kind === "pin" || await hasCounterPin(emailValue),
+                    hasPin: await hasCounterPin(emailValue),
                 }).catch(() => { /* a missing face costs nothing */ });
             }
 
             // Asked for a PIN: stop here rather than navigating. They are signed in —
             // the session is real — but the app waits behind this card until they have
-            // chosen their six digits or said no. Only ever reached from the password
-            // path, which is the only one that can prove who they are again.
-            if (setPin && kind === "password") {
+            // chosen their four digits or said no.
+            if (setPin) {
                 setCounterNumber((await getLocalCounterSetup())?.counterNumber ?? null);
                 setPending({ dest, password: secret, hasPin: await hasCounterPin(emailValue), isCounter });
                 setStage("choosePin");
@@ -383,12 +348,9 @@ function StaffLoginForm() {
 
             await enter(dest, isCounter);
         }
-        // `chosen` is read in the failure branch to decide whether a refused PIN goes
-        // back to the keypad. Without it here, that branch closes over a stale null and
-        // the cashier is dropped on the password form — the very thing being fixed.
-    }, [callbackUrl, router, chosen, enter]);
+    }, [callbackUrl, router, enter]);
 
-    /** Save the six digits, then let the app open. */
+    /** Save the four digits, then let the app open. */
     const savePin = async () => {
         if (!pending) return;
         if (pin !== pinAgain) { setPinError("The two PINs are not the same."); return; }
@@ -431,7 +393,7 @@ function StaffLoginForm() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await doSignIn(email, password, "password", wantsPin);
+        await doSignIn(email, password, wantsPin);
     };
 
     // ── Credentials typed on the counter's sign-in shell ────────────────────────
@@ -450,10 +412,9 @@ function StaffLoginForm() {
     // ONE effect, in order, on purpose. The parked credentials are asked for first and
     // the photographs only after: two effects racing here would sometimes paint a grid
     // underneath a sign-in that was already running, which is a flicker with no meaning.
-    // Once, and only once. `doSignIn` is rebuilt whenever `chosen` changes — which is
-    // every tap on a face — and without this guard the effect ran again, re-read the
-    // roster and threw the screen straight back to the photographs. The credentials are
-    // read-once on main's side anyway, so a second run could never do anything useful.
+    // Once, and only once: without this guard a rebuilt `doSignIn` ran the effect
+    // again, re-read the roster and threw the screen back to the photographs. The
+    // credentials are read-once on main's side anyway.
     //
     // No cancellation flag alongside it, deliberately. React runs an effect twice in
     // development — mount, clean up, mount — and a guard that blocks the second run
@@ -469,17 +430,9 @@ function StaffLoginForm() {
 
             if (held) {
                 setEmail(held.email);
-                // Exactly one of the two is ever set. A PIN is never put in the password
-                // box: it would be shown by the peek button and submitted to the wrong
-                // provider on a retry.
-                if (held.pin) {
-                    setChosen((await readShellRoster()).find((r) => r.email === held.email) ?? null);
-                    void doSignIn(held.email, held.pin, "pin");
-                    return;
-                }
                 if (held.password) {
                     setPassword(held.password);
-                    void doSignIn(held.email, held.password, "password", held.setPin === true);
+                    void doSignIn(held.email, held.password, held.setPin === true);
                     return;
                 }
             }
@@ -493,18 +446,14 @@ function StaffLoginForm() {
         })();
     }, [doSignIn]);
 
-    // ── The keypad's own sign-in ────────────────────────────────────────────
+    // ── A face was tapped: their password, with the email already filled in ──
     const tapFace = useCallback(async (entry: ShellRosterEntry) => {
-        setChosen(entry);
-        setPadError("");
-        setPadNote("Enter your 6-digit PIN");
         setError("");
         setEmail(entry.email);
-        if (!entry.hasPin) { setStage("password"); return; }
-        setStage("keypad");
+        setStage("password");
 
-        // Is that PIN still live? Unlike the shell — whose `file://` origin cannot reach
-        // the server at all — this page is served over http and can simply ask.
+        // Still on the staff? HR may have marked them as left since this PC last saw
+        // them — say so once rather than refusing a right password in silence.
         try {
             const res = await fetch("/api/counter-pin/status", {
                 method: "POST",
@@ -512,18 +461,10 @@ function StaffLoginForm() {
                 body: JSON.stringify({ email: entry.email }),
             });
             const out = res.ok ? await res.json() as { state?: string } : null;
-            if (out?.state === "password-due") {
-                setStage("password");
-                setError("Password time — it has been a few days. Your PIN keeps working after this.");
-            } else if (out?.state === "none") {
-                setStage("password");
-            } else if (out?.state === "left") {
-                // HR marked this person as left. The card goes (same as the shell's
-                // Forget — a cache, nothing more), and the screen says so once
-                // rather than refusing a correct PIN in silence.
+            if (out?.state === "left") {
+                // The card goes (same as the shell's Forget — a cache, nothing more).
                 void window.electronAPI?.forgetShellUser?.(entry.email).catch(() => { });
                 setRoster((was) => was.filter((r) => r.email !== entry.email));
-                setChosen(null);
                 setEmail("");
                 setStage("faces");
                 setError(`${entry.name} is no longer on the staff list.`);
@@ -543,8 +484,6 @@ function StaffLoginForm() {
     }, []);
 
     const backToFaces = useCallback(() => {
-        setChosen(null);
-        setPadError("");
         setError("");
         setStage("faces");
     }, []);
@@ -616,31 +555,21 @@ function StaffLoginForm() {
                             onEdit={() => setEditing((on) => !on)}
                         />
                     </section>
-                ) : stage === "keypad" && chosen ? (
-                    <PinPad
-                        entry={chosen}
-                        note={padNote}
-                        error={padError}
-                        busy={loading}
-                        onSubmit={(pin) => void doSignIn(chosen.email, pin, "pin")}
-                        onBack={backToFaces}
-                        onUsePassword={() => { setEmail(chosen.email); setPadError(""); setStage("password"); }}
-                    />
                 ) : pending ? (
                     <section className={styles.card}>
                         <h1 className={styles.greet}>
                             {pending.hasPin ? "Change your PIN" : "Choose your PIN"}
                         </h1>
                         <p className={styles.clock}>
-                            Six digits{counterNumber !== null ? `, for counter ${counterNumber} only` : ""}.
-                            Tomorrow you just tap your photo.
+                            Four digits{counterNumber !== null ? `, for counter ${counterNumber} only` : ""}.
+                            When the counter locks, they bring you straight back.
                         </p>
 
                         <div className={styles.field}>
                             <label htmlFor="pin">{pending.hasPin ? "New PIN" : "PIN"}</label>
                             <input
                                 id="pin" type="password" inputMode="numeric" autoComplete="off"
-                                placeholder="6 digits" autoFocus
+                                placeholder="4 digits" autoFocus
                                 value={pin}
                                 onChange={(e) => { setPin(digitsOnly(e.target.value)); setPinError(""); }}
                             />
@@ -650,16 +579,16 @@ function StaffLoginForm() {
                             <label htmlFor="pin2">Type it again</label>
                             <input
                                 id="pin2" type="password" inputMode="numeric" autoComplete="off"
-                                placeholder="6 digits"
+                                placeholder="4 digits"
                                 value={pinAgain}
                                 onChange={(e) => { setPinAgain(digitsOnly(e.target.value)); setPinError(""); }}
-                                onKeyDown={(e) => { if (e.key === "Enter" && pin.length === 6) void savePin(); }}
+                                onKeyDown={(e) => { if (e.key === "Enter" && pin.length === PIN_LENGTH) void savePin(); }}
                             />
                         </div>
 
                         <button
                             className={styles.go} type="button"
-                            disabled={pinBusy || pin.length !== 6 || pinAgain.length !== 6}
+                            disabled={pinBusy || pin.length !== PIN_LENGTH || pinAgain.length !== PIN_LENGTH}
                             onClick={() => void savePin()}
                         >
                             {pinBusy ? "Saving…" : "Save and open"}
@@ -687,8 +616,8 @@ function StaffLoginForm() {
                         </button>
 
                         <p className={styles.pinnote}>
-                            The line must be up to save a PIN. Using one later works offline, and your
-                            password is still asked for every few days.
+                            The line must be up to save a PIN. Unlocking with it works offline. Signing
+                            in is always your password.
                         </p>
                     </section>
                 ) : (
@@ -754,17 +683,14 @@ function StaffLoginForm() {
                     </button>
                     {error && <p className={styles.err}>{error}</p>}
 
-                    {/* Desktop only — six digits mean nothing on the website. Pressed
+                    {/* Desktop only — a counter PIN means nothing on the website. Pressed
                         before signing in, so all it can do is ask; the panel opens on
-                        the other side. */}
-                    {/* TWO controls, never one link doing both jobs — the same pair as
-                        the shell. "Login with PIN" is offered whenever this PC has any,
-                        never conditional on who holds a PIN: that condition is what made
-                        this a dead end. */}
+                        the other side. "Pick your photo" goes back to the faces whenever
+                        this PC has any — the same pair as the shell. */}
                     <div className={styles.rowlinks}>
                         {roster.length > 0 ? (
                             <button type="button" className={styles.pinlink} onClick={backToFaces}>
-                                Login with PIN
+                                Pick your photo
                             </button>
                         ) : <span />}
                         {isDesktop && (

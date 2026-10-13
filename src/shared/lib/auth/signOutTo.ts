@@ -4,7 +4,7 @@ import { signOut } from "next-auth/react";
  * Did the person themselves end this session?
  *
  * A session can end three ways and they must not read alike on screen: they signed
- * out, an admin changed their access, or it simply went cold (6 idle hours — see
+ * out, an admin changed their access, or it simply went cold (3 idle days — see
  * src/auth.ts). Only the last two deserve a word of explanation; announcing "your
  * session expired" to somebody who just clicked Sign out is nonsense.
  *
@@ -18,7 +18,7 @@ let deliberate = false;
 /**
  * Other windows of the app share the cookie, so a sign-out here ends them too — and
  * next-auth tells them only THAT it happened, never why. Without a word of our own
- * each one would announce "signed out after 6 hours with nothing happening" to the
+ * each one would announce "signed out after 3 days with nothing happening" to the
  * person who had just clicked Sign out. The word goes out before `signOut()` makes its
  * request, so it lands ahead of next-auth's own broadcast, which waits for the reply.
  */
