@@ -87,4 +87,6 @@ When the owner says **"do a release"** (or release / publish / ship a version), 
 
 **Publish as soon as possible.** No smoke-test stop, no pause for the owner to test — if something needs checking, test it yourself and carry on. **Ask the owner to join hand** at any step needing their eyes or their machine, rather than guessing or skipping it — the notes and their urgency tier (ask once), the `.env` variant (`APP_MODE`, `LANDING_PAGE`), a push they would rather run, and anything else that would be a guess. Say plainly what you need and wait. Handing a step back is not stopping the release: do everything either side of it, and pick the list up where you left off.
 
+**`/release urgent`** (or "release urgent") means nothing to ask: notes go out `[urgent]`, the `.env` variant is used as it is, no waiting — run the list straight through.
+
 **Stop and ask** on a non-fast-forward merge, a failing `verify:package`, or a publish failure (then `RELEASE_ONLY_REPO=<repo>` to retry that one repo — never as the normal path).
