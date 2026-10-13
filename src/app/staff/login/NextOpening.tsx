@@ -61,7 +61,9 @@ export default function NextOpening() {
     if (!line) return null;
     return (
         <p className={styles.nextopen}>
-            {line.today && <strong>{line.today}</strong>} {line.rest}
+            {/* The next opening steps aside when the till card already says the next
+                duty (`.nexthero`, login.module.css) — never the same fact twice. */}
+            {line.today && <strong>{line.today}</strong>} <span className={styles.nextrest}>{line.rest}</span>
         </p>
     );
 }

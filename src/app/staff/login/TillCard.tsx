@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { formatClockTime, formatHhMmFriendly, weekdayAndDate, weekdayName } from "@/shared/lib/format/formatDate";
+import { formatClockTime, formatHhMmFriendly, todayIso, weekdayAndDate, weekdayName } from "@/shared/lib/format/formatDate";
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
 import { myDayStore, type MyDay } from "@/shared/lib/hr/myDay";
 import { nextOpeningText } from "@/shared/lib/hr/nextOpeningText";
@@ -113,7 +113,8 @@ export default function TillCard() {
         <section className={styles.duty}>
             <p className={styles.dutyhead}>
                 <span>{counterName || "This counter"}</span>
-                {day && <span>{weekdayAndDate(day.date)}</span>}
+                {/* Today's date is already under the greeting; only an older day is named. */}
+                {day && day.date !== todayIso() && <span>{weekdayAndDate(day.date)}</span>}
             </p>
 
             {/* ── 1. Next duty ─────────────────────────────────────────────── */}

@@ -334,6 +334,8 @@
 .padcard .who { font-size: 15px }
 .padcard .post { margin: 3px 0 0 }
 .padcard .nextopen strong { margin-inline: auto }
+/* The till card's "Next duty day" already says it — say it once. */
+.stage:has(.nexthero) .nextrest { display: none }
 
 .dots { display: flex; gap: 9px; justify-content: center; margin: 14px 0 18px; min-height: 13px }
 .dots i { width: 11px; height: 11px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .35) }
