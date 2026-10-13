@@ -1,23 +1,23 @@
-# v1.16.4 [urgent]
+# v1.16.5 [urgent]
 
-Every counter must update today. It changes HR attendance and payroll, and makes sure changes made in the office reach every counter. This version adds a database change, and the office site is being updated with it. A counter that has not updated will have its sync pause.
+Every counter should install this today. It changes how a till signs in with the office, and the office site will move to the new sign-in right after the counters have updated.
 
-## HR – Attendance and Payroll
+## Counter sign-in
+- Staff login on the till now happens on the till itself, so it is quicker and works even when the office line is slow.
+- Each counter now has its own private key to talk to the office. No installer carries the office password any more. The key renews itself every 30 days; an admin can cut off a counter from **Admin → POS Counters**.
+- **Sign out** now ends only that login, not every login of the same staff.
+- Fixed the brief "log in again" flash right after signing out.
 
-- Day review now has an Auto / Manual toggle instead of Accept / Reject.
-- Auto attendance reaches pay only after it is accepted. Day review is on Employee Activity, and each row opens that person's day card.
-- The day card now refreshes when you mark a day or switch to another day. The hour and minute boxes are wider.
-- Figures on the activity card can be corrected.
-- Payroll "Generate" now opens on From / Till, covering every unpaid day up to today.
-- A payroll run opened before the counter has it now waits, instead of saying "not found".
+## Attendance and pay
+- Attendance counts whole minutes. The day card lists On duty / Off duty in order, in two columns, and hides empty rows.
+- A day's extra time first covers that day's late penalty and any earlier short time; only what is left is paid as overtime.
+- Half days are judged against half the duty. Their extra time recovers short time, and the rest is paid at the normal rate, never as overtime.
+- Full-day and half-day limits can be edited on **Pay Rules**.
+- Employee Activity now checks every clocked day, Manual or Auto. Over / short matches the day's own total.
+- When the office marks someone late, the day card says why.
 
 ## Sync
+- An attendance mark made in the office no longer wipes the minutes the till recorded.
 
-- A change made only to a bill's lines or other child details now reaches every counter. Earlier it could be missed.
-- HR payroll, payslips, leave types, loyalty wallet and POS positions now update on screen as soon as new data arrives.
-- Sync keeps its connections ready between cycles, so it runs faster.
-
-## Messages and Recycle Bin
-
-- The first reply after a bill no longer shows a menu, and Close clears the popup.
-- Recycle Bin: View opens a read-only look inside any saved voucher copy. It opens wide, up to 95% of the screen.
+## Important — update order
+This version adds new fields for counters. **Update every counter first.** The office site is updated after that; a till still on the old version will pause its sync until it updates.
