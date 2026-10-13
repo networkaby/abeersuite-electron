@@ -2,6 +2,7 @@ import "server-only";
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { dutyMinutesFor, gradeDay, overtimeMinutes, shortMinutes } from "@/shared/lib/hr/dutyTime";
+import { loadPayRules } from "@/modules/hr/lib/payRulesServer";
 import { monthBounds } from "@/modules/hr/lib/attendanceCalendar";
 import type { MonthOvertime } from "@/shared/lib/hr/myDay";
 
@@ -48,7 +49,8 @@ export type { MonthOvertime };
 
 export async function monthOvertimeFor(userId: number, todayIso: string): Promise<MonthOvertime> {
     const { from, to } = monthBounds(Number(todayIso.slice(0, 4)), Number(todayIso.slice(5, 7)));
-    const [profile, rows] = await Promise.all([
+    const [rules, profile, rows] = await Promise.all([
+        loadPayRules(),
         prisma.staffProfile.findUnique({
             where: { userId },
             select: { dutyMinutes: true, dutyStart: true, dutyEnd: true, weeklyOff: true },
@@ -84,7 +86,7 @@ export async function monthOvertimeFor(userId: number, todayIso: string): Promis
 
         const short = shortMinutes(worked, duty);
         if (short === 0) continue;
-        const grade = gradeDay(worked, duty);
+        const grade = gradeDay(worked, duty, rules);
         if (grade === "ABSENT") continue;                       // payroll already took the whole day
         const alreadyWithheld = grade === "HALF_DAY" ? Math.round(duty / 2) : 0;
         shortfallMinutes += Math.max(0, short - alreadyWithheld);

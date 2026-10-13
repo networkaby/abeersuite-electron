@@ -22,7 +22,7 @@
  *      before the leave day"
  */
 
-import { LATE_GRACE_MINUTES } from "@/shared/lib/constants/hr";
+import { FULL_DAY_FRACTION, HALF_DAY_FRACTION, LATE_GRACE_MINUTES } from "@/shared/lib/constants/hr";
 
 /**
  * How a charged late day is punished.
@@ -40,6 +40,12 @@ import { LATE_GRACE_MINUTES } from "@/shared/lib/constants/hr";
 export type LatePenaltyStyle = "none" | "pay" | "timesLate" | "sharePerSlab" | "shareOfDay";
 
 export interface PayRules {
+    // ── Day grade ────────────────────────────────────────────────────────────
+    /** Worked at least this % of the day's duty → full day (present). */
+    fullDayPct: number;
+    /** Worked at least this % (but under full) → half day. Below it → absent. */
+    halfDayPct: number;
+
     // ── Overtime ─────────────────────────────────────────────────────────────
     /** Each extra hour is paid this many times his normal hour. */
     overtimeRate: number;
@@ -92,6 +98,8 @@ export interface PayRules {
  * absence nobody asked for is the thing the owner wanted charged.
  */
 export const DEFAULT_PAY_RULES: PayRules = {
+    fullDayPct: Math.round(FULL_DAY_FRACTION * 100),
+    halfDayPct: Math.round(HALF_DAY_FRACTION * 100),
     overtimeRate: 1.5,
     shortHoursRate: 1,
     weeklyOffRate: 2,
@@ -125,7 +133,11 @@ export function parsePayRules(v: unknown): PayRules {
     if (!v || typeof v !== "object") return { ...DEFAULT_PAY_RULES };
     const r = v as Record<string, unknown>;
     const d = DEFAULT_PAY_RULES;
+    const fullDayPct = num(r.fullDayPct, d.fullDayPct, 100);
     return {
+        fullDayPct,
+        // A half-day bar above the full-day bar would make half days impossible.
+        halfDayPct:        Math.min(num(r.halfDayPct, d.halfDayPct, 100), fullDayPct),
         overtimeRate:      num(r.overtimeRate, d.overtimeRate, 10),
         shortHoursRate:    num(r.shortHoursRate, d.shortHoursRate, 10),
         weeklyOffRate:     num(r.weeklyOffRate, d.weeklyOffRate, 10),

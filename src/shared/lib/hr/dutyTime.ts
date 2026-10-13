@@ -173,11 +173,23 @@ export type DutyGrade = "PRESENT" | "HALF_DAY" | "ABSENT";
  * a fraction of duty rather than fixed hours: a part-timer on a four-hour duty who
  * works all four has done a full day, and a fixed 6h45m rule would call it half.
  */
-export function gradeDay(workedMinutes: number, dutyMinutes: number): DutyGrade {
+export interface GradeLimits {
+    /** % of duty for a full day — HR → Pay Rules → Day grade. */
+    fullDayPct: number;
+    /** % of duty for a half day; below it the day is absent. */
+    halfDayPct: number;
+}
+
+const DEFAULT_GRADE_LIMITS: GradeLimits = {
+    fullDayPct: FULL_DAY_FRACTION * 100,
+    halfDayPct: HALF_DAY_FRACTION * 100,
+};
+
+export function gradeDay(workedMinutes: number, dutyMinutes: number, limits: GradeLimits = DEFAULT_GRADE_LIMITS): DutyGrade {
     if (dutyMinutes <= 0) return "ABSENT";
-    const share = workedMinutes / dutyMinutes;
-    if (share >= FULL_DAY_FRACTION) return "PRESENT";
-    if (share >= HALF_DAY_FRACTION) return "HALF_DAY";
+    const pct = (workedMinutes / dutyMinutes) * 100;
+    if (pct >= limits.fullDayPct) return "PRESENT";
+    if (pct >= limits.halfDayPct) return "HALF_DAY";
     return "ABSENT";
 }
 

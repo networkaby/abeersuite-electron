@@ -5,6 +5,7 @@ import {
     dutyHoursFor, dutyMinutesFor, gradeDay, lateMinutes, overtimeMinutes, shortMinutes,
 } from "@/shared/lib/hr/dutyTime";
 import { monthOvertimeFor } from "@/modules/hr/lib/monthlyOvertime";
+import { loadPayRules } from "@/modules/hr/lib/payRulesServer";
 import { loadOfficeCalendar } from "@/shared/lib/hr/officeCalendarServer";
 import { userBranchIds } from "@/modules/hr/lib/staffBranchesServer";
 import { nextOfficeDay, shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
@@ -18,7 +19,8 @@ import type { MyDay } from "@/shared/lib/hr/myDay";
 export async function buildMyDay(userId: number): Promise<MyDay> {
     const date = businessTodayIso();
 
-    const [profile, day, month, calendar] = await Promise.all([
+    const [rules, profile, day, month, calendar] = await Promise.all([
+        loadPayRules(),
         prisma.staffProfile.findUnique({
             where: { userId },
             select: { dutyMinutes: true, dutyStart: true, dutyEnd: true, weeklyOff: true },
@@ -78,7 +80,7 @@ export async function buildMyDay(userId: number): Promise<MyDay> {
         // An office mark is the answer when there is one; otherwise the hours speak.
         grade: officeMarked && day?.status
             ? (day.status === "HALF_DAY" ? "HALF_DAY" : day.status === "ABSENT" ? "ABSENT" : "PRESENT")
-            : gradeDay(worked, dutyMinutes),
+            : gradeDay(worked, dutyMinutes, rules),
         officeMarked,
         month,
         nextDuty,

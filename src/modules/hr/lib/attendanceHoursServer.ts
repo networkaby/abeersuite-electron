@@ -161,6 +161,7 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
             // card reads the style off `rules` and says so in words.
             latePenaltyMinutes: lateCharged ? lateDutyCutMinutes(rules, lateBy, duty) : 0,
             lateCharged,
+            gradeLimits: rules,
         }));
     }
 

@@ -16,7 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
-import { BadgeIndianRupee, Clock4, CalendarHeart, CalendarX2, TriangleAlert } from "lucide-react";
+import { BadgeIndianRupee, CalendarCheck, Clock4, CalendarHeart, CalendarX2, TriangleAlert } from "lucide-react";
 import { NumericInput } from "@/shared/components/NumericInput";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DataPageHeader } from "@/shared/components/DataPageHeader";
@@ -38,6 +38,34 @@ interface Rule {
 
 /** "1.5", "2", "1.25" — never "1.50" or "2.0", which read like a machine wrote them. */
 const times = (n: number) => `${Number(n.toFixed(2))} times`;
+
+/** "8h 1m" of a day's duty — the worked example under each grade box. */
+const EXAMPLE_GRADE_DUTY_MINUTES = 10 * 60;
+const shareOfExample = (pct: number) => {
+    const m = Math.ceil((EXAMPLE_GRADE_DUTY_MINUTES * Math.min(100, pct)) / 100);
+    return `${Math.floor(m / 60)}h ${m % 60}m`;
+};
+
+/** Which days count as full, half or absent — judged on the hours worked. */
+const GRADE_RULES: Rule[] = [
+    {
+        key: "fullDayPct",
+        label: "Full day from",
+        suffix: "% of the day's duty",
+        step: 1,
+        explain: (v) => `Working ${v}% or more of the duty is a full day — on a 10-hour duty that is ${shareOfExample(v)} or more.`,
+    },
+    {
+        key: "halfDayPct",
+        label: "Half day from",
+        suffix: "% of the day's duty",
+        step: 1,
+        explain: (v) =>
+            v === 0
+                ? "No day is ever absent on hours alone — anything short of a full day is a half day."
+                : `From ${v}% up to the full-day mark is a half day (${shareOfExample(v)} on a 10-hour duty). Less than that is absent.`,
+    },
+];
 
 const OVERTIME_RULES: Rule[] = [
     {
@@ -362,6 +390,13 @@ export default function PayRulesCard({ canEdit }: { canEdit: boolean }) {
                     divided by the duty hours of the month, so one rule fits every salary and nothing needs changing
                     when a salary is revised.
                 </p>
+
+                {group(
+                    "Day grade",
+                    <CalendarCheck size={15} />,
+                    "How a day is called present, half day or absent from the hours actually worked. A day marked by hand in the office keeps its mark.",
+                    GRADE_RULES,
+                )}
 
                 {group(
                     "Overtime",

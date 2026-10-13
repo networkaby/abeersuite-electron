@@ -8,6 +8,7 @@ import { businessTodayIso, toDateOnlyUtc } from "@/shared/lib/format/formatDate"
 import { monthBounds } from "@/modules/hr/lib/attendanceCalendar";
 import { dutyHoursFor, dutyMinutesFor } from "@/shared/lib/hr/dutyTime";
 import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
+import { loadPayRules } from "@/modules/hr/lib/payRulesServer";
 import type { RegisterPayload, RegisterPerson, HolidayDto } from "@/modules/hr/lib/attendanceTypes";
 import { USER_BRANCHES_SELECT, branchIdsFrom } from "@/modules/hr/lib/staffBranchesServer";
 import type { AttendanceStatus, LeaveKind } from "@/shared/lib/schemas/hrAttendanceSchema";
@@ -41,8 +42,9 @@ export async function GET(req: Request) {
             return NextResponse.json({ error: "Bad date range" }, { status: 400 });
         }
 
-        const [seasonal, users, marks, leaves, holidays] = await Promise.all([
+        const [seasonal, rules, users, marks, leaves, holidays] = await Promise.all([
             loadSeasonalHours(),
+            loadPayRules(),
             prisma.user.findMany({
                 orderBy: { name: "asc" },
                 select: {
@@ -90,6 +92,7 @@ export async function GET(req: Request) {
                 ownDutyStart:   u.staffProfile?.dutyStart ?? null,
                 ownDutyEnd:     u.staffProfile?.dutyEnd ?? null,
                 seasonal,
+                gradeLimits: { fullDayPct: rules.fullDayPct, halfDayPct: rules.halfDayPct },
                 marks: {}, leaveDays: {},
             });
         }

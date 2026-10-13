@@ -111,7 +111,7 @@ export async function GET(req: Request) {
                 dutyMinutes: duty,
                 dutyStart: hours.start,
                 dutyEnd: hours.end,
-                grade: gradeDay(worked, duty),
+                grade: gradeDay(worked, duty, rules),
                 overtimeMinutes: overtimeMinutes(worked, duty),
                 shortMinutes: shortMinutes(worked, duty),
                 weeklyOff: (p?.weeklyOff ?? [0]).includes(weekdayOf(date)),

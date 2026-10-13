@@ -138,7 +138,7 @@ export async function attendanceEffectFor(
 
         // An absence nobody asked for — charged whichever hand wrote the day,
         // because "he did not come" needs no clock to establish.
-        const status = measured ? gradeDay(worked, duty) : r.status;
+        const status = measured ? gradeDay(worked, duty, rules) : r.status;
         if (status === "ABSENT" && !grantedLeave(day)) out.unaskedAbsentDays += 1;
 
         if (!measured) continue;   // the office's mark stands; nothing to count

@@ -2,6 +2,7 @@ import "server-only";
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { dutyHoursFor, dutyMinutesFor, gradeDay } from "@/shared/lib/hr/dutyTime";
+import { loadPayRules } from "@/modules/hr/lib/payRulesServer";
 import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import { shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
 import { ATTENDANCE_SOURCE_SELECT, autoCounts, workedOf } from "@/shared/lib/hr/attendanceSource";
@@ -37,8 +38,9 @@ import { unpaidLeaveDaysFor } from "./leaveBalance";
 export async function nonPayableDays(userId: number, fromIso: string, toIso: string): Promise<Map<string, 0 | 0.5>> {
     const from = new Date(`${fromIso}T00:00:00.000Z`);
     const to = new Date(`${toIso}T00:00:00.000Z`);
-    const [seasonal, profile, rows, unpaid] = await Promise.all([
+    const [seasonal, rules, profile, rows, unpaid] = await Promise.all([
         loadSeasonalHours(),
+        loadPayRules(),
         prisma.staffProfile.findUnique({ where: { userId }, select: { dutyMinutes: true, dutyStart: true, dutyEnd: true } }),
         // Every stored row, not only the three exception statuses: a COUNTER day
         // stored as PRESENT may still grade to HALF or ABSENT on its hours, and
@@ -67,7 +69,7 @@ export async function nonPayableDays(userId: number, fromIso: string, toIso: str
     const out = new Map<string, 0 | 0.5>();
     for (const r of rows) {
         const iso = r.date.toISOString().slice(0, 10);
-        const status = autoCounts(r) ? gradeDay(workedOf(r), dutyOnDay(iso)) : r.status;
+        const status = autoCounts(r) ? gradeDay(workedOf(r), dutyOnDay(iso), rules) : r.status;
         if (status === "ABSENT") out.set(iso, 0);
         else if (status === "HALF_DAY") out.set(iso, 0.5);
         else if (status === "LEAVE" && unpaid.has(iso)) out.set(iso, 0);

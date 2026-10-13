@@ -99,7 +99,7 @@ export function readDay(person: RegisterPerson, iso: string, holidayDates: Reado
         if (mark.source === "COUNTER" && mark.workedMinutes > 0) {
             return {
                 kind: "marked",
-                status: gradeDay(mark.workedMinutes, duty.minutes),
+                status: gradeDay(mark.workedMinutes, duty.minutes, person.gradeLimits),
                 stored: true,
                 source: mark.source,
                 workedMinutes: mark.workedMinutes,

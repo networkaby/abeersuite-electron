@@ -4,7 +4,7 @@
 // wise."* Pure, so the API, the register's day panel and the month sheet all
 // answer the same way — and so the working can be checked without a database.
 
-import type { DutyGrade } from "@/shared/lib/hr/dutyTime";
+import type { DutyGrade, GradeLimits } from "@/shared/lib/hr/dutyTime";
 import { earlyMinutes, gradeDay, lateMinutes, overtimeMinutes, shortMinutes } from "@/shared/lib/hr/dutyTime";
 import type { AttendanceEffect, PayRules } from "@/shared/lib/hr/payRules";
 import type { PayslipAttendanceData, PayslipAttendanceDay } from "@/shared/components/print/PayslipBody";
@@ -230,6 +230,8 @@ export function buildDayBreakup(input: {
     holidayName: string | null;
     latePenaltyMinutes: number;
     lateCharged: boolean;
+    /** Full / half day bars from Pay Rules. */
+    gradeLimits: GradeLimits;
 }): DayBreakup {
     const spans = input.spans
         .map((s) => resolveOpenSpan(s, input.lastSeenAt, input.isToday, input.idleLimitMinutes))
@@ -267,7 +269,7 @@ export function buildDayBreakup(input: {
         leaveKind: input.leaveKind,
         overtimeMinutes: overtimeMinutes(input.workedMinutes, input.dutyMinutes),
         shortMinutes: shortMinutes(input.workedMinutes, input.dutyMinutes),
-        grade: gradeDay(input.workedMinutes, input.dutyMinutes),
+        grade: gradeDay(input.workedMinutes, input.dutyMinutes, input.gradeLimits),
         status: input.status,
         manual: input.manual,
         till: input.till,
