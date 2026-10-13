@@ -147,7 +147,7 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                     strong hint="What pay uses on an Auto day — the counter's figure unless it was corrected"
                     onCorrect={onCorrect && ((m) => onCorrect("worked", m))}
                 />
-                <Figure label="Times active" value={String(day.activeCount)} hint="Separate stretches at the machine" />
+                <Figure label="Duty segments" value={String(day.activeCount)} hint="Separate on-duty segments at the machine" />
                 <Figure label="Away" value={orDash(day.idleMinutes)} hint={`Between stretches. A gap past ${idleLimitMinutes} min stops the clock — not counted, not paid`} />
                 <CorrectableFigure
                     label="Late by" minutes={day.lateBy} till={day.till.lateBy} corrected={day.corrected.late}

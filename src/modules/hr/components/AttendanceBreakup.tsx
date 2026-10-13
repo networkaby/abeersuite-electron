@@ -71,7 +71,7 @@ export default function AttendanceBreakup({ userId, from, to, canEdit }: {
                         <section className="rounded-lg border border-border bg-card px-4 py-3">
                             <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4 lg:grid-cols-7">
                                 <Tally label="Days measured" value={String(totals.days)} hint="Days the clock actually recorded stretches for" />
-                                <Tally label="Times active" value={String(totals.activeCount)} hint="Separate stretches across all these days" />
+                                <Tally label="Duty segments" value={String(totals.activeCount)} hint="Separate on-duty segments across all these days" />
                                 <Tally label="Worked" value={formatWorked(totals.worked)} strong hint={`Of ${formatWorked(totals.duty)} duty`} />
                                 <Tally
                                     label="Accounted"
