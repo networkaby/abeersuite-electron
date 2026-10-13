@@ -77,12 +77,8 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
     const reads = day.status || day.grade;
     const shut = day.weeklyOff || !!day.holidayName;
     const account = accountDay(day, rules);
-    // Agrees with the accounting below: today's short carried forward, or the
-    // extra left once today's own penalty is paid.
-    const lateCut = account.lines.find((l) => l.key === "late")?.accounted ?? 0;
-    const overShort = account.carry.minutes > 0
-        ? -account.carry.minutes
-        : Math.max(0, day.overtimeMinutes + lateCut);
+    // Owner, 2026-10-13: day total against the expected duty, nothing else.
+    const overShort = account.total - day.dutyMinutes;
 
     // A day with no stretches is not a day with no hours — it is a day from
     // before this was recorded, or one nobody worked. A card full of zeroes would
@@ -179,7 +175,7 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                     label="Over / short"
                     value={shut ? "—" : overShort > 0 ? `+${formatWorked(overShort)}` : overShort < 0 ? `−${formatWorked(-overShort)}` : "—"}
                     tone={shut ? undefined : overShort > 0 ? "good" : overShort < 0 ? "warn" : undefined}
-                    hint={shut ? "Not judged — every minute of a shut day is granted at its own rate" : "After today's penalty: the extra left, or today's short carried forward"}
+                    hint={shut ? "Not judged — every minute of a shut day is granted at its own rate" : "Day total against the expected duty hours"}
                 />
             </div>
 
