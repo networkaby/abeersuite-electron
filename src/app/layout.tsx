@@ -10,6 +10,7 @@ import StatusTitleUpdater from "@/shared/components/StatusTitleUpdater";
 import ReplicaReadyGate from "@/shared/components/ReplicaReadyGate";
 import UpdatePrompt from "@/shared/components/UpdatePrompt";
 import ConfirmHost from "@/shared/components/ConfirmHost";
+import CounterLockVeil from "@/shared/components/CounterLockVeil";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { CANONICAL_SITE_URL, INDEXABLE } from "@/shared/lib/appMode";
 
@@ -72,6 +73,8 @@ export default function RootLayout({
       className={`${fontSans.variable} ${fontMono.variable} ${robotoCondensed.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        {/* First in the body: a locked till's first paint is the cover, not the app. */}
+        <CounterLockVeil />
         <CounterReconciler />
         <GlAccountsWarmup />
         <PartiesWarmup />

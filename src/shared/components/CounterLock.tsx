@@ -59,6 +59,15 @@ export default function CounterLock() {
 
     // Does this till lock, and is it locked already (a refresh, a new window)?
     useEffect(() => { void refreshCounterLock(); }, []);
+    // The server's first-paint stand-in (CounterLockVeil) goes once this screen knows:
+    // either this cover is up in its place, or the till says it is not locked.
+    useEffect(() => {
+        if (lock.enabled === null && !lock.locked) return;
+        // Hidden, not removed: the node is React's (server-rendered), and pulling it
+        // out from under React breaks the next render of the root layout.
+        const veil = document.getElementById("counter-lock-veil");
+        if (veil) veil.style.display = "none";
+    }, [lock.enabled, lock.locked]);
     useEffect(() => {
         void getLocalCounterSetup().then((s) => setCounterNumber(s?.counterNumber ?? null)).catch(() => { });
     }, []);
