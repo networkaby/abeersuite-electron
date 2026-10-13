@@ -144,7 +144,10 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                 <Figure label="Actual Worked" value={formatWorked(day.till.workedMinutes)} hint="What the counter measured — never changed by hand" />
                 <CorrectableFigure
                     label="Adjusted Worked" minutes={day.workedMinutes} till={day.till.workedMinutes} corrected={day.corrected.worked}
-                    strong hint="What pay uses on an Auto day — the counter's figure unless it was corrected"
+                    // Owner, 2026-10-13: shows the day total by default. The pencil
+                    // still corrects the worked minutes the total is built from.
+                    display={shut ? undefined : account.total}
+                    strong hint="The day total — worked, plus extra, less penalty. The pencil corrects the worked minutes it starts from"
                     onCorrect={onCorrect && ((m) => onCorrect("worked", m))}
                 />
                 <Figure label="Duty segments" value={String(day.activeCount)} hint="Separate on-duty segments at the machine" />
@@ -366,9 +369,11 @@ function Figure({ label, value, hint, strong, tone }: {
  * value with the till's own beside it, so the override never hides what it
  * overrode; ↺ hands the figure back to the till.
  */
-function CorrectableFigure({ label, minutes, till, corrected, hint, strong, tone, dashZero, onCorrect }: {
+function CorrectableFigure({ label, minutes, display, till, corrected, hint, strong, tone, dashZero, onCorrect }: {
     label: string;
     minutes: number;
+    /** What to show when not editing, if not `minutes` itself. Editing still edits `minutes`. */
+    display?: number;
     till: number;
     corrected: boolean;
     hint?: string;
@@ -417,7 +422,8 @@ function CorrectableFigure({ label, minutes, till, corrected, hint, strong, tone
         );
     }
 
-    const show = dashZero ? orDash(minutes) : formatWorked(minutes);
+    const shown = display ?? minutes;
+    const show = dashZero ? orDash(shown) : formatWorked(shown);
     return (
         <div title={hint}>
             <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
