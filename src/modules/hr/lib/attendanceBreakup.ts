@@ -6,7 +6,7 @@
 
 import type { DutyGrade, GradeLimits } from "@/shared/lib/hr/dutyTime";
 import { earlyMinutes, gradeDay, lateMinutes, overtimeMinutes, shortMinutes } from "@/shared/lib/hr/dutyTime";
-import { pendingTotal, type AttendanceEffect, type PayRules, type PendingDay, type PendingItem } from "@/shared/lib/hr/payRules";
+import { dayTargetMinutes, pendingTotal, type AttendanceEffect, type PayRules, type PendingDay, type PendingItem } from "@/shared/lib/hr/payRules";
 import type { PayslipAttendanceData, PayslipAttendanceDay } from "@/shared/components/print/PayslipBody";
 
 /** One active stretch, as the screens want it: ISO instants, minutes, why it ended. */
@@ -300,7 +300,7 @@ export function buildDayBreakup(input: {
  * styles that are not a plain multiple ("10% of day / 5 min").
  */
 export interface AccountLine {
-    key: "duty" | "lateCover" | "madeUp" | "overtime" | "weeklyOff" | "holiday" | "late";
+    key: "duty" | "lateCover" | "madeUp" | "overtime" | "halfExtra" | "weeklyOff" | "holiday" | "late";
     label: string;
     /** The raw minutes this line is about — the lateness itself for the late line. */
     minutes: number;
@@ -342,6 +342,8 @@ export interface DayAccount {
      * came out even or ahead.
      */
     carry: ShortBalance;
+    /** The duty the day is judged against — all of it, or half on a half day. */
+    target: number;
 }
 
 const times = (n: number) => `× ${Number.isInteger(n) ? `${n}.0` : String(n)}`;
@@ -375,7 +377,7 @@ export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
                 note: "paid outside the netting",
             });
         }
-        return { lines, total: sum(lines), carry: NO_SHORT };
+        return { lines, total: sum(lines), target: 0, carry: NO_SHORT };
     }
 
     // Owner, 2026-10-13: the day first makes up the duty pending from earlier
@@ -389,15 +391,23 @@ export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
     const addedOf = (kind: "short" | "late" | "absent") =>
         (p?.added ?? []).filter((a) => a.kind === kind).reduce((t, a) => t + a.minutes, 0);
 
-    const normal = Math.min(day.workedMinutes, day.dutyMinutes);
-    lines.push({ key: "duty", label: "Normal duty", minutes: normal, rateLabel: times(1), accounted: normal, note: null });
+    // A half day is judged against half the duty: the other half is already
+    // cut from the salary (owner, 2026-10-13).
+    const half = day.grade === "HALF_DAY";
+    const target = dayTargetMinutes(day.dutyMinutes, day.grade);
+    const over = Math.max(0, day.workedMinutes - target);
+    const normal = Math.min(day.workedMinutes, target);
+    lines.push({
+        key: "duty", label: half ? "Normal duty (half day)" : "Normal duty", minutes: normal, rateLabel: times(1), accounted: normal,
+        note: half ? `half day — judged against ${fmtShort(target)}; the other half is cut from salary` : null,
+    });
 
     // Always shown, above overtime: the extra recovers earlier short first,
     // and only what is left is overtime (30m short + 50m extra → 30m + 20m).
     // Normal duty never goes past the expected hours — the rest is extra.
     // Today's extra pays today's late penalty first (owner, 2026-10-13).
     const lateCut = day.lateCharged && rules.latePenaltyStyle !== "none" ? day.latePenaltyMinutes : 0;
-    const coveredLate = Math.min(day.overtimeMinutes, lateCut);
+    const coveredLate = Math.min(over, lateCut);
     if (coveredLate > 0) {
         lines.push({
             key: "lateCover", label: "Extra — covers today's penalty", minutes: coveredLate, rateLabel: times(1), accounted: coveredLate,
@@ -412,11 +422,19 @@ export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
             : carried > 0 ? "no extra today to recover the earlier short" : null,
     });
 
-    lines.push({
-        key: "overtime", label: "Overtime", minutes: overtime,
-        rateLabel: times(rules.overtimeRate), accounted: Math.round(overtime * rules.overtimeRate),
-        note: day.overtimeMinutes > 0 && overtime === 0 ? "the extra went to recover earlier short" : null,
-    });
+    if (half) {
+        const normalExtra = p ? p.normalExtra : 0;
+        lines.push({
+            key: "halfExtra", label: "Half-day extra", minutes: normalExtra, rateLabel: times(1), accounted: normalExtra,
+            note: normalExtra > 0 ? "a half day's extra is paid at the normal rate — never overtime" : null,
+        });
+    } else {
+        lines.push({
+            key: "overtime", label: "Overtime", minutes: overtime,
+            rateLabel: times(rules.overtimeRate), accounted: Math.round(overtime * rules.overtimeRate),
+            note: over > 0 && overtime === 0 ? "the extra went to recover earlier short" : null,
+        });
+    }
 
     lines.push(lateLine(day, rules, lateCut));
 
@@ -424,7 +442,6 @@ export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
     // left of the earlier days' pending (the extra makes that up first).
     const leftOfBefore = Math.max(0, carried - madeUp);
     const carryMinutes = p ? Math.max(0, pendingTotal(p.after) - leftOfBefore) : 0;
-    const withheld = day.grade === "HALF_DAY" ? Math.round(day.dutyMinutes / 2) : 0;
     const absentAdded = addedOf("absent");
     const parts = [
         addedOf("short") > 0 ? `${fmtShort(addedOf("short"))} short` : null,
@@ -434,12 +451,11 @@ export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
     const carryNote = day.grade === "ABSENT" && absentAdded === 0 && day.shortMinutes > 0
         ? "the day is paid at zero already — nothing carried"
         : carryMinutes > 0
-            ? [parts.join(" + "), withheld > 0 ? `half the day (${fmtShort(withheld)}) is already withheld on the payslip` : null]
-                .filter(Boolean).join(" · ")
+            ? parts.join(" + ")
             : null;
 
     return {
-        lines, total: sum(lines),
+        lines, total: sum(lines), target,
         carry: {
             before: carried, beforeNote: p && p.before.length ? pendingBreakup(p.before) : null,
             recovered: Math.min(madeUp, carried),

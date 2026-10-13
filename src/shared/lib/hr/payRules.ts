@@ -202,6 +202,8 @@ export function lateDutyCutMinutes(rules: PayRules, lateMinutes: number, dutyMin
 export interface AttendanceEffect {
     /** Each day's overtime after pending duty was made up — paid at `overtimeRate`. */
     payableMinutes: number;
+    /** Half-day extra left after recovery — paid at the normal rate (× 1). */
+    halfDayExtraMinutes: number;
     /** Duty still pending at the end of the period — cut at `shortHoursRate`. */
     owedMinutes: number;
     /** Minutes worked on their own weekly off, and on a listed shop holiday. */
@@ -214,8 +216,17 @@ export interface AttendanceEffect {
     unaskedAbsentDays: number;
 }
 
+/**
+ * The duty a day is judged against: the whole of it, or half on a half day —
+ * the other half is already cut from the salary, so it is not short as well.
+ */
+export function dayTargetMinutes(dutyMinutes: number, grade: string): number {
+    return grade === "HALF_DAY" ? Math.round(dutyMinutes / 2) : dutyMinutes;
+}
+
 /** A period in which the clock did nothing at all. */
 export const EMPTY_ATTENDANCE_EFFECT: AttendanceEffect = {
+    halfDayExtraMinutes: 0,
     payableMinutes: 0, owedMinutes: 0, weeklyOffMinutes: 0, holidayMinutes: 0,
     lateDays: 0, chargedLateDays: 0, unaskedAbsentDays: 0,
 };
@@ -250,6 +261,12 @@ export interface PendingDayInput {
     date: string;
     /** Minutes worked beyond the day's duty. */
     extra: number;
+    /**
+     * A half day: half its salary is already cut, so its extra beyond half the
+     * duty recovers short and is otherwise paid at the normal rate — never
+     * overtime (owner, 2026-10-13: *"halfway extra never overtime"*).
+     */
+    halfDay?: boolean;
     /** What the day adds to pending — its short, its penalties. */
     adds: PendingItem[];
 }
@@ -264,6 +281,8 @@ export interface PendingDay {
     madeUp: number;
     /** Extra minutes left once nothing was pending — paid at the overtime rate. */
     overtime: number;
+    /** The same, on a half day — paid at the normal rate, never overtime. */
+    normalExtra: number;
     /** Still pending at the end of the day. */
     after: PendingItem[];
 }
@@ -287,7 +306,11 @@ export function walkPendingDuty(days: readonly PendingDayInput[]): PendingDay[] 
             if (queue[0].minutes === 0) queue = queue.slice(1);
         }
         pending = [...queue, ...added];
-        out.push({ date: d.date, before, added, madeUp, overtime: extra, after: pending });
+        out.push({
+            date: d.date, before, added, madeUp,
+            overtime: d.halfDay ? 0 : extra, normalExtra: d.halfDay ? extra : 0,
+            after: pending,
+        });
     }
     return out;
 }

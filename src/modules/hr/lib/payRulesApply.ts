@@ -5,7 +5,7 @@ import { dutyHoursFor, dutyMinutesFor, gradeDay, lateMinutes, overtimeMinutes, s
 import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import { shopDateFromIso, type SeasonalHours } from "@/shared/lib/hr/seasonalHours";
 import {
-    EMPTY_ATTENDANCE_EFFECT, lateDutyCutMinutes, pendingTotal, walkPendingDuty,
+    EMPTY_ATTENDANCE_EFFECT, dayTargetMinutes, lateDutyCutMinutes, pendingTotal, walkPendingDuty,
     type AttendanceEffect, type PayRules, type PendingDay, type PendingDayInput, type PendingItem,
 } from "@/shared/lib/hr/payRules";
 import { ATTENDANCE_SOURCE_SELECT, autoCounts, lateOf, workedOf } from "@/shared/lib/hr/attendanceSource";
@@ -174,16 +174,14 @@ export async function attendanceLedgerFor(
             if (holidays.has(day)) { out.holidayMinutes += worked; continue; }
             if (offDays.has(weekdayOf(day))) { out.weeklyOffMinutes += worked; continue; }
 
-            const over = overtimeMinutes(worked, duty);
+            // A half day is judged against half the duty — payroll already cut
+            // the other half from the salary.
+            const target = dayTargetMinutes(duty, status);
+            const over = overtimeMinutes(worked, target);
             extra = over;
 
-            const short = shortMinutes(worked, duty);
-            if (short > 0 && status !== "ABSENT") {
-                // Payroll has already withheld half of a half day; only the rest
-                // is pending here, or the same hour is taken from him twice.
-                const alreadyWithheld = status === "HALF_DAY" ? Math.round(duty / 2) : 0;
-                adds.push({ date: day, kind: "short", minutes: Math.max(0, short - alreadyWithheld) });
-            }
+            const short = shortMinutes(worked, target);
+            if (short > 0 && status !== "ABSENT") adds.push({ date: day, kind: "short", minutes: short });
 
             // Lateness, against the opening that applied on that very day.
             const late = lateOf(r, lateMinutes(r.firstInAt, hours.start, undefined, rules.lateGraceMinutes) ?? 0);
@@ -200,11 +198,12 @@ export async function attendanceLedgerFor(
                 }
             }
         }
-        ledger.push({ date: day, extra, adds });
+        ledger.push({ date: day, extra, adds, halfDay: measured && status === "HALF_DAY" });
     }
 
     const days = walkPendingDuty(ledger);
     out.payableMinutes = days.reduce((t, d) => t + d.overtime, 0);
+    out.halfDayExtraMinutes = days.reduce((t, d) => t + d.normalExtra, 0);
     out.owedMinutes = pendingTotal(days[days.length - 1]?.after ?? []);
     return { effect: out, days };
 }
@@ -241,6 +240,7 @@ export function payRuleLines(
     };
 
     earn("Overtime", perHour * rules.overtimeRate * (effect.payableMinutes / 60));
+    earn("Half-day extra", perHour * ((effect.halfDayExtraMinutes ?? 0) / 60));
     earn("Weekly off duty", perHour * rules.weeklyOffRate * (effect.weeklyOffMinutes / 60));
     earn("Holiday duty", perHour * rules.holidayRate * (effect.holidayMinutes / 60));
 

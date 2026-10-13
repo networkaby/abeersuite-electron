@@ -78,7 +78,8 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
     const shut = day.weeklyOff || !!day.holidayName;
     const account = accountDay(day, rules);
     // Owner, 2026-10-13: day total against the expected duty, nothing else.
-    const overShort = account.total - day.dutyMinutes;
+    // On a half day, against half the duty (the other half is cut from salary).
+    const overShort = account.total - account.target;
 
     // A day with no stretches is not a day with no hours — it is a day from
     // before this was recorded, or one nobody worked. A card full of zeroes would
