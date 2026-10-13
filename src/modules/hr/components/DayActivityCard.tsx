@@ -201,11 +201,32 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                             <td />
                             <td className="py-1 text-right font-mono tabular-nums">{signed(account.total)}</td>
                             <td className="hidden py-1 pl-3 text-[11px] font-normal text-muted-foreground sm:table-cell">
-                                {shut
-                                    ? "paid at its own rate, outside pending duty"
-                                    : `pending after today: ${day.pending && pendingTotal(day.pending.after) > 0 ? formatWorked(pendingTotal(day.pending.after)) : "nothing"}`}
+                                {shut ? "paid at its own rate, outside pending duty" : "duty − penalty + extra time"}
                             </td>
                         </tr>
+                        {/* Owner, 2026-10-13: the short is neither today's time nor a
+                            penalty, so it sits below the total and is never part of it —
+                            expected − day total, carried forward when it falls short. */}
+                        {!shut && (
+                            <>
+                                <tr className={cn("text-[11px]", account.carry.minutes > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground/60")}>
+                                    <td className="pt-1.5">Short of duty — carried forward</td>
+                                    <td className="pt-1.5 text-right font-mono tabular-nums">{orDash(account.carry.minutes)}</td>
+                                    <td />
+                                    <td />
+                                    <td className="hidden pt-1.5 pl-3 sm:table-cell">{account.carry.note ?? ""}</td>
+                                </tr>
+                                <tr className="text-[11px] text-muted-foreground">
+                                    <td>Pending after today</td>
+                                    <td className="text-right font-mono tabular-nums">
+                                        {orDash(day.pending ? pendingTotal(day.pending.after) : 0)}
+                                    </td>
+                                    <td />
+                                    <td />
+                                    <td className="hidden pl-3 sm:table-cell">made up by a later day&apos;s extra, or cut at month end</td>
+                                </tr>
+                            </>
+                        )}
                     </tfoot>
                 </table>
             </div>
@@ -272,7 +293,6 @@ function AccountRow({ line }: { line: AccountLine }) {
     // A carried pending figure is read in its label, so it is never greyed.
     const carried = line.key === "pending" && !!line.note;
     const idle = line.minutes === 0 && line.accounted === 0 && !carried;
-    const toPending = line.toPending ?? 0;
     return (
         <tr className={cn(idle && "text-muted-foreground/60", carried && "text-amber-600 dark:text-amber-400")}>
             <td className="py-0.5">{line.label}</td>
@@ -283,18 +303,9 @@ function AccountRow({ line }: { line: AccountLine }) {
                 line.accounted < 0 && "text-amber-600 dark:text-amber-400",
                 line.accounted > 0 && line.key !== "duty" && "text-emerald-600 dark:text-emerald-400",
             )}>
-                {toPending > 0
-                    ? "—"
-                    : line.key === "duty" ? (line.accounted > 0 ? formatWorked(line.accounted) : "—") : signed(line.accounted)}
+                {line.key === "duty" ? (line.accounted > 0 ? formatWorked(line.accounted) : "—") : signed(line.accounted)}
             </td>
             <td className="hidden py-0.5 pl-3 text-[11px] text-muted-foreground sm:table-cell">
-                {/* Pending minutes are NOT part of the day total, so they never sit
-                    in the Accounted column — only here, tagged with where they went. */}
-                {toPending > 0 && (
-                    <span className="mr-1.5 rounded bg-amber-100 px-1 py-px font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                        +{formatWorked(toPending)} to pending
-                    </span>
-                )}
                 {line.note ?? ""}
             </td>
         </tr>

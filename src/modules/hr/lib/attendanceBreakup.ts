@@ -300,7 +300,7 @@ export function buildDayBreakup(input: {
  * styles that are not a plain multiple ("10% of day / 5 min").
  */
 export interface AccountLine {
-    key: "pending" | "duty" | "madeUp" | "overtime" | "weeklyOff" | "holiday" | "late" | "short" | "absent";
+    key: "pending" | "duty" | "madeUp" | "overtime" | "weeklyOff" | "holiday" | "late";
     label: string;
     /** The raw minutes this line is about — the lateness itself for the late line. */
     minutes: number;
@@ -310,14 +310,19 @@ export interface AccountLine {
     accounted: number;
     /** Why it is what it is, when a reader would ask. */
     note: string | null;
-    /** Minutes this line sends to pending duty instead of taking off the day. */
-    toPending?: number;
 }
 
 export interface DayAccount {
     lines: AccountLine[];
-    /** Every line's `accounted`, summed — the day as if it stood alone. */
+    /** Every line's `accounted`, summed: duty − penalty + extra time. */
     total: number;
+    /**
+     * Owner, 2026-10-13: *"expected − day total = if negative short (carry
+     * forward)"*. Shown below the total, never part of it: what this day leaves
+     * pending — its short plus its penalty not made up today. 0 on a day that
+     * came out even or ahead.
+     */
+    carry: { minutes: number; note: string | null };
 }
 
 const times = (n: number) => `× ${Number.isInteger(n) ? `${n}.0` : String(n)}`;
@@ -351,7 +356,7 @@ export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
                 note: "paid outside the netting",
             });
         }
-        return { lines, total: sum(lines) };
+        return { lines, total: sum(lines), carry: { minutes: 0, note: null } };
     }
 
     // Owner, 2026-10-13: the day first makes up the duty pending from earlier
@@ -391,26 +396,25 @@ export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
 
     lines.push(lateLine(day, rules, addedOf("late")));
 
-    const shortAdded = addedOf("short");
+    // What today leaves pending: everything after today, less what is still
+    // left of the earlier days' pending (the extra makes that up first).
+    const leftOfBefore = Math.max(0, carried - madeUp);
+    const carryMinutes = p ? Math.max(0, pendingTotal(p.after) - leftOfBefore) : 0;
     const withheld = day.grade === "HALF_DAY" ? Math.round(day.dutyMinutes / 2) : 0;
-    lines.push({
-        key: "short", label: "Short of duty", minutes: day.shortMinutes, rateLabel: "", accounted: 0, toPending: shortAdded,
-        note: day.grade === "ABSENT" && day.shortMinutes > 0
-            ? "the day is paid at zero already — not added to pending"
-            : shortAdded > 0
-                ? (withheld > 0 ? `half the day (${fmtShort(withheld)}) is already withheld on the payslip — only the rest is pending` : "made up by a later day's extra, or cut at month end")
-                : null,
-    });
-
     const absentAdded = addedOf("absent");
-    if (absentAdded > 0) {
-        lines.push({
-            key: "absent", label: "Absence penalty", minutes: absentAdded, rateLabel: "", accounted: 0, toPending: absentAdded,
-            note: "absent with no leave granted — the day itself is paid at zero",
-        });
-    }
+    const parts = [
+        addedOf("short") > 0 ? `${fmtShort(addedOf("short"))} short` : null,
+        addedOf("late") > 0 && carryMinutes > 0 ? `${fmtShort(Math.min(addedOf("late"), carryMinutes))} late penalty` : null,
+        absentAdded > 0 ? `${fmtShort(absentAdded)} absence penalty` : null,
+    ].filter(Boolean);
+    const carryNote = day.grade === "ABSENT" && absentAdded === 0 && day.shortMinutes > 0
+        ? "the day is paid at zero already — nothing carried"
+        : carryMinutes > 0
+            ? [parts.join(" + "), withheld > 0 ? `half the day (${fmtShort(withheld)}) is already withheld on the payslip` : null]
+                .filter(Boolean).join(" · ")
+            : null;
 
-    return { lines, total: sum(lines) };
+    return { lines, total: sum(lines), carry: { minutes: carryMinutes, note: carryNote } };
 }
 
 function lateLine(day: DayBreakup, rules: PayRules, added: number): AccountLine {
@@ -421,7 +425,7 @@ function lateLine(day: DayBreakup, rules: PayRules, added: number): AccountLine 
         return { ...base, rateLabel: rateOfLate(rules), accounted: 0, note: `not charged — inside the first ${n} free late ${n === 1 ? "day" : "days"}` };
     }
     if (rules.latePenaltyStyle === "none") return { ...base, rateLabel: "—", accounted: 0, note: "no late penalty is set" };
-    return { ...base, rateLabel: rateOfLate(rules), accounted: 0, toPending: added, note: "charged — the free late days are used up" };
+    return { ...base, rateLabel: rateOfLate(rules), accounted: -added, note: "charged — the free late days are used up" };
 }
 
 /** The late rule as a short label — the multiple, or the slab, or the flat share. */
@@ -476,7 +480,6 @@ export function freezeAttendanceForPayslip(
         const acc = accountDay(d, rules);
         const line = (key: AccountLine["key"]) => acc.lines.find((l) => l.key === key);
         const late = line("late");
-        const short = line("short");
         const ot = line("overtime");
         const shut = line("holiday") ?? line("weeklyOff");
         out.push({
@@ -489,8 +492,8 @@ export function freezeAttendanceForPayslip(
             overtimeAccounted: ot?.accounted ?? 0,
             late: late?.minutes ?? 0,
             lateAccounted: late?.accounted ?? 0,
-            short: short?.minutes ?? 0,
-            shortAccounted: short?.accounted ?? 0,
+            short: d.shortMinutes,
+            shortAccounted: -acc.carry.minutes,
             grantedAccounted: shut?.accounted ?? 0,
             total: acc.total,
         });
