@@ -14,7 +14,7 @@ Sources of truth: `AGENTS.md` §8 and `docs/commands.md` §0 (the convention) an
 - **`main` only.** Never release from `dev`, `d_office`, or a detached HEAD. The tag the script mints points at `HEAD`, so releasing off `dev` puts `v<version>` on a commit `main` does not contain and the two remotes stop agreeing about what that version is.
 - **Two source remotes, both must end level.** `origin` = `devloperakramul/abeersuite-electron`, `production` = `akramuljakir/abeersuite-electron`.
 - **Release is the one exception to "never push".** Steps 5, 7 and 8 are pushes the owner asked for by saying the word "release". The `d_office` / `d_shop` pushes in step 9 are **not** — the owner runs those; the agent only reminds. Everything else in this repo still stops at the commit.
-- **Publish as soon as possible — no pauses.** No smoke-test stop, no waiting for the owner to test. If something in the release looks risky and untested, test it yourself (tsc, lint, drive the dev server, run the packed exe) and carry on.
+- **Publish as soon as possible — no pauses.** No smoke-test stop, no waiting for the owner to test — the only questions are the notes/urgency tier and the variant. If something in the release looks risky and untested, test it yourself (tsc, lint, drive the dev server, run the packed exe) and carry on.
 - **A `-` in the version makes it a test build.** `1.3.1-pre.1` publishes to `GITHUB_UPDATE_REPO_2` **only**, marked a GitHub prerelease. A version with no `-` publishes to **every** repo. The gate is in `scripts/release-electron.ts` and needs nothing set by hand — do not reach for `RELEASE_ONLY_REPO` to get this, that is the retry path.
   - Repo 1 is what the tills update from (`GITHUB_DOWNLOAD_UPDATE_REPO` → `electron/updateManager.ts`). Publishing there reaches real counters.
   - Repo 2 is the test channel. Counters never poll it, and `allowPrerelease` is off, so a test build cannot reach a till by accident.
@@ -31,7 +31,7 @@ git status --porcelain && git branch --show-current && git log --oneline -1
 
 - Working tree clean? Uncommitted work must be resolved or stashed first — ask the owner, never discard.
 - `.env` present with `GITHUB_UPDATE_REPO_1` + `GH_TOKEN_1` (the script scans `_1`, `_2`, … until a gap; a repo with no matching token is fatal).
-- **Read the build variant** — `APP_MODE` and `LANDING_PAGE` in `.env` decide which product this installer is. State them in the report; stop and ask only if they look wrong for a counter build (e.g. a leftover test value).
+- **Ask the owner to confirm the build variant** — `APP_MODE` and `LANDING_PAGE` in `.env` decide which product this installer is. Do not guess.
 
 **Stop anything that can lock the build, before step 6 — not after it fails.** `electron-builder` unpacks Electron into `dist-app/win-unpacked.tmp` and renames it to `dist-app/win-unpacked`. A leftover `AbeerSuite.exe` (an earlier smoke test still open) or `electron.exe` (a `pnpm dev` / `pnpm electron:dev` session still running) holds those files open and turns that rename into `EPERM: operation not permitted, rename 'win-unpacked.tmp' -> 'win-unpacked'` — a real failure, unlike the transient antivirus one covered by the EPERM-resumable memory. A dev server left on port `786` (`electron:dev`) or `3000` (`pnpm dev`) can just as easily clash with the fresh `.next` output the same pack step writes.
 
@@ -89,7 +89,7 @@ Read the actual diffs behind those commits — subject lines are not enough to k
 
 **The auto-generated part appends below yours.** `scripts/release-electron.ts` reads `RELEASE_NOTES.md`, then appends `### What's Changed in v<version>` — the raw `git log` since the previous tag plus a compare link — joined with a `---` separator. So the file holds **only** the hand-written half. Do not paste a commit list into it yourself; it would appear twice.
 
-**Do not wait for approval on the notes.** Write them carefully from the commits, commit, and carry on; show the notes and the urgency tier in the step-10 report. Stop and ask only when `[urgent]` is a genuine judgement call — forcing every till to restart today is the owner's decision.
+**Show the drafted notes and the urgency tier to the owner and wait before committing them** — ask once, together with the variant question if it is still open. They know which change customers care about; you only know the commits.
 
 ### 4. Commit the bump and the notes on `main`
 
@@ -209,7 +209,7 @@ Done means, and say each one plainly:
 
 - `main` and `v<version>` are on **both** remotes.
 - `main` and `dev` are on the released commit.
-- The drafted notes, the variant, and anything you tested yourself.
+- Anything you tested yourself.
 - **Last line — the Vercel reminder:** which of `d_office` / `d_shop` were fast-forwarded (or skipped, and why), that they are **not pushed** so the sites still run old code, the push commands, and on a schema release that counters must update first.
 - **Every** release repo shows the installer, the blockmap, `latest.yml`, and the crafted notes — or, for a `-pre` version, **repo 2 shows them and repo 1 was deliberately left alone**. Say which, and say that counters will not see a test build.
 - Which urgency tier went out, and therefore how counters will take it.
@@ -220,8 +220,8 @@ Handing a step back is **not** stopping the release: do everything either side o
 
 | Ask for | When |
 | --- | --- |
-| **`[urgent]`** | Only when it is a genuine judgement call — restarting every till today. |
-| **The variant** | Only when `.env` looks wrong for a counter build. |
+| **The notes and the tier** | Always, once, before step 4. Show the drafted `RELEASE_NOTES.md` and whether it is `[urgent]`. |
+| **The variant** | Always, at preflight — `APP_MODE`, `LANDING_PAGE`. |
 | **A push they would rather run** | Whenever they say so — offer the exact command instead of running it. |
 | **Anything that would be a guess** | A version number that is not an obvious bump; a schema release's publish-then-migrate ordering; a repo that failed to publish. |
 
