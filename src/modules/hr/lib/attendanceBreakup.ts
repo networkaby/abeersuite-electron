@@ -5,7 +5,7 @@
 // answer the same way — and so the working can be checked without a database.
 
 import type { DutyGrade } from "@/shared/lib/hr/dutyTime";
-import { earlyMinutes, gradeDay, overtimeMinutes, shortMinutes } from "@/shared/lib/hr/dutyTime";
+import { earlyMinutes, gradeDay, lateMinutes, overtimeMinutes, shortMinutes } from "@/shared/lib/hr/dutyTime";
 import type { AttendanceEffect, PayRules } from "@/shared/lib/hr/payRules";
 import type { PayslipAttendanceData, PayslipAttendanceDay } from "@/shared/components/print/PayslipBody";
 
@@ -19,6 +19,29 @@ export interface SpanDto {
     endedBy: "OPEN" | "IDLE" | "SIGNED_OUT" | "SHIFT_CLOSED";
 }
 
+/**
+ * One line of the day as it was lived, in order. Owner, 2026-10-13: *"full day
+ * in the list, on duty, off duty in sequence."*
+ *
+ *   - `late`  : duty had begun and he had not come yet (duty start to first in)
+ *   - `on`    : at the counter. Stretches with a gap inside his idle limit are
+ *               one line: a quiet minute, or a sign-out and back, is still duty.
+ *   - `off`   : a gap past the idle limit, from his last sign of life to the next.
+ *   - `early` : he stopped before duty ended (last sign of life to duty end).
+ *
+ * `on` + `off` always add up to first in to last out, because the lines are
+ * built end to end from the same instants. A `late` line has no `from` instant
+ * and an `early` line no `to`; the card prints the duty clock there.
+ */
+export interface TimelineRow {
+    kind: "late" | "on" | "off" | "early";
+    from: string | null;
+    to: string | null;
+    minutes: number;
+    /** On an `on` line: still running (today), so its end is "now". */
+    open?: boolean;
+}
+
 export interface DayBreakup {
     date: string;
     /**
@@ -29,6 +52,8 @@ export interface DayBreakup {
      */
     tracked: boolean;
     spans: SpanDto[];
+    /** The day in order, on duty and off. See `TimelineRow`. */
+    timeline: TimelineRow[];
     /** HOW MANY TIMES they were active. The count the owner asked for. */
     activeCount: number;
     /**
@@ -39,7 +64,8 @@ export interface DayBreakup {
     /** What the day owed, resolved for THAT date (the shop's opening moves). */
     dutyMinutes: number;
     /**
-     * Time between one stretch ending and the next beginning — away, mid-day.
+     * Time off duty mid-day: the `off` lines of the timeline added up, so the
+     * figure and the list can never disagree.
      *
      * Deliberately only the gaps BETWEEN stretches: the time before the first
      * arrival is lateness and the time after the last is an early finish, and
@@ -114,27 +140,62 @@ function minutesBetween(fromIso: string, toIso: string): number {
 /**
  * A stretch left open by a day that simply ended.
  *
- * Nothing stamps a sign-out on the server — the session dies, or the machine is
- * switched off — so yesterday's last stretch is still sitting there with no end
- * time. It did end, of course: at the last sign of life, which the day row knows
- * as `lastSeenAt`. Closing it at read time is the honest answer and costs nothing;
- * the alternative is a register that shows every past day still running.
+ * Nothing stamps an end on the server (the session dies, or the machine is
+ * switched off), so the last stretch is still sitting there with no end time. It
+ * did end, of course: at the last sign of life, which the day row knows as
+ * `lastSeenAt`. Closing it at read time is the honest answer and costs nothing.
  *
- * Today's open stretch is left open, because it genuinely is.
+ * Today's open stretch is left open only while it can still be running. Once
+ * the last sign of life is further back than the idle limit he has gone, and it
+ * closes there exactly as a past day's does.
  */
-export function resolveOpenSpan(span: SpanDto, lastSeenAtIso: string | null, isToday: boolean): SpanDto {
-    if (span.endedAt || isToday) return span;
-    return { ...span, endedAt: lastSeenAtIso ?? span.startedAt, endedBy: "IDLE" };
+export function resolveOpenSpan(
+    span: SpanDto, lastSeenAtIso: string | null, isToday: boolean, idleLimitMinutes: number, nowMs = Date.now(),
+): SpanDto {
+    if (span.endedAt) return span;
+    if (isToday && (!lastSeenAtIso || nowMs - new Date(lastSeenAtIso).getTime() <= idleLimitMinutes * 60000)) return span;
+    // It ran for the minutes it earned and no further. A stretch is credited
+    // beat by beat as it runs, so its own minutes ARE its length; the day's last
+    // sign of life only caps it. Ledgers before 2026-10-13 hold stray stretches
+    // left open beside the real one — stretching those to the day's last beat
+    // painted the whole afternoon as one unbroken line.
+    const startMs = new Date(span.startedAt).getTime();
+    let endMs = startMs + Math.max(0, span.minutes) * 60000;
+    if (lastSeenAtIso) endMs = Math.min(endMs, new Date(lastSeenAtIso).getTime());
+    return { ...span, endedAt: new Date(Math.max(startMs, endMs)).toISOString(), endedBy: "IDLE" };
 }
 
-/** The gaps between one stretch and the next, added up. */
-export function idleBetween(spans: readonly SpanDto[]): number {
-    let idle = 0;
-    for (let i = 1; i < spans.length; i++) {
-        const prevEnd = spans[i - 1].endedAt;
-        if (prevEnd) idle += minutesBetween(prevEnd, spans[i].startedAt);
+type LivedRow = { kind: "on" | "off"; from: string; to: string; minutes: number; open?: boolean };
+
+/**
+ * The day as on / off lines, end to end.
+ *
+ * Stretches are merged wherever the gap to the next is inside the idle limit,
+ * and where they overlap (ledgers written before 2026-10-13 can, after two
+ * stretches were left open at once). Only a gap past the limit is an `off` line.
+ */
+export function buildTimeline(spans: readonly SpanDto[], idleLimitMinutes: number, nowIso: string): LivedRow[] {
+    const limitMs = idleLimitMinutes * 60000;
+    const merged: Array<{ from: string; to: string; open: boolean }> = [];
+    for (const s of spans) {
+        const to = s.endedAt ?? nowIso;
+        const last = merged[merged.length - 1];
+        if (last && new Date(s.startedAt).getTime() - new Date(last.to).getTime() <= limitMs) {
+            if (to > last.to) last.to = to;
+            last.open = last.open || !s.endedAt;
+            continue;
+        }
+        merged.push({ from: s.startedAt, to, open: !s.endedAt });
     }
-    return idle;
+    const rows: LivedRow[] = [];
+    merged.forEach((m, i) => {
+        if (i > 0) {
+            const prev = merged[i - 1].to;
+            rows.push({ kind: "off", from: prev, to: m.from, minutes: minutesBetween(prev, m.from) });
+        }
+        rows.push({ kind: "on", from: m.from, to: m.to, minutes: minutesBetween(m.from, m.to), ...(m.open ? { open: true } : {}) });
+    });
+    return rows;
 }
 
 /**
@@ -151,6 +212,8 @@ export function buildDayBreakup(input: {
     tracked: boolean;
     spans: SpanDto[];
     lastSeenAt: string | null;
+    /** The person's own idle limit: what makes a gap an `off` line. */
+    idleLimitMinutes: number;
     workedMinutes: number;
     dutyMinutes: number;
     lateBy: number;
@@ -169,21 +232,35 @@ export function buildDayBreakup(input: {
     lateCharged: boolean;
 }): DayBreakup {
     const spans = input.spans
-        .map((s) => resolveOpenSpan(s, input.lastSeenAt, input.isToday))
+        .map((s) => resolveOpenSpan(s, input.lastSeenAt, input.isToday, input.idleLimitMinutes))
         .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
-    // The last stretch's end, and only when it really has ended: a day still
+    const lived = buildTimeline(spans, input.idleLimitMinutes, new Date().toISOString());
+    const onLines = lived.filter((r) => r.kind === "on");
+    // The day's last end, and only when it really has ended: a day still
     // running has not been left early, it has not been left at all.
-    const lastOut = spans.length ? spans[spans.length - 1].endedAt : null;
+    const lastOn = onLines[onLines.length - 1];
+    const lastOut = lastOn && !lastOn.open ? lastOn.to : null;
+    const shut = input.weeklyOff || !!input.holidayName;
+    const leftEarlyBy = earlyMinutes(lastOut, input.dutyEnd) ?? 0;
+    // Raw, before any grace: the line shows the time he was not there, which
+    // the grace forgives on the charge but does not turn into presence.
+    const notYetCome = lived.length && !shut ? lateMinutes(lived[0].from, input.dutyStart, undefined, 0) ?? 0 : 0;
+    const timeline: TimelineRow[] = [
+        ...(notYetCome > 0 ? [{ kind: "late" as const, from: null, to: lived[0].from, minutes: notYetCome }] : []),
+        ...lived,
+        ...(!shut && lastOut && leftEarlyBy > 0 ? [{ kind: "early" as const, from: lastOut, to: null, minutes: leftEarlyBy }] : []),
+    ];
     return {
         date: input.date,
         tracked: input.tracked,
         spans,
-        activeCount: spans.length,
+        timeline,
+        activeCount: onLines.length,
         workedMinutes: input.workedMinutes,
         dutyMinutes: input.dutyMinutes,
-        idleMinutes: idleBetween(spans),
+        idleMinutes: lived.reduce((t, r) => t + (r.kind === "off" ? r.minutes : 0), 0),
         lateBy: input.lateBy,
-        leftEarlyBy: earlyMinutes(lastOut, input.dutyEnd) ?? 0,
+        leftEarlyBy,
         dutyStart: input.dutyStart,
         dutyEnd: input.dutyEnd,
         note: input.note,

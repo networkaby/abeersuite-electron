@@ -87,6 +87,7 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
         leaveRows.find((l) => toDateOnlyUtc(l.fromDate) <= iso && iso <= toDateOnlyUtc(l.toDate))?.kind ?? null;
 
     const today = businessTodayIso();
+    const idleLimit = idleLimitMinutesFor(user.staffProfile?.idleLimitMinutes);
     const joined = user.staffProfile?.joinedOn ? toDateOnlyUtc(user.staffProfile.joinedOn) : null;
     const left   = user.staffProfile?.leftOn   ? toDateOnlyUtc(user.staffProfile.leftOn)   : null;
 
@@ -140,6 +141,7 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
             tracked: spans.length > 0,
             spans,
             lastSeenAt: row?.lastSeenAt?.toISOString() ?? null,
+            idleLimitMinutes: idleLimit,
             workedMinutes: row ? workedOf(row) : 0,
             dutyMinutes: duty,
             lateBy,
@@ -171,6 +173,6 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
 
     return {
         userId: user.id, userName: user.name, from, to, days, rules, effect,
-        idleLimitMinutes: idleLimitMinutesFor(user.staffProfile?.idleLimitMinutes),
+        idleLimitMinutes: idleLimit,
     };
 }

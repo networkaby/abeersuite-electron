@@ -190,7 +190,8 @@ export function formatWorked(minutes: number): string {
 }
 
 /**
- * How much of the gap since the last sign of life counts as work.
+ * How much of the gap since the last sign of life counts as work, and whether the
+ * gap meant the person was away.
  *
  * The client pings every few minutes while somebody is actually using the machine,
  * and each ping adds the gap since the previous one. A gap longer than the idle
@@ -199,11 +200,30 @@ export function formatWorked(minutes: number): string {
  * "treat the idle time as absent", and it holds whether or not the auto-logout
  * actually fired: a machine left on all night simply contributes one ignored gap.
  */
-export function creditableMinutes(previousSeenAt: Date | null, now: Date, idleLimitMs = IDLE_LIMIT_MS): number {
-    if (!previousSeenAt) return 0;
+export function creditStep(previousSeenAt: Date | null, now: Date, idleLimitMs = IDLE_LIMIT_MS): CreditStep {
+    if (!previousSeenAt) return { minutes: 0, seenAt: now, away: true };
     const gapMs = now.getTime() - previousSeenAt.getTime();
-    if (gapMs <= 0 || gapMs > idleLimitMs) return 0;
-    return Math.round(gapMs / 60000);
+    if (gapMs <= 0) return { minutes: 0, seenAt: previousSeenAt, away: false };
+    if (gapMs > idleLimitMs) return { minutes: 0, seenAt: now, away: true };
+    // Whole minutes only, and the clock moves on by exactly what was credited.
+    // Owner, 2026-10-13: rounding each beat on its own threw away up to half a
+    // minute a time — and a beat inside 30 s rounded to 0, which read as "away"
+    // and broke the stretch into 0m pieces. The leftover seconds now wait for
+    // the next beat instead of being lost.
+    const minutes = Math.floor(gapMs / 60000);
+    return { minutes, seenAt: new Date(previousSeenAt.getTime() + minutes * 60000), away: false };
+}
+
+/**
+ * One beat's answer: the minutes to add, where the day's clock now stands, and
+ * whether the gap was long enough to mean the person was not there. `away` — not
+ * `minutes === 0` — is what ends a stretch; a quick second beat credits nothing
+ * and is still the same stretch.
+ */
+export interface CreditStep {
+    minutes: number;
+    seenAt: Date;
+    away: boolean;
 }
 
 /**

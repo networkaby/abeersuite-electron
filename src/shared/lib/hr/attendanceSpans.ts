@@ -11,15 +11,19 @@
  * read. These rows only ever EXPLAIN that number, never replace it, which is why
  * nothing working today can break if a span is missed.
  *
- * The rule is not a new one. It is the rule already in `creditableMinutes`, said
+ * The rule is not a new one. It is the rule already in `creditStep`, said
  * out loud: every sign of life extends the open stretch, and a gap longer than the
  * person's idle limit means they were not here — the open stretch is closed at its
  * own last sign of life, and a fresh one starts where they came back.
  *
  *   10:30 … 14:00   (last touch)      → span 1, 3h 30m, ended IDLE
- *   16:00 … 20:40   (shift closed)    → span 2, 4h 40m, ended SHIFT_CLOSED
+ *   16:00 … 20:40   (last touch)      → span 2, 4h 40m, closed at read time
  *
- * The 45 minutes between 14:00 and the sign-out, and the two hours to 16:00, are
+ * Signing in or out and opening or closing a shift are signs of life like any
+ * other (owner, 2026-10-13) — none of them ends a stretch. Back inside the limit
+ * is the same stretch; only a gap past it breaks one.
+ *
+ * The two hours between 14:00 and 16:00 are
  * stored nowhere — they are not time worked, they are simply the space between
  * two spans, and the breakup reads the idle figure as that difference.
  *
@@ -32,7 +36,10 @@ import type { PrismaClient } from "@/generated/prisma/client";
 
 type Db = Pick<PrismaClient, "attendanceSpan">;
 
-/** Why a stretch finished. `OPEN` while it is still running. */
+/**
+ * Why a stretch finished. `OPEN` while it is still running. SIGNED_OUT and
+ * SHIFT_CLOSED are no longer written (2026-10-13) — kept for the old rows.
+ */
 export type SpanEnd = "OPEN" | "IDLE" | "SIGNED_OUT" | "SHIFT_CLOSED";
 
 /**
@@ -46,19 +53,21 @@ async function openSpan(db: Db, userId: number, date: Date) {
     return db.attendanceSpan.findFirst({
         where:   { userId, date, endedAt: null },
         orderBy: { startedAt: "desc" },
-        select:  { id: true, minutes: true },
+        select:  { id: true, minutes: true, startedAt: true },
     }).catch(() => null);
 }
 
 /**
  * A sign of life landed — put it on the ledger.
  *
- * `credited` is the minutes the day row just accepted for this beat, worked out
- * by `creditableMinutes` and passed in rather than recomputed, so the ledger can
- * never disagree with the balance. Zero means the gap was too long, and that is
- * exactly the signal to break the stretch: the open one is closed at `lastActive`
- * — the previous sign of life, which is the last moment anybody was really there
- * — and a new one opens at `seenAt`.
+ * `credited` is the minutes the day row just accepted for this beat and `away`
+ * whether the gap was past the idle limit — both from `creditStep`, passed in
+ * rather than recomputed, so the ledger can never disagree with the balance.
+ * Only `away` breaks the stretch: the open one is closed at `lastActive` — the
+ * previous sign of life, the last moment anybody was really there — and a new
+ * one opens at `seenAt`. A beat that credits nothing but is not away (two beats
+ * inside a minute) is the same stretch; breaking there is what used to litter a
+ * day with 0m pieces.
  *
  * `lastActive` null means nothing has been seen today at all, so there is nothing
  * to close and the first stretch simply begins.
@@ -70,26 +79,31 @@ export async function recordSpanBeat(
     lastActive: Date | null,
     seenAt: Date,
     credited: number,
+    away: boolean,
     counterId: number | null,
 ): Promise<void> {
     try {
         const open = await openSpan(db, userId, date);
 
-        if (open && credited > 0) {
+        if (open && !away) {
             // Still the same stretch — it just grew.
-            await db.attendanceSpan.update({
-                where: { id: open.id },
-                data:  { minutes: { increment: credited } },
-            }).catch(() => undefined);
+            if (credited > 0) {
+                await db.attendanceSpan.update({
+                    where: { id: open.id },
+                    data:  { minutes: { increment: credited } },
+                }).catch(() => undefined);
+            }
             return;
         }
 
         if (open) {
-            // Nothing credited, so they were away longer than the limit: the old
-            // stretch ended at its last sign of life, not at this one.
+            // Away longer than the limit: the old stretch ended at its last sign
+            // of life, not at this one — and never before it began, which a
+            // stretch opened by a sign-in after that last sign of life would.
+            const end = lastActive && lastActive > open.startedAt ? lastActive : open.startedAt;
             await db.attendanceSpan.update({
                 where: { id: open.id },
-                data:  { endedAt: lastActive ?? seenAt, endedBy: "IDLE" },
+                data:  { endedAt: end, endedBy: "IDLE" },
             }).catch(() => undefined);
             await db.attendanceSpan.create({
                 data: { userId, date, startedAt: seenAt, minutes: 0, counterId, endedBy: "OPEN" },
@@ -129,24 +143,4 @@ export async function openSpanOnArrival(
             data: { userId, date, startedAt: at, minutes: 0, counterId, endedBy: "OPEN" },
         }).catch(() => undefined);
     } catch { /* never fail an arrival */ }
-}
-
-/**
- * Close the running stretch — the shift closed, or the person signed out.
- *
- * `credited` is whatever the day row accepted for the final gap, so the last
- * quiet stretch at the counter is not thrown away. A day with nothing open is not
- * an error: somebody can sign out after having already idled out.
- */
-export async function closeOpenSpan(
-    db: Db, userId: number, date: Date, at: Date, credited: number, endedBy: Exclude<SpanEnd, "OPEN" | "IDLE">,
-): Promise<void> {
-    try {
-        const open = await openSpan(db, userId, date);
-        if (!open) return;
-        await db.attendanceSpan.update({
-            where: { id: open.id },
-            data:  { endedAt: at, endedBy, minutes: { increment: credited > 0 ? credited : 0 } },
-        }).catch(() => undefined);
-    } catch { /* never fail a close */ }
 }

@@ -25,7 +25,7 @@ import { NumericInput } from "@/shared/components/NumericInput";
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
 import { cn } from "@/shared/lib/format/utils";
 import type { PayRules } from "@/shared/lib/hr/payRules";
-import { accountDay, type AccountLine, type DayBreakup, type SpanDto } from "../lib/attendanceBreakup";
+import { accountDay, type AccountLine, type DayBreakup, type TimelineRow } from "../lib/attendanceBreakup";
 
 const fmtTime = (iso: string | null) =>
     iso ? new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "—";
@@ -33,12 +33,12 @@ const fmtTime = (iso: string | null) =>
 const fmtDay = (iso: string) =>
     new Date(`${iso}T00:00:00.000Z`).toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" });
 
-/** Why a stretch finished, in words the reader does not have to decode. */
-const ENDED_BY: Record<SpanDto["endedBy"], string> = {
-    OPEN:         "still going",
-    IDLE:         "left the counter",
-    SIGNED_OUT:   "signed out",
-    SHIFT_CLOSED: "shift closed",
+/** Each line of the day, in plain words. */
+const TIMELINE_LABEL: Record<TimelineRow["kind"], string> = {
+    late:  "Not yet came",
+    on:    "On duty",
+    off:   "Off duty",
+    early: "Left early",
 };
 
 /** "HALF_DAY" → "half day". The words are for a reader, not for a database. */
@@ -68,8 +68,12 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
     /** Correct (minutes) or hand back to the till (null). Absent = read-only card. */
     onCorrect?: (field: CorrectableField, minutes: number | null) => Promise<void>;
 }) {
-    const first = day.spans[0]?.startedAt ?? null;
-    const last = day.spans.length ? day.spans[day.spans.length - 1].endedAt : null;
+    // First in and last out from the day in order, not the raw stretches: old
+    // ledgers can hold overlapping stretches, and the last one is not the latest.
+    const onLines = day.timeline.filter((r) => r.kind === "on");
+    const first = onLines[0]?.from ?? null;
+    const lastOn = onLines[onLines.length - 1];
+    const last = lastOn && !lastOn.open ? lastOn.to : null;
     const reads = day.status || day.grade;
     const shut = day.weeklyOff || !!day.holidayName;
     const account = accountDay(day, rules);
@@ -126,7 +130,7 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
             {/* The figures the day was arrived at from */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-3 sm:grid-cols-4 lg:grid-cols-8">
                 <Figure label="Duty window" value={`${day.dutyStart}–${day.dutyEnd}`} hint="The shop's hours on this very date — they move through the year" />
-                <Figure label="Duty owed" value={formatWorked(day.dutyMinutes)} hint="What this day owed" />
+                <Figure label="Expected Duty Hours" value={formatWorked(day.dutyMinutes)} hint="The full duty as per the Duty window — not the time he was present" />
                 <CorrectableFigure
                     label="Worked" minutes={day.workedMinutes} till={day.till.workedMinutes} corrected={day.corrected.worked}
                     strong hint="Credited by the clock itself, stretch by stretch"
@@ -201,22 +205,28 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                 </p>
             )}
 
-            {/* The log — every stretch, in order */}
-            {day.spans.length > 0 && (
+            {/* The day in order — owner, 2026-10-13: "full day in the list, on
+                duty, off duty in sequence." Off-duty lines are red, so the gaps
+                that cost him are the first thing the eye lands on. */}
+            {day.timeline.length > 0 && (
                 <div className="border-t border-border px-4 py-2">
-                    <p className="mb-1 text-[11px] font-medium text-muted-foreground">
-                        Active {day.activeCount} {day.activeCount === 1 ? "time" : "times"}
-                    </p>
-                    <ul className="space-y-0.5 text-xs text-muted-foreground">
-                        {day.spans.map((s, i) => (
-                            <li key={`${s.startedAt}-${i}`} className="flex flex-wrap items-center gap-x-2">
-                                <span className="w-4 shrink-0 tabular-nums">{i + 1}.</span>
-                                <span className="font-mono tabular-nums whitespace-nowrap">{fmtTime(s.startedAt)} – {fmtTime(s.endedAt)}</span>
-                                <span className="font-medium text-foreground">{formatWorked(s.minutes)}</span>
-                                <span>· {ENDED_BY[s.endedBy]}</span>
-                                {s.counterId ? <span>· counter {s.counterId}</span> : null}
-                            </li>
-                        ))}
+                    <p className="mb-1 text-[11px] font-medium text-muted-foreground">The day in order</p>
+                    <ul className="space-y-0.5 text-xs">
+                        {day.timeline.map((r, i) => {
+                            const away = r.kind !== "on";
+                            return (
+                                <li
+                                    key={`${r.kind}-${r.from ?? r.to}-${i}`}
+                                    className={cn("flex flex-wrap items-center gap-x-2", away ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}
+                                >
+                                    <span className="font-mono tabular-nums whitespace-nowrap">
+                                        {r.from ? fmtTime(r.from) : day.dutyStart} – {r.open ? "now" : r.to ? fmtTime(r.to) : day.dutyEnd}
+                                    </span>
+                                    <span className={cn("w-24 shrink-0", !away && "text-foreground")}>{TIMELINE_LABEL[r.kind]}</span>
+                                    <span className={cn("font-medium tabular-nums", !away && "text-foreground")}>{formatWorked(r.minutes)}</span>
+                                </li>
+                            );
+                        })}
                     </ul>
                 </div>
             )}
