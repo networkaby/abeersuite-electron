@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatHhMmFriendly } from "@/shared/lib/format/formatDate";
 import { nextOpeningText } from "@/shared/lib/hr/nextOpeningText";
 import type { NextOfficeDay } from "@/shared/lib/hr/seasonalHours";
 import styles from "./login.module.css";
@@ -28,15 +29,20 @@ export default function NextOpening() {
                 const res = await fetch("/api/office-hours/next");
                 if (!res.ok) return;
                 const out = await res.json() as {
-                    today?: { iso: string; closed: boolean; startHhMm: string; holidayName: string | null };
+                    today?: { iso: string; closed: boolean; startHhMm: string; endHhMm: string | null; holidayName: string | null };
                     next?: NextOfficeDay;
                 };
                 if (!alive || !out.today || !out.next) return;
 
-                // Open today: the useful fact is tonight's closing, not next week's
-                // opening — he is about to start a shift, not plan one. The next
-                // working day is only news when today is not one.
-                if (!out.today.closed) return;
+                // Open today: tonight's closing first, then the next opening with any
+                // closure on the way — "Closes today at 8:30 PM. Closed tomorrow for
+                // Bihu. Opens Friday, 10:55 AM." (owner, 2026-10-13: the lock screen
+                // must say both).
+                if (!out.today.closed) {
+                    const closes = out.today.endHhMm ? `Closes today at ${formatHhMmFriendly(out.today.endHhMm)}. ` : "";
+                    setLine(`${closes}${nextOpeningText(out.next, out.today.iso).full}`);
+                    return;
+                }
 
                 const why = out.today.holidayName ? `Closed today for ${out.today.holidayName}.` : "Closed today.";
                 setLine(`${why} ${nextOpeningText(out.next, out.today.iso).opens}`);
