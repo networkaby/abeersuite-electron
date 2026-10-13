@@ -24,7 +24,40 @@ export type CounterLockState = {
 
 const CHANNEL = "abeer-counter-lock";
 
-let state: CounterLockState = { enabled: null, locked: false, hasPin: false, lockedAt: null };
+// ── The refresh gap ──────────────────────────────────────────────────────────
+// The till's own answer takes a round trip after the whole app has loaded — seconds
+// on a slow till — and until then a refreshed window showed the work, unlocked. So
+// every window also keeps a note of "locked" in the browser and starts from it: the
+// cover is up from the first render, and the till's answer only confirms or lifts
+// it. A hint, never the authority — a stale note is corrected by that same answer.
+const HINT_KEY = "abeer-counter-locked";
+
+type Hint = { lockedAt: number | null; hasPin: boolean };
+
+function readHint(): Hint | null {
+    try {
+        const raw = typeof window !== "undefined" ? window.localStorage.getItem(HINT_KEY) : null;
+        if (!raw) return null;
+        const h = JSON.parse(raw) as Partial<Hint>;
+        return { lockedAt: typeof h.lockedAt === "number" ? h.lockedAt : null, hasPin: h.hasPin === true };
+    } catch {
+        return null;
+    }
+}
+
+function writeHint(s: CounterLockState): void {
+    try {
+        if (s.locked) window.localStorage.setItem(HINT_KEY, JSON.stringify({ lockedAt: s.lockedAt, hasPin: s.hasPin }));
+        else window.localStorage.removeItem(HINT_KEY);
+    } catch { /* no storage: the till's answer still covers, just later */ }
+}
+
+const hint = readHint();
+let state: CounterLockState = hint
+    ? { enabled: true, locked: true, hasPin: hint.hasPin, lockedAt: hint.lockedAt }
+    : { enabled: null, locked: false, hasPin: false, lockedAt: null };
+/** What the server renders, and so what hydration must start from — never the hint. */
+const SERVER_STATE: CounterLockState = { enabled: null, locked: false, hasPin: false, lockedAt: null };
 const listeners = new Set<() => void>();
 const unlockListeners = new Set<() => void>();
 let channel: BroadcastChannel | null = null;
@@ -32,6 +65,7 @@ let channel: BroadcastChannel | null = null;
 function set(next: Partial<CounterLockState>, broadcast = true): void {
     const wasLocked = state.locked;
     state = { ...state, ...next };
+    writeHint(state);
     for (const l of listeners) l();
     if (wasLocked && !state.locked) for (const l of unlockListeners) l();
     if (broadcast && wasLocked !== state.locked) {
@@ -48,12 +82,18 @@ if (typeof window !== "undefined" && typeof BroadcastChannel !== "undefined") {
     };
 }
 
+/** A full sign-out: drop the note so the sign-in page is not covered. Not an unlock —
+ *  nothing is broadcast, the other windows stay covered until the session ends them. */
+export function forgetCounterLockHint(): void {
+    try { window.localStorage.removeItem(HINT_KEY); } catch { /* nothing kept */ }
+}
+
 export function subscribeCounterLock(onChange: () => void): () => void {
     listeners.add(onChange);
     return () => { listeners.delete(onChange); };
 }
 export const getCounterLock = (): CounterLockState => state;
-export const getServerCounterLock = (): CounterLockState => state;
+export const getServerCounterLock = (): CounterLockState => SERVER_STATE;
 
 /** Is the till covered right now? Read by the idle timer, which must count nothing
  *  typed on the lock screen as work. */

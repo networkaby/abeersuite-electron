@@ -27,7 +27,7 @@ import { useLocalClock } from "@/app/staff/login/useLocalClock";
 import styles from "@/app/staff/login/login.module.css";
 import { getLocalCounterSetup } from "@/shared/lib/counter/setupGate";
 import {
-    getCounterLock, getServerCounterLock, refreshCounterLock, subscribeCounterLock, unlockCounter,
+    forgetCounterLockHint, getCounterLock, getServerCounterLock, refreshCounterLock, subscribeCounterLock, unlockCounter,
 } from "@/shared/lib/auth/counterLock";
 import { signOutTo } from "@/shared/lib/auth/signOutTo";
 import { captureMyDay } from "@/shared/lib/hr/myDay";
@@ -70,6 +70,7 @@ export default function CounterLock() {
         busyRef.current = true;
         setBusy(true);
         await captureMyDay({ lastInputAt: lockedAt });
+        forgetCounterLockHint();
         await signOutTo("/staff/login");
     }, []);
 
