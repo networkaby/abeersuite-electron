@@ -20,7 +20,7 @@ import styles from "./login.module.css";
  * cannot log in, so the line simply does not appear.
  */
 export default function NextOpening() {
-    const [line, setLine] = useState("");
+    const [line, setLine] = useState<{ today: string; rest: string } | null>(null);
 
     useEffect(() => {
         let alive = true;
@@ -38,14 +38,19 @@ export default function NextOpening() {
                 // closure on the way — "Closes today at 8:30 PM. Closed tomorrow for
                 // Bihu. Opens Friday, 10:55 AM." (owner, 2026-10-13: the lock screen
                 // must say both).
+                // Today's sentence is the highlighted one (owner, 2026-10-13).
                 if (!out.today.closed) {
-                    const closes = out.today.endHhMm ? `Closes today at ${formatHhMmFriendly(out.today.endHhMm)}. ` : "";
-                    setLine(`${closes}${nextOpeningText(out.next, out.today.iso).full}`);
+                    setLine({
+                        today: out.today.endHhMm ? `Closes today at ${formatHhMmFriendly(out.today.endHhMm)}.` : "",
+                        rest: nextOpeningText(out.next, out.today.iso).full,
+                    });
                     return;
                 }
 
-                const why = out.today.holidayName ? `Closed today for ${out.today.holidayName}.` : "Closed today.";
-                setLine(`${why} ${nextOpeningText(out.next, out.today.iso).opens}`);
+                setLine({
+                    today: out.today.holidayName ? `Closed today for ${out.today.holidayName}.` : "Closed today.",
+                    rest: nextOpeningText(out.next, out.today.iso).opens,
+                });
             } catch {
                 /* no line, never a blocked sign-in */
             }
@@ -54,5 +59,9 @@ export default function NextOpening() {
     }, []);
 
     if (!line) return null;
-    return <p className={styles.nextopen}>{line}</p>;
+    return (
+        <p className={styles.nextopen}>
+            {line.today && <strong>{line.today}</strong>} {line.rest}
+        </p>
+    );
 }
