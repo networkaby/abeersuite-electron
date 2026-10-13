@@ -128,12 +128,16 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
             </header>
 
             {/* The figures the day was arrived at from */}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-3 sm:grid-cols-4 lg:grid-cols-8">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-3 sm:grid-cols-4 lg:grid-cols-9">
                 <Figure label="Duty window" value={`${day.dutyStart}–${day.dutyEnd}`} hint="The shop's hours on this very date — they move through the year" />
                 <Figure label="Expected Duty Hours" value={formatWorked(day.dutyMinutes)} hint="The full duty as per the Duty window — not the time he was present" />
+                {/* Owner, 2026-10-13: "actual worked, adjusted worked" — the till's
+                    own measurement always shows, even on a Manual day that pays on
+                    the office's mark; the adjusted figure is the one pay uses. */}
+                <Figure label="Actual Worked" value={formatWorked(day.till.workedMinutes)} hint="What the counter measured — never changed by hand" />
                 <CorrectableFigure
-                    label="Worked" minutes={day.workedMinutes} till={day.till.workedMinutes} corrected={day.corrected.worked}
-                    strong hint="Credited by the clock itself, stretch by stretch"
+                    label="Adjusted Worked" minutes={day.workedMinutes} till={day.till.workedMinutes} corrected={day.corrected.worked}
+                    strong hint="What pay uses on an Auto day — the counter's figure unless it was corrected"
                     onCorrect={onCorrect && ((m) => onCorrect("worked", m))}
                 />
                 <Figure label="Times active" value={String(day.activeCount)} hint="Separate stretches at the machine" />
