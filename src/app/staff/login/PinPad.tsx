@@ -15,8 +15,10 @@ import { Face } from "./FaceGrid";
 import styles from "./login.module.css";
 
 export default function PinPad({
-    entry, length, typed, note, error, onPress, onDelete, children,
+    entry, length, typed, note, error, onPress, onDelete, header, children,
 }: {
+    /** Above the photo — the greeting, the date and the shop's next opening. */
+    header?: ReactNode;
     entry: ShellRosterEntry;
     length: number;
     typed: string;
@@ -31,6 +33,7 @@ export default function PinPad({
 
     return (
         <section className={`${styles.card} ${styles.padcard}`}>
+            {header}
             {/* Keyed so a different person starts the photo chain again. */}
             <Face key={entry.email} entry={entry} size={60} />
             <p className={styles.who}>{entry.name}</p>

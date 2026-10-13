@@ -9,6 +9,10 @@
  * their password. "Sign out fully" is the way out: end of day, or somebody else
  * taking the till.
  *
+ * It wears the sign-in screen's own pieces (owner, 2026-10-13): the till card (next
+ * duty, today, the drawer), the greeting with the shop's next opening, and the
+ * "Choose / Change your PIN" card — the password is typed there, never assumed.
+ *
  * While covered it swallows every key that is not typed into the cover itself, so a
  * POS shortcut cannot fire on the hidden screen behind it.
  */
@@ -16,7 +20,12 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useSession } from "next-auth/react";
 import PinPad from "@/app/staff/login/PinPad";
+import ChoosePinCard from "@/app/staff/login/ChoosePinCard";
+import NextOpening from "@/app/staff/login/NextOpening";
+import TillCard from "@/app/staff/login/TillCard";
+import { useLocalClock } from "@/app/staff/login/useLocalClock";
 import styles from "@/app/staff/login/login.module.css";
+import { getLocalCounterSetup } from "@/shared/lib/counter/setupGate";
 import {
     getCounterLock, getServerCounterLock, refreshCounterLock, subscribeCounterLock, unlockCounter,
 } from "@/shared/lib/auth/counterLock";
@@ -40,14 +49,22 @@ export default function CounterLock() {
     const busyRef = useRef(false);
     const [password, setPassword] = useState("");
     const [usePassword, setUsePassword] = useState(false);
+    // "Set PIN" / "Change PIN" from the cover — the same card the sign-in uses.
+    const [choosingPin, setChoosingPin] = useState(false);
+    const [counterNumber, setCounterNumber] = useState<number | null>(null);
     const [error, setError] = useState("");
     const [busy, setBusy] = useState(false);
     const coverRef = useRef<HTMLDivElement>(null);
+    const { greet, clock } = useLocalClock();
 
     // Does this till lock, and is it locked already (a refresh, a new window)?
     useEffect(() => { void refreshCounterLock(); }, []);
+    useEffect(() => {
+        void getLocalCounterSetup().then((s) => setCounterNumber(s?.counterNumber ?? null)).catch(() => { });
+    }, []);
 
-    const passwordMode = usePassword || !lock.hasPin;
+    // Typing goes into boxes, never to the keypad: the password card and the PIN card.
+    const passwordMode = usePassword || !lock.hasPin || choosingPin;
 
     const signOutFully = useCallback(async (lockedAt: number | null) => {
         busyRef.current = true;
@@ -63,7 +80,7 @@ export default function CounterLock() {
         const out = await unlockCounter(secret);
         busyRef.current = false;
         if (out.ok) {
-            setTyped(""); setPassword(""); setUsePassword(false); setBusy(false);
+            setTyped(""); setPassword(""); setUsePassword(false); setChoosingPin(false); setBusy(false);
             return;
         }
         if (out.signedOut) {
@@ -89,8 +106,8 @@ export default function CounterLock() {
     // other is stopped here and, on the keypad, typed into it.
     useEffect(() => {
         if (!lock.locked) return;
-        // Nothing on the hidden app may keep focus; the password box takes it instead.
-        if (passwordMode) document.getElementById("lock-pass")?.focus();
+        // Nothing on the hidden app may keep focus; the cover's first box takes it instead.
+        if (passwordMode) document.getElementById(choosingPin ? "pin-pass" : "lock-pass")?.focus();
         else (document.activeElement as HTMLElement | null)?.blur?.();
         const onKey = (e: KeyboardEvent) => {
             if (coverRef.current?.contains(e.target as Node) && e.target !== coverRef.current) return;
@@ -102,7 +119,7 @@ export default function CounterLock() {
         };
         window.addEventListener("keydown", onKey, true);
         return () => window.removeEventListener("keydown", onKey, true);
-    }, [lock.locked, passwordMode, press, setTyped]);
+    }, [lock.locked, passwordMode, choosingPin, press, setTyped]);
 
     if (!lock.enabled || !lock.locked) return null;
 
@@ -114,18 +131,35 @@ export default function CounterLock() {
     };
 
     const links = (
-        <div className={styles.rowlinks}>
-            {lock.hasPin ? (
+        <>
+            <div className={styles.rowlinks}>
+                {lock.hasPin ? (
+                    <button type="button" className={styles.pinlink} disabled={busy}
+                        onClick={() => { setUsePassword((on) => !on); setError(""); setTyped(""); }}>
+                        {usePassword ? "Use PIN" : "Use password"}
+                    </button>
+                ) : <span />}
                 <button type="button" className={styles.pinlink} disabled={busy}
-                    onClick={() => { setUsePassword((on) => !on); setError(""); setTyped(""); }}>
-                    {usePassword ? "Use PIN" : "Use password"}
+                    onClick={() => void signOutFully(lock.lockedAt)}>
+                    Someone else? Sign out fully
                 </button>
-            ) : <span />}
-            <button type="button" className={styles.pinlink} disabled={busy}
-                onClick={() => void signOutFully(lock.lockedAt)}>
-                Someone else? Sign out fully
-            </button>
-        </div>
+            </div>
+            <div className={styles.rowlinks}>
+                <button type="button" className={styles.pinlink} disabled={busy}
+                    onClick={() => { setChoosingPin(true); setError(""); setTyped(""); }}>
+                    {lock.hasPin ? "Change PIN" : "Set a PIN"}
+                </button>
+            </div>
+        </>
+    );
+
+    // The greeting, the date and the shop's next opening — the sign-in card's head.
+    const head = (
+        <>
+            <h1 className={styles.greet}>{greet}</h1>
+            <p className={styles.clock}>{clock || " "}</p>
+            <NextOpening />
+        </>
     );
 
     return (
@@ -139,7 +173,25 @@ export default function CounterLock() {
         >
             <div className={styles.bg} />
             <div className={styles.scrim} />
-            {passwordMode ? (
+            <div className={styles.stage}>
+            {/* The till's own card, as on the sign-in screen: next duty, today, the drawer. */}
+            <TillCard />
+            {choosingPin ? (
+                <ChoosePinCard
+                    hasPin={lock.hasPin}
+                    counterNumber={counterNumber}
+                    saveLabel="Save and unlock"
+                    skipLabel="Back"
+                    // The PIN route has just checked this password — it lifts the cover too.
+                    // A refused unlock then shows on the ordinary card, not on this one.
+                    onDone={(pw) => {
+                        setChoosingPin(false);
+                        void refreshCounterLock();
+                        void tryUnlock({ password: pw });
+                    }}
+                    onSkip={() => { setChoosingPin(false); setError(""); }}
+                />
+            ) : passwordMode ? (
                 <form
                     className={styles.card}
                     onSubmit={(e) => { e.preventDefault(); if (password) void tryUnlock({ password }); }}
@@ -168,10 +220,12 @@ export default function CounterLock() {
                     error={error}
                     onPress={press}
                     onDelete={() => setTyped((t) => t.slice(0, -1))}
+                    header={head}
                 >
                     {links}
                 </PinPad>
             )}
+            </div>
         </div>
     );
 }

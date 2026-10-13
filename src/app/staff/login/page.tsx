@@ -7,7 +7,7 @@ import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { refreshCounterStatus } from "@/shared/hooks/useCounterMode";
 import { refreshSyncStatus } from "@/shared/hooks/useSyncStatus";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { OUTSIDE_COUNTER_SIGNIN_CODE, PIN_LENGTH } from "@/shared/lib/constants/session";
+import { OUTSIDE_COUNTER_SIGNIN_CODE } from "@/shared/lib/constants/session";
 import { isPhoneAppPath, PHONE_APP_FORGOT, PHONE_APP_HOME } from "@/shared/lib/device/phone";
 import { isPhoneOnlySession } from "@/shared/lib/auth/phoneOnly";
 import {
@@ -19,16 +19,17 @@ import {
     LOGIN_SPOTLIGHTS,
     LOGIN_TAGLINE,
     LOGIN_TIPS,
-    loginGreeting,
 } from "@/shared/lib/constants/loginShowcase";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import Link from "next/link";
-import { Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import styles from "./login.module.css";
 import FaceGrid from "./FaceGrid";
 import TillCard from "./TillCard";
 import NextOpening from "./NextOpening";
+import ChoosePinCard from "./ChoosePinCard";
+import { useLocalClock } from "./useLocalClock";
 import DesktopSiteNotice from "@/modules/mobile/components/DesktopSiteNotice";
 import { ShiftTakeoverDialog, type CounterTakeover } from "@/modules/pos/components/ShiftTakeoverDialog";
 import { fetchCounterTakeover } from "@/modules/pos/lib/currentShift";
@@ -100,32 +101,6 @@ function useBackdropPhoto(candidates: readonly string[]): string | null {
     return url;
 }
 
-// ── The clock, as an outside thing React reads ──────────────────────────────
-// The time is not React state — it is the machine's clock — so it is subscribed
-// to rather than copied into state. Ticking every twenty seconds is plenty for a
-// display that only shows minutes, and the snapshot is the minute itself so a
-// tick that lands inside the same minute re-renders nothing.
-function subscribeToMinute(onChange: () => void): () => void {
-    const timer = setInterval(onChange, 20_000);
-    return () => clearInterval(timer);
-}
-const currentMinute = () => Math.floor(Date.now() / 60_000);
-/** The server has no idea what time it is where the user is, so it renders no clock at all. */
-const noMinuteOnServer = () => null;
-
-/** The greeting and the clock line, both from the user's own machine. */
-function useLocalClock(): { greet: string; clock: string } {
-    const minute = useSyncExternalStore(subscribeToMinute, currentMinute, noMinuteOnServer);
-    if (minute === null) return { greet: "Welcome", clock: "" };
-
-    const now = new Date(minute * 60_000);
-    return {
-        greet: loginGreeting(now.getHours()),
-        clock: now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })
-            + " · " + now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }),
-    };
-}
-
 /**
  * Does this person have a PIN on this counter? Only so "Set PIN" can read "Change
  * your PIN" — the PIN itself only unlocks a locked counter (CounterLock.tsx). Silent
@@ -148,9 +123,6 @@ async function hasCounterPin(email: string): Promise<boolean> {
 
 /** The phone-app sign-in shows no photograph — it costs mobile data for nothing. */
 const NO_PHOTOS: readonly string[] = [];
-
-/** A PIN box takes digits and nothing else — four of them. */
-const digitsOnly = (value: string) => value.replace(/\D/g, "").slice(0, PIN_LENGTH);
 
 function StaffLoginForm() {
     const router = useRouter();
@@ -201,10 +173,6 @@ function StaffLoginForm() {
     const [stage, setStage] = useState<"faces" | "password" | "choosePin">("password");
     const [roster, setRoster] = useState<ShellRosterEntry[]>([]);
     const [editing, setEditing] = useState(false);
-    const [pin, setPin] = useState("");
-    const [pinAgain, setPinAgain] = useState("");
-    const [pinBusy, setPinBusy] = useState(false);
-    const [pinError, setPinError] = useState("");
     const [counterNumber, setCounterNumber] = useState<number | null>(null);
 
     const spotlight = useRotation(LOGIN_SPOTLIGHTS.length, LOGIN_ROTATE_SECONDS);
@@ -349,47 +317,6 @@ function StaffLoginForm() {
             await enter(dest, isCounter);
         }
     }, [callbackUrl, router, enter]);
-
-    /** Save the four digits, then let the app open. */
-    const savePin = async () => {
-        if (!pending) return;
-        if (pin !== pinAgain) { setPinError("The two PINs are not the same."); return; }
-        setPinBusy(true);
-        setPinError("");
-        try {
-            const res = await fetch("/api/me/counter-pin", {
-                method: "PUT",
-                headers: { "content-type": "application/json" },
-                // The password they typed a moment ago. The route asks for it because a
-                // PIN is a second key to this account, and an unattended till with a
-                // session open must not be enough to cut one.
-                body: JSON.stringify({ pin, password: pending.password }),
-            });
-            const out = await res.json().catch(() => ({})) as { error?: string };
-            if (!res.ok) { setPinError(out.error || "Could not save your PIN."); return; }
-            void enter(pending.dest, pending.isCounter);
-        } catch {
-            setPinError("Could not reach the office. A PIN can only be saved with the line up.");
-        } finally {
-            setPinBusy(false);
-        }
-    };
-
-    const removePin = async (scope: "counter" | "all") => {
-        if (!pending) return;
-        setPinBusy(true);
-        setPinError("");
-        try {
-            const res = await fetch(`/api/me/counter-pin?scope=${scope}`, { method: "DELETE" });
-            const out = await res.json().catch(() => ({})) as { error?: string };
-            if (!res.ok) { setPinError(out.error || "Could not remove your PIN."); return; }
-            void enter(pending.dest, pending.isCounter);
-        } catch {
-            setPinError("Could not reach the office. A PIN can only be removed with the line up.");
-        } finally {
-            setPinBusy(false);
-        }
-    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -556,70 +483,16 @@ function StaffLoginForm() {
                         />
                     </section>
                 ) : pending ? (
-                    <section className={styles.card}>
-                        <h1 className={styles.greet}>
-                            {pending.hasPin ? "Change your PIN" : "Choose your PIN"}
-                        </h1>
-                        <p className={styles.clock}>
-                            Four digits{counterNumber !== null ? `, for counter ${counterNumber} only` : ""}.
-                            When the counter locks, they bring you straight back.
-                        </p>
-
-                        <div className={styles.field}>
-                            <label htmlFor="pin">{pending.hasPin ? "New PIN" : "PIN"}</label>
-                            <input
-                                id="pin" type="password" inputMode="numeric" autoComplete="off"
-                                placeholder="4 digits" autoFocus
-                                value={pin}
-                                onChange={(e) => { setPin(digitsOnly(e.target.value)); setPinError(""); }}
-                            />
-                        </div>
-
-                        <div className={styles.field}>
-                            <label htmlFor="pin2">Type it again</label>
-                            <input
-                                id="pin2" type="password" inputMode="numeric" autoComplete="off"
-                                placeholder="4 digits"
-                                value={pinAgain}
-                                onChange={(e) => { setPinAgain(digitsOnly(e.target.value)); setPinError(""); }}
-                                onKeyDown={(e) => { if (e.key === "Enter" && pin.length === PIN_LENGTH) void savePin(); }}
-                            />
-                        </div>
-
-                        <button
-                            className={styles.go} type="button"
-                            disabled={pinBusy || pin.length !== PIN_LENGTH || pinAgain.length !== PIN_LENGTH}
-                            onClick={() => void savePin()}
-                        >
-                            {pinBusy ? "Saving…" : "Save and open"}
-                        </button>
-                        {pinError && <p className={styles.err}>{pinError}</p>}
-
-                        {/* Removing is the same errand, so it lives on the same card —
-                            there is nowhere else to do it now, and nowhere else needed. */}
-                        {pending.hasPin && (
-                            <div className={styles.pinrow}>
-                                <button type="button" className={styles.pinlink} disabled={pinBusy}
-                                    onClick={() => void removePin("counter")}>
-                                    Remove from this counter
-                                </button>
-                                <button type="button" className={styles.pinlink} disabled={pinBusy}
-                                    onClick={() => void removePin("all")}>
-                                    Remove from all
-                                </button>
-                            </div>
-                        )}
-
-                        <button type="button" className={styles.pinlink} disabled={pinBusy}
-                            onClick={() => void enter(pending.dest, pending.isCounter)}>
-                            Skip for now
-                        </button>
-
-                        <p className={styles.pinnote}>
-                            The line must be up to save a PIN. Unlocking with it works offline. Signing
-                            in is always your password.
-                        </p>
-                    </section>
+                    <ChoosePinCard
+                        hasPin={pending.hasPin}
+                        counterNumber={counterNumber}
+                        // The password they typed a moment ago — nothing asked twice.
+                        password={pending.password}
+                        saveLabel="Save and open"
+                        skipLabel="Skip for now"
+                        onDone={() => void enter(pending.dest, pending.isCounter)}
+                        onSkip={() => void enter(pending.dest, pending.isCounter)}
+                    />
                 ) : (
                 <form className={styles.card} onSubmit={handleSubmit} autoComplete="on">
                     {/* Plain <img>: a single-path vector has nothing for the optimizer to
