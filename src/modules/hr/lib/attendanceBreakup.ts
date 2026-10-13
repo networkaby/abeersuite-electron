@@ -392,13 +392,15 @@ export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
     const normal = Math.min(day.workedMinutes, day.dutyMinutes);
     lines.push({ key: "duty", label: "Normal duty", minutes: normal, rateLabel: times(1), accounted: normal, note: null });
 
-    if (madeUp > 0) {
-        const left = pendingTotal(p?.after ?? []);
-        lines.push({
-            key: "madeUp", label: "Extra — recovers earlier short", minutes: madeUp, rateLabel: times(1), accounted: madeUp,
-            note: left > 0 ? `${fmtShort(left)} short still to recover` : "earlier short fully recovered",
-        });
-    }
+    // Always shown, above overtime: the extra recovers earlier short first,
+    // and only what is left is overtime (30m short + 50m extra → 30m + 20m).
+    // Normal duty never goes past the expected hours — the rest is extra.
+    lines.push({
+        key: "madeUp", label: "Short recovery", minutes: madeUp, rateLabel: times(1), accounted: madeUp,
+        note: madeUp > 0
+            ? (pendingTotal(p?.after ?? []) > 0 ? "earlier short partly recovered by today's extra" : "earlier short fully recovered by today's extra")
+            : carried > 0 ? "no extra today to recover the earlier short" : null,
+    });
 
     lines.push({
         key: "overtime", label: "Overtime", minutes: overtime,
@@ -440,6 +442,11 @@ export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
 function lateLine(day: DayBreakup, rules: PayRules, added: number): AccountLine {
     const base = { key: "late" as const, label: "Late penalty", minutes: day.lateBy };
     if (day.lateBy <= 0) return { ...base, rateLabel: rateOfLate(rules), accounted: 0, note: null };
+    // An office-marked day is not judged on the clock, so its lateness is
+    // never charged — say that, not a free-day count that does not apply.
+    if (!day.lateCharged && day.manual) {
+        return { ...base, rateLabel: rateOfLate(rules), accounted: 0, note: "not charged — the office marked this day" };
+    }
     if (!day.lateCharged) {
         const n = rules.lateFreeDays;
         return { ...base, rateLabel: rateOfLate(rules), accounted: 0, note: `not charged — inside the first ${n} free late ${n === 1 ? "day" : "days"}` };

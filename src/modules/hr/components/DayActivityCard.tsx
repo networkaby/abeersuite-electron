@@ -180,6 +180,11 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                 A line that costs nothing still shows, greyed: the reader sees the
                 free late day being spent rather than finding out on a payslip. */}
             <div className="border-t border-border px-4 py-2">
+                {/* Owner, 2026-10-13: two columns — the day's own time on the left,
+                    the running short on the right. The short is neither today's
+                    time nor a penalty, so it is never inside the day total. */}
+                <div className={cn("grid gap-x-6 gap-y-3", !shut && "xl:grid-cols-[3fr_2fr]")}>
+                <div>
                 <p className="mb-1 text-[11px] font-medium text-muted-foreground">How the day is accounted</p>
                 <table className="w-full text-xs">
                     <thead>
@@ -201,24 +206,36 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                             <td />
                             <td className="py-1 text-right font-mono tabular-nums">{signed(account.total)}</td>
                             <td className="hidden py-1 pl-3 text-[11px] font-normal text-muted-foreground sm:table-cell">
-                                {shut ? "paid at its own rate, outside pending duty" : "normal duty + extra − penalty"}
+                                {shut ? "paid at its own rate, outside the short balance" : "normal duty + recovery + overtime − penalty"}
                             </td>
                         </tr>
-                        {/* Owner, 2026-10-13: the short is neither today's time nor a
-                            penalty, so it sits below the total and is never part of it —
-                            expected − day total, carried forward when it falls short. */}
-                        {!shut && (
-                            <>
-                                <tr><td colSpan={5} className="pt-2 text-[11px] font-medium text-muted-foreground">Short balance</td></tr>
+                    </tfoot>
+                </table>
+                </div>
+                {!shut && (
+                    <div>
+                        <p className="mb-1 text-[11px] font-medium text-muted-foreground">Short balance</p>
+                        <table className="w-full text-xs">
+                            <thead>
+                                <tr className="text-[11px] text-muted-foreground">
+                                    <th className="py-0.5 text-left font-normal">Line</th>
+                                    <th className="py-0.5 text-right font-normal">Minutes</th>
+                                    <th className="hidden py-0.5 pl-3 text-left font-normal sm:table-cell">Why</th>
+                                </tr>
+                            </thead>
+                            <tbody>
                                 <BalanceRow label="Earlier short" minutes={account.carry.before} note={account.carry.beforeNote} />
                                 <BalanceRow label="− Recovered today" minutes={account.carry.recovered} note={account.carry.recovered > 0 ? "by today's extra" : null} />
                                 <BalanceRow label="+ Today's short" minutes={account.carry.minutes} note={account.carry.note} warn />
+                            </tbody>
+                            <tfoot>
                                 <BalanceRow label="= Short carried forward" minutes={account.carry.after} strong warn
                                     note={account.carry.after > 0 ? "recovered by a later day's extra, or cut at month end" : null} />
-                            </>
-                        )}
-                    </tfoot>
-                </table>
+                            </tfoot>
+                        </table>
+                    </div>
+                )}
+                </div>
             </div>
 
             {/* Whatever the office wrote on the day. It is the one part of a card
@@ -278,12 +295,10 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
 /** One line of the running short. Kept out of the Accounted column — it is not the day's time. */
 function BalanceRow({ label, minutes, note, warn, strong }: { label: string; minutes: number; note: string | null; warn?: boolean; strong?: boolean }) {
     return (
-        <tr className={cn("text-[11px]", minutes === 0 ? "text-muted-foreground/60" : warn ? "text-amber-700 dark:text-amber-400" : "text-foreground", strong && "font-medium")}>
-            <td className="py-px pl-2">{label}</td>
-            <td className="py-px text-right font-mono tabular-nums">{orDash(minutes)}</td>
-            <td />
-            <td />
-            <td className="hidden py-px pl-3 sm:table-cell">{note ?? ""}</td>
+        <tr className={cn("text-xs", minutes === 0 ? "text-muted-foreground/60" : warn ? "text-amber-700 dark:text-amber-400" : "text-foreground", strong && "border-t border-border font-medium")}>
+            <td className="whitespace-nowrap py-0.5 pr-3">{label}</td>
+            <td className="whitespace-nowrap py-0.5 text-right font-mono tabular-nums">{orDash(minutes)}</td>
+            <td className="hidden py-0.5 pl-3 text-[11px] sm:table-cell">{note ?? ""}</td>
         </tr>
     );
 }
@@ -296,9 +311,9 @@ function AccountRow({ line }: { line: AccountLine }) {
     const idle = line.minutes === 0 && line.accounted === 0;
     return (
         <tr className={cn(idle && "text-muted-foreground/60")}>
-            <td className="py-0.5">{line.label}</td>
-            <td className="py-0.5 text-right font-mono tabular-nums">{line.minutes > 0 ? formatWorked(line.minutes) : "—"}</td>
-            <td className="py-0.5 text-right font-mono tabular-nums text-muted-foreground">{line.rateLabel}</td>
+            <td className="whitespace-nowrap py-0.5 pr-3">{line.label}</td>
+            <td className="whitespace-nowrap py-0.5 text-right font-mono tabular-nums">{line.minutes > 0 ? formatWorked(line.minutes) : "—"}</td>
+            <td className="whitespace-nowrap py-0.5 pl-3 text-right font-mono tabular-nums text-muted-foreground">{line.rateLabel}</td>
             <td className={cn(
                 "py-0.5 text-right font-mono tabular-nums whitespace-nowrap",
                 line.accounted < 0 && "text-amber-600 dark:text-amber-400",
