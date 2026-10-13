@@ -22,7 +22,15 @@ import type { HoursPayload } from "@/modules/hr/lib/attendanceHoursTypes";
 
 const dayOf = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 
-export async function loadHoursBreakup(userId: number, from: string, to: string): Promise<HoursPayload | null> {
+/**
+ * `clockOnly`: judge every day on the till's minutes, Manual or Auto — the
+ * Employee Activity view. Payroll's own read leaves it off, so a Manual day
+ * there still pays on the office's mark.
+ */
+export async function loadHoursBreakup(
+    userId: number, from: string, to: string, opts: { clockOnly?: boolean } = {},
+): Promise<HoursPayload | null> {
+    const clockOnly = !!opts.clockOnly;
     const [user, seasonal, rules, dayRows, spanRows, holidayRows, branchIds, leaveRows] = await Promise.all([
         prisma.user.findUnique({
             where:  { id: userId },
@@ -126,7 +134,9 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
         // was shut cannot be arrived late for. Counting one of those here would
         // spend a free late day the payslip never spent, and from then on every
         // later day would disagree with payroll about whether it was charged.
-        const judged = !!row && autoCounts(row) && !weeklyOff && !holidayName;
+        // The clock's own record: Manual or Auto, every day with minutes is
+        // judged here (owner, 2026-10-13) — the same `clockOnly` walk below.
+        const judged = !!row && (clockOnly ? workedOf(row) > 0 : autoCounts(row)) && !weeklyOff && !holidayName;
         let lateCharged = false;
         if (lateBy > 0 && judged) {
             lateSoFar += 1;
@@ -168,7 +178,7 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
     // and a screen that worked it out by itself would promise more than the
     // payslip pays. The reads it would make for the context are ones we have
     // already done, so it is handed them rather than repeating them.
-    const { effect, days: ledger } = await attendanceLedgerFor({ rules, seasonal, holidays }, userId, from, to);
+    const { effect, days: ledger } = await attendanceLedgerFor({ rules, seasonal, holidays }, userId, from, to, { clockOnly });
     // Each card carries its own line of the walk — pending carried in, made up,
     // overtime, added — so the card and the payslip are one calculation.
     const pendingByIso = new Map(ledger.map((p) => [p.date, p]));

@@ -89,12 +89,20 @@ export async function attendanceEffectFor(
     return (await attendanceLedgerFor(ctx, userId, fromIso, toIso)).effect;
 }
 
-/** The effect, plus each day's pending-duty walk — what the day cards show. */
+/**
+ * The effect, plus each day's pending-duty walk — what the day cards show.
+ *
+ * `clockOnly` judges every day on the till's minutes, Manual or Auto. Owner,
+ * 2026-10-13: Employee Activity *"should display correct data regardless we
+ * use manual or auto"* — it is the clock's own record. Payroll leaves it off:
+ * a Manual day still pays on the office's mark.
+ */
 export async function attendanceLedgerFor(
     ctx: PayRulesContext,
     userId: number,
     fromIso: string,
     toIso: string,
+    opts: { clockOnly?: boolean } = {},
 ): Promise<{ effect: AttendanceEffect; days: PendingDay[] }> {
     const { rules, seasonal } = ctx;
     const [profile, rows, leaves, branchIds] = await Promise.all([
@@ -146,7 +154,7 @@ export async function attendanceLedgerFor(
         const duty = dutyMinutesFor(profile?.dutyMinutes, hours.start, hours.end);
         // Auto pays on the activity card's minutes — corrected where a person
         // fixed them; manual pays on the mark. attendanceSource.ts.
-        const measured = autoCounts(r);
+        const measured = opts.clockOnly ? workedOf(r) > 0 : autoCounts(r);
         const worked = workedOf(r);
         const adds: PendingItem[] = [];
         let extra = 0;

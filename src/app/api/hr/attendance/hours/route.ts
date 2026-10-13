@@ -43,7 +43,7 @@ export async function GET(req: Request) {
             return NextResponse.json({ error: "Bad date range" }, { status: 400 });
         }
 
-        const payload = await loadHoursBreakup(userId, from, to);
+        const payload = await loadHoursBreakup(userId, from, to, { clockOnly: true });
         if (!payload) return NextResponse.json({ error: "No such person" }, { status: 404 });
         return NextResponse.json(payload);
     } catch (e) {
