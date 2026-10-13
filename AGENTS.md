@@ -68,7 +68,7 @@ Priority: **UX → DB → Server**.
 
 - Worktree work **starts from** `main` (`git merge --ff-only main` before editing) and **merges back into** `main`. If the checkout is currently on `dev`, merge it into `dev` as well — `dev` is not a substitute for `main`.
 - **Releases go out from** `main` **only** — never `dev`, `d_office`, or a detached HEAD; the tag points at `HEAD`.
-- **Never push.** Release is the one exception — §9 steps 5, 7, 8 and 9 are pushes the owner asked for by saying "release". Everything else stops at the commit.
+- **Never push.** Release is the one exception — §9 steps 5, 7 and 8 are pushes the owner asked for by saying "release". Everything else stops at the commit.
 
 ## 9. Release — the agent carries it out
 
@@ -76,15 +76,15 @@ When the owner says **"do a release"** (or release / publish / ship a version), 
 
 1. `git checkout main && git merge --ff-only dev` — not fast-forwardable → stop and report, never force.
 2. Bump `version` in `package.json`.
-3. **Write** `RELEASE_NOTES.md` **yourself** — customer-readable, rewritten from scratch, from the actual commits since the last tag. `[urgent]` in the first line only when every counter must restart today. Never leave last version's notes.
+3. **Write** `RELEASE_NOTES.md` **yourself** — customer-readable, rewritten from scratch, from the actual commits since the last tag. `[urgent]` in the first line only when every counter must restart today. Never leave last version's notes. No waiting for approval — show them in the report.
 4. Commit the bump + notes on `main`. Message it `chore(release): attempt v<version> - <one line>` — the build has not run yet, so the commit must not claim the version shipped. The tag from step 6 is the proof; never reword the commit afterwards.
 5. `git push origin main && git push production main` — push before building.
 6. `pnpm electron:release` — pack, `verify:package` gate, tag `v<version>`, push tag to `origin`, publish. **A** `-` **in the version makes it a test build**: `1.3.1-pre.1` goes to `GITHUB_UPDATE_REPO_2` only, marked a GitHub prerelease; a version with no `-` goes to every `GITHUB_UPDATE_REPO_N`. Counters update from repo 1, so a test build never reaches a till. The gate is automatic — never use `RELEASE_ONLY_REPO` to get it.
 7. `git push production main --tags`.
 8. `git checkout dev && git merge --ff-only main && git push origin dev`.
-9. `git checkout d_office && git merge --ff-only main && git push origin d_office && git checkout main` — `d_office` **ends level with** `main`**, exactly like** `dev`**.** It is the deploy branch: Vercel is connected to it on `origin`, so this push is what puts the office site live and runs `prisma migrate deploy` through `vercel-build`. Pushing `main` deploys nothing, nor does `dev`, and `production` has no `d_office`. **Ask before pushing** — a production deploy needs the owner's word — but only the timing is a question, never whether `d_office` should be level; on a no, fast-forward locally and hand over the push command. On a schema release the counters take the build first (§3), and `pnpm db:migrate:status` says whether the migration is still pending or already reached live.
-10. Report: `main`, `dev` and `d_office` all on the released commit, both remotes level, and installer + blockmap + `latest.yml` + notes present on every release repo. Say plainly if the `d_office` push is still outstanding — the office site is running old code until it lands.
+9. **If the release touches what Vercel serves** (`git diff --stat d_office..main` / `d_shop..main` shows web code, `prisma/`, `public/`, deps — not just `electron/`, packaging or docs), fast-forward **both** `d_office` and `d_shop` to `main` **without asking**: `git checkout d_office && git merge --ff-only main && git checkout d_shop && git merge --ff-only main && git checkout main`. **Never push them** — the owner pushes by hand. These are the Vercel deploy branches; pushing `main` or `dev` deploys nothing. On a schema release the counters take the build first (§3); `pnpm db:migrate:status` says whether the migration is pending.
+10. Report: `main` and `dev` on the released commit, both remotes level, installer + blockmap + `latest.yml` + notes present on every release repo. **End with the Vercel reminder**: which of `d_office` / `d_shop` were fast-forwarded (or skipped and why), that they are not pushed so the sites still run old code, and the `git push origin d_office` / `git push origin d_shop` commands.
 
-**Ask the owner to join hand** at any step needing their eyes or their machine, rather than guessing or skipping it — the notes and their urgency tier, the `.env` variant (`APP_MODE`, `LANDING_PAGE`), the `d_office` push that deploys the office site, a push they would rather run, and anything else that would be a guess. Say plainly what you need and wait. Handing a step back is not stopping the release: do everything either side of it, and pick the list up where you left off. No smoke-test stop — the owner has already tested before saying "release".
+**Publish as soon as possible.** No smoke-test stop, no pause for the owner to test — if something needs checking, test it yourself and carry on. **Ask the owner to join hand** only where it would otherwise be a guess — an `[urgent]` judgement call, a `.env` variant that looks wrong, a push they would rather run. Say plainly what you need and wait. Handing a step back is not stopping the release: do everything either side of it, and pick the list up where you left off.
 
 **Stop and ask** on a non-fast-forward merge, a failing `verify:package`, or a publish failure (then `RELEASE_ONLY_REPO=<repo>` to retry that one repo — never as the normal path).

@@ -1,6 +1,6 @@
 ---
 name: release
-description: Carry out a full AbeerSuite release end to end — merge dev into main, bump the version, craft RELEASE_NOTES.md, commit, push to both remotes, build and publish with `pnpm electron:release` (tag + GitHub release upload), push the tag to production, and bring both dev and d_office level again — the d_office push being what deploys the office site to Vercel. Use when the owner says "do a release", "release", "publish a version", "ship 5.0.4", "make a new build for the counters", or asks for a tag + GitHub release of this app.
+description: Carry out a full AbeerSuite release end to end — merge dev into main, bump the version, craft RELEASE_NOTES.md, commit, push to both remotes, build and publish with `pnpm electron:release` (tag + GitHub release upload), push the tag to production, and, when the release touches what Vercel serves, fast-forward d_office and d_shop locally (the owner pushes them). Use when the owner says "do a release", "release", "publish a version", "ship 5.0.4", "make a new build for the counters", or asks for a tag + GitHub release of this app.
 ---
 
 # Do a release
@@ -13,7 +13,8 @@ Sources of truth: `AGENTS.md` §8 and `docs/commands.md` §0 (the convention) an
 
 - **`main` only.** Never release from `dev`, `d_office`, or a detached HEAD. The tag the script mints points at `HEAD`, so releasing off `dev` puts `v<version>` on a commit `main` does not contain and the two remotes stop agreeing about what that version is.
 - **Two source remotes, both must end level.** `origin` = `devloperakramul/abeersuite-electron`, `production` = `akramuljakir/abeersuite-electron`.
-- **Release is the one exception to "never push".** Steps 5, 7, 8 and 9 are pushes the owner asked for by saying the word "release". Everything else in this repo still stops at the commit.
+- **Release is the one exception to "never push".** Steps 5, 7 and 8 are pushes the owner asked for by saying the word "release". The `d_office` / `d_shop` pushes in step 9 are **not** — the owner runs those; the agent only reminds. Everything else in this repo still stops at the commit.
+- **Publish as soon as possible — no pauses.** No smoke-test stop, no waiting for the owner to test. If something in the release looks risky and untested, test it yourself (tsc, lint, drive the dev server, run the packed exe) and carry on.
 - **A `-` in the version makes it a test build.** `1.3.1-pre.1` publishes to `GITHUB_UPDATE_REPO_2` **only**, marked a GitHub prerelease. A version with no `-` publishes to **every** repo. The gate is in `scripts/release-electron.ts` and needs nothing set by hand — do not reach for `RELEASE_ONLY_REPO` to get this, that is the retry path.
   - Repo 1 is what the tills update from (`GITHUB_DOWNLOAD_UPDATE_REPO` → `electron/updateManager.ts`). Publishing there reaches real counters.
   - Repo 2 is the test channel. Counters never poll it, and `allowPrerelease` is off, so a test build cannot reach a till by accident.
@@ -30,7 +31,7 @@ git status --porcelain && git branch --show-current && git log --oneline -1
 
 - Working tree clean? Uncommitted work must be resolved or stashed first — ask the owner, never discard.
 - `.env` present with `GITHUB_UPDATE_REPO_1` + `GH_TOKEN_1` (the script scans `_1`, `_2`, … until a gap; a repo with no matching token is fatal).
-- **Ask the owner to confirm the build variant** — `APP_MODE` and `LANDING_PAGE` in `.env` decide which product this installer is. Do not guess.
+- **Read the build variant** — `APP_MODE` and `LANDING_PAGE` in `.env` decide which product this installer is. State them in the report; stop and ask only if they look wrong for a counter build (e.g. a leftover test value).
 
 **Stop anything that can lock the build, before step 6 — not after it fails.** `electron-builder` unpacks Electron into `dist-app/win-unpacked.tmp` and renames it to `dist-app/win-unpacked`. A leftover `AbeerSuite.exe` (an earlier smoke test still open) or `electron.exe` (a `pnpm dev` / `pnpm electron:dev` session still running) holds those files open and turns that rename into `EPERM: operation not permitted, rename 'win-unpacked.tmp' -> 'win-unpacked'` — a real failure, unlike the transient antivirus one covered by the EPERM-resumable memory. A dev server left on port `786` (`electron:dev`) or `3000` (`pnpm dev`) can just as easily clash with the fresh `.next` output the same pack step writes.
 
@@ -88,7 +89,7 @@ Read the actual diffs behind those commits — subject lines are not enough to k
 
 **The auto-generated part appends below yours.** `scripts/release-electron.ts` reads `RELEASE_NOTES.md`, then appends `### What's Changed in v<version>` — the raw `git log` since the previous tag plus a compare link — joined with a `---` separator. So the file holds **only** the hand-written half. Do not paste a commit list into it yourself; it would appear twice.
 
-**Show the drafted notes and the urgency tier to the owner and wait before committing them.** They know which change customers care about; you only know the commits.
+**Do not wait for approval on the notes.** Write them carefully from the commits, commit, and carry on; show the notes and the urgency tier in the step-10 report. Stop and ask only when `[urgent]` is a genuine judgement call — forcing every till to restart today is the owner's decision.
 
 ### 4. Commit the bump and the notes on `main`
 
@@ -126,9 +127,9 @@ One command owns all of this — never do any part of it by hand:
 - `git push origin HEAD --tags` — `main` **and** the tag to `origin`.
 - **Publishes a GitHub release.** A normal version goes to **every** `GITHUB_UPDATE_REPO_N`, each with its own `GH_TOKEN_N` — one `electron-builder --publish always --prepackaged` run per repo, carrying the installer, the blockmap, `latest.yml` and the notes. A version with a `-` in it goes to **repo 2 only**, marked a prerelease; the script says which it is doing before it starts, so read that line.
 
-**No smoke-test pause.** The owner tests before saying "release", so let
-`pnpm electron:release` run straight from pack to publish. The `verify:package` gate is
-the only check between them.
+**No smoke-test pause.** Never stop to ask the owner to test. If the release needs a
+check the gate cannot make, do it yourself before or after the pack, then let
+`pnpm electron:release` run straight from pack to publish.
 
 ### 7. Push the tag to `production` too
 
@@ -146,55 +147,60 @@ git checkout dev && git merge --ff-only main && git push origin dev
 
 So the next day's work starts from the released tree.
 
-### 9. Bring `d_office` level too — that is the office deploy
+### 9. `d_office` and `d_shop` — fast-forward if Vercel needs it, never push
 
-**`d_office` ends every release on the released commit, exactly like `dev`.** It is
-not a branch that catches up now and then: `main`, `dev` and `d_office` all sit on
-the same commit when a release is done, and the report in step 10 says so.
+Both are Vercel deploy branches on `origin`: `d_office` deploys the office site (and runs
+`prisma migrate deploy` through `vercel-build`), `d_shop` deploys the shop site. Pushing
+`main` or `dev` deploys nothing.
 
-It is the deploy branch. Vercel is connected to it on `origin`, so the push that
-levels it is also what puts the office site live and runs `prisma migrate deploy`
-through `vercel-build`. Pushing `main` deploys nothing. Neither does `dev`.
-`production` has no `d_office` at all.
+**Does this release need Vercel?** Check what changed since each branch's tip:
 
 ```bash
-git checkout d_office && git merge --ff-only main && git push origin d_office && git checkout main
+git diff --stat d_office..main
+git diff --stat d_shop..main
 ```
 
-Not fast-forwardable → stop and report. `d_office` carrying something `main` does not
-means the site is running code no release contains, and merging over it hides that.
+Anything the web side serves counts — `src/app`, `src/shared`, API routes, `prisma/`
+(migrations), `public/`, `next.config`, `package.json` deps. Only `electron/`,
+installer/packaging scripts, `RELEASE_NOTES.md` and docs → no Vercel change; skip the
+branch and say so in the report.
 
-**The push is the one thing to ask for**, every time — it is a production deploy, and
-the agent's own permission layer refuses it unprompted anyway. The question is *when
-to press it*, never *whether* `d_office` should be level. Show what it carries and
-wait for a yes; on a no, do the local fast-forward anyway and hand over the push
-command, so only one step is left outstanding.
+When it does, **fast-forward without asking:**
 
-**If `d_office` is many commits behind, say so loudly.** That means earlier releases
-never deployed and the office site has been running behind — it happened at v1.5.0,
-where `d_office` sat 15 commits back, past both the v1.4.0 and v1.4.1 release
-commits. Levelling it every time is what stops that.
+```bash
+git checkout d_office && git merge --ff-only main
+git checkout d_shop && git merge --ff-only main
+git checkout main
+```
 
-**On a schema release, the counters get the build first** (AGENTS.md §3) — this push
-is the moment live's schema changes. Check what is actually pending before proposing
-it:
+Not fast-forwardable → stop and report; that branch carries code no release contains.
+
+**Do not push them.** The owner pushes `d_office` / `d_shop` by hand. Put the reminder
+at the very end of the step-10 report, with the commands:
+
+```bash
+git push origin d_office
+git push origin d_shop
+```
+
+**If either is many commits behind, say so loudly** — earlier releases never deployed
+(v1.5.0 found `d_office` 15 commits back).
+
+**On a schema release, the counters get the build first** (AGENTS.md §3) — the
+`d_office` push is the moment live's schema changes. Check what is pending and put it
+in the reminder:
 
 ```bash
 pnpm db:migrate:status
 ```
 
-"Database schema is up to date!" means the migration already reached live and the
-deploy is code-only — say so, it changes the risk completely. Anything pending means
-the ordering rule is live and the counters come first.
-
-Judge the drift risk on **what physically changes**, not on the word "migration".
-`schemaGuard` only compares tables a counter already has in its registry, so a brand
-new table is invisible to an old till and cannot halt it. A new **column on a table
-counters already sync** is the shape that stops shops. Prisma relation fields are not
-columns — read the migration SQL, not the schema diff.
+"Database schema is up to date!" → code-only deploy. Anything pending → tell the owner
+to push `d_office` only after the tills have updated. Judge drift on what physically
+changes: a new table is invisible to old tills; a new **column on a table counters
+already sync** is what halts shops. Read the migration SQL, not the schema diff.
 
 If the owner asks for a deploy some other way — `vercel --prod`, the dashboard — say
-plainly that `d_office` is the trigger and offer this instead. Do not go looking for
+plainly that the `d_office` / `d_shop` push is the trigger and offer this instead. Do not go looking for
 Vercel credentials.
 
 ### 10. Report
@@ -202,8 +208,9 @@ Vercel credentials.
 Done means, and say each one plainly:
 
 - `main` and `v<version>` are on **both** remotes.
-- `main`, `dev` and `d_office` are all on the released commit.
-- `d_office` is level with `main` **and pushed** — the office site is live on the released commit. If the push is still outstanding, say so plainly: the site is then running the old code.
+- `main` and `dev` are on the released commit.
+- The drafted notes, the variant, and anything you tested yourself.
+- **Last line — the Vercel reminder:** which of `d_office` / `d_shop` were fast-forwarded (or skipped, and why), that they are **not pushed** so the sites still run old code, the push commands, and on a schema release that counters must update first.
 - **Every** release repo shows the installer, the blockmap, `latest.yml`, and the crafted notes — or, for a `-pre` version, **repo 2 shows them and repo 1 was deliberately left alone**. Say which, and say that counters will not see a test build.
 - Which urgency tier went out, and therefore how counters will take it.
 
@@ -213,9 +220,8 @@ Handing a step back is **not** stopping the release: do everything either side o
 
 | Ask for | When |
 | --- | --- |
-| **The notes and the tier** | Always, before step 4. Show the drafted `RELEASE_NOTES.md`. |
-| **The variant** | Always, at preflight — `APP_MODE`, `LANDING_PAGE`. |
-| **The `d_office` push** | Always, at step 9. `d_office` ending level is not optional; only the timing of the push is. Show what it carries and wait for a yes. |
+| **`[urgent]`** | Only when it is a genuine judgement call — restarting every till today. |
+| **The variant** | Only when `.env` looks wrong for a counter build. |
 | **A push they would rather run** | Whenever they say so — offer the exact command instead of running it. |
 | **Anything that would be a guess** | A version number that is not an obvious bump; a schema release's publish-then-migrate ordering; a repo that failed to publish. |
 
