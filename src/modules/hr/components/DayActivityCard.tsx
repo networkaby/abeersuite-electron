@@ -105,7 +105,7 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                     exactly the line a person asks about later. */}
                 {day.pending && day.pending.added.length > 0 && (
                     <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                        +{formatWorked(pendingTotal(day.pending.added))} → pending ({pendingBreakup(day.pending.added)}) · pending after today: {formatWorked(pendingTotal(day.pending.after))}
+                        Today&apos;s short +{formatWorked(pendingTotal(day.pending.added))} ({pendingBreakup(day.pending.added)}) · short carried forward {formatWorked(pendingTotal(day.pending.after))}
                     </p>
                 )}
             </article>
@@ -201,7 +201,7 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                             <td />
                             <td className="py-1 text-right font-mono tabular-nums">{signed(account.total)}</td>
                             <td className="hidden py-1 pl-3 text-[11px] font-normal text-muted-foreground sm:table-cell">
-                                {shut ? "paid at its own rate, outside pending duty" : "duty − penalty + extra time"}
+                                {shut ? "paid at its own rate, outside pending duty" : "normal duty + extra − penalty"}
                             </td>
                         </tr>
                         {/* Owner, 2026-10-13: the short is neither today's time nor a
@@ -209,22 +209,12 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                             expected − day total, carried forward when it falls short. */}
                         {!shut && (
                             <>
-                                <tr className={cn("text-[11px]", account.carry.minutes > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground/60")}>
-                                    <td className="pt-1.5">Short of duty — carried forward</td>
-                                    <td className="pt-1.5 text-right font-mono tabular-nums">{orDash(account.carry.minutes)}</td>
-                                    <td />
-                                    <td />
-                                    <td className="hidden pt-1.5 pl-3 sm:table-cell">{account.carry.note ?? ""}</td>
-                                </tr>
-                                <tr className="text-[11px] text-muted-foreground">
-                                    <td>Pending after today</td>
-                                    <td className="text-right font-mono tabular-nums">
-                                        {orDash(day.pending ? pendingTotal(day.pending.after) : 0)}
-                                    </td>
-                                    <td />
-                                    <td />
-                                    <td className="hidden pl-3 sm:table-cell">made up by a later day&apos;s extra, or cut at month end</td>
-                                </tr>
+                                <tr><td colSpan={5} className="pt-2 text-[11px] font-medium text-muted-foreground">Short balance</td></tr>
+                                <BalanceRow label="Earlier short" minutes={account.carry.before} note={account.carry.beforeNote} />
+                                <BalanceRow label="− Recovered today" minutes={account.carry.recovered} note={account.carry.recovered > 0 ? "by today's extra" : null} />
+                                <BalanceRow label="+ Today's short" minutes={account.carry.minutes} note={account.carry.note} warn />
+                                <BalanceRow label="= Short carried forward" minutes={account.carry.after} strong warn
+                                    note={account.carry.after > 0 ? "recovered by a later day's extra, or cut at month end" : null} />
                             </>
                         )}
                     </tfoot>
@@ -285,16 +275,27 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
     );
 }
 
+/** One line of the running short. Kept out of the Accounted column — it is not the day's time. */
+function BalanceRow({ label, minutes, note, warn, strong }: { label: string; minutes: number; note: string | null; warn?: boolean; strong?: boolean }) {
+    return (
+        <tr className={cn("text-[11px]", minutes === 0 ? "text-muted-foreground/60" : warn ? "text-amber-700 dark:text-amber-400" : "text-foreground", strong && "font-medium")}>
+            <td className="py-px pl-2">{label}</td>
+            <td className="py-px text-right font-mono tabular-nums">{orDash(minutes)}</td>
+            <td />
+            <td />
+            <td className="hidden py-px pl-3 sm:table-cell">{note ?? ""}</td>
+        </tr>
+    );
+}
+
 /** "+1h 08m", "−46m", "—" for nought. The sign is the whole point of the column. */
 const signed = (minutes: number) =>
     minutes === 0 ? "—" : minutes < 0 ? `−${formatWorked(-minutes)}` : formatWorked(minutes);
 
 function AccountRow({ line }: { line: AccountLine }) {
-    // A carried pending figure is read in its label, so it is never greyed.
-    const carried = line.key === "pending" && !!line.note;
-    const idle = line.minutes === 0 && line.accounted === 0 && !carried;
+    const idle = line.minutes === 0 && line.accounted === 0;
     return (
-        <tr className={cn(idle && "text-muted-foreground/60", carried && "text-amber-600 dark:text-amber-400")}>
+        <tr className={cn(idle && "text-muted-foreground/60")}>
             <td className="py-0.5">{line.label}</td>
             <td className="py-0.5 text-right font-mono tabular-nums">{line.minutes > 0 ? formatWorked(line.minutes) : "—"}</td>
             <td className="py-0.5 text-right font-mono tabular-nums text-muted-foreground">{line.rateLabel}</td>

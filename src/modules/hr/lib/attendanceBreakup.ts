@@ -300,7 +300,7 @@ export function buildDayBreakup(input: {
  * styles that are not a plain multiple ("10% of day / 5 min").
  */
 export interface AccountLine {
-    key: "pending" | "duty" | "madeUp" | "overtime" | "weeklyOff" | "holiday" | "late";
+    key: "duty" | "madeUp" | "overtime" | "weeklyOff" | "holiday" | "late";
     label: string;
     /** The raw minutes this line is about — the lateness itself for the late line. */
     minutes: number;
@@ -312,6 +312,25 @@ export interface AccountLine {
     note: string | null;
 }
 
+/**
+ * The running short, shown under the day total. Owner, 2026-10-13: *"previous
+ * short − today recover + today short = final short"*.
+ */
+export interface ShortBalance {
+    /** Short carried in from earlier days, and its dated breakup. */
+    before: number;
+    beforeNote: string | null;
+    /** Earlier short recovered by today's extra. */
+    recovered: number;
+    /** Short this day adds — expected − day total, when negative. */
+    minutes: number;
+    note: string | null;
+    /** Short carried forward to the next day. */
+    after: number;
+}
+
+const NO_SHORT: ShortBalance = { before: 0, beforeNote: null, recovered: 0, minutes: 0, note: null, after: 0 };
+
 export interface DayAccount {
     lines: AccountLine[];
     /** Every line's `accounted`, summed: duty − penalty + extra time. */
@@ -322,7 +341,7 @@ export interface DayAccount {
      * pending — its short plus its penalty not made up today. 0 on a day that
      * came out even or ahead.
      */
-    carry: { minutes: number; note: string | null };
+    carry: ShortBalance;
 }
 
 const times = (n: number) => `× ${Number.isInteger(n) ? `${n}.0` : String(n)}`;
@@ -356,7 +375,7 @@ export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
                 note: "paid outside the netting",
             });
         }
-        return { lines, total: sum(lines), carry: { minutes: 0, note: null } };
+        return { lines, total: sum(lines), carry: NO_SHORT };
     }
 
     // Owner, 2026-10-13: the day first makes up the duty pending from earlier
@@ -370,28 +389,21 @@ export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
     const addedOf = (kind: "short" | "late" | "absent") =>
         (p?.added ?? []).filter((a) => a.kind === kind).reduce((t, a) => t + a.minutes, 0);
 
-    lines.push({
-        // The carried figure lives in the label, not the columns: it is a note
-        // of what earlier days left, never part of this day's total.
-        key: "pending", label: `Pending duty (earlier days, ${carried > 0 ? fmtShort(carried) : "nil"})`, minutes: 0, rateLabel: "", accounted: 0,
-        note: p && p.before.length ? pendingBreakup(p.before) : null,
-    });
-
     const normal = Math.min(day.workedMinutes, day.dutyMinutes);
     lines.push({ key: "duty", label: "Normal duty", minutes: normal, rateLabel: times(1), accounted: normal, note: null });
 
     if (madeUp > 0) {
         const left = pendingTotal(p?.after ?? []);
         lines.push({
-            key: "madeUp", label: "Extra → made up pending", minutes: madeUp, rateLabel: times(1), accounted: madeUp,
-            note: left > 0 ? `still pending ${fmtShort(left)}` : "nothing pending now",
+            key: "madeUp", label: "Extra — recovers earlier short", minutes: madeUp, rateLabel: times(1), accounted: madeUp,
+            note: left > 0 ? `${fmtShort(left)} short still to recover` : "earlier short fully recovered",
         });
     }
 
     lines.push({
         key: "overtime", label: "Overtime", minutes: overtime,
         rateLabel: times(rules.overtimeRate), accounted: Math.round(overtime * rules.overtimeRate),
-        note: day.overtimeMinutes > 0 && overtime === 0 ? "the extra went to make up pending duty" : null,
+        note: day.overtimeMinutes > 0 && overtime === 0 ? "the extra went to recover earlier short" : null,
     });
 
     lines.push(lateLine(day, rules, addedOf("late")));
@@ -414,7 +426,15 @@ export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
                 .filter(Boolean).join(" · ")
             : null;
 
-    return { lines, total: sum(lines), carry: { minutes: carryMinutes, note: carryNote } };
+    return {
+        lines, total: sum(lines),
+        carry: {
+            before: carried, beforeNote: p && p.before.length ? pendingBreakup(p.before) : null,
+            recovered: Math.min(madeUp, carried),
+            minutes: carryMinutes, note: carryNote,
+            after: p ? pendingTotal(p.after) : 0,
+        },
+    };
 }
 
 function lateLine(day: DayBreakup, rules: PayRules, added: number): AccountLine {
