@@ -1,23 +1,27 @@
-# v1.16.5 [urgent]
+# v1.16.6
 
-Every counter should install this today. It changes how a till signs in with the office, and the office site will move to the new sign-in right after the counters have updated.
+A normal update for every counter. It brings a lock screen for the till, a clearer duty timeline on the sign-in screen, and a fix for editing service bills. Counters will take it at a quiet moment — no rush.
 
-## Counter sign-in
-- Staff login on the till now happens on the till itself, so it is quicker and works even when the office line is slow.
-- Each counter now has its own private key to talk to the office. No installer carries the office password any more. The key renews itself every 30 days; an admin can cut off a counter from **Admin → POS Counters**.
-- **Sign out** now ends only that login, not every login of the same staff.
-- Fixed the brief "log in again" flash right after signing out.
+## Lock the till
+- A new **Lock** button covers the till without signing out. A 4-digit PIN lifts it. Staff can set or change their PIN from the lock screen.
+- The lock screen shows the shop photo, the till card, today's closing time and the next opening.
+- A locked till stays covered even after the window is refreshed; it never flashes the app underneath.
+- Only the person who locked it, or nobody, sees the till behind the lock.
+
+## Duty timeline on sign-in and lock screens
+- Today's duty is shown as a 24-hour ruler across the bottom of the screen, with duty start, duty end and "Now" marked.
+- Joins, leaves, shift start/end and away times appear on the timeline. Idle gaps are never painted as work.
+
+## Billing
+- **Update Sale on a service bill** now shows the service in the cart. Earlier the cart opened empty with only the old total. Saving keeps the service as it was.
 
 ## Attendance and pay
-- Attendance counts whole minutes. The day card lists On duty / Off duty in order, in two columns, and hides empty rows.
-- A day's extra time first covers that day's late penalty and any earlier short time; only what is left is paid as overtime.
-- Half days are judged against half the duty. Their extra time recovers short time, and the rest is paid at the normal rate, never as overtime.
-- Full-day and half-day limits can be edited on **Pay Rules**.
-- Employee Activity now checks every clocked day, Manual or Auto. Over / short matches the day's own total.
-- When the office marks someone late, the day card says why.
+- A day worked under 40% of the duty now reads **On duty / Incomplete duty**, not Absent.
+- Incomplete duty is unpaid but carries no absence penalty.
+- Work on a holiday or weekly off reads "worked", never incomplete duty.
 
-## Sync
-- An attendance mark made in the office no longer wipes the minutes the till recorded.
+## Sign-in
+- The admin login on a real person's email signs in as that person, with their own idle limit.
 
-## Important — update order
-This version adds new fields for counters. **Update every counter first.** The office site is updated after that; a till still on the old version will pause its sync until it updates.
+## Installation
+- After an update there is only one set of AbeerSuite shortcuts on the Desktop, not two.
