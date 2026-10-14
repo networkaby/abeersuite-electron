@@ -53,7 +53,7 @@ export const WA_TEMPLATE_LABEL: Record<WaTemplateKind, string> = {
  *  them can also be sent by hand from the 3-dot menu. */
 export const WA_TEMPLATE_WHEN: Record<WaTemplateKind, string> = {
     SALE: "POS sale, or an office Sale / Online invoice when posted.",
-    RECEIPT: "Office Receipt posted, or money received at the counter.",
+    RECEIPT: "Office Receipt posted, or money received at the counter — never to suppliers (Sundry Creditors).",
     SALE_RETURN: "Sale return posted (counter or office).",
     REFUND: "Payment voucher posted to a customer (Sundry Debtors) — not to suppliers.",
     ORDER: "POS order, or an office Sales Order when saved and posted.",
