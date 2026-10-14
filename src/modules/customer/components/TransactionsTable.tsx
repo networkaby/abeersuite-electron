@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
+import { groupByDay, useOpenDays, DayRowLabel } from "@/shared/components/DailyBreakup";
 import Link from "next/link";
 import type { SettlementState } from "@/modules/accountancy/lib/billLink";
 import { formatDate } from "@/shared/lib/format/formatDate";
@@ -91,14 +92,17 @@ const TYPE_DOT: Record<string, string> = {
     OPENING: "bg-muted-foreground/40",
 };
 
-export function TransactionsTable({ invVouchers, accountId, partyName, onChanged }: {
+export function TransactionsTable({ invVouchers, accountId, partyName, onChanged, daily = false }: {
     invVouchers: TxInvVoucher[];
     /** The party's ledger account — what the bill-wise popup settles against.
      *  Null only where the party has no ledger, and then nothing is linkable. */
     accountId?:  number | null;
     partyName?:  string;
     onChanged?:  () => void;
+    /** Tally's daily breakup: one row per day, opened to show its vouchers. */
+    daily?:      boolean;
 }) {
+    const { isOpen, toggleDay } = useOpenDays();
     // Which voucher's bill-wise popup is open, if any.
     const [linkVoucherId, setLinkVoucherId] = useState<number | null>(null);
     // Right-click: "Open in new window" on a voucher number (as in the Day Book),
@@ -184,28 +188,7 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
 
     const money = (n: number) => formatRupeesFromPaise(Math.round(n * 100));
 
-    return (
-        <Card className="py-0 overflow-hidden" onContextMenu={onContainerContextMenu}>
-            <CardContent className="p-0">
-                <Table>
-                    <TableHeader>
-                        {/* Tinted, and its hover suppressed — a header is not a row you
-                            can land on, so it should not light up like one. */}
-                        <TableRow className="bg-muted/60 hover:bg-muted/60">
-                            <TableHead>Type</TableHead>
-                            <TableHead>Reference</TableHead>
-                            <TableHead>Date</TableHead>
-                            <TableHead className="text-muted-foreground/70 font-normal">Branch</TableHead>
-                            <TableHead className="text-muted-foreground/70 font-normal">Created by</TableHead>
-                            <TableHead className="text-right">Total</TableHead>
-                            <TableHead className="text-right">Paid</TableHead>
-                            <TableHead className="text-right">Balance</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="w-10" />
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {rows.map((row) => (
+    const renderRow = (row: Row) => (
                             <TableRow
                                 key={row.rowKey}
                                 // Faint striping so the eye can carry one voucher across ten
@@ -286,7 +269,53 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
                                     )}
                                 </TableCell>
                             </TableRow>
-                        ))}
+    );
+
+    return (
+        <Card className="py-0 overflow-hidden" onContextMenu={onContainerContextMenu}>
+            <CardContent className="p-0">
+                <Table>
+                    <TableHeader>
+                        {/* Tinted, and its hover suppressed — a header is not a row you
+                            can land on, so it should not light up like one. */}
+                        <TableRow className="bg-muted/60 hover:bg-muted/60">
+                            <TableHead>Type</TableHead>
+                            <TableHead>Reference</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead className="text-muted-foreground/70 font-normal">Branch</TableHead>
+                            <TableHead className="text-muted-foreground/70 font-normal">Created by</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead className="text-right">Paid</TableHead>
+                            <TableHead className="text-right">Balance</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="w-10" />
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {!daily ? rows.map(renderRow) : groupByDay(rows, (r) => r.date).map((day) => {
+                            // Rows run newest first, so the day's first row carries its closing balance.
+                            const closing = day.rows[0].balance;
+                            const open = isOpen(day.date);
+                            return (
+                                <Fragment key={day.date}>
+                                    <TableRow className="cursor-pointer bg-muted/40 hover:bg-muted/60" onClick={() => toggleDay(day.date)}>
+                                        <TableCell colSpan={2}><DayRowLabel open={open} count={day.rows.length} /></TableCell>
+                                        <TableCell className="text-xs font-medium whitespace-nowrap">{formatDate(day.date)}</TableCell>
+                                        <TableCell colSpan={2} />
+                                        <TableCell className="text-right font-mono text-xs">{money(day.rows.reduce((s, r) => s + r.total, 0))}</TableCell>
+                                        <TableCell className="text-right font-mono text-xs">{money(day.rows.reduce((s, r) => s + r.paid, 0))}</TableCell>
+                                        <TableCell className={cn(
+                                            "text-right font-mono text-xs font-semibold tabular-nums",
+                                            closing < -0.005 ? "text-rose-600 dark:text-rose-400" : closing < 0.005 ? "text-muted-foreground" : "text-foreground",
+                                        )}>
+                                            {money(closing)}
+                                        </TableCell>
+                                        <TableCell colSpan={2} />
+                                    </TableRow>
+                                    {open && day.rows.map(renderRow)}
+                                </Fragment>
+                            );
+                        })}
                     </TableBody>
                 </Table>
             </CardContent>

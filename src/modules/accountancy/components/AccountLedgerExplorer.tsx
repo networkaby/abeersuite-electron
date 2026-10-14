@@ -11,7 +11,8 @@
 // pseudo-rows, source-voucher links. Uses /api/accountancy/reports/ledger/[id]
 // (truth-path running balance) and /api/accountancy/ledgers (flat GL list).
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { Fragment, useEffect, useState, useCallback, useMemo } from "react";
+import { DailyToggle, DayRowLabel, groupByDay, useDailyTick, useOpenDays } from "@/shared/components/DailyBreakup";
 import axios from "axios";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -184,6 +185,8 @@ export function AccountLedgerExplorer({
     // pass ?accountId=&from=&to=). Honour them instead of always defaulting.
     const [from, setFrom] = useState(params.get("from") ?? toIsoDate(indianFiscalYearStart()));
     const [to, setTo] = useState(params.get("to") ?? toIsoDate(new Date()));
+    const [daily, setDaily] = useDailyTick();
+    const { isOpen, toggleDay } = useOpenDays();
 
     // Balances on this list are summed from the GL lines (the replica on a
     // counter), and re-read on every ledger change — a voucher posted or deleted
@@ -272,6 +275,94 @@ export function AccountLedgerExplorer({
                 (a.group?.name ?? "").toLowerCase().includes(q),
         );
     }, [accounts, search]);
+
+    // One ledger row — drawn straight, or under its day in the daily breakup.
+    const renderLedgerRow = (row: LedgerRow, reconciledThrough: string | null | undefined, normalBalance: NormalBalance) => {
+            // yyyy-mm-dd strings compare lexicographically — reconciledThrough
+            // is INCLUSIVE, so a row dated exactly on it is settled.
+            const settled = !!reconciledThrough
+                && row.date <= reconciledThrough;
+            return (
+            <tr
+                key={row.id}
+                className={cn(
+                    "hover:bg-muted/40 transition-colors",
+                    // A full-row wash was too heavy across a whole settled statement,
+                    // but the border-only version was barely visible at a glance —
+                    // a thicker border + a light fill strikes the middle ground.
+                    settled && "border-l-4 border-l-red-400 bg-red-50/50 dark:bg-red-900/15",
+                )}
+            >
+                <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                    <span className={cn(
+                        "inline-flex items-center gap-1",
+                        settled ? "text-red-700 dark:text-red-300 font-semibold" : "text-muted-foreground",
+                    )}>
+                        {settled && <CheckCircle2 size={11} className="shrink-0" />}
+                        {formatDate(row.date)}
+                    </span>
+                </td>
+                <td className="px-4 py-2.5">
+                    {(() => {
+                        const source = voucherSourceForType(row.voucherType);
+                        const rawId = source === "inv" && row.source ? row.source.id : row.journalEntryId;
+                        const href = row.source?.url ?? referenceHref(source, rawId, row.voucherType);
+                        if (!href) return <span className="font-mono text-xs text-muted-foreground">{row.reference}</span>;
+                        if (row.source) {
+                            return (
+                                <Link
+                                    href={href}
+                                    className={`inline-block text-xs px-2 py-0.5 border rounded-sm font-mono font-medium hover:underline ${SOURCE_COLOR[row.source.kind]}`}
+                                >
+                                    {row.source.reference ?? row.source.number ?? row.reference}
+                                </Link>
+                            );
+                        }
+                        return (
+                            <Link
+                                href={href}
+                                className="font-mono text-xs text-primary font-medium hover:underline"
+                            >
+                                {row.reference}
+                            </Link>
+                        );
+                    })()}
+                </td>
+                <td className="px-4 py-2.5">
+                    <p className="text-sm">{row.description}</p>
+                    {row.lineDescription && (
+                        <p className="text-xs text-muted-foreground">{row.lineDescription}</p>
+                    )}
+                </td>
+                <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+                    {row.branchName ?? <span className="text-muted-foreground/65">—</span>}
+                </td>
+                <td className="px-4 py-2.5 text-right font-mono text-xs">
+                    {row.debit != null ? fmt(row.debit) : <span className="text-muted-foreground/65">—</span>}
+                </td>
+                <td className="px-4 py-2.5 text-right font-mono text-xs">
+                    {row.credit != null ? fmt(row.credit) : <span className="text-muted-foreground/65">—</span>}
+                </td>
+                <td className={cn(
+                    "px-4 py-2.5 text-right font-mono text-xs font-semibold",
+                    row.balance < 0 && "text-destructive",
+                )}>
+                    {drCr(row.balance, normalBalance)}
+                </td>
+                <td className="px-4 py-2.5 text-right">
+                    <DayBookActionsMenu
+                        // An inventory row edits / cancels / prints by its DETAIL id
+                        // (row.source, resolved server-side); GL and journal rows by the spine id.
+                        rawId={voucherSourceForType(row.voucherType) === "inv" && row.source ? row.source.id : row.journalEntryId}
+                        source={voucherSourceForType(row.voucherType)}
+                        kind={row.voucherType}
+                        reference={row.reference}
+                        onChanged={refreshDetail}
+                    />
+                </td>
+            </tr>
+            );
+    };
 
     // Derived totals for the stat row (period debit/credit + net movement)
     const periodDebit = detail?.rows.reduce((s, r) => s + (r.debit ?? 0), 0) ?? 0;
@@ -520,6 +611,7 @@ export function AccountLedgerExplorer({
                                             monthMode="end"
                                             className="h-7 w-36 text-xs"
                                         />
+                                        <DailyToggle checked={daily} onChange={setDaily} />
                                         <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={handleRefresh}>
                                             <RefreshCw size={12} className="mr-1" />
                                             Refresh
@@ -565,90 +657,27 @@ export function AccountLedgerExplorer({
                                                         No transactions in this period
                                                     </td>
                                                 </tr>
-                                            ) : detail.rows.map((row) => {
-                                                // yyyy-mm-dd strings compare lexicographically — reconciledThrough
-                                                // is INCLUSIVE, so a row dated exactly on it is settled.
-                                                const settled = !!detail.account.reconciledThrough
-                                                    && row.date <= detail.account.reconciledThrough;
+                                            ) : !daily ? detail.rows.map((row) => renderLedgerRow(row, detail.account.reconciledThrough, detail.account.normalBalance))
+                                            : groupByDay(detail.rows, (r) => r.date).map((day) => {
+                                                // Rows run oldest first, so the day's last row carries its closing balance.
+                                                const closing = day.rows[day.rows.length - 1].balance;
+                                                const debit = day.rows.reduce((s, r) => s + (r.debit ?? 0), 0);
+                                                const credit = day.rows.reduce((s, r) => s + (r.credit ?? 0), 0);
+                                                const open = isOpen(day.date);
                                                 return (
-                                                <tr
-                                                    key={row.id}
-                                                    className={cn(
-                                                        "hover:bg-muted/40 transition-colors",
-                                                        // A full-row wash was too heavy across a whole settled statement,
-                                                        // but the border-only version was barely visible at a glance —
-                                                        // a thicker border + a light fill strikes the middle ground.
-                                                        settled && "border-l-4 border-l-red-400 bg-red-50/50 dark:bg-red-900/15",
-                                                    )}
-                                                >
-                                                    <td className="px-4 py-2.5 text-xs whitespace-nowrap">
-                                                        <span className={cn(
-                                                            "inline-flex items-center gap-1",
-                                                            settled ? "text-red-700 dark:text-red-300 font-semibold" : "text-muted-foreground",
-                                                        )}>
-                                                            {settled && <CheckCircle2 size={11} className="shrink-0" />}
-                                                            {formatDate(row.date)}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-2.5">
-                                                        {(() => {
-                                                            const source = voucherSourceForType(row.voucherType);
-                                                            const rawId = source === "inv" && row.source ? row.source.id : row.journalEntryId;
-                                                            const href = row.source?.url ?? referenceHref(source, rawId, row.voucherType);
-                                                            if (!href) return <span className="font-mono text-xs text-muted-foreground">{row.reference}</span>;
-                                                            if (row.source) {
-                                                                return (
-                                                                    <Link
-                                                                        href={href}
-                                                                        className={`inline-block text-xs px-2 py-0.5 border rounded-sm font-mono font-medium hover:underline ${SOURCE_COLOR[row.source.kind]}`}
-                                                                    >
-                                                                        {row.source.reference ?? row.source.number ?? row.reference}
-                                                                    </Link>
-                                                                );
-                                                            }
-                                                            return (
-                                                                <Link
-                                                                    href={href}
-                                                                    className="font-mono text-xs text-primary font-medium hover:underline"
-                                                                >
-                                                                    {row.reference}
-                                                                </Link>
-                                                            );
-                                                        })()}
-                                                    </td>
-                                                    <td className="px-4 py-2.5">
-                                                        <p className="text-sm">{row.description}</p>
-                                                        {row.lineDescription && (
-                                                            <p className="text-xs text-muted-foreground">{row.lineDescription}</p>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
-                                                        {row.branchName ?? <span className="text-muted-foreground/65">—</span>}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-right font-mono text-xs">
-                                                        {row.debit != null ? fmt(row.debit) : <span className="text-muted-foreground/65">—</span>}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-right font-mono text-xs">
-                                                        {row.credit != null ? fmt(row.credit) : <span className="text-muted-foreground/65">—</span>}
-                                                    </td>
-                                                    <td className={cn(
-                                                        "px-4 py-2.5 text-right font-mono text-xs font-semibold",
-                                                        row.balance < 0 && "text-destructive",
-                                                    )}>
-                                                        {drCr(row.balance, detail.account.normalBalance)}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-right">
-                                                        <DayBookActionsMenu
-                                                            // An inventory row edits / cancels / prints by its DETAIL id
-                                                            // (row.source, resolved server-side); GL and journal rows by the spine id.
-                                                            rawId={voucherSourceForType(row.voucherType) === "inv" && row.source ? row.source.id : row.journalEntryId}
-                                                            source={voucherSourceForType(row.voucherType)}
-                                                            kind={row.voucherType}
-                                                            reference={row.reference}
-                                                            onChanged={refreshDetail}
-                                                        />
-                                                    </td>
-                                                </tr>
+                                                    <Fragment key={day.date}>
+                                                        <tr className="cursor-pointer bg-muted/40 hover:bg-muted/60" onClick={() => toggleDay(day.date)}>
+                                                            <td className="px-4 py-2 text-xs font-medium whitespace-nowrap">{formatDate(day.date)}</td>
+                                                            <td className="px-4 py-2" colSpan={3}><DayRowLabel open={open} count={day.rows.length} /></td>
+                                                            <td className="px-4 py-2 text-right font-mono text-xs">{debit ? fmt(debit) : ""}</td>
+                                                            <td className="px-4 py-2 text-right font-mono text-xs">{credit ? fmt(credit) : ""}</td>
+                                                            <td className={cn("px-4 py-2 text-right font-mono text-xs font-semibold", closing < 0 && "text-destructive")}>
+                                                                {drCr(closing, detail.account.normalBalance)}
+                                                            </td>
+                                                            <td className="px-4 py-2" />
+                                                        </tr>
+                                                        {open && day.rows.map((row) => renderLedgerRow(row, detail.account.reconciledThrough, detail.account.normalBalance))}
+                                                    </Fragment>
                                                 );
                                             })}
 

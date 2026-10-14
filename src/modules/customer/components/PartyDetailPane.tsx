@@ -39,6 +39,7 @@ import CustomerQualityTab from "@/modules/customer/components/CustomerQualityTab
 import PartyBankTab from "@/modules/customer/components/PartyBankTab";
 import { PartyDetailHeader } from "@/modules/customer/components/PartyDetailHeader";
 import { TransactionsTable } from "@/modules/customer/components/TransactionsTable";
+import { DailyToggle, useDailyTick } from "@/shared/components/DailyBreakup";
 
 export type PartyRef = { kind: PartyKind; id: number };
 
@@ -126,6 +127,7 @@ export function PartyDetailPane({
     const tab: Tab = tabChoice.key === partyKey ? tabChoice.tab : "transactions";
     const setTab = (next: Tab) => setTabChoice({ key: partyKey, tab: next });
 
+    const [daily, setDaily] = useDailyTick();
     const [from, setFrom] = useSessionState(`${stateKey}:from`, toIsoDate(indianFiscalYearStart()));
     const [to, setTo] = useSessionState(`${stateKey}:to`, toIsoDate(new Date()));
     // The statement for the open party and period — read while its tab is on screen,
@@ -369,6 +371,7 @@ export function PartyDetailPane({
                                 <TallyDateInput value={from} onValueChange={setFrom} className="h-7 w-36 text-xs" />
                                 <label className="text-xs text-muted-foreground">To</label>
                                 <TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="h-7 w-36 text-xs" />
+                                <DailyToggle checked={daily} onChange={setDaily} />
                                 {/* Where a deliberate re-read says so, now that it no longer
                                     announces itself by blanking the table. */}
                                 <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={() => void reloadTransactions()} disabled={txLoading || txRefreshing}>
@@ -396,7 +399,7 @@ export function PartyDetailPane({
                             ) : !transactions ? null : transactions.invVouchers.length === 0 ? (
                                 <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
                             ) : (
-                                <TransactionsTable invVouchers={transactions.invVouchers} accountId={transactions.accountId} onChanged={() => void reloadTransactions()} />
+                                <TransactionsTable invVouchers={transactions.invVouchers} accountId={transactions.accountId} onChanged={() => void reloadTransactions()} daily={daily} />
                             )}
                         </div>
                     </>
