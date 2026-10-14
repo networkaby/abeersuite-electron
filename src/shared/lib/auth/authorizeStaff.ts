@@ -82,7 +82,7 @@ function checkSuperAdminEnv(email: string, password: string): StaffAuthUser | nu
         departmentIds: [],
         branchIds: [],
         seats: [],
-        idleLimitMinutes: DEFAULT_IDLE_LIMIT_MINUTES,   // the env bypass has no HR row
+        idleLimitMinutes: DEFAULT_IDLE_LIMIT_MINUTES,   // until resolveSuperAdmin finds the row's own
         kind: "staff",
     };
 }
@@ -117,7 +117,7 @@ function checkSuperAdminEnv(email: string, password: string): StaffAuthUser | nu
  * only way in. It is a valid hash (not a sentinel string) so `bcrypt.compare`
  * fails cleanly rather than choking on a malformed digest.
  */
-async function resolveSuperAdminId(prisma: PrismaClient, u: StaffAuthUser): Promise<string> {
+async function resolveSuperAdmin(prisma: PrismaClient, u: StaffAuthUser): Promise<{ id: string; idleLimitMinutes: number }> {
     try {
         const row = await prisma.user.upsert({
             where:  { email: u.email },
@@ -127,12 +127,15 @@ async function resolveSuperAdminId(prisma: PrismaClient, u: StaffAuthUser): Prom
                 email:    u.email,
                 password: bcrypt.hashSync(randomBytes(32).toString("hex"), 10),
             },
-            select: { id: true },
+            // The row can be a real person's own (owner, 2026-10-14: the super-admin
+            // password on his own email) — then his HR idle limit applies, or the
+            // till's clock and his timeline judge the same gap by two limits.
+            select: { id: true, staffProfile: { select: { idleLimitMinutes: true } } },
         });
-        return String(row.id);
+        return { id: String(row.id), idleLimitMinutes: idleLimitMinutesFor(row.staffProfile?.idleLimitMinutes) };
     } catch {
         // DB empty / unreachable — keep the sentinel and let the login through.
-        return u.id;
+        return { id: u.id, idleLimitMinutes: u.idleLimitMinutes };
     }
 }
 
@@ -357,7 +360,7 @@ export async function authorizeStaffCredentials(
     const superAdmin = checkSuperAdminEnv(email, password);
     if (superAdmin) {
         clearLoginFailures(email);
-        return { ...superAdmin, id: await resolveSuperAdminId(prisma, superAdmin) };
+        return { ...superAdmin, ...(await resolveSuperAdmin(prisma, superAdmin)) };
     }
 
     if (!isStaffEmailDomainAllowed(email)) return null;
