@@ -76,11 +76,13 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
     const lastOn = onLines[onLines.length - 1];
     const last = lastOn && !lastOn.open ? lastOn.to : null;
     const reads = day.status || day.grade;
-    // Came and worked under 40%: "on duty" / "incomplete duty", never "absent" (label only).
-    const cameIn = day.grade === "ABSENT" && day.workedMinutes > 0;
-    const clockWords = cameIn ? clockGradeLabel(day.grade, day.workedMinutes, isToday).toLowerCase() : inWords(day.grade);
-    const showsClock = !day.manual && reads === day.grade;
     const shut = day.weeklyOff || !!day.holidayName;
+    // Came and worked under 40%: "on duty" / "incomplete duty" (unpaid), never
+    // "absent". A shut day owes no duty, so any work there is just "worked" — paid.
+    const cameIn = day.grade === "ABSENT" && day.workedMinutes > 0;
+    const clockWords = shut && day.workedMinutes > 0 ? "worked"
+        : cameIn ? clockGradeLabel(day.grade, day.workedMinutes, isToday).toLowerCase() : inWords(day.grade);
+    const showsClock = !day.manual && reads === day.grade;
     const account = accountDay(day, rules);
     // Owner, 2026-10-13: day total against the expected duty, nothing else.
     // On a half day, against half the duty (the other half is cut from salary).
@@ -126,7 +128,7 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
             <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-2">
                 <span className="text-sm font-semibold">{fmtDay(day.date)}</span>
                 {isToday && <span className="text-[11px] font-medium text-primary">today</span>}
-                <Chip tone={showsClock && cameIn ? GRADE_TONE.HALF_DAY : GRADE_TONE[reads] ?? GRADE_TONE.PRESENT}>{showsClock ? clockWords : inWords(reads)}</Chip>
+                <Chip tone={showsClock && shut && day.workedMinutes > 0 ? GRADE_TONE.PRESENT : showsClock && cameIn ? GRADE_TONE.HALF_DAY : GRADE_TONE[reads] ?? GRADE_TONE.PRESENT}>{showsClock ? clockWords : inWords(reads)}</Chip>
                 {day.holidayName && <Chip tone={GRADE_TONE.HOLIDAY}>{day.holidayName}</Chip>}
                 {!day.holidayName && day.weeklyOff && <Chip tone={GRADE_TONE.WEEKLY_OFF}>weekly off</Chip>}
                 {day.leaveKind && <Chip tone={GRADE_TONE.LEAVE}>{inWords(day.leaveKind)} leave</Chip>}
