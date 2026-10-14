@@ -82,7 +82,7 @@ function checkSuperAdminEnv(email: string, password: string): StaffAuthUser | nu
         departmentIds: [],
         branchIds: [],
         seats: [],
-        idleLimitMinutes: DEFAULT_IDLE_LIMIT_MINUTES,   // until resolveSuperAdmin finds the row's own
+        idleLimitMinutes: DEFAULT_IDLE_LIMIT_MINUTES,   // no HR row behind the bare super admin
         kind: "staff",
     };
 }
@@ -127,9 +127,6 @@ async function resolveSuperAdmin(prisma: PrismaClient, u: StaffAuthUser): Promis
                 email:    u.email,
                 password: bcrypt.hashSync(randomBytes(32).toString("hex"), 10),
             },
-            // The row can be a real person's own (owner, 2026-10-14: the super-admin
-            // password on his own email) — then his HR idle limit applies, or the
-            // till's clock and his timeline judge the same gap by two limits.
             select: { id: true, staffProfile: { select: { idleLimitMinutes: true } } },
         });
         return { id: String(row.id), idleLimitMinutes: idleLimitMinutesFor(row.staffProfile?.idleLimitMinutes) };
@@ -360,6 +357,22 @@ export async function authorizeStaffCredentials(
     const superAdmin = checkSuperAdminEnv(email, password);
     if (superAdmin) {
         clearLoginFailures(email);
+        // A real person's own email (owner, 2026-10-14: *"Akramul Jakir is one
+        // person; with the super-admin password he gets super-admin permission, no
+        // other difference"*): his own session — name, photo, seats, branches, idle
+        // limit, the counter's attendance stamp — with the bypass added on top.
+        const own = await findStaffUser(prisma, email).catch(() => null);
+        if (own) {
+            const staff = await buildStaffAuthUser(prisma, own);
+            { const counterId = thisCounterId(); if (counterId) await stampAttendanceIn(prisma, own.id, counterId); }
+            return {
+                ...staff,
+                role: superAdmin.role,
+                roles: [...new Set([...staff.roles, ...superAdmin.roles])],
+                permissions: [...new Set([...staff.permissions, ...superAdmin.permissions])],
+                rank: Math.max(staff.rank, superAdmin.rank),
+            };
+        }
         return { ...superAdmin, ...(await resolveSuperAdmin(prisma, superAdmin)) };
     }
 
