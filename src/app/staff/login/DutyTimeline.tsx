@@ -1,6 +1,5 @@
 "use client";
 
-import { DoorClosed, DoorOpen } from "lucide-react";
 import { formatHhMmFriendly, todayIso } from "@/shared/lib/format/formatDate";
 import { formatWorked, parseHhMm } from "@/shared/lib/hr/dutyTime";
 import type { MyDay } from "@/shared/lib/hr/myDay";
@@ -72,9 +71,9 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
     if (lastOut !== null && lastOut > close) {
         tags.push({ at: (close + lastOut) / 2, row: "top", text: `${formatWorked(lastOut - close)} after close`, tone: "extra" });
     } else if (now !== null && now >= open && now < close) {
-        tags.push({ at: close, row: "top", text: `closes in ${formatWorked(close - now)}`, tone: "work" });
+        tags.push({ at: close, row: "top", text: `closes in ${formatWorked(close - now)}`, tone: "work", end: true });
     } else if (now !== null && now < open && firstIn === null) {
-        tags.push({ at: open, row: "top", text: `opens in ${formatWorked(open - now)}`, tone: "work" });
+        tags.push({ at: open, row: "top", text: `opens in ${formatWorked(open - now)}`, tone: "work", end: true });
     }
     for (const r of lived) {
         // A sliver is still drawn; only a stretch with room for the words is named.
@@ -92,11 +91,13 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
         ...(now !== null ? [{ row: "top" as const, at: pc(now), half: half("Now 12:00 PM") }] : []),
         { row: "bottom", at: pc(open), half: half("Duty starts") },
         { row: "bottom", at: pc(close), half: half("Duty starts") },
+        { row: "top", at: pc(open), half: 0.9 },
+        { row: "top", at: pc(close), half: 0.9 },
     ];
     // A tag that is crowded on its own row tries the other one before it is dropped.
     const fits = (row: Tag["row"], at: number, h: number) => !taken.some((o) => o.row === row && Math.abs(o.at - at) < o.half + h);
     const shown = tags.flatMap((t) => {
-        const h = half(t.text), at = t.end ? pc(t.at) - h : pc(t.at);
+        const h = half(t.text), at = t.end ? pc(t.at) - h - 1 : pc(t.at);
         const other: Tag["row"] = t.row === "top" ? "bottom" : "top";
         const row = fits(t.row, at, h) ? t.row : fits(other, at, h) ? other : null;
         if (!row) return [];
@@ -118,11 +119,11 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
                     <i key={i} className={`${styles.tlseg} ${styles[`tl_${s.tone}`]}`}
                        style={{ left: `${pc(s.from)}%`, width: `${pc(s.to) - pc(s.from)}%` }} />
                 ))}
-                {/* Duty start and end: a coloured post with a door on it, so the two
-                    times read at a glance from across the counter. */}
-                {([[open, "Duty starts", DoorOpen, styles.tlopen], [close, "Duty ends", DoorClosed, styles.tlclose]] as const).map(([m, word, Icon, tone]) => (
+                {/* Duty start and end: a map pin each, green and amber, its point on
+                    the bar — read at a glance from across the counter. */}
+                {([[open, "Duty starts", styles.tlopen], [close, "Duty ends", styles.tlclose]] as const).map(([m, word, tone]) => (
                     <div key={word} className={`${styles.tlmark} ${tone}`} style={{ left: `${pc(m)}%` }}>
-                        <i className={styles.tlpin}><Icon size={12} strokeWidth={2.4} aria-hidden /></i>
+                        <i className={styles.tlpin} aria-hidden />
                         <span><b>{clock(m)}</b>{word}</span>
                     </div>
                 ))}
