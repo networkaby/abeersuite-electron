@@ -162,8 +162,12 @@ export async function attendanceLedgerFor(
         // An absence nobody asked for — charged whichever hand wrote the day,
         // because "he did not come" needs no clock to establish. The day itself
         // is paid at zero by payroll; only the penalty goes to pending duty.
+        // Came and worked under 40% ("incomplete duty"): unpaid like absent, but
+        // he did come — no absence penalty (owner, 2026-10-14). Nor on a shut day.
         const status = measured ? gradeDay(worked, duty, rules) : r.status;
-        if (status === "ABSENT" && !grantedLeave(day)) {
+        const cameIn = measured && worked > 0;
+        const shutDay = holidays.has(day) || offDays.has(weekdayOf(day));
+        if (status === "ABSENT" && !cameIn && !(measured && shutDay) && !grantedLeave(day)) {
             out.unaskedAbsentDays += 1;
             adds.push({ date: day, kind: "absent", minutes: Math.round(duty * rules.absentPenaltyDays) });
         }
