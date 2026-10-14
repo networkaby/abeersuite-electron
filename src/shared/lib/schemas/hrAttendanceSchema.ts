@@ -14,7 +14,19 @@ export const ATTENDANCE_STATUS_META: Record<AttendanceStatus, { label: string; s
     HOLIDAY:    { label: "Holiday",    short: "H" },
 };
 
-export const LEAVE_KINDS = ["CASUAL", "SICK", "EARNED", "UNPAID"] as const;
+/**
+ * The clock's grade in words. Under 40% of duty grades ABSENT, but someone who
+ * came and worked was not absent — owner, 2026-10-14: "On duty" while the day
+ * runs, "Incomplete duty" after. Label only; the pay still treats it as absent.
+ */
+export function clockGradeLabel(grade: "PRESENT" | "HALF_DAY" | "ABSENT", workedMinutes: number, isToday: boolean): string {
+    if (grade === "PRESENT") return "Full day";
+    if (grade === "HALF_DAY") return "Half day";
+    if (workedMinutes > 0) return isToday ? "On duty" : "Incomplete duty";
+    return "Absent";
+}
+
+export const LEAVE_KINDS =["CASUAL", "SICK", "EARNED", "UNPAID"] as const;
 export type LeaveKind = (typeof LEAVE_KINDS)[number];
 export const LEAVE_KIND_LABELS: Record<LeaveKind, string> = {
     CASUAL: "Casual", SICK: "Sick", EARNED: "Earned", UNPAID: "Unpaid",
