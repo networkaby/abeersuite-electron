@@ -340,11 +340,10 @@ async function loadOpenBills(
             : (v.type === "CREDIT_NOTE" ? -1 : 1);
 
         if (v.type === OPENING_TYPE) {
-            // An opening is worth what the PARTY leg says, not what the debit
-            // legs add up to: its other side is Suspense, so on a payable
-            // opening the debit leg is the suspense one. The leg's direction is
-            // also the only thing that says which report the row belongs in —
-            // debit = they owe us, credit = we owe them.
+            // An opening is worth what the PARTY leg says — it is the only leg
+            // (older openings also carried a Suspense leg, which must not count).
+            // The leg's direction is also the only thing that says which report
+            // the row belongs in — debit = they owe us, credit = we owe them.
             if (Math.abs(leg) <= 0.005) continue;
             const legSide = leg > 0 ? "SALE" : "PURCHASE";
             if (invType !== "BOTH" && invType !== legSide) continue;

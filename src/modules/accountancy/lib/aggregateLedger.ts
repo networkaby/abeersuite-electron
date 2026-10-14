@@ -8,6 +8,7 @@ import { balanceDelta } from "./balance";
 import { computeTradingStockAdjustment } from "./tradingStockAdjustment";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
 import { ledgerStatusFilterUv } from "./ledgerStatus";
+import { OPENING_TYPE } from "./openingBills";
 
 // Both live in `./ledgerStatus` now, so a caller needing only the gate does not
 // have to pull this module's `server-only` dependency chain in. Re-exported here
@@ -333,13 +334,17 @@ export async function aggregateRolledUpByGroup(
  *
  *   • dated <= to → folded into the opening bucket (carry-forward into the period).
  *   • dated > to  → ignored entirely.
+ *
+ * Opening BILLS (`OPENING` vouchers, see openingBills.ts) follow the same rule:
+ * they carry the party's leg only, so one dated inside the period goes to the
+ * opening bucket too, never to debits / credits.
  */
 export async function aggregateRange(
     from: Date,
     to: Date,
     nbMap: Map<number, "DEBIT" | "CREDIT">,
 ): Promise<Map<number, AccountAggregate>> {
-    const [openingSums, periodSums, masterOpening] = await Promise.all([
+    const [openingSums, openingBillSums, periodSums, masterOpening] = await Promise.all([
         prisma.voucherGlLine.groupBy({
             by: ["accountId", "type"],
             _sum: { amount: true },
@@ -348,7 +353,12 @@ export async function aggregateRange(
         prisma.voucherGlLine.groupBy({
             by: ["accountId", "type"],
             _sum: { amount: true },
-            where: { universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: from, lte: to } } },
+            where: { universalVoucher: { ...ledgerStatusFilterUv(), type: OPENING_TYPE, date: { gte: from, lte: to } } },
+        }),
+        prisma.voucherGlLine.groupBy({
+            by: ["accountId", "type"],
+            _sum: { amount: true },
+            where: { universalVoucher: { ...ledgerStatusFilterUv(), type: { not: OPENING_TYPE }, date: { gte: from, lte: to } } },
         }),
         loadMasterOpeningBalances(to, nbMap),
     ]);
@@ -363,7 +373,7 @@ export async function aggregateRange(
         return v;
     };
 
-    for (const r of openingSums) {
+    for (const r of [...openingSums, ...openingBillSums]) {
         const nb = nbMap.get(r.accountId);
         if (!nb) continue;
         const v = ensure(r.accountId);

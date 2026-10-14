@@ -18,26 +18,22 @@
 // The scalar layer and the voucher layer coexist PER ACCOUNT, never both at once.
 // `aggregateLedger.loadMasterOpenings` only folds in accounts whose
 // `openingBalance` is not null, so an account that has moved to bill-wise
-// vouchers (scalar nulled) contributes through its GL lines alone. Nothing else
-// in the reports had to change.
+// vouchers (scalar nulled) contributes through its GL lines alone.
 //
-// ── Why the counter-leg goes to Suspense A/c ────────────────────────────────
+// ── Why there is no counter-leg ─────────────────────────────────────────────
 //
-// NOT to "Difference in Opening Balances". `bootstrap-seed.ts` is explicit that
-// no such ledger may exist: it is a pure synthetic the Balance Sheet computes as
-// Σ(Dr openings) − Σ(Cr openings), and creating a real one would double-count.
-// (`reconcileOpeningSuspense` in `openingBalance.ts` looks that ledger up and so
-// has never done anything on a correctly seeded database.)
+// An opening bill is the party's opening balance and nothing else — Tally's
+// way: the figure sits on the ledger, touches no other ledger, and whatever the
+// openings fail to agree by shows as the computed "Difference in opening
+// balances" line on the Trial Balance and Balance Sheet. So the voucher carries
+// ONE leg, the party's. (It used to post its other side to Suspense A/c, which
+// filled that ledger with a row per party; owner, 2026-10-14: "opening balance
+// are just opening balance of the ledger, no counter balance need".)
 //
-// The scalar layer can afford to be one-sided because that synthetic line
-// balances the sheet for it. A voucher cannot: an unbalanced one would leave the
-// trial balance short. So an opening bill posts BOTH legs — the party, and the
-// ledger under the seeded "Suspense A/c" group, which is where Tally parks an
-// amount whose other side is not yet known.
-//
-// The totals do not move. As accounts convert, the synthetic difference shrinks
-// by exactly what Suspense A/c gains, so the Balance Sheet still balances — the
-// amount simply becomes a real, drillable ledger instead of a computed line.
+// A one-legged voucher would unbalance any report that counts it as period
+// movement, so `aggregateRange` folds OPENING lines into the opening bucket,
+// the same as a master opening — the Trial Balance's Debit and Credit columns
+// stay equal and its opening plug picks the difference up.
 
 import type { Prisma } from "@/generated/prisma/client";
 import { systemBranchId } from "@/shared/lib/org/systemBranch";
@@ -52,10 +48,6 @@ export const OPENING_TYPE = "OPENING";
 /** What an unnamed opening bill is called. */
 export const DEFAULT_OPENING_REF = "Opening Balance";
 
-/** The seeded group the counter-leg's ledger lives under. The LEDGER itself is
- *  not seeded — the shop creates it — so it is resolved through the group rather
- *  than matched by name, and a missing or ambiguous one is refused out loud. */
-const SUSPENSE_GROUP = "Suspense A/c";
 const EPS = 0.005;
 
 /** One bill making up an opening balance. */
@@ -96,48 +88,6 @@ export function defaultOpeningDate(): Date {
 /** ISO yyyy-mm-dd of the above, for form defaults. */
 export function defaultOpeningDateIso(): string {
     return defaultOpeningDate().toISOString().slice(0, 10);
-}
-
-/**
- * The ledger the other side of an opening posts to: the single active account
- * under the seeded "Suspense A/c" group.
- *
- * Resolved rather than named, because that ledger is not seeded — the shop makes
- * it. Both failure modes are refused with something a human can act on, since
- * guessing here would silently post half a voucher into the wrong place.
- */
-async function resolveSuspenseLedger(tx: Prisma.TransactionClient): Promise<number> {
-    const group = await tx.accountGroup.findFirst({
-        where:  { name: SUSPENSE_GROUP, isActive: true },
-        select: { id: true },
-    });
-    if (!group) {
-        throw new OpeningBillError(
-            `The "${SUSPENSE_GROUP}" group is missing from the chart of accounts, so an opening bill has nowhere to post its other side.`,
-        );
-    }
-    const ledgers = await tx.account.findMany({
-        where:  { groupId: group.id, isActive: true },
-        select: { id: true, name: true },
-        orderBy: { id: "asc" },
-    });
-    if (ledgers.length === 0) {
-        throw new OpeningBillError(
-            `Create one ledger under "${SUSPENSE_GROUP}" first — it is what the other side of an opening bill posts to.`,
-        );
-    }
-    // The ledger named after its group is the suspense account proper. Preferring
-    // it by name matters because a group can pick up a stray: on this shop's books
-    // "Cash Over" is filed here rather than under Indirect Incomes, and picking
-    // the wrong one would post openings into a till-overage ledger.
-    const named = ledgers.find((l) => l.name.trim().toLowerCase() === SUSPENSE_GROUP.toLowerCase());
-    if (named) return named.id;
-    if (ledgers.length > 1) {
-        throw new OpeningBillError(
-            `There are ${ledgers.length} ledgers under "${SUSPENSE_GROUP}" (${ledgers.map((l) => l.name).join(", ")}) and none is named "${SUSPENSE_GROUP}" — name one so openings have an unambiguous other side.`,
-        );
-    }
-    return ledgers[0].id;
 }
 
 /** The opening bills currently posted for a party, oldest first. */
@@ -182,9 +132,6 @@ export async function loadOpeningBills(
  *
  * Refuses to remove a bill that something has already been settled against —
  * deleting it would silently un-settle a receipt that has been banked.
- *
- * The caller must run `reconcileOpeningSuspense()` afterwards (outside the
- * transaction, since it reads every account) so the trial balance ties.
  */
 export async function saveOpeningBills(
     tx: Prisma.TransactionClient,
@@ -215,11 +162,6 @@ export async function saveOpeningBills(
         throw new OpeningBillError(
             `${account.name} is not a party ledger — bill-wise details are only kept for Sundry Debtors and Sundry Creditors.`,
         );
-    }
-
-    const suspense = await resolveSuspenseLedger(tx);
-    if (suspense === args.accountId) {
-        throw new OpeningBillError("The suspense ledger cannot carry a bill-wise opening of its own.");
     }
 
     const existing = await loadOpeningBills(tx, args.accountId);
@@ -266,14 +208,8 @@ export async function saveOpeningBills(
         if (Math.abs(b.amount - was.amount) > EPS || was.type !== args.type) {
             await reverseOpeningBalances(tx, [b.universalVoucherId]);
             await tx.voucherGlLine.deleteMany({ where: { universalVoucherId: b.universalVoucherId } });
-            await tx.voucherGlLine.createMany({
-                data: [
-                    { universalVoucherId: b.universalVoucherId, accountId: args.accountId, type: args.type, amount: b.amount, seq: 0 },
-                    {
-                        universalVoucherId: b.universalVoucherId, accountId: suspense,
-                        type: args.type === "DEBIT" ? "CREDIT" : "DEBIT", amount: b.amount, seq: 1,
-                    },
-                ],
+            await tx.voucherGlLine.create({
+                data: { universalVoucherId: b.universalVoucherId, accountId: args.accountId, type: args.type, amount: b.amount, seq: 0 },
             });
             await applyOpeningBalances(tx, [b.universalVoucherId]);
         }
@@ -300,16 +236,9 @@ export async function saveOpeningBills(
             },
             select: { id: true },
         });
-        // Two legs, so the voucher balances on its own and the trial balance
-        // cannot drift — which is what the scalar layer needed a reconciler for.
-        await tx.voucherGlLine.createMany({
-            data: [
-                { universalVoucherId: uv.id, accountId: args.accountId, type: args.type, amount: b.amount, seq: 0 },
-                {
-                    universalVoucherId: uv.id, accountId: suspense,
-                    type: args.type === "DEBIT" ? "CREDIT" : "DEBIT", amount: b.amount, seq: 1,
-                },
-            ],
+        // The party's leg only — see "Why there is no counter-leg" above.
+        await tx.voucherGlLine.create({
+            data: { universalVoucherId: uv.id, accountId: args.accountId, type: args.type, amount: b.amount, seq: 0 },
         });
         created.push(uv.id);
     }
@@ -323,12 +252,12 @@ export async function saveOpeningBills(
         data:  { openingBalance: null, openingBalanceType: null, openingBalanceDate: null },
     });
 
-    // A changed opening reaches every day the ledger has — its reconciliation,
-    // and the suspense ledger's on the other leg, start over. Re-splitting the
-    // same total into bills (or converting the scalar) changes nothing.
+    // A changed opening reaches every day the ledger has — its reconciliation
+    // starts over. Re-splitting the same total into bills (or converting the
+    // scalar) changes nothing.
     const openingAfter = bills.reduce((s, b) => s + signed(b.amount, args.type), 0);
     if (Math.abs(openingAfter - openingBefore) > EPS) {
-        await resetReconciliation(tx, [args.accountId, suspense]);
+        await resetReconciliation(tx, [args.accountId]);
     }
 
     return {
