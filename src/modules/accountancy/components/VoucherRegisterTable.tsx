@@ -32,6 +32,7 @@ import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActi
 import { referenceHref } from "@/modules/accountancy/lib/voucherUrls";
 import { SettlementChip } from "@/modules/accountancy/components/SettlementChip";
 import { BillLinkDialog, clearBillLinkCache } from "@/modules/accountancy/components/BillLinkDialog";
+import { BillUnlinkDialog } from "@/modules/accountancy/components/BillUnlinkDialog";
 import { clearPartyCache } from "@/modules/accountancy/components/PartyOutstandingsPanel";
 import type { CombinedRow } from "@/modules/accountancy/hooks/useDayBook";
 import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
@@ -150,6 +151,7 @@ export function VoucherRegisterTable({
     // Hooks before any early return.
     // Which voucher's bill-wise popup is open, and on whose ledger it is measured.
     const [linkRow, setLinkRow] = useState<{ uvId: number; accountId: number; party: string | null } | null>(null);
+    const [unlinkRow, setUnlinkRow] = useState<{ uvId: number; accountId: number | null; ref: string } | null>(null);
     const [expanded,  setExpanded]  = useState<Set<string>>(new Set());
     // Right-click on Voucher No / Party offers "Open in new window", like the sidebar.
     const { menu: linkMenu, close: closeLinkMenu, onContainerContextMenu } = useLinkContextMenu();
@@ -386,6 +388,9 @@ export function VoucherRegisterTable({
                                                         party:     r.party,
                                                     })
                                                     : undefined}
+                                                onUnlink={r.universalVoucherId != null
+                                                    ? () => setUnlinkRow({ uvId: r.universalVoucherId!, accountId: r.partyAccountId ?? null, ref: r.reference })
+                                                    : undefined}
                                             />
                                         </td>
                                     )}
@@ -529,6 +534,19 @@ export function VoucherRegisterTable({
                         clearBillLinkCache();
                         clearPartyCache(linkRow.accountId);
                         setLinkRow(null);
+                        onChanged();
+                    }}
+                />
+            )}
+            {unlinkRow && (
+                <BillUnlinkDialog
+                    open
+                    onOpenChange={(v) => { if (!v) setUnlinkRow(null); }}
+                    voucherId={unlinkRow.uvId}
+                    reference={unlinkRow.ref}
+                    onSaved={() => {
+                        clearBillLinkCache();
+                        if (unlinkRow.accountId != null) clearPartyCache(unlinkRow.accountId);
                         onChanged();
                     }}
                 />

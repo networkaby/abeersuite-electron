@@ -10,6 +10,7 @@ import { voucherTypeLabel } from "@/shared/lib/format/voucherTypeLabel";
 import { referenceHref, type VoucherSource } from "@/modules/accountancy/lib/voucherUrls";
 import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
 import { BillLinkDialog, clearBillLinkCache } from "@/modules/accountancy/components/BillLinkDialog";
+import { BillUnlinkDialog } from "@/modules/accountancy/components/BillUnlinkDialog";
 import { SettlementChip } from "@/modules/accountancy/components/SettlementChip";
 import { clearPartyCache } from "@/modules/accountancy/components/PartyOutstandingsPanel";
 import { Card, CardContent } from "@/components/ui/card";
@@ -99,6 +100,8 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
 }) {
     // Which voucher's bill-wise popup is open, if any.
     const [linkVoucherId, setLinkVoucherId] = useState<number | null>(null);
+    // Which voucher's Remove link popup is open, if any.
+    const [unlinkRow, setUnlinkRow] = useState<{ uvId: number; ref: string } | null>(null);
 
     type Row = {
         rowKey:          string;
@@ -258,6 +261,7 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
                                         onLink={row.canLink && row.uvId !== null && accountId != null && Math.abs(row.movement) > 0.005
                                             ? () => setLinkVoucherId(row.uvId)
                                             : undefined}
+                                        onUnlink={row.uvId !== null ? () => setUnlinkRow({ uvId: row.uvId!, ref: row.ref }) : undefined}
                                     />
                                 </TableCell>
                                 <TableCell className="text-right">
@@ -293,6 +297,19 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
                         clearBillLinkCache();
                         clearPartyCache(accountId);
                         setLinkVoucherId(null);
+                        onChanged?.();
+                    }}
+                />
+            )}
+            {unlinkRow && (
+                <BillUnlinkDialog
+                    open
+                    onOpenChange={(v) => { if (!v) setUnlinkRow(null); }}
+                    voucherId={unlinkRow.uvId}
+                    reference={unlinkRow.ref}
+                    onSaved={() => {
+                        clearBillLinkCache();
+                        if (accountId != null) clearPartyCache(accountId);
                         onChanged?.();
                     }}
                 />
