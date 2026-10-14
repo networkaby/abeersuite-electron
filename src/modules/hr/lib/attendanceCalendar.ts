@@ -117,7 +117,7 @@ export function readDay(person: RegisterPerson, iso: string, holidayDates: Reado
 
 /** Month totals for the summary column. */
 export function summarise(person: RegisterPerson, days: readonly string[], holidayDates: ReadonlySet<string>) {
-    const t = { present: 0, half: 0, absent: 0, leave: 0, off: 0, unmarked: 0 };
+    const t = { present: 0, half: 0, absent: 0, incomplete: 0, leave: 0, off: 0, unmarked: 0 };
     for (const iso of days) {
         const r = readDay(person, iso, holidayDates);
         if (r.kind === "outside") continue;
@@ -125,7 +125,8 @@ export function summarise(person: RegisterPerson, days: readonly string[], holid
         switch (r.status) {
             case "PRESENT":    t.present++; break;
             case "HALF_DAY":   t.half++; break;
-            case "ABSENT":     t.absent++; break;
+            // Graded from the till's minutes = came but under 40%: incomplete duty.
+            case "ABSENT":     if (r.graded) t.incomplete++; else t.absent++; break;
             case "LEAVE":      t.leave++; break;
             default:           t.off++;
         }

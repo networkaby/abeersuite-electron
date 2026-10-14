@@ -63,9 +63,10 @@ function AttendanceView({ data }: { data: MyHrPayload }) {
     const totals = summarise(data.person, days, holidayDates);
     return (
         <div className="space-y-6">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 <StatCard label="Present" value={`${totals.present + totals.half * 0.5} days`} hint={`${totals.present} full · ${totals.half} half`} />
                 <StatCard label="Absent" value={String(totals.absent)} hint="No leave granted" tone={totals.absent > 0 ? "warn" : undefined} />
+                <StatCard label="Incomplete duty" value={String(totals.incomplete)} hint="Came, under 40% — unpaid, no penalty" tone={totals.incomplete > 0 ? "warn" : undefined} />
                 <StatCard label="On leave" value={String(totals.leave)} />
                 <StatCard label="Days lost" value={data.lostDays === 0 ? "None" : String(data.lostDays)} hint={data.lostDays === 0 ? "Nothing cut" : "Absent and half days"} />
             </div>

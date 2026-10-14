@@ -68,7 +68,7 @@ export default function PortalOverview({ userId, me, staff, nav, onRequestLeave 
                                 : `Duty ${data.person.dutyStart} – ${data.person.dutyEnd}`} />
                         <StatCard icon={<CalendarDays size={15} />} label="This month"
                             value={`${view.totals.present + view.totals.half * 0.5} days`}
-                            hint={`${view.totals.present} full · ${view.totals.half} half · ${view.totals.absent} absent · ${view.totals.leave} leave`} />
+                            hint={`${view.totals.present} full · ${view.totals.half} half · ${view.totals.absent} absent · ${view.totals.incomplete} incomplete · ${view.totals.leave} leave`} />
                         <StatCard icon={<Timer size={15} />} label="Extra time" value={formatWorked(data.overtime.payableMinutes)}
                             hint={data.overtime.shortfallMinutes > 0 ? `${formatWorked(data.overtime.madeUpMinutes)} made up a shortfall` : "Beyond your duty hours"}
                             tone={data.overtime.payableMinutes > 0 ? "good" : undefined} />

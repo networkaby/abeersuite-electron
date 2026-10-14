@@ -205,14 +205,15 @@ function summariseDays(att: PayslipAttendanceData): SummaryLine[] {
     let lateCharged = 0, lateChargedMinutes = 0, lateAcc = 0;
     let shortDays = 0, shortMinutes = 0, shortAcc = 0;
     let half = 0, halfAcc = 0;
-    let absent = 0;
+    let absent = 0, incomplete = 0;
     let offDays = 0, offMinutes = 0, offAcc = 0;
     let holDays = 0, holMinutes = 0, holAcc = 0;
 
     for (const d of att.days) {
         if (d.shut === "OFF")     { offDays++; offMinutes += d.worked; offAcc += d.grantedAccounted; continue; }
         if (d.shut === "HOLIDAY") { holDays++; holMinutes += d.worked; holAcc += d.grantedAccounted; continue; }
-        if (d.status === "ABSENT") { absent++; continue; }
+        // Came but worked under 40%: unpaid, yet not an absence (no penalty).
+        if (d.status === "ABSENT") { if (d.worked > 0) incomplete++; else absent++; continue; }
         if (d.status === "HALF_DAY") { half++; halfAcc += d.shortAccounted; }
         else if (d.short > 0) { shortDays++; shortMinutes += d.short; shortAcc += d.shortAccounted; }
         if (d.overtime > 0) { otDays++; otMinutes += d.overtime; otAcc += d.overtimeAccounted; }
@@ -234,6 +235,7 @@ function summariseDays(att: PayslipAttendanceData): SummaryLine[] {
     }
     if (shortDays > 0) out.push({ key: "short", label: "Short of duty", days: dayCount(shortDays), working: `${formatWorked(shortMinutes)} × ${att.rates.shortHours}`, accounted: shortAcc });
     if (half > 0) out.push({ key: "half", label: "Half day", days: dayCount(half), working: "half the day already withheld on the pay", accounted: halfAcc || null });
+    if (incomplete > 0) out.push({ key: "incomplete", label: "Incomplete duty", days: dayCount(incomplete), working: "under 40% of duty — paid at zero, no absence penalty", accounted: null });
     if (absent > 0) out.push({ key: "absent", label: "Absent", days: dayCount(absent), working: "paid at zero", accounted: null });
     if (offDays > 0) out.push({ key: "off", label: "Weekly off worked", days: dayCount(offDays), working: `${formatWorked(offMinutes)} × ${att.rates.weeklyOff}`, accounted: offAcc });
     if (holDays > 0) out.push({ key: "hol", label: "Holiday worked", days: dayCount(holDays), working: `${formatWorked(holMinutes)} × ${att.rates.holiday}`, accounted: holAcc });

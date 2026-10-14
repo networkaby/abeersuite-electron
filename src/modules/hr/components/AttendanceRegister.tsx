@@ -121,12 +121,13 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                                     })}
                                     <th className="px-2 py-2 text-right font-medium">P</th>
                                     <th className="px-2 py-2 text-right font-medium">A</th>
+                                    <th className="px-2 py-2 text-right font-medium" title="Incomplete duty — came, under 40% of duty">ID</th>
                                     <th className="px-2 py-2 text-right font-medium">L</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {people.length === 0 ? (
-                                    <tr><td colSpan={days.length + 4} className="px-3 py-6 text-center text-muted-foreground">Nobody on the staff this month.</td></tr>
+                                    <tr><td colSpan={days.length + 5} className="px-3 py-6 text-center text-muted-foreground">Nobody on the staff this month.</td></tr>
                                 ) : people.map((p) => {
                                     const mine = holidayDatesFor(holidays, p.branchIds);
                                     const t = summarise(p, days, mine);
@@ -190,6 +191,7 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                                             })}
                                             <td className="px-2 py-1 text-right tabular-nums">{t.present + t.half / 2}</td>
                                             <td className="px-2 py-1 text-right tabular-nums">{t.absent}</td>
+                                            <td className="px-2 py-1 text-right tabular-nums">{t.incomplete}</td>
                                             <td className="px-2 py-1 text-right tabular-nums">{t.leave}</td>
                                         </tr>
                                     );
