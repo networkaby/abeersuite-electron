@@ -55,10 +55,11 @@ export async function loadNormalBalanceMap(
             map.set(a.id, a.normalBalance);
             continue;
         }
-        // Fallback: infer from group.type
+        // Fallback: infer from group.type. A ledger with neither is read as
+        // Dr — the posting engine's and the party Transactions tab's default —
+        // never dropped: a skipped account showed its money as Nil everywhere.
         const g = a.group?.type;
-        if (g === "ASSET" || g === "EXPENSE") map.set(a.id, "DEBIT");
-        else if (g) map.set(a.id, "CREDIT");
+        map.set(a.id, g && g !== "ASSET" && g !== "EXPENSE" ? "CREDIT" : "DEBIT");
     }
     return map;
 }
