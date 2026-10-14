@@ -104,7 +104,11 @@ export async function buildMyDay(userId: number): Promise<MyDay> {
         }))
         .map((s) => resolveOpenSpan(s, lastSeen, true, idleLimit))
         .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
-    const lived = buildTimeline(spans, idleLimit, new Date().toISOString())
+    // An unfinished stretch ends at his last sign of life, not at "now": this is
+    // read on the lock and sign-in screens, where nobody is working, and drawing
+    // it on to the clock painted a locked hour as work while the minutes said 0m
+    // (owner, 2026-10-14).
+    const lived = buildTimeline(spans, idleLimit, lastSeen ?? new Date().toISOString())
         .map(({ kind, from, to, open }) => ({ kind, from, to, ...(open ? { open } : {}) }));
 
     // A join is the first stretch, or one that follows a sign-out or a shift

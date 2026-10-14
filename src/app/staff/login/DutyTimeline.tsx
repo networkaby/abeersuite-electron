@@ -40,7 +40,8 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
     const lived = (day.lived ?? []).map((r) => ({
         kind: r.kind,
         from: shopMinute(new Date(r.from).getTime()),
-        to:   r.open && now !== null ? now : shopMinute(new Date(r.to).getTime()),
+        // The server already ends an unfinished stretch at his last sign of life.
+        to:   shopMinute(new Date(r.to).getTime()),
     })).filter((r) => r.to >= r.from);
     const on = lived.filter((r) => r.kind === "on");
     const firstIn = on[0]?.from ?? null;

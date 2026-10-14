@@ -176,22 +176,29 @@ type LivedRow = { kind: "on" | "off"; from: string; to: string; minutes: number;
 /**
  * The day as on / off lines, end to end.
  *
- * Stretches are merged wherever the gap to the next is inside the idle limit,
- * and where they overlap (ledgers written before 2026-10-13 can, after two
- * stretches were left open at once). Only a gap past the limit is an `off` line.
+ * Stretches are merged wherever the gap to the next is inside the idle limit —
+ * unless the clock already ended the first one as IDLE — and wherever they
+ * overlap (ledgers written before 2026-10-13 can, after two stretches were left
+ * open at once). Every other gap is an `off` line.
  */
 export function buildTimeline(spans: readonly SpanDto[], idleLimitMinutes: number, nowIso: string): LivedRow[] {
     const limitMs = idleLimitMinutes * 60000;
-    const merged: Array<{ from: string; to: string; open: boolean }> = [];
+    const merged: Array<{ from: string; to: string; open: boolean; idleEnd: boolean }> = [];
     for (const s of spans) {
         const to = s.endedAt ?? nowIso;
         const last = merged[merged.length - 1];
-        if (last && new Date(s.startedAt).getTime() - new Date(last.to).getTime() <= limitMs) {
-            if (to > last.to) last.to = to;
+        const gapMs = last ? new Date(s.startedAt).getTime() - new Date(last.to).getTime() : 0;
+        // A stretch the clock itself ended as IDLE stays ended: the stamping ruled
+        // that gap away with the limit it had at the time, and re-judging it here
+        // against today's limit painted unpaid time as work (owner, 2026-10-14:
+        // a 58-minute gap credited 1 minute but drew as one long stretch).
+        // Overlaps from old ledgers still merge.
+        if (last && (gapMs <= 0 || (!last.idleEnd && gapMs <= limitMs))) {
+            if (to > last.to) { last.to = to; last.idleEnd = s.endedBy === "IDLE"; }
             last.open = last.open || !s.endedAt;
             continue;
         }
-        merged.push({ from: s.startedAt, to, open: !s.endedAt });
+        merged.push({ from: s.startedAt, to, open: !s.endedAt, idleEnd: s.endedBy === "IDLE" });
     }
     const rows: LivedRow[] = [];
     merged.forEach((m, i) => {
