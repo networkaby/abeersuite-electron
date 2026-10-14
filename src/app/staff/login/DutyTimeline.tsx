@@ -11,7 +11,7 @@ const clock = (m: number) => formatHhMmFriendly(`${Math.floor(m / 60)}:${String(
 
 type Seg = { from: number; to: number; tone: "work" | "extra" | "away" | "late" | "left" };
 /** `end`: the words finish at `at` rather than centre on it — the arrival reads back from the moment he came. */
-type Tag = { at: number; row: "top" | "bottom" | "shift"; text: string; tone?: Seg["tone"] | "now" | "out" | "shift"; end?: boolean };
+type Tag = { at: number; row: "top" | "bottom" | "shift" | "low"; text: string; tone?: Seg["tone"] | "now" | "out" | "shift"; end?: boolean };
 
 /**
  * Today on one line, full width under the cards. Owner, 2026-10-14: *"a proper
@@ -113,12 +113,16 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
         { row: "bottom", at: pc(open), half: half("Duty starts") },
         { row: "bottom", at: pc(close), half: half("Duty starts") },
     ];
-    // A tag that is crowded on its own row tries the other one before it is dropped.
+    // A tag that is crowded on its own row tries another before it is dropped.
     const fits = (row: Tag["row"], at: number, h: number) => !taken.some((o) => o.row === row && Math.abs(o.at - at) < o.half + h);
     const shown = tags.flatMap((t) => {
         const h = half(t.text), at = t.end ? pc(t.at) - h - 1 : pc(t.at);
-        const other: Tag["row"] = t.row === "top" ? "bottom" : t.row === "bottom" ? "top" : "shift";
-        const row = fits(t.row, at, h) ? t.row : fits(other, at, h) ? other : null;
+        // An away label may drop to the shift row, then a row of its own, as a last resort — a stretch of
+        // stripes with no words was the one thing people asked about.
+        const tries: Tag["row"][] = t.row === "top" ? ["top", "bottom"]
+            : t.row === "bottom" ? ["bottom", "top", ...(t.tone === "away" ? ["shift" as const, "low" as const] : [])]
+            : ["shift"];
+        const row = tries.find((r) => fits(r, at, h)) ?? null;
         if (!row) return [];
         taken.push({ row, at, half: h });
         return [{ ...t, row }];
@@ -148,7 +152,7 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
                     <i key={`f${i}`} className={`${styles.tlflag} ${styles[`tf_${f.kind}`]}`} style={{ left: `${pc(f.at)}%` }} />
                 ))}
                 {shown.map((t, i) => (
-                    <span key={i} className={`${styles.tltag} ${t.row === "top" ? styles.tltop : t.row === "bottom" ? styles.tlbottom : styles.tlshift} ${t.end ? styles.tlend : ""} ${t.tone ? styles[`tt_${t.tone}`] : ""}`}
+                    <span key={i} className={`${styles.tltag} ${styles[`tlrow_${t.row}`]} ${t.end ? styles.tlend : ""} ${t.tone ? styles[`tt_${t.tone}`] : ""}`}
                           style={{ left: `${pc(t.at)}%` }}>{t.text}</span>
                 ))}
                 {now !== null && (

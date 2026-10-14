@@ -412,9 +412,9 @@
 }
 /* Room under the cards for the band, and less sky above them: card, PIN pad and
    the band must all fit a 1366x728 counter window without a scroll. */
-.stage:has(.timeline) { padding: 12px 40px 160px }
+.stage:has(.timeline) { padding: 12px 40px 174px }
 .root:has(.timeline) { overflow: hidden }
-.tlrail { position: relative; height: 112px; margin: 18px 14px 0 }
+.tlrail { position: relative; height: 126px; margin: 18px 14px 0 }
 /* Height says what the time is: the duty window stands tall, work outside it
    (early start, late close) half height, the rest of the day a thin track. */
 .tltrack, .tlseg { position: absolute; top: 34px; height: 8px; border-radius: 3px }
@@ -442,10 +442,11 @@
 .tlopen b  { color: #6ee7b7 }
 .tlclose b { color: #fcd38a }
 .tlmark b { display: block; font-weight: 600; color: var(--ink) }
-.tltop { top: 6px }
+.tlrow_top { top: 6px }
 .tlend { transform: translateX(-100%); margin-left: -14px }
-.tlbottom { top: 66px }
-.tlshift { top: 94px }
+.tlrow_bottom { top: 66px }
+.tlrow_shift { top: 94px }
+.tlrow_low { top: 110px }
 .tt_out { color: #cbd5e1 } .tt_shift { color: #c4b5fd }
 /* A moment of the day: a short tick across the bar — joins green, leaves
    white, shift moments violet, below the bar so they never hide a stretch. */
