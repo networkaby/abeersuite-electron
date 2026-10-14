@@ -412,9 +412,9 @@
 }
 /* Room under the cards for the band, and less sky above them: card, PIN pad and
    the band must all fit a 1366x728 counter window without a scroll. */
-.stage:has(.timeline) { padding: 16px 40px 150px }
+.stage:has(.timeline) { padding: 12px 40px 160px }
 .root:has(.timeline) { overflow: hidden }
-.tlrail { position: relative; height: 104px; margin: 18px 14px 0 }
+.tlrail { position: relative; height: 112px; margin: 18px 14px 0 }
 /* Height says what the time is: the duty window stands tall, work outside it
    (early start, late close) half height, the rest of the day a thin track. */
 .tltrack, .tlseg { position: absolute; top: 34px; height: 8px; border-radius: 3px }
@@ -445,6 +445,13 @@
 .tltop { top: 6px }
 .tlend { transform: translateX(-100%); margin-left: -14px }
 .tlbottom { top: 66px }
+.tlshift { top: 94px }
+.tt_out { color: #cbd5e1 } .tt_shift { color: #c4b5fd }
+/* A moment of the day: a short tick across the bar — joins green, leaves
+   white, shift moments violet, below the bar so they never hide a stretch. */
+.tlflag { position: absolute; top: 26px; width: 2px; height: 22px; margin-left: -1px; border-radius: 1px }
+.tf_in { background: #34d399 } .tf_out { background: #e2e8f0 }
+.tf_shiftOpen, .tf_shiftClose, .tf_handover { top: 36px; height: 18px; background: #a78bfa }
 .tt_extra { color: #6ee7b7 } .tt_late { color: #fcd38a } .tt_away { color: #fca5a5 } .tt_work { color: #7dd3fc }
 .tlnow { position: absolute; top: 20px; width: 2px; height: 26px; margin-left: -1px; background: #fff; border-radius: 1px }
 /* "Now" is a map pin: a round head turned on its corner, the point on the line. */

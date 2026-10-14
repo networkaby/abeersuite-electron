@@ -11,7 +11,7 @@ const clock = (m: number) => formatHhMmFriendly(`${Math.floor(m / 60)}:${String(
 
 type Seg = { from: number; to: number; tone: "work" | "extra" | "away" | "late" | "left" };
 /** `end`: the words finish at `at` rather than centre on it — the arrival reads back from the moment he came. */
-type Tag = { at: number; row: "top" | "bottom"; text: string; tone?: Seg["tone"] | "now"; end?: boolean };
+type Tag = { at: number; row: "top" | "bottom" | "shift"; text: string; tone?: Seg["tone"] | "now" | "out" | "shift"; end?: boolean };
 
 /**
  * Today on one line, full width under the cards. Owner, 2026-10-14: *"a proper
@@ -68,13 +68,33 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
         const by = firstIn < open ? `${formatWorked(open - firstIn)} early` : firstIn > open ? `${formatWorked(firstIn - open)} late` : "on time";
         tags.push({ at: firstIn, row: "top", text: `in ${clock(firstIn)} · ${by}`, tone: firstIn > open ? "late" : "extra", end: true });
     }
+    const flags = (day.events ?? []).map((e) => ({ kind: e.kind, at: shopMinute(new Date(e.at).getTime()) }));
+    // His last sign-out, when it is the end of a late close, is said in the same breath.
+    const lastFlag = flags[flags.length - 1];
+    const foldOut = lastFlag?.kind === "out" && lastOut !== null && lastOut > close && Math.abs(lastFlag.at - lastOut) <= 1;
     if (lastOut !== null && lastOut > close) {
-        tags.push({ at: (close + lastOut) / 2, row: "top", text: `${formatWorked(lastOut - close)} after close`, tone: "extra" });
+        const after = `${formatWorked(lastOut - close)} after close`;
+        tags.push({ at: (close + lastOut) / 2, row: "top", text: foldOut ? `out ${clock(lastOut)} · ${after}` : after, tone: "extra" });
     } else if (now !== null && now >= open && now < close) {
         tags.push({ at: close, row: "top", text: `closes in ${formatWorked(close - now)}`, tone: "work", end: true });
     } else if (now !== null && now < open && firstIn === null) {
         tags.push({ at: open, row: "top", text: `opens in ${formatWorked(open - now)}`, tone: "work", end: true });
     }
+    // The day's moments as flags (owner, 2026-10-14): every sign-in after the
+    // first (the first already says early / late above), every sign-out, and
+    // his shift opening, closing or handed over. Joins and leaves ride the top
+    // row, the shift ones a row of their own under the duty times; a flag with
+    // no room keeps its tick.
+    const SHIFT_WORDS = { shiftOpen: "shift open", shiftClose: "shift closed", handover: "handed over" } as const;
+    flags.forEach((f) => {
+        if (f.kind === "in") {
+            if (f.at !== firstIn) tags.push({ at: f.at, row: "top", text: `in ${clock(f.at)}`, tone: "extra" });
+        } else if (f.kind === "out") {
+            if (!(foldOut && f === lastFlag)) tags.push({ at: f.at, row: "top", text: `out ${clock(f.at)}`, tone: "out" });
+        } else {
+            tags.push({ at: f.at, row: "shift", text: `${SHIFT_WORDS[f.kind]} ${clock(f.at)}`, tone: "shift" });
+        }
+    });
     for (const r of lived) {
         // A sliver is still drawn; only a stretch with room for the words is named.
         if (r.kind === "off" && pc(r.to) - pc(r.from) >= 1.2) {
@@ -96,7 +116,7 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
     const fits = (row: Tag["row"], at: number, h: number) => !taken.some((o) => o.row === row && Math.abs(o.at - at) < o.half + h);
     const shown = tags.flatMap((t) => {
         const h = half(t.text), at = t.end ? pc(t.at) - h - 1 : pc(t.at);
-        const other: Tag["row"] = t.row === "top" ? "bottom" : "top";
+        const other: Tag["row"] = t.row === "top" ? "bottom" : t.row === "bottom" ? "top" : "shift";
         const row = fits(t.row, at, h) ? t.row : fits(other, at, h) ? other : null;
         if (!row) return [];
         taken.push({ row, at, half: h });
@@ -123,8 +143,11 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
                         <span><b>{clock(m)}</b>{word}</span>
                     </div>
                 ))}
+                {flags.map((f, i) => (
+                    <i key={`f${i}`} className={`${styles.tlflag} ${styles[`tf_${f.kind}`]}`} style={{ left: `${pc(f.at)}%` }} />
+                ))}
                 {shown.map((t, i) => (
-                    <span key={i} className={`${styles.tltag} ${t.row === "top" ? styles.tltop : styles.tlbottom} ${t.end ? styles.tlend : ""} ${t.tone ? styles[`tt_${t.tone}`] : ""}`}
+                    <span key={i} className={`${styles.tltag} ${t.row === "top" ? styles.tltop : t.row === "bottom" ? styles.tlbottom : styles.tlshift} ${t.end ? styles.tlend : ""} ${t.tone ? styles[`tt_${t.tone}`] : ""}`}
                           style={{ left: `${pc(t.at)}%` }}>{t.text}</span>
                 ))}
                 {now !== null && (

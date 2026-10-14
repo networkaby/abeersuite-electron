@@ -36,23 +36,29 @@ const inr = (paise: string) =>
  *      when he simply left, and every payment method the counter takes with what
  *      each collected. Zero rows stay, so a quiet evening still shows the methods.
  *
- * The day comes from `sessionStorage` when someone has just signed out here
- * (read exactly once — the idle auto-logout leaves nobody to read a dialog).
- * Otherwise — a restart, a fresh install, first thing in the morning — it is
- * fetched from `/api/counter/day`: whoever last ran a shift on this counter
- * (owner, 2026-09-25: the card always shows). The drawer comes from
- * `/api/counter/shift`. Both counter PCs only, silent on every failure: a panel
- * that cannot load must never stand between a cashier and the keypad.
+ * Whose day it is (owner, 2026-10-14: *"the whole information is related to some
+ * user + counter; if it's fully logged out only general information"*):
+ *
+ *   - LOCKED (`locked`): the person still signed in. Their day comes from the
+ *     lock's own capture in `sessionStorage`, else `/api/hr/my-day`.
+ *   - SIGNED OUT: nobody's day — except the one just handed over by a sign-out
+ *     here, read exactly once from `sessionStorage` (the idle auto-logout leaves
+ *     nobody to read a dialog).
+ *
+ * The drawer belongs to the counter, not to a person, so it shows either way —
+ * the next person checks it before taking over. `/api/counter/shift`, counter
+ * PCs only, silent on every failure: a panel that cannot load must never stand
+ * between a cashier and the keypad.
  *
  * Renders nothing when neither is there, so an ordinary locked till is exactly
  * the shell's screen and the cold-start handover does not jump.
  */
-export default function TillCard() {
+export default function TillCard({ locked = false }: { locked?: boolean }) {
     const signedOutDay = useSyncExternalStore(
         myDayStore.subscribe, myDayStore.getSnapshot, myDayStore.getServerSnapshot,
     );
-    const [counterDay, setCounterDay] = useState<MyDay | null>(null);
-    const day = signedOutDay ?? counterDay;
+    const [fetchedDay, setFetchedDay] = useState<MyDay | null>(null);
+    const day = signedOutDay ?? fetchedDay;
     const [shift, setShift] = useState<CounterShift | null>(null);
 
     useEffect(() => {
@@ -70,22 +76,22 @@ export default function TillCard() {
         return () => { alive = false; };
     }, []);
 
-    // Only when no sign-out handed a day over — that one is fresher and his own.
+    // Locked, with no capture handed over: ask for the signed-in person's own day.
     useEffect(() => {
-        if (signedOutDay) return;
+        if (signedOutDay || !locked) return;
         let alive = true;
         (async () => {
             try {
-                const res = await fetch("/api/counter/day");
+                const res = await fetch("/api/hr/my-day");
                 if (!res.ok) return;
                 const out = await res.json() as MyDay | null;
-                if (alive && out?.tracked) setCounterDay(out);
+                if (alive && out?.tracked) setFetchedDay(out);
             } catch {
                 /* no panel, never a blocked sign-in */
             }
         })();
         return () => { alive = false; };
-    }, [signedOutDay]);
+    }, [signedOutDay, locked]);
 
     if (!day && !shift) return null;
 

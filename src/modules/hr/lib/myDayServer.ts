@@ -14,15 +14,19 @@ import { buildTimeline, resolveOpenSpan, type SpanDto } from "@/modules/hr/lib/a
 import type { MyDay } from "@/shared/lib/hr/myDay";
 
 /**
- * One person's day, as the counter's duty card shows it. Shared by
- * /api/hr/my-day (the signed-in person, read at sign-out) and /api/counter/day
- * (the lock screen, for whoever last worked this counter).
+ * One person's day, as the counter's duty card shows it — /api/hr/my-day, for
+ * the signed-in person only: read at sign-out and on the lock screen. A counter
+ * nobody is signed in to shows no one's day (owner, 2026-10-14).
  */
 export async function buildMyDay(userId: number): Promise<MyDay> {
     const date = businessTodayIso();
 
     const dateOnly = new Date(`${date}T00:00:00.000Z`);
-    const [rules, profile, day, month, calendar, spanRows] = await Promise.all([
+    // The business day as instants: its shop midnight to the next (IST keeps
+    // no summer time, so the offset is fixed — BUSINESS_TIME_ZONE).
+    const dayFrom = new Date(`${date}T00:00:00+05:30`);
+    const dayTo = new Date(dayFrom.getTime() + 86_400_000);
+    const [rules, profile, day, month, calendar, spanRows, shiftRows] = await Promise.all([
         loadPayRules(),
         prisma.staffProfile.findUnique({
             where: { userId },
@@ -40,6 +44,18 @@ export async function buildMyDay(userId: number): Promise<MyDay> {
             where:   { userId, date: dateOnly },
             orderBy: { startedAt: "asc" },
             select:  { startedAt: true, endedAt: true, minutes: true, counterId: true, endedBy: true },
+        }),
+        // His shifts that opened, closed or were handed over today — a handful.
+        prisma.posShift.findMany({
+            where: {
+                userId,
+                OR: [
+                    { openedAt: { gte: dayFrom, lt: dayTo } },
+                    { closedAt: { gte: dayFrom, lt: dayTo } },
+                    { handover: { initiatedAt: { gte: dayFrom, lt: dayTo } } },
+                ],
+            },
+            select: { openedAt: true, closedAt: true, handover: { select: { initiatedAt: true } } },
         }),
     ]);
 
@@ -78,20 +94,36 @@ export async function buildMyDay(userId: number): Promise<MyDay> {
     // the same way, so the till and the register never tell two stories.
     const idleLimit = idleLimitMinutesFor(profile?.idleLimitMinutes);
     const lastSeen = day?.lastSeenAt?.toISOString() ?? null;
-    const lived = buildTimeline(
-        spanRows
-            .map((s): SpanDto => ({
-                startedAt: s.startedAt.toISOString(),
-                endedAt:   s.endedAt?.toISOString() ?? null,
-                minutes:   s.minutes,
-                counterId: s.counterId,
-                endedBy:   s.endedBy as SpanDto["endedBy"],
-            }))
-            .map((s) => resolveOpenSpan(s, lastSeen, true, idleLimit))
-            .sort((a, b) => a.startedAt.localeCompare(b.startedAt)),
-        idleLimit,
-        new Date().toISOString(),
-    ).map(({ kind, from, to, open }) => ({ kind, from, to, ...(open ? { open } : {}) }));
+    const spans = spanRows
+        .map((s): SpanDto => ({
+            startedAt: s.startedAt.toISOString(),
+            endedAt:   s.endedAt?.toISOString() ?? null,
+            minutes:   s.minutes,
+            counterId: s.counterId,
+            endedBy:   s.endedBy as SpanDto["endedBy"],
+        }))
+        .map((s) => resolveOpenSpan(s, lastSeen, true, idleLimit))
+        .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+    const lived = buildTimeline(spans, idleLimit, new Date().toISOString())
+        .map(({ kind, from, to, open }) => ({ kind, from, to, ...(open ? { open } : {}) }));
+
+    // A join is the first stretch, or one that follows a sign-out or a shift
+    // close; a leave is a stretch he ended by signing out. An idle gap is
+    // neither — it is drawn as "away".
+    type DayEvent = NonNullable<MyDay["events"]>[number];
+    const inDay = (d: Date | null | undefined): d is Date => !!d && d >= dayFrom && d < dayTo;
+    const events: DayEvent[] = [];
+    spans.forEach((sp, i) => {
+        const prev = spans[i - 1];
+        if (!prev || prev.endedBy === "SIGNED_OUT" || prev.endedBy === "SHIFT_CLOSED") events.push({ kind: "in", at: sp.startedAt });
+        if (sp.endedBy === "SIGNED_OUT" && sp.endedAt) events.push({ kind: "out", at: sp.endedAt });
+    });
+    for (const sh of shiftRows) {
+        if (inDay(sh.openedAt)) events.push({ kind: "shiftOpen", at: sh.openedAt.toISOString() });
+        if (inDay(sh.handover?.initiatedAt)) events.push({ kind: "handover", at: sh.handover.initiatedAt.toISOString() });
+        else if (inDay(sh.closedAt)) events.push({ kind: "shiftClose", at: sh.closedAt.toISOString() });
+    }
+    events.sort((a, b) => a.at.localeCompare(b.at));
     const officeMarked = day?.source === "OFFICE";
 
     // The counter he actually worked, read off the day's own row rather than
@@ -121,5 +153,6 @@ export async function buildMyDay(userId: number): Promise<MyDay> {
         month,
         nextDuty,
         lived,
+        events,
     };
 }

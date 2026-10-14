@@ -193,7 +193,7 @@ export default function CounterLock() {
             <div className={styles.scrim} style={{ background: `rgba(2, 6, 23, ${LOGIN_SCRIM})` }} />
             <div className={styles.stage}>
             {/* The till's own card, as on the sign-in screen: next duty, today, the drawer. */}
-            <TillCard />
+            <TillCard locked />
             {choosingPin ? (
                 <ChoosePinCard
                     hasPin={lock.hasPin}
