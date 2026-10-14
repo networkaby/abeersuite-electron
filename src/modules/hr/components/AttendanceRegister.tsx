@@ -159,6 +159,7 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                                                 const lateBy = r.kind === "marked" ? (r.lateBy ?? 0) : 0;
                                                 const tip = [
                                                     status ? ATTENDANCE_STATUS_META[status].label : "Unmarked",
+                                                    r.kind === "marked" && r.extraDuty ? "extra duty" : "",
                                                     worked ? `${worked} worked${r.kind === "marked" && r.graded ? " (auto)" : ""}` : "",
                                                     lateBy > 0 ? `late by ${formatWorked(lateBy)}` : "",
                                                     // "COUNTER" on the row means the MACHINE wrote it, not that a till

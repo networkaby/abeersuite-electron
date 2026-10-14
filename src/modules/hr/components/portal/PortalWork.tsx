@@ -83,7 +83,7 @@ function AttendanceView({ data }: { data: MyHrPayload }) {
                             ? `${formatDate(iso)} — not marked`
                             : [
                                 `${formatDate(iso)} — ${ATTENDANCE_STATUS_META[r.status].label}`,
-                                r.workedMinutes ? `${formatWorked(r.workedMinutes)} worked` : null,
+                                r.workedMinutes ? `${formatWorked(r.workedMinutes)} worked${r.extraDuty ? " (extra duty)" : ""}` : null,
                                 r.lateBy ? `${r.lateBy} min late` : null,
                             ].filter(Boolean).join(", ");
                         return (

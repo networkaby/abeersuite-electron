@@ -72,6 +72,8 @@ export type DayReading =
         graded?: boolean;
         /** Minutes past the person's start time, grace already allowed. 0 = on time. */
         lateBy?: number;
+        /** Worked on a holiday / weekly off: no duty owed, so it is extra duty (paid as extra). */
+        extraDuty?: boolean;
     };
 
 /**
@@ -97,6 +99,13 @@ export function readDay(person: RegisterPerson, iso: string, holidayDates: Reado
         const duty = dutyOn(person, iso);
         const lateBy = lateMinutes(mark.firstInAt, duty.start) ?? undefined;
         if (mark.source === "COUNTER" && mark.workedMinutes > 0) {
+            // A shut day owes no duty: any work there is extra duty, never a
+            // grade (owner, 2026-10-14). The day still reads as the holiday / off.
+            const shut = holidayDates.has(iso) ? "HOLIDAY" as const
+                : person.weeklyOff.includes(weekdayOf(iso)) ? "WEEKLY_OFF" as const : null;
+            if (shut) {
+                return { kind: "marked", status: shut, stored: true, source: mark.source, workedMinutes: mark.workedMinutes, graded: true, extraDuty: true };
+            }
             return {
                 kind: "marked",
                 status: gradeDay(mark.workedMinutes, duty.minutes, person.gradeLimits),
