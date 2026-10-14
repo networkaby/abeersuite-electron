@@ -22,7 +22,7 @@ import { formatDate } from "@/shared/lib/format/formatDate";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { readTabularFile } from "@/shared/lib/import/spreadsheetRead";
 import {
-    IGNORE_FIELD, STATEMENT_FIELD_LABELS, checkContinuity, normaliseStatementRows, parseStatementGrid,
+    IGNORE_FIELD, STATEMENT_FIELD_LABELS, checkContinuity, normaliseStatementRows, orderStatementRows, parseStatementGrid,
     type FieldChoice, type ParsedStatement, type StatementField, type StatementRow,
 } from "@/shared/lib/import/bankStatement";
 
@@ -68,7 +68,10 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
 
     const rows = useMemo(() => {
         if (!parsed || parsed.headerRowIndex < 0) return { rows: [] as StatementRow[], errors: [] as Array<{ rowIndex: number; reason: string }> };
-        return normaliseStatementRows(parsed.headers, parsed.dataRows, mapping);
+        const n = normaliseStatementRows(parsed.headers, parsed.dataRows, mapping);
+        // Oldest first, whatever order the bank printed — the preview, the
+        // continuity check and the upload all see the order that gets saved.
+        return { ...n, rows: orderStatementRows(n.rows, parsed.meta.openingBalance ?? null) };
     }, [parsed, mapping]);
 
     const continuity = useMemo(
@@ -249,7 +252,7 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
                                     )}
                                     {continuity.breaks.length > 0 && (
                                         <div className="text-xs text-red-600">
-                                            Running balance breaks at {continuity.breaks.length} line(s) — first at line {continuity.breaks[0].rowIndex + 1}
+                                            Running balance breaks at {continuity.breaks.length} line(s) — first on {formatDate(rows.rows[continuity.breaks[0].rowIndex].date)}
                                             {" "}(expected {fmt(continuity.breaks[0].expected)}, statement says {fmt(continuity.breaks[0].actual)}). A line is missing or doubled.
                                             <label className="ml-2 inline-flex items-center gap-1">
                                                 <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} /> save anyway
