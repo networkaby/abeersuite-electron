@@ -14,6 +14,7 @@ import { afterCursor, NAME_ORDER, nextBrowseCursor, parseBrowseCursor } from "@/
 import { BROWSE_PAGE_SIZE } from "@/shared/lib/constants/paging";
 import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
+import { aliasKeyOf } from "@/modules/accountancy/lib/accountAlias";
 
 // Multi-value `phones` / `emails` arrays default to []; the first entry is
 // primary unless an entry explicitly carries `isPrimary: true` at the write site.
@@ -73,6 +74,8 @@ export async function GET(req: Request) {
                             { name: { contains: q, mode: "insensitive" as const } },
                             { phones: { some: { phone: { contains: q } } } },
                             { emails: { some: { email: { contains: q, mode: "insensitive" as const } } } },
+                            // The ledger's Keywords (Profile tab) find the party, as in the voucher pickers.
+                            { account: { is: { aliases: { some: { aliasKey: { contains: aliasKeyOf(q) } } } } } },
                         ],
                     }] : []),
                     ...(paginate ? [afterCursor(cursor)] : []),

@@ -46,6 +46,8 @@ export interface BrowseListRow {
 }
 
 
+const NO_ROWS: never[] = [];
+
 interface BrowseResponse<T> {
     items: T[];
     nextCursor: BrowseCursor | null;
@@ -74,9 +76,15 @@ export function usePartyBrowseList<T extends BrowseListRow>(opts: {
      * server cursor the cache has no equivalent of).
      */
     cachePlaceholder?: (p: Party) => T;
+    /** False = ask for nothing and hold no rows — a list the screen is not
+     *  showing right now (the other kind's matches on a one-kind page with an
+     *  empty search box). Default true. */
+    enabled?: boolean;
 }): {
     items: T[];
     loadingMore: boolean;
+    /** Another page is waiting on the server (Name-ascending only). */
+    hasMore: boolean;
     loadMore: () => void;
     /** Reload from page one with the current filters — after a create, delete,
      *  or reactivate changes which rows belong in the list at all. */
@@ -86,9 +94,10 @@ export function usePartyBrowseList<T extends BrowseListRow>(opts: {
      *  in the list, so it doesn't need a full reload. */
     updateItem: (id: number, patch: Partial<T>) => void;
 } {
-    const { type, apiPath, search, sort, hideCreditors, includeInactive, errorMessage, cachePlaceholder } = opts;
+    const { type, apiPath, search, sort, hideCreditors, includeInactive, errorMessage, cachePlaceholder, enabled = true } = opts;
     const [items, setItems] = useState<T[]>([]);
     const [loadingMore, setLoadingMore] = useState(false);
+    const [hasMore, setHasMore] = useState(false);
     const cursorRef = useRef<BrowseCursor | null>(null);
     // Bumped on every fresh fetch so a slow response from a since-abandoned
     // filter combination can't land after a newer one already has.
@@ -124,6 +133,7 @@ export function usePartyBrowseList<T extends BrowseListRow>(opts: {
                 if (genRef.current !== gen) return; // superseded by a newer request
                 const data = Array.isArray(res.data) ? { items: res.data, nextCursor: null } : res.data;
                 cursorRef.current = data.nextCursor;
+                setHasMore(data.nextCursor !== null);
                 setLandedKey(filterKey);
                 setItems((prev) => (cursor ? [...prev, ...data.items] : data.items));
             })
@@ -133,20 +143,24 @@ export function usePartyBrowseList<T extends BrowseListRow>(opts: {
     // Any filter, sort, or search change starts the list over from page one.
     useEffect(() => {
         cursorRef.current = null;
+        if (!enabled) {
+            ++genRef.current; // drop any answer still in flight
+            return;
+        }
         void fetchPage(null);
-    }, [fetchPage]);
+    }, [fetchPage, enabled]);
 
     // Rows from the held party list, to show while the first page is in flight so
     // opening the panel is never a blank wait. Derived, not state: what the server
     // sent always wins, and there is nothing to keep in sync.
     const placeholders = useMemo<T[]>(() => {
-        if (!cachePlaceholder || search) return [];
+        if (!cachePlaceholder || search || !enabled) return [];
         return browseParties(parties, {
             type,
             excludeAccountGroup: hideCreditors ? ACCOUNT_GROUPS.SUNDRY_CREDITORS : undefined,
             limit: BROWSE_PAGE_SIZE,
         }).map(cachePlaceholder);
-    }, [cachePlaceholder, search, type, hideCreditors, parties]);
+    }, [cachePlaceholder, search, enabled, type, hideCreditors, parties]);
 
     // Never over-paint rows already on screen — if the live page won the race, or
     // this is a re-filter with the previous list still showing, the real data
@@ -156,22 +170,22 @@ export function usePartyBrowseList<T extends BrowseListRow>(opts: {
     // genuinely matches nobody must show an empty list, never fall back to the
     // held parties as though they were results. So the placeholders stand only
     // until the page for THESE filters has actually landed.
-    const shown = items.length > 0 || landedKey === filterKey ? items : placeholders;
+    const shown = !enabled ? NO_ROWS as T[] : items.length > 0 || landedKey === filterKey ? items : placeholders;
 
     const loadMore = useCallback(() => {
-        if (!paginated || loadingMore || !cursorRef.current) return;
+        if (!enabled || !paginated || loadingMore || !cursorRef.current) return;
         setLoadingMore(true);
         void fetchPage(cursorRef.current).finally(() => setLoadingMore(false));
-    }, [paginated, loadingMore, fetchPage]);
+    }, [enabled, paginated, loadingMore, fetchPage]);
 
     const refresh = useCallback(() => {
         cursorRef.current = null;
-        return fetchPage(null);
-    }, [fetchPage]);
+        return enabled ? fetchPage(null) : Promise.resolve();
+    }, [enabled, fetchPage]);
 
     const updateItem = useCallback((id: number, patch: Partial<T>) => {
         setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
     }, []);
 
-    return { items: shown, loadingMore, loadMore, refresh, updateItem };
+    return { items: shown, loadingMore, hasMore: enabled && hasMore, loadMore, refresh, updateItem };
 }

@@ -11,12 +11,14 @@ import { moduleTabStyle } from "@/shared/lib/format/moduleTheme";
 import { cn } from "@/shared/lib/format/utils";
 import { Button } from "@/components/ui/button";
 
-export function ModuleTabs<T extends string>({ module, tabs, active, onChange, className }: {
+export function ModuleTabs<T extends string>({ module, tabs, active, onChange, labels, className }: {
     /** Module key from constants/nav.ts — decides the hue. */
     module: string;
     tabs: readonly T[];
     active: T;
     onChange: (tab: T) => void;
+    /** Words for a tab whose key is not what it should read as. */
+    labels?: Partial<Record<T, string>>;
     className?: string;
 }) {
     return (
@@ -35,7 +37,7 @@ export function ModuleTabs<T extends string>({ module, tabs, active, onChange, c
                         style={moduleTabStyle(module, active === item)}
                         onClick={() => onChange(item)}
                     >
-                        {item}
+                        {labels?.[item] ?? item}
                     </Button>
                 ))}
             </div>

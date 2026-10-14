@@ -30,6 +30,8 @@ type PersonForm = {
 type CreatePersonDialogProps = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    /** The new party's id, once saved — a list page opens it. */
+    onCreated?: (id: number) => void;
     /** Optional phone to seed the form with (e.g. creating a lead from a call). */
     initialPhone?: string;
 };
@@ -44,7 +46,7 @@ const INITIAL_FORM: PersonForm = {
     shippingStateCode: "",
 };
 
-export default function CreatePersonDialog({ open, onOpenChange, initialPhone }: CreatePersonDialogProps) {
+export default function CreatePersonDialog({ open, onOpenChange, onCreated, initialPhone }: CreatePersonDialogProps) {
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<PersonForm>(INITIAL_FORM);
     const [serverError, setServerError] = useState<string | null>(null);
@@ -89,7 +91,7 @@ export default function CreatePersonDialog({ open, onOpenChange, initialPhone }:
 
         setSaving(true);
         try {
-            await axios.post("/api/person", {
+            const res = await axios.post<{ id: number }>("/api/person", {
                 name: form.name,
                 phones: form.phone ? [form.phone] : [],
                 emails: form.email ? [form.email] : [],
@@ -100,6 +102,7 @@ export default function CreatePersonDialog({ open, onOpenChange, initialPhone }:
             });
             toast.success("Person created");
             onOpenChange(false);
+            onCreated?.(res.data.id);
             setForm(INITIAL_FORM);
         } catch (err: unknown) {
             const msg = axios.isAxiosError(err)
