@@ -400,6 +400,7 @@
     z-index: 3;
     order: 99;
     flex: 1 0 100%;
+    width: 100%;
     padding: 14px 22px 10px;
     background: var(--glass);
     border: 1px solid var(--line);

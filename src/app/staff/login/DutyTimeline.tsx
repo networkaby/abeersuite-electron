@@ -81,7 +81,7 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
         tags.push({ at: (close + lastOut) / 2, row: "top", text: `${formatWorked(lastOut - close)} after close`, tone: "extra" });
     } else if (now !== null && now >= open && now < close) {
         tags.push({ at: close, row: "top", text: `closes in ${formatWorked(close - now)}`, tone: "work" });
-    } else if (now !== null && now < open) {
+    } else if (now !== null && now < open && firstIn === null) {
         tags.push({ at: open, row: "top", text: `opens in ${formatWorked(open - now)}`, tone: "work" });
     }
     for (const r of lived) {
@@ -90,6 +90,22 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
             tags.push({ at: (r.from + r.to) / 2, row: "bottom", text: `away ${formatWorked(r.to - r.from)}`, tone: "away" });
         }
     }
+
+    // Words never sit on words. The opening, closing and "now" labels hold their
+    // places; a tag that would land on one (or on an earlier tag) is dropped —
+    // its stretch is still drawn. Width is estimated from the text at ~6.5px a
+    // character on a rail of about 1100px.
+    const half = (text: string) => (text.length * 6.5 / 2 / 1100) * 100 + 1;
+    const taken: { row: Tag["row"]; at: number; half: number }[] = [
+        { row: "bottom", at: pc(open), half: half("9:51 AM") },
+        { row: "bottom", at: pc(close), half: half("9:51 AM") },
+    ];
+    const shown = tags.filter((t) => {
+        const at = pc(t.at), h = half(t.text);
+        if (taken.some((o) => o.row === t.row && Math.abs(o.at - at) < o.half + h)) return false;
+        taken.push({ row: t.row, at, half: h });
+        return true;
+    });
 
     return (
         <section className={styles.timeline} aria-label="Today's duty timeline">
@@ -105,7 +121,7 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
                         <span><b>{clock(m as number)}</b>{word}</span>
                     </div>
                 ))}
-                {tags.map((t, i) => (
+                {shown.map((t, i) => (
                     <span key={i} className={`${styles.tltag} ${t.row === "top" ? styles.tltop : styles.tlbottom} ${t.tone ? styles[`tt_${t.tone}`] : ""}`}
                           style={{ left: `${pc(t.at)}%` }}>{t.text}</span>
                 ))}
