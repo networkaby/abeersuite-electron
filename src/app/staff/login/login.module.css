@@ -430,27 +430,15 @@
 .tlhour { position: absolute; top: 44px; width: 1px; height: 4px; background: rgba(255, 255, 255, .18) }
 .tlhour3 { height: 7px; background: rgba(255, 255, 255, .32) }
 .tlhour span { position: absolute; top: 8px; left: 0; transform: translateX(-50%); white-space: nowrap; font-size: 10.5px; color: rgba(148, 163, 184, .7) }
-.tlmark { position: absolute; top: 30px; width: 2px; height: 14px; margin-left: -1px; background: rgba(226, 232, 240, .8) }
+.tlmark { position: absolute; top: 22px; width: 2px; height: 30px; margin-left: -1px; background: rgba(226, 232, 240, .8) }
 .tlmark span, .tltag, .tlnow span {
     position: absolute; transform: translateX(-50%); white-space: nowrap;
     font-size: 11.5px; line-height: 1.3; color: var(--ink-dim); text-align: center; font-variant-numeric: tabular-nums;
 }
-.tlmark span { top: 36px; left: 1px }
+.tlmark span { top: 44px; left: 1px }
 /* Duty start green, duty end amber — the post, its door badge and its time. */
 .tlopen  { background: #34d399; width: 3px; margin-left: -1.5px }
 .tlclose { background: #f5b942; width: 3px; margin-left: -1.5px }
-.tlpin {
-    /* A map pin: a round head turned on its corner, the point resting on the bar. */
-    position: absolute; top: -25px; left: 50%;
-    width: 20px; height: 20px; margin-left: -10px;
-    border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
-    box-shadow: -1px 1px 4px rgba(0, 0, 0, .5);
-}
-.tlpin::after {
-    content: ""; position: absolute; inset: 5px; border-radius: 50%; background: #0f172a;
-}
-.tlopen .tlpin  { background: #34d399 }
-.tlclose .tlpin { background: #f5b942 }
 .tlopen b  { color: #6ee7b7 }
 .tlclose b { color: #fcd38a }
 .tlmark b { display: block; font-weight: 600; color: var(--ink) }
@@ -458,17 +446,19 @@
 .tlend { transform: translateX(-100%); margin-left: -14px }
 .tlbottom { top: 66px }
 .tt_extra { color: #6ee7b7 } .tt_late { color: #fcd38a } .tt_away { color: #fca5a5 } .tt_work { color: #7dd3fc }
-.tlnow { position: absolute; top: 24px; width: 2px; height: 26px; margin-left: -1px; background: #fff; border-radius: 1px; box-shadow: 0 0 8px rgba(255, 255, 255, .6) }
-.tlnow span { top: -20px; left: 1px; font-weight: 600; color: var(--ink) }
-/* "Now" is a balloon: a white bubble with a tail pointing down to the line. */
-.tlnow span {
-    top: -46px; padding: 2px 8px; border-radius: 999px;
-    background: #fff; color: #0b1220; font-size: 11px; box-shadow: 0 2px 8px rgba(0, 0, 0, .45);
+.tlnow { position: absolute; top: 20px; width: 2px; height: 26px; margin-left: -1px; background: #fff; border-radius: 1px }
+/* "Now" is a map pin: a round head turned on its corner, the point on the line. */
+.tlnow::before {
+    content: ""; position: absolute; top: -24px; left: 50%;
+    width: 20px; height: 20px; margin-left: -10px;
+    border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+    background: #fff; box-shadow: -1px 1px 5px rgba(0, 0, 0, .55);
 }
-.tlnow span::after {
-    content: ""; position: absolute; left: 50%; bottom: -4px; transform: translateX(-50%);
-    border: 5px solid transparent; border-bottom: 0; border-top-color: #fff;
+.tlnow::after {
+    content: ""; position: absolute; top: -18px; left: 50%;
+    width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: #0f172a;
 }
+.tlnow span { top: -44px; left: 1px; font-weight: 600; color: var(--ink) }
 @media (prefers-reduced-motion: reduce) { .timeline { animation: none } }
 
 /* Counter on the left, the date on the right. */

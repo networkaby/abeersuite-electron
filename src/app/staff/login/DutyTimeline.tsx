@@ -91,8 +91,6 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
         ...(now !== null ? [{ row: "top" as const, at: pc(now), half: half("Now 12:00 PM") }] : []),
         { row: "bottom", at: pc(open), half: half("Duty starts") },
         { row: "bottom", at: pc(close), half: half("Duty starts") },
-        { row: "top", at: pc(open), half: 0.9 },
-        { row: "top", at: pc(close), half: 0.9 },
     ];
     // A tag that is crowded on its own row tries the other one before it is dropped.
     const fits = (row: Tag["row"], at: number, h: number) => !taken.some((o) => o.row === row && Math.abs(o.at - at) < o.half + h);
@@ -119,11 +117,9 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
                     <i key={i} className={`${styles.tlseg} ${styles[`tl_${s.tone}`]}`}
                        style={{ left: `${pc(s.from)}%`, width: `${pc(s.to) - pc(s.from)}%` }} />
                 ))}
-                {/* Duty start and end: a map pin each, green and amber, its point on
-                    the bar — read at a glance from across the counter. */}
+                {/* Duty start and end: a green and an amber post. */}
                 {([[open, "Duty starts", styles.tlopen], [close, "Duty ends", styles.tlclose]] as const).map(([m, word, tone]) => (
                     <div key={word} className={`${styles.tlmark} ${tone}`} style={{ left: `${pc(m)}%` }}>
-                        <i className={styles.tlpin} aria-hidden />
                         <span><b>{clock(m)}</b>{word}</span>
                     </div>
                 ))}
