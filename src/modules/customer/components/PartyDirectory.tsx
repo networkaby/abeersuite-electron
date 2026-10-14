@@ -5,9 +5,7 @@
 // carry the same features: the same list, search, sort, and the same detail pane
 // (PartyDetailPane).
 //
-// A search on Person or Companies also looks in the other kind and lists those
-// hits under their own heading, so a party looked for on the wrong page is still
-// one click away — it opens right here.
+// Person and Companies list only their own kind; All lists both.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -91,10 +89,9 @@ export function PartyDirectory({ scope }: { scope: DirectoryScope }) {
 
     const [sort, setSort] = useState<PartySort>(DEFAULT_PARTY_SORT);
     const [showInactive, setShowInactive] = useState(false);
-    // A switch between All / Person / Companies carries the search box along.
+    // The All page's switch to Person / Companies carries the search box along.
     const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
     const debouncedSearch = useDebouncedValue(search, 300).trim();
-    const searching = debouncedSearch !== "";
 
     // Open party, its tab, period and scroll come back after Back from a voucher.
     const stateKey = `contacts:${scope}`;
@@ -112,7 +109,6 @@ export function PartyDirectory({ scope }: { scope: DirectoryScope }) {
     // Server-side search: each list holds only what its API returns for the
     // current query — name, phone, email / reg and the ledger's keywords. Empty
     // query → 50 at a time, growing as the panel is scrolled (usePartyBrowseList).
-    // The other kind is asked for only while a search is typed.
     const listOpts = {
         search: debouncedSearch,
         sort,
@@ -125,7 +121,7 @@ export function PartyDirectory({ scope }: { scope: DirectoryScope }) {
         apiPath: "/api/person",
         errorMessage: "Failed to load customers",
         cachePlaceholder: scope === "company" ? undefined : placeholderFromCache,
-        enabled: scope !== "company" || searching,
+        enabled: scope !== "company",
     });
     const companies = usePartyBrowseList<PartyListItem>({
         ...listOpts,
@@ -133,7 +129,7 @@ export function PartyDirectory({ scope }: { scope: DirectoryScope }) {
         apiPath: "/api/companies",
         errorMessage: "Failed to load companies",
         cachePlaceholder: scope === "person" ? undefined : placeholderFromCache,
-        enabled: scope !== "person" || searching,
+        enabled: scope !== "person",
     });
 
     const refreshPersons = persons.refresh;
@@ -156,11 +152,9 @@ export function PartyDirectory({ scope }: { scope: DirectoryScope }) {
     const personRows = useMemo<Row[]>(() => persons.items.map((p) => ({ ...p, kind: "person" })), [persons.items]);
     const companyRows = useMemo<Row[]>(() => companies.items.map((c) => ({ ...c, kind: "company" })), [companies.items]);
 
-    // `main` is this page's own kind (both, on All); `others` the other kind's
-    // search hits, drawn under their own heading.
-    const { main, others } = useMemo(() => {
-        if (scope === "person") return { main: sortRows(personRows), others: sortRows(companyRows) };
-        if (scope === "company") return { main: sortRows(companyRows), others: sortRows(personRows) };
+    const main = useMemo(() => {
+        if (scope === "person") return sortRows(personRows);
+        if (scope === "company") return sortRows(companyRows);
         // All: two name-ordered lists, each a page at a time. Past the last loaded
         // name of a list that has more to come, the other list's rows would sit out
         // of order (its own next page belongs before them) — hold them back until
@@ -177,7 +171,7 @@ export function PartyDirectory({ scope }: { scope: DirectoryScope }) {
                 merged = merged.filter((r) => byName(r.name, cutoff) <= 0);
             }
         }
-        return { main: merged, others: [] as Row[] };
+        return merged;
     }, [scope, personRows, companyRows, sortRows, sort, persons.hasMore, companies.hasMore]);
 
     const updatePerson = persons.updateItem;
@@ -203,7 +197,6 @@ export function PartyDirectory({ scope }: { scope: DirectoryScope }) {
     });
 
     const here = SCOPES.find((s) => s.scope === scope)!;
-    const otherLabel = scope === "person" ? "Companies" : "Persons";
     const loadingMore = persons.loadingMore || companies.loadingMore;
 
     const renderRow = (row: Row, showKind: boolean) => {
@@ -291,8 +284,8 @@ export function PartyDirectory({ scope }: { scope: DirectoryScope }) {
                     onAdd={scope === "all" ? undefined : () => setCreating(scope)}
                     toolbar={
                         <div className="flex flex-col gap-2">
-                            {/* All / Person / Companies — the same list, filtered. */}
-                            <div className="flex items-center gap-1">
+                            {/* All → Person / Companies, the same list filtered. */}
+                            {scope === "all" && <div className="flex flex-wrap items-center gap-1">
                                 {SCOPES.filter((s) => s.scope === scope || canOpen(s.href)).map((s) => (
                                     <Button
                                         key={s.scope}
@@ -304,39 +297,26 @@ export function PartyDirectory({ scope }: { scope: DirectoryScope }) {
                                         <Link href={search.trim() ? `${s.href}?q=${encodeURIComponent(search.trim())}` : s.href}>{s.label}</Link>
                                     </Button>
                                 ))}
-                                {scope === "all" && (
-                                    <span className="ml-auto flex gap-1">
-                                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setCreating("person")}>
-                                            <Plus size={12} /> Person
-                                        </Button>
-                                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setCreating("company")}>
-                                            <Plus size={12} /> Company
-                                        </Button>
-                                    </span>
-                                )}
-                            </div>
+                                <span className="ml-auto flex gap-1">
+                                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setCreating("person")}>
+                                        <Plus size={12} /> Person
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setCreating("company")}>
+                                        <Plus size={12} /> Company
+                                    </Button>
+                                </span>
+                            </div>}
                             <div className="flex justify-between">
                                 <PartySortToggle sort={sort} onChange={setSort} />
                                 <PartyInactiveToggle checked={showInactive} onChange={setShowInactive} visible={canDelete} />
                             </div>
                         </div>
                     }
-                    isEmpty={main.length === 0 && others.length === 0}
+                    isEmpty={main.length === 0}
                     emptyMessage={search ? "No matches" : "No contacts yet"}
                     onScrollNearBottom={loadMore}
                 >
                     {main.map((row) => renderRow(row, scope === "all"))}
-                    {main.length === 0 && others.length > 0 && (
-                        <p className="px-4 py-3 text-center text-xs text-muted-foreground">No {here.crumb.toLowerCase()} match</p>
-                    )}
-                    {others.length > 0 && (
-                        <>
-                            <p className="border-b bg-muted/50 px-4 py-1.5 text-xs font-medium text-muted-foreground">
-                                Also in {otherLabel} ({others.length})
-                            </p>
-                            {others.map((row) => renderRow(row, true))}
-                        </>
-                    )}
                     {loadingMore && (
                         <p className="py-3 text-center text-xs text-muted-foreground">Loading more…</p>
                     )}
