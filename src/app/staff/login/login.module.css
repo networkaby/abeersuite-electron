@@ -393,23 +393,25 @@
 @media (prefers-reduced-motion: reduce) { .duty { animation: none } }
 
 /* ── Today's duty timeline ────────────────────────────────────────────────────
-   DutyTimeline.tsx — midnight to midnight, edge to edge of the screen under both
-   cards (order keeps it last in the wrapping stage; the negative margins step
-   out of the stage's max-width). Every figure sits on the bar. */
+   DutyTimeline.tsx — midnight to midnight, a band along the foot of the screen
+   under both cards. Every figure sits on the bar. */
 .timeline {
-    position: relative;
+    /* Pinned to the foot of the screen, so the cards keep their centre and the
+       day is never scrolled off on a short counter monitor. */
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 3;
-    order: 99;
-    flex: 0 0 100vw;
-    width: 100vw;
-    margin: 4px calc(50% - 50vw) -40px;
-    padding: 12px 32px 6px;
-    background: var(--glass);
+    padding: 10px 32px 4px;
+    background: rgba(15, 23, 42, .88);
     border-top: 1px solid var(--line);
     backdrop-filter: blur(22px) saturate(140%);
     -webkit-backdrop-filter: blur(22px) saturate(140%);
     animation: dutyIn .35s ease both;
 }
+/* Room under the cards for the band. */
+.stage:has(.timeline) { padding-bottom: 150px }
 .tlrail { position: relative; height: 100px; margin: 0 14px }
 .tltrack, .tlseg { position: absolute; top: 30px; height: 14px; border-radius: 3px }
 .tltrack { left: 0; right: 0; background: rgba(255, 255, 255, .07) }
