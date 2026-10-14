@@ -11,8 +11,8 @@
 // pseudo-rows, source-voucher links. Uses /api/accountancy/reports/ledger/[id]
 // (truth-path running balance) and /api/accountancy/ledgers (flat GL list).
 
-import { Fragment, useEffect, useState, useCallback, useMemo } from "react";
-import { DailyToggle, DayRowLabel, groupByDay, useDailyTick, useOpenDays } from "@/shared/components/DailyBreakup";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { DailyBreakupTable, DailyToggle, useDailyTick } from "@/shared/components/DailyBreakup";
 import axios from "axios";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -186,7 +186,6 @@ export function AccountLedgerExplorer({
     const [from, setFrom] = useState(params.get("from") ?? toIsoDate(indianFiscalYearStart()));
     const [to, setTo] = useState(params.get("to") ?? toIsoDate(new Date()));
     const [daily, setDaily] = useDailyTick();
-    const { isOpen, toggleDay } = useOpenDays();
 
     // Balances on this list are summed from the GL lines (the replica on a
     // counter), and re-read on every ledger change — a voucher posted or deleted
@@ -276,7 +275,7 @@ export function AccountLedgerExplorer({
         );
     }, [accounts, search]);
 
-    // One ledger row — drawn straight, or under its day in the daily breakup.
+    // One ledger row — drawn in the list, or under its day in the daily breakup.
     const renderLedgerRow = (row: LedgerRow, reconciledThrough: string | null | undefined, normalBalance: NormalBalance) => {
             // yyyy-mm-dd strings compare lexicographically — reconciledThrough
             // is INCLUSIVE, so a row dated exactly on it is settled.
@@ -624,83 +623,78 @@ export function AccountLedgerExplorer({
 
                                 {/* Table */}
                                 <div className="flex-1 overflow-auto" onContextMenu={onContainerContextMenu}>
-                                    <table className="w-full text-sm">
-                                        <thead className="sticky top-0 z-10">
-                                            <tr className="bg-muted/60 border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
-                                                <th className="px-4 py-2 text-left font-medium">Date</th>
-                                                <th className="px-4 py-2 text-left font-medium">Voucher</th>
-                                                <th className="px-4 py-2 text-left font-medium">Description</th>
-                                                <th className="px-4 py-2 text-left font-medium">Branch</th>
-                                                <th className="px-4 py-2 text-right font-medium">Debit</th>
-                                                <th className="px-4 py-2 text-right font-medium">Credit</th>
-                                                <th className="px-4 py-2 text-right font-medium">Balance</th>
-                                                <th className="px-4 py-2 text-right font-medium w-10" />
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-border">
-                                            {/* Opening balance pseudo-row */}
-                                            <tr className="bg-muted/30 text-xs">
-                                                <td className="px-4 py-2 text-muted-foreground" colSpan={4}>
-                                                    Opening balance
-                                                </td>
-                                                <td className="px-4 py-2" />
-                                                <td className="px-4 py-2" />
-                                                <td className="px-4 py-2 text-right font-mono font-semibold">
-                                                    {drCr(detail.openingBalance, detail.account.normalBalance)}
-                                                </td>
-                                                <td className="px-4 py-2" />
-                                            </tr>
-
-                                            {detail.rows.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground text-sm">
-                                                        No transactions in this period
-                                                    </td>
+                                    {daily ? (
+                                        <DailyBreakupTable
+                                            entries={detail.rows.map((row) => ({ date: row.date, debit: row.debit ?? 0, credit: row.credit ?? 0, row }))}
+                                            opening={detail.openingBalance}
+                                            from={from}
+                                            to={to}
+                                            normalBalance={detail.account.normalBalance}
+                                            renderVouchers={(dayRows) => (
+                                                <table className="w-full text-sm">
+                                                    <tbody className="divide-y divide-border">
+                                                        {dayRows.map((row) => renderLedgerRow(row, detail.account.reconciledThrough, detail.account.normalBalance))}
+                                                    </tbody>
+                                                </table>
+                                            )}
+                                        />
+                                    ) : (
+                                        <table className="w-full text-sm">
+                                            <thead className="sticky top-0 z-10">
+                                                <tr className="bg-muted/60 border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
+                                                    <th className="px-4 py-2 text-left font-medium">Date</th>
+                                                    <th className="px-4 py-2 text-left font-medium">Voucher</th>
+                                                    <th className="px-4 py-2 text-left font-medium">Description</th>
+                                                    <th className="px-4 py-2 text-left font-medium">Branch</th>
+                                                    <th className="px-4 py-2 text-right font-medium">Debit</th>
+                                                    <th className="px-4 py-2 text-right font-medium">Credit</th>
+                                                    <th className="px-4 py-2 text-right font-medium">Balance</th>
+                                                    <th className="px-4 py-2 text-right font-medium w-10" />
                                                 </tr>
-                                            ) : !daily ? detail.rows.map((row) => renderLedgerRow(row, detail.account.reconciledThrough, detail.account.normalBalance))
-                                            : groupByDay(detail.rows, (r) => r.date).map((day) => {
-                                                // Rows run oldest first, so the day's last row carries its closing balance.
-                                                const closing = day.rows[day.rows.length - 1].balance;
-                                                const debit = day.rows.reduce((s, r) => s + (r.debit ?? 0), 0);
-                                                const credit = day.rows.reduce((s, r) => s + (r.credit ?? 0), 0);
-                                                const open = isOpen(day.date);
-                                                return (
-                                                    <Fragment key={day.date}>
-                                                        <tr className="cursor-pointer bg-muted/40 hover:bg-muted/60" onClick={() => toggleDay(day.date)}>
-                                                            <td className="px-4 py-2 text-xs font-medium whitespace-nowrap">{formatDate(day.date)}</td>
-                                                            <td className="px-4 py-2" colSpan={3}><DayRowLabel open={open} count={day.rows.length} /></td>
-                                                            <td className="px-4 py-2 text-right font-mono text-xs">{debit ? fmt(debit) : ""}</td>
-                                                            <td className="px-4 py-2 text-right font-mono text-xs">{credit ? fmt(credit) : ""}</td>
-                                                            <td className={cn("px-4 py-2 text-right font-mono text-xs font-semibold", closing < 0 && "text-destructive")}>
-                                                                {drCr(closing, detail.account.normalBalance)}
-                                                            </td>
-                                                            <td className="px-4 py-2" />
-                                                        </tr>
-                                                        {open && day.rows.map((row) => renderLedgerRow(row, detail.account.reconciledThrough, detail.account.normalBalance))}
-                                                    </Fragment>
-                                                );
-                                            })}
-
-                                            {/* Closing balance pseudo-row */}
-                                            {detail.rows.length > 0 && (
+                                            </thead>
+                                            <tbody className="divide-y divide-border">
+                                                {/* Opening balance pseudo-row */}
                                                 <tr className="bg-muted/30 text-xs">
-                                                    <td className="px-4 py-2 text-muted-foreground font-medium" colSpan={4}>
-                                                        Closing balance
+                                                    <td className="px-4 py-2 text-muted-foreground" colSpan={4}>
+                                                        Opening balance
                                                     </td>
+                                                    <td className="px-4 py-2" />
+                                                    <td className="px-4 py-2" />
                                                     <td className="px-4 py-2 text-right font-mono font-semibold">
-                                                        {periodDebit ? fmt(periodDebit) : ""}
-                                                    </td>
-                                                    <td className="px-4 py-2 text-right font-mono font-semibold">
-                                                        {periodCredit ? fmt(periodCredit) : ""}
-                                                    </td>
-                                                    <td className="px-4 py-2 text-right font-mono font-semibold text-primary">
-                                                        {drCr(detail.closingBalance, detail.account.normalBalance)}
+                                                        {drCr(detail.openingBalance, detail.account.normalBalance)}
                                                     </td>
                                                     <td className="px-4 py-2" />
                                                 </tr>
-                                            )}
-                                        </tbody>
-                                    </table>
+
+                                                {detail.rows.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground text-sm">
+                                                            No transactions in this period
+                                                        </td>
+                                                    </tr>
+                                                ) : detail.rows.map((row) => renderLedgerRow(row, detail.account.reconciledThrough, detail.account.normalBalance))}
+
+                                                {/* Closing balance pseudo-row */}
+                                                {detail.rows.length > 0 && (
+                                                    <tr className="bg-muted/30 text-xs">
+                                                        <td className="px-4 py-2 text-muted-foreground font-medium" colSpan={4}>
+                                                            Closing balance
+                                                        </td>
+                                                        <td className="px-4 py-2 text-right font-mono font-semibold">
+                                                            {periodDebit ? fmt(periodDebit) : ""}
+                                                        </td>
+                                                        <td className="px-4 py-2 text-right font-mono font-semibold">
+                                                            {periodCredit ? fmt(periodCredit) : ""}
+                                                        </td>
+                                                        <td className="px-4 py-2 text-right font-mono font-semibold text-primary">
+                                                            {drCr(detail.closingBalance, detail.account.normalBalance)}
+                                                        </td>
+                                                        <td className="px-4 py-2" />
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    )}
                                 </div>
                             </div>
                         </>

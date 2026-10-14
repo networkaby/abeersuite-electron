@@ -399,7 +399,7 @@ export function PartyDetailPane({
                             ) : !transactions ? null : transactions.invVouchers.length === 0 ? (
                                 <CustomerEmptyState icon={<span className="text-3xl">🧾</span>} message="No transactions found" />
                             ) : (
-                                <TransactionsTable invVouchers={transactions.invVouchers} accountId={transactions.accountId} onChanged={() => void reloadTransactions()} daily={daily} />
+                                <TransactionsTable invVouchers={transactions.invVouchers} accountId={transactions.accountId} onChanged={() => void reloadTransactions()} daily={daily ? { from, to } : null} normalBalance={transactions.normalBalance} />
                             )}
                         </div>
                     </>

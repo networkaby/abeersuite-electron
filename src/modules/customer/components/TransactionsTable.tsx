@@ -1,7 +1,7 @@
 "use client";
 
-import { Fragment, useState } from "react";
-import { groupByDay, useOpenDays, DayRowLabel } from "@/shared/components/DailyBreakup";
+import { useState } from "react";
+import { DailyBreakupTable } from "@/shared/components/DailyBreakup";
 import Link from "next/link";
 import type { SettlementState } from "@/modules/accountancy/lib/billLink";
 import { formatDate } from "@/shared/lib/format/formatDate";
@@ -69,7 +69,11 @@ export type TxInvVoucher = {
 // now pass a single `invVouchers` list.
 /** `accountId` is the party's ledger — the bill-wise popup measures a link on
  *  it. Null when the party has no ledger account, and then nothing is linkable. */
-export type CustomerTransactions = { invVouchers: TxInvVoucher[]; accountId: number | null };
+export type CustomerTransactions = {
+    invVouchers:    TxInvVoucher[];
+    accountId:      number | null;
+    normalBalance?: "DEBIT" | "CREDIT" | null;
+};
 
 // Settled — nothing of this voucher is left sitting on the party's account.
 // Due — none of it has been matched to the other side yet.
@@ -92,17 +96,19 @@ const TYPE_DOT: Record<string, string> = {
     OPENING: "bg-muted-foreground/40",
 };
 
-export function TransactionsTable({ invVouchers, accountId, partyName, onChanged, daily = false }: {
+export function TransactionsTable({ invVouchers, accountId, partyName, onChanged, daily, normalBalance }: {
     invVouchers: TxInvVoucher[];
     /** The party's ledger account — what the bill-wise popup settles against.
      *  Null only where the party has no ledger, and then nothing is linkable. */
     accountId?:  number | null;
     partyName?:  string;
     onChanged?:  () => void;
-    /** Tally's daily breakup: one row per day, opened to show its vouchers. */
-    daily?:      boolean;
+    /** Tally's daily breakup for this period — every day with Debit, Credit and
+     *  Closing balance; a day opens to its vouchers. Off = the plain voucher list. */
+    daily?:      { from: string; to: string } | null;
+    /** The party ledger's normal side, so the breakup can print Dr / Cr. */
+    normalBalance?: "DEBIT" | "CREDIT" | null;
 }) {
-    const { isOpen, toggleDay } = useOpenDays();
     // Which voucher's bill-wise popup is open, if any.
     const [linkVoucherId, setLinkVoucherId] = useState<number | null>(null);
     // Right-click: "Open in new window" on a voucher number (as in the Day Book),
@@ -271,55 +277,8 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
                             </TableRow>
     );
 
-    return (
-        <Card className="py-0 overflow-hidden" onContextMenu={onContainerContextMenu}>
-            <CardContent className="p-0">
-                <Table>
-                    <TableHeader>
-                        {/* Tinted, and its hover suppressed — a header is not a row you
-                            can land on, so it should not light up like one. */}
-                        <TableRow className="bg-muted/60 hover:bg-muted/60">
-                            <TableHead>Type</TableHead>
-                            <TableHead>Reference</TableHead>
-                            <TableHead>Date</TableHead>
-                            <TableHead className="text-muted-foreground/70 font-normal">Branch</TableHead>
-                            <TableHead className="text-muted-foreground/70 font-normal">Created by</TableHead>
-                            <TableHead className="text-right">Total</TableHead>
-                            <TableHead className="text-right">Paid</TableHead>
-                            <TableHead className="text-right">Balance</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="w-10" />
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {!daily ? rows.map(renderRow) : groupByDay(rows, (r) => r.date).map((day) => {
-                            // Rows run newest first, so the day's first row carries its closing balance.
-                            const closing = day.rows[0].balance;
-                            const open = isOpen(day.date);
-                            return (
-                                <Fragment key={day.date}>
-                                    <TableRow className="cursor-pointer bg-muted/40 hover:bg-muted/60" onClick={() => toggleDay(day.date)}>
-                                        <TableCell colSpan={2}><DayRowLabel open={open} count={day.rows.length} /></TableCell>
-                                        <TableCell className="text-xs font-medium whitespace-nowrap">{formatDate(day.date)}</TableCell>
-                                        <TableCell colSpan={2} />
-                                        <TableCell className="text-right font-mono text-xs">{money(day.rows.reduce((s, r) => s + r.total, 0))}</TableCell>
-                                        <TableCell className="text-right font-mono text-xs">{money(day.rows.reduce((s, r) => s + r.paid, 0))}</TableCell>
-                                        <TableCell className={cn(
-                                            "text-right font-mono text-xs font-semibold tabular-nums",
-                                            closing < -0.005 ? "text-rose-600 dark:text-rose-400" : closing < 0.005 ? "text-muted-foreground" : "text-foreground",
-                                        )}>
-                                            {money(closing)}
-                                        </TableCell>
-                                        <TableCell colSpan={2} />
-                                    </TableRow>
-                                    {open && day.rows.map(renderRow)}
-                                </Fragment>
-                            );
-                        })}
-                    </TableBody>
-                </Table>
-            </CardContent>
-
+    const dialogs = (
+        <>
             {/* The same bill-wise popup the receipt and trading voucher forms
                 open after posting — tick list, Auto, part amounts and all. */}
             {linkVoucherId !== null && accountId != null && (
@@ -341,6 +300,83 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
                 />
             )}
             <LinkContextMenu menu={menu} onClose={closeMenu} />
+        </>
+    );
+
+    // Daily breakup: `movement` is signed onto the ledger's normal side, so a
+    // plus lands on that side's column and a minus on the other.
+    if (daily) {
+        const nb = normalBalance ?? "DEBIT";
+        const opening = rows.filter((r) => r.isOpening).reduce((s, r) => s + r.movement, 0);
+        const entries = rows.filter((r) => !r.isOpening).map((r) => {
+            const plus = Math.max(r.movement, 0);
+            const minus = Math.max(-r.movement, 0);
+            return { date: r.date, debit: nb === "DEBIT" ? plus : minus, credit: nb === "DEBIT" ? minus : plus, row: r };
+        });
+        return (
+            <Card className="py-0 overflow-hidden" onContextMenu={onContainerContextMenu}>
+                <CardContent className="p-0">
+                    <DailyBreakupTable
+                        entries={entries}
+                        opening={opening}
+                        from={daily.from}
+                        to={daily.to}
+                        normalBalance={normalBalance ?? null}
+                        renderVouchers={(dayRows) => (
+                            <Table>
+                                <TableHeader>
+                                    {/* Tinted, and its hover suppressed — a header is not a row you
+                                        can land on, so it should not light up like one. */}
+                                    <TableRow className="bg-muted/60 hover:bg-muted/60">
+                                        <TableHead>Type</TableHead>
+                                        <TableHead>Reference</TableHead>
+                                        <TableHead>Date</TableHead>
+                                        <TableHead className="text-muted-foreground/70 font-normal">Branch</TableHead>
+                                        <TableHead className="text-muted-foreground/70 font-normal">Created by</TableHead>
+                                        <TableHead className="text-right">Total</TableHead>
+                                        <TableHead className="text-right">Paid</TableHead>
+                                        <TableHead className="text-right">Balance</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead className="w-10" />
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>{dayRows.map(renderRow)}</TableBody>
+                            </Table>
+                        )}
+                    />
+                </CardContent>
+                {dialogs}
+            </Card>
+        );
+    }
+
+    return (
+        <Card className="py-0 overflow-hidden" onContextMenu={onContainerContextMenu}>
+            <CardContent className="p-0">
+                <Table>
+                    <TableHeader>
+                        {/* Tinted, and its hover suppressed — a header is not a row you
+                            can land on, so it should not light up like one. */}
+                        <TableRow className="bg-muted/60 hover:bg-muted/60">
+                            <TableHead>Type</TableHead>
+                            <TableHead>Reference</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead className="text-muted-foreground/70 font-normal">Branch</TableHead>
+                            <TableHead className="text-muted-foreground/70 font-normal">Created by</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead className="text-right">Paid</TableHead>
+                            <TableHead className="text-right">Balance</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="w-10" />
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {rows.map(renderRow)}
+                    </TableBody>
+                </Table>
+            </CardContent>
+
+            {dialogs}
         </Card>
     );
 }

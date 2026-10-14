@@ -117,7 +117,7 @@ export const CUSTOMER_ACCOUNT_OPENING_SELECT = {
 } as const;
 
 /** The account's normal side, resolved the way the posting engine does. */
-function normalSideOf(account: AccountForOpening): "DEBIT" | "CREDIT" {
+export function normalSideOf(account: AccountForOpening): "DEBIT" | "CREDIT" {
     return account.normalBalance
         ?? (account.group?.type ? defaultNormalBalanceForGroupType(account.group.type as GroupTypeStr) : "DEBIT");
 }
