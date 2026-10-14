@@ -10,7 +10,8 @@ import { voucherTypeLabel } from "@/shared/lib/format/voucherTypeLabel";
 import { referenceHref, type VoucherSource } from "@/modules/accountancy/lib/voucherUrls";
 import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
 import { BillLinkDialog, clearBillLinkCache } from "@/modules/accountancy/components/BillLinkDialog";
-import { BillUnlinkDialog } from "@/modules/accountancy/components/BillUnlinkDialog";
+import { removeVoucherLinks } from "@/modules/accountancy/lib/removeVoucherLinks";
+import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkContextMenu";
 import { SettlementChip } from "@/modules/accountancy/components/SettlementChip";
 import { clearPartyCache } from "@/modules/accountancy/components/PartyOutstandingsPanel";
 import { Card, CardContent } from "@/components/ui/card";
@@ -100,8 +101,15 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
 }) {
     // Which voucher's bill-wise popup is open, if any.
     const [linkVoucherId, setLinkVoucherId] = useState<number | null>(null);
-    // Which voucher's Remove link popup is open, if any.
-    const [unlinkRow, setUnlinkRow] = useState<{ uvId: number; ref: string } | null>(null);
+    // Right-click: "Open in new window" on a voucher number (as in the Day Book),
+    // "Remove link" on a Settled chip.
+    const { menu, close: closeMenu, openActions, onContainerContextMenu } = useLinkContextMenu();
+    const unlink = async (uvId: number) => {
+        if (!(await removeVoucherLinks(uvId))) return;
+        clearBillLinkCache();
+        if (accountId != null) clearPartyCache(accountId);
+        onChanged?.();
+    };
 
     type Row = {
         rowKey:          string;
@@ -177,7 +185,7 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
     const money = (n: number) => formatRupeesFromPaise(Math.round(n * 100));
 
     return (
-        <Card className="py-0 overflow-hidden">
+        <Card className="py-0 overflow-hidden" onContextMenu={onContainerContextMenu}>
             <CardContent className="p-0">
                 <Table>
                     <TableHeader>
@@ -261,7 +269,9 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
                                         onLink={row.canLink && row.uvId !== null && accountId != null && Math.abs(row.movement) > 0.005
                                             ? () => setLinkVoucherId(row.uvId)
                                             : undefined}
-                                        onUnlink={row.uvId !== null ? () => setUnlinkRow({ uvId: row.uvId!, ref: row.ref }) : undefined}
+                                        onSettledContextMenu={row.uvId !== null
+                                            ? (e) => openActions(e, [{ label: "Remove link", danger: true, onSelect: () => void unlink(row.uvId!) }])
+                                            : undefined}
                                     />
                                 </TableCell>
                                 <TableCell className="text-right">
@@ -301,19 +311,7 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
                     }}
                 />
             )}
-            {unlinkRow && (
-                <BillUnlinkDialog
-                    open
-                    onOpenChange={(v) => { if (!v) setUnlinkRow(null); }}
-                    voucherId={unlinkRow.uvId}
-                    reference={unlinkRow.ref}
-                    onSaved={() => {
-                        clearBillLinkCache();
-                        if (accountId != null) clearPartyCache(accountId);
-                        onChanged?.();
-                    }}
-                />
-            )}
+            <LinkContextMenu menu={menu} onClose={closeMenu} />
         </Card>
     );
 }

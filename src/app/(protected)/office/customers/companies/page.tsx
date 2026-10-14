@@ -17,7 +17,7 @@ import { cn } from "@/shared/lib/format/utils";
 import { DEFAULT_PARTY_SORT, sortParties, type PartySort } from "@/modules/customer/lib/partySort";
 import { PartySortToggle } from "@/modules/customer/components/PartySortToggle";
 import { PartyInactiveToggle } from "@/modules/customer/components/PartyInactiveToggle";
-import { useDebouncedValue, useEscape, usePartyBrowseList, useRealtimeTopics, type BrowseListRow } from "@/shared/hooks";
+import { useDebouncedValue, useEscape, usePartyBrowseList, useRealtimeTopics, useSessionScroll, useSessionState, type BrowseListRow } from "@/shared/hooks";
 import type { Party } from "@/shared/lib/parties";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
@@ -139,13 +139,14 @@ export default function CompaniesPage() {
     const [sort, setSort] = useState<PartySort>(DEFAULT_PARTY_SORT);
     const [showInactive, setShowInactive] = useState(false);
     const [search, setSearch] = useState("");
-    const [selectedId, setSelectedId] = useState<number | null>(null);
+    // Open party, tab, period and scroll come back after Back from a voucher.
+    const [selectedId, setSelectedId] = useSessionState<number | null>("companies:selected", null);
     // The open profile — a reply for a company the screen has already left is dropped.
     const { detail, loading: detailLoading, reload: reloadDetail } =
         usePartyDetail<CompanyDetail>(selectedId ? "company" : null, selectedId, "Failed to load company");
     // A newly opened party starts on its statement; a tab choice belongs to the party
     // it was made for.
-    const [tabChoice, setTabChoice] = useState<{ id: number | null; tab: Tab }>({ id: null, tab: "transactions" });
+    const [tabChoice, setTabChoice] = useSessionState<{ id: number | null; tab: Tab }>("companies:tab", { id: null, tab: "transactions" });
     const tab: Tab = tabChoice.id === selectedId ? tabChoice.tab : "transactions";
     const setTab = (next: Tab) => setTabChoice({ id: selectedId, tab: next });
     // Quick Actions read the open profile so a party-facing voucher opens with
@@ -161,13 +162,15 @@ export default function CompaniesPage() {
         } : null);
         return () => setActiveParty(null);
     }, [detail, setActiveParty]);
-    const [from, setFrom] = useState(toIsoDate(indianFiscalYearStart()));
-    const [to, setTo] = useState(toIsoDate(new Date()));
+    const [from, setFrom] = useSessionState("companies:from", toIsoDate(indianFiscalYearStart()));
+    const [to, setTo] = useSessionState("companies:to", toIsoDate(new Date()));
     // The statement for the open party and period — read while its tab is on screen,
     // marked stale (and re-read on the way back in) while it is not.
     const {
         transactions, loading: txLoading, refreshing: txRefreshing, reload: reloadTransactions, markStale: markTxStale,
     } = usePartyTransactions(selectedId ? "company" : null, selectedId, { from, to }, tab === "transactions");
+
+    const detailScroll = useSessionScroll(`companies:scroll:${selectedId}:${tab}`, tab === "transactions" ? !!transactions : !!detail);
 
     const [showCreate, setShowCreate] = useState(false);
     const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", companyReg: "", taxId: "" });
@@ -378,7 +381,7 @@ export default function CompaniesPage() {
                             />
 
                             {/* ── Tab content ── */}
-                            <div className={`flex-1 overflow-y-auto ${tab === "transactions" ? "" : "p-6"}`}>
+                            <div ref={detailScroll.ref} onScroll={detailScroll.onScroll} className={`flex-1 overflow-y-auto ${tab === "transactions" ? "" : "p-6"}`}>
 
                                 {/* Profile — inline editing */}
                                 {tab === "profile" && (

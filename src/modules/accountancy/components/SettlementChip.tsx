@@ -18,7 +18,7 @@
 // an OPEN BILL row, where the interesting word is how overdue it is rather than
 // how much of it is matched.
 
-import { Link2, Unlink } from "lucide-react";
+import { Link2 } from "lucide-react";
 import type { SettlementState } from "@/modules/accountancy/lib/billLink";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 
@@ -32,7 +32,7 @@ const STYLES: Record<SettlementState, { label: string; className: string }> = {
 // across two lines in a narrow register column.
 const CHIP = "inline-flex items-center gap-1 whitespace-nowrap rounded px-2 py-0.5 text-xs font-medium";
 
-export function SettlementChip({ state, open, onLink, onUnlink }: {
+export function SettlementChip({ state, open, onLink, onSettledContextMenu }: {
     /** Null where there is nothing to settle — no party, or a documentary
      *  voucher that posts no money. Renders a plain dash. */
     state:  SettlementState | null;
@@ -41,9 +41,8 @@ export function SettlementChip({ state, open, onLink, onUnlink }: {
     /** Open the bill-wise popup. Omitted where the row cannot be linked — a
      *  bill taken in full at the counter has nothing to point at a receipt. */
     onLink?: () => void;
-    /** Open the Remove link popup. Reached by right-click on a Settled or
-     *  Partial chip, and by plain click on a Settled one (nothing to link). */
-    onUnlink?: () => void;
+    /** Right-click on a Settled chip — the host opens its "Remove link" menu. */
+    onSettledContextMenu?: (e: React.MouseEvent) => void;
 }) {
     if (!state) return <span className="text-xs opacity-40">—</span>;
 
@@ -55,26 +54,19 @@ export function SettlementChip({ state, open, onLink, onUnlink }: {
         ? `${style.label} ${formatRupeesFromPaise(Math.round(open * 100))}`
         : style.label;
 
-    const unlink = state !== "DUE" ? onUnlink : undefined;
-    const onContextMenu = unlink
-        ? (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); unlink(); }
-        : undefined;
-    const click = state === "SETTLED" ? unlink : onLink ?? undefined;
-
-    if (!click) return <span className={`${CHIP} ${style.className}`} onContextMenu={onContextMenu}>{label}</span>;
+    const onContextMenu = state === "SETTLED" ? onSettledContextMenu : undefined;
+    if (!onLink) return <span className={`${CHIP} ${style.className}`} onContextMenu={onContextMenu}>{label}</span>;
 
     return (
         <button
             type="button"
-            title={state === "SETTLED"
-                ? "Settled — click to remove a link"
-                : unlink ? "Match this bill by bill · right-click to remove a link" : "Match this against the other side, bill by bill"}
-            onClick={(e) => { e.stopPropagation(); click(); }}
+            title="Match this against the other side, bill by bill"
+            onClick={(e) => { e.stopPropagation(); onLink(); }}
             onContextMenu={onContextMenu}
             className={`${CHIP} ${style.className} cursor-pointer transition-opacity hover:opacity-80`}
         >
             {label}
-            {state === "SETTLED" ? <Unlink size={11} className="opacity-70" /> : <Link2 size={11} className="opacity-70" />}
+            <Link2 size={11} className="opacity-70" />
         </button>
     );
 }
