@@ -429,9 +429,16 @@
     SetShellVarContext all
   ${EndIf}
   DetailPrint "Removing any leftover shortcuts from other location..."
+  ; The shared ("everyone") folders need admin; an "only me" setup has none, so a
+  ; failed delete leaves a second icon beside the new one. Say so in the log.
+  ClearErrors
   Delete "$SMPROGRAMS\${SHORTCUT_NAME}.lnk"
   Delete "$DESKTOP\${SHORTCUT_NAME}.lnk"
   RMDir "$SMPROGRAMS\${SHORTCUT_NAME}"
+  ${If} ${FileExists} "$SMPROGRAMS\${SHORTCUT_NAME}.lnk"
+  ${OrIf} ${FileExists} "$DESKTOP\${SHORTCUT_NAME}.lnk"
+    DetailPrint "Could not remove the older shared AbeerSuite icon (needs admin) - delete it by hand, or install for the same users as before."
+  ${EndIf}
 
   ; 3. Recreate icons in the ACTIVE scope (always refreshed for updated/festive icons)
   ${If} $installMode == "all"
