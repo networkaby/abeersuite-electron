@@ -5,6 +5,7 @@ import { formatClockTime, formatHhMmFriendly, todayIso, weekdayAndDate, weekdayN
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
 import { myDayStore, type MyDay } from "@/shared/lib/hr/myDay";
 import { nextOpeningText } from "@/shared/lib/hr/nextOpeningText";
+import DutyTimeline from "./DutyTimeline";
 import styles from "./login.module.css";
 
 type CounterShift = {
@@ -110,6 +111,7 @@ export default function TillCard() {
     const firstName = shift?.cashierName.split(/\s+/)[0] ?? "";
 
     return (
+        <>
         <section className={styles.duty}>
             <p className={styles.dutyhead}>
                 <span>{counterName || "This counter"}</span>
@@ -150,7 +152,6 @@ export default function TillCard() {
                         </div>
                         {day.overtimeMinutes > 0 && <div><b>{formatWorked(day.overtimeMinutes)}</b><span>overtime</span></div>}
                         {day.shortMinutes > 0 && <div><b>{formatWorked(day.shortMinutes)}</b><span>away</span></div>}
-                        {day.lateMinutes ? <div><b>{formatWorked(day.lateMinutes)}</b><span>late</span></div> : null}
                     </div>
                 </div>
             )}
@@ -197,5 +198,8 @@ export default function TillCard() {
                 </div>
             )}
         </section>
+        {/* Full width under both cards — the stage wraps it to its own row. */}
+        {day && <DutyTimeline day={day} />}
+        </>
     );
 }

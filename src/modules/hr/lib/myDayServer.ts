@@ -2,13 +2,14 @@ import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
 import {
-    dutyHoursFor, dutyMinutesFor, gradeDay, lateMinutes, overtimeMinutes, shortMinutes,
+    dutyHoursFor, dutyMinutesFor, gradeDay, idleLimitMinutesFor, lateMinutes, overtimeMinutes, shortMinutes,
 } from "@/shared/lib/hr/dutyTime";
 import { monthOvertimeFor } from "@/modules/hr/lib/monthlyOvertime";
 import { loadPayRules } from "@/modules/hr/lib/payRulesServer";
 import { loadOfficeCalendar } from "@/shared/lib/hr/officeCalendarServer";
 import { userBranchIds } from "@/modules/hr/lib/staffBranchesServer";
 import { nextOfficeDay, shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
+import { buildTimeline, resolveOpenSpan, type SpanDto } from "@/modules/hr/lib/attendanceBreakup";
 import type { MyDay } from "@/shared/lib/hr/myDay";
 
 /**
@@ -19,19 +20,26 @@ import type { MyDay } from "@/shared/lib/hr/myDay";
 export async function buildMyDay(userId: number): Promise<MyDay> {
     const date = businessTodayIso();
 
-    const [rules, profile, day, month, calendar] = await Promise.all([
+    const dateOnly = new Date(`${date}T00:00:00.000Z`);
+    const [rules, profile, day, month, calendar, spanRows] = await Promise.all([
         loadPayRules(),
         prisma.staffProfile.findUnique({
             where: { userId },
-            select: { dutyMinutes: true, dutyStart: true, dutyEnd: true, weeklyOff: true },
+            select: { dutyMinutes: true, dutyStart: true, dutyEnd: true, weeklyOff: true, idleLimitMinutes: true },
         }),
         prisma.attendanceDay.findUnique({
-            where: { userId_date: { userId, date: new Date(`${date}T00:00:00.000Z`) } },
-            select: { firstInAt: true, workedMinutes: true, counterId: true, source: true, status: true },
+            where: { userId_date: { userId, date: dateOnly } },
+            select: { firstInAt: true, lastSeenAt: true, workedMinutes: true, counterId: true, source: true, status: true },
         }),
         monthOvertimeFor(userId, date),
         // His own calendar: the shop's holidays plus his branch's.
         userBranchIds(userId).then((ids) => loadOfficeCalendar(new Date(), 14, ids)),
+        // One person, one day: a handful of rows.
+        prisma.attendanceSpan.findMany({
+            where:   { userId, date: dateOnly },
+            orderBy: { startedAt: "asc" },
+            select:  { startedAt: true, endedAt: true, minutes: true, counterId: true, endedBy: true },
+        }),
     ]);
 
     // Today's own hours, on the season's curve. The person's typed hours still
@@ -56,6 +64,25 @@ export async function buildMyDay(userId: number): Promise<MyDay> {
         startHhMm: dutyHoursFor(profile?.dutyStart, profile?.dutyEnd, { on: shopDateFromIso(mine.iso), seasonal: calendar.seasonal }).start,
     };
     const worked = day?.workedMinutes ?? 0;
+
+    // The same on / off lines the office's day card draws, open stretches closed
+    // the same way, so the till and the register never tell two stories.
+    const idleLimit = idleLimitMinutesFor(profile?.idleLimitMinutes);
+    const lastSeen = day?.lastSeenAt?.toISOString() ?? null;
+    const lived = buildTimeline(
+        spanRows
+            .map((s): SpanDto => ({
+                startedAt: s.startedAt.toISOString(),
+                endedAt:   s.endedAt?.toISOString() ?? null,
+                minutes:   s.minutes,
+                counterId: s.counterId,
+                endedBy:   s.endedBy as SpanDto["endedBy"],
+            }))
+            .map((s) => resolveOpenSpan(s, lastSeen, true, idleLimit))
+            .sort((a, b) => a.startedAt.localeCompare(b.startedAt)),
+        idleLimit,
+        new Date().toISOString(),
+    ).map(({ kind, from, to, open }) => ({ kind, from, to, ...(open ? { open } : {}) }));
     const officeMarked = day?.source === "OFFICE";
 
     // The counter he actually worked, read off the day's own row rather than
@@ -84,5 +111,6 @@ export async function buildMyDay(userId: number): Promise<MyDay> {
         officeMarked,
         month,
         nextDuty,
+        lived,
     };
 }

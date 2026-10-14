@@ -49,6 +49,13 @@ export type MyDay = {
      * and a returning cashier should still see his day rather than a blank screen.
      */
     nextDuty?: NextOfficeDay;
+    /**
+     * Today as it was lived, in order — the on / off stretches the office's day
+     * card draws (attendanceBreakup.ts `buildTimeline`), for the lock screen's
+     * timeline. An `off` line is a gap past his idle limit: away. Optional for the
+     * same reason as `nextDuty`.
+     */
+    lived?: { kind: "on" | "off"; from: string; to: string; open?: boolean }[];
 };
 
 /**

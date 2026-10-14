@@ -16,6 +16,12 @@ const currentMinute = () => Math.floor(Date.now() / 60_000);
 /** The server has no idea what time it is where the user is, so it renders no clock at all. */
 const noMinuteOnServer = () => null;
 
+/** The machine's clock to the minute (ms), or null on the server. Ticks with the greeting. */
+export function useNowMinute(): number | null {
+    const minute = useSyncExternalStore(subscribeToMinute, currentMinute, noMinuteOnServer);
+    return minute === null ? null : minute * 60_000;
+}
+
 /** The greeting and the clock line, both from the user's own machine. Sign-in card and lock cover. */
 export function useLocalClock(): { greet: string; clock: string } {
     const minute = useSyncExternalStore(subscribeToMinute, currentMinute, noMinuteOnServer);

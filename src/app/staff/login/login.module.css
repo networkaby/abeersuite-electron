@@ -392,6 +392,45 @@
 @keyframes dutyIn { from { opacity: 0; transform: translateY(6px) } }
 @media (prefers-reduced-motion: reduce) { .duty { animation: none } }
 
+/* ── Today's duty timeline ────────────────────────────────────────────────────
+   DutyTimeline.tsx — a full-width row under both cards (order keeps it last in
+   the wrapping stage). Every figure sits on the bar itself. */
+.timeline {
+    position: relative;
+    z-index: 3;
+    order: 99;
+    flex: 1 0 100%;
+    padding: 14px 22px 10px;
+    background: var(--glass);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    box-shadow: 0 24px 60px rgba(2, 6, 23, .5);
+    animation: dutyIn .35s ease both;
+}
+.tlrail { position: relative; height: 92px; margin: 0 28px }
+.tltrack, .tlseg { position: absolute; top: 30px; height: 12px; border-radius: 3px }
+.tltrack { left: 0; right: 0; background: rgba(255, 255, 255, .07) }
+.tl_work  { background: var(--accent) }
+.tl_extra { background: #34d399 }
+.tl_left  { background: rgba(56, 189, 248, .22) }
+.tl_late  { background: repeating-linear-gradient(45deg, #f5b942 0 3px, rgba(245, 185, 66, .15) 3px 6px) }
+.tl_away  { background: repeating-linear-gradient(45deg, #f87171 0 3px, rgba(248, 113, 113, .15) 3px 6px) }
+.tlmark { position: absolute; top: 24px; width: 2px; height: 24px; margin-left: -1px; background: rgba(226, 232, 240, .7) }
+.tlmark span, .tltag, .tlnow span {
+    position: absolute; transform: translateX(-50%); white-space: nowrap;
+    font-size: 11.5px; line-height: 1.3; color: var(--ink-dim); text-align: center; font-variant-numeric: tabular-nums;
+}
+.tlmark span { top: 26px; left: 1px }
+.tlmark b { display: block; font-weight: 600; color: var(--ink) }
+.tltop { top: 6px }
+.tlbottom { top: 48px }
+.tt_extra { color: #6ee7b7 } .tt_late { color: #fcd38a } .tt_away { color: #fca5a5 } .tt_work { color: #7dd3fc }
+.tlnow { position: absolute; top: 20px; width: 2px; height: 32px; margin-left: -1px; background: #fff; border-radius: 1px }
+.tlnow span { top: 52px; left: 1px; font-weight: 600; color: var(--ink) }
+@media (prefers-reduced-motion: reduce) { .timeline { animation: none } }
+
 /* Counter on the left, the date on the right. */
 .dutyhead {
     display: flex;
