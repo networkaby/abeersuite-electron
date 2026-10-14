@@ -27,6 +27,8 @@ export function useSessionState<T>(key: string, initial: T): [T, Dispatch<SetSta
 
     useEffect(() => {
         const saved = read<T>(key);
+        // One-time restore after mount — the server render has no sessionStorage.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (saved !== undefined) setValue(saved);
         restored.current = true;
     }, [key]);
