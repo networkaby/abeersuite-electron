@@ -1,5 +1,6 @@
 "use client";
 
+import { DoorClosed, DoorOpen } from "lucide-react";
 import { formatHhMmFriendly, todayIso } from "@/shared/lib/format/formatDate";
 import { formatWorked, parseHhMm } from "@/shared/lib/hr/dutyTime";
 import type { MyDay } from "@/shared/lib/hr/myDay";
@@ -84,13 +85,13 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
 
     // Words never sit on words. The opening, closing and "now" labels hold their
     // places; a tag that would land on one (or on an earlier tag) is dropped —
-    // its stretch is still drawn. Width is estimated from the text at ~6.5px a
-    // character on a rail of about 1300px (a 1366 counter screen, edge to edge).
-    const half = (text: string) => (text.length * 6.5 / 2 / 1300) * 100 + 0.6;
+    // its stretch is still drawn. Width is estimated from the text at ~5.8px a
+    // character (11.5px text) on a rail of about 1300px (a 1366 counter screen, edge to edge).
+    const half = (text: string) => (text.length * 5.8 / 2 / 1300) * 100 + 0.3;
     const taken: { row: Tag["row"]; at: number; half: number }[] = [
         ...(now !== null ? [{ row: "top" as const, at: pc(now), half: half("Now 12:00 PM") }] : []),
-        { row: "bottom", at: pc(open), half: half("9:51 AM") },
-        { row: "bottom", at: pc(close), half: half("9:51 AM") },
+        { row: "bottom", at: pc(open), half: half("Duty starts") },
+        { row: "bottom", at: pc(close), half: half("Duty starts") },
     ];
     // A tag that is crowded on its own row tries the other one before it is dropped.
     const fits = (row: Tag["row"], at: number, h: number) => !taken.some((o) => o.row === row && Math.abs(o.at - at) < o.half + h);
@@ -117,9 +118,12 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
                     <i key={i} className={`${styles.tlseg} ${styles[`tl_${s.tone}`]}`}
                        style={{ left: `${pc(s.from)}%`, width: `${pc(s.to) - pc(s.from)}%` }} />
                 ))}
-                {[[open, "opens"], [close, "closes"]].map(([m, word]) => (
-                    <div key={word} className={styles.tlmark} style={{ left: `${pc(m as number)}%` }}>
-                        <span><b>{clock(m as number)}</b>{word}</span>
+                {/* Duty start and end: a coloured post with a door on it, so the two
+                    times read at a glance from across the counter. */}
+                {([[open, "Duty starts", DoorOpen, styles.tlopen], [close, "Duty ends", DoorClosed, styles.tlclose]] as const).map(([m, word, Icon, tone]) => (
+                    <div key={word} className={`${styles.tlmark} ${tone}`} style={{ left: `${pc(m)}%` }}>
+                        <i className={styles.tlpin}><Icon size={12} strokeWidth={2.4} aria-hidden /></i>
+                        <span><b>{clock(m)}</b>{word}</span>
                     </div>
                 ))}
                 {shown.map((t, i) => (
