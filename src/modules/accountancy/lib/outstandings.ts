@@ -233,9 +233,14 @@ async function loadOpenBills(
                 // see it. Left out of here it linked fine in the popup and was
                 // simply missing from Receivables and Payables: two views
                 // disagreeing about the same money.
-                type:           { in: ["CREDIT_NOTE", "DEBIT_NOTE", OPENING_TYPE] },
+                // An opening counts on every date, whatever its bill date — it is
+                // the position before the books begin (aggregateLedger's
+                // `onOrBeforeOrOpening`), so "as at 31 March" still lists it.
+                OR: [
+                    { type: { in: ["CREDIT_NOTE", "DEBIT_NOTE"] }, date: { lte: asOf } },
+                    { type: OPENING_TYPE },
+                ],
                 status:         { not: "CANCELLED" },
-                date:           { lte: asOf },
             },
             select: {
                 id: true, partyAccountId: true, voucherNo: true, date: true, type: true,

@@ -5,12 +5,13 @@ import { requireAuth } from "@/shared/lib/auth/permissions";
 import { balanceDelta, toNumber } from "@/modules/accountancy/lib/balance";
 import { resolveSourceBatch } from "@/modules/accountancy/lib/journalEntrySource";
 import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
+import { OPENING_TYPE } from "@/modules/accountancy/lib/openingBills";
 import { collapseEditReversals } from "@/modules/accountancy/lib/collapseEditReversals";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { availableBalance } from "@/modules/accountancy/lib/facilityLimit";
 import { handleApiError } from "@/shared/lib/api";
 import {
-    dateOnOrBefore, toDateOnly, toDateOnlyUtc, startOfDayUtc, endOfDayUtc, businessTodayIso,
+    toDateOnly, toDateOnlyUtc, startOfDayUtc, endOfDayUtc, businessTodayIso,
 } from "@/shared/lib/format/formatDate";
 
 // GET /api/accountancy/reports/ledger/[accountId]?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -43,24 +44,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
         ?? (account.group?.type ? defaultNormalBalanceForGroupType(account.group.type) : "DEBIT");
 
     try {
-        // Opening balance: all posted lines before the 'from' date, plus the
-        // master-page openingBalance if its as-of date is on/before `to`
-        // (matches the aggregateRange policy used by Trial Balance / Balance Sheet
-        // — every master opening dated within or before the report period folds
-        // into the opening bucket so period debits/credits stay balanced and
-        // the list/detail surfaces agree).
+        // Opening balance: all posted lines before the 'from' date, plus every
+        // opening — the master figure and any opening bills — whatever its date
+        // (the aggregateRange rule used by Trial Balance / Balance Sheet: an
+        // opening is the position before the books begin, never a transaction).
         const openingLines = await prisma.voucherGlLine.findMany({
             where: {
                 accountId: Number(accountId),
-                universalVoucher: { ...ledgerStatusFilterUv(), date: { lt: from } },
+                universalVoucher: { ...ledgerStatusFilterUv(), OR: [{ date: { lt: from } }, { type: OPENING_TYPE }] },
             },
             select: { type: true, amount: true },
         });
         let openingBalance = openingLines.reduce((bal, l) => {
             return bal + balanceDelta(nb, l.type, toNumber(l.amount));
         }, 0);
-        if (account.openingBalance != null && account.openingBalanceType
-            && (!account.openingBalanceDate || dateOnOrBefore(account.openingBalanceDate, to))) {
+        if (account.openingBalance != null && account.openingBalanceType) {
             openingBalance += balanceDelta(nb, account.openingBalanceType, toNumber(account.openingBalance));
         }
 
@@ -68,7 +66,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
         const lines = await prisma.voucherGlLine.findMany({
             where: {
                 accountId: Number(accountId),
-                universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: from, lte: to } },
+                universalVoucher: { ...ledgerStatusFilterUv(), type: { not: OPENING_TYPE }, date: { gte: from, lte: to } },
             },
             orderBy: [{ universalVoucher: { date: "asc" } }, { id: "asc" }],
             include: {

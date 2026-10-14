@@ -123,14 +123,12 @@ function normalSideOf(account: AccountForOpening): "DEBIT" | "CREDIT" {
 }
 
 /** Master-page opening balance, signed onto the account's normal side.
- *  Folded in whenever `openingBalanceDate` is on/before `to` — mirrors
- *  aggregateRange's rule in aggregateLedger.ts (folded into the opening
- *  bucket whenever dated <= `to`, regardless of whether that falls before or
- *  inside the period) so the customer Transactions view and the accountancy
- *  reports never disagree about which period an opening balance belongs to. */
-export function signedMasterOpening(account: AccountForOpening, to: Date): number {
+ *  Always counted, whatever `openingBalanceDate` says — aggregateRange's rule
+ *  in aggregateLedger.ts (an opening is the position before the books begin),
+ *  so the customer Transactions view and the accountancy reports never
+ *  disagree about it. */
+export function signedMasterOpening(account: AccountForOpening): number {
     if (account.openingBalance == null || !account.openingBalanceType) return 0;
-    if (account.openingBalanceDate && account.openingBalanceDate > to) return 0;
     return balanceDelta(normalSideOf(account), account.openingBalanceType, toNumber(account.openingBalance));
 }
 
@@ -332,6 +330,6 @@ export async function loadCustomerTransactionVouchers(
             createdBy: { name: createdById != null ? (creatorById.get(createdById) ?? "") : "" },
         }));
 
-    const openingRow = buildOpeningVoucherRow(account.id, signedMasterOpening(account, to) + priorMovement, from);
+    const openingRow = buildOpeningVoucherRow(account.id, signedMasterOpening(account) + priorMovement, from);
     return openingRow ? [openingRow, ...rows] : rows;
 }
