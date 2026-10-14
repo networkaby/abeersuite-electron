@@ -410,8 +410,10 @@
     -webkit-backdrop-filter: blur(22px) saturate(140%);
     animation: dutyIn .35s ease both;
 }
-/* Room under the cards for the band. */
-.stage:has(.timeline) { padding-bottom: 150px }
+/* Room under the cards for the band, and less sky above them: card, PIN pad and
+   the band must all fit a 1366x728 counter window without a scroll. */
+.stage:has(.timeline) { padding: 16px 40px 132px }
+.root:has(.timeline) { overflow: hidden }
 .tlrail { position: relative; height: 100px; margin: 0 14px }
 .tltrack, .tlseg { position: absolute; top: 30px; height: 14px; border-radius: 3px }
 .tltrack { left: 0; right: 0; background: rgba(255, 255, 255, .07) }

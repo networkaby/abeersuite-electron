@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { loginGreeting } from "@/shared/lib/constants/loginShowcase";
+import { BUSINESS_TIME_ZONE } from "@/shared/lib/constants/business";
 
 // ── The clock, as an outside thing React reads ──────────────────────────────
 // The time is not React state — it is the machine's clock — so it is subscribed
@@ -33,4 +34,13 @@ export function useLocalClock(): { greet: string; clock: string } {
         clock: now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })
             + " · " + now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }),
     };
+}
+
+/** An instant → minutes past midnight on the shop's clock (duty hours are shop time). */
+export function shopMinute(ms: number): number {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: BUSINESS_TIME_ZONE, hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(new Date(ms));
+    const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? "0");
+    return (get("hour") % 24) * 60 + get("minute");
 }

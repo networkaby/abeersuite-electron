@@ -1,20 +1,11 @@
 "use client";
 
 import { formatHhMmFriendly, todayIso } from "@/shared/lib/format/formatDate";
-import { BUSINESS_TIME_ZONE } from "@/shared/lib/constants/business";
 import { formatWorked, parseHhMm } from "@/shared/lib/hr/dutyTime";
 import type { MyDay } from "@/shared/lib/hr/myDay";
-import { useNowMinute } from "./useLocalClock";
+import { shopMinute, useNowMinute } from "./useLocalClock";
 import styles from "./login.module.css";
 
-/** An instant → minutes past midnight on the shop's clock. */
-const shopMinute = (ms: number) => {
-    const parts = new Intl.DateTimeFormat("en-GB", {
-        timeZone: BUSINESS_TIME_ZONE, hour: "2-digit", minute: "2-digit", hour12: false,
-    }).formatToParts(new Date(ms));
-    const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? "0");
-    return (get("hour") % 24) * 60 + get("minute");
-};
 
 const clock = (m: number) => formatHhMmFriendly(`${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`);
 
@@ -101,11 +92,15 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
         { row: "bottom", at: pc(open), half: half("9:51 AM") },
         { row: "bottom", at: pc(close), half: half("9:51 AM") },
     ];
-    const shown = tags.filter((t) => {
+    // A tag that is crowded on its own row tries the other one before it is dropped.
+    const fits = (row: Tag["row"], at: number, h: number) => !taken.some((o) => o.row === row && Math.abs(o.at - at) < o.half + h);
+    const shown = tags.flatMap((t) => {
         const h = half(t.text), at = t.end ? pc(t.at) - h : pc(t.at);
-        if (taken.some((o) => o.row === t.row && Math.abs(o.at - at) < o.half + h)) return false;
-        taken.push({ row: t.row, at, half: h });
-        return true;
+        const other: Tag["row"] = t.row === "top" ? "bottom" : "top";
+        const row = fits(t.row, at, h) ? t.row : fits(other, at, h) ? other : null;
+        if (!row) return [];
+        taken.push({ row, at, half: h });
+        return [{ ...t, row }];
     });
 
     return (

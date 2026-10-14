@@ -27,6 +27,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import styles from "./login.module.css";
 import FaceGrid from "./FaceGrid";
 import TillCard from "./TillCard";
+import { useBackdropPhoto } from "./useBackdropPhoto";
 import NextOpening from "./NextOpening";
 import ChoosePinCard from "./ChoosePinCard";
 import { useLocalClock } from "./useLocalClock";
@@ -69,36 +70,6 @@ function useRotation(length: number, seconds: number): { index: number; fading: 
     }, [length, seconds]);
 
     return { index, fading };
-}
-
-/**
- * The backdrop photo — tried in order, first one that loads wins.
- *
- * Nothing waits on it. The drawn CSS background is already a finished screen, so
- * a photo that is slow or never arrives costs a photograph, not a blank page.
- * It is loaded through an `Image` rather than set straight on the layer so the
- * fade only starts once the picture is actually decoded — half a photo sliding
- * in looks worse than none.
- */
-function useBackdropPhoto(candidates: readonly string[]): string | null {
-    const [url, setUrl] = useState<string | null>(null);
-
-    useEffect(() => {
-        let cancelled = false;
-        let at = 0;
-        const tryNext = () => {
-            if (cancelled || at >= candidates.length) return;
-            const candidate = candidates[at++];
-            const img = new Image();
-            img.onload = () => { if (!cancelled) setUrl(candidate); };
-            img.onerror = tryNext;
-            img.src = candidate;
-        };
-        tryNext();
-        return () => { cancelled = true; };
-    }, [candidates]);
-
-    return url;
 }
 
 /**

@@ -24,6 +24,8 @@ import ChoosePinCard from "@/app/staff/login/ChoosePinCard";
 import NextOpening from "@/app/staff/login/NextOpening";
 import TillCard from "@/app/staff/login/TillCard";
 import { useLocalClock } from "@/app/staff/login/useLocalClock";
+import { useBackdropPhoto } from "@/app/staff/login/useBackdropPhoto";
+import { LOGIN_BACKGROUNDS, LOGIN_SCRIM } from "@/shared/lib/constants/loginShowcase";
 import styles from "@/app/staff/login/login.module.css";
 import { getLocalCounterSetup } from "@/shared/lib/counter/setupGate";
 import {
@@ -56,6 +58,8 @@ export default function CounterLock() {
     const [busy, setBusy] = useState(false);
     const coverRef = useRef<HTMLDivElement>(null);
     const { greet, clock } = useLocalClock();
+    // The sign-in screen's own photograph, so locking does not swap the room for a gradient.
+    const backdrop = useBackdropPhoto(LOGIN_BACKGROUNDS);
 
     // Does this till lock, and is it locked already (a refresh, a new window)?
     useEffect(() => { void refreshCounterLock(); }, []);
@@ -178,11 +182,15 @@ export default function CounterLock() {
             role="dialog"
             aria-modal="true"
             aria-label="Counter locked"
-            className={styles.root}
+            className={`${styles.root} ${backdrop ? styles.blobsOut : ""}`}
             style={{ position: "fixed", inset: 0, zIndex: 2147483000, minHeight: 0 }}
         >
             <div className={styles.bg} />
-            <div className={styles.scrim} />
+            <div
+                className={`${styles.bgphoto} ${backdrop ? styles.bgphotoIn : ""}`}
+                style={backdrop ? { backgroundImage: `url("${backdrop}")` } : undefined}
+            />
+            <div className={styles.scrim} style={{ background: `rgba(2, 6, 23, ${LOGIN_SCRIM})` }} />
             <div className={styles.stage}>
             {/* The till's own card, as on the sign-in screen: next duty, today, the drawer. */}
             <TillCard />
