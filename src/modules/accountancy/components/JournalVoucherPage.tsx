@@ -686,7 +686,7 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
 
             {/* Sticky action bar */}
             <VoucherActionBar
-                onCancel={closeForm}
+                onCancel={handleClose}
                 onSave={() => submit(true, printAfterSave)}
                 saveLabel={isEditing ? "Save Changes" : "Save"}
                 saveDisabled={saving || !balanced || loading || (isEditing && (loadedJe?.status === "CANCELLED"))}

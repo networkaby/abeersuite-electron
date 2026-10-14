@@ -1579,7 +1579,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
 
             {/* Sticky action bar */}
             <VoucherActionBar
-                onCancel={closeForm}
+                onCancel={handleClose}
                 onSave={() => submit(true, printAfterSave)}
                 saveLabel={isEditing ? "Save Changes" : "Save"}
                 saveDisabled={saving || !balanced || loading || (isEditing && (loadedVoucher?.status === "CANCELLED"))}
