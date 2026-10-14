@@ -19,7 +19,8 @@ const shopMinute = (ms: number) => {
 const clock = (m: number) => formatHhMmFriendly(`${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`);
 
 type Seg = { from: number; to: number; tone: "work" | "extra" | "away" | "late" | "left" };
-type Tag = { at: number; row: "top" | "bottom"; text: string; tone?: Seg["tone"] | "now"; sub?: string };
+/** `end`: the words finish at `at` rather than centre on it — the arrival reads back from the moment he came. */
+type Tag = { at: number; row: "top" | "bottom"; text: string; tone?: Seg["tone"] | "now"; end?: boolean };
 
 /**
  * Today on one line, full width under the cards. Owner, 2026-10-14: *"a proper
@@ -54,10 +55,9 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
     const firstIn = on[0]?.from ?? null;
     const lastOut = on.length ? on[on.length - 1].to : null;
 
-    // The ruler: an hour's margin either side of everything there is to show.
-    const lo = Math.floor((Math.min(open, firstIn ?? open, now ?? open) - 30) / 60) * 60;
-    const hi = Math.ceil((Math.max(close, lastOut ?? close, now ?? close) + 30) / 60) * 60;
-    const pc = (m: number) => ((Math.min(hi, Math.max(lo, m)) - lo) / (hi - lo)) * 100;
+    // The whole day, midnight to midnight (owner, 2026-10-14: *"24h time line,
+    // full screen width"*) — the same ruler every day, so a glance compares.
+    const pc = (m: number) => (Math.min(1440, Math.max(0, m)) / 1440) * 100;
 
     const segs: Seg[] = [];
     const end = now ?? close;
@@ -75,7 +75,7 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
     const tags: Tag[] = [];
     if (firstIn !== null) {
         const by = firstIn < open ? `${formatWorked(open - firstIn)} early` : firstIn > open ? `${formatWorked(firstIn - open)} late` : "on time";
-        tags.push({ at: firstIn, row: "top", text: `in ${clock(firstIn)} · ${by}`, tone: firstIn > open ? "late" : "extra" });
+        tags.push({ at: firstIn, row: "top", text: `in ${clock(firstIn)} · ${by}`, tone: firstIn > open ? "late" : "extra", end: true });
     }
     if (lastOut !== null && lastOut > close) {
         tags.push({ at: (close + lastOut) / 2, row: "top", text: `${formatWorked(lastOut - close)} after close`, tone: "extra" });
@@ -86,7 +86,7 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
     }
     for (const r of lived) {
         // A sliver is still drawn; only a stretch with room for the words is named.
-        if (r.kind === "off" && pc(r.to) - pc(r.from) >= 3) {
+        if (r.kind === "off" && pc(r.to) - pc(r.from) >= 1.2) {
             tags.push({ at: (r.from + r.to) / 2, row: "bottom", text: `away ${formatWorked(r.to - r.from)}`, tone: "away" });
         }
     }
@@ -94,14 +94,15 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
     // Words never sit on words. The opening, closing and "now" labels hold their
     // places; a tag that would land on one (or on an earlier tag) is dropped —
     // its stretch is still drawn. Width is estimated from the text at ~6.5px a
-    // character on a rail of about 1100px.
-    const half = (text: string) => (text.length * 6.5 / 2 / 1100) * 100 + 1;
+    // character on a rail of about 1300px (a 1366 counter screen, edge to edge).
+    const half = (text: string) => (text.length * 6.5 / 2 / 1300) * 100 + 0.6;
     const taken: { row: Tag["row"]; at: number; half: number }[] = [
+        ...(now !== null ? [{ row: "top" as const, at: pc(now), half: half("Now 12:00 PM") }] : []),
         { row: "bottom", at: pc(open), half: half("9:51 AM") },
         { row: "bottom", at: pc(close), half: half("9:51 AM") },
     ];
     const shown = tags.filter((t) => {
-        const at = pc(t.at), h = half(t.text);
+        const h = half(t.text), at = t.end ? pc(t.at) - h : pc(t.at);
         if (taken.some((o) => o.row === t.row && Math.abs(o.at - at) < o.half + h)) return false;
         taken.push({ row: t.row, at, half: h });
         return true;
@@ -112,6 +113,11 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
             <p className={styles.tilllabel}>Today&apos;s duty</p>
             <div className={styles.tlrail}>
                 <div className={styles.tltrack} />
+                {Array.from({ length: 25 }, (_, h) => (
+                    <div key={h} className={h % 3 ? styles.tlhour : `${styles.tlhour} ${styles.tlhour3}`} style={{ left: `${(h / 24) * 100}%` }}>
+                        {h % 3 === 0 && <span>{h % 12 === 0 ? (h === 12 ? "12 PM" : "12 AM") : `${h % 12} ${h < 12 ? "AM" : "PM"}`}</span>}
+                    </div>
+                ))}
                 {segs.filter((s) => s.to > s.from).map((s, i) => (
                     <i key={i} className={`${styles.tlseg} ${styles[`tl_${s.tone}`]}`}
                        style={{ left: `${pc(s.from)}%`, width: `${pc(s.to) - pc(s.from)}%` }} />
@@ -122,7 +128,7 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
                     </div>
                 ))}
                 {shown.map((t, i) => (
-                    <span key={i} className={`${styles.tltag} ${t.row === "top" ? styles.tltop : styles.tlbottom} ${t.tone ? styles[`tt_${t.tone}`] : ""}`}
+                    <span key={i} className={`${styles.tltag} ${t.row === "top" ? styles.tltop : styles.tlbottom} ${t.end ? styles.tlend : ""} ${t.tone ? styles[`tt_${t.tone}`] : ""}`}
                           style={{ left: `${pc(t.at)}%` }}>{t.text}</span>
                 ))}
                 {now !== null && (
