@@ -269,7 +269,7 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
                                         onLink={row.canLink && row.uvId !== null && accountId != null && Math.abs(row.movement) > 0.005
                                             ? () => setLinkVoucherId(row.uvId)
                                             : undefined}
-                                        onSettledContextMenu={row.uvId !== null
+                                        onLinkedContextMenu={row.uvId !== null
                                             ? (e) => openActions(e, [{ label: "Remove link", danger: true, onSelect: () => void unlink(row.uvId!) }])
                                             : undefined}
                                     />

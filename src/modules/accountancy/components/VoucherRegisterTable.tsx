@@ -393,7 +393,7 @@ export function VoucherRegisterTable({
                                                         party:     r.party,
                                                     })
                                                     : undefined}
-                                                onSettledContextMenu={r.universalVoucherId != null
+                                                onLinkedContextMenu={r.universalVoucherId != null
                                                     ? (e) => openActions(e, [{ label: "Remove link", danger: true, onSelect: () => void unlink(r.universalVoucherId!, r.partyAccountId ?? null) }])
                                                     : undefined}
                                             />
