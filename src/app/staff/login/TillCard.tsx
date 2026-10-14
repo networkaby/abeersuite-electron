@@ -92,9 +92,10 @@ export default function TillCard() {
     const counterName = day?.counterName ?? shift?.counterName ?? "";
     const next = day?.nextDuty;
     const nextWords = next && day ? nextOpeningText(next, day.date, "mine") : null;
-    // "Tomorrow" on its own is the whole answer; a day further out is named in full.
+    // "Today" / "Tomorrow" on its own is the whole answer; a day further out is named in full.
+    const near = next && day ? weekdayName(next.iso, day.date) : "";
     const nextDay = next && day
-        ? (weekdayName(next.iso, day.date) === "Tomorrow" ? "Tomorrow" : weekdayAndDate(next.iso))
+        ? (near === "Today" || near === "Tomorrow" ? near : weekdayAndDate(next.iso))
         : "";
 
     const verdict = !day ? "" :

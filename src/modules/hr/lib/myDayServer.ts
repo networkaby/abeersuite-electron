@@ -8,7 +8,8 @@ import { monthOvertimeFor } from "@/modules/hr/lib/monthlyOvertime";
 import { loadPayRules } from "@/modules/hr/lib/payRulesServer";
 import { loadOfficeCalendar } from "@/shared/lib/hr/officeCalendarServer";
 import { userBranchIds } from "@/modules/hr/lib/staffBranchesServer";
-import { nextOfficeDay, shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
+import { addShopDays, nextOfficeDay, shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
+import { parseHhMm, shopMinuteOf } from "@/shared/lib/hr/hhmm";
 import { buildTimeline, resolveOpenSpan, type SpanDto } from "@/modules/hr/lib/attendanceBreakup";
 import type { MyDay } from "@/shared/lib/hr/myDay";
 
@@ -54,10 +55,18 @@ export async function buildMyDay(userId: number): Promise<MyDay> {
      * holidays apply to everybody; his weekly off is his alone. A man whose day
      * off is Friday must not be told to come in on Friday because the shop is open.
      */
-    const mine = nextOfficeDay(today, {
+    const myCalendar = {
         ...calendar,
         weeklyOff: [...new Set([...(calendar.weeklyOff ?? []), ...(profile?.weeklyOff ?? [])])],
-    });
+    };
+    // Before his own start on a working day, the next duty is TODAY (owner,
+    // 2026-10-14: the morning lock screen said "Tomorrow" at 9:18 for a 9:51
+    // start). Asking from yesterday answers "is today a working day for him".
+    const todayStart = parseHhMm(hours.start);
+    const fromYesterday = nextOfficeDay(addShopDays(today, -1), myCalendar);
+    const mine = fromYesterday.iso === date && todayStart !== null && shopMinuteOf(Date.now()) < todayStart
+        ? fromYesterday
+        : nextOfficeDay(today, myCalendar);
     // His typed start overrides the curve on that day too, exactly as it does today.
     const nextDuty = {
         ...mine,

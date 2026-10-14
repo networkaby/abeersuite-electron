@@ -11,6 +11,8 @@
  * Re-exported from `dutyTime.ts`, which is where callers have always found them.
  */
 
+import { BUSINESS_TIME_ZONE } from "@/shared/lib/constants/business";
+
 /** "HH:MM" → minutes past midnight, or null if it is not a time. */
 export function parseHhMm(hhmm: string | null | undefined): number | null {
     if (!hhmm) return null;
@@ -25,4 +27,16 @@ export function parseHhMm(hhmm: string | null | undefined): number | null {
 export function formatHhMm(minutes: number): string {
     const h = Math.floor(minutes / 60) % 24;
     return `${String(h).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
+/**
+ * An instant → minutes past midnight on the shop's clock. Duty hours are shop
+ * time, so "is it before opening?" must be asked on that clock, not the machine's.
+ */
+export function shopMinuteOf(ms: number, timeZone = BUSINESS_TIME_ZONE): number {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone, hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(new Date(ms));
+    const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? "0");
+    return (get("hour") % 24) * 60 + get("minute");
 }
