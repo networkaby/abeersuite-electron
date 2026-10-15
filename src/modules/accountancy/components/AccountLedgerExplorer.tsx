@@ -39,7 +39,7 @@ import { BookPage } from "@/modules/accountancy/components/BookPage";
 import { CreateLedgerDialog } from "@/modules/accountancy/components/CreateLedgerDialog";
 import { EditLedgerDialog, type EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
 import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
-import { ReconciledBadge, ReconStatusTag } from "@/modules/accountancy/components/ReconciledBadge";
+import { ReconciledBadge, ReconciledTick } from "@/modules/accountancy/components/ReconciledBadge";
 import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
 import { voucherSourceForType, referenceHref } from "@/modules/accountancy/lib/voucherUrls";
 import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkContextMenu";
@@ -459,12 +459,7 @@ export function AccountLedgerExplorer({
                             )}
                         >
                             <div className="min-w-0">
-                                <div className="flex items-center justify-between gap-2">
-                                    <p className="truncate text-sm font-medium">{a.name}</p>
-                                    {a.reconciledThrough && (
-                                        <ReconStatusTag through={a.reconciledThrough} pending={a.entriesSinceReconciled ?? 0} compact />
-                                    )}
-                                </div>
+                                <p className="truncate text-sm font-medium">{a.name}</p>
                                 {/* Group + balance share the second line; the balance
                                     breaks onto its own line here instead of being clipped
                                     when the name/group is long. Group name is a small
@@ -480,6 +475,8 @@ export function AccountLedgerExplorer({
                                     >
                                         {a.group?.name ?? "Ungrouped"}
                                     </span>
+                                    <span className="flex shrink-0 items-center gap-1">
+                                    <ReconciledTick through={a.reconciledThrough} pending={a.entriesSinceReconciled} />
                                     <span
                                         className={cn(
                                             "shrink-0 rounded px-1.5 py-0.5 text-xs font-mono font-medium",
@@ -491,6 +488,7 @@ export function AccountLedgerExplorer({
                                         )}
                                     >
                                         {drCr(a.balance, a.normalBalance ?? (a.group?.type ? defaultNormalBalanceForGroupType(a.group.type as GroupTypeStr) : "DEBIT"))}
+                                    </span>
                                     </span>
                                 </div>
                             </div>

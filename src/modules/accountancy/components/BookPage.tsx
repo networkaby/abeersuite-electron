@@ -23,7 +23,7 @@ import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { groupColor } from "@/shared/lib/format/groupColor";
 import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
-import { ReconStatusTag } from "@/modules/accountancy/components/ReconciledBadge";
+import { ReconciledTick } from "@/modules/accountancy/components/ReconciledBadge";
 
 type LedgerNode = {
     id:      number;
@@ -114,8 +114,7 @@ export function BookPage({
      *  /office/accountancy/account/[id]. Used to keep the click inside a
      *  parent master-detail view. */
     onSelectLedger?: (ledgerId: number) => void;
-    /** Per-ledger reconciliation status. The Reconciled column shows only when
-     *  some ledger in this book has ever been reconciled. */
+    /** Per-ledger reconciliation status — a green tick beside a reconciled closing. */
     reconciliation?: Map<number, { through: string | null; pending: number | null }>;
 }) {
     const router = useRouter();
@@ -165,8 +164,7 @@ export function BookPage({
 
     const ledgers = sections?.flatMap((s) => (s.node ? flattenLedgers(s.node) : [])) ?? null;
     const grandTotal = ledgers && sectioned ? sumSection(ledgers) : null;
-    const showRecon = !!reconciliation && !!ledgers?.some((l) => reconciliation.get(l.id)?.through);
-    const cols = showRecon ? 7 : 6;
+
 
     const hasBankOd = useMemo(() => {
         if (!sections) return false;
@@ -207,7 +205,7 @@ export function BookPage({
             const gc = groupColor(child.name);
             rows.push(
                 <tr key={`h-${child.id}`} className={`border-t ${gc.bg}`}>
-                    <td colSpan={cols} style={{ paddingLeft: pad }} className={`py-1.5 pr-3 text-[11px] font-semibold uppercase tracking-wider ${gc.text}`}>
+                    <td colSpan={6} style={{ paddingLeft: pad }} className={`py-1.5 pr-3 text-[11px] font-semibold uppercase tracking-wider ${gc.text}`}>
                         <span className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full ${gc.bar} align-middle`} />
                         {child.name}
                     </td>
@@ -224,7 +222,6 @@ export function BookPage({
                         <td className="px-3 py-1.5 text-right font-mono">{dash(childTotals.debits)}</td>
                         <td className="px-3 py-1.5 text-right font-mono">{dash(childTotals.credits)}</td>
                         <td className="px-3 py-1.5 text-right font-mono font-semibold">{dash(childTotals.closing)}</td>
-                        {showRecon && <td />}
                         <td />
                     </tr>,
                 );
@@ -248,12 +245,12 @@ export function BookPage({
                     <td className="px-3 py-2.5 text-right font-mono">{dash(l.opening)}</td>
                     <td className="px-3 py-2.5 text-right font-mono">{dash(l.debits)}</td>
                     <td className="px-3 py-2.5 text-right font-mono">{dash(l.credits)}</td>
-                    <td className="px-3 py-2.5 text-right font-mono font-semibold">{dash(l.closing)}</td>
-                    {showRecon && (
-                        <td className="px-3 py-2.5 whitespace-nowrap">
-                            <ReconStatusTag through={reconciliation?.get(l.id)?.through ?? null} pending={reconciliation?.get(l.id)?.pending ?? null} />
-                        </td>
-                    )}
+                    <td className="px-3 py-2.5 text-right font-mono font-semibold">
+                        <span className="inline-flex items-center gap-1.5">
+                            <ReconciledTick through={reconciliation?.get(l.id)?.through} pending={reconciliation?.get(l.id)?.pending} />
+                            {dash(l.closing)}
+                        </span>
+                    </td>
                     <td className="px-3 py-2.5 text-muted-foreground"><ChevronRight size={14} /></td>
                 </tr>,
             );
@@ -331,7 +328,6 @@ export function BookPage({
                                                 <th className="px-3 py-2 text-right font-medium">Debit</th>
                                                 <th className="px-3 py-2 text-right font-medium">Credit</th>
                                                 <th className="px-3 py-2 text-right font-medium">Closing</th>
-                                                {showRecon && <th className="px-3 py-2 text-left font-medium">Reconciled</th>}
                                                 <th className="px-3 py-2 w-8" />
                                             </tr>
                                         </thead>
@@ -345,8 +341,7 @@ export function BookPage({
                                                 <td className="px-3 py-2.5 text-right font-mono">{dash(secTotals.debits)}</td>
                                                 <td className="px-3 py-2.5 text-right font-mono">{dash(secTotals.credits)}</td>
                                                 <td className="px-3 py-2.5 text-right font-mono">{dash(secTotals.closing)}</td>
-                                                {showRecon && <td />}
-                                                <td />
+                                                                        <td />
                                             </tr>
                                         </tfoot>
                                     </table>
