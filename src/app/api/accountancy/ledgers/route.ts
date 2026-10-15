@@ -9,6 +9,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { reconcileOpeningSuspense } from "@/modules/accountancy/lib/openingBalance";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
+import { entriesSinceReconciled } from "@/modules/accountancy/lib/reconciliation";
 import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
 import { ALIAS_MAX_LENGTH, aliasKeyOf, aliasRows } from "@/modules/accountancy/lib/accountAlias";
 import { toDateOnly, toDateOnlyUtc } from "@/shared/lib/format/formatDate";
@@ -25,7 +26,7 @@ const withAliases = { select: { alias: true }, orderBy: { id: "asc" } } as const
 // `closingForAccounts`, never the `Account.balance` cache: a counter reads its
 // local replica, so the sum is a local indexed read, and a deleted voucher
 // drops out the moment sync lands it.
-function serializeLedger<T extends AccountWithGroup>(a: T, balances: Map<number, number>) {
+function serializeLedger<T extends AccountWithGroup>(a: T, balances: Map<number, number>, pending: Map<number, number>) {
     const normalBalance = a.normalBalance
         ?? (a.group?.type ? defaultNormalBalanceForGroupType(a.group.type) : "DEBIT");
     return {
@@ -38,6 +39,9 @@ function serializeLedger<T extends AccountWithGroup>(a: T, balances: Map<number,
         // Reconciliation watermark — mirror of the startOfDayUtc write in the
         // reconcile route (toDateOnly would slip a day west of UTC).
         reconciledThrough: a.reconciledThrough ? toDateOnlyUtc(a.reconciledThrough) : null,
+        // Posted entries dated after the watermark — 0 means fully reconciled.
+        // null when the ledger has never been reconciled.
+        entriesSinceReconciled: a.reconciledThrough ? (pending.get(a.id) ?? 0) : null,
     };
 }
 
@@ -208,8 +212,11 @@ export async function GET(req: Request) {
                 }),
                 prisma.account.count({ where }),
             ]);
-            const balances = await closingForAccounts(null, items.map((i) => i.id));
-            return NextResponse.json({ items: items.map((i) => serializeLedger(i, balances)), total });
+            const [balances, pending] = await Promise.all([
+                closingForAccounts(null, items.map((i) => i.id)),
+                entriesSinceReconciled(items),
+            ]);
+            return NextResponse.json({ items: items.map((i) => serializeLedger(i, balances, pending)), total });
         }
 
         // ── Mode A: pure GL accounts, flat array (original behaviour) ──────────
@@ -225,8 +232,11 @@ export async function GET(req: Request) {
                 aliases: withAliases,
             },
         });
-        const balances = await closingForAccounts(null, ledgers.map((l) => l.id));
-        return NextResponse.json(ledgers.map((l) => serializeLedger(l, balances)));
+        const [balances, pending] = await Promise.all([
+            closingForAccounts(null, ledgers.map((l) => l.id)),
+            entriesSinceReconciled(ledgers),
+        ]);
+        return NextResponse.json(ledgers.map((l) => serializeLedger(l, balances, pending)));
     } catch (e) {
         return handleApiError(e, "Failed to fetch ledgers");
     }

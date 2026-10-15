@@ -122,3 +122,27 @@ export function ReconciledBadge({ accountId, reconciledThrough, reconciledAt, on
         </div>
     );
 }
+
+/** Read-only status for list rows: is this ledger reconciled right up to its
+ *  last entry? `pending` = posted entries dated after the watermark. */
+export function ReconStatusTag({ through, pending, compact = false }: {
+    through: string | null;
+    pending: number | null;
+    compact?: boolean;
+}) {
+    if (!through) {
+        return <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground"><CircleDashed size={11} />{compact ? "Never" : "Never reconciled"}</span>;
+    }
+    if (!pending) {
+        return (
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-green-700 dark:text-green-400" title={`Reconciled upto ${formatDate(through)}, nothing entered after it`}>
+                <CheckCircle2 size={11} />{compact ? "Reconciled" : `Reconciled · ${formatDate(through)}`}
+            </span>
+        );
+    }
+    return (
+        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-400" title={`Reconciled upto ${formatDate(through)}; ${pending} entr${pending === 1 ? "y" : "ies"} after it`}>
+            <CircleDashed size={11} />{pending} after {formatDate(through)}
+        </span>
+    );
+}

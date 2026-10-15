@@ -19,6 +19,8 @@
 
 import type { Prisma } from "@/generated/prisma/client";
 import { startOfDayUtc } from "@/shared/lib/format/formatDate";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { ledgerStatusFilterUv } from "./ledgerStatus";
 
 /** The day before `date`, as a DATE-column-safe bound — the new watermark when
  *  `date` turns dirty. */
@@ -164,4 +166,28 @@ export async function carryStatementMatches(
         claimed.add(twin.id);
         await tx.bankStatementMatch.updateMany({ where: { glLineId: old.id }, data: { glLineId: twin.id } });
     }
+}
+
+// ── What is still open since the watermark ───────────────────────────────────
+//
+// A backdated entry pulls the watermark back (retreatReconciliation above), so
+// "nothing after reconciledThrough" is the whole test of a fully reconciled
+// ledger — an entry on the lock day itself retreats it to the day before.
+
+/** Posted GL lines dated after each ledger's watermark, per ledger. Only ledgers
+ *  that carry a watermark are asked about; a ledger with none is simply absent. */
+export async function entriesSinceReconciled(
+    accounts: { id: number; reconciledThrough: Date | null }[],
+): Promise<Map<number, number>> {
+    const locked = accounts.filter((a) => a.reconciledThrough);
+    if (locked.length === 0) return new Map();
+    const rows = await prisma.voucherGlLine.groupBy({
+        by: ["accountId"],
+        _count: { _all: true },
+        where: {
+            universalVoucher: ledgerStatusFilterUv(),
+            OR: locked.map((a) => ({ accountId: a.id, universalVoucher: { date: { gt: a.reconciledThrough! } } })),
+        },
+    });
+    return new Map(rows.map((r) => [r.accountId, r._count._all]));
 }

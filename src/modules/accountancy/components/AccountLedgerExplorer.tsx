@@ -39,7 +39,7 @@ import { BookPage } from "@/modules/accountancy/components/BookPage";
 import { CreateLedgerDialog } from "@/modules/accountancy/components/CreateLedgerDialog";
 import { EditLedgerDialog, type EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
 import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
-import { ReconciledBadge } from "@/modules/accountancy/components/ReconciledBadge";
+import { ReconciledBadge, ReconStatusTag } from "@/modules/accountancy/components/ReconciledBadge";
 import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
 import { voucherSourceForType, referenceHref } from "@/modules/accountancy/lib/voucherUrls";
 import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkContextMenu";
@@ -69,6 +69,8 @@ interface LedgerListItem {
     openingBalance?: number | null;
     openingBalanceType?: NormalBalance | null;
     openingBalanceDate?: string | null;
+    reconciledThrough?: string | null;
+    entriesSinceReconciled?: number | null;
 }
 
 interface SourceDoc {
@@ -195,6 +197,11 @@ export function AccountLedgerExplorer({
     } = useApiResource<LedgerListItem[]>("/api/accountancy/ledgers?activeOnly=false", { topics: ["ledger"] });
     const allAccounts = useMemo(() => accountsData ?? [], [accountsData]);
     useEffect(() => { if (accountsError) toast.error("Failed to load accounts"); }, [accountsError]);
+    // Reconciliation status per ledger, handed to the Book report's status column.
+    const reconciliation = useMemo(
+        () => new Map(allAccounts.map((a) => [a.id, { through: a.reconciledThrough ?? null, pending: a.entriesSinceReconciled ?? null }])),
+        [allAccounts],
+    );
 
     // Lightweight group tree (id/name/children only) — lets the list filter
     // walk descendants of groupNames dynamically instead of needing every
@@ -452,7 +459,12 @@ export function AccountLedgerExplorer({
                             )}
                         >
                             <div className="min-w-0">
-                                <p className="truncate text-sm font-medium">{a.name}</p>
+                                <div className="flex items-center justify-between gap-2">
+                                    <p className="truncate text-sm font-medium">{a.name}</p>
+                                    {a.reconciledThrough && (
+                                        <ReconStatusTag through={a.reconciledThrough} pending={a.entriesSinceReconciled ?? 0} compact />
+                                    )}
+                                </div>
                                 {/* Group + balance share the second line; the balance
                                     breaks onto its own line here instead of being clipped
                                     when the name/group is long. Group name is a small
@@ -499,6 +511,7 @@ export function AccountLedgerExplorer({
                                     autoSingle={false}
                                     compact
                                     onSelectLedger={selectLedger}
+                                    reconciliation={reconciliation}
                                 />
                             </div>
                         ) : (
