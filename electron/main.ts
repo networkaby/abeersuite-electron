@@ -729,7 +729,8 @@ ipcMain.handle("shell:sign-in", async (_, credentials: { email: string; password
     // Choosing a person here starts a fresh login. A session left alive — a reinstall
     // keeps userData, or a tap that beat the boot's own hasStaffSession check — would
     // otherwise walk straight in as whoever held it, with no PIN and no lock.
-    await clearStaffSession();
+    // If the old login cannot be dropped, it opens behind the lock instead — fail closed.
+    if (!await clearStaffSession()) lockOnBoot();
     // From here the real /staff/login takes over: it collects these through
     // shell:take-credentials, submits them, and does the counter reconciliation the
     // shell has no business doing.
@@ -1384,7 +1385,7 @@ async function hasStaffSession(): Promise<boolean> {
 }
 
 /** Drop the staff session cookie(s) so the next page load asks who this is. */
-async function clearStaffSession(): Promise<void> {
+async function clearStaffSession(): Promise<boolean> {
     try {
         const jar = await session.defaultSession.cookies.get({ name: "authjs.session-token" });
         await Promise.all(jar.map((c) => {
@@ -1392,8 +1393,10 @@ async function clearStaffSession(): Promise<void> {
             const url = `${c.secure ? "https" : "http"}://${host}${c.path ?? "/"}`;
             return session.defaultSession.cookies.remove(url, c.name);
         }));
+        return true;
     } catch (err) {
         console.error("[Shell] could not clear the old session:", err);
+        return false;
     }
 }
 
@@ -1401,10 +1404,13 @@ async function clearStaffSession(): Promise<void> {
  * A start that finds a login alive opens behind the counter's lock, never straight onto
  * the last person's screen (owner, 2026-10-15). Writes the BOOT lock — `userId: ""` in
  * the same file `src/shared/lib/auth/localLock.ts` owns; the first login to ask adopts
- * it, and its PIN lifts it. Counters only, and an existing lock is left as it is.
+ * it, and its PIN lifts it. An existing lock is left as it is.
+ *
+ * Not gated on the counter setup any more (owner, 2026-10-16: right after a reinstall
+ * the setup was not readable yet and the till opened straight in). Off a counter the
+ * server's /api/counter-lock says so and removes the file itself.
  */
 function lockOnBoot(): void {
-    if (!readCounterSetup()) return;
     const file = path.join(app.getPath("userData"), "local-lock.json");
     try {
         if (fs.existsSync(file)) return;

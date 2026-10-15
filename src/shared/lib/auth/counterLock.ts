@@ -52,9 +52,24 @@ function writeHint(s: CounterLockState): void {
     } catch { /* no storage: the till's answer still covers, just later */ }
 }
 
+// The server's own word, read off its first-paint veil (CounterLockVeil): the till's
+// lock file said locked when it drew this page. Present before any script runs, so
+// the cover is up from hydration — no wait for the round trip (owner, 2026-10-16).
+// No PIN known yet: assume the keypad, the till's answer corrects it.
+function veilSaysLocked(): boolean {
+    try {
+        return typeof document !== "undefined"
+            && document.getElementById("counter-lock-veil")?.dataset.locked === "1";
+    } catch {
+        return false;
+    }
+}
+
 const hint = readHint();
 let state: CounterLockState = hint
     ? { enabled: true, locked: true, hasPin: hint.hasPin, lockedAt: hint.lockedAt }
+    : veilSaysLocked()
+    ? { enabled: true, locked: true, hasPin: true, lockedAt: null }
     : { enabled: null, locked: false, hasPin: false, lockedAt: null };
 /** What the server renders, and so what hydration must start from — never the hint. */
 const SERVER_STATE: CounterLockState = { enabled: null, locked: false, hasPin: false, lockedAt: null };
@@ -106,11 +121,23 @@ export function onCounterUnlocked(fn: () => void): () => void {
 }
 
 /** Ask the till whether it locks, and whether it is locked now (a refresh, a new
- *  window). Silent on failure: no answer means "signs out as before". */
+ *  window). Fails CLOSED on a counter (owner, 2026-10-16: "lock is failing"): a till
+ *  that does not answer — still starting, busy, an error — leaves the cover up and is
+ *  asked again; the PIN is checked by the same till, so nobody gets in by the gap.
+ *  Off the desktop app, or with no login (401), there is nothing to cover. */
+let retry: ReturnType<typeof setTimeout> | null = null;
 export async function refreshCounterLock(): Promise<void> {
+    if (retry) { clearTimeout(retry); retry = null; }
+    const failClosed = () => {
+        const onCounter = typeof window !== "undefined" && !!(window as { electronAPI?: unknown }).electronAPI;
+        if (!onCounter) { set({ enabled: false }, false); return; }
+        set({ enabled: true, locked: true, hasPin: state.enabled ? state.hasPin : true }, false);
+        retry = setTimeout(() => { void refreshCounterLock(); }, 3000);
+    };
     try {
         const res = await fetch("/api/counter-lock", { cache: "no-store" });
-        if (!res.ok) { set({ enabled: false }, false); return; }
+        if (res.status === 401) { set({ enabled: false }, false); return; }
+        if (!res.ok) { failClosed(); return; }
         const out = await res.json() as { enabled?: boolean; locked?: boolean; hasPin?: boolean; lockedAt?: number | null };
         set({
             enabled: out.enabled === true,
@@ -119,7 +146,7 @@ export async function refreshCounterLock(): Promise<void> {
             lockedAt: typeof out.lockedAt === "number" ? out.lockedAt : null,
         });
     } catch {
-        set({ enabled: false }, false);
+        failClosed();
     }
 }
 

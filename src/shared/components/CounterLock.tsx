@@ -36,6 +36,10 @@ import { signOutTo } from "@/shared/lib/auth/signOutTo";
 import { captureMyDay } from "@/shared/lib/hr/myDay";
 import { PIN_LENGTH } from "@/shared/lib/constants/session";
 
+// Tells the first-paint veil that this page has the real cover, so it must never
+// lift on its own timer (CounterLockVeil — fail closed).
+if (typeof window !== "undefined") (window as { __counterLockMounted?: boolean }).__counterLockMounted = true;
+
 export default function CounterLock() {
     const lock = useSyncExternalStore(subscribeCounterLock, getCounterLock, getServerCounterLock);
     const { data: session } = useSession();

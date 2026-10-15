@@ -60,7 +60,12 @@ export async function GET() {
     if (response) return response;
 
     const counterId = thisCounterId();
-    if (!counterId) return NextResponse.json({ enabled: false, locked: false, hasPin: false });
+    if (!counterId) {
+        // A boot lock the desktop app wrote on a PC that is not a counter: drop it, or
+        // every page here would flash the cover first.
+        try { if (readLocalLock()) writeLocalLock(null); } catch { /* nothing to drop */ }
+        return NextResponse.json({ enabled: false, locked: false, hasPin: false });
+    }
 
     try {
         const lock = readLockFor(String(user.id));
