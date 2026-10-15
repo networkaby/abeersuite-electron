@@ -726,6 +726,10 @@ ipcMain.handle("shell:sign-in", async (_, credentials: { email: string; password
         // the other side. Just an intent — it grants nothing.
         setPin: credentials.setPin === true,
     };
+    // Choosing a person here starts a fresh login. A session left alive — a reinstall
+    // keeps userData, or a tap that beat the boot's own hasStaffSession check — would
+    // otherwise walk straight in as whoever held it, with no PIN and no lock.
+    await clearStaffSession();
     // From here the real /staff/login takes over: it collects these through
     // shell:take-credentials, submits them, and does the counter reconciliation the
     // shell has no business doing.
@@ -1376,6 +1380,20 @@ async function hasStaffSession(): Promise<boolean> {
         return jar.length > 0;
     } catch {
         return false;   // Unreadable jar → show the sign-in screen. The safe way to be wrong.
+    }
+}
+
+/** Drop the staff session cookie(s) so the next page load asks who this is. */
+async function clearStaffSession(): Promise<void> {
+    try {
+        const jar = await session.defaultSession.cookies.get({ name: "authjs.session-token" });
+        await Promise.all(jar.map((c) => {
+            const host = (c.domain ?? "localhost").replace(/^\./, "");
+            const url = `${c.secure ? "https" : "http"}://${host}${c.path ?? "/"}`;
+            return session.defaultSession.cookies.remove(url, c.name);
+        }));
+    } catch (err) {
+        console.error("[Shell] could not clear the old session:", err);
     }
 }
 
