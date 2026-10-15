@@ -98,6 +98,8 @@ export function DailyBreakupTable<T>({ entries, opening, from, to, normalBalance
 
     const money = (v: number) => (Math.abs(v) < 0.005 ? "" : fmt(v));
     const bal = (v: number) => formatDrCr(Math.round(v * 100) / 100, nb);
+    // A balance on the wrong side (cash in Cr, a debtor in Cr) reads red, as in the voucher list.
+    const wrongSide = (v: number) => v < -0.005 && "text-destructive";
 
     return (
         <table className="w-full text-sm">
@@ -114,7 +116,7 @@ export function DailyBreakupTable<T>({ entries, opening, from, to, normalBalance
                     <td className="px-4 py-2 italic text-muted-foreground">Opening balance</td>
                     <td />
                     <td />
-                    <td className="px-4 py-2 text-right font-mono font-semibold">{bal(opening)}</td>
+                    <td className={cn("px-4 py-2 text-right font-mono font-semibold", wrongSide(opening))}>{bal(opening)}</td>
                 </tr>
                 {days.map((day) => {
                     const has = day.list.length > 0;
@@ -141,7 +143,7 @@ export function DailyBreakupTable<T>({ entries, opening, from, to, normalBalance
                                 </td>
                                 <td className="px-4 py-1.5 text-right font-mono">{money(day.debit)}</td>
                                 <td className="px-4 py-1.5 text-right font-mono">{money(day.credit)}</td>
-                                <td className={cn("px-4 py-1.5 text-right font-mono", has && "font-semibold")}>{bal(day.closing)}</td>
+                                <td className={cn("px-4 py-1.5 text-right font-mono", has && "font-semibold", wrongSide(day.closing))}>{bal(day.closing)}</td>
                             </tr>
                             {open && (
                                 <tr>
@@ -157,13 +159,13 @@ export function DailyBreakupTable<T>({ entries, opening, from, to, normalBalance
                     <td className="px-4 py-2">Grand total</td>
                     <td className="px-4 py-2 text-right font-mono">{fmt(totalDr)}</td>
                     <td className="px-4 py-2 text-right font-mono">{fmt(totalCr)}</td>
-                    <td className="px-4 py-2 text-right font-mono text-primary">{bal(balance)}</td>
+                    <td className={cn("px-4 py-2 text-right font-mono", balance < -0.005 ? "text-destructive" : "text-primary")}>{bal(balance)}</td>
                 </tr>
                 <tr className="bg-muted/30 text-xs text-muted-foreground">
                     <td className="px-4 py-2">Average</td>
                     <td className="px-4 py-2 text-right font-mono">{fmt(totalDr / n)}</td>
                     <td className="px-4 py-2 text-right font-mono">{fmt(totalCr / n)}</td>
-                    <td className="px-4 py-2 text-right font-mono">{bal(closingSum / n)}</td>
+                    <td className={cn("px-4 py-2 text-right font-mono", wrongSide(closingSum / n))}>{bal(closingSum / n)}</td>
                 </tr>
             </tbody>
         </table>
