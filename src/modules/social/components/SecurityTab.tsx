@@ -147,7 +147,7 @@ function CounterPinCard() {
 
     const remove = async (scope: "counter" | "all") => {
         const where = scope === "all" ? "every counter" : "this counter";
-        if (!confirm(`Remove your PIN from ${where}? You will unlock with your password there.`)) return;
+        if (!confirm(`Remove your PIN from ${where}? You will use your password there.`)) return;
         setBusy(true);
         try {
             await axios.delete(`/api/me/counter-pin?scope=${scope}`);

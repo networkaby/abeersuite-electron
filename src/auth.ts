@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { authorizeStaffCredentials } from "@/shared/lib/auth/authorizeStaff";
+import { authorizeStaffCredentials, authorizeStaffPin } from "@/shared/lib/auth/authorizeStaff";
 import { authorizePortalCredentials } from "@/shared/lib/auth/authorizePortal";
 import { IS_PUBLIC } from "@/shared/lib/appMode";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
@@ -33,7 +33,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
      * A login lasts until one of two clocks runs out (owner, 2026-10-13): 3 days with
      * nobody using it — this rolling cookie lifetime — or 10 days since the password
      * was typed, checked on every request in `isStaffTokenRevoked`. Between those a
-     * counter only LOCKS (`CounterLock.tsx`) and its 4-digit PIN lifts the cover.
+     * counter only LOCKS (`CounterLock.tsx`) and its 4-digit PIN lifts the cover; inside
+     * the same two clocks the PIN also signs a person back in (`counterPin.ts`).
      *
      * It replaced a 6-hour lifetime that signed every till out each night, which is
      * what made coming back slow. The idle limit per person ("Lock after", HR → Job)
@@ -177,6 +178,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     );
                 },
             }),
+            // Counter PIN — the same staff session, reached by four digits on a tapped
+            // photograph (owner, 2026-10-15). `authorizeStaffPin` refuses anywhere that
+            // is not a counter, so on the office deployment it can never succeed.
+            Credentials({
+                id: "credentials-staff-pin",
+                name: "Counter PIN",
+                credentials: {
+                    email: { label: "Email", type: "email" },
+                    pin: { label: "PIN", type: "password" },
+                },
+                async authorize(credentials) {
+                    if (!credentials?.email || !credentials?.pin) return null;
+                    return authorizeStaffPin(prisma, credentials.email as string, credentials.pin as string);
+                },
+            }),
         ]),
         Credentials({
             id: "credentials-portal",
@@ -239,6 +255,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
  */
 export function fillTokenFromUser(token: Record<string, unknown>, user: { id?: string | null }): void {
     token.loginAt = Date.now();   // for server-side revocation
+    // The 10-day clock. A PIN sign-in carries the counter's stamp of the last password,
+    // so it never restarts the clock; everything else typed the password just now.
+    token.passwordAt = "passwordAt" in user && typeof user.passwordAt === "number" ? user.passwordAt : token.loginAt;
     token.id = user.id;
     token.role = "role" in user && typeof user.role === "string" ? user.role : "";
     token.roles = "roles" in user && Array.isArray(user.roles) ? (user.roles as string[]) : [];
@@ -291,8 +310,9 @@ export function fillTokenFromUser(token: Record<string, unknown>, user: { id?: s
  *     a password change (`revokeSessions.ts`). Everywhere, office and tills alike.
  *   • On a till, this till's own sign-out mark (`localSignOut.ts`). A Sign out on one
  *     till ends that till's login and nothing else (owner, 2026-10-13).
- *   • 10 days since the password was typed (`LOGIN_MAX_AGE_MS`). `loginAt` is only
- *     ever minted by a password sign-in — the counter PIN unlocks, it never signs in.
+ *   • 10 days since the password was typed (`LOGIN_MAX_AGE_MS`), from `passwordAt` —
+ *     a counter PIN sign-in carries the old stamp forward, so it never resets it.
+ *     Tokens from before `passwordAt` fall back to `loginAt`.
  *
  * Tokens minted before `loginAt` existed are left alone. A DB hiccup fails OPEN so a
  * transient outage cannot mass-logout every cashier; prisma's read-retry makes it rare.
@@ -302,7 +322,8 @@ export async function isStaffTokenRevoked(token: Record<string, unknown>): Promi
     if (!token.id || token.kind === "customer") return false;
     const loginAt = typeof token.loginAt === "number" ? token.loginAt : 0;
     if (!loginAt) return false;
-    if (Date.now() - loginAt > LOGIN_MAX_AGE_MS) return true;
+    const passwordAt = typeof token.passwordAt === "number" ? token.passwordAt : loginAt;
+    if (Date.now() - passwordAt > LOGIN_MAX_AGE_MS) return true;
     if (IS_COUNTER_PC && loginAt < localSignOutAt(String(token.id))) return true;
     try {
         const u = await prisma.user.findUnique({

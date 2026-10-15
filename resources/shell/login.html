@@ -553,6 +553,7 @@
     elGo.textContent = "Sign in";
     clearInterval(tipTimer);
     elTip.classList.remove("in");
+    if (waitingFor) { var w = waitingFor; waitingFor = null; toKeypad(w); return; }
     if (state !== "password") return;
     if (!elEmail.value) elEmail.focus(); else elPass.focus();
   }
@@ -632,13 +633,14 @@
 
   // ── The sequence ─────────────────────────────────────────────────────────
   //
-  //   faces ──tap a face──→ password (their email filled in) ──sign in──→ signed in
+  //   faces ──tap a face with a PIN──→ (server ready) /staff/login's keypad
+  //     │    └─tap, no PIN──→ password (their email filled in) ──sign in──→ signed in
   //     ↑                      │
   //     └── Pick your photo ───┘
   //
-  // Signing in is always the password (owner, 2026-10-13). The PIN only unlocks a
-  // LOCKED counter, inside the app (src/shared/components/CounterLock.tsx); it is
-  // chosen on /staff/login after a sign-in with "Set PIN" pressed. THE SAME STATE
+  // A PIN signs in on this counter inside its clocks (owner, 2026-10-15). The keypad
+  // lives on /staff/login, which has the server to ask whether the PIN is still good,
+  // so a tapped face with a PIN is handed over as its email alone. THE SAME STATE
   // NAMES are used there. The two screens cannot share code — this one is a file://
   // page that paints before any server exists — so they are kept in step by hand.
 
@@ -652,6 +654,7 @@
   var roster   = [];
   var formFor  = null;         // the face the password form is standing in for
   var wantsPin = false;        // "Set PIN" was pressed; rides along with the sign-in
+  var waitingFor = null;       // a face with a PIN tapped before the server was up
 
   /** The one place a state change happens. */
   function show(next) {
@@ -774,7 +777,21 @@
     if (ready) elPass.focus();
   }
 
-  function choose(entry) { toPassword(entry, ""); }
+  /** Hand a face with a PIN to /staff/login — its email only; the keypad is there. */
+  function toKeypad(entry) {
+    if (!api || !api.shellSignIn) { toPassword(entry, ""); return; }
+    api.shellSignIn({ email: entry.email, password: "" })
+      .then(function (res) { if (!res || !res.ok) toPassword(entry, (res && res.error) || ""); })
+      .catch(function () { toPassword(entry, ""); });
+  }
+
+  function choose(entry) {
+    if (!entry.hasPin) { toPassword(entry, ""); return; }
+    if (ready) { toKeypad(entry); return; }
+    // Still starting: the keypad comes up the moment the server answers.
+    waitingFor = entry;
+    elMsg.textContent = "Starting… your PIN pad opens in a moment";
+  }
 
   // ── The two controls under the password box ───────────────────────────────
   elBack.addEventListener("click", function () {

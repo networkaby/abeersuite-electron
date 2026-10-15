@@ -1,6 +1,7 @@
 import "server-only";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { markLocalSignOut } from "@/shared/lib/auth/localSignOut";
 
 /**
  * A counter's soft lock (owner, 2026-10-13: "soft logout is just a cover, so login
@@ -14,6 +15,10 @@ import * as path from "node:path";
  * A file beside `local-sign-outs.json`, for the same reasons (`localSignOut.ts`):
  * this machine's business alone, never synced, and read by route handlers that may
  * be separate module copies. One person at a time — a till has one login.
+ *
+ * `userId: ""` is the BOOT lock: the desktop shell writes it on a start that finds a
+ * login still alive (electron/main.ts), so a till never opens straight onto the last
+ * person's screen. Whoever's login asks first adopts it (`/api/counter-lock`).
  */
 
 const FILE = "local-lock.json";
@@ -62,4 +67,16 @@ export function writeLocalLock(lock: LocalLock | null): void {
 /** Lift the lock as part of a full sign-out. Best-effort — the sign-out matters more. */
 export function clearLocalLock(): void {
     try { writeLocalLock(null); } catch (err) { console.error("[localLock] could not clear the lock:", err); }
+}
+
+/**
+ * Somebody has just signed in on this till, by password or PIN — the cover goes. A
+ * lock that belonged to somebody else ends that person's login here too: the till has
+ * one login, and the new cookie has already replaced theirs.
+ */
+export function takeOverLocalLock(userId: string): void {
+    const lock = readLocalLock();
+    if (!lock) return;
+    if (lock.userId && lock.userId !== userId) markLocalSignOut(lock.userId);
+    clearLocalLock();
 }

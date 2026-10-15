@@ -1,10 +1,11 @@
 /**
- * Does this person have a PIN on this counter — and are they still on the staff?
+ * Can this person sign in with their PIN on this counter, right now?
  *
- * Asked by the sign-in screen: to remember on the face card whether a PIN exists (so
- * "Set PIN" reads "Change PIN"), and when a face is tapped, so somebody HR has
- * marked as left is told so instead of being refused in silence. The PIN itself
- * only lifts the counter lock (`/api/counter-lock`); it never signs anyone in.
+ * Asked by the sign-in screen when a face is tapped, before it puts the keypad up,
+ * and on the way in to remember on the face card whether a PIN exists. The answer
+ * tells the refusals apart — "wrong PIN" and "the 10 days are up" look identical to a
+ * cashier at 9am, and the second is not a mistake they made — and somebody HR has
+ * marked as left is told so instead of being refused in silence.
  *
  * Unauthenticated by necessity — nobody is signed in yet — and therefore deliberately
  * narrow: it answers only inside a counter shell (`thisCounterId`), only about the
@@ -17,16 +18,18 @@ import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { isLoginBlocked, recordLoginFailure } from "@/shared/lib/auth/loginRateLimit";
-import { thisCounterId } from "@/shared/lib/auth/counterPin";
+import { pinClocksExpired, thisCounterId } from "@/shared/lib/auth/counterPin";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 
 const schema = z.object({ email: z.string().email() });
 
-/** `left` — HR marked this person as left; no sign-in of any kind, and the shell
+/** `ready` — the keypad. `password-due` — a PIN exists but its clocks have run out
+ *  (`counterPin.ts`), so the password, once, and the PIN works again after it.
+ *  `left` — HR marked this person as left; no sign-in of any kind, and the shell
  *  drops the face card. The one answer that says something about the person,
  *  and deliberately so: a card that keeps failing in silence reads as a broken
  *  till, and the fact itself is one every colleague on the floor already knows. */
-export type CounterPinState = "none" | "ready" | "left";
+export type CounterPinState = "none" | "ready" | "password-due" | "left";
 
 export async function POST(req: Request) {
     const counterId = thisCounterId();
@@ -47,11 +50,13 @@ export async function POST(req: Request) {
     try {
         const row = await prisma.userCounterPin.findFirst({
             where: { counterId, user: { email } },
-            select: { user: { select: { staffProfile: { select: { leftOn: true } } } } },
+            select: { lastPasswordAt: true, lastLoginAt: true, user: { select: { staffProfile: { select: { leftOn: true } } } } },
         });
         if (!row) return NextResponse.json({ state: "none" satisfies CounterPinState });
         if (staffHasLeft(row.user.staffProfile)) return NextResponse.json({ state: "left" satisfies CounterPinState });
-        return NextResponse.json({ state: "ready" satisfies CounterPinState });
+        return NextResponse.json({
+            state: (pinClocksExpired(row) ? "password-due" : "ready") satisfies CounterPinState,
+        });
     } catch (e) {
         return handleApiError(e, "Could not check the PIN");
     }

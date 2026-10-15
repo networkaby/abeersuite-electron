@@ -9,6 +9,8 @@
  *     duty time stops counting.
  *   • LOGIN LIFETIME (10 days / 3 days) — the only things that end a login on their
  *     own: 10 days since the password was typed, or 3 days with nobody using it.
+ *     The same two clocks decide when a counter PIN may sign somebody in instead of
+ *     the password (`counterPin.ts`, owner 2026-10-15).
  *     Owner, 2026-10-13: "this is the auto full logout condition, otherwise lock is
  *     enough." It replaced a 6-hour lifetime that signed every till out each night.
  */
@@ -89,12 +91,14 @@ export const IDLE_WARNING_MS = 2 * 60 * 1000;
 
 // ─── Counter PIN ─────────────────────────────────────────────────────────────
 
-/** The PIN that lifts a counter's lock. Four digits, any four (owner, 2026-10-13):
- *  the till is already signed in on its own key, so the PIN only has to tell one
- *  colleague from another, never keep a stranger out. */
+/** The counter PIN — lifts the lock, and signs in on that counter inside the two
+ *  clocks above. Four digits, any four (owner, 2026-10-13): the till is already signed
+ *  in on its own key, so the PIN only has to tell one colleague from another, never
+ *  keep a stranger out. */
 export const PIN_LENGTH = 4;
 
-/** Wrong PINs in a row before the lock turns into a full sign-out. */
+/** Wrong PINs in a row before the password is due — on the lock (which then signs
+ *  out fully) and on the sign-in keypad alike. */
 export const UNLOCK_MAX_FAILURES = 5;
 
 // ─── Customer OTP (shop / portal sign-in) ────────────────────────────────────

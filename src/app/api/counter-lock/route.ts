@@ -14,7 +14,11 @@
  * The secret is checked HERE, on the till, against its own replica — no trip to the
  * office, which is why unlocking is instant and works with the line down. The PIN row
  * is per counter (`counterPin.ts`); somebody with no PIN on this till unlocks with the
- * password instead.
+ * password instead. Lock and unlock both move the PIN's idle clock; 5 wrong tries
+ * make the password due for the PIN sign-in too.
+ *
+ * A BOOT lock (`userId: ""`, written by the desktop shell on a start that finds a
+ * login alive) is adopted by the first login that asks — the till has one.
  *
  * Counters only: off a counter `enabled` is false and the screen signs out as before.
  */
@@ -25,8 +29,8 @@ import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
-import { thisCounterId } from "@/shared/lib/auth/counterPin";
-import { readLocalLock, writeLocalLock } from "@/shared/lib/auth/localLock";
+import { stampCounterPin, thisCounterId } from "@/shared/lib/auth/counterPin";
+import { readLocalLock, writeLocalLock, type LocalLock } from "@/shared/lib/auth/localLock";
 import { markLocalSignOut } from "@/shared/lib/auth/localSignOut";
 import { LOGIN_IDLE_LABEL, LOGIN_IDLE_MAX_AGE_MS, UNLOCK_MAX_FAILURES } from "@/shared/lib/constants/session";
 
@@ -42,6 +46,15 @@ function signOutHere(userId: string, error: string) {
     return NextResponse.json({ signedOut: true, error });
 }
 
+/** The lock on this till, with a boot lock made this person's. */
+function readLockFor(userId: string): LocalLock | null {
+    const lock = readLocalLock();
+    if (lock?.userId !== "") return lock;
+    const mine = { ...lock, userId };
+    writeLocalLock(mine);
+    return mine;
+}
+
 export async function GET() {
     const { user, response } = await requireAuth();
     if (response) return response;
@@ -50,7 +63,7 @@ export async function GET() {
     if (!counterId) return NextResponse.json({ enabled: false, locked: false, hasPin: false });
 
     try {
-        const lock = readLocalLock();
+        const lock = readLockFor(String(user.id));
         const pin = await prisma.userCounterPin.findUnique({
             where: { userId_counterId: { userId: Number(user.id), counterId } },
             select: { userId: true },
@@ -78,7 +91,7 @@ export async function POST(req: Request) {
     const now = Date.now();
 
     try {
-        const lock = readLocalLock();
+        const lock = readLockFor(userId);
 
         if (data.action === "lock") {
             // Already locked by this person (another window got there first): keep the
@@ -86,6 +99,7 @@ export async function POST(req: Request) {
             if (lock?.userId === userId) return NextResponse.json({ ok: true });
             const at = data.lastInputAt && data.lastInputAt <= now ? data.lastInputAt : now;
             writeLocalLock({ userId, lockedAt: at, failures: 0 });
+            await stampCounterPin(prisma, Number(userId), "used", new Date(at));
             return NextResponse.json({ ok: true });
         }
 
@@ -112,11 +126,13 @@ export async function POST(req: Request) {
 
         if (right) {
             writeLocalLock(null);
+            await stampCounterPin(prisma, Number(userId), data.pin ? "used" : "password");
             return NextResponse.json({ ok: true });
         }
 
         const failures = lock.failures + 1;
         if (failures >= UNLOCK_MAX_FAILURES) {
+            await stampCounterPin(prisma, Number(userId), "expire");
             return signOutHere(userId, `${UNLOCK_MAX_FAILURES} wrong tries — sign in with your password.`);
         }
         writeLocalLock({ ...lock, failures });

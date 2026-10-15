@@ -1,11 +1,12 @@
 "use client";
 
 /**
- * The keypad on the counter's lock cover (`CounterLock.tsx`).
+ * The 4-digit keypad — on the counter's lock cover (`CounterLock.tsx`) and on the
+ * sign-in page once a face is tapped (`page.tsx`).
  *
- * Only draws: the digits typed so far belong to the lock, which also owns the
- * keyboard — it has to swallow every key while the till is covered, so the keypad
- * cannot have a listener of its own. Whether the PIN was right is the server's
+ * Only draws: the digits typed so far belong to the screen using it, which also owns
+ * the keyboard — the lock has to swallow every key while the till is covered, so the
+ * keypad cannot have a listener of its own. Whether the PIN was right is the server's
  * answer, handed back in as `error`.
  */
 

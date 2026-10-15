@@ -716,6 +716,8 @@ ipcMain.handle("shell:sign-in", async (_, credentials: { email: string; password
         // a race — the cashier hitting Enter in the same tick readiness arrived.
         return { ok: false, error: "Still starting. Try again in a moment." };
     }
+    // An empty password is a tapped photograph with a PIN: /staff/login puts its
+    // keypad up for that email (resources/shell/login.html → toKeypad).
     parkedCredentials = {
         email: credentials.email,
         password: credentials.password,
@@ -1348,8 +1350,8 @@ function shellQuery(): Record<string, string> {
  * "login outside counter" permission, and signing in behind its back would skip both.
  * So the shell saves the cashier the typing and the real page still does the work.
  *
- * Always a password: the counter PIN only unlocks a locked till (CounterLock.tsx),
- * it never signs anyone in (owner, 2026-10-13).
+ * A password, or an empty one for a tapped photograph with a PIN — then `/staff/login`
+ * puts its keypad up for that email (owner, 2026-10-15).
  */
 let parkedCredentials: { email: string; password: string; setPin?: boolean } | null = null;
 
@@ -1374,6 +1376,23 @@ async function hasStaffSession(): Promise<boolean> {
         return jar.length > 0;
     } catch {
         return false;   // Unreadable jar → show the sign-in screen. The safe way to be wrong.
+    }
+}
+
+/**
+ * A start that finds a login alive opens behind the counter's lock, never straight onto
+ * the last person's screen (owner, 2026-10-15). Writes the BOOT lock — `userId: ""` in
+ * the same file `src/shared/lib/auth/localLock.ts` owns; the first login to ask adopts
+ * it, and its PIN lifts it. Counters only, and an existing lock is left as it is.
+ */
+function lockOnBoot(): void {
+    if (!readCounterSetup()) return;
+    const file = path.join(app.getPath("userData"), "local-lock.json");
+    try {
+        if (fs.existsSync(file)) return;
+        fs.writeFileSync(file, JSON.stringify({ userId: "", lockedAt: Date.now(), failures: 0 }));
+    } catch (err) {
+        console.error("[Boot] could not write the boot lock:", err);
     }
 }
 
@@ -1890,6 +1909,7 @@ app.whenReady().then(async () => {
         // shown a login screen for a session they already have. Straight in for them;
         // everyone else stays on the shell, which is now live and takes their typing.
         if (await hasStaffSession()) {
+            lockOnBoot();
             await loadApp(result.url);
         } else {
             notifyServerReady();

@@ -6,8 +6,9 @@
  * Covers the whole app while the till is locked; whatever was open underneath — a
  * half-made bill — stays exactly as it was, and the person's 4-digit PIN lifts the
  * cover at once with no page load. Somebody with no PIN on this counter unlocks with
- * their password. "Sign out fully" is the way out: end of day, or somebody else
- * taking the till.
+ * their password. "Not <name>? Switch person" is the way out for somebody else taking
+ * the till: it ends this login and lands on the photographs, where the next person
+ * taps their own face and types their own PIN (owner, 2026-10-15).
  *
  * It wears the sign-in screen's own pieces (owner, 2026-10-13): the till card (next
  * duty, today, the drawer), the greeting with the shop's next opening, and the
@@ -144,6 +145,7 @@ export default function CounterLock() {
         hasPin: lock.hasPin,
     };
 
+    const firstName = entry.name.split(/\s+/)[0];
     const links = (
         <>
             <div className={styles.rowlinks}>
@@ -155,7 +157,7 @@ export default function CounterLock() {
                 ) : <span />}
                 <button type="button" className={styles.pinlink} disabled={busy}
                     onClick={() => void signOutFully(lock.lockedAt)}>
-                    Someone else? Sign out fully
+                    Not {firstName}? Switch person
                 </button>
             </div>
             <div className={styles.rowlinks}>
@@ -234,7 +236,7 @@ export default function CounterLock() {
                     entry={entry}
                     length={PIN_LENGTH}
                     typed={typed}
-                    note={busy ? "Unlocking…" : `Locked — enter your ${PIN_LENGTH}-digit PIN`}
+                    note={busy ? "Unlocking…" : `Locked for ${firstName} — enter your ${PIN_LENGTH}-digit PIN`}
                     error={error}
                     onPress={press}
                     onDelete={() => setTyped((t) => t.slice(0, -1))}

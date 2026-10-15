@@ -78,7 +78,7 @@ export default function ChoosePinCard({
             <h1 className={styles.greet}>{hasPin ? "Change your PIN" : "Choose your PIN"}</h1>
             <p className={styles.clock}>
                 Four digits{counterNumber !== null ? `, for counter ${counterNumber} only` : ""}.
-                When the counter locks, they bring you straight back.
+                Next time just tap your photo — after a lock, a restart or a colleague.
             </p>
 
             {knownPassword === undefined && (
@@ -137,8 +137,8 @@ export default function ChoosePinCard({
             </button>
 
             <p className={styles.pinnote}>
-                The line must be up to save a PIN. Unlocking with it works offline. Signing
-                in is always your password.
+                The line must be up to save a PIN. Using it works offline, and your password
+                is still asked every few days.
             </p>
         </section>
     );
