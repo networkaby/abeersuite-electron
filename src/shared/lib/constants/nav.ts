@@ -452,6 +452,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Top Customers", icon: Crown, href: "/office/bi/top-customers" },
             { label: "RFM Segmentation", icon: Target, href: "/office/bi/rfm" },
             { label: "Party Sale & Purchase", icon: Split, href: "/office/bi/party-sale-purchase" },
+            { label: "Ledger vs Ledger", icon: ArrowLeftRight, href: "/office/bi/ledger-vs-ledger" },
             { label: "GST Purchase Planning", icon: CalendarRange, href: "/office/bi/gst-purchase-planning", sidebarKey: "gst-purchase-planning" },
             { label: "Item Profit", icon: BadgeIndianRupee, href: "/office/bi/item-profit" },
             { label: "Item by Party", icon: Grid2x2, href: "/office/bi/item-by-party" },
