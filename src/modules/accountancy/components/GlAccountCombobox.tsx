@@ -157,9 +157,11 @@ export function GlAccountCombobox({
     const qDigits = q.replace(/\D/g, "");
     const filtered = useMemo(() => {
         if (belowMin) return [];
+        // Word by word, any order: "akram sta" finds "Akramul Jakir (Staff)".
+        const words = q.split(/\s+/).filter(Boolean);
         const all = q && q !== selectedLabel.toLowerCase()
             ? pool.filter((a) =>
-                a.name.toLowerCase().includes(q) ||
+                words.every((w) => a.name.toLowerCase().includes(w)) ||
                 aliasMatches(a.aliases, q) ||
                 (qDigits.length >= 3 && (a.phones ?? []).some(
                     (p) => p.replace(/\D/g, "").includes(qDigits),
