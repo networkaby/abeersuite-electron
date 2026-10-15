@@ -73,6 +73,7 @@ import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { rowActivation } from "@/shared/lib/a11y/rowActivation";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
+import { LedgerReconciledTick, ReconciledLedgersProvider } from "@/modules/accountancy/components/ReconciledBadge";
 
 // ─── Shape (mirrors the API response) ────────────────────────────────────────
 
@@ -271,6 +272,7 @@ export default function UsableFundPage() {
     const totalFund = instantTotal + otherTotal;
 
     return (
+        <ReconciledLedgersProvider>
         <ScrollArea className="h-full" type="always">
             <div className="mx-auto max-w-6xl space-y-5 px-6 pt-3 pb-8">
                 {/* ── Header ──────────────────────────────────────────────── */}
@@ -355,6 +357,7 @@ export default function UsableFundPage() {
                 )}
             </div>
         </ScrollArea>
+        </ReconciledLedgersProvider>
     );
 }
 
@@ -522,9 +525,10 @@ function LedgerRow({
                     )}
                 </div>
                 <div
-                    className={`shrink-0 font-mono text-sm font-medium tabular-nums ${alreadyCounted ? "text-muted-foreground/60" : ""}`}
+                    className={`flex shrink-0 items-center gap-1.5 font-mono text-sm font-medium tabular-nums ${alreadyCounted ? "text-muted-foreground/60" : ""}`}
                     title={alreadyCounted ? `Already counted under "${poolCarrier}" — one shared limit, counted once.` : undefined}
                 >
+                    <LedgerReconciledTick ledgerId={ledger.id} />
                     ₹{fmt(capacity)}
                 </div>
             </div>
