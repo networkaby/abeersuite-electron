@@ -94,7 +94,7 @@ export default function AttendanceBreakup({ userId, from, to, canEdit }: {
                                     label="Late days"
                                     value={effect.lateDays === 0 ? "—" : `${effect.lateDays}${effect.chargedLateDays ? ` · ${effect.chargedLateDays} charged` : " · all free"}`}
                                     tone={effect.chargedLateDays > 0 ? "warn" : undefined}
-                                    hint={`The first ${rules.lateFreeDays} late days of the period cost nothing`}
+                                    hint={`Up to ${rules.lateGraceMinutes} min is forgiven on the first ${rules.lateFreeDays} such days`}
                                 />
                             </div>
 

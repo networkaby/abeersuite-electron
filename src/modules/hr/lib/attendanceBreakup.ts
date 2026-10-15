@@ -482,7 +482,7 @@ function lateLine(day: DayBreakup, rules: PayRules, added: number): AccountLine 
     }
     if (!day.lateCharged) {
         const n = rules.lateFreeDays;
-        return { ...base, rateLabel: rateOfLate(rules), accounted: 0, note: `not charged — inside the first ${n} free late ${n === 1 ? "day" : "days"}` };
+        return { ...base, rateLabel: rateOfLate(rules), accounted: 0, note: `forgiven — within ${rules.lateGraceMinutes} min, one of the month's ${n} grace ${n === 1 ? "day" : "days"}` };
     }
     if (rules.latePenaltyStyle === "none") return { ...base, rateLabel: "—", accounted: 0, note: "no late penalty is set" };
     return { ...base, rateLabel: rateOfLate(rules), accounted: -added, note: "charged — the free late days are used up" };

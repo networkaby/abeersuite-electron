@@ -11,7 +11,7 @@ import { businessTodayIso, toDateOnlyUtc } from "@/shared/lib/format/formatDate"
 import { dutyHoursFor, dutyMinutesFor, idleLimitMinutesFor, lateMinutes } from "@/shared/lib/hr/dutyTime";
 import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import { loadPayRules } from "@/modules/hr/lib/payRulesServer";
-import { lateDutyCutMinutes } from "@/shared/lib/hr/payRules";
+import { lateDutyCutMinutes, lateForgiven } from "@/shared/lib/hr/payRules";
 import { ATTENDANCE_SOURCE_SELECT, autoCounts, lateOf, workedOf } from "@/shared/lib/hr/attendanceSource";
 import { shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
 import { holidayDatesFor, isoDaysBetween, weekdayOf } from "@/modules/hr/lib/attendanceCalendar";
@@ -103,7 +103,7 @@ export async function loadHoursBreakup(
     // range and not whichever the loop happens to reach first — the same order
     // `attendanceEffectFor` uses, or the card and the payslip would disagree
     // about which day was the free one.
-    let lateSoFar = 0;
+    let forgivenSoFar = 0;
 
     const days: DayBreakup[] = [];
     for (const iso of isoDaysBetween(from, to)) {
@@ -125,7 +125,7 @@ export async function loadHoursBreakup(
 
         // The clock's lateness, and the one the day stands on — a correction
         // made on the card wins (attendanceSource.ts).
-        const tillLate = lateMinutes(row?.firstInAt ?? null, hours.start, undefined, rules.lateGraceMinutes) ?? 0;
+        const tillLate = lateMinutes(row?.firstInAt ?? null, hours.start) ?? 0;
         const lateBy = row ? lateOf(row, tillLate) : tillLate;
         const weeklyOff = offDays.has(weekdayOf(iso));
         const holidayName = myHolidays.get(iso) ?? null;
@@ -139,8 +139,8 @@ export async function loadHoursBreakup(
         const judged = !!row && (clockOnly ? workedOf(row) > 0 : autoCounts(row)) && !weeklyOff && !holidayName;
         let lateCharged = false;
         if (lateBy > 0 && judged) {
-            lateSoFar += 1;
-            lateCharged = lateSoFar > rules.lateFreeDays;
+            if (lateForgiven(lateBy, forgivenSoFar, rules)) forgivenSoFar += 1;
+            else lateCharged = true;
         }
 
         days.push(buildDayBreakup({

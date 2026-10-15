@@ -165,7 +165,7 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                 <CorrectableFigure
                     label="Late by" minutes={day.lateBy} till={day.till.lateBy} corrected={day.corrected.late}
                     tone={day.lateBy > 0 ? "warn" : undefined} dashZero
-                    hint={`Against ${day.dutyStart}, after ${rules.lateGraceMinutes} min of grace`}
+                    hint={`Against ${day.dutyStart}; up to ${rules.lateGraceMinutes} min forgiven on ${rules.lateFreeDays} days a month`}
                     onCorrect={onCorrect && ((m) => onCorrect("late", m))}
                 />
                 {/* A day the shop was shut owes nothing, so it cannot be left early

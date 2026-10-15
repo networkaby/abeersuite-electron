@@ -142,7 +142,7 @@ function PenaltiesView({ data }: { data: MyHrPayload }) {
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                         <Fact label="Overtime (after pending duty made up)" value={counts.payableMinutes > 0 ? `${formatWorked(counts.payableMinutes)} at ${rules.overtimeRate}×` : "—"} />
                         <Fact label="Pending duty" value={counts.owedMinutes > 0 ? `${formatWorked(counts.owedMinutes)} at ${rules.shortHoursRate}×` : "—"} />
-                        <Fact label="Late days" value={counts.lateDays === 0 ? "—" : `${counts.lateDays} · ${counts.chargedLateDays} charged (first ${rules.lateFreeDays} free)`} />
+                        <Fact label="Late days" value={counts.lateDays === 0 ? "—" : `${counts.lateDays} · ${counts.chargedLateDays} charged (${rules.lateFreeDays} grace days)`} />
                         <Fact label="Absent with no leave" value={counts.unaskedAbsentDays === 0 ? "—" : `${counts.unaskedAbsentDays} day${counts.unaskedAbsentDays === 1 ? "" : "s"} · ${rules.absentPenaltyDays} day${rules.absentPenaltyDays === 1 ? "" : "s"} of duty to pending each`} />
                         <Fact label="Weekly-off duty" value={counts.weeklyOffMinutes > 0 ? `${formatWorked(counts.weeklyOffMinutes)} at ${rules.weeklyOffRate}×` : "—"} />
                         <Fact label="Holiday duty" value={counts.holidayMinutes > 0 ? `${formatWorked(counts.holidayMinutes)} at ${rules.holidayRate}×` : "—"} />

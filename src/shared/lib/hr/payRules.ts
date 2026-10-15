@@ -72,9 +72,9 @@ export interface PayRules {
     leaveNoticeDays: number;
 
     // ── Late arrival ─────────────────────────────────────────────────────────
-    /** Signing in within this many minutes of opening is not counted late. */
+    /** A late of up to this many minutes can be forgiven — see `lateFreeDays`. */
     lateGraceMinutes: number;
-    /** The first N late days of a month cost nothing. */
+    /** How many late days a month the grace forgives. Past them, every minute counts. */
     lateFreeDays: number;
     /** Which of the charges below is in force. */
     latePenaltyStyle: LatePenaltyStyle;
@@ -313,4 +313,14 @@ export function walkPendingDuty(days: readonly PendingDayInput[]): PendingDay[] 
         });
     }
     return out;
+}
+
+/**
+ * Whether today's lateness is forgiven (owner, 2026-10-16): the grace covers a
+ * late of up to `lateGraceMinutes`, on the first `lateFreeDays` such days of the
+ * month only. A late past the grace is never forgiven and does not use a grace
+ * day. `forgivenSoFar` is the month's forgiven days before this one.
+ */
+export function lateForgiven(lateBy: number, forgivenSoFar: number, rules: Pick<PayRules, "lateGraceMinutes" | "lateFreeDays">): boolean {
+    return lateBy > 0 && lateBy <= rules.lateGraceMinutes && forgivenSoFar < rules.lateFreeDays;
 }

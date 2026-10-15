@@ -5,7 +5,7 @@ import { dutyHoursFor, dutyMinutesFor, gradeDay, lateMinutes, overtimeMinutes, s
 import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import { shopDateFromIso, type SeasonalHours } from "@/shared/lib/hr/seasonalHours";
 import {
-    EMPTY_ATTENDANCE_EFFECT, dayTargetMinutes, lateDutyCutMinutes, pendingTotal, walkPendingDuty,
+    EMPTY_ATTENDANCE_EFFECT, dayTargetMinutes, lateDutyCutMinutes, lateForgiven, pendingTotal, walkPendingDuty,
     type AttendanceEffect, type PayRules, type PendingDay, type PendingDayInput, type PendingItem,
 } from "@/shared/lib/hr/payRules";
 import { ATTENDANCE_SOURCE_SELECT, autoCounts, lateOf, workedOf } from "@/shared/lib/hr/attendanceSource";
@@ -188,10 +188,11 @@ export async function attendanceLedgerFor(
             if (short > 0 && status !== "ABSENT") adds.push({ date: day, kind: "short", minutes: short });
 
             // Lateness, against the opening that applied on that very day.
-            const late = lateOf(r, lateMinutes(r.firstInAt, hours.start, undefined, rules.lateGraceMinutes) ?? 0);
+            const late = lateOf(r, lateMinutes(r.firstInAt, hours.start) ?? 0);
             if (late > 0) {
                 out.lateDays += 1;
-                if (out.lateDays > rules.lateFreeDays) {
+                // Days forgiven so far = late days before this one, less those charged.
+                if (!lateForgiven(late, out.lateDays - 1 - out.chargedLateDays, rules)) {
                     out.chargedLateDays += 1;
                     // The day's own extra pays the penalty first; only what it
                     // cannot cover is carried as short.

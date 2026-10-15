@@ -112,17 +112,17 @@ const PENALTY_RULES: Rule[] = [
         suffix: "minutes",
         step: 5,
         explain: (v) =>
-            `Signing in within ${v} minute${v === 1 ? "" : "s"} of opening is not counted late. The minutes are still not credited as duty.`,
+            `A late of up to ${v} minute${v === 1 ? "" : "s"} is forgiven on the month's grace days below. Past them, or past ${v} minutes, lateness counts from opening. The minutes are still not credited as duty.`,
     },
     {
         key: "lateFreeDays",
-        label: "Free late days in a month",
+        label: "Grace days in a month",
         suffix: "days",
         step: 1,
         explain: (v) =>
             v === 0
-                ? "Every late day is charged."
-                : `The first ${v} late day${v === 1 ? "" : "s"} of the month cost nothing. The penalty starts from the next one.`,
+                ? "No grace — every late minute is charged."
+                : `The first ${v} small late${v === 1 ? "" : "s"} of the month (within the grace) cost nothing. A bigger late never uses one, and is charged in full.`,
     },
 ];
 

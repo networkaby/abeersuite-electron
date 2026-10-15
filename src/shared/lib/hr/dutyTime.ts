@@ -23,7 +23,7 @@
 import { parseHhMm } from "./hhmm";
 import { seasonalStartFor, type SeasonalHours, type ShopDate } from "./seasonalHours";
 import {
-    DEFAULT_DUTY_END, DEFAULT_DUTY_MINUTES, DEFAULT_DUTY_START, FULL_DAY_FRACTION, HALF_DAY_FRACTION, LATE_GRACE_MINUTES,
+    DEFAULT_DUTY_END, DEFAULT_DUTY_MINUTES, DEFAULT_DUTY_START, FULL_DAY_FRACTION, HALF_DAY_FRACTION,
 } from "@/shared/lib/constants/hr";
 import { DEFAULT_IDLE_LIMIT_MINUTES, IDLE_LIMIT_MS, MAX_IDLE_LIMIT_MINUTES } from "@/shared/lib/constants/session";
 import { BUSINESS_TIME_ZONE } from "@/shared/lib/constants/business";
@@ -106,7 +106,10 @@ export function dutyMinutesFor(
 }
 
 /**
- * How late the arrival was, in minutes — 0 when on time or inside the grace.
+ * How late the arrival was, in minutes, counted from opening — 0 when on time.
+ *
+ * No grace is taken off here: the grace forgives a day, it does not shorten the
+ * lateness (owner, 2026-10-16) — see `lateForgiven` in shared/lib/hr/payRules.ts.
  *
  * Null when there is nothing to judge: no arrival recorded at all. The arrival is
  * a UTC instant and the office hours are shop-clock, so the comparison is made in
@@ -116,10 +119,7 @@ export function lateMinutes(
     firstInAt: Date | string | null,
     startHhMm: string,
     timeZone = BUSINESS_TIME_ZONE,
-    /* The shop's own grace, once it has one. LATE_GRACE_MINUTES is only the
-       fallback for a caller that has not read the pay rules — see
-       shared/lib/hr/payRules.ts, `lateGraceMinutes`. */
-    graceMinutes: number = LATE_GRACE_MINUTES,
+    graceMinutes = 0,
 ): number | null {
     if (!firstInAt) return null;
     const at = typeof firstInAt === "string" ? new Date(firstInAt) : firstInAt;
