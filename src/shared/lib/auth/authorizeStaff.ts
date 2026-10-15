@@ -366,19 +366,34 @@ export async function authorizeStaffCredentials(
         // person; with the super-admin password he gets super-admin permission, no
         // other difference"*): his own session — name, photo, seats, branches, idle
         // limit, the counter's attendance stamp — with the bypass added on top.
-        const own = await findStaffUser(prisma, email).catch(() => null);
-        if (own) {
-            const staff = await buildStaffAuthUser(prisma, own);
-            { const counterId = thisCounterId(); if (counterId) await stampAttendanceIn(prisma, own.id, counterId); }
-            await stampCounterPin(prisma, own.id, "password");
-            takeOverLocalLock(staff.id);
-            return {
-                ...staff,
-                role: superAdmin.role,
-                roles: [...new Set([...staff.roles, ...superAdmin.roles])],
-                permissions: [...new Set([...staff.permissions, ...superAdmin.permissions])],
-                rank: Math.max(staff.rank, superAdmin.rank),
-            };
+        //
+        // The super admin is the .env pair, never a DB grant (owner, 2026-10-15): the
+        // matched user's own role does not narrow it (a Counter Manager row still gets
+        // everything), the badge says "Super Admin" so the session is never mistaken
+        // for an ordinary one, and NO database failure may lock it out — any error in
+        // the matched-user step falls back to the bare env session below.
+        try {
+            const own = await findStaffUser(prisma, email);
+            if (own) {
+                const staff = await buildStaffAuthUser(prisma, own);
+                // Bookkeeping only — a failed stamp must not cost the login.
+                const counterId = thisCounterId();
+                if (counterId) await stampAttendanceIn(prisma, own.id, counterId).catch(() => {});
+                await stampCounterPin(prisma, own.id, "password").catch(() => {});
+                takeOverLocalLock(staff.id);
+                return {
+                    ...staff,
+                    role: superAdmin.role,
+                    roles: [...new Set([...staff.roles, ...superAdmin.roles])],
+                    permissions: [...new Set([...staff.permissions, ...superAdmin.permissions])],
+                    rank: Math.max(staff.rank, superAdmin.rank),
+                    scope: superAdmin.scope,
+                    roleLabel: superAdmin.roleLabel,
+                    roleColor: superAdmin.roleColor,
+                };
+            }
+        } catch {
+            // DB broken / unreachable — fall through to the bare env super admin.
         }
         return { ...superAdmin, ...(await resolveSuperAdmin(prisma, superAdmin)) };
     }
