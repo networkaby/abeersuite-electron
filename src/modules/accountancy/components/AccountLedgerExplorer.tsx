@@ -547,6 +547,7 @@ export function AccountLedgerExplorer({
                                         <ReconciledBadge
                                             accountId={detail.account.id}
                                             reconciledThrough={detail.account.reconciledThrough}
+                                            lastEntryDate={detail.rows.reduce<string | null>((max, r) => (!max || r.date > max ? r.date : max), null)}
                                             reconciledAt={detail.account.reconciledAt}
                                             onSaved={() => {
                                                 reloadAccounts();

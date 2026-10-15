@@ -31,9 +31,15 @@ export interface ReconciledBadgeProps {
     reconciledAt: string | null;
     /** Called after a successful save/clear so the parent can refetch. */
     onSaved: () => void;
+    /** yyyy-mm-dd of the latest entry on screen — offered when the editor opens
+     *  so the usual case ("matched to the end") is one click on Save. */
+    lastEntryDate?: string | null;
 }
 
-export function ReconciledBadge({ accountId, reconciledThrough, reconciledAt, onSaved }: ReconciledBadgeProps) {
+export function ReconciledBadge({ accountId, reconciledThrough, reconciledAt, onSaved, lastEntryDate }: ReconciledBadgeProps) {
+    const suggestion = lastEntryDate && (!reconciledThrough || lastEntryDate > reconciledThrough)
+        ? lastEntryDate
+        : reconciledThrough ?? "";
     const [open, setOpen] = useState(false);
     const [draft, setDraft] = useState(reconciledThrough ?? "");
     const [saving, setSaving] = useState(false);
@@ -57,7 +63,7 @@ export function ReconciledBadge({ accountId, reconciledThrough, reconciledAt, on
         <div className="flex flex-col items-end gap-1.5">
             <button
                 type="button"
-                onClick={() => { setDraft(reconciledThrough ?? ""); setOpen((v) => !v); }}
+                onClick={() => { setDraft(suggestion); setOpen((v) => !v); }}
                 className={cn(
                     "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
                     reconciledThrough

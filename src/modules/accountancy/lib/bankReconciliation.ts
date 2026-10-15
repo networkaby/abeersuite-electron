@@ -342,32 +342,18 @@ export async function loadReconciliation(accountId: number, fromIso: string, toI
         if (d < fromIso) glUnmatchedOlder++;
     }
     let depositsNotInBooks = 0, withdrawalsNotInBooks = 0, stUnmatched = 0, stUnmatchedOlder = 0;
-    let firstUnmatchedDate: string | null = null;
-    let lastLine: { date: string; balance: number | null } | null = null;
     for (const s of stLinesAll) {
         const d = toDateOnlyUtc(s.date);
-        lastLine = { date: d, balance: s.balance != null ? toNumber(s.balance) : null };
         if (byStatement.has(s.id) || inOpening(d, cover)) continue;
         depositsNotInBooks += s.deposit != null ? toNumber(s.deposit) : 0;
         withdrawalsNotInBooks += s.withdrawal != null ? toNumber(s.withdrawal) : 0;
         stUnmatched++;
         if (d < fromIso) stUnmatchedOlder++;
-        if (!firstUnmatchedDate || d < firstUnmatchedDate) firstUnmatchedDate = d;
     }
     const derived = money2(books + paymentsNotInBank - depositsNotInBank + depositsNotInBooks - withdrawalsNotInBooks);
     // Latest printed balance on/before `to`.
     const withBalance = [...stLinesAll].reverse().find((s) => s.balance != null);
     const statementBalance = withBalance ? toNumber(withBalance.balance!) : null;
-
-    let suggested: string | null = null;
-    if (lastLine) {
-        if (!firstUnmatchedDate) suggested = lastLine.date;
-        else {
-            const dayBefore = new Date(startOfDayUtc(firstUnmatchedDate).getTime() - 86400000);
-            const iso = toDateOnlyUtc(dayBefore);
-            suggested = iso >= (account.lock ?? "0000-00-00") ? iso : null;
-        }
-    }
 
     // ── Rows for the two panes (the period) ────────────────────────────────
     const visiblePeriod = collapseEditReversals(periodGl);
@@ -390,6 +376,9 @@ export async function loadReconciliation(accountId: number, fromIso: string, toI
             ticked: byStatement.has(s.id) || inOpening(toDateOnlyUtc(s.date), cover),
         })),
     });
+    // "Lock upto" offers exactly where the green Balance band runs to — books =
+    // bank and every row ticked — never further, and never behind the lock.
+    const suggested = agreedThrough && agreedThrough > (account.lock ?? "0000-00-00") ? agreedThrough : null;
     const sourceMap = await resolveSourceBatch([...new Set(visiblePeriod.map((l) => l.universalVoucher.id))]);
     const glLines: GlLineView[] = visiblePeriod.map((l) => {
         const d = toDateOnly(l.universalVoucher.date);
