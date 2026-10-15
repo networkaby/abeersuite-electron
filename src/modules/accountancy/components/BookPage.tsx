@@ -23,7 +23,7 @@ import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { groupColor } from "@/shared/lib/format/groupColor";
 import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
-import { ReconciledTick } from "@/modules/accountancy/components/ReconciledBadge";
+import { LedgerReconciledTick, ReconciledLedgersProvider } from "@/modules/accountancy/components/ReconciledBadge";
 
 type LedgerNode = {
     id:      number;
@@ -99,7 +99,7 @@ function sumSection(ledgers: LedgerNode[]) {
 
 export function BookPage({
     title, subtitle, groupName, autoSingle = true,
-    compact = false, onSelectLedger, reconciliation,
+    compact = false, onSelectLedger,
 }: {
     title:        string;
     subtitle:     string;
@@ -114,8 +114,6 @@ export function BookPage({
      *  /office/accountancy/account/[id]. Used to keep the click inside a
      *  parent master-detail view. */
     onSelectLedger?: (ledgerId: number) => void;
-    /** Per-ledger reconciliation status — a green tick beside a reconciled closing. */
-    reconciliation?: Map<number, { through: string | null; pending: number | null }>;
 }) {
     const router = useRouter();
     const fyStart = indianFiscalYearStart();
@@ -247,7 +245,7 @@ export function BookPage({
                     <td className="px-3 py-2.5 text-right font-mono">{dash(l.credits)}</td>
                     <td className="px-3 py-2.5 text-right font-mono font-semibold">
                         <span className="inline-flex items-center gap-1.5">
-                            <ReconciledTick through={reconciliation?.get(l.id)?.through} pending={reconciliation?.get(l.id)?.pending} />
+                            <LedgerReconciledTick ledgerId={l.id} />
                             {dash(l.closing)}
                         </span>
                     </td>
@@ -260,6 +258,7 @@ export function BookPage({
     };
 
     return (
+        <ReconciledLedgersProvider>
         <div className={compact ? "space-y-4 p-6" : "max-w-6xl mx-auto space-y-5"}>
             <div className="flex items-end justify-between gap-3 flex-wrap">
                 <div>
@@ -374,5 +373,6 @@ export function BookPage({
                 </div>
             )}
         </div>
+        </ReconciledLedgersProvider>
     );
 }

@@ -16,6 +16,7 @@ import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/grou
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { groupReportUrl } from "@/modules/accountancy/lib/groupReportUrl";
 import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
+import { LedgerReconciledTick, ReconciledLedgersProvider } from "@/modules/accountancy/components/ReconciledBadge";
 
 type GroupTypeStr = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 type Side = "DEBIT" | "CREDIT";
@@ -45,8 +46,10 @@ interface TBData {
  * - value < 0 → on the opposite side
  * - value ≈ 0 → "—"
  */
-function SidedCell({ value, normalSide, bold, italic, underline }: {
+function SidedCell({ value, normalSide, bold, italic, underline, ledgerId }: {
     value: number; normalSide: Side; bold?: boolean; italic?: boolean; underline?: boolean;
+    /** Ledger rows: the green reconciled tick beside the amount. */
+    ledgerId?: number;
 }) {
     // Ledger rows render italic ⇒ drop one point so they read as detail.
     const sizeClass = italic ? "text-[13px]" : "text-sm";
@@ -58,6 +61,7 @@ function SidedCell({ value, normalSide, bold, italic, underline }: {
     const label = side === "DEBIT" ? "Dr" : "Cr";
     return (
         <td className={`px-3 py-1 text-right font-mono ${sizeClass} ${bold ? "font-semibold" : ""} ${italic ? "italic" : ""}`}>
+            {ledgerId != null && <span className="mr-1.5 inline-block align-middle"><LedgerReconciledTick ledgerId={ledgerId} /></span>}
             <span className={underline ? "underline decoration-foreground/40 underline-offset-4" : ""}>
                 {fmt(Math.abs(value))}
             </span>{" "}
@@ -157,7 +161,7 @@ function GroupRow({ node, depth, expanded, toggle, onLedger, onGroup }: {
                                 <SidedCell value={l.opening} normalSide={ledgerSide} italic />
                                 <PlainCell value={l.debits} italic />
                                 <PlainCell value={l.credits} italic />
-                                <SidedCell value={l.closing} normalSide={ledgerSide} italic />
+                                <SidedCell value={l.closing} normalSide={ledgerSide} italic ledgerId={l.id} />
                             </tr>
                         );
                     })}
@@ -309,6 +313,7 @@ export default function TrialBalancePage() {
     })() : null;
 
     return (
+        <ReconciledLedgersProvider>
         <ScrollArea className="h-full" type="always">
         <div className="max-w-7xl mx-auto space-y-5 px-6 pt-3 pb-6">
             <div className="flex items-end justify-between gap-3 flex-wrap print:hidden">
@@ -414,5 +419,6 @@ export default function TrialBalancePage() {
             )}
         </div>
         </ScrollArea>
+        </ReconciledLedgersProvider>
     );
 }

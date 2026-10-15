@@ -13,7 +13,8 @@
 // retreatReconciliation() in lib/reconciliation.ts), so what's shown here is
 // always the last date still known to be clean.
 
-import { useState } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { useApiResource } from "@/shared/hooks/useApiResource";
 import axios from "axios";
 import { toast } from "sonner";
 import { CheckCircle2, CircleDashed, Loader2 } from "lucide-react";
@@ -138,4 +139,23 @@ export function ReconciledTick({ through, pending, size = 12 }: {
             <CheckCircle2 size={size} />
         </span>
     );
+}
+
+// ── Reports: one read, a tick on every reconciled ledger row ─────────────────
+
+const ReconciledLedgers = createContext<Map<number, string> | null>(null);
+
+/** Wrap a report once; every `LedgerReconciledTick` inside it reads this list. */
+export function ReconciledLedgersProvider({ children }: { children: ReactNode }) {
+    const { data } = useApiResource<{ id: number; through: string }[]>(
+        "/api/accountancy/ledgers/reconciled", { topics: ["ledger"] },
+    );
+    const map = useMemo(() => new Map((data ?? []).map((r) => [r.id, r.through])), [data]);
+    return <ReconciledLedgers.Provider value={map}>{children}</ReconciledLedgers.Provider>;
+}
+
+/** The green tick for a ledger row, when that ledger is reconciled up to date. */
+export function LedgerReconciledTick({ ledgerId, size }: { ledgerId: number; size?: number }) {
+    const through = useContext(ReconciledLedgers)?.get(ledgerId);
+    return <ReconciledTick through={through} pending={0} size={size} />;
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { toast } from "sonner";
 import { useApiResource } from "@/shared/hooks/useApiResource";
+import { LedgerReconciledTick, ReconciledLedgersProvider } from "@/modules/accountancy/components/ReconciledBadge";
 import { Loader2, Printer, ChevronRight, ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -77,8 +78,10 @@ interface BalanceSheetData {
 // the hierarchy visible at a glance.
 type AmountWeight = "group" | "subGroup" | "ledger";
 
-function AmountCells({ value, weight, side }: {
+function AmountCells({ value, weight, side, ledgerId }: {
     value: number;
+    /** Ledger rows: the green reconciled tick beside the amount. */
+    ledgerId?: number;
     weight: AmountWeight;
     /** The column's own nature — Assets read Dr, Liabilities read Cr. */
     side: "DEBIT" | "CREDIT";
@@ -111,6 +114,7 @@ function AmountCells({ value, weight, side }: {
     return (
         <>
             <td className="py-1 pr-2 text-right font-mono whitespace-nowrap w-[90px]">
+                {weight === "ledger" && ledgerId != null && <span className="mr-1 inline-block align-middle"><LedgerReconciledTick ledgerId={ledgerId} /></span>}
                 {weight === "ledger" ? cell(value) : null}
             </td>
             <td className="py-1 pr-2 text-right font-mono whitespace-nowrap w-[100px]">
@@ -189,7 +193,7 @@ function GroupBlock({ node, depth, expanded, toggle, onLedger, onGroup }: {
                             >
                                 <span className="hover:underline hover:text-primary">{l.name}</span>
                             </td>
-                            <AmountCells value={l.closing} weight="ledger" side={side} />
+                            <AmountCells value={l.closing} weight="ledger" side={side} ledgerId={l.id} />
                         </tr>
                     ))}
                 </>
@@ -276,6 +280,7 @@ export default function BalanceSheetPage() {
     const assetsTotal = assetBaseline + synthOnAsset;
 
     return (
+        <ReconciledLedgersProvider>
         <ScrollArea className="h-full" type="always">
         <div className="max-w-7xl mx-auto space-y-5 px-6 pt-3 pb-6">
             {/* Header */}
@@ -447,5 +452,6 @@ export default function BalanceSheetPage() {
 
         </div>
         </ScrollArea>
+        </ReconciledLedgersProvider>
     );
 }

@@ -197,11 +197,6 @@ export function AccountLedgerExplorer({
     } = useApiResource<LedgerListItem[]>("/api/accountancy/ledgers?activeOnly=false", { topics: ["ledger"] });
     const allAccounts = useMemo(() => accountsData ?? [], [accountsData]);
     useEffect(() => { if (accountsError) toast.error("Failed to load accounts"); }, [accountsError]);
-    // Reconciliation status per ledger, handed to the Book report's status column.
-    const reconciliation = useMemo(
-        () => new Map(allAccounts.map((a) => [a.id, { through: a.reconciledThrough ?? null, pending: a.entriesSinceReconciled ?? null }])),
-        [allAccounts],
-    );
 
     // Lightweight group tree (id/name/children only) — lets the list filter
     // walk descendants of groupNames dynamically instead of needing every
@@ -509,7 +504,6 @@ export function AccountLedgerExplorer({
                                     autoSingle={false}
                                     compact
                                     onSelectLedger={selectLedger}
-                                    reconciliation={reconciliation}
                                 />
                             </div>
                         ) : (
@@ -580,6 +574,10 @@ export function AccountLedgerExplorer({
                                     <StatBox
                                         label="Closing"
                                         value={drCr(detail.closingBalance, detail.account.normalBalance)}
+                                        tick={<ReconciledTick
+                                            through={detail.account.reconciledThrough}
+                                            pending={allAccounts.find((a) => a.id === detail.account.id)?.entriesSinceReconciled}
+                                        />}
                                         emphasis
                                         sub={netMovement !== 0
                                             ? `${netMovement > 0 ? "+" : ""}${fmt(netMovement)} net`
@@ -744,12 +742,15 @@ export function AccountLedgerExplorer({
 function StatBox({
     label,
     value,
+    tick,
     sub,
     emphasis = false,
     warn = false,
 }: {
     label: string;
     value: string;
+    /** Shown before the value — e.g. the green reconciled tick. */
+    tick?: React.ReactNode;
     sub?: string;
     emphasis?: boolean;
     /** Styles the value as a destructive warning — e.g. usage past a facility limit. */
@@ -761,7 +762,7 @@ function StatBox({
             warn ? "border-destructive/30 bg-destructive/5" : emphasis ? "border-primary/30 bg-primary/5" : "border-border bg-background",
         )}>
             <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-            <p className={cn("text-sm font-semibold font-mono", warn ? "text-destructive" : emphasis && "text-primary")}>{value}</p>
+            <p className={cn("flex items-center gap-1.5 text-sm font-semibold font-mono", warn ? "text-destructive" : emphasis && "text-primary")}>{tick}{value}</p>
             {sub && <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">{sub}</p>}
         </div>
     );
