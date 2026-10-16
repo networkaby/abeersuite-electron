@@ -311,8 +311,7 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
     },
     TICKET_AUTO_REPLY: {
         body:
-            "Hello {customer}, welcome back to {shop}! 👋\n\n" +
-            "We noticed you have active job(s) with us. Please let us know if your message is about an existing ticket or something new:",
+            "Hi {customer} 👋 Good to hear from you again!",
         viewButton: null,
         appButton: null,
     },

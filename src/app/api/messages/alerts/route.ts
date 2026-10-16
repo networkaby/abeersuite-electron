@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
-import { claimsByPhone, ownersByPhone } from "@/modules/message/lib/customerMessages";
+import { claimsByPhone, mediaLink, ownersByPhone } from "@/modules/message/lib/customerMessages";
 import { lastContactByPhone } from "@/shared/lib/calls/followUp";
 import { CALL_POPUP_MAX_AGE_MS, MESSAGE_FOLLOWUP_START, MESSAGE_REPLY_WINDOW_MS } from "@/shared/lib/constants/polling";
 
@@ -27,12 +27,15 @@ const SCAN = 300;
 /** Customer messages a popup card shows, newest last. */
 const RECENT = 3;
 
+/** One customer message on a card, with its attachment as a signed 1-hour link. */
+type Recent = { body: string; mediaUrl: string | null; downloadUrl: string | null; mediaType: string | null; fileName: string | null; mediaSize: number | null };
+
 type Chat = {
     phone: string;
     lastId: number;
     /** Newest customer message — what a ticket is raised from. */
     lastInId: number | null;
-    recent: string[];
+    recent: Recent[];
     senderName: string | null;
     lastAt: Date;
     /** Newest customer message's time — WhatsApp's 24-hour reply window runs from it. */
@@ -54,7 +57,7 @@ export async function GET() {
                 where: { direction: "IN", spam: false, phone: { not: null }, occurredAt: { gte: from } },
                 orderBy: { occurredAt: "desc" },
                 take: SCAN,
-                select: { id: true, phone: true, body: true, senderName: true, occurredAt: true },
+                select: { id: true, phone: true, body: true, senderName: true, occurredAt: true, mediaKey: true, mediaType: true, fileName: true, mediaSize: true },
             }),
             prisma.message.findMany({
                 where: { direction: "NOTE", kind: { not: "ticket" }, seenAt: null, phone: { not: null }, occurredAt: { gte: new Date(now - MESSAGE_REPLY_WINDOW_MS) } },
@@ -96,7 +99,12 @@ export async function GET() {
             const c = chatOf(phone, r.id, r.occurredAt);
             if (c.lastInId == null) { c.lastInId = r.id; c.lastInAt = r.occurredAt; }
             if (!answered) { c.count++; c.firstAt = r.occurredAt; }
-            if (c.recent.length < RECENT && (!answered || c.count === 0)) c.recent.unshift(r.body);
+            if (c.recent.length < RECENT && (!answered || c.count === 0)) c.recent.unshift({
+                body: r.body,
+                mediaUrl: mediaLink(r.mediaKey),
+                downloadUrl: r.mediaKey ? mediaLink(r.mediaKey, r.fileName, true) : null,
+                mediaType: r.mediaType, fileName: r.fileName, mediaSize: r.mediaSize,
+            });
             c.senderName ??= r.senderName;
         }
         const noteBy = new Map<string, number>();
@@ -122,7 +130,7 @@ export async function GET() {
             name: owners.get(c.phone)?.name ?? c.senderName ?? `+91 ${c.phone}`,
             lastId: c.lastId,
             lastInId: c.lastInId,
-            body: c.recent[c.recent.length - 1] ?? "",
+            body: c.recent[c.recent.length - 1]?.body ?? "",
             recent: c.recent,
             count: c.count,
             lastAt: c.lastAt.toISOString(),

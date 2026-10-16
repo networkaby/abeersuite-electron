@@ -61,6 +61,7 @@ import { extractApiError } from "@/shared/lib/api";
 import StaffPickerDialog, { type PickMode, type Staff } from "./StaffPickerDialog";
 import MentionTextarea, { mentionTargets } from "./MentionTextarea";
 import { requestOpenChat, useChatDrawerOpen } from "../lib/chatDrawer";
+import { MessageMedia, captionOf, type MediaInfo } from "@/modules/crm/components/MessageMedia";
 
 const MESSAGES_HREF = "/office/crm/messages";
 const DISMISS_KEY = "message-alert-dismissed:v1";
@@ -131,7 +132,7 @@ type Alert = {
     /** Newest customer message — a ticket is raised from it. */
     lastInId: number | null;
     /** Up to the last 3 customer messages (the waiting ones while any wait), oldest first. */
-    recent: string[];
+    recent: (MediaInfo & { body: string })[];
     /** Customer messages still waiting for the shop to get back to them. */
     count: number;
     lastAt: string;
@@ -437,9 +438,15 @@ export default function MessageAlertPopup() {
                     )}
                 </div>
                 <div className="mt-2 space-y-1">
-                    {a.recent.map((b, i) => (
-                        <p key={i} className="w-fit max-w-full whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1 text-sm">{b}</p>
-                    ))}
+                    {a.recent.map((m, i) => {
+                        const caption = captionOf(m.body, !!(m.mediaUrl || m.mediaType));
+                        return (
+                            <div key={i} className="w-fit max-w-full space-y-1 rounded-md bg-muted px-2 py-1 text-sm [&_img]:max-h-40 [&_video]:max-h-40">
+                                <MessageMedia m={m} />
+                                {caption && <p className="whitespace-pre-wrap break-words">{caption}</p>}
+                            </div>
+                        );
+                    })}
                     {a.note && (
                         <p className="whitespace-pre-wrap break-words rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-50">
                             <span className="text-[11px] font-medium">{a.note.by} · staff note</span><br />{a.note.text}
