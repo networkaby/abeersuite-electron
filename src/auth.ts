@@ -7,7 +7,6 @@ import { IS_PUBLIC } from "@/shared/lib/appMode";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { DEFAULT_IDLE_LIMIT_MINUTES, LOGIN_IDLE_MAX_AGE_MS, LOGIN_MAX_AGE_MS, SESSION_RENEW_EVERY_S } from "@/shared/lib/constants/session";
 import { localSignOutAt, markLocalSignOut } from "@/shared/lib/auth/localSignOut";
-import { clearLocalLock } from "@/shared/lib/auth/localLock";
 
 /**
  * One session-cookie NAME on every deployment, office and counters alike.
@@ -32,12 +31,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     /**
      * A login lasts until one of two clocks runs out (owner, 2026-10-13): 3 days with
      * nobody using it — this rolling cookie lifetime — or 10 days since the password
-     * was typed, checked on every request in `isStaffTokenRevoked`. Between those a
-     * counter only LOCKS (`CounterLock.tsx`) and its 4-digit PIN lifts the cover; inside
-     * the same two clocks the PIN also signs a person back in (`counterPin.ts`).
+     * was typed, checked on every request in `isStaffTokenRevoked`. Inside those two
+     * clocks a counter's 4-digit PIN signs a person back in (`counterPin.ts`).
      *
      * It replaced a 6-hour lifetime that signed every till out each night, which is
-     * what made coming back slow. The idle limit per person ("Lock after", HR → Job)
+     * what made coming back slow. The idle limit per person ("Sign out after", HR → Job)
      * is the short clock now; this is only the backstop.
      *
      * Renewed at most every 5 minutes (`SESSION_RENEW_EVERY_S`) — it was every
@@ -151,10 +149,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         async signOut(message) {
             const token = "token" in message ? message.token : null;
             if (!token?.id || token.kind === "customer") return;
-            if (IS_COUNTER_PC) {
-                markLocalSignOut(String(token.id));
-                clearLocalLock();   // a full sign-out leaves no cover behind for the next person
-            }
+            if (IS_COUNTER_PC) markLocalSignOut(String(token.id));
         },
     },
     providers: [

@@ -7,7 +7,6 @@ import { applyPermissionOverrides, normalizeCrudGrants } from "@/shared/lib/auth
 import { positionScopeLabel } from "@/shared/lib/org/positionScope";
 import { CredentialsSignin } from "next-auth";
 import { pinClocksExpired, stampCounterPin, thisCounterId } from "@/shared/lib/auth/counterPin";
-import { takeOverLocalLock } from "@/shared/lib/auth/localLock";
 import { isThisPcACounter } from "@/shared/lib/counter/releaseGuard";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
@@ -380,7 +379,6 @@ export async function authorizeStaffCredentials(
                 const counterId = thisCounterId();
                 if (counterId) await stampAttendanceIn(prisma, own.id, counterId).catch(() => {});
                 await stampCounterPin(prisma, own.id, "password").catch(() => {});
-                takeOverLocalLock(staff.id);
                 return {
                     ...staff,
                     role: superAdmin.role,
@@ -442,7 +440,6 @@ export async function authorizeStaffCredentials(
     // Typing the password is what the PIN's 10-day rule asks for — both clocks go back
     // to zero. A no-op for anyone with no PIN here, and off a counter.
     await stampCounterPin(prisma, user.id, "password");
-    takeOverLocalLock(staff.id);
 
     return staff;
 }
@@ -496,7 +493,6 @@ export async function authorizeStaffPin(
     const staff = await buildStaffAuthUser(prisma, user);
     await stampAttendanceIn(prisma, user.id, counterId);
     await stampCounterPin(prisma, user.id, "used");
-    takeOverLocalLock(staff.id);
     return { ...staff, passwordAt: row.lastPasswordAt.getTime() };
 }
 

@@ -11,7 +11,6 @@ import { toast } from "sonner";
 import { heardSignOutNotice, markDeliberateSignOut, wasDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
 import { LOGIN_IDLE_LABEL, SESSION_REVOKED_MESSAGE } from "@/shared/lib/constants/session";
 import ActivityPulse from "@/shared/components/ActivityPulse";
-import CounterLock from "@/shared/components/CounterLock";
 
 // Staff-only wrapper (mounted by every (protected) layout, never the portal).
 // Adds two layers that make "logout" actually stick across tabs:
@@ -160,8 +159,6 @@ export default function SessionWrapper({
                 reason the guard is — the portal never mounts this wrapper. */}
             <ActivityPulse />
             {children}
-            {/* After the app, so the cover sits over it. Renders nothing off a counter. */}
-            <CounterLock />
         </SessionProvider>
     );
 }

@@ -22,7 +22,7 @@ export function useNowMinute(): number | null {
     return minute === null ? null : minute * 60_000;
 }
 
-/** The greeting and the clock line, both from the user's own machine. Sign-in card and lock cover. */
+/** The greeting and the clock line, both from the user's own machine. The sign-in card. */
 export function useLocalClock(): { greet: string; clock: string } {
     const minute = useSyncExternalStore(subscribeToMinute, currentMinute, noMinuteOnServer);
     if (minute === null) return { greet: "Welcome", clock: "" };

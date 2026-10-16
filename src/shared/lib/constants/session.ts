@@ -1,12 +1,10 @@
 /**
- * Sign-in clocks — how long a login lasts, when an idle till locks, and how far the
+ * Sign-in clocks — how long a login lasts, when an idle login ends, and how far the
  * customer OTP is trusted.
  *
- *   • LOCK AFTER (45 min, per person — "Lock after" on HR → Job) — no click or key
- *     for this long and a counter LOCKS: the screen is covered, the login stays
- *     alive, and the person's 4-digit PIN lifts the cover. Off a counter (office
- *     website, phone app) the same minutes sign the person out instead. Also where
- *     duty time stops counting.
+ *   • SIGN OUT AFTER (45 min, per person — "Sign out after" on HR → Job) — no click
+ *     or key for this long and the person is signed out; on a counter their 4-digit
+ *     PIN signs them back in. Also where duty time stops counting.
  *   • LOGIN LIFETIME (10 days / 3 days) — the only things that end a login on their
  *     own: 10 days since the password was typed, or 3 days with nobody using it.
  *     The same two clocks decide when a counter PIN may sign somebody in instead of
@@ -62,11 +60,10 @@ export const SESSION_REVOKED_MESSAGE =
  */
 export const OUTSIDE_COUNTER_SIGNIN_CODE = "outside-counter";
 
-// ─── Lock after (idle) ───────────────────────────────────────────────────────
+// ─── Sign out after (idle) ───────────────────────────────────────────────────
 
 /**
- * No click, no keypress, no touch for this long → a counter locks (elsewhere: signed
- * out), and the stretch is
+ * No click, no keypress, no touch for this long → signed out, and the stretch is
  * not counted as duty. A person's own limit (StaffProfile.idleLimitMinutes, HR →
  * Job tab) overrides it — see `idleLimitMinutesFor` in `hr/dutyTime.ts`.
  *

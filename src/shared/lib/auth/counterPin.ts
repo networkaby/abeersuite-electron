@@ -1,13 +1,11 @@
 /**
  * Counter PIN — the rules, in one place.
  *
- * Four digits, any four, and they do two jobs on a counter (owner, 2026-10-15: "don't
- * ask for password, respect the 4-digit PIN even on a fresh boot … password only after
- * x idle days or y days"):
- *   • lift the counter's LOCK (`CounterLock.tsx`, `/api/counter-lock`) — the login and
- *     the open work under it stay as they were;
- *   • SIGN IN on this counter (`authorizeStaffPin`) — a tapped photograph and four
- *     digits, after a restart, a full sign-out, or when a colleague takes the till.
+ * Four digits, any four, and they SIGN IN on a counter (`authorizeStaffPin`) — a
+ * tapped photograph and four digits, after a restart, a sign-out, or when a colleague
+ * takes the till (owner, 2026-10-15: "don't ask for password, respect the 4-digit PIN
+ * even on a fresh boot … password only after x idle days or y days"). The lock cover
+ * it also lifted was retired 2026-10-16.
  *
  *  1. **It only works on a counter.** `thisCounterId()` answers null anywhere else —
  *     on Vercel `COUNTER_MACHINE_ID` is simply not set.
@@ -65,8 +63,7 @@ export function pinClocksExpired(pin: { lastPasswordAt: Date; lastLoginAt: Date 
  * Stamp this person's clocks on this counter.
  *
  *   • `password` — both go back to zero; typing it is what the 10-day rule asks for.
- *   • `used`     — only the idle clock moves (a PIN sign-in, an unlock, a lock at the
- *                  last real input), so the password still falls due on time.
+ *   • `used`     — only the idle clock moves (a PIN sign-in), so the password still falls due on time.
  *   • `expire`   — the password is due now: too many wrong PINs in a row.
  *
  * Best-effort: a failed stamp never fails a sign-in — the worst it costs is one extra

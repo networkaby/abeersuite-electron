@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { formatClockTime, formatHhMmFriendly, todayIso, weekdayAndDate, weekdayName } from "@/shared/lib/format/formatDate";
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
-import { myDayStore, type MyDay } from "@/shared/lib/hr/myDay";
+import { myDayStore } from "@/shared/lib/hr/myDay";
 import { nextOpeningText } from "@/shared/lib/hr/nextOpeningText";
 import DutyTimeline from "./DutyTimeline";
 import styles from "./login.module.css";
@@ -24,7 +24,7 @@ const inr = (paise: string) =>
     (Number(paise) / 100).toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
 
 /**
- * The till's own card on the lock screen — one card, three things the person
+ * The till's own card on the sign-in screen — one card, three things the person
  * standing at the counter wants to know, in the order they matter:
  *
  *   1. NEXT DUTY — when he is next expected, said big. The most useful line on
@@ -39,8 +39,6 @@ const inr = (paise: string) =>
  * Whose day it is (owner, 2026-10-14: *"the whole information is related to some
  * user + counter; if it's fully logged out only general information"*):
  *
- *   - LOCKED (`locked`): the person still signed in. Their day comes from the
- *     lock's own capture in `sessionStorage`, else `/api/hr/my-day`.
  *   - SIGNED OUT: nobody's day — except the one just handed over by a sign-out
  *     here, read exactly once from `sessionStorage` (the idle auto-logout leaves
  *     nobody to read a dialog).
@@ -50,15 +48,13 @@ const inr = (paise: string) =>
  * PCs only, silent on every failure: a panel that cannot load must never stand
  * between a cashier and the keypad.
  *
- * Renders nothing when neither is there, so an ordinary locked till is exactly
+ * Renders nothing when neither is there, so an ordinary signed-out till is exactly
  * the shell's screen and the cold-start handover does not jump.
  */
-export default function TillCard({ locked = false }: { locked?: boolean }) {
-    const signedOutDay = useSyncExternalStore(
+export default function TillCard() {
+    const day = useSyncExternalStore(
         myDayStore.subscribe, myDayStore.getSnapshot, myDayStore.getServerSnapshot,
     );
-    const [fetchedDay, setFetchedDay] = useState<MyDay | null>(null);
-    const day = signedOutDay ?? fetchedDay;
     const [shift, setShift] = useState<CounterShift | null>(null);
 
     useEffect(() => {
@@ -75,23 +71,6 @@ export default function TillCard({ locked = false }: { locked?: boolean }) {
         })();
         return () => { alive = false; };
     }, []);
-
-    // Locked, with no capture handed over: ask for the signed-in person's own day.
-    useEffect(() => {
-        if (signedOutDay || !locked) return;
-        let alive = true;
-        (async () => {
-            try {
-                const res = await fetch("/api/hr/my-day");
-                if (!res.ok) return;
-                const out = await res.json() as MyDay | null;
-                if (alive && out?.tracked) setFetchedDay(out);
-            } catch {
-                /* no panel, never a blocked sign-in */
-            }
-        })();
-        return () => { alive = false; };
-    }, [signedOutDay, locked]);
 
     if (!day && !shift) return null;
 

@@ -49,7 +49,6 @@ const NEVER_RELAY: readonly RegExp[] = [
     // stays on the replica, which is what lets a PIN work with the line down.
     /^\/api\/counter-pin(\/|$)/,                 // "is there a PIN on this counter?"
     /^\/api\/me\/counter-pin(\/|$)/,             // set or remove one FOR this counter
-    /^\/api\/counter-lock(\/|$)/,                // this till's soft lock: a file on this PC
 ];
 
 export type RelaySkipReason =

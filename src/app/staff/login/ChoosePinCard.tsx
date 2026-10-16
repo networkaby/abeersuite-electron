@@ -1,12 +1,11 @@
 "use client";
 
 /**
- * "Choose your PIN" / "Change your PIN" — one card, two doors: the sign-in card
- * (asked for on the way in, password already in hand) and the counter's lock cover
- * (the password is typed here, because a till left open must not be enough to cut
- * a second key to the account — `/api/me/counter-pin` asks for it either way).
+ * "Choose your PIN" / "Change your PIN" — the sign-in card asks for it on the way in,
+ * password already in hand (`/api/me/counter-pin` asks for it either way, so a till
+ * left open is never enough to cut a second key to the account).
  *
- * `onDone` gets the password that was checked, so the lock can lift with it.
+ * `onDone` gets the password that was checked.
  */
 
 import { useState } from "react";

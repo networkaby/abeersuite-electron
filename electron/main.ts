@@ -728,9 +728,9 @@ ipcMain.handle("shell:sign-in", async (_, credentials: { email: string; password
     };
     // Choosing a person here starts a fresh login. A session left alive — a reinstall
     // keeps userData, or a tap that beat the boot's own hasStaffSession check — would
-    // otherwise walk straight in as whoever held it, with no PIN and no lock.
-    // If the old login cannot be dropped, it opens behind the lock instead — fail closed.
-    if (!await clearStaffSession()) lockOnBoot();
+    // otherwise walk straight in as whoever held it, with no PIN. A clear that fails
+    // still costs nothing: the sign-in that follows replaces the cookie.
+    await clearStaffSession();
     // From here the real /staff/login takes over: it collects these through
     // shell:take-credentials, submits them, and does the counter reconciliation the
     // shell has no business doing.
@@ -1400,24 +1400,10 @@ async function clearStaffSession(): Promise<boolean> {
     }
 }
 
-/**
- * A start that finds a login alive opens behind the counter's lock, never straight onto
- * the last person's screen (owner, 2026-10-15). Writes the BOOT lock — `userId: ""` in
- * the same file `src/shared/lib/auth/localLock.ts` owns; the first login to ask adopts
- * it, and its PIN lifts it. An existing lock is left as it is.
- *
- * Not gated on the counter setup any more (owner, 2026-10-16: right after a reinstall
- * the setup was not readable yet and the till opened straight in). Off a counter the
- * server's /api/counter-lock says so and removes the file itself.
- */
-function lockOnBoot(): void {
-    const file = path.join(app.getPath("userData"), "local-lock.json");
-    try {
-        if (fs.existsSync(file)) return;
-        fs.writeFileSync(file, JSON.stringify({ userId: "", lockedAt: Date.now(), failures: 0 }));
-    } catch (err) {
-        console.error("[Boot] could not write the boot lock:", err);
-    }
+/** The retired counter lock's file (2026-10-13 → 2026-10-16). Removed on start so a
+ *  till updated from a locked state leaves nothing behind. */
+function removeRetiredLockFile(): void {
+    try { fs.rmSync(path.join(app.getPath("userData"), "local-lock.json"), { force: true }); } catch { /* nothing to remove */ }
 }
 
 function bootErrorHtml(triedUrl: string): string {
@@ -1929,15 +1915,12 @@ app.whenReady().then(async () => {
         // nothing else wants the server yet. See serverManager.ts's warmRoutes().
         warmRoutes(result.url, Array.from(new Set([...DEFAULT_WARM_ROUTES, ...loadPersistedWarmRoutes()])));
 
-        // A cashier who never signed out still holds a session cookie, and must not be
-        // shown a login screen for a session they already have. Straight in for them;
-        // everyone else stays on the shell, which is now live and takes their typing.
-        if (await hasStaffSession()) {
-            lockOnBoot();
-            await loadApp(result.url);
-        } else {
-            notifyServerReady();
-        }
+        // A start never walks onto the last person's screen (owner, 2026-10-16: the lock
+        // cover is retired). A login left alive is ended here, and everyone lands on the
+        // photographs: tap a face, type the 4-digit PIN.
+        removeRetiredLockFile();
+        if (await hasStaffSession()) await clearStaffSession();
+        notifyServerReady();
     } else {
         // A hidden start normally stays hidden — but a boot failure is the one thing
         // nobody can act on from an invisible window, and the tray icon alone gives no
