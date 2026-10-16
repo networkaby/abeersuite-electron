@@ -12,7 +12,7 @@ import { useTheme } from "@/shared/components/ThemeProvider";
 import axios from "axios";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
-    Settings, ChevronDown, LogOut,
+    Settings, ChevronDown, LogOut, LayoutDashboard,
     PanelLeftClose, PanelLeftOpen, Sun, Moon, ShieldCheck, RefreshCw,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -629,6 +629,26 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
                                 </p>
                             )}
                             <div className="space-y-0.5">
+                                {/* Dashboard — everyone's, never a role tick (owner, 2026-10-16:
+                                    "make the dashboard user reachable"). Exact match: every
+                                    office path starts with /office. */}
+                                <Link
+                                    href="/office"
+                                    className={[
+                                        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                                        pathname === "/office" ? "" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                        collapsed ? "justify-center px-2" : "",
+                                    ].join(" ")}
+                                    style={pathname === "/office" ? moduleActiveStyle() : undefined}
+                                    title={collapsed ? "Dashboard" : ""}
+                                >
+                                    <LayoutDashboard
+                                        size={17}
+                                        className="shrink-0"
+                                        style={pathname === "/office" ? undefined : moduleIconStyle()}
+                                    />
+                                    {!collapsed && <span className="min-w-0 truncate">Dashboard</span>}
+                                </Link>
                                 {/* Workspace visibility is authoritative — the role picks each link
                                     yes/no (ui:sidebar:workspace:*); untick hides it. Admin always sees all. */}
                                 {WORKSPACE_NAV.filter((item) => isAdmin || hasSidebarLink("workspace", item.label)).map((item) => {

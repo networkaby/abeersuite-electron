@@ -29,7 +29,8 @@ type Tag = { at: number; row: "top" | "bottom" | "shift" | "low"; text: string; 
  * and overtime are already judged against. Nothing is computed that the server
  * did not hand over; this only places the instants on a ruler.
  */
-export default function DutyTimeline({ day }: { day: MyDay }) {
+/** `inline`: a band in the page's flow (the office dashboard) instead of pinned to the screen's foot. */
+export default function DutyTimeline({ day, inline = false }: { day: MyDay; inline?: boolean }) {
     const nowMs = useNowMinute();
     const open = parseHhMm(day.dutyStart);
     const close = parseHhMm(day.dutyEnd);
@@ -129,7 +130,7 @@ export default function DutyTimeline({ day }: { day: MyDay }) {
     });
 
     return (
-        <section className={styles.timeline} aria-label="Today's duty timeline">
+        <section className={inline ? `${styles.timeline} ${styles.timelineInline}` : styles.timeline} aria-label="Today's duty timeline">
             <p className={styles.tilllabel}>Today&apos;s duty</p>
             <div className={styles.tlrail}>
                 <div className={styles.tltrack} />

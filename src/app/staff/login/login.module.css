@@ -412,6 +412,21 @@
 }
 /* Room under the cards for the band, and less sky above them: card, PIN pad and
    the band must all fit a 1366x728 counter window without a scroll. */
+/* The office dashboard's copy (owner, 2026-10-16: "put the time line to dashboard
+   top"): the same dark band in the page's flow, carrying the sign-in screen's own
+   colours since it sits outside .root. */
+.timelineInline {
+    --ink: #f1f5f9;
+    --ink-dim: #94a3b8;
+    --line: rgba(255, 255, 255, .14);
+    --accent: #38bdf8;
+    position: static;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #0f172a;
+    color: var(--ink);
+    padding: 10px 20px 4px;
+}
 .stage:has(.timeline) { padding: 12px 40px 174px }
 .root:has(.timeline) { overflow: hidden }
 .tlrail { position: relative; height: 126px; margin: 18px 14px 0 }
