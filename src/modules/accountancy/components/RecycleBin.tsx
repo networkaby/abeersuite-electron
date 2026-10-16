@@ -30,6 +30,8 @@ interface AuditRow {
     reason: string | null;
     createdAt: string;
     restoredAt: string | null;
+    /** The voucher this is a copy of is still on the books — restoring would save it twice. */
+    voucherLive?: boolean;
     actor: { id: number; name: string } | null;
     restoredBy: { id: number; name: string } | null;
 }
@@ -258,6 +260,10 @@ export function RecycleBin() {
                                             </Button>
                                             {row.restoredAt ? (
                                                 <Badge variant="outline" className="text-xs">Restored{row.restoredBy ? ` · ${row.restoredBy.name}` : ""}</Badge>
+                                            ) : row.voucherLive ? (
+                                                <Badge variant="outline" className="text-xs font-normal text-muted-foreground" title="This voucher is still on the books. Restoring this copy would save it a second time, so edit the voucher itself instead.">
+                                                    Voucher still on books
+                                                </Badge>
                                             ) : (
                                                 <Button size="sm" variant="outline" className="h-7" disabled={busyId === row.id} onClick={() => restore(row)}>
                                                     {busyId === row.id ? <Loader2 size={13} className="animate-spin" /> : <Undo2 size={13} className="mr-1" />} Restore

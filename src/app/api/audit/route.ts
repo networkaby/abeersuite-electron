@@ -4,6 +4,7 @@ import { requireAuth, requirePermission, userCanRestoreAudit } from "@/shared/li
 import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { releaseSeriesNumber, seriesKindOf } from "@/modules/accountancy/lib/releaseSeriesNumber";
+import { liveAuditCopyIds } from "@/modules/accountancy/lib/auditCopyLive";
 import { auditSnapshotKind } from "@/shared/lib/accountancy/auditSnapshotKind";
 
 // Recycle-bin visibility follows the DELETE key, per kind: you see what you could
@@ -41,7 +42,11 @@ export async function GET(req: Request) {
         });
         // Per-ROW gate — the key depends on the removed voucher's kind (subtype),
         // which isn't queryable as a permission, so filter after the fetch.
-        return NextResponse.json(rows.filter((r) => userCanRestoreAudit(user!, r.entityType, r.subtype)));
+        const visible = rows.filter((r) => userCanRestoreAudit(user!, r.entityType, r.subtype));
+        // `voucherLive`: the voucher this is a copy of is still on the books, so the
+        // bin offers no Restore for it (the restore route refuses it too).
+        const live = await liveAuditCopyIds(prisma, visible.filter((r) => !r.restoredAt));
+        return NextResponse.json(visible.map((r) => ({ ...r, voucherLive: live.has(r.id) })));
     } catch (e) {
         return handleApiError(e, "Failed to list audit entries");
     }
