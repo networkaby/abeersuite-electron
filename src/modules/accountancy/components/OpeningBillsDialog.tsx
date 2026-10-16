@@ -193,8 +193,8 @@ export function OpeningBillsDialog({
                             introduce a wrong answer — it is shown, not picked. */}
                         <p className="text-sm text-muted-foreground">
                             {clearing ? "No bills — saving clears the opening balance" : type === "DEBIT" ? "Debit — they owe us" : "Credit — we owe them"}
-                            {target !== null && (
-                                <> · opening balance on the master <span className="font-mono">₹ {fmt(target)}</span></>
+                            {target !== null && !clearing && (
+                                <> · {retarget ? "new opening balance" : "opening balance on the master"} <span className="font-mono">₹ {fmt(target)}</span></>
                             )}
                         </p>
 
