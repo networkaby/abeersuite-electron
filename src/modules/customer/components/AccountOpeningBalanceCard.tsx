@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Scale, ListTree } from "lucide-react";
@@ -43,21 +43,53 @@ function toInput(amount: string | number | null): string {
 }
 
 // Per repo rule: no <input type="number">. Keep digits and a single dot.
+type BillTotal = { amount: number; type: "DEBIT" | "CREDIT"; count: number };
+
 export default function AccountOpeningBalanceCard({
     accountId, initialAmount, initialType, canEdit, onSaved,
 }: Props) {
+    // Once the opening is broken into bills the master figure is null, so the
+    // card reads the bills and shows their total — the box always holds the
+    // opening as it really stands.
+    const [bills, setBills] = useState<BillTotal | null>(null);
     const [amount, setAmount] = useState(() => toInput(initialAmount));
     const [type, setType] = useState<"DEBIT" | "CREDIT">(initialType ?? "DEBIT");
     const [saving, setSaving] = useState(false);
     const [billsOpen, setBillsOpen] = useState(false);
+    const [reload, setReload] = useState(0);
+    const [retarget, setRetarget] = useState<{ amount: number; type: "DEBIT" | "CREDIT" } | undefined>();
 
-    const savedAmount = toInput(initialAmount);
-    const savedType = initialType ?? "DEBIT";
+    useEffect(() => {
+        let alive = true;
+        axios.get<{ bills: { amount: number; type: "DEBIT" | "CREDIT" }[] }>(`/api/accountancy/accounts/${accountId}/opening-bills`)
+            .then(({ data }) => {
+                if (!alive) return;
+                const total = Math.round(data.bills.reduce((s, b) => s + b.amount, 0) * 100) / 100;
+                const t = data.bills.length > 0
+                    ? { amount: total, type: data.bills[0].type, count: data.bills.length }
+                    : null;
+                setBills(t);
+                if (t) { setAmount(toInput(t.amount)); setType(t.type); }
+                else { setAmount(toInput(initialAmount)); setType(initialType ?? "DEBIT"); }
+            })
+            .catch(() => { /* not a party ledger, or offline — the master figure stands */ });
+        return () => { alive = false; };
+    }, [accountId, initialAmount, initialType, reload]);
+
+    const savedAmount = bills ? toInput(bills.amount) : toInput(initialAmount);
+    const savedType = bills ? bills.type : (initialType ?? "DEBIT");
     const dirty = amount !== savedAmount || type !== savedType;
     const parsed = amount.trim() === "" ? 0 : Number(amount);
     const hasOpening = parsed > 0;
 
     const save = async () => {
+        // The opening lives in bills: a new figure goes through the breakup,
+        // prefilled, rather than back onto the master (that would count twice).
+        if (bills) {
+            setRetarget({ amount: hasOpening ? parsed : 0, type });
+            setBillsOpen(true);
+            return;
+        }
         setSaving(true);
         try {
             await axios.patch(`/api/accounts/${accountId}`, {
@@ -86,6 +118,7 @@ export default function AccountOpeningBalanceCard({
                 </div>
 
                 <p className="text-sm text-muted-foreground">
+                    {bills && <>Held as {bills.count === 1 ? "1 bill" : `${bills.count} bills`} — a change here opens Bill-wise details to apply it. </>}
                     {hasOpening
                         ? <>Carried-forward opening balance of <span className="font-medium text-foreground">{formatRupees(parsed)}</span> ({type === "DEBIT" ? "Dr" : "Cr"}), from before this ledger started in the app.</>
                         : "No opening balance on the master — set one when migrating a customer's existing outstanding from another system, or check Bill-wise details, where it lives once it has been broken into bills."}
@@ -117,7 +150,7 @@ export default function AccountOpeningBalanceCard({
                 <div className="flex flex-wrap items-center gap-2">
                     {dirty && (
                         <Button size="sm" onClick={() => void save()} disabled={saving}>
-                            {saving ? "Saving…" : "Save opening balance"}
+                            {saving ? "Saving…" : bills ? "Apply to bills…" : "Save opening balance"}
                         </Button>
                     )}
                     {/* One number rarely tells the whole story. Break it into the
@@ -129,7 +162,7 @@ export default function AccountOpeningBalanceCard({
                         Hidden only while there are unsaved edits, which are not in
                         the breakup yet. */}
                     {!dirty && (
-                        <Button size="sm" variant="outline" onClick={() => setBillsOpen(true)}>
+                        <Button size="sm" variant="outline" onClick={() => { setRetarget(undefined); setBillsOpen(true); }}>
                             <ListTree size={14} className="mr-1" /> Bill-wise details
                         </Button>
                     )}
@@ -138,9 +171,15 @@ export default function AccountOpeningBalanceCard({
             {billsOpen && (
                 <OpeningBillsDialog
                     open
-                    onOpenChange={(v) => { if (!v) setBillsOpen(false); }}
+                    onOpenChange={(v) => {
+                        if (v) return;
+                        setBillsOpen(false);
+                        // Cancelled a retarget: put the box back to what is saved.
+                        if (retarget) { setAmount(savedAmount); setType(savedType); setRetarget(undefined); }
+                    }}
                     accountId={accountId}
-                    onSaved={onSaved}
+                    retarget={retarget}
+                    onSaved={() => { setRetarget(undefined); setReload((n) => n + 1); onSaved(); }}
                 />
             )}
         </Card>
