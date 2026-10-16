@@ -7,6 +7,7 @@ import { useApiResource } from "@/shared/hooks/useApiResource";
 import { Loader2, Printer, ChevronRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { indianFiscalYearStart, fmtPeriodDate } from "@/modules/accountancy/lib/period";
@@ -16,7 +17,7 @@ import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/grou
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import { groupReportUrl } from "@/modules/accountancy/lib/groupReportUrl";
 import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
-import { LedgerReconciledTick, ReconciledLedgersProvider } from "@/modules/accountancy/components/ReconciledBadge";
+import { GroupReconciledTick, LedgerReconciledTick, ReconciledLedgersProvider } from "@/modules/accountancy/components/ReconciledBadge";
 
 type GroupTypeStr = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 type Side = "DEBIT" | "CREDIT";
@@ -32,6 +33,9 @@ interface GroupNode {
     rolledUpOpening: number; rolledUpDebits: number;
     rolledUpCredits: number; rolledUpClosing: number;
 }
+/** Which balance columns are ticked on — Transactions Dr / Cr always show. */
+interface Cols { opening: boolean; closing: boolean }
+
 interface TBData {
     from: string; to: string;
     tree: GroupNode[];
@@ -46,10 +50,12 @@ interface TBData {
  * - value < 0 → on the opposite side
  * - value ≈ 0 → "—"
  */
-function SidedCell({ value, normalSide, bold, italic, underline, ledgerId }: {
+function SidedCell({ value, normalSide, bold, italic, underline, ledgerId, groupLedgers }: {
     value: number; normalSide: Side; bold?: boolean; italic?: boolean; underline?: boolean;
     /** Ledger rows: the green reconciled tick beside the amount. */
     ledgerId?: number;
+    /** Group rows: tick when every ledger inside is reconciled. */
+    groupLedgers?: { id: number; closing: number }[];
 }) {
     // Ledger rows render italic ⇒ drop one point so they read as detail.
     const sizeClass = italic ? "text-[13px]" : "text-sm";
@@ -62,6 +68,7 @@ function SidedCell({ value, normalSide, bold, italic, underline, ledgerId }: {
     return (
         <td className={`px-3 py-1 text-right font-mono ${sizeClass} ${bold ? "font-semibold" : ""} ${italic ? "italic" : ""}`}>
             {ledgerId != null && <span className="mr-1.5 inline-block align-middle"><LedgerReconciledTick ledgerId={ledgerId} /></span>}
+            {groupLedgers && <span className="mr-1.5 inline-block align-middle"><GroupReconciledTick ledgers={groupLedgers} /></span>}
             <span className={underline ? "underline decoration-foreground/40 underline-offset-4" : ""}>
                 {fmt(Math.abs(value))}
             </span>{" "}
@@ -85,30 +92,31 @@ function PlainCell({ value, bold, italic, underline }: { value: number; bold?: b
     );
 }
 
-/** Remove groups + ledgers that have no activity in any column. */
-function pruneEmpty(nodes: GroupNode[]): GroupNode[] {
+/** Every ledger under a group, sub-groups included. */
+function allLedgers(n: GroupNode): LedgerNode[] {
+    return [...n.ledgers, ...n.children.flatMap(allLedgers)];
+}
+
+/** Remove groups + ledgers that have nothing in any column on screen. */
+function pruneEmpty(nodes: GroupNode[], cols: Cols): GroupNode[] {
+    const has = (opening: number, debits: number, credits: number, closing: number) =>
+        (cols.opening && Math.abs(opening) >= 0.005) ||
+        Math.abs(debits) >= 0.005 ||
+        Math.abs(credits) >= 0.005 ||
+        (cols.closing && Math.abs(closing) >= 0.005);
     const out: GroupNode[] = [];
     for (const n of nodes) {
-        const keptKids = pruneEmpty(n.children);
-        const keptLedgers = n.ledgers.filter((l) =>
-            Math.abs(l.opening) >= 0.005 ||
-            Math.abs(l.debits) >= 0.005 ||
-            Math.abs(l.credits) >= 0.005 ||
-            Math.abs(l.closing) >= 0.005,
-        );
-        const groupHasActivity =
-            Math.abs(n.rolledUpOpening) >= 0.005 ||
-            Math.abs(n.rolledUpDebits) >= 0.005 ||
-            Math.abs(n.rolledUpCredits) >= 0.005 ||
-            Math.abs(n.rolledUpClosing) >= 0.005;
+        const keptKids = pruneEmpty(n.children, cols);
+        const keptLedgers = n.ledgers.filter((l) => has(l.opening, l.debits, l.credits, l.closing));
+        const groupHasActivity = has(n.rolledUpOpening, n.rolledUpDebits, n.rolledUpCredits, n.rolledUpClosing);
         if (keptKids.length === 0 && keptLedgers.length === 0 && !groupHasActivity) continue;
         out.push({ ...n, children: keptKids, ledgers: keptLedgers });
     }
     return out;
 }
 
-function GroupRow({ node, depth, expanded, toggle, onLedger, onGroup }: {
-    node: GroupNode; depth: number;
+function GroupRow({ node, depth, cols, expanded, toggle, onLedger, onGroup }: {
+    node: GroupNode; depth: number; cols: Cols;
     expanded: Set<number>; toggle: (id: number) => void;
     onLedger: (id: number) => void; onGroup: (id: number) => void;
 }) {
@@ -131,15 +139,15 @@ function GroupRow({ node, depth, expanded, toggle, onLedger, onGroup }: {
                         <span className={`hover:underline ${depth === 0 ? "font-semibold" : "font-medium"}`}>{node.name}</span>
                     </span>
                 </td>
-                <SidedCell value={node.rolledUpOpening} normalSide={groupNormalSide} bold={depth === 0} underline={depth === 0} />
+                {cols.opening && <SidedCell value={node.rolledUpOpening} normalSide={groupNormalSide} bold={depth === 0} underline={depth === 0} />}
                 <PlainCell value={node.rolledUpDebits} bold={depth === 0} underline={depth === 0} />
                 <PlainCell value={node.rolledUpCredits} bold={depth === 0} underline={depth === 0} />
-                <SidedCell value={node.rolledUpClosing} normalSide={groupNormalSide} bold={depth === 0} underline={depth === 0} />
+                {cols.closing && <SidedCell value={node.rolledUpClosing} normalSide={groupNormalSide} bold={depth === 0} underline={depth === 0} groupLedgers={allLedgers(node)} />}
             </tr>
             {isOpen && (
                 <>
                     {node.children.map((c) => (
-                        <GroupRow key={`g-${c.id}`} node={c} depth={depth + 1}
+                        <GroupRow key={`g-${c.id}`} node={c} depth={depth + 1} cols={cols}
                                   expanded={expanded} toggle={toggle}
                                   onLedger={onLedger} onGroup={onGroup} />
                     ))}
@@ -158,10 +166,10 @@ function GroupRow({ node, depth, expanded, toggle, onLedger, onGroup }: {
                                 <td className="py-1 text-[13px] text-muted-foreground italic" style={{ paddingLeft: 24 + depth * 16 }}>
                                     <span className="hover:underline hover:text-primary">{l.name}</span>
                                 </td>
-                                <SidedCell value={l.opening} normalSide={ledgerSide} italic />
+                                {cols.opening && <SidedCell value={l.opening} normalSide={ledgerSide} italic />}
                                 <PlainCell value={l.debits} italic />
                                 <PlainCell value={l.credits} italic />
-                                <SidedCell value={l.closing} normalSide={ledgerSide} italic ledgerId={l.id} />
+                                {cols.closing && <SidedCell value={l.closing} normalSide={ledgerSide} italic ledgerId={l.id} />}
                             </tr>
                         );
                     })}
@@ -241,12 +249,16 @@ export default function TrialBalancePage() {
         [expandedChoice, data],
     );
     const [showEmpty, setShowEmpty] = useState(false);
+    // Transactions only by default — every visit, never remembered.
+    const [cols, setCols] = useState<Cols>({ opening: false, closing: false });
+    const anyBalanceCol = cols.opening || cols.closing;
+    const colCount = 3 + (cols.opening ? 1 : 0) + (cols.closing ? 1 : 0);
 
 
     const viewTree = useMemo(() => {
         if (!data) return [];
-        return showEmpty ? data.tree : pruneEmpty(data.tree);
-    }, [data, showEmpty]);
+        return showEmpty ? data.tree : pruneEmpty(data.tree, cols);
+    }, [data, showEmpty, cols]);
 
     // Trading-account stock movement. Stock is a valuation, not a journal entry,
     // so when it moves during the period no ledger records the cost — the Trial
@@ -326,6 +338,18 @@ export default function TrialBalancePage() {
                 <div className="flex items-end gap-2">
                     <div className="space-y-1"><Label>From</Label><TallyDateInput value={from} onValueChange={setFrom} className="w-auto" /></div>
                     <div className="space-y-1"><Label>To</Label><TallyDateInput value={to} onValueChange={setTo} monthMode="end" className="w-auto" /></div>
+                    {(["opening", "closing"] as const).map((k) => (
+                        <div key={k} className="flex items-center gap-1.5 h-9">
+                            <Checkbox
+                                id={`tb-show-${k}`}
+                                checked={cols[k]}
+                                onCheckedChange={(v) => setCols((c) => ({ ...c, [k]: v === true }))}
+                            />
+                            <Label htmlFor={`tb-show-${k}`} className="cursor-pointer font-normal">
+                                Show {k === "opening" ? "Opening" : "Closing"}
+                            </Label>
+                        </div>
+                    ))}
                     <Button variant="outline" onClick={() => setShowEmpty((v) => !v)} title="Toggle visibility of groups / ledgers with no activity">
                         {showEmpty ? "Hide empty" : "Show all"}
                     </Button>
@@ -342,21 +366,21 @@ export default function TrialBalancePage() {
                         <thead className="border-b bg-muted text-xs text-muted-foreground">
                             <tr>
                                 <th className="px-3 py-2 text-left font-medium">Particulars</th>
-                                <th className="px-3 py-2 text-right font-medium">Opening Balance</th>
+                                {cols.opening && <th className="px-3 py-2 text-right font-medium">Opening Balance</th>}
                                 <th className="px-3 py-2 text-right font-medium">Transactions Dr</th>
                                 <th className="px-3 py-2 text-right font-medium">Transactions Cr</th>
-                                <th className="px-3 py-2 text-right font-medium">Closing Balance</th>
+                                {cols.closing && <th className="px-3 py-2 text-right font-medium">Closing Balance</th>}
                             </tr>
                         </thead>
                         <tbody>
                             {viewTree.map((g) => (
-                                <GroupRow key={g.id} node={g} depth={0}
+                                <GroupRow key={g.id} node={g} depth={0} cols={cols}
                                           expanded={expanded} toggle={toggle}
                                           onLedger={goLedger} onGroup={goGroup} />
                             ))}
                             {viewTree.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                                    <td colSpan={colCount} className="px-3 py-6 text-center text-sm text-muted-foreground">
                                         No activity in the selected period.
                                     </td>
                                 </tr>
@@ -373,20 +397,20 @@ export default function TrialBalancePage() {
                                 below and the Trial Balance reads as out of balance every
                                 time stock moves. Sits above the plug because it is a real
                                 accounting figure, not a leftover. */}
-                            {(Math.abs(stockAdjOpen) >= 0.005 || Math.abs(stockAdjClose) >= 0.005) && (
+                            {anyBalanceCol && (Math.abs(stockAdjOpen) >= 0.005 || Math.abs(stockAdjClose) >= 0.005) && (
                                 <tr
                                     className="border-t"
                                     title="Opening Stock less Closing Stock — the same trading-account figure the Profit & Loss shows, measured from the financial-year start. Stock is valued, never journalised, so no ledger carries it."
                                 >
                                     <td className="px-3 py-1.5 italic text-muted-foreground">Opening less Closing Stock</td>
-                                    <SidedCell value={stockAdjOpen} normalSide="DEBIT" italic />
+                                    {cols.opening && <SidedCell value={stockAdjOpen} normalSide="DEBIT" italic />}
                                     <PlainCell value={0} italic />
                                     <PlainCell value={0} italic />
-                                    <SidedCell value={stockAdjClose} normalSide="DEBIT" italic />
+                                    {cols.closing && <SidedCell value={stockAdjClose} normalSide="DEBIT" italic />}
                                 </tr>
                             )}
 
-                            {(Math.abs(summary.openingDiff) >= 0.005 || Math.abs(summary.closingDiff) >= 0.005) && (
+                            {anyBalanceCol && (Math.abs(summary.openingDiff) >= 0.005 || Math.abs(summary.closingDiff) >= 0.005) && (
                                 <tr
                                     className="text-amber-700 dark:text-amber-400 border-t"
                                     title="Master-page opening balances are one-sided — this is the plug that balances Σ Dr against Σ Cr in each balance column."
@@ -394,24 +418,24 @@ export default function TrialBalancePage() {
                                     <td className="px-3 py-1.5 italic">Difference in opening balances</td>
                                     {/* If Dr > Cr (diff > 0), the plug sits on the Cr side, and vice-versa.
                                         Each column is plugged from its own slack — see deriveSummary. */}
-                                    <SidedCell value={-summary.openingDiff} normalSide="DEBIT" italic />
+                                    {cols.opening && <SidedCell value={-summary.openingDiff} normalSide="DEBIT" italic />}
                                     <PlainCell value={0} italic />
                                     <PlainCell value={0} italic />
-                                    <SidedCell value={-summary.closingDiff} normalSide="DEBIT" italic />
+                                    {cols.closing && <SidedCell value={-summary.closingDiff} normalSide="DEBIT" italic />}
                                 </tr>
                             )}
                         </tbody>
                         <tfoot className="border-t-2 bg-muted/30 font-bold">
                             <tr>
                                 <td className="px-3 py-2">Grand Total</td>
-                                <td className="px-3 py-2 text-right font-mono text-sm">
+                                {cols.opening && <td className="px-3 py-2 text-right font-mono text-sm">
                                     {fmt(Math.max(totalsDisplay.openDr, totalsDisplay.openCr))}
-                                </td>
+                                </td>}
                                 <td className="px-3 py-2 text-right font-mono text-sm">{fmt(totalsDisplay.debits)}</td>
                                 <td className="px-3 py-2 text-right font-mono text-sm">{fmt(totalsDisplay.credits)}</td>
-                                <td className="px-3 py-2 text-right font-mono text-sm">
+                                {cols.closing && <td className="px-3 py-2 text-right font-mono text-sm">
                                     {fmt(Math.max(totalsDisplay.closeDr, totalsDisplay.closeCr))}
-                                </td>
+                                </td>}
                             </tr>
                         </tfoot>
                     </table>
