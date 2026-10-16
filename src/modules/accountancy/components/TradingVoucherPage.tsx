@@ -644,13 +644,17 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     showDescription: !!readLineText(l, l.product).note,
                 }));
 
-                setPayMode(v.paymentMode === "CASH" ? "CASH" : "CREDIT");
+                // A bill with no party can only be a cash sale — counter bills
+                // may carry a mode other than "CASH", and opening one as CREDIT
+                // leaves it unsaveable (credit needs a party).
+                const asCash = v.paymentMode === "CASH" || v.partyId == null;
+                setPayMode(asCash ? "CASH" : "CREDIT");
                 if (v.paymentAccountId != null) setPendingPaymentAccountId(v.paymentAccountId);
 
                 // Party prefill — for CREDIT we set the picker via its handle;
                 // for CASH the walk-in fields take it. We populate both sides
                 // so the form re-renders without a re-fetch.
-                if (v.paymentMode === "CASH") {
+                if (asCash) {
                     setWalkInName(v.partyName ?? "");
                     setWalkInPhone(v.partyPhone ?? "");
                 } else if (v.partyId != null && v.partyType) {
@@ -1498,7 +1502,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         }
     };
 
-    const cell = "bg-transparent border-0 outline-none text-sm text-right w-full focus:bg-accent/40 rounded px-1 tabular-nums";
+    const cell = "bg-background border border-input outline-none text-sm text-right w-full h-7 rounded px-1.5 tabular-nums focus:border-ring focus:ring-1 focus:ring-ring/40";
 
     // Tally-style keyboard nav: Enter advances focus through input/select
     // tour; Ctrl+Enter / Ctrl+A trigger primary Save (full post).
@@ -1840,6 +1844,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                     <InvProductCombobox
                                                         value={line.product?.id ?? null}
                                                         onChange={(p) => handleProductSelect(line.id, p)}
+                                                        className="h-7 flex items-center rounded border border-input bg-background px-2 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/40"
                                                         clearNonce={clearedRow?.id === line.id ? clearedRow.n : 0}
                                                         autoFocus={(i === 0 && !line.product) || line.id === lastFocusRowId}
                                                     />
@@ -1854,7 +1859,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                         onChange={(e) => updateLine(line.id, { description: e.target.value })}
                                                         placeholder="Note"
                                                         tabIndex={-1}
-                                                        className="hidden sm:block h-7 text-xs"
+                                                        className="hidden sm:block h-7 text-xs bg-background"
                                                     />
                                                     {/* Small screen: unchanged toggle behaviour, just moved up front. */}
                                                     <Button
