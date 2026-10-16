@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, Fragment } from "react";
 import { toast } from "sonner";
 import { useApiResource } from "@/shared/hooks/useApiResource";
-import { LedgerReconciledTick, ReconciledLedgersProvider } from "@/modules/accountancy/components/ReconciledBadge";
+import { GroupReconciledTick, LedgerReconciledTick, ReconciledLedgersProvider } from "@/modules/accountancy/components/ReconciledBadge";
 import { Loader2, Printer, ChevronRight, ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -78,8 +78,10 @@ interface BalanceSheetData {
 // the hierarchy visible at a glance.
 type AmountWeight = "group" | "subGroup" | "ledger";
 
-function AmountCells({ value, weight, side, ledgerId }: {
+function AmountCells({ value, weight, side, ledgerId, groupLedgers }: {
     value: number;
+    /** Group rows: tick when every ledger inside is reconciled. */
+    groupLedgers?: LedgerNode[];
     /** Ledger rows: the green reconciled tick beside the amount. */
     ledgerId?: number;
     weight: AmountWeight;
@@ -118,13 +120,20 @@ function AmountCells({ value, weight, side, ledgerId }: {
                 {weight === "ledger" ? cell(value) : null}
             </td>
             <td className="py-1 pr-2 text-right font-mono whitespace-nowrap w-[100px]">
+                {weight === "subGroup" && groupLedgers && <span className="mr-1 inline-block align-middle"><GroupReconciledTick ledgers={groupLedgers} /></span>}
                 {weight === "subGroup" ? cell(value) : null}
             </td>
             <td className="py-1 pr-3 text-right font-mono whitespace-nowrap w-[110px]">
+                {weight === "group" && groupLedgers && <span className="mr-1 inline-block align-middle"><GroupReconciledTick ledgers={groupLedgers} /></span>}
                 {weight === "group" ? cell(value) : null}
             </td>
         </>
     );
+}
+
+/** Every ledger under a group, sub-groups included. */
+function allLedgers(n: GroupNode): LedgerNode[] {
+    return [...n.ledgers, ...n.children.flatMap(allLedgers)];
 }
 
 function GroupBlock({ node, depth, expanded, toggle, onLedger, onGroup }: {
@@ -170,7 +179,7 @@ function GroupBlock({ node, depth, expanded, toggle, onLedger, onGroup }: {
                         </span>
                     </button>
                 </td>
-                <AmountCells value={balance} weight={weight} side={side} />
+                <AmountCells value={balance} weight={weight} side={side} groupLedgers={allLedgers(node)} />
             </tr>
             {isOpen && (
                 <>

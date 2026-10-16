@@ -23,7 +23,7 @@ import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { groupColor } from "@/shared/lib/format/groupColor";
 import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
-import { LedgerReconciledTick, ReconciledLedgersProvider } from "@/modules/accountancy/components/ReconciledBadge";
+import { GroupReconciledTick, LedgerReconciledTick, ReconciledLedgersProvider } from "@/modules/accountancy/components/ReconciledBadge";
 
 type LedgerNode = {
     id:      number;
@@ -219,7 +219,12 @@ export function BookPage({
                         <td className="px-3 py-1.5 text-right font-mono">{dash(childTotals.opening)}</td>
                         <td className="px-3 py-1.5 text-right font-mono">{dash(childTotals.debits)}</td>
                         <td className="px-3 py-1.5 text-right font-mono">{dash(childTotals.credits)}</td>
-                        <td className="px-3 py-1.5 text-right font-mono font-semibold">{dash(childTotals.closing)}</td>
+                        <td className="px-3 py-1.5 text-right font-mono font-semibold">
+                            <span className="inline-flex items-center gap-1.5">
+                                <GroupReconciledTick ledgers={childLedgers} />
+                                {dash(childTotals.closing)}
+                            </span>
+                        </td>
                         <td />
                     </tr>,
                 );
@@ -339,7 +344,12 @@ export function BookPage({
                                                 <td className="px-3 py-2.5 text-right font-mono">{dash(secTotals.opening)}</td>
                                                 <td className="px-3 py-2.5 text-right font-mono">{dash(secTotals.debits)}</td>
                                                 <td className="px-3 py-2.5 text-right font-mono">{dash(secTotals.credits)}</td>
-                                                <td className="px-3 py-2.5 text-right font-mono">{dash(secTotals.closing)}</td>
+                                                <td className="px-3 py-2.5 text-right font-mono">
+                                                    <span className="inline-flex items-center gap-1.5">
+                                                        <GroupReconciledTick ledgers={secLedgers} />
+                                                        {dash(secTotals.closing)}
+                                                    </span>
+                                                </td>
                                                                         <td />
                                             </tr>
                                         </tfoot>

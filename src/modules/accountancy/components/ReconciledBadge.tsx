@@ -165,3 +165,24 @@ export function LedgerReconciledTick({ ledgerId, size }: { ledgerId: number; siz
     const through = useContext(ReconciledLedgers)?.get(ledgerId);
     return <ReconciledTick through={through} pending={0} size={size} />;
 }
+
+/** The green tick for a group row: every ledger under it is reconciled up to
+ *  date — a ledger closing at zero counts as reconciled. An empty group gets no
+ *  tick. The label shows the earliest watermark among them. */
+export function GroupReconciledTick({ ledgers, size = 12 }: { ledgers: { id: number; closing: number }[]; size?: number }) {
+    const map = useContext(ReconciledLedgers);
+    if (!map || ledgers.length === 0) return null;
+    let earliest: string | undefined;
+    for (const l of ledgers) {
+        if (Math.abs(l.closing) < 0.005) continue;
+        const through = map.get(l.id);
+        if (!through) return null;
+        if (!earliest || through < earliest) earliest = through;
+    }
+    const label = earliest ? `Reconciled upto ${formatDate(earliest)}` : "All balances nil";
+    return (
+        <span title={label} aria-label={label} className="inline-flex shrink-0 text-green-600 dark:text-green-400">
+            <CheckCircle2 size={size} />
+        </span>
+    );
+}

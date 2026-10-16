@@ -73,7 +73,7 @@ import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { rowActivation } from "@/shared/lib/a11y/rowActivation";
 import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
-import { LedgerReconciledTick, ReconciledLedgersProvider } from "@/modules/accountancy/components/ReconciledBadge";
+import { GroupReconciledTick, LedgerReconciledTick, ReconciledLedgersProvider } from "@/modules/accountancy/components/ReconciledBadge";
 
 // ─── Shape (mirrors the API response) ────────────────────────────────────────
 
@@ -451,7 +451,8 @@ function GroupCard({
                     </div>
                 </div>
                 <div className="shrink-0 text-right">
-                    <div className={`font-mono text-sm font-bold tabular-nums ${group.tone}`}>
+                    <div className={`flex items-center justify-end gap-1.5 font-mono text-sm font-bold tabular-nums ${group.tone}`}>
+                        <GroupReconciledTick ledgers={ledgers.map((l) => ({ id: l.id, closing: l.amount }))} />
                         ₹{fmt(net)}
                     </div>
                 </div>
