@@ -1,27 +1,43 @@
-# v1.16.6
+# v1.16.7 [urgent]
 
-A normal update for every counter. It brings a lock screen for the till, a clearer duty timeline on the sign-in screen, and a fix for editing service bills. Counters will take it at a quiet moment — no rush.
-
-## Lock the till
-- A new **Lock** button covers the till without signing out. A 4-digit PIN lifts it. Staff can set or change their PIN from the lock screen.
-- The lock screen shows the shop photo, the till card, today's closing time and the next opening.
-- A locked till stays covered even after the window is refreshed; it never flashes the app underneath.
-- Only the person who locked it, or nobody, sees the till behind the lock.
-
-## Duty timeline on sign-in and lock screens
-- Today's duty is shown as a 24-hour ruler across the bottom of the screen, with duty start, duty end and "Now" marked.
-- Joins, leaves, shift start/end and away times appear on the timeline. Idle gaps are never painted as work.
-
-## Billing
-- **Update Sale on a service bill** now shows the service in the cart. Earlier the cart opened empty with only the old total. Saving keeps the service as it was.
-
-## Attendance and pay
-- A day worked under 40% of the duty now reads **On duty / Incomplete duty**, not Absent.
-- Incomplete duty is unpaid but carries no absence penalty.
-- Work on a holiday or weekly off reads "worked", never incomplete duty.
+Every counter must install this today. It removes the till lock from v1.16.6, so sign-in goes back to the 4-digit PIN. It also brings many accounts fixes and new reports. Counters will show a countdown and restart within 30 minutes.
 
 ## Sign-in
-- The admin login on a real person's email signs in as that person, with their own idle limit.
+- The till lock screen is gone. Staff sign in again with their 4-digit PIN, as before.
+- Tapping a face or typing a password clears the old login first. The wrong person no longer stays signed in.
+- Super Admin login shows "Super Admin" correctly.
 
-## Installation
-- After an update there is only one set of AbeerSuite shortcuts on the Desktop, not two.
+## Home
+- Everyone gets a Dashboard link. Today's duty timeline shows at the top.
+
+## Billing
+- A sale bill with no party now opens as a cash bill. Earlier it could open as credit and refuse to save.
+- The boxes on the sale and purchase bill lines now have clear borders, so they are easier to see.
+
+## Accounts
+- A green tick shows which ledgers are reconciled up to date. You see it on Trial Balance, Balance Sheet, Cash/Bank Book, ledger closing and Usable Fund. A group gets the tick when every ledger inside it is reconciled.
+- Trial Balance has **Show Opening** and **Show Closing** ticks. By default it shows only transactions.
+- New **Daily** tick on a ledger shows a Tally-style daily breakup: Debit, Credit and Closing for every day, with Grand total and Average.
+- New **Ledger vs Ledger** report shows only the vouchers between two ledgers, with the net.
+- Ledger search matches word by word, in any order.
+- Bill-wise links: right-click a Settled or Partial chip to remove the link.
+- Opening balances count on every date, so the 31 March closing equals the 1 April opening.
+- The party opening balance card shows the bill-wise total. Editing it opens the breakup already filled in.
+- Bank statements are saved oldest first, whatever order the bank prints them in. Bank Recon keeps your bank, page and scroll after you book a voucher.
+- Payment and Receipt have a **Send WhatsApp** tick. Parties under Sundry Creditors never get a WhatsApp message.
+- Journal clears itself for the next entry after you save. Cancel asks before throwing away unsaved changes.
+
+## Recycle Bin and audit
+- A new **Activity** tab shows who created, edited, cancelled, deleted or restored each voucher.
+- Restoring an older copy of a voucher now changes the live voucher in place.
+
+## Contacts
+- One screen for All, Person and Companies. Search matches keywords.
+
+## Attendance and pay
+- Work done on a holiday or weekly off counts as extra duty.
+- Late grace forgives only that month's grace days. Lateness counts from opening time.
+- Generated payroll rounds every salary head to whole rupees.
+
+## Messages
+- WhatsApp auto-replies are friendlier and do not show ids. Attachments open in a popup.
