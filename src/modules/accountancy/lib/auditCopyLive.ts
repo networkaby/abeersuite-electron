@@ -46,3 +46,27 @@ export async function liveAuditCopyIds(db: Db, rows: AuditCopyRef[]): Promise<Se
     }
     return out;
 }
+
+/**
+ * The live record a Recycle Bin copy belongs to, as the id its edit route takes:
+ * the VoucherDetail id for INV_VOUCHER, the spine id otherwise. Null when the
+ * voucher is gone (the copy then restores as a fresh voucher).
+ */
+export async function liveAuditCopyTarget(db: Db, row: AuditCopyRef): Promise<number | null> {
+    if (row.entityType === "INV_VOUCHER") {
+        const own = await db.voucherDetail.findUnique({ where: { id: row.originalId }, select: { id: true } });
+        if (own) return own.id;
+        if (!row.originalRef || !row.subtype) return null;
+        const byNumber = await db.voucherDetail.findFirst({
+            where: { universalVoucher: { voucherNo: row.originalRef, type: row.subtype } }, select: { id: true },
+        });
+        return byNumber?.id ?? null;
+    }
+    const own = await db.universalVoucher.findUnique({ where: { id: row.originalId }, select: { id: true } });
+    if (own) return own.id;
+    if (!row.originalRef || !row.subtype) return null;
+    const byNumber = await db.universalVoucher.findFirst({
+        where: { voucherNo: row.originalRef, type: row.subtype }, select: { id: true },
+    });
+    return byNumber?.id ?? null;
+}
