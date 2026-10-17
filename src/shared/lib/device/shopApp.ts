@@ -41,7 +41,8 @@ export const SHOP_APP_THEME = { light: "#eff4fb", dark: "#101725" } as const;
 export const SHOP_NATIVE_HOME = "/m-shop-app";
 
 /** The shell appends this to its user agent (capacitor.config.json
- *  `appendUserAgent`), so the server and the page both know they are inside it. */
+ *  `appendUserAgent`, followed by `/<versionCode>` — build-apk.ps1, read by
+ *  AppUpdateBar), so the server and the page both know they are inside it. */
 export const SHOP_NATIVE_UA = "NSShopApp";
 
 export function isShopNativePath(pathname: string): boolean {

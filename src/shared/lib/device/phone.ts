@@ -52,6 +52,10 @@ export const PHONE_APP_ANDROID_PACKAGE = "in.networkservice.staff";
 /** The APK, served from `public/` — rebuilt only when the name, icon or address changes. */
 export const PHONE_APP_APK = "/ns-staff.apk";
 
+/** The Capacitor shell (phone-app/) appends this to its user agent, followed by
+ *  `/<versionCode>` (build-apk.ps1) — read by AppUpdateBar. */
+export const PHONE_APP_UA = "NSStaffApp";
+
 /** The app's own sign-in page — the staff sign-in form, served inside the app's PWA
  *  scope. `/staff/login` is outside it, and an installed app leaving its scope makes
  *  Chrome show an address bar with an ✕ over the screen. */

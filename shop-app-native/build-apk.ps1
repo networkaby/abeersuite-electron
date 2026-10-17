@@ -6,7 +6,8 @@
 # Rebuild only when the native side changes (name, icon, a new plugin or
 # permission): the screens are the live website, so a deploy reaches installed
 # phones without a new APK. Bump versionCode in android/app/build.gradle first, or
-# phones refuse it as "not an update".
+# phones refuse it as "not an update" — then deploy, and older phones see
+# "New version available" (appVersions.ts, AppUpdateBar).
 #
 # Toolchain on D: (owner, 2026-10-05): JDK 21 (Capacitor 8), Android SDK, Gradle cache.
 $ErrorActionPreference = "Stop"
@@ -19,6 +20,10 @@ Set-Location $PSScriptRoot
 if (-not (Test-Path "..\shop-app\ns-shop.keystore")) {
     throw "shop-app\ns-shop.keystore is missing (the TWA's key - this app updates it). Restore it from the backup - a new key cannot update phones that already have the app."
 }
+
+# Version into the user agent + appVersions.ts, so older phones are told to update.
+. "$PSScriptRoot\..\scripts\stamp-app-version.ps1"
+Set-AppVersion -AppDir $PSScriptRoot -UaTag "NSShopApp" -Constant "SHOP_APP_RELEASE"
 
 if (-not (Test-Path ".\node_modules")) { npm install --no-audit --no-fund; if ($LASTEXITCODE -ne 0) { throw "npm install failed" } }
 npx cap sync android

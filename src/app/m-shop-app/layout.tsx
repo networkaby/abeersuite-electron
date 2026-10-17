@@ -2,7 +2,9 @@ import type { Metadata, Viewport } from "next";
 import NativeAppReady from "@/modules/mobile/components/NativeAppReady";
 import CustomerAppShell from "@/modules/external/shopApp/CustomerAppShell";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
-import { SHOP_APP_THEME } from "@/shared/lib/device/shopApp";
+import { SHOP_APP_APK, SHOP_APP_THEME, SHOP_NATIVE_UA } from "@/shared/lib/device/shopApp";
+import AppUpdateBar from "@/shared/components/AppUpdateBar";
+import { SHOP_APP_RELEASE } from "@/shared/lib/constants/appVersions";
 
 export const metadata: Metadata = {
     title: { absolute: COMPANY_DETAILS.brandName },
@@ -32,6 +34,8 @@ export default function CustomerAppLayout({ children }: { children: React.ReactN
     return (
         <>
             <NativeAppReady />
+            {/* APK on the office address, so the link leaves the app's WebView for Chrome. */}
+            <AppUpdateBar uaTag={SHOP_NATIVE_UA} release={SHOP_APP_RELEASE} apkUrl={`${COMPANY_DETAILS.sites.office}${SHOP_APP_APK}`} />
             <CustomerAppShell>{children}</CustomerAppShell>
         </>
     );
