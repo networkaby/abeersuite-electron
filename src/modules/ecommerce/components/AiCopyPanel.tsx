@@ -11,7 +11,31 @@ import { fetchAiCopy, useCanUseAiCopy, type ProductCopy } from "@/modules/ecomme
 
 type SpecRow = { k: string; v: string };
 
-export const SEARCH_SKIPPED_NOTE = "Online search is not available on this Gemini key (free tier) — written from name and photo only. Check the specs.";
+const SEARCH_NOTE: Record<ProductCopy["search"], string | null> = {
+    searched: null,
+    "not-needed": "Written from name and photo — online search would not add anything for this product, so it was skipped (no charge).",
+    off: "Written from name and photo only (online search switched off).",
+    "no-key": "Written from name and photo — online search needs the paid key (GOOGLE_AI_SEARCH_API_KEY), not set up.",
+    failed: "Online search failed, so this is the name-and-photo draft.",
+};
+
+/** How the draft was made + what staff should check before saving. */
+export function AiDraftNotes({ draft }: { draft: ProductCopy }) {
+    const note = SEARCH_NOTE[draft.search];
+    return (
+        <>
+            {note && <p className="text-muted-foreground text-xs">{note}</p>}
+            {draft.unsure.length > 0 && (
+                <div className="text-xs text-amber-700 dark:text-amber-400">
+                    <p className="font-medium">Please check / add by hand:</p>
+                    <ul className="ml-4 list-disc">
+                        {draft.unsure.map((u) => <li key={u}>{u}</li>)}
+                    </ul>
+                </div>
+            )}
+        </>
+    );
+}
 
 /** Fill the blanks only: an existing label keeps the value staff typed. */
 export function mergeAiSpecs(rows: SpecRow[], specs: Record<string, string>): SpecRow[] {
@@ -70,7 +94,6 @@ export default function AiCopyPanel({
                 filled.push("specs");
             }
             toast.success(filled.length ? `AI filled ${filled.join(", ")} — review, then Save` : "AI draft ready — use what you like, then Save");
-            if (copy.searchSkipped) toast.warning(SEARCH_SKIPPED_NOTE);
         } catch (e) {
             toast.error(extractApiError(e, "AI could not write this product"));
         } finally {
@@ -90,12 +113,12 @@ export default function AiCopyPanel({
                 </Button>
                 <div className="flex items-center gap-2">
                     <Switch id="ai-search" checked={search} onCheckedChange={setSearch} />
-                    <Label htmlFor="ai-search" className="text-sm">Search online for exact specs</Label>
+                    <Label htmlFor="ai-search" className="text-sm">Search online when it helps</Label>
                 </div>
             </div>
             {draft && (
                 <div className="space-y-2 text-sm">
-                    {draft.searchSkipped && <p className="text-xs text-amber-600">{SEARCH_SKIPPED_NOTE}</p>}
+                    <AiDraftNotes draft={draft} />
                     {titleDiffers && (
                         <DraftRow label="Online name" text={draft.title} onUse={() => onSubheading(draft.title)} />
                     )}

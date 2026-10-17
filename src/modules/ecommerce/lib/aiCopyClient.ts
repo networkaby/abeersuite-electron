@@ -20,7 +20,7 @@ export function useCanUseAiCopy(): boolean {
 // pressing Generate again for the same name + photo + search mode is free.
 // Not in the DB on purpose — a draft is only kept once staff save it.
 function cacheKey(r: AiCopyRequest): string {
-    return `aiCopy:${r.productId}:${r.search ? 1 : 0}:${r.name ?? ""}:${r.imageUrl ?? ""}`;
+    return `aiCopy2:${r.productId}:${r.search ? 1 : 0}:${r.name ?? ""}:${r.imageUrl ?? ""}`;
 }
 
 function readCache(key: string): ProductCopy | null {

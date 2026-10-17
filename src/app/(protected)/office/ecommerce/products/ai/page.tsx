@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { extractApiError } from "@/shared/lib/api";
 import { AI_BULK_BATCH_SIZE } from "@/shared/lib/constants";
 import { fetchAiCopy, useCanUseAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
-import { mergeAiSpecs, SEARCH_SKIPPED_NOTE } from "@/modules/ecommerce/components/AiCopyPanel";
+import { AiDraftNotes, mergeAiSpecs } from "@/modules/ecommerce/components/AiCopyPanel";
 
 // Bulk AI copy for products with no shop description (the one-time backlog,
 // then each month's new items). Runs a few at a time, keeps each draft on
@@ -139,7 +139,7 @@ export default function AiBulkCopyPage() {
                 <div className="flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2">
                         <Switch id="bulk-search" checked={search} onCheckedChange={setSearch} />
-                        <Label htmlFor="bulk-search" className="text-sm">Search online</Label>
+                        <Label htmlFor="bulk-search" className="text-sm">Search online when it helps</Label>
                     </div>
                     <Button onClick={() => void generate()} disabled={running || selected.size === 0}>
                         <Sparkles className="size-4" />
@@ -188,7 +188,6 @@ export default function AiBulkCopyPage() {
                             {r.saved && <p className="text-xs text-green-600">Saved</p>}
                             {r.draft && !r.saved && (
                                 <div className="bg-muted/40 space-y-1 rounded-md p-2">
-                                    {r.draft.searchSkipped && <p className="text-xs text-amber-600">{SEARCH_SKIPPED_NOTE}</p>}
                                     <p className="font-medium">{r.draft.title}</p>
                                     <p className="whitespace-pre-line">{r.draft.shopDescription}</p>
                                     {Object.keys(r.draft.specs).length > 0 && (
@@ -205,6 +204,7 @@ export default function AiBulkCopyPage() {
                                             ))}
                                         </p>
                                     )}
+                                    <AiDraftNotes draft={r.draft} />
                                     <Button size="sm" onClick={() => void save(r)}>Save</Button>
                                 </div>
                             )}
