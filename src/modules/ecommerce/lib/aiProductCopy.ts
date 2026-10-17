@@ -48,7 +48,7 @@ export type ProductCopy = Copy & {
     /** Text assembled for InvProduct.shopDescription. */
     shopDescription: string;
     /** "searched" = step 2 ran; otherwise why it did not. */
-    search: "searched" | "not-needed" | "off" | "no-key" | "failed";
+    search: "searched" | "not-needed" | "off" | "no-key" | "failed" | "no-sources";
 };
 
 const freeKey = () => process.env.GOOGLE_GENERATIVE_AI_API_KEY;
@@ -103,7 +103,9 @@ function searchPrompt(p: ProductCopyInput, draft: Copy, query: string): string {
         "Draft written from the product photo (its facts are correct — keep them):",
         JSON.stringify(draft),
         "Use the search ONLY to fill the \"unsure\" facts and missing specs from the manufacturer's site or reputed sellers (Flipkart, Amazon.in, big retailers) for this EXACT model.",
-        "Never use specs of similar or look-alike products. If sources disagree, leave the fact out and keep it in \"unsure\". Where the draft and a source differ, the draft wins.",
+        "Never use specs of similar or look-alike products. Where the draft and a source differ, the draft wins: keep every draft spec, and the colour / variant words of the draft title.",
+        "Compatible models: take the list from the manufacturer's own site (e.g. hp.com, epson.co.in, canon.co.in) when it has one, even if sellers' lists differ. Without a manufacturer list, use only models every reputed source agrees on.",
+        "Any other fact the sources disagree on: leave it out and keep it in \"unsure\".",
         ...STRICT_RULES,
         "",
         ...OUTPUT_KEYS,
@@ -176,14 +178,20 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
     else {
         try {
             const r = await call(paidKey, [{ type: "text", text: searchPrompt(p, draft, searchQuery.trim()) }], true);
-            const improved = copySchema.parse(parseJson(r.text));
-            // Photo-read specs win over anything the search brought back.
-            final = { ...improved, specs: { ...improved.specs, ...draft.specs } };
             sources = r.sources
                 .flatMap((s) => (s.sourceType === "url" ? [{ title: s.title ?? s.url, url: s.url }] : []))
                 .filter((s, i, all) => all.findIndex((x) => x.url === s.url) === i)
                 .slice(0, 8);
-            search = "searched";
+            if (sources.length === 0) {
+                // Nothing staff could check — a fact without a source is not added.
+                search = "no-sources";
+            } else {
+                const improved = copySchema.parse(parseJson(r.text));
+                // The photo decides the variant: draft title and photo-read specs
+                // win over anything the search brought back.
+                final = { ...improved, title: draft.title, specs: { ...improved.specs, ...draft.specs } };
+                search = "searched";
+            }
         } catch (e) {
             console.warn("[aiProductCopy] search step failed, keeping the photo draft:", aiErrorMessage(e) ?? e);
             search = "failed";
