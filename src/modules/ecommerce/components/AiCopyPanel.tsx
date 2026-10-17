@@ -75,7 +75,8 @@ export default function AiCopyPanel({
     onSpecs: (rows: SpecRow[]) => void;
 }) {
     const canUse = useCanUseAiCopy();
-    const [search, setSearch] = useState(true);
+    // Off by default: Gemini rarely really searches and most cited pages fail the link check (2026-10-17).
+    const [search, setSearch] = useState(false);
     const [busy, setBusy] = useState(false);
     const [draft, setDraft] = useState<ProductCopy | null>(null);
 

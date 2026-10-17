@@ -67,7 +67,7 @@ const postSchema = z.object({
     // Unsaved edits from the form win over the saved row.
     name: z.string().trim().min(1).max(500).optional(),
     imageUrl: z.string().url().nullish(),
-    search: z.boolean().default(true),
+    search: z.boolean().default(false),
 });
 
 export async function POST(req: Request) {

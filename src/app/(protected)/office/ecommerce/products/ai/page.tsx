@@ -37,7 +37,7 @@ export default function AiBulkCopyPage() {
     const [cursor, setCursor] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
     const [selected, setSelected] = useState<Set<number>>(new Set());
-    const [search, setSearch] = useState(true);
+    const [search, setSearch] = useState(false); // off by default — see AiCopyPanel
     const [running, setRunning] = useState(false);
     const [progress, setProgress] = useState({ done: 0, of: 0 });
 
