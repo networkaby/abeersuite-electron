@@ -48,6 +48,8 @@ function buildPrompt(p: ProductCopyInput): string {
         p.search
             ? "Search the web for this exact product (official brand page, Flipkart, Amazon.in) and use only specs you find. If a spec is not found, leave it out — never guess numbers."
             : "Do not invent technical numbers you cannot see in the name or photo; leave such specs out.",
+        // Customers buying a consumable search by their device, not the refill code.
+        "If the product is a consumable, spare or accessory (ink, toner, cartridge, drum, ribbon, adapter, battery, charger, cable, keyboard/screen part), name the exact compatible device models (e.g. \"PIXMA G1010, G2012, G3010\") — only models the manufacturer officially lists for it, never a series name alone. Put them in specs as \"Compatible Models\" and in one highlight starting \"Works with\". If you are not sure of any model, leave both out.",
         "",
         "Return ONLY a JSON object, no markdown fence, with these keys:",
         '- "title": a clean customer-facing product title (brand + model + key variant).',
