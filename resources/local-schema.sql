@@ -921,6 +921,42 @@ ALTER TABLE "Call" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DE
 ALTER TABLE "Call" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "Campaign" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "channel" TEXT NOT NULL DEFAULT 'PUSH',
+    "title" TEXT NOT NULL,
+    "body" TEXT NOT NULL,
+    "url" TEXT,
+    "couponId" INTEGER,
+    "audience" TEXT NOT NULL DEFAULT 'ALL_PUSH',
+    "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "sentAt" TIMESTAMP(3),
+    "createdById" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Campaign_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "channel" TEXT NOT NULL DEFAULT 'PUSH';
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "title" TEXT NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "body" TEXT NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "url" TEXT;
+ALTER TABLE "Campaign" ALTER COLUMN "url" DROP NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "couponId" INTEGER;
+ALTER TABLE "Campaign" ALTER COLUMN "couponId" DROP NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "audience" TEXT NOT NULL DEFAULT 'ALL_PUSH';
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'DRAFT';
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "sentAt" TIMESTAMP(3);
+ALTER TABLE "Campaign" ALTER COLUMN "sentAt" DROP NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "createdById" INTEGER;
+ALTER TABLE "Campaign" ALTER COLUMN "createdById" DROP NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "Coupon" (
     "id" SERIAL NOT NULL,
     "code" TEXT,
@@ -5181,6 +5217,12 @@ CREATE INDEX IF NOT EXISTS "Call_sourceHost_occurredAt_idx" ON "Call"("sourceHos
 CREATE INDEX IF NOT EXISTS "Call_updatedAt_idx" ON "Call"("updatedAt");
 
 -- CreateIndex
+CREATE INDEX IF NOT EXISTS "Campaign_status_createdAt_idx" ON "Campaign"("status", "createdAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "Campaign_couponId_idx" ON "Campaign"("couponId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "Coupon_code_key" ON "Coupon"("code");
 
 -- CreateIndex
@@ -6072,6 +6114,20 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "Email" ADD CONSTRAINT "Email_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "Campaign" ADD CONSTRAINT "Campaign_couponId_fkey" FOREIGN KEY ("couponId") REFERENCES "Coupon"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "Campaign" ADD CONSTRAINT "Campaign_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -7823,6 +7879,13 @@ DO $$ BEGIN
     IF to_regclass('public."Call"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "Call";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Call"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Campaign"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Campaign";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Campaign"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;

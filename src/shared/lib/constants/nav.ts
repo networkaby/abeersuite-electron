@@ -704,6 +704,19 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
     },
 
+    // Campaigns — messages to many customers at once (greetings, offers). Uses the
+    // Retention tools (picks a coupon) but never changes them; replies land in CRM.
+    {
+        label: "Campaigns",
+        icon: Megaphone,
+        key: "campaigns",
+        dashboardHref: "/office/campaigns",
+        pathPrefixes: ["/office/campaigns"],
+        children: [
+            { label: "Campaigns", icon: Megaphone, href: "/office/campaigns" },
+        ],
+    },
+
     // Pricing Strategy
     {
         label: "Pricing Strategy",

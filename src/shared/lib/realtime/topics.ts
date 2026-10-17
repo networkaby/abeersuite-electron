@@ -108,6 +108,8 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
     [/^\/api\/hr\//,                                 ["settings"]],
     [/^\/api\/pos\/counters/,                       ["settings"]],
     [/^\/api\/due-reminders/,                       ["settings"]],
+    // Campaigns are office-written messages, not books or parties; the list follows "settings".
+    [/^\/api\/campaigns/,                           ["settings"]],
 
     // ── Chat room discovery ──────────────────────────────────────────────────
     // A new message riding an existing room delivers over its OWN "room:<id>"

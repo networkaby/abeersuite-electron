@@ -192,6 +192,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
         administration: pathname.startsWith("/office/roadmap/administration"),
         retention: pathname.startsWith("/office/customer-retention") || pathname.startsWith("/office/roadmap/retention"),
         "pricing-strategy": pathname.startsWith("/office/pricing-strategy"),
+        campaigns: pathname.startsWith("/office/campaigns"),
     });
     const [nestedChildOpen, setNestedChildOpen] = useState<Record<string, boolean>>({});
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);

@@ -57,6 +57,7 @@
   --m-customers: oklch(0.885 0.115 230);
   --m-retention: oklch(0.885 0.115 245);
   --m-bi: oklch(0.88 0.12 260);
+  --m-campaigns: oklch(0.88 0.12 275);
   --m-crm: oklch(0.88 0.12 290);
   --m-administration: oklch(0.88 0.12 320);
   --m-hr: oklch(0.88 0.12 335);
@@ -197,6 +198,7 @@
   --m-customers: oklch(0.55 0.16 230);
   --m-retention: oklch(0.55 0.17 245);
   --m-bi: oklch(0.55 0.19 260);
+  --m-campaigns: oklch(0.55 0.19 275);
   --m-crm: oklch(0.55 0.19 290);
   --m-administration: oklch(0.55 0.18 320);
   /* HR & People sits between Administration and Settings — people
@@ -272,6 +274,7 @@
   --m-customers: oklch(0.76 0.14 230);
   --m-retention: oklch(0.76 0.15 245);
   --m-bi: oklch(0.75 0.15 260);
+  --m-campaigns: oklch(0.75 0.15 275);
   --m-crm: oklch(0.75 0.15 290);
   --m-administration: oklch(0.75 0.15 320);
   --m-hr: oklch(0.75 0.15 335);

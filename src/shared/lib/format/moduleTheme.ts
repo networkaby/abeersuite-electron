@@ -59,6 +59,8 @@ const MODULE_VAR: Record<string, string> = {
     customers: "--m-customers",
     retention: "--m-retention",
     bi: "--m-bi",
+    // Between BI and CRM: a campaign starts the funnel that lands in CRM.
+    campaigns: "--m-campaigns",
     crm: "--m-crm",
     administration: "--m-administration",
     hr: "--m-hr",
