@@ -22,7 +22,8 @@ export async function GET() {
     const rows = await prisma.campaign.findMany({ select: CAMPAIGN_SELECT, orderBy: { createdAt: "desc" } });
     const stats = await campaignStats(rows.filter((r) => r.status === "SENT").map((r) => r.id));
     return NextResponse.json({
-        campaigns: rows.map((r) => ({ ...r, stats: stats[r.id] ?? null })),
+        // A sent campaign that reached nobody still shows its (zero) results.
+        campaigns: rows.map((r) => ({ ...r, stats: stats[r.id] ?? (r.status === "SENT" ? { customers: 0, reached: 0, shown: 0, tapped: 0 } : null) })),
         canSend: hasPermission(user, PERMISSIONS.CAMPAIGNS_SEND),
     });
 }
