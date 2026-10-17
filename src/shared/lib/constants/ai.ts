@@ -15,3 +15,7 @@ export const AI_BULK_BATCH_SIZE = 5;
 
 /** How many highlight bullets the Flipkart-style copy carries. */
 export const AI_HIGHLIGHT_COUNT = { min: 4, max: 7 } as const;
+
+/** Most gallery photos sent per product (staff-skipped ones never count). Each
+ *  adds ~1,100 input tokens — about ₹0.05 on the paid key — and a few seconds. */
+export const AI_MAX_PHOTOS = 8;

@@ -25,7 +25,8 @@ export type ProductCopyInput = {
     name: string;
     brand?: string | null;
     category?: string | null;
-    imageUrl?: string | null;
+    /** Gallery photos to send, already without the staff-skipped ones (photoMark.ts). */
+    imageUrls: string[];
     /** Off = never run step 2, even when it would help. */
     search: boolean;
 };
@@ -90,7 +91,7 @@ export function isAiConfigured(): boolean {
 const STRICT_RULES = [
     "STRICT RULE: say nothing false. State a fact only if it is in the product name, printed on the product or pack in the photo, given below as verified, or an official spec of this exact model you are certain of.",
     "If unsure (speed, chipset, part number, yield, OS support, compatibility, switch type, warranty), leave it out and list it in \"unsure\". Fewer true facts beat more doubtful ones.",
-    "Without a photo, never state colour, design or what is in the box.",
+    "Without a photo of the product itself, never state colour, design or what is in the box.",
     "For a consumable, spare or accessory (ink, toner, cartridge, RAM, adapter, battery, charger, cable, keyboard/screen part), give the exact compatible device models the manufacturer lists, in specs as \"Compatible Models\" and one highlight starting \"Works with\" — never a series name alone; if unsure, leave both out.",
 ];
 
@@ -117,11 +118,15 @@ function productLines(p: ProductCopyInput): string[] {
     ].filter(Boolean);
 }
 
-function draftPrompt(p: ProductCopyInput, hasPhoto: boolean): string {
+function draftPrompt(p: ProductCopyInput, photoCount: number): string {
     return [
         "You write product listings for an Indian online shop.",
         ...productLines(p),
-        hasPhoto ? "A photo is attached: read every word, number, code and logo printed on the product and pack." : "",
+        photoCount > 0 ? [
+            `${photoCount} photo${photoCount > 1 ? "s are" : " is"} attached. First decide what each one shows: the product itself, its box/pack, a label or spec sheet (back of box, warranty card), a promo/lifestyle picture (people, places, posters), or something that is not this product.`,
+            "Read every word, number, code and logo printed on the product, box and labels — specs come only from those.",
+            "Colour and design come from photos of the product itself. Promo pictures: ignore the people and background, use them only to confirm colour/design, and treat their slogans as marketing, not specs. Ignore any photo that is not this product, and if photos show different variants, describe the one in the product photos.",
+        ].join("\n") : "",
         ...STRICT_RULES,
         "",
         ...OUTPUT_KEYS,
@@ -146,7 +151,7 @@ function polishPrompt(p: ProductCopyInput, draft: Copy, facts: CitedFact[]): str
     return [
         "Rewrite this shop listing, adding the verified facts below. Keep every fact already in the draft, and keep the colour / variant words of the draft title.",
         ...productLines(p),
-        "Draft (from the product photo):",
+        "Draft (from the product photos):",
         JSON.stringify(draft),
         "Verified facts (each read on a real web page):",
         JSON.stringify(facts.map(({ label, value }) => ({ label, value }))),
@@ -224,9 +229,9 @@ function assembleDescription(c: Copy): string {
 }
 
 export async function generateProductCopy(p: ProductCopyInput): Promise<ProductCopy> {
-    const photo = p.imageUrl && /^https?:\/\//.test(p.imageUrl) ? new URL(p.imageUrl) : null;
-    const draftParts: Part[] = [{ type: "text", text: draftPrompt(p, !!photo) }];
-    if (photo) draftParts.push({ type: "file", data: photo, mediaType: "image" });
+    const photos = p.imageUrls.filter((u) => /^https?:\/\//.test(u)).map((u) => new URL(u));
+    const draftParts: Part[] = [{ type: "text", text: draftPrompt(p, photos.length) }];
+    for (const photo of photos) draftParts.push({ type: "file", data: photo, mediaType: "image" });
 
     // One more try when the reply cannot be read at all (no JSON, no title…).
     const readDraft = async () => draftSchema.parse(parseJson((await callFreeFirst(draftParts)).text));

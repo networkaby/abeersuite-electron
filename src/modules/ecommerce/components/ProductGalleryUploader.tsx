@@ -5,7 +5,8 @@ import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Crop, Link2, Star, Trash2, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, Crop, EyeOff, Link2, Sparkles, Star, Trash2, Upload } from "lucide-react";
+import { isAiSkipped, setAiSkipped } from "@/shared/lib/shop/photoMark";
 import { uploadImageToCloudinary } from "@/shared/lib/uploadToCloudinary";
 import { cloudinaryThumb, isCloudinaryUrl } from "@/shared/lib/cloudinaryImage";
 import ImageAdjustDialog from "@/modules/ecommerce/components/ImageAdjustDialog";
@@ -134,6 +135,12 @@ export default function ProductGalleryUploader({
                         ) : (
                             <span className="absolute left-1 top-1 rounded bg-background/80 px-1 text-[10px]">{i + 1}</span>
                         )}
+                        {isAiSkipped(url) && (
+                            <span className="absolute bottom-1 left-1 flex items-center gap-0.5 rounded bg-background/90 px-1 text-[10px] text-muted-foreground">
+                                <EyeOff className="size-3" />
+                                AI skip
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>
@@ -207,6 +214,17 @@ export default function ProductGalleryUploader({
                                 onClick={() => move(selected, 1)}
                             >
                                 <ChevronRight className="size-4" />
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                title="Skipped photos are not sent to AI — saves time and cost (ads, duplicates, other products)"
+                                onClick={() => replaceAt(selected, setAiSkipped(urls[selected], !isAiSkipped(urls[selected])))}
+                            >
+                                {isAiSkipped(urls[selected])
+                                    ? <><Sparkles className="mr-2 size-4" />Use for AI</>
+                                    : <><EyeOff className="mr-2 size-4" />Skip for AI</>}
                             </Button>
                             <Button
                                 type="button"
