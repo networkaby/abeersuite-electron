@@ -1,19 +1,19 @@
-# v1.16.8
+# v1.16.9 [urgent]
 
-Install when convenient. Customer WhatsApp messages now reach staff on every device, and E-Commerce can write product descriptions with AI. This release adds a small new table, so every counter should take this update before the office website is updated.
+Every counter should install this today. It brings Campaigns — a way to send one message to many customers — and makes staff WhatsApp alerts quieter. This release adds a new table, so every counter must take this update before the office website is updated; until a counter updates, its sync pauses.
 
-## WhatsApp messages
-- When a customer sends a WhatsApp message, staff get a notification on the office website and POS, even with the tab closed. The browser asks once to allow notifications.
-- The desktop app shows the Windows notification correctly, also while it sits in the tray.
-- The staff phone app now shows the same message popup as the office, with reply, take and hand over.
-- With the new staff app (version 2.1.0), phones get the notification even when the app is closed. Tapping it opens that customer's chat.
-- A chat nobody has answered goes to everyone who can reply. Once someone replies, only they and the people they invite are notified.
+## Campaigns (new)
+- New **Campaigns** page in the office: write a greeting or an offer once, for many customers at a time. A campaign can carry an existing coupon.
+- **Send now** sends the message as a phone notification to every customer who has notifications switched on in the customer app.
+- A sent campaign that reached nobody now shows zero results clearly, instead of looking unfinished.
+
+## Staff app and WhatsApp
+- New customer messages now show as a short WhatsApp-style banner for 3 seconds, without sound, instead of desktop-style cards.
+- A floating WhatsApp button shows how many chats are waiting; tap it to open them.
 
 ## Phone apps
-- The staff app and the customer app now say "New version available" when a newer app is out, with a Download button. Tap Later to be reminded the next day.
-- The staff app 2.1.0 is ready to download. Install it once to get message notifications with the app closed.
+- Each app (staff and customer) now downloads its update from its own website.
+- Customer app 2.1.0 is out; customers still on 2.0.0 now see the update bar.
 
-## E-Commerce
-- New **Generate with AI** button on the product form, and a bulk screen for many products. It drafts the online name and description from the product photo and name; staff tap Use to keep each line.
-- When it searches online for details, every fact must come from a page it can link to. Nothing is made up, and the photo's colour or variant is kept.
-- Consumables list the device models they fit.
+## Counters
+- AI product descriptions and other outside services now run directly from the till when it holds their keys, so they respond faster.
