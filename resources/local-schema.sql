@@ -4200,6 +4200,25 @@ ALTER TABLE "PushMessage" ADD COLUMN IF NOT EXISTS "clickedAt" TIMESTAMP(3);
 ALTER TABLE "PushMessage" ALTER COLUMN "clickedAt" DROP NOT NULL;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "StaffPushDevice" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "token" TEXT NOT NULL,
+    "userAgent" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "StaffPushDevice_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "userId" INTEGER NOT NULL;
+ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "token" TEXT NOT NULL;
+ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "userAgent" TEXT;
+ALTER TABLE "StaffPushDevice" ALTER COLUMN "userAgent" DROP NOT NULL;
+ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "Role" (
     "id" TEXT NOT NULL,
     "label" TEXT NOT NULL,
@@ -5744,6 +5763,12 @@ CREATE INDEX IF NOT EXISTS "PushMessage_personId_sentAt_idx" ON "PushMessage"("p
 CREATE INDEX IF NOT EXISTS "PushMessage_refType_refId_idx" ON "PushMessage"("refType", "refId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "StaffPushDevice_token_key" ON "StaffPushDevice"("token");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "StaffPushDevice_userId_idx" ON "StaffPushDevice"("userId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "UserPermission_userId_permissionId_key" ON "UserPermission"("userId", "permissionId");
 
 -- CreateIndex
@@ -7105,6 +7130,13 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "PushMessage" ADD CONSTRAINT "PushMessage_personId_fkey" FOREIGN KEY ("personId") REFERENCES "Person"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "StaffPushDevice" ADD CONSTRAINT "StaffPushDevice_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;

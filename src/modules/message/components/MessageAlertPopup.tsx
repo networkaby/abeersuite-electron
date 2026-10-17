@@ -175,18 +175,22 @@ function chime() {
 
 const inChat = (a: Alert, me: number) => !!a.claim && (a.claim.owner.id === me || a.claim.helpers.some((h) => h.id === me));
 
-export default function MessageAlertPopup() {
+/**
+ * `href` is where "open the full chat" goes — the staff phone app passes its own
+ * Inbox, since a phone never leaves the app; `mayOpen` is that screen's own rule.
+ */
+export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen }: { href?: string; mayOpen?: (permissions: string[]) => boolean } = {}) {
     const router = useRouter();
     const pathname = usePathname();
     const { data } = useSession();
     const user = data?.user as { id?: string; permissions?: string[] } | undefined;
     const me = user?.id ? Number(user.id) : null;
     const permissions = user?.permissions;
-    const allowed = !!me && !!permissions && canOpenPage(MESSAGES_HREF, permissions);
+    const allowed = !!me && !!permissions && (mayOpen ? mayOpen(permissions) : canOpenPage(href, permissions));
     const canReply = !!permissions && (permissions.includes(PERMISSIONS.MESSAGES_REPLY) || permissions.includes(PERMISSIONS.ADMIN_BYPASS));
     // The POS Messages drawer shows everything too — hide while it is up.
     const drawerOpen = useChatDrawerOpen();
-    const onMessagesScreen = (pathname?.startsWith(MESSAGES_HREF) ?? false) || drawerOpen;
+    const onMessagesScreen = (pathname?.startsWith(href) ?? false) || drawerOpen;
 
     const [items, setItems] = useState<Alert[]>([]);
     const [loaded, setLoaded] = useState(false);
@@ -423,7 +427,7 @@ export default function MessageAlertPopup() {
                                     : `${a.claim.owner.name} has not answered for 10 min`}
                         </p>
                     </div>
-                    <button onClick={() => { if (!requestOpenChat(a.phone)) router.push(`${MESSAGES_HREF}?phone=${a.phone}`); }} className="text-muted-foreground hover:text-foreground" title="Open the full chat">
+                    <button onClick={() => { if (!requestOpenChat(a.phone)) router.push(`${href}?phone=${a.phone}`); }} className="text-muted-foreground hover:text-foreground" title="Open the full chat">
                         <ExternalLink className="size-4" />
                     </button>
                     <button onClick={() => changePlace({ ...place, minimised: true })} className="text-muted-foreground hover:text-foreground" title="Minimise to a chat bubble">
@@ -530,7 +534,7 @@ export default function MessageAlertPopup() {
                 <div ref={boxRef} style={{ right: place.right, bottom: Math.max(0, Math.min(place.bottom, (typeof window === "undefined" ? 0 : window.innerHeight) - boxH - 8)) }} className="fixed z-[60] flex w-96 max-w-[calc(100vw-1rem)] flex-col gap-2">
                     {stacked.map(renderCard)}
                     {more > 0 && (
-                        <button onClick={() => router.push(MESSAGES_HREF)} className="self-end rounded-md bg-green-600 px-2 py-1 text-xs text-white shadow">
+                        <button onClick={() => router.push(href)} className="self-end rounded-md bg-green-600 px-2 py-1 text-xs text-white shadow">
                             +{more} more waiting
                         </button>
                     )}

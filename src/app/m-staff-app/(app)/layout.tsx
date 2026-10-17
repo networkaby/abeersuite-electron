@@ -6,6 +6,8 @@ import { redirectIfPcWithoutCounter } from "@/shared/lib/auth/permissions";
 import SessionWrapper from "@/shared/components/SessionWrapper";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import MobileShell from "@/modules/mobile/components/MobileShell";
+import MobileMessageAlert from "@/modules/mobile/components/MobileMessageAlert";
+import StaffPushRegister from "@/modules/mobile/components/StaffPushRegister";
 import { PHONE_APP_HOME, PHONE_APP_SIGN_IN, PHONE_APP_THEME } from "@/shared/lib/device/phone";
 
 export const metadata: Metadata = {
@@ -50,6 +52,8 @@ export default async function MobileLayout({ children }: { children: React.React
             <MobileShell user={{ name: user.name ?? "", roleLabel: user.roleLabel ?? null, permissions: user.permissions ?? [] }}>
                 {children}
             </MobileShell>
+            <MobileMessageAlert />
+            <StaffPushRegister />
             <Toaster position="top-center" />
         </SessionWrapper>
     );

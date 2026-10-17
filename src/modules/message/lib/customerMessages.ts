@@ -687,7 +687,11 @@ export function mediaLink(key: string | null, fileName?: string | null, download
 }
 
 /** Store the customer messages in one webhook change. Duplicates (Meta retries) are skipped. */
-export async function ingestInbound(value: WaChangeValue): Promise<number> {
+export async function ingestInbound(
+    value: WaChangeValue,
+    /** Told about each stored, non-spam message — the webhook pushes staff phones. */
+    onStored?: (m: { phone: string; name: string; text: string }) => void,
+): Promise<number> {
     const names = new Map((value.contacts ?? []).map((c) => [c.wa_id ?? "", c.profile?.name ?? null]));
     let stored = 0;
     for (const m of value.messages ?? []) {
@@ -742,6 +746,7 @@ export async function ingestInbound(value: WaChangeValue): Promise<number> {
                 },
             });
             stored++;
+            if (phone && !spam) onStored?.({ phone, name: owner?.name ?? senderName ?? `+91 ${phone}`, text: text || "[message]" });
 
             // A bare "1" answering the menu is not worth a line in the ticket's history.
             if (ticketId && text && !route?.bareMenuPick) {

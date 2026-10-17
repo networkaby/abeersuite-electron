@@ -235,3 +235,4 @@ resources/7za.exe
 !/shop-app/build-apk.ps1
 
 certificates
+/phone-app/android/app/google-services.json

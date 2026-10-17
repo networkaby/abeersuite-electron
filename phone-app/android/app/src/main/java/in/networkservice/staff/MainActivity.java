@@ -1,5 +1,48 @@
 package in.networkservice.staff;
 
+import android.Manifest;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import android.os.Bundle;
+
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
 import com.getcapacitor.BridgeActivity;
 
-public class MainActivity extends BridgeActivity {}
+public class MainActivity extends BridgeActivity {
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(NsPushPlugin.class);
+        super.onCreate(savedInstanceState);
+        NsMessagingService.ensureChannel(this);
+        askForNotifications();
+        openFromNotification(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        openFromNotification(intent);
+    }
+
+    /** Android 13+ asks once; without it messages still pop up while the app is open. */
+    private void askForNotifications() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[] { Manifest.permission.POST_NOTIFICATIONS }, 7);
+        }
+    }
+
+    /** A tapped notification opens its chat inside the app. */
+    private void openFromNotification(Intent intent) {
+        if (intent == null) return;
+        String path = intent.getStringExtra(NsMessagingService.EXTRA_URL);
+        if (path == null) return;
+        intent.removeExtra(NsMessagingService.EXTRA_URL);
+        if (!path.startsWith("/")) return;
+        String site = getString(R.string.ns_site);
+        getBridge().getWebView().post(() -> getBridge().getWebView().loadUrl(site + path));
+    }
+}
