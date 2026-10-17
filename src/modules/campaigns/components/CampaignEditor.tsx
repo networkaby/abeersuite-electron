@@ -18,6 +18,7 @@ import {
     CAMPAIGN_BODY_MAX,
     CAMPAIGN_CHANNELS,
     CAMPAIGN_TITLE_MAX,
+    campaignBody,
     type CampaignInput,
     type CampaignRow,
 } from "@/modules/campaigns/lib/campaign";
@@ -45,10 +46,12 @@ const fromRow = (c: CampaignRow): Form => ({
 /** Write / edit one campaign, with a phone-style preview of the notification. */
 export default function CampaignEditor({
     campaign,
+    canSend,
     onClose,
     onSaved,
 }: {
     campaign: CampaignRow | null;
+    canSend: boolean;
     onClose: () => void;
     onSaved: () => void;
 }) {
@@ -75,6 +78,7 @@ export default function CampaignEditor({
             : []),
     ];
     const reach = options?.audience[form.audience];
+    const couponCode = options?.coupons.find((c) => c.id === form.couponId)?.code ?? (saved?.id === form.couponId ? saved.code : null) ?? null;
 
     async function save() {
         setSaving(true);
@@ -85,6 +89,29 @@ export default function CampaignEditor({
             onSaved();
         } catch (e) {
             toast.error(extractApiError(e, "Failed to save the campaign"));
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    /** Saves the latest wording first, then sends — what is on screen is what goes. */
+    async function send() {
+        if (!campaign) return;
+        const who = reach ? `${reach.customers} customers (${reach.devices} phones / browsers)` : "every customer with notifications on";
+        const ok = await confirmAction({
+            title: `Send "${form.title}" now?`,
+            body: `It goes to ${who} at once and cannot be taken back.`,
+            confirmLabel: "Send",
+        });
+        if (!ok) return;
+        setSaving(true);
+        try {
+            await axios.patch(`/api/campaigns/${campaign.id}`, form);
+            await axios.post(`/api/campaigns/${campaign.id}/send`);
+            toast.success("Sending now — results fill in over the next few minutes");
+            onSaved();
+        } catch (e) {
+            toast.error(extractApiError(e, "Failed to send the campaign"));
         } finally {
             setSaving(false);
         }
@@ -108,7 +135,9 @@ export default function CampaignEditor({
                 <DialogHeader>
                     <DialogTitle>{campaign ? campaign.name : "New campaign"}</DialogTitle>
                     <DialogDescription>
-                        {sent ? "This campaign was sent and is kept as history." : "Write it now; sending comes in the next step."}
+                        {sent
+                            ? "This campaign was sent and is kept as history."
+                            : "Save it as a draft, or send it to every customer with notifications on."}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -205,7 +234,9 @@ export default function CampaignEditor({
                                     <Bell size={11} /> Network Service · now
                                 </div>
                                 <p className="text-sm font-semibold leading-snug">{form.title || "Title"}</p>
-                                <p className="whitespace-pre-line text-[13px] leading-snug text-slate-700">{form.body || "Your message shows here."}</p>
+                                <p className="whitespace-pre-line text-[13px] leading-snug text-slate-700">
+                                    {form.body ? campaignBody(form.body, couponCode) : "Your message shows here."}
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -220,9 +251,16 @@ export default function CampaignEditor({
                         )}
                     </div>
                     <div className="flex gap-2">
-                        <Button variant="outline" disabled title="Sending comes in the next step">
-                            <Send className="mr-1.5 h-4 w-4" /> Send · coming next
-                        </Button>
+                        {!sent && (
+                            <Button
+                                variant="outline"
+                                onClick={send}
+                                disabled={saving || !campaign || !canSend}
+                                title={!campaign ? "Save it first" : !canSend ? "Needs the Send campaigns tick" : undefined}
+                            >
+                                <Send className="mr-1.5 h-4 w-4" /> Send now
+                            </Button>
+                        )}
                         {!sent && (
                             <Button onClick={save} disabled={saving}>
                                 {saving ? "Saving…" : "Save"}

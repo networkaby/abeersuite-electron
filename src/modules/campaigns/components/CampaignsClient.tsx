@@ -22,16 +22,20 @@ const labelOf = (list: readonly { value: string; label: string }[], v: string) =
 
 /**
  * Campaigns — one message to many customers (a greeting, an offer). Phase 1:
- * write and save; sending arrives with phase 2.
+ * write, save, and send as an app notification; sent ones show their results.
  */
 export default function CampaignsClient() {
     const [rows, setRows] = useState<CampaignRow[] | null>(null);
+    const [canSend, setCanSend] = useState(false);
     const [editing, setEditing] = useState<CampaignRow | "new" | null>(null);
 
     const load = useCallback(() => {
         axios
-            .get<CampaignRow[]>("/api/campaigns")
-            .then((r) => setRows(r.data))
+            .get<{ campaigns: CampaignRow[]; canSend: boolean }>("/api/campaigns")
+            .then((r) => {
+                setRows(r.data.campaigns);
+                setCanSend(r.data.canSend);
+            })
             .catch((e) => toast.error(extractApiError(e, "Failed to load campaigns")));
     }, []);
 
@@ -95,9 +99,14 @@ export default function CampaignsClient() {
                                     <p className="truncate text-sm text-muted-foreground">
                                         <span className="text-foreground">{c.title}</span> — {c.body}
                                     </p>
+                                    {c.stats && (
+                                        <p className="mt-0.5 text-xs text-muted-foreground">
+                                            {c.stats.customers} customers · {c.stats.reached} reached · {c.stats.shown} shown · {c.stats.tapped} tapped
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="shrink-0 text-right text-xs text-muted-foreground">
-                                    <div>{new Date(c.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</div>
+                                    <div>{new Date(c.sentAt ?? c.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</div>
                                     {c.createdBy && <div>{c.createdBy.name}</div>}
                                 </div>
                             </button>
@@ -109,6 +118,7 @@ export default function CampaignsClient() {
             {editing && (
                 <CampaignEditor
                     campaign={editing === "new" ? null : editing}
+                    canSend={canSend}
                     onClose={() => setEditing(null)}
                     onSaved={() => {
                         setEditing(null);

@@ -46,6 +46,12 @@ export const campaignSchema = z.object({
 
 export type CampaignInput = z.infer<typeof campaignSchema>;
 
+/** The notification text: the coupon code goes on its own line unless the message already says it. */
+export function campaignBody(body: string, couponCode: string | null): string {
+    if (!couponCode || body.toUpperCase().includes(couponCode.toUpperCase())) return body;
+    return `${body}\nCode: ${couponCode}`;
+}
+
 export const CAMPAIGN_SELECT = {
     id: true,
     name: true,
@@ -78,4 +84,6 @@ export type CampaignRow = {
     createdAt: string;
     updatedAt: string;
     createdBy: { name: string } | null;
+    /** Sent campaigns only: customers messaged, reached, shown on the phone, tapped. */
+    stats?: { customers: number; reached: number; shown: number; tapped: number } | null;
 };
