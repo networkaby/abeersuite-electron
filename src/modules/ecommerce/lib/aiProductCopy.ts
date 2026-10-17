@@ -1,5 +1,5 @@
 import "server-only";
-import { generateText } from "ai";
+import { APICallError, RetryError, generateText } from "ai";
 import { google } from "@ai-sdk/google";
 import { z } from "zod";
 import { AI_HIGHLIGHT_COUNT, AI_PRODUCT_COPY_MODEL } from "@/shared/lib/constants";
@@ -30,6 +30,8 @@ export type ProductCopy = z.infer<typeof copySchema> & {
     sources: { title: string; url: string }[];
     /** Text assembled for InvProduct.shopDescription. */
     shopDescription: string;
+    /** Search was asked for but Google refused it (free-tier key has no search quota). */
+    searchSkipped: boolean;
 };
 
 export function isAiConfigured(): boolean {
@@ -62,18 +64,46 @@ function parseJson(text: string): unknown {
     return JSON.parse(text.slice(start, end + 1));
 }
 
-export async function generateProductCopy(p: ProductCopyInput): Promise<ProductCopy> {
-    const content: ({ type: "text"; text: string } | { type: "image"; image: URL })[] = [
+async function callModel(p: ProductCopyInput) {
+    const content: ({ type: "text"; text: string } | { type: "file"; data: URL; mediaType: string })[] = [
         { type: "text", text: buildPrompt(p) },
     ];
-    if (p.imageUrl && /^https?:\/\//.test(p.imageUrl)) content.push({ type: "image", image: new URL(p.imageUrl) });
-
-    const result = await generateText({
+    if (p.imageUrl && /^https?:\/\//.test(p.imageUrl)) content.push({ type: "file", data: new URL(p.imageUrl), mediaType: "image" });
+    return generateText({
         model: google(AI_PRODUCT_COPY_MODEL),
         tools: p.search ? { google_search: google.tools.googleSearch({}) } : undefined,
         messages: [{ role: "user", content }],
         maxRetries: 1,
     });
+}
+
+/** Google's reason in staff words — 402 / 429 mean the key's billing, not this product. */
+/** Google's HTTP status, looking inside the SDK's retry wrapper. */
+function aiStatus(e: unknown): number | undefined {
+    const inner = RetryError.isInstance(e) ? e.lastError : e;
+    return APICallError.isInstance(inner) ? inner.statusCode : undefined;
+}
+
+export function aiErrorMessage(e: unknown): string | null {
+    const status = aiStatus(e);
+    if (status === 402) return "Gemini credit is used up — top up the AI Studio project, or use a free-tier key.";
+    if (status === 429) return "Gemini limit reached for now — wait a minute and try again, or turn off Search online.";
+    if (status === 400 || status === 403) return "Gemini refused the key — check GOOGLE_GENERATIVE_AI_API_KEY.";
+    return null;
+}
+
+export async function generateProductCopy(p: ProductCopyInput): Promise<ProductCopy> {
+    let searchSkipped = false;
+    let result;
+    try {
+        result = await callModel(p);
+    } catch (e) {
+        // A free-tier key gets no Google Search quota (429) while plain calls
+        // still work — write from name + photo rather than fail the product.
+        if (!p.search || aiStatus(e) !== 429) throw e;
+        searchSkipped = true;
+        result = await callModel({ ...p, search: false });
+    }
 
     const copy = copySchema.parse(parseJson(result.text));
     const sources = result.sources
@@ -81,5 +111,5 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
         .filter((s, i, all) => all.findIndex((x) => x.url === s.url) === i)
         .slice(0, 8);
     const shopDescription = [copy.highlights.map((h) => `• ${h}`).join("\n"), copy.description].join("\n\n");
-    return { ...copy, sources, shopDescription };
+    return { ...copy, sources, shopDescription, searchSkipped };
 }

@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { extractApiError } from "@/shared/lib/api";
 import { AI_BULK_BATCH_SIZE } from "@/shared/lib/constants";
 import { fetchAiCopy, useCanUseAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
-import { mergeAiSpecs } from "@/modules/ecommerce/components/AiCopyPanel";
+import { mergeAiSpecs, SEARCH_SKIPPED_NOTE } from "@/modules/ecommerce/components/AiCopyPanel";
 
 // Bulk AI copy for products with no shop description (the one-time backlog,
 // then each month's new items). Runs a few at a time, keeps each draft on
@@ -66,19 +66,25 @@ export default function AiBulkCopyPage() {
         if (!todo.length) { toast.error("Tick the products to write"); return; }
         setRunning(true);
         setProgress({ done: 0, of: todo.length });
-        for (let i = 0; i < todo.length; i += AI_BULK_BATCH_SIZE) {
+        // 503 = the key itself is out (credit / limit / not set up) — every
+        // further product would fail the same way, so stop and say why once.
+        let stopped: string | null = null;
+        for (let i = 0; i < todo.length && !stopped; i += AI_BULK_BATCH_SIZE) {
             await Promise.all(todo.slice(i, i + AI_BULK_BATCH_SIZE).map(async (r) => {
                 try {
                     const draft = await fetchAiCopy({ productId: r.id, search });
                     patchRow(r.id, { draft, error: undefined });
                 } catch (e) {
-                    patchRow(r.id, { error: extractApiError(e, "AI failed") });
+                    const msg = extractApiError(e, "AI failed");
+                    if (axios.isAxiosError(e) && e.response?.status === 503) stopped = msg;
+                    patchRow(r.id, { error: msg });
                 } finally {
                     setProgress((p) => ({ ...p, done: p.done + 1 }));
                 }
             }));
         }
         setRunning(false);
+        if (stopped) toast.error(`Stopped: ${stopped}`);
     };
 
     const save = async (r: Row) => {
@@ -125,7 +131,9 @@ export default function AiBulkCopyPage() {
                     </Link>
                     <h1 className="text-2xl font-semibold tracking-tight">Write descriptions with AI</h1>
                     <p className="text-muted-foreground text-sm">
-                        {total} active product{total === 1 ? "" : "s"} have no description. Tick, generate, check the draft, then save.
+                        {loading && rows.length === 0
+                            ? "Loading…"
+                            : `${total} active product${total === 1 ? "" : "s"} have no description. Tick, generate, check the draft, then save.`}
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
@@ -180,6 +188,7 @@ export default function AiBulkCopyPage() {
                             {r.saved && <p className="text-xs text-green-600">Saved</p>}
                             {r.draft && !r.saved && (
                                 <div className="bg-muted/40 space-y-1 rounded-md p-2">
+                                    {r.draft.searchSkipped && <p className="text-xs text-amber-600">{SEARCH_SKIPPED_NOTE}</p>}
                                     <p className="font-medium">{r.draft.title}</p>
                                     <p className="whitespace-pre-line">{r.draft.shopDescription}</p>
                                     {Object.keys(r.draft.specs).length > 0 && (

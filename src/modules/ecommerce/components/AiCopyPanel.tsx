@@ -11,6 +11,8 @@ import { fetchAiCopy, useCanUseAiCopy, type ProductCopy } from "@/modules/ecomme
 
 type SpecRow = { k: string; v: string };
 
+export const SEARCH_SKIPPED_NOTE = "Online search is not available on this Gemini key (free tier) — written from name and photo only. Check the specs.";
+
 /** Fill the blanks only: an existing label keeps the value staff typed. */
 export function mergeAiSpecs(rows: SpecRow[], specs: Record<string, string>): SpecRow[] {
     const kept = rows.filter((r) => r.k.trim());
@@ -68,6 +70,7 @@ export default function AiCopyPanel({
                 filled.push("specs");
             }
             toast.success(filled.length ? `AI filled ${filled.join(", ")} — review, then Save` : "AI draft ready — use what you like, then Save");
+            if (copy.searchSkipped) toast.warning(SEARCH_SKIPPED_NOTE);
         } catch (e) {
             toast.error(extractApiError(e, "AI could not write this product"));
         } finally {
@@ -92,6 +95,7 @@ export default function AiCopyPanel({
             </div>
             {draft && (
                 <div className="space-y-2 text-sm">
+                    {draft.searchSkipped && <p className="text-xs text-amber-600">{SEARCH_SKIPPED_NOTE}</p>}
                     {titleDiffers && (
                         <DraftRow label="Online name" text={draft.title} onUse={() => onSubheading(draft.title)} />
                     )}

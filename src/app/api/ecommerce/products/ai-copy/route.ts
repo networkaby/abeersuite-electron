@@ -4,7 +4,7 @@ import { z } from "zod";
 import { hasPermission, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
-import { generateProductCopy, isAiConfigured } from "@/modules/ecommerce/lib/aiProductCopy";
+import { aiErrorMessage, generateProductCopy, isAiConfigured } from "@/modules/ecommerce/lib/aiProductCopy";
 
 // AI product copy (Gemini + Google Search). Nothing is written here — the
 // caller shows the draft and saves through the normal product PATCH, so staff
@@ -93,6 +93,8 @@ export async function POST(req: Request) {
         });
         return NextResponse.json(copy);
     } catch (e) {
+        const reason = aiErrorMessage(e);
+        if (reason) return NextResponse.json({ error: reason }, { status: 503 });
         return handleApiError(e, "AI could not write this product");
     }
 }
