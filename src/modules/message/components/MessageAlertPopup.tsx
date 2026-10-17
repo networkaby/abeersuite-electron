@@ -69,7 +69,7 @@ const MAX_CARDS = 3;
 const PLACE_KEY = "message-alert-place:v1";
 const EDGE = 16;
 /** How long the phone banner stays before sliding away, like WhatsApp's. */
-const BANNER_MS = 5_000;
+const BANNER_MS = 3_000;
 
 /** Where the popup sits: its distance from the window's right and bottom edges. */
 type Place = { right: number; bottom: number; minimised: boolean };
@@ -182,8 +182,9 @@ const inChat = (a: Alert, me: number) => !!a.claim && (a.claim.owner.id === me |
  * Inbox, since a phone never leaves the app; `mayOpen` is that screen's own rule.
  *
  * `banner` (the phone app): no cards at all — each new message slides a slim
- * WhatsApp-style banner down from the top for a few seconds; a tap opens the
- * chat in `href`, ✕ hides it. Replying happens in the Inbox, not here.
+ * WhatsApp-style banner down from the top for 3 seconds, silently; a tap opens
+ * the chat in `href`, ✕ hides it. A floating WhatsApp button with the waiting
+ * count opens `href` and hides when nothing waits. Replying happens in the Inbox.
  */
 export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banner = false }: { href?: string; mayOpen?: (permissions: string[]) => boolean; banner?: boolean } = {}) {
     const router = useRouter();
@@ -317,8 +318,10 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
         const fresh = visible.filter((a) => !notified.current!.has(a.lastId));
         for (const id of ids) notified.current.add(id);
         if (!fresh.length || onMessagesScreen) return;
-        chime();
+        // The phone is in hand: the banner is enough — no sound. A locked or
+        // closed phone is alerted by the Android shell (FCM) instead.
         if (banner) { setFlash(fresh[0]); return; }
+        chime();
         if (typeof Notification !== "undefined" && Notification.permission === "granted") {
             const a = fresh[0];
             const n = new Notification(
@@ -402,9 +405,20 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
 
     if (!allowed || onMessagesScreen || !me) return null;
     if (banner) {
-        if (!flash) return null;
-        const others = visible.filter((a) => a.waiting && a.phone !== flash.phone).length;
+        const waiting = visible.filter((a) => a.waiting).length;
         return (
+            <>
+            {waiting > 0 && (
+                <button
+                    onClick={() => router.push(href)}
+                    className="fixed right-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-[60] flex size-14 items-center justify-center rounded-full bg-green-600 text-white shadow-lg active:bg-green-700"
+                    aria-label={`${waiting} chats waiting — open Inbox`}
+                >
+                    <MessageCircle className="size-7" />
+                    <span className="absolute -top-1 -right-1 min-w-5 rounded-full bg-red-600 px-1 text-center text-xs font-semibold leading-5">{waiting}</span>
+                </button>
+            )}
+            {flash && (
             <div className="fixed inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] z-[60] animate-in slide-in-from-top fade-in duration-200">
                 <div className="flex items-center gap-3 rounded-2xl border border-green-300 bg-background p-3 shadow-lg dark:border-green-800">
                     <button
@@ -421,7 +435,6 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
                             <span className="block truncate text-xs text-muted-foreground">
                                 {flash.note?.text ?? flash.body}
                             </span>
-                            {others > 0 && <span className="block text-[11px] text-green-700 dark:text-green-500">+{others} more waiting</span>}
                         </span>
                     </button>
                     <button onClick={() => setFlash(null)} className="shrink-0 p-1 text-muted-foreground" aria-label="Hide">
@@ -429,6 +442,8 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
                     </button>
                 </div>
             </div>
+            )}
+            </>
         );
     }
     const shown = visible.slice(0, MAX_CARDS);
