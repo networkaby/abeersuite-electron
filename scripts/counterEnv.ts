@@ -157,7 +157,7 @@ export function counterEnvCopiedFor(mode: AppMode): readonly string[] {
     return mode === "office"
         ? [...COUNTER_ENV_COPIED, ...COUNTER_ENV_BACKUP_KEYS, ...COUNTER_ENV_CLOUDINARY_KEYS,
         ...COUNTER_ENV_CLOUDFLARE_KEYS, ...COUNTER_ENV_COURIER_KEYS, ...COUNTER_ENV_SUPER_ADMIN_KEYS,
-        ...COUNTER_ENV_WHATSAPP_KEYS]
+        ...COUNTER_ENV_WHATSAPP_KEYS, ...COUNTER_ENV_AI_KEYS]
         : COUNTER_ENV_COPIED;
 }
 
@@ -264,4 +264,13 @@ export const COUNTER_ENV_WHATSAPP_KEYS: readonly string[] = [
     "META_WA_ACCESS_TOKEN",
     "META_WA_PHONE_NUMBER_ID",
     "META_WA_BUSINESS_ACCOUNT_ID",
+];
+/**
+ * Gemini keys for AI product copy. With them the till calls Google itself instead of
+ * relaying through the office (`relayPolicy.ts` NEVER_RELAY) — one hop faster. Office
+ * only, like the rest: a counter build without them simply keeps relaying.
+ */
+export const COUNTER_ENV_AI_KEYS: readonly string[] = [
+    "GOOGLE_GENERATIVE_AI_API_KEY",
+    "GOOGLE_AI_SEARCH_API_KEY",
 ];

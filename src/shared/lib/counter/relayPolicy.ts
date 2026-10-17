@@ -49,6 +49,10 @@ const NEVER_RELAY: readonly RegExp[] = [
     // stays on the replica, which is what lets a PIN work with the line down.
     /^\/api\/counter-pin(\/|$)/,                 // "is there a PIN on this counter?"
     /^\/api\/me\/counter-pin(\/|$)/,             // set or remove one FOR this counter
+    // AI product copy writes nothing and reads one product from the replica; calling
+    // Gemini from here skips the ~0.4s relay hop. Only when this till holds the key
+    // (office builds — COUNTER_ENV_AI_KEYS); without it the office answers instead.
+    ...(process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ? [/^\/api\/ecommerce\/products\/ai-copy$/] : []),
 ];
 
 export type RelaySkipReason =
