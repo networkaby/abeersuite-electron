@@ -16,8 +16,12 @@ const LATER_MS = 24 * 60 * 60 * 1000;
  * full-screen notice when `release.urgent`. Outside the app (no tag) → nothing.
  * No server call: the page compares against the constant it was built with.
  *
- * `apkUrl` must be on the OTHER site address: the app's WebView cannot download a
- * file, but a link off its own host opens in Chrome, which can.
+ * `apkUrl` is the app's own site written with a trailing dot (`office.networkservice.in.`):
+ * the app's WebView cannot download a file, and Capacitor keeps a link to its own
+ * host inside it — the dotted host reads as another host, so it opens in Chrome,
+ * which can, while still being served by the app's own site (owner: staff app from
+ * office, customer app from shop, no cross-site fallback). That site must be
+ * deployed whenever its APK changes, or phones reinstall the old file in a loop.
  */
 export default function AppUpdateBar({ uaTag, release, apkUrl }: { uaTag: string; release: AppRelease; apkUrl: string }) {
     const [show, setShow] = useState(false);

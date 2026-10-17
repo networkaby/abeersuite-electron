@@ -177,6 +177,11 @@ an update.
   `public/.well-known/assetlinks.json`; the app vouches back (`asset_statements`), so the
   install page's `getInstalledRelatedApps()` still sees it as installed. Both files carry
   an extension, so `proxy.ts` never asks for a sign-in.
+- **Update download:** the "New version available" bar links to
+  `https://office.networkservice.in./ns-staff.apk` — office only, never shop. The trailing
+  dot makes Capacitor treat it as another host, so Chrome opens it (the app's WebView
+  cannot download); the customer app does the same with `shop.networkservice.in.`.
+  Deploy `d_office` with every new staff APK, or phones reinstall the old one in a loop.
 - **Build:** `pwsh -File phone-app/build-apk.ps1` — `cap sync`, asks the key's passwords
   (owner types them; environment only, never written), Gradle `assembleRelease`, copies
   the APK to `public/` and writes `assetlinks.json` from the fingerprint **read off the

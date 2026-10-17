@@ -11,7 +11,7 @@ export default function PhoneAppLayout({ children }: { children: React.ReactNode
     return (
         <>
             <NativeAppReady />
-            <AppUpdateBar uaTag={PHONE_APP_UA} release={STAFF_APP_RELEASE} apkUrl={`${COMPANY_DETAILS.sites.shop}${PHONE_APP_APK}`} />
+            <AppUpdateBar uaTag={PHONE_APP_UA} release={STAFF_APP_RELEASE} apkUrl={`${COMPANY_DETAILS.sites.office}.${PHONE_APP_APK}`} />
             {children}
         </>
     );

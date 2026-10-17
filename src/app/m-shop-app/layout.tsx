@@ -35,7 +35,7 @@ export default function CustomerAppLayout({ children }: { children: React.ReactN
         <>
             <NativeAppReady />
             {/* APK on the office address, so the link leaves the app's WebView for Chrome. */}
-            <AppUpdateBar uaTag={SHOP_NATIVE_UA} release={SHOP_APP_RELEASE} apkUrl={`${COMPANY_DETAILS.sites.office}${SHOP_APP_APK}`} />
+            <AppUpdateBar uaTag={SHOP_NATIVE_UA} release={SHOP_APP_RELEASE} apkUrl={`${COMPANY_DETAILS.sites.shop}.${SHOP_APP_APK}`} />
             <CustomerAppShell>{children}</CustomerAppShell>
         </>
     );
