@@ -97,8 +97,9 @@ export default function AiBulkCopyPage() {
         try {
             await axios.patch(`/api/ecommerce/products/${r.id}`, {
                 shopDescription: r.draft.shopDescription,
-                // Staff-typed online name wins; AI title only fills a blank.
-                ...(r.subheading?.trim() ? {} : { shopSubheading: r.draft.title }),
+                // Staff-typed online name wins; the AI's SEO title fills a blank
+                // one, or one that is only a copy of the stock name.
+                ...(r.subheading?.trim() && r.subheading.trim() !== r.name.trim() ? {} : { shopSubheading: r.draft.title }),
                 specs,
             });
             patchRow(r.id, { saved: true });

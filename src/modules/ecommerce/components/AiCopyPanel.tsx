@@ -17,12 +17,14 @@ const SEARCH_NOTE: Record<ProductCopy["search"], string | null> = {
     off: "Written from name and photo only (online search switched off).",
     "no-key": "Written from name and photo — online search needs the paid key (GOOGLE_AI_SEARCH_API_KEY), not set up.",
     failed: "Online search failed, so this is the name-and-photo draft.",
-    "no-sources": "Online search gave no source links, so nothing from it was added — this is the name-and-photo draft.",
+    "no-sources": "Online search found nothing that a real web page confirmed, so nothing from it was added — this is the name-and-photo draft.",
 };
 
 /** How the draft was made + what staff should check before saving. */
 export function AiDraftNotes({ draft }: { draft: ProductCopy }) {
-    const note = SEARCH_NOTE[draft.search];
+    const note = draft.search === "failed" && draft.searchError
+        ? `${SEARCH_NOTE.failed} (${draft.searchError})`
+        : SEARCH_NOTE[draft.search];
     return (
         <>
             {note && <p className="text-muted-foreground text-xs">{note}</p>}
