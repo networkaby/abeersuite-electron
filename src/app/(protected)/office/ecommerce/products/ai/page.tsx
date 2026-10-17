@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { extractApiError } from "@/shared/lib/api";
 import { AI_BULK_BATCH_SIZE } from "@/shared/lib/constants";
-import { fetchAiCopy, useCanUseAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
+import { fetchAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
 import { AiDraftNotes, mergeAiSpecs } from "@/modules/ecommerce/components/AiCopyPanel";
 
 // Bulk AI copy for products with no shop description (the one-time backlog,
@@ -31,7 +31,6 @@ type Row = Item & { draft?: ProductCopy; error?: string; saved?: boolean };
 type Page = { total: number; items: Item[]; nextCursor: number | null };
 
 export default function AiBulkCopyPage() {
-    const canUse = useCanUseAiCopy();
     const [rows, setRows] = useState<Row[]>([]);
     const [total, setTotal] = useState(0);
     const [cursor, setCursor] = useState<number | null>(null);
@@ -114,10 +113,6 @@ export default function AiBulkCopyPage() {
         for (const r of ready) await save(r);
         toast.success(`Saved ${ready.length} product${ready.length === 1 ? "" : "s"}`);
     };
-
-    if (!canUse) {
-        return <p className="text-muted-foreground text-sm">You need the “Generate product copy with AI” tick to use this page.</p>;
-    }
 
     const open = rows.filter((r) => !r.saved);
     const allTicked = open.length > 0 && open.every((r) => selected.has(r.id));

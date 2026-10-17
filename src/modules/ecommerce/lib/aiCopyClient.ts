@@ -1,20 +1,11 @@
 "use client";
 
 import axios from "axios";
-import { useSession } from "next-auth/react";
-import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import type { ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
 
 export type { ProductCopy };
 
 export type AiCopyRequest = { productId: number; name?: string; imageUrl?: string | null; search: boolean };
-
-/** Whether this staff member holds the AI copy tick (the server checks again). */
-export function useCanUseAiCopy(): boolean {
-    const perms = (useSession().data?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
-    return hasPermissionWithScope(perms, PERMISSIONS.ECOMMERCE_AI_COPY);
-}
 
 // Every AI call costs money, so a draft is kept on this machine for the session:
 // pressing Generate again for the same name + photo + search mode is free.

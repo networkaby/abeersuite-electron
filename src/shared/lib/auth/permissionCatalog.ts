@@ -141,9 +141,6 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     // they are what the storefront shows whenever nothing else is scheduled, so
     // they stay locked unless the role holds this.
     { id: "ecommerce:fallback:unlock", label: "Unlock fallback sections", module: "ecommerce", description: "Show the Unlock button on E-Commerce → Customize Home, which opens every permanent fallback section at once to edit, move, switch off or delete, and to make a section a new fallback." },
-    // AI product copy calls a paid model (Gemini) — its own tick so a cost can't
-    // be run up by anyone holding the Products link.
-    { id: "ecommerce:ai:copy", label: "Generate product copy with AI", module: "ecommerce", description: "Use the Generate with AI button and the bulk AI screen on E-Commerce → Products to write descriptions, highlights and specs from the product name, photo and an online search." },
 
     // inventory — per-kind voucher gates (inventory:voucher:<action>:<kind>). Every
     // voucher kind is independent (Sale ≠ Purchase). Generated from the matrix so

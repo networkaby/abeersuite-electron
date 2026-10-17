@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { extractApiError } from "@/shared/lib/api";
-import { fetchAiCopy, useCanUseAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
+import { fetchAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
 
 type SpecRow = { k: string; v: string };
 
@@ -74,13 +74,10 @@ export default function AiCopyPanel({
     onSubheading: (v: string) => void;
     onSpecs: (rows: SpecRow[]) => void;
 }) {
-    const canUse = useCanUseAiCopy();
     // Off by default: Gemini rarely really searches and most cited pages fail the link check (2026-10-17).
     const [search, setSearch] = useState(false);
     const [busy, setBusy] = useState(false);
     const [draft, setDraft] = useState<ProductCopy | null>(null);
-
-    if (!canUse) return null;
 
     const run = async (fresh: boolean) => {
         if (!productId) { toast.error("Save the product first, then generate"); return; }

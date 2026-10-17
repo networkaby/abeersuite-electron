@@ -1,8 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { hasPermission, requireModuleAccess } from "@/shared/lib/auth/permissions";
-import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { aiErrorMessage, generateProductCopy, isAiConfigured } from "@/modules/ecommerce/lib/aiProductCopy";
 
@@ -14,11 +13,9 @@ import { aiErrorMessage, generateProductCopy, isAiConfigured } from "@/modules/e
 // POST { productId, name?, imageUrl?, search } → one draft
 
 async function guard() {
-    const { user, response } = await requireModuleAccess("e-commerce");
+    // Anyone who can open E-Commerce may use it — owner's call, no tick of its own.
+    const { response } = await requireModuleAccess("e-commerce");
     if (response) return { response };
-    if (!hasPermission(user, PERMISSIONS.ECOMMERCE_AI_COPY)) {
-        return { response: NextResponse.json({ error: "You need the 'Generate product copy with AI' tick" }, { status: 403 }) };
-    }
     if (!isAiConfigured()) {
         return { response: NextResponse.json({ error: "AI is not set up — add GOOGLE_GENERATIVE_AI_API_KEY to .env" }, { status: 503 }) };
     }
