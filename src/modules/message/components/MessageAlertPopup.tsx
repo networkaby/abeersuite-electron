@@ -68,6 +68,8 @@ const DISMISS_KEY = "message-alert-dismissed:v1";
 const MAX_CARDS = 3;
 const PLACE_KEY = "message-alert-place:v1";
 const EDGE = 16;
+/** How long the phone banner stays before sliding away, like WhatsApp's. */
+const BANNER_MS = 5_000;
 
 /** Where the popup sits: its distance from the window's right and bottom edges. */
 type Place = { right: number; bottom: number; minimised: boolean };
@@ -178,8 +180,12 @@ const inChat = (a: Alert, me: number) => !!a.claim && (a.claim.owner.id === me |
 /**
  * `href` is where "open the full chat" goes — the staff phone app passes its own
  * Inbox, since a phone never leaves the app; `mayOpen` is that screen's own rule.
+ *
+ * `banner` (the phone app): no cards at all — each new message slides a slim
+ * WhatsApp-style banner down from the top for a few seconds; a tap opens the
+ * chat in `href`, ✕ hides it. Replying happens in the Inbox, not here.
  */
-export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen }: { href?: string; mayOpen?: (permissions: string[]) => boolean } = {}) {
+export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banner = false }: { href?: string; mayOpen?: (permissions: string[]) => boolean; banner?: boolean } = {}) {
     const router = useRouter();
     const pathname = usePathname();
     const { data } = useSession();
@@ -200,6 +206,12 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen }: { h
     const [sending, setSending] = useState<string | null>(null);
     const [pick, setPick] = useState<{ mode: PickMode; alert: Alert } | null>(null);
     const notified = useRef<Set<number> | null>(null);
+    const [flash, setFlash] = useState<Alert | null>(null);
+    useEffect(() => {
+        if (!flash) return;
+        const t = setTimeout(() => setFlash(null), BANNER_MS);
+        return () => clearTimeout(t);
+    }, [flash]);
     const [place, setPlace] = useState<Place>({ right: EDGE, bottom: EDGE, minimised: false });
     const boxRef = useRef<HTMLDivElement>(null);
     const bubbleRef = useRef<HTMLButtonElement>(null);
@@ -306,6 +318,7 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen }: { h
         for (const id of ids) notified.current.add(id);
         if (!fresh.length || onMessagesScreen) return;
         chime();
+        if (banner) { setFlash(fresh[0]); return; }
         if (typeof Notification !== "undefined" && Notification.permission === "granted") {
             const a = fresh[0];
             const n = new Notification(
@@ -314,13 +327,13 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen }: { h
             );
             n.onclick = () => { window.focus(); n.close(); };
         }
-    }, [visible, allowed, onMessagesScreen]);
+    }, [visible, allowed, onMessagesScreen, banner]);
 
     useEffect(() => {
-        if (allowed && typeof Notification !== "undefined" && Notification.permission === "default") {
+        if (allowed && !banner && typeof Notification !== "undefined" && Notification.permission === "default") {
             void Notification.requestPermission();
         }
-    }, [allowed]);
+    }, [allowed, banner]);
 
     const close = (a: Alert) => {
         const next = { ...loadDismissed(), [a.phone]: a.lastId };
@@ -388,6 +401,36 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen }: { h
     };
 
     if (!allowed || onMessagesScreen || !me) return null;
+    if (banner) {
+        if (!flash) return null;
+        const others = visible.filter((a) => a.waiting && a.phone !== flash.phone).length;
+        return (
+            <div className="fixed inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] z-[60] animate-in slide-in-from-top fade-in duration-200">
+                <div className="flex items-center gap-3 rounded-2xl border border-green-300 bg-background p-3 shadow-lg dark:border-green-800">
+                    <button
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                        onClick={() => { setFlash(null); router.push(`${href}?phone=${flash.phone}`); }}
+                    >
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-green-600 text-white">
+                            <MessageCircle className="size-5" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold">
+                                {flash.note ? `${flash.note.by} mentioned you · ${flash.name}` : flash.name}
+                            </span>
+                            <span className="block truncate text-xs text-muted-foreground">
+                                {flash.note?.text ?? flash.body}
+                            </span>
+                            {others > 0 && <span className="block text-[11px] text-green-700 dark:text-green-500">+{others} more waiting</span>}
+                        </span>
+                    </button>
+                    <button onClick={() => setFlash(null)} className="shrink-0 p-1 text-muted-foreground" aria-label="Hide">
+                        <X className="size-4" />
+                    </button>
+                </div>
+            </div>
+        );
+    }
     const shown = visible.slice(0, MAX_CARDS);
     const more = visible.length - shown.length;
     const stacked = shown.filter((a) => !cards[a.phone]);
