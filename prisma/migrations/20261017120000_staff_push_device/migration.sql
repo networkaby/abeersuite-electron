@@ -1,5 +1,6 @@
--- Staff phone app push (2026-10-17): a customer's WhatsApp message notifies
--- staff phones even with the app closed (FCM, push/staffPush.ts).
+-- Staff push (2026-10-17): a customer's WhatsApp message notifies staff devices
+-- even with the app or tab closed — the Android staff app (FCM) and browsers
+-- (web push, p256dh + auth). push/staffPush.ts.
 --
 -- RELEASE GATE: the table syncs to the counters (child of User), so every till
 -- must run the build that carries it BEFORE the d_office push applies this
@@ -10,6 +11,8 @@ CREATE TABLE "StaffPushDevice" (
     "id" SERIAL NOT NULL,
     "userId" INTEGER NOT NULL,
     "token" TEXT NOT NULL,
+    "p256dh" TEXT,
+    "auth" TEXT,
     "userAgent" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

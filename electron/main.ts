@@ -1750,6 +1750,9 @@ function buildApplicationMenu(): void {
 }
 
 app.whenReady().then(async () => {
+    // Windows shows a page's Notification (WhatsApp message popup) only for an app
+    // id that matches the installed shortcut — electron-builder's build.appId.
+    if (process.platform === "win32") app.setAppUserModelId("com.abeersuite.desktop");
     buildApplicationMenu();
     createSystemTray();
 

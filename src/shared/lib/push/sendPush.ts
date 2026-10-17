@@ -45,7 +45,7 @@ export type PushResult = {
 
 let webConfigured: boolean | null = null;
 
-function isWebPushConfigured(): boolean {
+export function isWebPushConfigured(): boolean {
     if (webConfigured !== null) return webConfigured;
     const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     const privateKey = process.env.VAPID_PRIVATE_KEY;

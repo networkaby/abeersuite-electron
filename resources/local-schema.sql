@@ -4204,6 +4204,8 @@ CREATE TABLE IF NOT EXISTS "StaffPushDevice" (
     "id" SERIAL NOT NULL,
     "userId" INTEGER NOT NULL,
     "token" TEXT NOT NULL,
+    "p256dh" TEXT,
+    "auth" TEXT,
     "userAgent" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -4213,6 +4215,10 @@ CREATE TABLE IF NOT EXISTS "StaffPushDevice" (
 ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
 ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "userId" INTEGER NOT NULL;
 ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "token" TEXT NOT NULL;
+ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "p256dh" TEXT;
+ALTER TABLE "StaffPushDevice" ALTER COLUMN "p256dh" DROP NOT NULL;
+ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "auth" TEXT;
+ALTER TABLE "StaffPushDevice" ALTER COLUMN "auth" DROP NOT NULL;
 ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "userAgent" TEXT;
 ALTER TABLE "StaffPushDevice" ALTER COLUMN "userAgent" DROP NOT NULL;
 ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
@@ -8400,6 +8406,13 @@ DO $$ BEGIN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "staff_profiles";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "staff_profiles"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('userId');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."StaffPushDevice"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "StaffPushDevice";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "StaffPushDevice"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;
 DO $$ BEGIN

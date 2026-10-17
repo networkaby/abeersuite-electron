@@ -4,6 +4,7 @@ import SessionWrapper from "@/shared/components/SessionWrapper";
 import GlobalInboxListener from "@/modules/message/components/GlobalInboxListener";
 import CallFollowUpPopup from "@/modules/pos/components/CallFollowUpPopup";
 import MessageAlertPopup from "@/modules/message/components/MessageAlertPopup";
+import StaffPushRegister from "@/modules/mobile/components/StaffPushRegister";
 
 // Shared auth wrapper for /vouchers/pos/* routes.
 // The list page (/vouchers/pos) renders inside the normal office chrome via
@@ -33,6 +34,7 @@ export default async function PosLayout({ children }: { children: React.ReactNod
             <GlobalInboxListener currentUserId={userId} />
             <CallFollowUpPopup />
             <MessageAlertPopup />
+            <StaffPushRegister />
         </SessionWrapper>
     );
 }
