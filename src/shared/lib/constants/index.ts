@@ -46,3 +46,4 @@ export * from "./inventory";
 export * from "./badges";
 export * from "./whatsapp";
 export * from "./workflow";
+export * from "./ai";

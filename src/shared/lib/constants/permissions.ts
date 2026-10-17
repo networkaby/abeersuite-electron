@@ -166,6 +166,8 @@ export const PERMISSIONS = {
     // Permanent fallback sections (priority -1) stay locked; this key shows the
     // Unlock button that opens them all for editing at once.
     ECOMMERCE_FALLBACK_UNLOCK: "ecommerce:fallback:unlock",
+    // AI product copy (Gemini) — costs money per call, so it has its own tick.
+    ECOMMERCE_AI_COPY: "ecommerce:ai:copy",
 
     // POS — shift / till / handover lifecycle
     POS_SHIFT_OPEN: "pos:shift:open",

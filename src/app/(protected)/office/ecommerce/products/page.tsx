@@ -13,6 +13,7 @@ import {
     DEFAULT_SHOP_PUBLISH_RULES,
     type ShopPublishRules,
 } from "@/modules/ecommerce/lib/shopQualification";
+import { useCanUseAiCopy } from "@/modules/ecommerce/lib/aiCopyClient";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
 import { PaginationBar } from "@/shared/components/PaginationBar";
 import { Badge } from "@/components/ui/badge";
@@ -138,6 +139,7 @@ function StatusBadge({ status }: { status: ProductStatus }) {
 }
 
 export default function EcommerceProductsPage() {
+    const canUseAi = useCanUseAiCopy();
     // Plain defaults on first render — sessionStorage doesn't exist during SSR,
     // so seeding these useState calls from loadSavedView() (as before) made the
     // client's first paint diverge from the server HTML and triggered a
@@ -424,7 +426,11 @@ export default function EcommerceProductsPage() {
                         One catalogue across shop, POS and Sale vouchers. Publish a product once it’s shop-ready.
                     </p>
                 </div>
-
+                {canUseAi && (
+                    <Button asChild variant="outline" size="sm">
+                        <Link href="/office/ecommerce/products/ai">Write descriptions with AI</Link>
+                    </Button>
+                )}
             </div>
 
             {/* Tabs + search + filter button */}
