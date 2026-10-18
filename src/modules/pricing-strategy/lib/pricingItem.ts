@@ -28,7 +28,6 @@ export interface PricingItem {
     /** Deprecated (PricingStrategy dropped) — always null. */
     strategyCostMethod:   string | null;
     marginPercent:    number | null;
-    priceOverridden:  boolean;
     effectiveSalePricePaise: number | null;
     mrpPaise:         number | null;
     /** Stays in the interface as null for back-compat; STD_COST was dropped in PR 3. */

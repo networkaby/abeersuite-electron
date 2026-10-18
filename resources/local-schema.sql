@@ -2460,7 +2460,6 @@ CREATE TABLE IF NOT EXISTS "InvProduct" (
     "heightCm" INTEGER,
     "costMethod" "CostMethod",
     "marginPercent" DECIMAL(6,2),
-    "priceOverridden" BOOLEAN NOT NULL DEFAULT false,
     "effectiveSalePriceSource" "EffectiveSalePriceSource" NOT NULL DEFAULT 'STRATEGY',
     "savedSalePricePaise" INTEGER,
     "salePriceFrozenAt" TIMESTAMP(3),
@@ -2544,7 +2543,6 @@ ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "costMethod" "CostMethod";
 ALTER TABLE "InvProduct" ALTER COLUMN "costMethod" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "marginPercent" DECIMAL(6,2);
 ALTER TABLE "InvProduct" ALTER COLUMN "marginPercent" DROP NOT NULL;
-ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "priceOverridden" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "effectiveSalePriceSource" "EffectiveSalePriceSource" NOT NULL DEFAULT 'STRATEGY';
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "savedSalePricePaise" INTEGER;
 ALTER TABLE "InvProduct" ALTER COLUMN "savedSalePricePaise" DROP NOT NULL;

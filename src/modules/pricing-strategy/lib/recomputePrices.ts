@@ -3,8 +3,7 @@
 // POS price reflects the new cost basis immediately.
 //
 //   • Always scoped to a productIds list (callers pass the touched products).
-//   • Skips priceOverridden=true (manual price lock) and SAVED rows materialize
-//     from savedSalePricePaise without needing cost.
+//   • SAVED rows materialize from savedSalePricePaise without needing cost.
 //   • Designed to run as a sibling transaction AFTER voucher commit — failure
 //     never rolls back the voucher; callers wrap in `.catch(...)`.
 //
@@ -20,7 +19,7 @@ import { loadStrategyPoints, additiveMarginPct, additivePrice } from "@/modules/
 export interface RecomputeResult {
     /** Products whose `effectiveSalePricePaise` was rewritten. */
     updated: number;
-    /** Skipped: priceOverridden=true, or no cost basis, or inactive. */
+    /** Skipped: no cost basis, or no margin to apply. */
     skipped: number;
     /** Products that errored mid-write (Sentry captured by caller). */
     failed:  number;
@@ -51,7 +50,6 @@ export async function recomputePricesForProducts(
                 brandId:                  true,
                 costMethod:               true,
                 marginPercent:            true,
-                priceOverridden:          true,
                 effectiveSalePriceSource: true,
                 savedSalePricePaise:      true,
             },
@@ -71,11 +69,10 @@ export async function recomputePricesForProducts(
 
     // Batch cost resolution grouped by effective method (one query per method).
     // SAVED rows materialize from savedSalePricePaise and never need cost, so they
-    // are excluded from the cost batch (and from priceOverridden skipping).
+    // are excluded from the cost batch.
     const byMethod = new Map<EffectiveMethod, typeof products>();
     for (const p of products) {
         if (p.effectiveSalePriceSource === "SAVED") continue;
-        if (p.priceOverridden) continue;
         const m = effectiveMethodOf(p);
         const arr = byMethod.get(m);
         if (arr) arr.push(p); else byMethod.set(m, [p]);
@@ -102,17 +99,8 @@ export async function recomputePricesForProducts(
             let effective: number | null;
 
             if (p.effectiveSalePriceSource === "SAVED" && p.savedSalePricePaise != null) {
-                // SAVED → the human price, MRP-capped. Wins even over priceOverridden
-                // (it is itself an explicit human choice). No cost needed.
+                // SAVED → the human price, MRP-capped. No cost needed.
                 effective = mrpCap(p.savedSalePricePaise, p.mrpPaise);
-            } else if (p.priceOverridden) {
-                // TODO(old-concept): retired manual price-lock. The Items page that
-                // set this is deleted, so no new row can get the flag — but rows
-                // locked before the switch still rely on this skip. Migrate them to
-                // source=SAVED (savedSalePricePaise = effectiveSalePricePaise), then
-                // drop the column and this branch.
-                result.skipped += 1;
-                continue;
             } else {
                 const cost = costById.get(p.id) ?? null;
                 if (p.effectiveSalePriceSource === "COMPUTED" && p.marginPercent != null && cost != null) {
