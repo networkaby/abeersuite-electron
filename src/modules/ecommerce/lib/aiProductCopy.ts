@@ -2,7 +2,7 @@ import "server-only";
 import { APICallError, RetryError, generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
-import { AI_HIGHLIGHT_COUNT, AI_PRODUCT_COPY_MODEL, type AiSearchMode } from "@/shared/lib/constants/ai";
+import { AI_CALL_TIMEOUT_MS, AI_HIGHLIGHT_COUNT, AI_PRODUCT_COPY_MODEL, type AiSearchMode } from "@/shared/lib/constants/ai";
 import { verifyFacts, type CitedFact } from "@/modules/ecommerce/lib/aiFactCheck";
 
 // Flipkart-style, SEO-friendly product copy, spending search money only where
@@ -214,6 +214,8 @@ function call(apiKey: string, content: Part[], withSearch: boolean) {
         tools: withSearch ? { google_search: google.tools.googleSearch({}) } : undefined,
         messages: [{ role: "user", content }],
         maxRetries: 1,
+        // A grounded search call has hung for minutes (2026-10-19) — cut it off.
+        abortSignal: AbortSignal.timeout(AI_CALL_TIMEOUT_MS),
     });
 }
 
@@ -234,6 +236,7 @@ function aiStatus(e: unknown): number | undefined {
 /** Google's reason in staff words — 402 / 429 / 403 mean the key, not this product. */
 export function aiErrorMessage(e: unknown): string | null {
     if (e instanceof AiReplyError) return e.message;
+    if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) return "Gemini took too long — try again.";
     const status = aiStatus(e);
     if (status === 402) return "Gemini credit is used up — top up the AI Studio project, or use a free-tier key.";
     if (status === 429) return "Gemini limit reached for now — wait a minute and try again.";
@@ -323,12 +326,14 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
         try {
             const found = await call(paidKey, [{ type: "text", text: searchPrompt(p, draft, query) }], true);
             tokens.search += tokensOf(found);
+            console.info(`[aiProductCopy] search reply after ${Date.now() - started} ms`);
             const cited = factsSchema.parse(parseJson(found.text)).facts
                 // A legal paragraph or a foreign-language page is not a spec value.
                 .filter((f) => f.value.trim().length > 0 && (f.value.length <= 120 || /compatib/i.test(f.label)) && !/[^\x20-\x7E₹°×–—’“”]/.test(f.value))
                 .map((f) => ({ ...f, label: /warrant/i.test(f.label) ? "Warranty Summary" : f.label.trim() }));
             const verified = await verifyFacts(cited);
             verifiedFacts = verified.facts.length;
+            console.info(`[aiProductCopy] ${cited.length} cited, ${verifiedFacts} verified after ${Date.now() - started} ms`);
             if (verified.facts.length === 0) {
                 search = "no-sources";
             } else {
