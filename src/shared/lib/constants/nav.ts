@@ -323,7 +323,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         icon: Wrench,
         key: "repair",
         dashboardHref: "/office/repairing",
-        // pathPrefixes: ["/office/repairing/tickets", "/office/repairing/service-centers", "/office/repairing/dashboard"],
+        // pathPrefixes: ["/office/repairing/tickets", "/office/repairing/dashboard"],
         pathPrefixes: ["/office/repairing"],
         createActions: [
             { label: "Repair +", subtitle: "Open repair intake", icon: Wrench, variant: "default", action: "new-ticket", pipelineRef: "default", permission: "tickets:create" },
@@ -331,7 +331,6 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         children: [
             { label: "All Repair", icon: Hammer, href: "/office/repairing/tickets", pipelineRef: "default" },
             { label: "Device Location", icon: MapPin, href: "/office/repairing/device-location" },
-            // { label: "Service Centers", icon: Building2, href: "/office/repairing/service-centers" },
 
         ],
     },

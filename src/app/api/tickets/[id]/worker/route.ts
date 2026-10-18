@@ -440,8 +440,7 @@ export async function PATCH(
             ).catch(() => { /* best-effort */ });
         }
 
-        // TODO(rbac): handoffRole auto-assignment removed (it looked staff up by the
-        // legacy User.role). Re-add Position-based handoff when RBAC is re-wired.
+        // No auto-assignment on handoff. Removed by design — owner's decision (2026-10-18).
         // TODO(notify): worker notifications detached — re-add later, decoupled.
 
         // If the ticket landed on an Action (auto Work), run it + continue the outcome

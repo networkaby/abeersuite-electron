@@ -4532,7 +4532,6 @@ ALTER TABLE "Ticket" ALTER COLUMN "statusEnteredAt" DROP NOT NULL;
 CREATE TABLE IF NOT EXISTS "TicketRepair" (
     "ticketId" INTEGER NOT NULL,
     "deviceId" INTEGER NOT NULL,
-    "serviceCenterId" INTEGER,
     "ticketNo" TEXT,
     "estimatedCost" DOUBLE PRECISION,
     "accessInfo" TEXT,
@@ -4554,8 +4553,6 @@ CREATE TABLE IF NOT EXISTS "TicketRepair" (
 );
 ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "ticketId" INTEGER NOT NULL;
 ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "deviceId" INTEGER NOT NULL;
-ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "serviceCenterId" INTEGER;
-ALTER TABLE "TicketRepair" ALTER COLUMN "serviceCenterId" DROP NOT NULL;
 ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "ticketNo" TEXT;
 ALTER TABLE "TicketRepair" ALTER COLUMN "ticketNo" DROP NOT NULL;
 ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "estimatedCost" DOUBLE PRECISION;
@@ -4927,26 +4924,6 @@ ALTER TABLE "Device" ADD COLUMN IF NOT EXISTS "problem" TEXT NOT NULL;
 ALTER TABLE "Device" ADD COLUMN IF NOT EXISTS "accountId" INTEGER;
 ALTER TABLE "Device" ALTER COLUMN "accountId" DROP NOT NULL;
 ALTER TABLE "Device" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
-
--- CreateTable
-CREATE TABLE IF NOT EXISTS "ServiceCenter" (
-    "id" SERIAL NOT NULL,
-    "name" TEXT NOT NULL,
-    "phone" TEXT NOT NULL,
-    "email" TEXT,
-    "address" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "ServiceCenter_pkey" PRIMARY KEY ("id")
-);
-ALTER TABLE "ServiceCenter" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
-ALTER TABLE "ServiceCenter" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL;
-ALTER TABLE "ServiceCenter" ADD COLUMN IF NOT EXISTS "phone" TEXT NOT NULL;
-ALTER TABLE "ServiceCenter" ADD COLUMN IF NOT EXISTS "email" TEXT;
-ALTER TABLE "ServiceCenter" ALTER COLUMN "email" DROP NOT NULL;
-ALTER TABLE "ServiceCenter" ADD COLUMN IF NOT EXISTS "address" TEXT;
-ALTER TABLE "ServiceCenter" ALTER COLUMN "address" DROP NOT NULL;
-ALTER TABLE "ServiceCenter" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "TaskRecurrence" (
@@ -5890,9 +5867,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS "Ticket_recurrenceId_occurrenceNo_key" ON "Tic
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "TicketRepair_deviceId_idx" ON "TicketRepair"("deviceId");
-
--- CreateIndex
-CREATE INDEX IF NOT EXISTS "TicketRepair_serviceCenterId_idx" ON "TicketRepair"("serviceCenterId");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "TicketRepair_warrantyStatus_idx" ON "TicketRepair"("warrantyStatus");
@@ -7352,13 +7326,6 @@ END $$;
 
 -- AddForeignKey
 DO $$ BEGIN
-    ALTER TABLE "TicketRepair" ADD CONSTRAINT "TicketRepair_serviceCenterId_fkey" FOREIGN KEY ("serviceCenterId") REFERENCES "ServiceCenter"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-EXCEPTION
-    WHEN duplicate_object THEN NULL;
-END $$;
-
--- AddForeignKey
-DO $$ BEGIN
     ALTER TABLE "TicketDeal" ADD CONSTRAINT "TicketDeal_ticketId_fkey" FOREIGN KEY ("ticketId") REFERENCES "Ticket"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
@@ -8447,13 +8414,6 @@ DO $$ BEGIN
     IF to_regclass('public."SavedFilter"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "SavedFilter";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "SavedFilter"
-            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
-    END IF;
-END $$;
-DO $$ BEGIN
-    IF to_regclass('public."ServiceCenter"') IS NOT NULL THEN
-        DROP TRIGGER IF EXISTS "_outbox_capture" ON "ServiceCenter";
-        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "ServiceCenter"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;

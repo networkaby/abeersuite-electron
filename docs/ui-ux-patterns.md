@@ -307,8 +307,6 @@ Kept here so the list is not lost. Full detail is in the audit report.
 - **~40 built pages have no way in** — every voucher register except All, the
   accountancy and customers dashboards, the BI and inventory landing pages, and
   all six workflow settings sub-pages.
-- **A live redirect to a page that was never built** — `/office/service-centers`
-  forwards to `/office/repairing/service-centers`, which does not exist.
 - **Two status endpoints polled before anyone signs in.** `useSyncStatus` and
   `useCounterMode` are mounted in the root layout, which wraps the staff login
   and the public storefront. Each hook keeps its own interval and two components

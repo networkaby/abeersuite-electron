@@ -10,6 +10,7 @@ import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
 import { buildActorSnapshot } from "@/shared/lib/auth/actorSnapshot";
 import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
 import { autoAdvance } from "@/modules/repairing/lib/autoAdvance";
+import { serviceCentreName } from "@/modules/repairing/lib/serviceCentre";
 import { nextRefFromSeries } from "@/modules/accountancy/lib/balance";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
 import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
@@ -60,7 +61,6 @@ const repairInclude = {
                     },
                 },
             },
-            serviceCenter: true,
         },
     },
 } as const;
@@ -75,7 +75,8 @@ function flattenRepair<T extends RepairTicketRow>(t: T) {
     const device = dev
         ? { ...dev, account: dev.account ? { ...dev.account, phone: dev.account.person?.phones?.[0]?.phone ?? dev.account.company?.phones?.[0]?.phone ?? null } : null }
         : null;
-    return { ...t, ...repair, device, serviceCenter: repair.serviceCenter ?? null };
+    const name = serviceCentreName(t.context);
+    return { ...t, ...repair, device, serviceCenter: name ? { name } : null };
 }
 
 const TICKET_INCLUDE = {
@@ -192,7 +193,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-    // TODO(rbac): was requirePermission(TICKETS_CREATE) — open to all staff for now.
+    // Open to all staff by design — owner's decision (2026-10-18).
     const { user, response } = await requireAuth();
     if (response) return response;
     try {

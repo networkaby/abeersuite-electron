@@ -177,7 +177,6 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
             pathname.startsWith("/office/all"),
         repair:
             pathname.startsWith("/office/repairing/tickets") ||
-            pathname.startsWith("/office/repairing/service-centers") ||
             pathname.startsWith("/office/repairing"),
         crm: pathname.startsWith("/office/crm"),
         "e-commerce": pathname.startsWith("/office/ecommerce"),

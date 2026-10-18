@@ -11,6 +11,7 @@ import { findEntryWorker } from "@/modules/repairing/lib/entryWorker";
 import { autoAdvance } from "@/modules/repairing/lib/autoAdvance";
 import { reconcileParentFromChild } from "@/modules/repairing/lib/spawnChild";
 import { listAllChildren } from "@/modules/repairing/lib/childEntities";
+import { serviceCentreName, ticketContext } from "@/modules/repairing/lib/serviceCentre";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { selectPrimaryPhone } from "@/shared/lib/prisma/fragments";
@@ -37,7 +38,8 @@ const ticketUpdateSchema = z.object({
     expectedReturn: z.string().optional().nullable(),
     receivedBackAt: z.string().optional().nullable(),
     externalRef: z.string().optional(),
-    serviceCenterId: z.union([z.coerce.number().int().positive(), z.literal(""), z.null()]).optional(),
+    // Escalate's service centre — a Sundry-Creditor party, kept on Ticket.context.
+    escalatedTo: z.object({ accountId: z.number().int().positive(), name: z.string().trim().min(1) }).nullable().optional(),
     isWarranty: z.boolean().optional(),
     warrantyRef: z.string().optional(),
     purchaseDate: z.string().optional().nullable(),
@@ -55,7 +57,7 @@ export async function GET(
         const { id } = await params;
         const { response } = await requireAuth();
         if (response) return response;
-        // TODO(rbac): scope filtering removed — any authenticated staff can read any ticket.
+        // Any staff can read any ticket. Open to all staff by design — owner's decision (2026-10-18).
 
         const ticket = await prisma.ticket.findFirst({
             where: {
@@ -75,7 +77,6 @@ export async function GET(
                                 },
                             },
                         },
-                        serviceCenter: true,
                     },
                 },
                 ticketStatus: {
@@ -120,11 +121,12 @@ export async function GET(
             ? { ...repair.device, account: acct ? { ...acct, phone: acct.person?.phones?.[0]?.phone ?? acct.company?.phones?.[0]?.phone ?? null } : null }
             : null;
 
+        const centre = serviceCentreName(ticket.context);
         return NextResponse.json({
             ...ticket,
             ...(repair ?? {}),
             device,
-            serviceCenter: repair?.serviceCenter ?? null,
+            serviceCenter: centre ? { name: centre } : null,
             children,
         });
     } catch (e) {
@@ -189,7 +191,6 @@ export async function PUT(
             ...(body.expectedReturn !== undefined && { expectedReturn: body.expectedReturn ? new Date(body.expectedReturn) : null }),
             ...(body.receivedBackAt !== undefined && { receivedBackAt: body.receivedBackAt ? new Date(body.receivedBackAt) : null }),
             ...(body.externalRef !== undefined  && { externalRef: body.externalRef || null }),
-            ...(body.serviceCenterId !== undefined && { serviceCenter: body.serviceCenterId ? { connect: { id: Number(body.serviceCenterId) } } : { disconnect: true } }),
             ...(body.isWarranty !== undefined   && { isWarranty: Boolean(body.isWarranty) }),
             ...(body.warrantyRef !== undefined  && { warrantyRef: body.warrantyRef || null }),
             ...(body.purchaseDate !== undefined && { purchaseDate: body.purchaseDate ? new Date(body.purchaseDate) : null }),
@@ -203,6 +204,9 @@ export async function PUT(
                 ...(body.priority !== undefined && { priority: body.priority }),
                 ...(body.notes !== undefined    && { notes: body.notes }),
                 ...(Object.keys(repairData).length ? { repair: { update: repairData } } : {}),
+                ...(body.escalatedTo !== undefined && {
+                    context: { ...ticketContext(scopedTicket.context), escalatedTo: body.escalatedTo } as Prisma.InputJsonValue,
+                }),
             },
         });
 
@@ -211,10 +215,8 @@ export async function PUT(
         // A locked slip can no longer be edited; a later re-escalation to S62
         // starts a fresh slip. Skipped on undo/back (that's not a real send).
         if (body.status && !("restoreWorkerId" in body) && statusHasWorkflowRole("atServiceCentre", body.status)) {
-            const ctx =
-                scopedTicket.context && typeof scopedTicket.context === "object" && !Array.isArray(scopedTicket.context)
-                    ? (scopedTicket.context as Record<string, unknown>)
-                    : {};
+            const ctx: Record<string, unknown> = { ...ticketContext(scopedTicket.context) };
+            if (body.escalatedTo !== undefined) ctx.escalatedTo = body.escalatedTo;
             const list = Array.isArray(ctx.shippingSlips) ? [...(ctx.shippingSlips as Record<string, unknown>[])] : [];
             const last = list[list.length - 1];
             if (last && !last.locked) {

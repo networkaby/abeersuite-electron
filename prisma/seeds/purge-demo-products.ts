@@ -12,7 +12,7 @@
 // products hang off (InvBrand / InvCategory / InvProductGroup /
 // InvAttributeMaster / InvUnit / InvWarrantyTerm), all Users, all Roles +
 // grants, DepartmentPermission pools, payment_gateways, POS counters + rails,
-// ServiceCenter, Coupon / Loyalty config, Chat + WallPost, and everything
+// Coupon / Loyalty config, Chat + WallPost, and everything
 // bootstrap seeds.
 //
 // Note: party ledgers survive but their balances reset to 0 — the transactions
