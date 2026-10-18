@@ -21,6 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Field } from "@/shared/components/Field";
+import { GatedLink } from "@/shared/components/GatedLink";
 import { QueryStateBlock } from "@/shared/components/QueryStateBlock";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
@@ -29,6 +30,7 @@ import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { formatDate, todayIso } from "@/shared/lib/format/formatDate";
 import { formatInr, formatRupeesFromPaise, parseRupeesToPaise, rupeesToPaise } from "@/shared/lib/format/moneyInr";
+import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
 import type { PayableStaffDto } from "../lib/payrollTypes";
 
 /** Cash and bank ledgers — the only places salary can leave from. */
@@ -227,7 +229,7 @@ export default function PayrollPayTab({ canPay, onPaid }: {
                                     />
                                 </TableCell>
                                 <TableCell>
-                                    <span className="font-medium">{r.name}</span>
+                                    <GatedLink href={accountLedgerUrl(r.ledger.id)} whenLocked="text" textClassName="font-medium" className="font-medium hover:underline">{r.name}</GatedLink>
                                     {r.staffCode && <span className="ml-2 text-xs text-muted-foreground">{r.staffCode}</span>}
                                     {r.hasLeft && (
                                         <Badge variant="outline" className="ml-2 text-muted-foreground">
@@ -259,7 +261,13 @@ export default function PayrollPayTab({ canPay, onPaid }: {
             {!!advances.length && (
                 <p className="text-xs text-muted-foreground">
                     Holding an advance, so not on the list:{" "}
-                    {advances.map((a) => `${a.name} (${formatInr(Math.abs(a.balance))})`).join(", ")}. The next
+                    {advances.map((a, i) => (
+                        <span key={a.userId}>
+                            {i > 0 && ", "}
+                            <GatedLink href={accountLedgerUrl(a.ledger.id)} whenLocked="text" className="hover:underline">{a.name}</GatedLink>
+                            {` (${formatInr(Math.abs(a.balance))})`}
+                        </span>
+                    ))}. The next
                     payroll run credits them and clears it by itself.
                 </p>
             )}
