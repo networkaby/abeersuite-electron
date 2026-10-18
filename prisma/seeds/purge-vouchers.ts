@@ -23,7 +23,7 @@
 // paper invoice; a conversation cannot be re-had.
 //
 // LEAVES INTACT: chart of accounts, opening balances, products, customers,
-// users, org settings, and master data like ServiceCenter.
+// users, org settings, and master data.
 //
 // Run: pnpm seed:purge-vouchers [--comms] [--allow-remote]
 // DESTRUCTIVE — every voucher / stock movement / repair ticket is gone after this.

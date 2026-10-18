@@ -103,7 +103,7 @@ const RULES: ReadonlyArray<readonly [RegExp, readonly Topic[]]> = [
     [/^\/api\/admin-tasks/,                         ["tickets"]],
 
     // ── Configuration ────────────────────────────────────────────────────────
-    [/^\/api\/(settings|roles|permissions|users|positions|departments|branches|org-chart|service-centers)/, ["settings"]],
+    [/^\/api\/(settings|roles|permissions|users|positions|departments|branches|org-chart)/, ["settings"]],
     // HR & People — the staff record is org config like users and positions.
     [/^\/api\/hr\//,                                 ["settings"]],
     [/^\/api\/pos\/counters/,                       ["settings"]],
@@ -157,7 +157,7 @@ export const TOPIC_MODELS: Readonly<Record<Topic, readonly string[]>> = {
     stock: ["InvProduct", "InvProductBranch", "UniversalVoucher"],
     tickets: [
         "Ticket", "TicketLog", "TicketWorker", "TicketStatus", "StatusTransition", "Work", "WorkGroup",
-        "WorkGroupWork", "Pipeline", "Call", "DeliveryMethod", "ServiceCenter",
+        "WorkGroupWork", "Pipeline", "Call", "DeliveryMethod",
     ],
     parties: [
         "Person", "Company", "PersonCompany", "Phone", "Email", "SocialConnection", "CustomerGroup",
@@ -173,7 +173,7 @@ export const TOPIC_MODELS: Readonly<Record<Topic, readonly string[]>> = {
         "OrgDefaults", "BooksConfig", "Branch", "Department", "DepartmentPermission", "Role",
         "RolePermission", "Permission", "Position", "User", "UserPermission", "UserPosition",
         "PosCounter", "PaymentGateway", "AccountGroup", "OfflinePolicy", "BackupConfig",
-        "VoucherPrintTemplate", "VoucherSeries", "ServiceCenter", "Device", "CustomerGroup",
+        "VoucherPrintTemplate", "VoucherSeries", "Device", "CustomerGroup",
         "CreditLimitConfig", "StaffProfile", "StaffSalary",
     ],
     chat: ["ChatRoom", "ChatRoomMember"],

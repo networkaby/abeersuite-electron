@@ -65,7 +65,8 @@
   },
   "retired": [
     64,
-    68
+    68,
+    77
   ],
   "tables": {
     "Account": {
@@ -985,14 +986,6 @@
       "strategy": "child",
       "parent": "User",
       "fk": "ownerUserId"
-    },
-    "ServiceCenter": {
-      "n": 77,
-      "table": "ServiceCenter",
-      "pk": [
-        "id"
-      ],
-      "strategy": "full"
     },
     "SocialConnection": {
       "n": 78,

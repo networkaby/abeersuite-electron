@@ -98,7 +98,7 @@ interface Ticket {
         isTerminal: boolean;
         title: string | null;
     }[];
-    serviceCenter?: { id: number; name: string };
+    serviceCenter?: { name: string } | null;
     logs: {
         id: number;
         status: string;

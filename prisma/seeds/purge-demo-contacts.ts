@@ -10,7 +10,7 @@
 //
 // KEEPS: the whole product catalog (InvProduct + brands / categories / groups),
 // all Users, all Roles + grants, DepartmentPermission pools, payment_gateways,
-// POS counters + rails, ServiceCenter, Coupon / Loyalty config, Chat + WallPost,
+// POS counters + rails, Coupon / Loyalty config, Chat + WallPost,
 // and everything bootstrap seeds.
 //
 // Run: pnpm seed:purge-demo-contacts

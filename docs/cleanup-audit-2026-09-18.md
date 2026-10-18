@@ -170,7 +170,7 @@ All **128** hrefs in `src/shared/lib/constants/nav.ts` resolve to a real page. A
 
 | Line | Rule | Problem | Correct target |
 |---|---|---|---|
-| 99 | `/office/service-centers` → `/office/repairing/service-centers` | destination has no page | — page was removed; drop the rule |
+| 99 | `/office/service-centers` → `/office/repairing/service-centers` | destination has no page | — page was removed; drop the rule (done 2026-10-18) |
 | 106, 107 | `…/settings/pipelines` → `/office/settings/pipelines` | destination has no page | `/office/settings/workflow/pipelines` |
 | 108, 109 | `…/settings/statuses` → `/office/settings/statuses` | destination has no page | `/office/settings/workflow/statuses` |
 | 110, 111 | `…/settings/sub-statuses` → `/office/settings/sub-statuses` | destination has no page | `/office/settings/workflow/workers` (sub-status was renamed to worker) |
@@ -349,7 +349,7 @@ The live screens are `WorkActions.tsx` and `assignments/WorkInboxBoard.tsx`.
 | `src/modules/repairing/components/assignments/TicketCard.tsx` | 217 |
 | `src/modules/repairing/components/TicketOwnershipPanel.tsx` | 181 |
 | `src/modules/repairing/components/WorkerUpdate.tsx` | 159 |
-| `src/modules/repairing/components/ServiceCenterForm.tsx` | 122 |
+| ~~`ServiceCenterForm.tsx`~~ — deleted 2026-10-18 | 122 |
 | `src/modules/repairing/components/TicketStatusUpdate.tsx` | 119 |
 | `src/modules/repairing/components/assignments/PassRejectModal.tsx` | 111 |
 | `src/modules/repairing/components/TicketReopenButton.tsx` | 94 |

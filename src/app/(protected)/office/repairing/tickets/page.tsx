@@ -42,11 +42,9 @@ interface Ticket extends TicketRow {
         problem: string;
         account: { name: string; phone?: string | null } | null;
     };
-    // Legacy escalation set a ServiceCenter master; the new shipping-slip flow
-    // stores the centre as a Sundry-Creditor party name on context. Either can
-    // be the "sent to" centre, so the filter reads both (slip wins).
+    // The "sent to" centre — a Sundry-Creditor party, resolved by the API from
+    // the shipping slip or Escalate (see modules/repairing/lib/serviceCentre).
     serviceCenter?: { name: string } | null;
-    context?: { shippingSlip?: { partyName?: string | null } | null } | null;
 }
 type StatusOption = { id: string; label: string };
 type PriorityOption = { id: string; label: string };
@@ -56,8 +54,7 @@ type PriorityOption = { id: string; label: string };
  *  hook briefly fetching every pipeline's tickets on first mount. */
 const PENDING_PIPELINE = "__pending__";
 
-/** The centre a device was sent to — new shipping-slip party first, else the legacy ServiceCenter. */
-const serviceCenterName = (t: Ticket) => t.context?.shippingSlip?.partyName ?? t.serviceCenter?.name ?? null;
+const serviceCenterName = (t: Ticket) => t.serviceCenter?.name ?? null;
 
 export default function TicketsPage() {
     // Opening the board IS "looking at it" — clears this module's `new` sidebar badge.

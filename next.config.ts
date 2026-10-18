@@ -104,7 +104,6 @@ const nextConfig: NextConfig = {
       { source: "/office/tickets/:path*", destination: "/office/repairing/tickets/:path*", permanent: false },
       { source: "/office/companies", destination: "/office/customers/companies", permanent: false },
       { source: "/office/companies/:path*", destination: "/office/customers/companies/:path*", permanent: false },
-      { source: "/office/service-centers", destination: "/office/repairing/service-centers", permanent: false },
       { source: "/office/dashboard", destination: "/office/repairing", permanent: false },
       // Compat: legacy /office/tally URLs (renamed to /office/accountancy 2026-05-07)
       { source: "/office/tally", destination: "/office/accountancy", permanent: false },
