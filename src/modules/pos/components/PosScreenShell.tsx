@@ -48,6 +48,7 @@ import { useApiResource } from "@/shared/hooks";
 import type { TaskPositionOption } from "@/modules/administration/lib/types";
 import type { PosBilling } from "@/modules/pos/hooks/usePosBilling";
 import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearchAndCreate";
+import { formatInrLoose } from "@/shared/lib/format/moneyInr";
 
 export function PosScreenShell({
     b,
@@ -310,7 +311,7 @@ export function PosScreenShell({
                                                         {/* Price */}
                                                         <span className="whitespace-nowrap text-right text-xs text-muted-foreground">
                                                             {p.effectiveSalePricePaise != null
-                                                                ? `₹${(p.effectiveSalePricePaise / 100).toLocaleString("en-IN")}`
+                                                                ? formatInrLoose(p.effectiveSalePricePaise / 100)
                                                                 : "—"}
                                                         </span>
 
@@ -574,7 +575,7 @@ export function PosScreenShell({
                                                                         <span className="min-w-0 flex-1 leading-snug">{s.name}</span>
                                                                         <span className="mt-0.5 shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">{s.taxRate > 0 ? `GST ${s.taxRate}%` : "No tax"}</span>
                                                                         <span className="w-14 shrink-0 text-right text-xs text-muted-foreground">
-                                                                            {s.defaultPricePaise != null ? `₹${(s.defaultPricePaise / 100).toLocaleString("en-IN")}` : "—"}
+                                                                            {s.defaultPricePaise != null ? formatInrLoose(s.defaultPricePaise / 100) : "—"}
                                                                         </span>
                                                                     </button>
                                                                 </li>

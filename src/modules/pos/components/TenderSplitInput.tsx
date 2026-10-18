@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { parseDecimalInput } from "@/shared/lib/format";
 import type { UpiPart } from "@/modules/pos/lib/paymentMdr";
+import { formatInrLoose } from "@/shared/lib/format/moneyInr";
 
 /// Rupee box for a tender row. Binds a number but shows what the cashier typed,
 /// so "32." and "32.50" survive the trip through Number(). A change from outside
@@ -147,7 +148,7 @@ export function TenderSplitInput({
                                 amount={s.amount}
                                 onAmount={(amount) => patch(s.id, { amount })}
                                 onBlur={() => { if (s.amount < receivedSum) patch(s.id, { amount: receivedSum }); }}
-                                title={locked ? `₹${receivedSum.toLocaleString("en-IN")} already received by UPI — the amount cannot go below it` : undefined}
+                                title={locked ? `${formatInrLoose(receivedSum)} already received by UPI — the amount cannot go below it` : undefined}
                                 data-tender-field
                                 data-tender-amount
                                 data-tender-split={s.id}

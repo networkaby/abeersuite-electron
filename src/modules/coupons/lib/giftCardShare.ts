@@ -3,6 +3,8 @@
 // so we share via wa.me + mailto deep links (one tap opens the user's app with the
 // message prefilled), matching the existing sharing pattern elsewhere in the app.
 
+import { formatInrLoose } from "@/shared/lib/format/moneyInr";
+
 export interface GiftCardShareInfo {
     brandName: string;
     code: string;
@@ -12,7 +14,7 @@ export interface GiftCardShareInfo {
     link?: string;
 }
 
-const fmtINR = (n: number) => `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const fmtINR = formatInrLoose;
 
 /// The shared human-readable message body used by both channels.
 export function giftCardMessage(info: GiftCardShareInfo): string {
