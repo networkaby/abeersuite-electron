@@ -179,7 +179,7 @@ export const COMPANY_DETAILS: CompanyDetails = {
     staffMailDefaultForward: "networkaby@gmail.com",
 
     contact: {
-        email: "hello@networkservice.in",
+        email: "info@networkservice.in",
         supportEmail: "support@networkservice.in",
         phone: "+91 88769 96996",
         whatsapp: "+91 88769 96996",
