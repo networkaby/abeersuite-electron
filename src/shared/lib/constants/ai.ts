@@ -34,11 +34,21 @@ export const AI_COPY_TEST_ENTITY = "AI_COPY_TEST";
 /** Longest one Gemini call may take before it is cut off (each step; maxRetries=1 can double it). */
 export const AI_CALL_TIMEOUT_MS = 90_000; // a grounded search took ~60 s on 2026-10-19
 
-/** .env keys that write drafts and polish, tried in order (owner, 2026-10-19).
- *  A key refused twice in a day is skipped until midnight. The search step
- *  still uses GOOGLE_AI_SEARCH_API_KEY only. Replaced later by the AI setup page. */
+/** .env keys that write drafts and polish (owner, 2026-10-19). Every key but the
+ *  last is a free-tier key, taken in turn (least recently used first) so one key
+ *  is rarely hit twice inside a minute; the last is the paid key, used when no
+ *  free key is ready. A key refused twice in a row is skipped until midnight; a
+ *  429 (per-minute limit) only rests it for AI_RATE_LIMIT_REST_MS. The search
+ *  step still uses GOOGLE_AI_SEARCH_API_KEY only. Replaced later by the AI setup page. */
 export const AI_WRITE_KEY_CHAIN = [
     "GOOGLE_GENERATIVE_AI_API_KEY",
     "GOOGLE_GENERATIVE_AI_API_KEY1",
     "GOOGLE_AI_SEARCH_API_KEY",
 ] as const;
+
+/** Safety gap between two calls on the same free key (free tier ≈ 10 calls/min per
+ *  model). A call that cannot wait this long goes to the paid key instead. */
+export const AI_FREE_KEY_GAP_MS = 6_000;
+
+/** How long a key that answered 429 (per-minute limit) is left out. */
+export const AI_RATE_LIMIT_REST_MS = 2 * 60_000;

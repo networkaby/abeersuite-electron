@@ -2,6 +2,7 @@ import "server-only";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { AI_RATE_LIMIT_REST_MS } from "@/shared/lib/constants/ai";
 
 /**
  * Which AI keys are locked out today (owner, 2026-10-19): a key that fails twice
@@ -10,6 +11,10 @@ import * as path from "node:path";
  * on a till (COUNTER_USER_DATA), the OS temp folder elsewhere (a fresh Vercel
  * instance starts clean, which only costs two quick refused calls). Holds .env
  * key NAMES and counts only — never a key value.
+ *
+ * A 429 is the free tier's per-minute limit, not a broken key: it only rests the
+ * key for AI_RATE_LIMIT_REST_MS (in memory — a restart simply tries it again).
+ * Last-use times (also in memory) let callers take free keys in turn.
  */
 
 const FILE = "ai-key-lockouts.json";
@@ -21,6 +26,8 @@ const indiaDay = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/
 const filePath = () => path.join(process.env.COUNTER_USER_DATA || os.tmpdir(), FILE);
 
 let memory: State | null = null;
+const restUntil: Record<string, number> = {};
+const lastUsed: Record<string, number> = {};
 
 function read(): State {
     const today = indiaDay();
@@ -45,12 +52,24 @@ function write(state: State): void {
     }
 }
 
-/** Failed LOCK_AFTER times in a row today. */
+/** Failed LOCK_AFTER times in a row today, or resting after a 429. */
 export function isLockedOut(keyName: string): boolean {
-    return (read().fails[keyName] ?? 0) >= LOCK_AFTER;
+    return (read().fails[keyName] ?? 0) >= LOCK_AFTER || (restUntil[keyName] ?? 0) > Date.now();
 }
 
-export function noteKeyFailure(keyName: string): void {
+/** Mark a key as taken now (before the call, so parallel calls see it). */
+export function noteKeyUse(keyName: string): void {
+    lastUsed[keyName] = Date.now();
+}
+
+/** When the key was last taken (0 = not yet since start). */
+export const keyLastUsed = (keyName: string) => lastUsed[keyName] ?? 0;
+
+export function noteKeyFailure(keyName: string, opts: { rateLimited?: boolean } = {}): void {
+    if (opts.rateLimited) {
+        restUntil[keyName] = Date.now() + AI_RATE_LIMIT_REST_MS;
+        return; // not a strike towards the day lockout
+    }
     const s = read();
     write({ ...s, fails: { ...s.fails, [keyName]: (s.fails[keyName] ?? 0) + 1 } });
 }

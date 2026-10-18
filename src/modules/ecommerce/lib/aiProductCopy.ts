@@ -2,9 +2,9 @@ import "server-only";
 import { APICallError, RetryError, generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
-import { AI_CALL_TIMEOUT_MS, AI_WRITE_KEY_CHAIN, AI_HIGHLIGHT_COUNT, AI_PRODUCT_COPY_MODEL, type AiSearchMode } from "@/shared/lib/constants/ai";
+import { AI_CALL_TIMEOUT_MS, AI_FREE_KEY_GAP_MS, AI_WRITE_KEY_CHAIN, AI_HIGHLIGHT_COUNT, AI_PRODUCT_COPY_MODEL, type AiSearchMode } from "@/shared/lib/constants/ai";
 import { verifyFacts, type CitedFact } from "@/modules/ecommerce/lib/aiFactCheck";
-import { isLockedOut, noteKeyFailure, noteKeySuccess } from "@/shared/lib/ai/keyLockout";
+import { isLockedOut, keyLastUsed, noteKeyFailure, noteKeySuccess, noteKeyUse } from "@/shared/lib/ai/keyLockout";
 
 // Flipkart-style, SEO-friendly product copy, spending search money only where
 // it adds something. House style (owner, 2026-10-19): model + technical specs,
@@ -234,9 +234,9 @@ export function aiErrorMessage(e: unknown): string | null {
     return null;
 }
 
-// Draft and polish walk AI_WRITE_KEY_CHAIN in order; any failure of a key
-// (refused, out of credit, at its limit, too slow) silently moves on to the
-// next. Two failures in a row lock a key out for the day (keyLockout.ts).
+// Draft and polish try keys in keyOrder(); any failure of a key (refused, out
+// of credit, at its limit, too slow) silently moves on to the next. Two
+// failures in a row lock a key out for the day; a 429 only rests it (keyLockout.ts).
 const KEY_FAULTS = new Set([400, 401, 402, 403, 429, 500, 503]);
 const isTimeout = (e: unknown) => e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
 const isKeyFailure = (e: unknown) => KEY_FAULTS.has(aiStatus(e) ?? 0) || isTimeout(e);
@@ -249,8 +249,21 @@ export class AiKeysExhaustedError extends Error {
     }
 }
 
+/** Free keys in turn — least recently used first, none used inside the safety
+ *  gap — then the paid key (the chain's last), so a call never waits. With no
+ *  paid key to fall back on, a free key inside its gap is still tried. */
+function keyOrder(): string[] {
+    const usable = AI_WRITE_KEY_CHAIN.filter((k) => process.env[k] && !isLockedOut(k));
+    const paid = AI_WRITE_KEY_CHAIN[AI_WRITE_KEY_CHAIN.length - 1];
+    const now = Date.now();
+    const free = usable.filter((k) => k !== paid).sort((a, b) => keyLastUsed(a) - keyLastUsed(b));
+    const rested = free.filter((k) => now - keyLastUsed(k) >= AI_FREE_KEY_GAP_MS);
+    return usable.includes(paid) ? [...rested, paid] : free;
+}
+
 async function callChain(content: Part[]) {
-    for (const name of AI_WRITE_KEY_CHAIN.filter((k) => process.env[k] && !isLockedOut(k))) {
+    for (const name of keyOrder()) {
+        noteKeyUse(name);
         try {
             const reply = await call(process.env[name]!, content, false);
             noteKeySuccess(name);
@@ -258,7 +271,7 @@ async function callChain(content: Part[]) {
         } catch (e) {
             if (!isKeyFailure(e)) throw e; // about this product, not the key
             console.warn(`[aiProductCopy] ${name} failed (${aiStatus(e) ?? "timeout"}), trying the next key`);
-            noteKeyFailure(name);
+            noteKeyFailure(name, { rateLimited: aiStatus(e) === 429 });
         }
     }
     throw new AiKeysExhaustedError();
