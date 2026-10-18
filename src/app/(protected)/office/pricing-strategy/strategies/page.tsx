@@ -62,6 +62,7 @@ import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { productMatchesSearch, searchableText } from "@/shared/lib/inventory";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { formatInrLoose } from "@/shared/lib/format/moneyInr";
 
 // Default rows-per-page for the preview table (full list is paginated, not capped).
 const DEFAULT_PAGE_SIZE = 50;
@@ -89,7 +90,7 @@ const sanitize = (raw: string): string => {
 const rupee = (paise: number | null): string =>
     paise == null
         ? "—"
-        : `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+        : formatInrLoose(paise / 100);
 
 const nameOf = (list: Master[], id: number | null): string =>
     id == null ? "—" : list.find((m) => m.id === id)?.name ?? `#${id}`;

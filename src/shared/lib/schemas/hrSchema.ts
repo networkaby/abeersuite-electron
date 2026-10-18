@@ -5,6 +5,7 @@
 // it owns and nothing else is touched. `null` clears a field.
 
 import { z } from "zod";
+import { isoDateSchema } from "./commonSchemas";
 import { partyBankSchema } from "./partyBankSchema";
 import { hhMmSchema, staffPhoneSchema } from "./commonSchemas";
 import { COMMISSION_KINDS } from "../hr/commissionScheme";
@@ -19,7 +20,6 @@ export const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
     CONTRACT:  "Contract",
 };
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 const optText = (max: number) => z.string().trim().max(max).nullable().optional();
 
 /** The job-side fields — only HR (hr:staff:edit) may send these. */
@@ -36,8 +36,8 @@ export const STAFF_PERSONAL_KEYS = [
 export const staffProfilePatchSchema = z.object({
     // job
     staffCode:        z.string().trim().max(20).nullable().optional(),
-    joinedOn:         isoDate.nullable().optional(),
-    leftOn:           isoDate.nullable().optional(),
+    joinedOn:         isoDateSchema.nullable().optional(),
+    leftOn:           isoDateSchema.nullable().optional(),
     leftReason:       optText(300),
     employmentType:   z.enum(EMPLOYMENT_TYPES).optional(),
     weeklyOff:        z.array(z.number().int().min(0).max(6)).max(7).optional(),
@@ -81,7 +81,7 @@ export const salaryLineSchema = z.object({
 export type SalaryLineInput = z.infer<typeof salaryLineSchema>;
 
 export const staffSalaryCreateSchema = z.object({
-    effectiveFrom: isoDate,
+    effectiveFrom: isoDateSchema,
     /** Days a month the salary buys — the government's 26 unless told otherwise. */
     payDays:       z.number().int().min(1, "At least one day").max(31, "A month has no more than 31 days").optional(),
     lines:         z.array(salaryLineSchema).min(1, "At least one line"),
@@ -181,7 +181,7 @@ export type CommissionOverrideInput = z.infer<typeof commissionOverrideSchema>;
 export const commissionEntrySchema = z.object({
     userId: z.number().int().positive(),
     headId: z.number().int().positive(),
-    date:   isoDate,
+    date:   isoDateSchema,
     count:  z.number().int().min(1).max(100_000).default(1),
     note:   optText(300),
 });
@@ -195,9 +195,9 @@ export type CommissionEntryInput = z.infer<typeof commissionEntrySchema>;
 
 /** Generate the run for a period. The posting date defaults to `periodTo`. */
 export const payrollRunCreateSchema = z.object({
-    periodFrom:  isoDate,
-    periodTo:    isoDate,
-    postingDate: isoDate.optional(),
+    periodFrom:  isoDateSchema,
+    periodTo:    isoDateSchema,
+    postingDate: isoDateSchema.optional(),
     note:        optText(300),
 });
 
@@ -205,7 +205,7 @@ export type PayrollRunCreate = z.infer<typeof payrollRunCreateSchema>;
 
 /** Editing a draft run: hold someone back, or change the date / note. */
 export const payrollRunPatchSchema = z.object({
-    postingDate: isoDate.optional(),
+    postingDate: isoDateSchema.optional(),
     note:        optText(300),
     /** Line ids to include / exclude. Only lines the generator could pay may be included. */
     include:     z.array(z.number().int().positive()).optional(),
@@ -221,7 +221,7 @@ export type PayrollRunPatch = z.infer<typeof payrollRunPatchSchema>;
  */
 export const payrollPaySchema = z.object({
     sourceAccountId: z.number().int().positive(),
-    date:            isoDate,
+    date:            isoDateSchema,
     note:            optText(300),
     lines: z.array(z.object({
         userId:      z.number().int().positive(),

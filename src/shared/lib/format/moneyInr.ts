@@ -91,3 +91,8 @@ export function formatDrCr(balance: number, normalBalance: "DEBIT" | "CREDIT" | 
         : (nb === "DEBIT" ? "Dr" : "Cr");
     return `${fmt(Math.abs(balance))} ${sign}`;
 }
+
+/** Float rupees → "₹1,234.5" — up to 2dp, no padding zeros (chips, tooltips, share text). */
+export function formatInrLoose(rupees: number): string {
+    return `₹${rupees.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}

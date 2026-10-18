@@ -3,7 +3,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
-import { moneyNumber, rupeesToPaise } from "@/shared/lib/format/moneyInr";
+import { formatInr, moneyNumber, rupeesToPaise } from "@/shared/lib/format/moneyInr";
 import {
     COMMISSION_RETURN_TYPES, COMMISSION_SALE_TYPES, computeCommission, isCommissionKind, parseSlabs,
     type CommissionRule,
@@ -285,5 +285,5 @@ export async function commissionForUsers(
 function formatLakh(paise: number): string {
     const r = paise / 100;
     if (Math.abs(r) >= 100_000) return `₹${Number((r / 100_000).toFixed(2))}L`;
-    return `₹${Math.round(r).toLocaleString("en-IN")}`;
+    return formatInr(r, 0);
 }

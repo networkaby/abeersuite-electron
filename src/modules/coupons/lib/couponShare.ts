@@ -3,6 +3,8 @@
 // link API, so the image is delivered separately (clipboard / share sheet); these
 // just carry the text. Only coupons WITH a code are shareable.
 
+import { formatInrLoose } from "@/shared/lib/format/moneyInr";
+
 export interface CouponShareInfo {
     brandName: string;
     code: string;
@@ -13,7 +15,7 @@ export interface CouponShareInfo {
     validUntil?: string | null;
 }
 
-const fmtINR = (n: number) => `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const fmtINR = formatInrLoose;
 
 // Numeric mechanic fields shared by the message, the image, and the print card.
 // Values are `unknown` so this stays Prisma-free yet accepts a Prisma Decimal

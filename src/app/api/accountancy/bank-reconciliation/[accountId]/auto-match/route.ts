@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isoDateSchema } from "@/shared/lib/schemas";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { runAutoMatch } from "@/modules/accountancy/lib/bankReconciliation";
 import { accountIdOf, reconError } from "@/modules/accountancy/lib/bankReconRoute";
 
-const iso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected yyyy-mm-dd");
 const schema = z.object({
-    from: iso,
-    to: iso,
+    from: isoDateSchema,
+    to: isoDateSchema,
 });
 
 // POST /api/accountancy/bank-reconciliation/[accountId]/auto-match

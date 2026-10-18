@@ -180,6 +180,9 @@ export interface ThermalReceiptSample {
     /// Issuing-branch address block (multi-line). Rendered only when the
     /// template's `showBranchAddress` flag is on and this is non-empty.
     branchAddress?: string | null;
+    /// Challan printed with "Show prices" off (InvVoucher.showPrices): the goods
+    /// print as item + qty only — no rate, amount or totals.
+    hidePrices?: boolean;
 }
 
 // Plain figures, no "Rs." — the ESC/POS slip prints amounts bare (the column
@@ -446,7 +449,7 @@ function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateD
                     <tr>
                         <th style={{ textAlign: "left" }}>Item</th>
                         <th className="qty">Qty</th>
-                        <th className="amt">Amount</th>
+                        {!sample.hidePrices && <th className="amt">Amount</th>}
                     </tr>
                 </thead>
                 <tbody>
@@ -460,7 +463,7 @@ function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateD
                                 )}
                             </td>
                             <td className="qty">{l.quantity}</td>
-                            <td className="amt">{fmtINR(l.amount)}</td>
+                            {!sample.hidePrices && <td className="amt">{fmtINR(l.amount)}</td>}
                         </tr>
                     ))}
                 </tbody>

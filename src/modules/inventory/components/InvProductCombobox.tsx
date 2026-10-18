@@ -18,6 +18,7 @@
 import { useEffect, useMemo, useState, useCallback, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Plus } from "lucide-react";
+import { formatInr } from "@/shared/lib/format/moneyInr";
 import { useComboboxNav, useProductCatalog, invalidateProductCatalog } from "@/shared/hooks";
 import { primaryBarcode, searchProducts, findByExactCode } from "@/shared/lib/inventory";
 import { NewProductDialog, type AdvancedDefaults, type CreatedProductOption } from "./NewProductDialog";
@@ -79,7 +80,7 @@ type Props = {
 
 const formatINR = (paise: number | null) =>
     paise != null
-        ? `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        ? formatInr(paise / 100)
         : "—";
 
 function toSelected(p: ProductOption): SelectedProduct {

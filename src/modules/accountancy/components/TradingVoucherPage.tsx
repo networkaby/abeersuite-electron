@@ -78,7 +78,7 @@ import { useActiveRow } from "@/shared/hooks/useActiveRow";
 import { useEscape } from "@/shared/hooks/useEscape";
 import { useFormChanges } from "@/shared/hooks/useFormChanges";
 import { cleanLineNote, readLineText } from "@/shared/lib/print/lineDescription";
-import { fmt } from "@/shared/lib/format/moneyInr";
+import { fmt, formatInrLoose } from "@/shared/lib/format/moneyInr";
 import { LifecycleActions } from "@/modules/accountancy/components/LifecycleActions";
 import { BillLinkDialog } from "@/modules/accountancy/components/BillLinkDialog";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
@@ -2061,7 +2061,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                                                         <span className="flex-1 truncate">{svc.name}</span>
                                                                         <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{svc.taxRate > 0 ? `GST ${svc.taxRate}%` : "No tax"}</span>
                                                                         <span className="w-14 text-right text-xs text-muted-foreground">
-                                                                            {svc.defaultPricePaise != null ? `₹${(svc.defaultPricePaise / 100).toLocaleString("en-IN")}` : "—"}
+                                                                            {svc.defaultPricePaise != null ? formatInrLoose(svc.defaultPricePaise / 100) : "—"}
                                                                         </span>
                                                                     </button>
                                                                 </li>

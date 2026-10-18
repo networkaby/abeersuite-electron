@@ -1018,8 +1018,10 @@ function GoodsTable({
     const all = sample.lines;
     const anyHsn = all.some((l) => !!l.hsn);
     const anyUnit = all.some((l) => !!l.unit);
-    const anyDisc = all.some((l) => (l.discount ?? 0) > 0.005);
-    const anyMrp = template.showMrp && all.some((l) => (l.mrp ?? 0) > 0);
+    // A challan printed with "Show prices" off keeps only # / goods / HSN / qty.
+    const priced = !sample.hidePrices;
+    const anyDisc = priced && all.some((l) => (l.discount ?? 0) > 0.005);
+    const anyMrp = priced && template.showMrp && all.some((l) => (l.mrp ?? 0) > 0);
     // Pre-tax basis → the GST ledger rows are safe to add.
     const exclusive = all.some((l) => l.taxable != null);
 
@@ -1066,12 +1068,13 @@ function GoodsTable({
         ...taxRows,
         ...(Math.abs(roundOff) > 0.005 ? [{ label: "Round Off", amount: roundOff }] : []),
     ] : [];
-    const hasTotal = isLastPage && sample.total !== null;
+    // An unpriced challan still closes with the quantity total.
+    const hasTotal = isLastPage && (sample.total !== null || !priced);
 
     // Colspan for a ledger row's right-aligned label: everything between the
     // serial column and the amount column.
     const midCols = 1 /* description */ + (anyHsn ? 1 : 0) + (anyMrp ? 1 : 0)
-        + 1 /* qty */ + (anyUnit ? 1 : 0) + 1 /* rate */ + (anyDisc ? 1 : 0);
+        + 1 /* qty */ + (anyUnit ? 1 : 0) + (priced ? 1 : 0) /* rate */ + (anyDisc ? 1 : 0);
 
     const signed = (n: number) => (n < 0 ? `(-)${fmtINR(Math.abs(n)).replace("Rs. ", "")}` : fmtINR(n).replace("Rs. ", ""));
 
@@ -1085,15 +1088,15 @@ function GoodsTable({
                     {anyMrp && <th className="num" style={{ width: 60 }}>MRP</th>}
                     <th className="num" style={{ width: 56 }}>Quantity</th>
                     {anyUnit && <th className="ctr" style={{ width: 40 }}>per</th>}
-                    <th className="num" style={{ width: 74 }}>Rate</th>
+                    {priced && <th className="num" style={{ width: 74 }}>Rate</th>}
                     {anyDisc && <th className="num" style={{ width: 60 }}>Disc.</th>}
-                    <th className="num" style={{ width: 86 }}>Amount</th>
+                    {priced && <th className="num" style={{ width: 86 }}>Amount</th>}
                 </tr>
             </thead>
             <tbody>
                 {/* Opening balance on a continuation sheet, so the reader can
                     follow the arithmetic across the page break. */}
-                {broughtForward != null && (
+                {priced && broughtForward != null && (
                     <tr className="ledger">
                         <td />
                         <td colSpan={midCols} className="num">Brought forward</td>
@@ -1111,9 +1114,9 @@ function GoodsTable({
                         {anyMrp && <td className="num">{l.mrp ? fmtINR(l.mrp).replace("Rs. ", "") : "—"}</td>}
                         <td className="num">{l.quantity}</td>
                         {anyUnit && <td className="ctr">{l.unit ?? ""}</td>}
-                        <td className="num">{fmtINR(unitRate(l)).replace("Rs. ", "")}</td>
+                        {priced && <td className="num">{fmtINR(unitRate(l)).replace("Rs. ", "")}</td>}
                         {anyDisc && <td className="num">{(l.discount ?? 0) > 0.005 ? fmtINR(l.discount!).replace("Rs. ", "") : "—"}</td>}
-                        <td className="num">{fmtINR(value(l)).replace("Rs. ", "")}</td>
+                        {priced && <td className="num">{fmtINR(value(l)).replace("Rs. ", "")}</td>}
                     </tr>
                 ))}
 
@@ -1131,9 +1134,9 @@ function GoodsTable({
                         {anyMrp && <td className="num" />}
                         <td className="num" />
                         {anyUnit && <td className="ctr" />}
-                        <td className="num" />
+                        {priced && <td className="num" />}
                         {anyDisc && <td className="num" />}
-                        <td className="num" />
+                        {priced && <td className="num" />}
                     </tr>
                 )}
 
@@ -1159,7 +1162,7 @@ function GoodsTable({
                 ))}
 
                 {/* Closing balance of a continuation sheet. */}
-                {carriedForward != null && (
+                {priced && carriedForward != null && (
                     <tr className="grand">
                         <td />
                         <td colSpan={midCols} className="num">Carried forward</td>
@@ -1175,9 +1178,9 @@ function GoodsTable({
                         {anyMrp && <td />}
                         <td className="num">{qtyLabel}</td>
                         {anyUnit && <td />}
-                        <td />
+                        {priced && <td />}
                         {anyDisc && <td className="num">{discTotal > 0.005 ? fmtINR(discTotal).replace("Rs. ", "") : ""}</td>}
-                        <td className="num">{fmtINR(sample.total!)}</td>
+                        {priced && <td className="num">{fmtINR(sample.total!)}</td>}
                     </tr>
                 )}
             </tbody>

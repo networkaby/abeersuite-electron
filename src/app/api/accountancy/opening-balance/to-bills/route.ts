@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, hasPermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { z } from "zod";
+import { isoDateSchema } from "@/shared/lib/schemas";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import {
     saveOpeningBills, defaultOpeningDateIso, DEFAULT_OPENING_REF, OPENING_TYPE, OpeningBillError,
@@ -26,7 +27,7 @@ import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 const schema = z.object({
     dryRun: z.boolean().default(true),
     /** Date every created bill carries. Defaults to the start of this financial year. */
-    date:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD").optional(),
+    date:   isoDateSchema.optional(),
     /** Bill number for the single bill. Defaults to "Opening Balance". */
     ref:    z.string().trim().max(60).optional(),
 });

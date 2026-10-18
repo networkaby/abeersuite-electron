@@ -358,6 +358,17 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     };
 
     const vType = (v.universalVoucher?.type ?? "") as InvVoucherType;   // 5D-11
+    // Challan "Show prices" off (the form's print toggle): goods + qty only,
+    // every money figure dropped so no total, tax or balance can leak onto it.
+    if (vType === "CHALLAN" && v.showPrices === false) {
+        Object.assign(sample, {
+            hidePrices: true,
+            subtotal: null, taxAmount: null, total: null,
+            taxBreakdown: null, hsnSummary: null, charges: null, roundOff: null,
+            receipts: null, balanceDue: null, balanceBefore: null, balanceAfter: null,
+            paymentTerms: null, dueDate: null,
+        } satisfies Partial<ThermalReceiptSample>);
+    }
     const posReturn = vType === "SALE_RETURN" && v.refVoucher?.universalVoucher?.type === "POS";
     const kind: VoucherTemplateKind = posReturn ? "POS_RETURN" : isVoucherTemplateKind(vType) ? vType : "SALE";
     return { kind, sample, docTitle: `${vType} ${voucherDisplayNo(v.universalVoucher?.voucherNo, v.universalVoucherId)}` };
