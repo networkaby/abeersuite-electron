@@ -9,6 +9,7 @@ import AboutBusinessNote from "@/modules/external/shop/AboutBusinessNote";
 import ShopBrandMark from "@/modules/external/shop/ShopBrandMark";
 import PaymentMethodLogos from "@/modules/external/shop/PaymentMethodLogos";
 import SocialLinks from "@/modules/external/shop/SocialLinks";
+import { SHOP_APP_INSTALL } from "@/shared/lib/device/shopApp";
 
 export default function ShopFooter() {
     const pathname = usePathname();
@@ -102,6 +103,11 @@ export default function ShopFooter() {
                         <li>
                             <Link href="/portal" className="hover:text-foreground">
                                 Service portal
+                            </Link>
+                        </li>
+                        <li>
+                            <Link href={SHOP_APP_INSTALL} className="hover:text-foreground">
+                                Get our app
                             </Link>
                         </li>
                     </ul>

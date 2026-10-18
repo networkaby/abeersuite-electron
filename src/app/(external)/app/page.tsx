@@ -32,7 +32,7 @@ export default function ShopAppInstallPage() {
                     </p>
                 </div>
                 <div className="w-full">
-                    <InstallAppButton appName={COMPANY_DETAILS.brandName} home={SHOP_APP_START} apk={SHOP_APP_APK} release={SHOP_APP_RELEASE} />
+                    <InstallAppButton appName={COMPANY_DETAILS.brandName} home={SHOP_APP_START} apk={SHOP_APP_APK} release={SHOP_APP_RELEASE} apkOnly qrOnComputer />
                 </div>
             </main>
         </>
