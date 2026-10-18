@@ -49,6 +49,7 @@ import type { TaskPositionOption } from "@/modules/administration/lib/types";
 import type { PosBilling } from "@/modules/pos/hooks/usePosBilling";
 import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearchAndCreate";
 import { formatInrLoose } from "@/shared/lib/format/moneyInr";
+import { focusWhenReady } from "@/shared/lib/ui/focusWhenReady";
 
 export function PosScreenShell({
     b,
@@ -120,8 +121,7 @@ export function PosScreenShell({
     // Auto-focus the party picker on mount so the cashier can start typing
     // the customer name immediately.
     useEffect(() => {
-        const t = setTimeout(() => partySearchRef.current?.focus(), 120);
-        return () => clearTimeout(t);
+        return focusWhenReady(() => partySearchRef.current);
     }, [partySearchRef]);
 
     // Keep the keyboard-selected cart line visible (ArrowUp/Down selection).

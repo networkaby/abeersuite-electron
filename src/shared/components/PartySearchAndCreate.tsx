@@ -44,6 +44,7 @@ import { usePartySearch, usePartyList, toPartyHit, type PartyHit } from "@/share
 import { separatingField } from "@/shared/lib/parties/partySearch";
 import { browseParties, invalidateParties, MAX_HITS } from "@/shared/lib/parties";
 import { FieldError } from "@/shared/components/FieldError";
+import { focusWhenReady } from "@/shared/lib/ui/focusWhenReady";
 
 export type PickedParty = {
     kind: "customer" | "company";
@@ -267,7 +268,7 @@ export const PartySearchAndCreate = forwardRef<
     // the up-to-date query.
     const openNewPartyRef = useRef<() => void>(() => { });
     useImperativeHandle(ref, () => ({
-        focus: () => inputRef.current?.focus(),
+        focus: () => { focusWhenReady(() => inputRef.current); },
         clear: () => {
             setQuery("");
             setOpenDialog(false);
@@ -566,7 +567,7 @@ export const PartySearchAndCreate = forwardRef<
             setOpenDialog(false);
             // Return focus to the search input after the dialog closes so the
             // user can continue on the form without having to click.
-            setTimeout(() => inputRef.current?.focus(), 80);
+            focusWhenReady(() => inputRef.current);
         } catch (e: unknown) {
             // Server-side errors carry { error, field? } — e.g. 409 with
             // field: "phone" when the value is already used. Surface inline

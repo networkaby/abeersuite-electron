@@ -17,6 +17,7 @@ import {
     TenderSplitInput, TenderAmountInput, seedTenderSplit, type TenderSplit, type TenderAccount,
 } from "@/modules/pos/components/TenderSplitInput";
 import { formatInr } from "@/shared/lib/format";
+import { focusWhenReady } from "@/shared/lib/ui/focusWhenReady";
 
 export type PayState = { cashTendered: number; cashReturn: number };
 
@@ -76,7 +77,7 @@ export function TenderEntry({
                             onClick={() => {
                                 const remaining = Math.max(0, +(targetTotal - splitsSum).toFixed(2));
                                 setPay((s) => ({ ...s, cashTendered: remaining, cashReturn: 0 }));
-                                setTimeout(() => cashTenderedRef?.current?.select(), 0);
+                                focusWhenReady(() => cashTenderedRef?.current, { select: true });
                             }}
                             className="ml-0.5 rounded-full text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 p-0.5 transition-colors"
                         >

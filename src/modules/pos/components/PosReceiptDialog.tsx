@@ -36,6 +36,7 @@ import { PaymentLinkDialog } from "@/modules/pos/components/PaymentLinkDialog";
 import { extractApiError } from "@/shared/lib/api";
 import { formatInr } from "@/shared/lib/format";
 import { cn } from "@/shared/lib/format/utils";
+import { focusWhenReady } from "@/shared/lib/ui/focusWhenReady";
 
 // Party balance, signed on the Dr side: > 0 the party owes us, < 0 an advance.
 type Due = number | "loading" | "error";
@@ -170,7 +171,7 @@ export function PosReceiptDialog({
                                     <p className="truncate font-medium">{party.name}</p>
                                     <PartyDueLine due={due} receiving={total} />
                                 </div>
-                                <Button variant="ghost" size="sm" className="h-7 shrink-0 text-muted-foreground" onClick={() => { setParty(null); setTimeout(() => partyRef.current?.focus(), 0); }}>
+                                <Button variant="ghost" size="sm" className="h-7 shrink-0 text-muted-foreground" onClick={() => { setParty(null); focusWhenReady(() => partyRef.current); }}>
                                     <X size={13} /> Change
                                 </Button>
                             </div>

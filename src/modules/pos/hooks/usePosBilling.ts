@@ -35,6 +35,7 @@ import { usePosDraftStore } from "@/store/posDraftStore";
 import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type OnTopHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
 import { searchProducts, readCachedProducts, syncProducts } from "@/shared/lib/inventory";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { focusWhenReady } from "@/shared/lib/ui/focusWhenReady";
 import type { PromoSnapshot } from "@/shared/lib/accountancy/settlement";
 
 /** How many rows the product dropdown shows — kept constant so the list does
@@ -876,7 +877,7 @@ export function usePosBilling(opts: {
                 setGiftCard({ id: data.id, code: data.code, balance: data.balance });
                 toast.success(`Gift card ${data.code} · ${formatInr(data.balance)} available`);
                 // Done with the bill-summary section — hand focus back to the scan box.
-                setTimeout(() => productSearchRef.current?.focus(), 0);
+                focusWhenReady(() => productSearchRef.current);
             }
             else { setGiftCard(null); toast.error(data.reason ?? "Gift card not usable"); }
         } catch {
@@ -1034,7 +1035,7 @@ export function usePosBilling(opts: {
             couponId: data.couponId, code: data.code, name: data.name, freeLines: fl,
         });
         toast.success(`Free items on this bill: ${fl.map((f) => `${f.freeQty} × ${f.productName}`).join(", ")}`);
-        setTimeout(() => productSearchRef.current?.focus(), 0);
+        focusWhenReady(() => productSearchRef.current);
         return true;
     }
     function clearFreeCoupon() {
@@ -1077,14 +1078,14 @@ export function usePosBilling(opts: {
                     // clears it, never drops tier / blocks loyalty.
                     setAppliedFree({ couponId: data.couponId, code: data.code, name: data.name, freeLines: [], onTop: true, rupees: data.discountRupees });
                     toast.success(`${data.code ?? data.name} applied · − ${formatInr(data.discountRupees)} on top`);
-                    setTimeout(() => productSearchRef.current?.focus(), 0);
+                    focusWhenReady(() => productSearchRef.current);
                 } else if (data.moneyGrant && data.freeLines?.length) {
                     // Rule 3 — a non-independent fully-free FREE_ITEM / BOGO won
                     // the MONEY slot: free lines REPLACE the ₹ coupon (it is a
                     // money coupon — exclusivity applies server-side).
                     setAppliedCoupon({ couponId: data.couponId, code: data.code, name: data.name, rupees: 0, droppedTier: false, blockedLoyalty: false, freeLines: data.freeLines });
                     toast.success(`${data.code ?? data.name} — ${data.freeLines.map((f) => `${f.freeQty} × ${f.productName}`).join(", ")} FREE`);
-                    setTimeout(() => productSearchRef.current?.focus(), 0);
+                    focusWhenReady(() => productSearchRef.current);
                 } else if (data.freeLines?.length) {
                     // An independent free-grant code (FREE_ITEM / BOGO) — it isn't
                     // a ₹ discount; apply it as free items ON TOP of the money
@@ -1094,7 +1095,7 @@ export function usePosBilling(opts: {
                     setAppliedCoupon(hit(data));
                     toast.success(`Coupon ${data.code ?? data.name} applied · − ${formatInr(data.discountRupees)}`);
                     // Done with the coupon section — hand focus back to the scan box.
-                    setTimeout(() => productSearchRef.current?.focus(), 0);
+                    focusWhenReady(() => productSearchRef.current);
                 }
             } else {
                 setAppliedCoupon(null);
@@ -1137,7 +1138,7 @@ export function usePosBilling(opts: {
                 setAppliedCoupon(hit(data));
                 setCouponCodeStr("");
                 toast.success(`Offer ${data.name} applied · − ${formatInr(data.discountRupees)}`);
-                setTimeout(() => productSearchRef.current?.focus(), 0);
+                focusWhenReady(() => productSearchRef.current);
             } else {
                 setAppliedCoupon(null);
                 toast.error(data?.reason ?? "Offer not applicable");
@@ -1153,7 +1154,7 @@ export function usePosBilling(opts: {
         setLoadingSnapshot(true);
         // Once a party is picked the search is locked; shift focus to the product
         // search so the cashier can scan/type immediately.
-        setTimeout(() => productSearchRef.current?.focus(), 50);
+        focusWhenReady(() => productSearchRef.current);
         try {
             const { data } = await axios.get<Snapshot>(`/api/pos/account-snapshot/${accountId}`);
             setSnapshot(data);
@@ -1274,7 +1275,7 @@ export function usePosBilling(opts: {
         setProductQuery("");
         // Clear highlight + return focus to the search box so cashier can scan next item
         setProductHighlight(0);
-        setTimeout(() => productSearchRef.current?.focus(), 0);
+        focusWhenReady(() => productSearchRef.current);
     };
 
     // Add a service (Settings → Services) to the cart as a GL-only line
@@ -1297,7 +1298,7 @@ export function usePosBilling(opts: {
                 taxRate: rate,
             }];
         });
-        setTimeout(() => productSearchRef.current?.focus(), 0);
+        focusWhenReady(() => productSearchRef.current);
     };
 
     const setQty = useCallback((productId: number, qty: number) => {
@@ -1485,7 +1486,7 @@ export function usePosBilling(opts: {
         setPay({ cashTendered, cashReturn: 0 });
         setSplits(splits);
         setCheckoutOpen(true);
-        setTimeout(() => cashTenderedRef.current?.focus(), 50);
+        focusWhenReady(() => cashTenderedRef.current);
     }, [snapshot, cart, payAccounts, coverAmountRef, cashTenderedRef, eb]);
 
     // F10 → quick pay on option-2: opens checkout with the full payable amount
@@ -1659,7 +1660,7 @@ export function usePosBilling(opts: {
         setSnapshot(null);
         partySearchRef.current?.clear();
         toast.message("Bill and customer cleared");
-        setTimeout(() => productSearchRef.current?.focus(), 50);
+        focusWhenReady(() => productSearchRef.current);
     };
 
     // Post-submit reset — the identical clear-out block both screens ran after a
@@ -1689,7 +1690,7 @@ export function usePosBilling(opts: {
         // Auto-clear customer after successful bill so the next sale starts fresh.
         setSnapshot(null);
         partySearchRef.current?.clear();
-        setTimeout(() => productSearchRef.current?.focus(), 50);
+        focusWhenReady(() => productSearchRef.current);
     };
 
     // Money math derived from pay — Cash net = tendered − return.

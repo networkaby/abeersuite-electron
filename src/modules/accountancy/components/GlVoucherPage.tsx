@@ -63,6 +63,7 @@ import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { useFormChanges } from "@/shared/hooks/useFormChanges";
 import { getOrgDefaults } from "@/shared/lib/orgDefaults";
 import { parseDenomJson, type DenomJson } from "@/shared/lib/accountancy/denomJson";
+import { focusWhenReady } from "@/shared/lib/ui/focusWhenReady";
 
 // ── Loaded voucher shape (used in edit mode) ────────────────────────────────
 
@@ -490,9 +491,10 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     // Focus a particulars row's ledger / amount box by row POSITION (the combobox
     // owns its own input, so we reach it through the row's data attribute; the
     // position, not the client-only row id, keeps server and client HTML equal).
-    // A short delay lets the combobox finish its own select-and-refocus first.
+    // focusWhenReady re-checks a frame later, so the combobox finishing its own
+    // select-and-refocus cannot steal it back.
     const focusIn = (selector: string) =>
-        setTimeout(() => document.querySelector<HTMLInputElement>(selector)?.focus(), 60);
+        focusWhenReady(() => document.querySelector<HTMLInputElement>(selector));
     const focusRowLedger = (idx: number) => focusIn(`[data-row-idx="${idx}"] input`);
     const focusRowAmount = (idx: number) => focusIn(`[data-row-idx="${idx}"] input[data-amount]`);
 
