@@ -133,20 +133,22 @@ const SELECT_SHAPE_VERSION = "2"; // v2: + imageUrl, attrsJson
  * product's `updatedAt` moves, so a timestamp delta alone would serve stale
  * tax or cap values; a changed stamp forces the client back to a full load.
  *
- * `GstRate` and `InvProductCode` have no `updatedAt`, so they contribute a row
- * count instead: that catches rows being added or removed, but not a rate or a
- * barcode edited in place. The client's 24h maximum cache age is the backstop
- * for that remaining gap.
+ * `GstRate` and `InvProductCode` have no `updatedAt`. Codes contribute a count —
+ * a product's codes are only ever rewritten through the product itself, which
+ * bumps its own `updatedAt`. Rates contribute count + id + rate sum, so a rate
+ * edited in place also moves the stamp. The 15-day delta window is the
+ * backstop for anything still missed.
  */
 async function catalogueStamp(): Promise<string> {
-    const [org, groups, categories, loyalty, codeCount, rateCount] = await Promise.all([
+    const [org, groups, categories, loyalty, codeCount, rates] = await Promise.all([
         prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { updatedAt: true } }),
         prisma.invProductGroup.aggregate({ _max: { updatedAt: true } }),
         prisma.invCategory.aggregate({ _max: { updatedAt: true } }),
         prisma.loyaltyEarnRule.aggregate({ _max: { updatedAt: true } }),
         prisma.invProductCode.count(),
-        prisma.gstRate.count(),
+        prisma.gstRate.aggregate({ _count: { _all: true }, _max: { id: true }, _sum: { rate: true } }),
     ]);
+    const rateCount = `${rates._count._all}/${rates._max.id ?? "-"}/${rates._sum.rate?.toString() ?? "-"}`;
     return [
         SELECT_SHAPE_VERSION,
         org?.updatedAt?.toISOString() ?? "-",
@@ -159,7 +161,7 @@ async function catalogueStamp(): Promise<string> {
 }
 
 /** Past this, a delta is not worth it — just send the catalogue. */
-const MAX_DELTA_WINDOW_MS = 24 * 60 * 60 * 1000;
+const MAX_DELTA_WINDOW_MS = 15 * 24 * 60 * 60 * 1000;
 
 /**
  * GET /api/inventory/products/lookup

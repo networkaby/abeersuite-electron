@@ -32,7 +32,7 @@ import { parseSince } from "@/shared/lib/prisma/counterMode";
  */
 
 /** Beyond this a delta is not worth trusting — the client refetches in full. */
-const MAX_DELTA_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_DELTA_WINDOW_MS = 15 * 24 * 60 * 60 * 1000;
 
 // Primary first — every consumer shows `[0]` as the party's number. Only the
 // value is selected: this ships ~3,500 parties on a first load, so a column

@@ -83,7 +83,7 @@ const META_KEY = "parties";
 
 /** Past this the held list is not trusted at all, whatever a delta would say —
  *  the backstop for a machine that was off while the shop carried on. */
-const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;   // in step with the server's MAX_DELTA_WINDOW_MS
 
 const URL = "/api/parties/catalog?sync=1";
 

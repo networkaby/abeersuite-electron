@@ -32,8 +32,8 @@
  *   • A hard-deleted product simply stops existing, and no timestamp can report
  *     it. The server sends its live `count`; if the merged result does not match,
  *     the cache is dropped and refetched.
- *   • Anything both of those miss (a barcode edited in place, say) is bounded by
- *     MAX_AGE_MS — past that the cache is not trusted at all.
+ *   • Anything both of those miss is bounded by MAX_AGE_MS — past that the held
+ *     rows still paint, but the sync takes the catalogue in full.
  *
  * Note prices here are what the till bills: `/api/pos/sale` posts the `unitPrice`
  * the browser sends. That is an argument FOR syncing rather than against it — the
@@ -46,8 +46,11 @@ import { localDb, type LocalProductRow } from "@/shared/lib/browser/localDb";
 
 /** The single `productMeta` row holding catalogue-wide sync state. */
 const META_KEY = "catalogue";
-/** Beyond this the cache is discarded outright, whatever the stamp says. */
-const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+/** Beyond this the cache is not trusted to build a delta on — the next sync takes
+ *  the catalogue in full. The held rows still paint first: a phone opened once
+ *  every few days shows yesterday's list at once instead of a blank screen. Kept
+ *  in step with the server's MAX_DELTA_WINDOW_MS. */
+const MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
 
 /** Rows are passed straight through; callers own the shape beyond these two.
  *  `name` is needed because the merge has to restore the server's ordering. */
@@ -78,12 +81,12 @@ async function readMeta() {
     if (!db) return null;
     const meta = await db.productMeta.get(META_KEY);
     if (!meta?.computedAt) return null;
-    if (Date.now() - new Date(meta.computedAt).getTime() > MAX_AGE_MS) {
-        await clearCatalogue();
-        return null;
-    }
     return meta;
 }
+
+/** Young enough to ask the server for a delta on top of. */
+const isFresh = (meta: { computedAt: string }) =>
+    Date.now() - new Date(meta.computedAt).getTime() <= MAX_AGE_MS;
 
 async function readRows<T extends Row>(): Promise<T[]> {
     const db = localDb();
@@ -107,11 +110,12 @@ export async function readCachedProducts<T extends Row>(): Promise<T[] | null> {
 export async function syncProducts<T extends Row>(): Promise<T[] | null> {
     const db = localDb();
     const meta = await readMeta();
+    const base = meta && isFresh(meta) ? meta : null;   // too old → ask in full
 
     const params: Record<string, string> = { sync: "1" };
-    if (meta) {
-        params.since = meta.computedAt;
-        params.stamp = meta.stamp;
+    if (base) {
+        params.since = base.computedAt;
+        params.stamp = base.stamp;
     }
 
     const res = await request<T>(params);
@@ -123,7 +127,7 @@ export async function syncProducts<T extends Row>(): Promise<T[] | null> {
     }
 
     if (res.mode === "full") return await replaceAll<T>(res.products, res);
-    if (!meta || !db) return (await reload<T>()) ?? null;   // delta with nothing to apply it to
+    if (!base || !db) return (await reload<T>()) ?? null;   // delta with nothing to apply it to
 
     await db.transaction("rw", db.products, db.productMeta, async () => {
         if (res.changed.length > 0)    await db.products.bulkPut(res.changed as LocalProductRow[]);
