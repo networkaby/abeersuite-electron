@@ -13,14 +13,19 @@
 // into the panel — or opening via F3 — "pins" it open; it then closes only
 // on Esc, a click outside, or F3 again. Fully self-contained: no open state
 // lives in the parent screen.
+//
+// Speed: while closed the panel filters nothing (it reads an empty list), and
+// while open the search + all three facet rails come out of ONE memoised pass
+// over the catalogue, fed a deferred query so typing never waits on the grid.
 
-import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { useExplorerStore } from "@/store/explorerStore";
+import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, PackageSearch, X, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { formatInr } from "@/shared/lib/format";
 import { productMatchesSearch, readCachedMasters, syncMasters } from "@/shared/lib/inventory";
 import type { ProductOption, CartLine } from "@/modules/pos/lib/posDraftTypes";
+
+const NO_PRODUCTS: ProductOption[] = [];
 
 /** Number of products to show in the grid before the next scroll-triggered batch. */
 const PAGE_SIZE = 50;
@@ -141,9 +146,7 @@ export const PosProductExplorer = memo(function PosProductExplorer({
      *  null clears the preview back to the real cart/idle view. */
     onHoverProduct: (p: ProductOption | null) => void;
 }) {
-    const [open, setOpenRaw] = useState(false);
-    const explorerSetOpen = useExplorerStore((s) => s.setOpen);
-    const setOpen = (v: boolean) => { setOpenRaw(v); explorerSetOpen(v); };
+    const [open, setOpen] = useState(false);
     const [pinned, setPinned] = useState(false);
     const [query, setQuery] = useState("");
     const [groupTree, setGroupTree] = useState<GroupNode[]>([]);
@@ -209,45 +212,35 @@ export const PosProductExplorer = memo(function PosProductExplorer({
     // hierarchy — see InvCategory's schema comment). Brand is flat too. All
     // three AND together with the text filter.
     const allowedGroupIds = useMemo(() => selectedGroup ? new Set(idsUnder(selectedGroup)) : null, [selectedGroup]);
-    const q = query.trim();
+    const q = useDeferredValue(query.trim());
+    const source = open ? products : NO_PRODUCTS;
 
-    /** Matches everything EXCEPT the facet named in `skip` — used to compute
-     *  each rail's own options from what the OTHER active facets still allow,
-     *  so picking a group empties out brands with nothing in it and vice
-     *  versa, instead of the two filters fighting each other silently. */
-    const passesOthers = (p: ProductOption, skip: "group" | "category" | "brand" | null) => {
-        if (q && !productMatchesSearch(p, q)) return false;
-        if (skip !== "group" && allowedGroupIds && (p.groupId == null || !allowedGroupIds.has(p.groupId))) return false;
-        if (skip !== "category" && selectedCategoryId !== "" && p.categoryId !== selectedCategoryId) return false;
-        if (skip !== "brand" && selectedBrand && p.brand?.name !== selectedBrand) return false;
-        return true;
-    };
+    /** One pass: each product is tested once per facet, then lands in the grid
+     *  (passes all four) and in each rail whose OTHER three facets it passes —
+     *  so picking a group empties out brands with nothing in it and vice versa,
+     *  instead of the two filters fighting each other silently. */
+    const { filtered, availableGroupIds, availableCategoryIds, availableBrandNames } = useMemo(() => {
+        const filtered: ProductOption[] = [];
+        const groups = new Set<number>();
+        const categories = new Set<number>();
+        const brandNames = new Set<string>();
+        for (const p of source) {
+            if (q && !productMatchesSearch(p, q)) continue;
+            const g = !allowedGroupIds || (p.groupId != null && allowedGroupIds.has(p.groupId));
+            const c = selectedCategoryId === "" || p.categoryId === selectedCategoryId;
+            const b = !selectedBrand || p.brand?.name === selectedBrand;
+            if (g && c && b) filtered.push(p);
+            if (c && b && p.groupId != null) groups.add(p.groupId);
+            if (g && b && p.categoryId != null) categories.add(p.categoryId);
+            if (g && c && p.brand?.name) brandNames.add(p.brand.name);
+        }
+        if (selectedGroup) groups.add(selectedGroup.id);
+        if (selectedCategoryId !== "") categories.add(selectedCategoryId);
+        if (selectedBrand) brandNames.add(selectedBrand);
+        return { filtered, availableGroupIds: groups, availableCategoryIds: categories, availableBrandNames: brandNames };
+    }, [source, q, allowedGroupIds, selectedGroup, selectedCategoryId, selectedBrand]);
 
-    const filtered = products.filter((p) => passesOthers(p, null));
-
-    const availableGroupIds = useMemo(() => {
-        const set = new Set<number>();
-        for (const p of products) if (p.groupId != null && passesOthers(p, "group")) set.add(p.groupId);
-        if (selectedGroup) set.add(selectedGroup.id);
-        return set;
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [products, q, selectedCategoryId, selectedBrand, selectedGroup]);
-
-    const availableCategoryIds = useMemo(() => {
-        const set = new Set<number>();
-        for (const p of products) if (p.categoryId != null && passesOthers(p, "category")) set.add(p.categoryId);
-        if (selectedCategoryId !== "") set.add(selectedCategoryId);
-        return set;
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [products, q, allowedGroupIds, selectedBrand, selectedCategoryId]);
-
-    const availableBrandNames = useMemo(() => {
-        const set = new Set<string>();
-        for (const p of products) if (p.brand?.name && passesOthers(p, "brand")) set.add(p.brand.name);
-        if (selectedBrand) set.add(selectedBrand);
-        return set;
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [products, q, allowedGroupIds, selectedCategoryId, selectedBrand]);
+    const cartQty = useMemo(() => new Map(cart.map((l) => [l.productId, l.qty])), [cart]);
 
     const visibleGroupTree = useMemo(() => pruneTree(groupTree, availableGroupIds), [groupTree, availableGroupIds]);
     const visibleCategoryTree = useMemo(() => pruneTree(categoryTree, availableCategoryIds), [categoryTree, availableCategoryIds]);
@@ -430,7 +423,7 @@ export const PosProductExplorer = memo(function PosProductExplorer({
                             )}
                             <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                                 {visibleProducts.map((p) => {
-                                    const inCartQty = cart.find((l) => l.productId === p.id)?.qty ?? 0;
+                                    const inCartQty = cartQty.get(p.id) ?? 0;
                                     const price = p.effectiveSalePricePaise != null ? p.effectiveSalePricePaise / 100 : null;
                                     // Free-form attribute key — admin-named ("colour" is the naming
                                     // convention's own example), so read both spellings.

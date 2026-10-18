@@ -5,13 +5,13 @@ import type { ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
 
 export type { ProductCopy };
 
-export type AiCopyRequest = { productId: number; name?: string; imageUrl?: string | null; search: boolean };
+export type AiCopyRequest = { productId: number; name?: string; imageUrls?: string[]; search: boolean };
 
 // Every AI call costs money, so a draft is kept on this machine for the session:
 // pressing Generate again for the same name + photo + search mode is free.
 // Not in the DB on purpose — a draft is only kept once staff save it.
 function cacheKey(r: AiCopyRequest): string {
-    return `aiCopy3:${r.productId}:${r.search ? 1 : 0}:${r.name ?? ""}:${r.imageUrl ?? ""}`;
+    return `aiCopy4:${r.productId}:${r.search ? 1 : 0}:${r.name ?? ""}:${(r.imageUrls ?? []).join("|")}`;
 }
 
 function readCache(key: string): ProductCopy | null {

@@ -305,7 +305,7 @@ model TicketDelivery {
   orderSource String // "inv" | "shop"
   orderId     Int
 
-  carrier               String? // SHIPROCKET | CUSTOM | OWN_BOY | PICKUP
+  carrier               String? // SHIPROCKET | CUSTOM | OWN_BOY | STORE_PICKUP
   awb                   String?
   trackingUrl           String?
   addressJson           Json?

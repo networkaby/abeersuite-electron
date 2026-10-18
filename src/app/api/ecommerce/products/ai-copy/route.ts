@@ -4,13 +4,15 @@ import { z } from "zod";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { aiErrorMessage, generateProductCopy, isAiConfigured } from "@/modules/ecommerce/lib/aiProductCopy";
+import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
+import { photosForAi } from "@/shared/lib/shop/photoMark";
 
 // AI product copy (Gemini + Google Search). Nothing is written here — the
 // caller shows the draft and saves through the normal product PATCH, so staff
 // always review before a customer sees it.
 //
 // GET  ?cursor=&take=  → active products with no shop description (bulk backlog)
-// POST { productId, name?, imageUrl?, search } → one draft
+// POST { productId, name?, imageUrls?, search } → one draft (photos marked "Skip for AI" are not sent)
 
 async function guard() {
     // Anyone who can open E-Commerce may use it — owner's call, no tick of its own.
@@ -63,7 +65,8 @@ const postSchema = z.object({
     productId: z.number().int().positive(),
     // Unsaved edits from the form win over the saved row.
     name: z.string().trim().min(1).max(500).optional(),
-    imageUrl: z.string().url().nullish(),
+    // The form's current (possibly unsaved) gallery, skip marks included.
+    imageUrls: z.array(z.string().url()).max(30).optional(),
     search: z.boolean().default(false),
 });
 
@@ -76,7 +79,7 @@ export async function POST(req: Request) {
         const p = await prisma.invProduct.findUnique({
             where: { id: data.productId },
             select: {
-                name: true, imageUrl: true, shopCategory: true,
+                name: true, imageUrl: true, galleryJson: true, shopCategory: true,
                 brand: { select: { name: true } }, category: { select: { name: true } },
             },
         });
@@ -85,7 +88,7 @@ export async function POST(req: Request) {
             name: data.name ?? p.name,
             brand: p.brand?.name,
             category: p.shopCategory ?? p.category?.name,
-            imageUrl: data.imageUrl === undefined ? p.imageUrl : data.imageUrl,
+            imageUrls: photosForAi(data.imageUrls ?? productGalleryUrls(p.galleryJson, p.imageUrl)),
             search: data.search,
         });
         return NextResponse.json(copy);

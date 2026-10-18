@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import axios from "axios";
-import { Loader2, RotateCw, Star, Trash2, X } from "lucide-react";
+import { EyeOff, Loader2, RotateCw, Sparkles, Star, Trash2, X } from "lucide-react";
 import { invalidateProductCatalog, useProductCatalog } from "@/shared/hooks/useProductCatalog";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { cloudinaryThumb } from "@/shared/lib/cloudinaryImage";
+import { isAiSkipped, setAiSkipped } from "@/shared/lib/shop/photoMark";
 import { MAX_PRODUCT_PHOTOS } from "@/shared/lib/constants/inventory";
 import { uploadShopPhoto } from "../lib/uploadShopPhoto";
 import type { ProductPhotos } from "../lib/types";
@@ -14,7 +15,7 @@ import PhotoPickButtons from "./PhotoPickButtons";
 import { photosHref } from "./MobilePhotos";
 
 /** A photo on its way: shown at once from the phone, then uploaded, then saved. */
-type Pending = { key: number; file: File; preview: string; url?: string; error?: string };
+type Pending = { key: number; file: File; preview: string; url?: string; error?: string; aiSkip: boolean };
 type CatalogueRow = { id: number; name: string; imageUrl?: string | null };
 
 const api = (id: number) => `/api/mobile/photos/product/${id}`;
@@ -39,6 +40,8 @@ export default function MobileProductPhotos({ id }: { id: number }) {
     const [confirmRemove, setConfirmRemove] = useState(false);
     const [busy, setBusy] = useState(false);
     const [note, setNote] = useState<{ text: string; tone: "good" | "warn" | "bad" } | null>(null);
+    // Chosen before taking photos: ads, duplicates or other products need not go to AI.
+    const [skipNewForAi, setSkipNewForAi] = useState(false);
     const nextKey = useRef(1);
     const previews = useRef(new Set<string>());
 
@@ -68,7 +71,7 @@ export default function MobileProductPhotos({ id }: { id: number }) {
     const send = async (item: Pending) => {
         setPending((list) => list.map((p) => (p.key === item.key ? { ...p, error: undefined } : p)));
         try {
-            const url = item.url ?? (await uploadShopPhoto(item.file, "product"));
+            const url = item.url ?? setAiSkipped(await uploadShopPhoto(item.file, "product"), item.aiSkip);
             // Remember the upload, so Retry after a failed save does not send the photo again.
             setPending((list) => list.map((p) => (p.key === item.key ? { ...p, url } : p)));
             const saved = (await axios.patch<ProductPhotos>(api(id), { add: [url] })).data;
@@ -93,7 +96,7 @@ export default function MobileProductPhotos({ id }: { id: number }) {
         const items = files.slice(0, room).map((file) => {
             const preview = URL.createObjectURL(file);
             previews.current.add(preview);
-            return { key: nextKey.current++, file, preview };
+            return { key: nextKey.current++, file, preview, aiSkip: skipNewForAi };
         });
         setPending((list) => [...list, ...items]);
         // One at a time: on mobile data, parallel uploads only make each one slower.
@@ -106,7 +109,7 @@ export default function MobileProductPhotos({ id }: { id: number }) {
         previews.current.delete(item.preview);
     };
 
-    const change = async (body: { makeMain: string } | { remove: string }) => {
+    const change = async (body: { makeMain: string } | { remove: string } | { aiSkip: string; skip: boolean }) => {
         setBusy(true);
         setNote(null);
         try {
@@ -154,6 +157,11 @@ export default function MobileProductPhotos({ id }: { id: number }) {
                                         <Star className="size-3 fill-current" aria-hidden /> Main
                                     </span>
                                 )}
+                                {isAiSkipped(url) && (
+                                    <span className="absolute bottom-1 left-1 flex items-center gap-0.5 rounded bg-background/90 px-1 text-[10px] text-muted-foreground">
+                                        <EyeOff className="size-3" aria-hidden /> AI skip
+                                    </span>
+                                )}
                             </button>
                         </li>
                     ))}
@@ -186,11 +194,34 @@ export default function MobileProductPhotos({ id }: { id: number }) {
                     </p>
                 )}
 
+                <label className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm">
+                    <span>
+                        New photos: <b>{skipNewForAi ? "Skip for AI" : "For AI"}</b>
+                        <span className="block text-xs text-muted-foreground">Skip ads, duplicates or other products — saves AI time and cost.</span>
+                    </span>
+                    <input
+                        type="checkbox"
+                        className="size-5"
+                        checked={skipNewForAi}
+                        onChange={(e) => setSkipNewForAi(e.target.checked)}
+                        aria-label="Skip new photos for AI"
+                    />
+                </label>
                 <PhotoPickButtons multiple disabled={!data || uploading} onFiles={(files) => void addFiles(files)} />
 
                 {sel && (
                     <div className="space-y-2 border-t pt-3">
                         <p className="text-xs text-muted-foreground">{photos[0] === sel ? "Main photo" : `Photo ${photos.indexOf(sel) + 1}`} selected</p>
+                        <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void change({ aiSkip: sel, skip: !isAiSkipped(sel) })}
+                            className="flex w-full items-center justify-center gap-1.5 rounded-lg border py-2.5 text-sm active:bg-muted disabled:opacity-40"
+                        >
+                            {isAiSkipped(sel)
+                                ? <><Sparkles className="size-4" aria-hidden /> Use for AI</>
+                                : <><EyeOff className="size-4" aria-hidden /> Skip for AI</>}
+                        </button>
                         <div className="grid grid-cols-2 gap-2">
                             <button
                                 type="button"

@@ -25,23 +25,40 @@ export type ProductCopyInput = {
     name: string;
     brand?: string | null;
     category?: string | null;
-    imageUrl?: string | null;
+    /** Gallery photos to send, already without the staff-skipped ones (photoMark.ts). */
+    imageUrls: string[];
     /** Off = never run step 2, even when it would help. */
     search: boolean;
 };
 
+// The model's JSON drifts run to run (a spec value as a list or number, an
+// extra highlight, a paragraph array) — read it leniently instead of failing
+// the product.
+const text = (v: unknown): string =>
+    Array.isArray(v) ? v.map(text).filter(Boolean).join(", ") : v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v).trim();
+const textList = (max: number) => z.preprocess(
+    (v) => (Array.isArray(v) ? v : v == null ? [] : [v]).map(text).filter(Boolean).slice(0, max),
+    z.array(z.string()),
+);
+const looseText = z.preprocess((v) => (Array.isArray(v) ? v.map(text).join("\n\n") : text(v)), z.string());
+
 const copySchema = z.object({
     /** Flipkart-style SEO title — also the Online display name. */
-    title: z.string().min(1),
+    title: looseText.pipe(z.string().min(1)),
     /** One sentence, ~150 characters — first line of the description (Google snippet). */
-    summary: z.string().default(""),
-    highlights: z.array(z.string().min(1)).min(1).max(10),
-    description: z.string().min(1),
-    howToUse: z.array(z.string().min(1)).max(8).default([]),
-    warranty: z.string().default(""),
-    specs: z.record(z.string(), z.string()).default({}),
+    summary: looseText.default(""),
+    highlights: textList(10).pipe(z.array(z.string()).min(1)),
+    description: looseText.pipe(z.string().min(1)),
+    howToUse: textList(8).default([]),
+    warranty: looseText.default(""),
+    specs: z.preprocess(
+        (v) => (v && typeof v === "object" && !Array.isArray(v)
+            ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, text(x)]))
+            : {}),
+        z.record(z.string(), z.string()),
+    ).default({}),
     /** Facts left out because the model was not sure — staff "Please check". */
-    unsure: z.array(z.string()).default([]),
+    unsure: textList(12).default([]),
 });
 const draftSchema = copySchema.extend({
     searchWorthy: z.boolean().default(false),
@@ -74,7 +91,7 @@ export function isAiConfigured(): boolean {
 const STRICT_RULES = [
     "STRICT RULE: say nothing false. State a fact only if it is in the product name, printed on the product or pack in the photo, given below as verified, or an official spec of this exact model you are certain of.",
     "If unsure (speed, chipset, part number, yield, OS support, compatibility, switch type, warranty), leave it out and list it in \"unsure\". Fewer true facts beat more doubtful ones.",
-    "Without a photo, never state colour, design or what is in the box.",
+    "Without a photo of the product itself, never state colour, design or what is in the box.",
     "For a consumable, spare or accessory (ink, toner, cartridge, RAM, adapter, battery, charger, cable, keyboard/screen part), give the exact compatible device models the manufacturer lists, in specs as \"Compatible Models\" and one highlight starting \"Works with\" — never a series name alone; if unsure, leave both out.",
 ];
 
@@ -101,11 +118,15 @@ function productLines(p: ProductCopyInput): string[] {
     ].filter(Boolean);
 }
 
-function draftPrompt(p: ProductCopyInput, hasPhoto: boolean): string {
+function draftPrompt(p: ProductCopyInput, photoCount: number): string {
     return [
         "You write product listings for an Indian online shop.",
         ...productLines(p),
-        hasPhoto ? "A photo is attached: read every word, number, code and logo printed on the product and pack." : "",
+        photoCount > 0 ? [
+            `${photoCount} photo${photoCount > 1 ? "s are" : " is"} attached. First decide what each one shows: the product itself, its box/pack, a label or spec sheet (back of box, warranty card), a promo/lifestyle picture (people, places, posters), or something that is not this product.`,
+            "Read every word, number, code and logo printed on the product, box and labels — specs come only from those.",
+            "Colour and design come from photos of the product itself. Promo pictures: ignore the people and background, use them only to confirm colour/design, and treat their slogans as marketing, not specs. Ignore any photo that is not this product, and if photos show different variants, describe the one in the product photos.",
+        ].join("\n") : "",
         ...STRICT_RULES,
         "",
         ...OUTPUT_KEYS,
@@ -130,7 +151,7 @@ function polishPrompt(p: ProductCopyInput, draft: Copy, facts: CitedFact[]): str
     return [
         "Rewrite this shop listing, adding the verified facts below. Keep every fact already in the draft, and keep the colour / variant words of the draft title.",
         ...productLines(p),
-        "Draft (from the product photo):",
+        "Draft (from the product photos):",
         JSON.stringify(draft),
         "Verified facts (each read on a real web page):",
         JSON.stringify(facts.map(({ label, value }) => ({ label, value }))),
@@ -160,6 +181,14 @@ function call(apiKey: string, content: Part[], withSearch: boolean) {
     });
 }
 
+/** The model answered, twice, with something that is not a usable listing. */
+export class AiReplyError extends Error {
+    constructor(cause: unknown) {
+        super(`AI reply could not be read (${cause instanceof z.ZodError ? cause.issues.map((i) => i.path.join(".") || "reply").join(", ") : cause instanceof Error ? cause.message : "unknown"}) — press Generate again.`);
+        this.name = "AiReplyError";
+    }
+}
+
 /** Google's HTTP status, looking inside the SDK's retry wrapper. */
 function aiStatus(e: unknown): number | undefined {
     const inner = RetryError.isInstance(e) ? e.lastError : e;
@@ -168,6 +197,7 @@ function aiStatus(e: unknown): number | undefined {
 
 /** Google's reason in staff words — 402 / 429 / 403 mean the key, not this product. */
 export function aiErrorMessage(e: unknown): string | null {
+    if (e instanceof AiReplyError) return e.message;
     const status = aiStatus(e);
     if (status === 402) return "Gemini credit is used up — top up the AI Studio project, or use a free-tier key.";
     if (status === 429) return "Gemini limit reached for now — wait a minute and try again.";
@@ -199,11 +229,25 @@ function assembleDescription(c: Copy): string {
 }
 
 export async function generateProductCopy(p: ProductCopyInput): Promise<ProductCopy> {
-    const photo = p.imageUrl && /^https?:\/\//.test(p.imageUrl) ? new URL(p.imageUrl) : null;
-    const draftParts: Part[] = [{ type: "text", text: draftPrompt(p, !!photo) }];
-    if (photo) draftParts.push({ type: "file", data: photo, mediaType: "image" });
+    const photos = p.imageUrls.filter((u) => /^https?:\/\//.test(u)).map((u) => new URL(u));
+    const draftParts: Part[] = [{ type: "text", text: draftPrompt(p, photos.length) }];
+    for (const photo of photos) draftParts.push({ type: "file", data: photo, mediaType: "image" });
 
-    const { searchWorthy, searchQuery, ...draft } = draftSchema.parse(parseJson((await callFreeFirst(draftParts)).text));
+    // One more try when the reply cannot be read at all (no JSON, no title…).
+    const readDraft = async () => draftSchema.parse(parseJson((await callFreeFirst(draftParts)).text));
+    let draftRaw;
+    try {
+        draftRaw = await readDraft();
+    } catch (e) {
+        if (aiStatus(e) !== undefined) throw e;
+        try {
+            draftRaw = await readDraft();
+        } catch (again) {
+            if (aiStatus(again) !== undefined) throw again;
+            throw new AiReplyError(again);
+        }
+    }
+    const { searchWorthy, searchQuery, ...draft } = draftRaw;
 
     let final: Copy = draft;
     let sources: ProductCopy["sources"] = [];

@@ -428,7 +428,7 @@ export default function ProductForm({
                 <AiCopyPanel
                     productId={initial?.id}
                     name={name}
-                    imageUrl={galleryUrls[selectedImage] ?? galleryUrls[0] ?? null}
+                    imageUrls={galleryUrls}
                     description={description}
                     subheading={subheading}
                     specPairs={specPairs}

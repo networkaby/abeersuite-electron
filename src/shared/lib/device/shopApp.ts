@@ -81,3 +81,8 @@ export function appScreenFor(pathname: string): string | null {
     if (social) return `${SHOP_NATIVE_HOME}/social${social[1] ?? ""}`;
     return null;
 }
+
+/** Firebase's web OAuth client (google-services.json, client_type 3). The app's
+ *  native Google sheet (NsGooglePlugin) asks for an ID token for this client, so
+ *  Firebase accepts it as if it came from the website's popup. Not a secret. */
+export const SHOP_APP_GOOGLE_WEB_CLIENT_ID = "975956928914-74lvv01a726pecea54l79u3jtvoib5a6.apps.googleusercontent.com";

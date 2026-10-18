@@ -56,7 +56,7 @@ export function mergeAiSpecs(rows: SpecRow[], specs: Record<string, string>): Sp
 export default function AiCopyPanel({
     productId,
     name,
-    imageUrl,
+    imageUrls,
     description,
     subheading,
     specPairs,
@@ -66,7 +66,8 @@ export default function AiCopyPanel({
 }: {
     productId?: number;
     name: string;
-    imageUrl: string | null;
+    /** Whole gallery, skip marks included — the server leaves the skipped ones out. */
+    imageUrls: string[];
     description: string;
     subheading: string;
     specPairs: SpecRow[];
@@ -84,7 +85,7 @@ export default function AiCopyPanel({
         if (!name.trim()) { toast.error("Name is required"); return; }
         setBusy(true);
         try {
-            const copy = await fetchAiCopy({ productId, name: name.trim(), imageUrl, search }, { fresh });
+            const copy = await fetchAiCopy({ productId, name: name.trim(), imageUrls, search }, { fresh });
             setDraft(copy);
             const filled: string[] = [];
             if (!description.trim()) { onDescription(copy.shopDescription); filled.push("description"); }

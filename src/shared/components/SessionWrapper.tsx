@@ -9,7 +9,8 @@ import { attachChangePublisher } from "@/shared/lib/realtime/appChannel";
 import { OFFLINE_READ_ONLY, offlineReason } from "@/shared/lib/prisma/offlineError";
 import { toast } from "sonner";
 import { heardSignOutNotice, markDeliberateSignOut, wasDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
-import { LOGIN_IDLE_LABEL, SESSION_REVOKED_MESSAGE } from "@/shared/lib/constants/session";
+import { LOGIN_IDLE_LABEL, PHONE_LOGIN_IDLE_MAX_AGE_MS, SESSION_REVOKED_MESSAGE } from "@/shared/lib/constants/session";
+import { PHONE_APP_UA } from "@/shared/lib/device/phone";
 import ActivityPulse from "@/shared/components/ActivityPulse";
 
 // Staff-only wrapper (mounted by every (protected) layout, never the portal).
@@ -82,7 +83,10 @@ function SessionGuard() {
             // crashed. The one case that needs no explanation is the person who chose
             // it: they know, and telling them their session expired would be nonsense.
             if (!wasDeliberateSignOut() && !redirecting) {
-                toast.error(`Signed out after ${LOGIN_IDLE_LABEL} with nothing happening — please sign in again.`, { duration: DEAD_NOTICE_MS });
+                const idleLabel = navigator.userAgent.includes(PHONE_APP_UA)
+                    ? `${PHONE_LOGIN_IDLE_MAX_AGE_MS / (24 * 60 * 60 * 1000)} days`
+                    : LOGIN_IDLE_LABEL;
+                toast.error(`Signed out after ${idleLabel} with nothing happening — please sign in again.`, { duration: DEAD_NOTICE_MS });
                 goLogin(DEAD_NOTICE_MS);
             } else if (heardSignOutNotice() && !redirecting) {
                 // Another window ended it and said why (idle, revoked, released);

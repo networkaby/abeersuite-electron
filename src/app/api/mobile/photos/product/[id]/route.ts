@@ -8,6 +8,7 @@ import { handleApiError, parseIdParam, validateRequest } from "@/shared/lib/api"
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { updateShopProduct } from "@/modules/ecommerce/lib/updateShopProduct";
 import { isOwnPhotoUrl } from "@/modules/mobile/lib/shopPhotos";
+import { setAiSkipped } from "@/shared/lib/shop/photoMark";
 import type { ProductPhotos } from "@/modules/mobile/lib/types";
 
 // GET   /api/mobile/photos/product/[id] — one product's shop photos, main first.
@@ -15,6 +16,7 @@ import type { ProductPhotos } from "@/modules/mobile/lib/types";
 //   { add: [url, …] }   append newly uploaded photos (the first photo becomes main)
 //   { remove: url }     take one off
 //   { makeMain: url }   move one to the front
+//   { aiSkip: url, skip } mark / unmark "Skip for AI" (a #ai-skip on the URL — photoMark.ts)
 //
 // The change is applied to the gallery as saved NOW, not to the list the phone
 // last saw, so an office edit made meanwhile is never overwritten. It is written
@@ -26,6 +28,7 @@ const opSchema = z.union([
     z.object({ add: z.array(z.string().url()).min(1).max(MAX_PRODUCT_PHOTOS) }).strict(),
     z.object({ remove: z.string().url() }).strict(),
     z.object({ makeMain: z.string().url() }).strict(),
+    z.object({ aiSkip: z.string().url(), skip: z.boolean() }).strict(),
 ]);
 
 const select = { id: true, name: true, sku: true, galleryJson: true, imageUrl: true, isListedInShop: true } as const;
@@ -78,6 +81,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
         } else if ("remove" in op) {
             next = current.filter((u) => u !== op.remove);
+        } else if ("aiSkip" in op) {
+            if (!current.includes(op.aiSkip)) {
+                return NextResponse.json({ error: "That photo is no longer on this product. Refresh." }, { status: 409 });
+            }
+            next = current.map((u) => (u === op.aiSkip ? setAiSkipped(u, op.skip) : u));
         } else {
             if (!current.includes(op.makeMain)) {
                 return NextResponse.json({ error: "That photo is no longer on this product. Refresh." }, { status: 409 });

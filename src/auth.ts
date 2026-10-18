@@ -5,7 +5,16 @@ import { authorizeStaffCredentials, authorizeStaffPin } from "@/shared/lib/auth/
 import { authorizePortalCredentials } from "@/shared/lib/auth/authorizePortal";
 import { IS_PUBLIC } from "@/shared/lib/appMode";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
-import { DEFAULT_IDLE_LIMIT_MINUTES, LOGIN_IDLE_MAX_AGE_MS, LOGIN_MAX_AGE_MS, SESSION_RENEW_EVERY_S } from "@/shared/lib/constants/session";
+import {
+    DEFAULT_IDLE_LIMIT_MINUTES,
+    LOGIN_IDLE_MAX_AGE_MS,
+    LOGIN_MAX_AGE_MS,
+    PHONE_LOGIN_IDLE_MAX_AGE_MS,
+    PHONE_LOGIN_MAX_AGE_MS,
+    SESSION_COOKIE_MAX_AGE_MS,
+    SESSION_RENEW_EVERY_S,
+} from "@/shared/lib/constants/session";
+import { PHONE_APP_UA } from "@/shared/lib/device/phone";
 import { localSignOutAt, markLocalSignOut } from "@/shared/lib/auth/localSignOut";
 
 /**
@@ -30,8 +39,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     trustHost: true,
     /**
      * A login lasts until one of two clocks runs out (owner, 2026-10-13): 3 days with
-     * nobody using it — this rolling cookie lifetime — or 10 days since the password
-     * was typed, checked on every request in `isStaffTokenRevoked`. Inside those two
+     * nobody using it or 10 days since the password was typed — both checked on every
+     * request in `isStaffTokenRevoked`. The staff phone app gets 30 / 90 days and a
+     * customer 90 days with nobody using it (owner, 2026-10-18); the cookie lives as
+     * long as the longest of them, and `token.seenAt` carries the shorter idle clocks. Inside those two
      * clocks a counter's 4-digit PIN signs a person back in (`counterPin.ts`).
      *
      * It replaced a 6-hour lifetime that signed every till out each night, which is
@@ -43,7 +54,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
      */
     session: {
         strategy:  "jwt",
-        maxAge:    LOGIN_IDLE_MAX_AGE_MS / 1000,     // seconds
+        maxAge:    SESSION_COOKIE_MAX_AGE_MS / 1000, // seconds
         updateAge: SESSION_RENEW_EVERY_S,             // renew at most this often
     },
     cookies: {
@@ -66,6 +77,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             // user's `tokensValidFrom` (an admin's "end every login") or, on a till,
             // this till's own sign-out mark — see `isStaffTokenRevoked`.
             if (await isStaffTokenRevoked(token)) token.revoked = true;
+            else token.seenAt = Date.now();   // the idle clock — saved whenever the cookie is renewed
             return token;
         },
         async session({ session, token }) {
@@ -164,13 +176,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     email: { label: "Email", type: "email" },
                     password: { label: "Password", type: "password" },
                 },
-                async authorize(credentials) {
+                async authorize(credentials, request) {
                     if (!credentials?.email || !credentials?.password) return null;
-                    return authorizeStaffCredentials(
+                    const user = await authorizeStaffCredentials(
                         prisma,
                         credentials.email as string,
                         credentials.password as string
                     );
+                    // Signed in from the staff phone app → the phone's longer clocks.
+                    const phoneApp = (request?.headers?.get("user-agent") ?? "").includes(PHONE_APP_UA);
+                    return user && phoneApp ? { ...user, phoneApp: true } : user;
                 },
             }),
             // Counter PIN — the same staff session, reached by four digits on a tapped
@@ -250,6 +265,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
  */
 export function fillTokenFromUser(token: Record<string, unknown>, user: { id?: string | null }): void {
     token.loginAt = Date.now();   // for server-side revocation
+    token.seenAt = token.loginAt; // the idle clock (`isStaffTokenRevoked`)
     // The 10-day clock. A PIN sign-in carries the counter's stamp of the last password,
     // so it never restarts the clock; everything else typed the password just now.
     token.passwordAt = "passwordAt" in user && typeof user.passwordAt === "number" ? user.passwordAt : token.loginAt;
@@ -286,6 +302,8 @@ export function fillTokenFromUser(token: Record<string, unknown>, user: { id?: s
     token.kind = "kind" in user && user.kind === "customer" ? "customer" : "staff";
     // Phone app only (auth/phoneOnly.ts) — proxy.ts reads it off the token.
     if ("phoneOnly" in user && user.phoneOnly === true) token.phoneOnly = true;
+    // Signed in inside the staff phone app — its 30 / 90-day clocks apply.
+    if ("phoneApp" in user && user.phoneApp === true) token.phoneApp = true;
     token.customerId =
         "customerId" in user && typeof user.customerId === "string" ? user.customerId : undefined;
     token.activeAccountId =
@@ -308,6 +326,9 @@ export function fillTokenFromUser(token: Record<string, unknown>, user: { id?: s
  *   • 10 days since the password was typed (`LOGIN_MAX_AGE_MS`), from `passwordAt` —
  *     a counter PIN sign-in carries the old stamp forward, so it never resets it.
  *     Tokens from before `passwordAt` fall back to `loginAt`.
+ *   • 3 days with nobody using it (`LOGIN_IDLE_MAX_AGE_MS`), from `seenAt`. The
+ *     cookie itself lives 90 days for customers, so this clock is on the token.
+ *   • A phone-app login (`token.phoneApp`) gets 90 days and 30 days instead.
  *
  * Tokens minted before `loginAt` existed are left alone. A DB hiccup fails OPEN so a
  * transient outage cannot mass-logout every cashier; prisma's read-retry makes it rare.
@@ -318,7 +339,11 @@ export async function isStaffTokenRevoked(token: Record<string, unknown>): Promi
     const loginAt = typeof token.loginAt === "number" ? token.loginAt : 0;
     if (!loginAt) return false;
     const passwordAt = typeof token.passwordAt === "number" ? token.passwordAt : loginAt;
-    if (Date.now() - passwordAt > LOGIN_MAX_AGE_MS) return true;
+    const phone = token.phoneApp === true;
+    if (Date.now() - passwordAt > (phone ? PHONE_LOGIN_MAX_AGE_MS : LOGIN_MAX_AGE_MS)) return true;
+    // Tokens from before `seenAt` existed: the cookie held them to 3 days already.
+    const seenAt = typeof token.seenAt === "number" ? token.seenAt : 0;
+    if (seenAt && Date.now() - seenAt > (phone ? PHONE_LOGIN_IDLE_MAX_AGE_MS : LOGIN_IDLE_MAX_AGE_MS)) return true;
     if (IS_COUNTER_PC && loginAt < localSignOutAt(String(token.id))) return true;
     try {
         const u = await prisma.user.findUnique({

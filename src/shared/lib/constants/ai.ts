@@ -15,3 +15,4 @@ export const AI_BULK_BATCH_SIZE = 5;
 
 /** How many highlight bullets the Flipkart-style copy carries. */
 export const AI_HIGHLIGHT_COUNT = { min: 4, max: 7 } as const;
+
