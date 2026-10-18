@@ -6,7 +6,6 @@ import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { aiErrorMessage, generateProductCopy, isAiConfigured } from "@/modules/ecommerce/lib/aiProductCopy";
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { photosForAi } from "@/shared/lib/shop/photoMark";
-import { AI_MAX_PHOTOS } from "@/shared/lib/constants";
 
 // AI product copy (Gemini + Google Search). Nothing is written here — the
 // caller shows the draft and saves through the normal product PATCH, so staff
@@ -89,7 +88,7 @@ export async function POST(req: Request) {
             name: data.name ?? p.name,
             brand: p.brand?.name,
             category: p.shopCategory ?? p.category?.name,
-            imageUrls: photosForAi(data.imageUrls ?? productGalleryUrls(p.galleryJson, p.imageUrl), AI_MAX_PHOTOS),
+            imageUrls: photosForAi(data.imageUrls ?? productGalleryUrls(p.galleryJson, p.imageUrl)),
             search: data.search,
         });
         return NextResponse.json(copy);

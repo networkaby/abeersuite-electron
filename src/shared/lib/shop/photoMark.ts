@@ -19,7 +19,8 @@ export function setAiSkipped(url: string, skip: boolean): string {
     return skip ? `${bare}${AI_SKIP_MARK}` : bare;
 }
 
-/** The photos the AI should see, in gallery order, without any mark. */
-export function photosForAi(urls: string[], max: number): string[] {
-    return urls.filter((u) => /^https?:\/\//.test(u) && !isAiSkipped(u)).slice(0, max);
+/** The photos the AI should see: every one staff did not mark, in gallery order.
+ *  No cap — each adds ~1,100 input tokens (≈ ₹0.05 on the paid key) and a few seconds. */
+export function photosForAi(urls: string[]): string[] {
+    return urls.filter((u) => /^https?:\/\//.test(u) && !isAiSkipped(u));
 }
