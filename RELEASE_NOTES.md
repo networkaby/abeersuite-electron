@@ -1,19 +1,27 @@
-# v1.16.9 [urgent]
+# v1.16.10 [urgent]
 
-Every counter should install this today. It brings Campaigns — a way to send one message to many customers — and makes staff WhatsApp alerts quieter. This release adds a new table, so every counter must take this update before the office website is updated; until a counter updates, its sync pauses.
+Every counter should install this today. It brings a printed slip for counter returns, cleans up repairing and pricing, and fixes AI image download on the till. This release changes the database (the old price lock and the old service centre list are removed), so every counter must take this update before the office website is updated.
 
-## Campaigns (new)
-- New **Campaigns** page in the office: write a greeting or an offer once, for many customers at a time. A campaign can carry an existing coupon.
-- **Send now** sends the message as a phone notification to every customer who has notifications switched on in the customer app.
-- A sent campaign that reached nobody now shows zero results clearly, instead of looking unfinished.
+## Billing and printing
+- Counter returns now print their own **return slip**, and its layout can be changed in the print template like every other document.
+- When a POS order turns into a sale, any rewards held on that order are now used up correctly.
 
-## Staff app and WhatsApp
-- New customer messages now show as a short WhatsApp-style banner for 3 seconds, without sound, instead of desktop-style cards.
-- A floating WhatsApp button shows how many chats are waiting; tap it to open them.
+## Prices
+- The old manual price lock is gone. Every product that was locked keeps the exact price it sells at today — now kept as its saved (barcode) price — so no customer price changes.
 
-## Phone apps
-- Each app (staff and customer) now downloads its update from its own website.
-- Customer app 2.1.0 is out; customers still on 2.0.0 now see the update bar.
+## Repairing
+- A service centre is now simply a supplier party, picked from the party list on the shipping slip and on Escalate. The separate Service Centre list is removed.
+
+## Delivery
+- The old "Pickup" delivery carrier is removed for good.
 
 ## Counters
-- AI product descriptions and other outside services now run directly from the till when it holds their keys, so they respond faster.
+- Downloading AI product images now works on the counter.
+
+## Phone apps
+- Staff and customer apps stay signed in, and the install page offers the update.
+- Customer app build 4: sign in with Google inside the app, and a "Get our app" link on the shop website (shows a QR code on a computer).
+- Product and party lists on the phone load faster: only the last 15 days of changes are fetched, and saved rows show first.
+
+## Online shop
+- AI product copy now reads every photo of a product, unless staff mark a photo "Skip for AI".
