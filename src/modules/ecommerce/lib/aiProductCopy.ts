@@ -2,7 +2,7 @@ import "server-only";
 import { APICallError, RetryError, generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
-import { AI_HIGHLIGHT_COUNT, AI_PRODUCT_COPY_MODEL } from "@/shared/lib/constants/ai";
+import { AI_HIGHLIGHT_COUNT, AI_PRODUCT_COPY_MODEL, type AiSearchMode } from "@/shared/lib/constants/ai";
 import { verifyFacts, type CitedFact } from "@/modules/ecommerce/lib/aiFactCheck";
 
 // Flipkart-style, SEO-friendly product copy, spending search money only where
@@ -33,8 +33,8 @@ export type ProductCopyInput = {
     shopWarrantyDays?: number | null;
     /** Gallery photos to send, already without the staff-skipped ones (photoMark.ts). */
     imageUrls: string[];
-    /** Off = never run step 2, even when it would help. */
-    search: boolean;
+    /** off = never run step 2; auto = when the draft says it helps; always = every time (A/B test, 2026-10-19). */
+    search: AiSearchMode;
 };
 
 // The model's JSON drifts run to run (a spec value as a list or number, an
@@ -96,6 +96,16 @@ export type ProductCopy = Copy & {
     search: "searched" | "not-needed" | "off" | "no-key" | "failed" | "no-sources";
     /** Why the search step failed, in staff words — only with search "failed". */
     searchError?: string;
+    /** Version A — the name-and-photo draft, only when search changed it (version B is the copy itself). */
+    photoOnly?: Pick<ProductCopy, "title" | "summary" | "highlights" | "description" | "compatibility" | "howToUse" | "warranty" | "specs" | "unsure" | "shopDescription">;
+    /** For the A/B test log: what this run cost and found. */
+    stats: {
+        mode: AiSearchMode;
+        verifiedFacts: number;
+        tokens: { draft: number; search: number; polish: number };
+        draftKey: "free" | "paid";
+        ms: number;
+    };
 };
 
 const freeKey = () => process.env.GOOGLE_GENERATIVE_AI_API_KEY;
@@ -234,13 +244,26 @@ export function aiErrorMessage(e: unknown): string | null {
 /** Free key first; the paid key takes over when the free daily cap answers 429, or Google blocks the free project (403). */
 async function callFreeFirst(content: Part[]) {
     try {
-        return await call(freeKey()!, content, false);
+        return { reply: await call(freeKey()!, content, false), key: "free" as const };
     } catch (e) {
         const paid = searchKey();
         // 403 = Google blocked the free project (seen 2026-10-19), not this product.
         if ((aiStatus(e) !== 429 && aiStatus(e) !== 403) || !paid) throw e;
-        return call(paid, content, false);
+        return { reply: await call(paid, content, false), key: "paid" as const };
     }
+}
+
+const tokensOf = (r: { usage?: { totalTokens?: number } }) => r.usage?.totalTokens ?? 0;
+
+/** No blank values, and one row per label whatever its case. */
+function cleanSpecs(raw: Record<string, string>): Record<string, string> {
+    const specs: Record<string, string> = {};
+    for (const [k, v] of Object.entries(raw)) {
+        if (!v.trim()) continue;
+        const same = Object.keys(specs).find((x) => x.toLowerCase() === k.toLowerCase());
+        if (!same) specs[k] = v.trim();
+    }
+    return specs;
 }
 
 /** Plain text in Flipkart's section order — the storefront shows it pre-wrapped. */
@@ -261,8 +284,16 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
     const draftParts: Part[] = [{ type: "text", text: draftPrompt(p, photos.length) }];
     for (const photo of photos) draftParts.push({ type: "file", data: photo, mediaType: "image" });
 
+    const started = Date.now();
+    const tokens = { draft: 0, search: 0, polish: 0 };
+    let draftKey: "free" | "paid" = "free";
     // One more try when the reply cannot be read at all (no JSON, no title…).
-    const readDraft = async () => draftSchema.parse(parseJson((await callFreeFirst(draftParts)).text));
+    const readDraft = async () => {
+        const { reply, key } = await callFreeFirst(draftParts);
+        tokens.draft += tokensOf(reply);
+        draftKey = key;
+        return draftSchema.parse(parseJson(reply.text));
+    };
     let draftRaw;
     try {
         draftRaw = await readDraft();
@@ -281,22 +312,29 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
     let sources: ProductCopy["sources"] = [];
     let search: ProductCopy["search"];
     let searchError: string | undefined;
+    let verifiedFacts = 0;
     const paidKey = searchKey();
-    if (!p.search) search = "off";
-    else if (!searchWorthy || !searchQuery.trim()) search = "not-needed";
+    // "always" searches even when the draft says no — by the brand + name if it gave no query.
+    const query = searchQuery.trim() || (p.search === "always" ? [p.brand, p.name].filter(Boolean).join(" ") : "");
+    if (p.search === "off") search = "off";
+    else if (p.search === "auto" && (!searchWorthy || !query)) search = "not-needed";
     else if (!paidKey) search = "no-key";
     else {
         try {
-            const found = await call(paidKey, [{ type: "text", text: searchPrompt(p, draft, searchQuery.trim()) }], true);
+            const found = await call(paidKey, [{ type: "text", text: searchPrompt(p, draft, query) }], true);
+            tokens.search += tokensOf(found);
             const cited = factsSchema.parse(parseJson(found.text)).facts
                 // A legal paragraph or a foreign-language page is not a spec value.
                 .filter((f) => f.value.trim().length > 0 && (f.value.length <= 120 || /compatib/i.test(f.label)) && !/[^\x20-\x7E₹°×–—’“”]/.test(f.value))
                 .map((f) => ({ ...f, label: /warrant/i.test(f.label) ? "Warranty Summary" : f.label.trim() }));
             const verified = await verifyFacts(cited);
+            verifiedFacts = verified.facts.length;
             if (verified.facts.length === 0) {
                 search = "no-sources";
             } else {
-                const polished = copySchema.parse(parseJson((await callFreeFirst([{ type: "text", text: polishPrompt(p, draft, verified.facts) }])).text));
+                const { reply: polishReply } = await callFreeFirst([{ type: "text", text: polishPrompt(p, draft, verified.facts) }]);
+                tokens.polish += tokensOf(polishReply);
+                const polished = copySchema.parse(parseJson(polishReply.text));
                 // The label decides: draft title, warranty and photo-read
                 // specs win; verified facts fill what the draft lacked.
                 const verifiedSpecs = Object.fromEntries(verified.facts.map((f) => [f.label, f.value]));
@@ -311,14 +349,17 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
         }
     }
 
-    // No blank values, and one row per label whatever its case.
-    const specs: Record<string, string> = {};
-    for (const [k, v] of Object.entries(final.specs)) {
-        if (!v.trim()) continue;
-        const same = Object.keys(specs).find((x) => x.toLowerCase() === k.toLowerCase());
-        if (!same) specs[k] = v.trim();
-    }
-    final = { ...final, specs };
+    final = { ...final, specs: cleanSpecs(final.specs) };
+    const photoDraft = { ...draft, specs: cleanSpecs(draft.specs) };
+    const stats = { mode: p.search, verifiedFacts, tokens, draftKey, ms: Date.now() - started };
 
-    return { ...final, sources, shopDescription: assembleDescription(final), search, ...(searchError ? { searchError } : {}) };
+    return {
+        ...final,
+        sources,
+        shopDescription: assembleDescription(final),
+        search,
+        ...(searchError ? { searchError } : {}),
+        ...(search === "searched" ? { photoOnly: { ...photoDraft, shopDescription: assembleDescription(photoDraft) } } : {}),
+        stats,
+    };
 }

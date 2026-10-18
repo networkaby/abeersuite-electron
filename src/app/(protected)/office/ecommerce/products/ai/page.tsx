@@ -7,12 +7,12 @@ import { toast } from "sonner";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { extractApiError } from "@/shared/lib/api";
-import { AI_BULK_BATCH_SIZE } from "@/shared/lib/constants/ai";
-import { fetchAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
+import { AI_BULK_BATCH_SIZE, type AiSearchMode } from "@/shared/lib/constants/ai";
+import { fetchAiCopy, logAiPick, type AiVersion, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
 import { AiDraftNotes, mergeAiSpecs } from "@/modules/ecommerce/components/AiCopyPanel";
+import { AbCompare, SearchModeButtons } from "@/modules/ecommerce/components/AiAbCompare";
+import AiTestLog from "@/modules/ecommerce/components/AiTestLog";
 
 // Bulk AI copy for products with no shop description (the one-time backlog,
 // then each month's new items). Runs a few at a time, keeps each draft on
@@ -36,7 +36,8 @@ export default function AiBulkCopyPage() {
     const [cursor, setCursor] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
     const [selected, setSelected] = useState<Set<number>>(new Set());
-    const [search, setSearch] = useState(false); // off by default — see AiCopyPanel
+    const [search, setSearch] = useState<AiSearchMode>("off"); // off by default — see AiCopyPanel
+    const [showLog, setShowLog] = useState(false);
     const [running, setRunning] = useState(false);
     const [progress, setProgress] = useState({ done: 0, of: 0 });
 
@@ -86,19 +87,20 @@ export default function AiBulkCopyPage() {
         if (stopped) toast.error(`Stopped: ${stopped}`);
     };
 
-    const save = async (r: Row) => {
-        if (!r.draft) return;
+    // `version` = the A/B pick; a single-version draft saves itself.
+    const save = async (r: Row, version: AiVersion | undefined = r.draft) => {
+        if (!version) return;
         const specs = Object.fromEntries(
-            mergeAiSpecs(Object.entries(r.specs).map(([k, v]) => ({ k, v })), r.draft.specs)
+            mergeAiSpecs(Object.entries(r.specs).map(([k, v]) => ({ k, v })), version.specs)
                 .filter((x) => x.k.trim())
                 .map((x) => [x.k, x.v]),
         );
         try {
             await axios.patch(`/api/ecommerce/products/${r.id}`, {
-                shopDescription: r.draft.shopDescription,
+                shopDescription: version.shopDescription,
                 // Staff-typed online name wins; the AI's SEO title fills a blank
                 // one, or one that is only a copy of the stock name.
-                ...(r.subheading?.trim() && r.subheading.trim() !== r.name.trim() ? {} : { shopSubheading: r.draft.title }),
+                ...(r.subheading?.trim() && r.subheading.trim() !== r.name.trim() ? {} : { shopSubheading: version.title }),
                 specs,
             });
             patchRow(r.id, { saved: true });
@@ -109,14 +111,15 @@ export default function AiBulkCopyPage() {
     };
 
     const saveAll = async () => {
-        const ready = rows.filter((r) => r.draft && !r.saved);
+        // Two-version rows wait for staff to keep one.
+        const ready = rows.filter((r) => r.draft && !r.draft.photoOnly && !r.saved);
         for (const r of ready) await save(r);
         toast.success(`Saved ${ready.length} product${ready.length === 1 ? "" : "s"}`);
     };
 
     const open = rows.filter((r) => !r.saved);
     const allTicked = open.length > 0 && open.every((r) => selected.has(r.id));
-    const draftsReady = rows.filter((r) => r.draft && !r.saved).length;
+    const draftsReady = rows.filter((r) => r.draft && !r.draft.photoOnly && !r.saved).length;
 
     return (
         <div className="flex flex-col gap-4">
@@ -133,10 +136,7 @@ export default function AiBulkCopyPage() {
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2">
-                        <Switch id="bulk-search" checked={search} onCheckedChange={setSearch} />
-                        <Label htmlFor="bulk-search" className="text-sm">Search online when it helps</Label>
-                    </div>
+                    <SearchModeButtons value={search} onChange={setSearch} disabled={running} />
                     <Button onClick={() => void generate()} disabled={running || selected.size === 0}>
                         <Sparkles className="size-4" />
                         {running ? `Writing ${progress.done}/${progress.of}…` : `Generate ${selected.size || ""}`.trim()}
@@ -182,7 +182,17 @@ export default function AiBulkCopyPage() {
                             {!r.imageUrl && <p className="text-muted-foreground text-xs">No photo — AI works from the name only.</p>}
                             {r.error && <p className="text-destructive text-xs">{r.error}</p>}
                             {r.saved && <p className="text-xs text-green-600">Saved</p>}
-                            {r.draft && !r.saved && (
+                            {r.draft?.photoOnly && !r.saved && (
+                                <AbCompare
+                                    draft={r.draft}
+                                    pickLabel="Save this"
+                                    onPick={(which, v) => {
+                                        logAiPick(r.id, r.name, which, r.draft!);
+                                        void save(r, v);
+                                    }}
+                                />
+                            )}
+                            {r.draft && !r.draft.photoOnly && !r.saved && (
                                 <div className="bg-muted/40 space-y-1 rounded-md p-2">
                                     <p className="font-medium">{r.draft.title}</p>
                                     <p className="whitespace-pre-line">{r.draft.shopDescription}</p>
@@ -201,7 +211,7 @@ export default function AiBulkCopyPage() {
                                         </p>
                                     )}
                                     <AiDraftNotes draft={r.draft} />
-                                    <Button size="sm" onClick={() => void save(r)}>Save</Button>
+                                    <Button size="sm" onClick={() => { logAiPick(r.id, r.name, "only", r.draft!); void save(r); }}>Save</Button>
                                 </div>
                             )}
                         </div>
@@ -216,6 +226,12 @@ export default function AiBulkCopyPage() {
                     {loading ? "Loading…" : "Load more"}
                 </Button>
             )}
+            <div className="border-t border-border pt-3">
+                <Button variant="ghost" size="sm" onClick={() => setShowLog((v) => !v)}>
+                    {showLog ? "Hide" : "Show"} search test log
+                </Button>
+                {showLog && <AiTestLog />}
+            </div>
         </div>
     );
 }

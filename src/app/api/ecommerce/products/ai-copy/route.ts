@@ -12,7 +12,7 @@ import { photosForAi } from "@/shared/lib/shop/photoMark";
 // always review before a customer sees it.
 //
 // GET  ?cursor=&take=  → active products with no shop description (bulk backlog)
-// POST { productId, name?, imageUrls?, search } → one draft (photos marked "Skip for AI" are not sent)
+// POST { productId, name?, imageUrls?, search: off|auto|always } → one draft (+ version A when search changed it) (photos marked "Skip for AI" are not sent)
 
 async function guard() {
     // Anyone who can open E-Commerce may use it — owner's call, no tick of its own.
@@ -67,7 +67,8 @@ const postSchema = z.object({
     name: z.string().trim().min(1).max(500).optional(),
     // The form's current (possibly unsaved) gallery, skip marks included.
     imageUrls: z.array(z.string().url()).max(30).optional(),
-    search: z.boolean().default(false),
+    // true/false from a tab opened before the three modes existed.
+    search: z.union([z.boolean().transform((b) => (b ? "auto" : "off")), z.enum(["off", "auto", "always"])]).default("off"),
 });
 
 export async function POST(req: Request) {

@@ -4,10 +4,10 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { ExternalLink, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { extractApiError } from "@/shared/lib/api";
-import { fetchAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
+import type { AiSearchMode } from "@/shared/lib/constants/ai";
+import { fetchAiCopy, logAiPick, type AiVersion, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
+import { AbCompare, SearchModeButtons } from "@/modules/ecommerce/components/AiAbCompare";
 
 type SpecRow = { k: string; v: string };
 
@@ -76,9 +76,17 @@ export default function AiCopyPanel({
     onSpecs: (rows: SpecRow[]) => void;
 }) {
     // Off by default: Gemini rarely really searches and most cited pages fail the link check (2026-10-17).
-    const [search, setSearch] = useState(false);
+    const [search, setSearch] = useState<AiSearchMode>("off");
     const [busy, setBusy] = useState(false);
     const [draft, setDraft] = useState<ProductCopy | null>(null);
+    // A/B trial: true once staff kept A or B for the current draft.
+    const [picked, setPicked] = useState(false);
+
+    const apply = (v: AiVersion) => {
+        onDescription(v.shopDescription);
+        if (!subheading.trim() || subheading.trim() === name.trim()) onSubheading(v.title);
+        onSpecs(mergeAiSpecs(specPairs, v.specs));
+    };
 
     const run = async (fresh: boolean) => {
         if (!productId) { toast.error("Save the product first, then generate"); return; }
@@ -87,6 +95,11 @@ export default function AiCopyPanel({
         try {
             const copy = await fetchAiCopy({ productId, name: name.trim(), imageUrls, search }, { fresh });
             setDraft(copy);
+            setPicked(false);
+            // Two versions: nothing is filled until staff keep one below.
+            if (copy.photoOnly) { toast.success("Two versions ready — compare below and keep one"); return; }
+            // The product form saves later — log the single version now, new answers only.
+            if (!copy.fromCache) logAiPick(productId, name.trim(), "only", copy);
             const filled: string[] = [];
             if (!description.trim()) { onDescription(copy.shopDescription); filled.push("description"); }
             if (!subheading.trim() || subheading.trim() === name.trim()) { onSubheading(copy.title); filled.push("online name"); }
@@ -113,18 +126,27 @@ export default function AiCopyPanel({
                     <Sparkles className="size-4" />
                     {busy ? "Writing…" : draft ? "Generate again" : "Generate with AI"}
                 </Button>
-                <div className="flex items-center gap-2">
-                    <Switch id="ai-search" checked={search} onCheckedChange={setSearch} />
-                    <Label htmlFor="ai-search" className="text-sm">Search online when it helps</Label>
-                </div>
+                <SearchModeButtons value={search} onChange={setSearch} disabled={busy} />
             </div>
             {draft && (
                 <div className="space-y-2 text-sm">
                     <AiDraftNotes draft={draft} />
-                    {titleDiffers && (
+                    {draft.photoOnly && !picked && productId && (
+                        <AbCompare
+                            draft={draft}
+                            pickLabel="Use this"
+                            onPick={(which, v) => {
+                                apply(v);
+                                logAiPick(productId, name.trim(), which, draft);
+                                setPicked(true);
+                                toast.success(`Version ${which} filled in — review, then Save`);
+                            }}
+                        />
+                    )}
+                    {!draft.photoOnly && titleDiffers && (
                         <DraftRow label="Online name" text={draft.title} onUse={() => onSubheading(draft.title)} />
                     )}
-                    {descDiffers && (
+                    {!draft.photoOnly && descDiffers && (
                         <DraftRow label="Description" text={draft.shopDescription} onUse={() => onDescription(draft.shopDescription)} />
                     )}
                     <div className="flex items-center gap-2">

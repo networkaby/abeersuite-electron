@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, requirePermission, userCanRestoreAudit } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { AI_COPY_TEST_ENTITY } from "@/shared/lib/constants/ai";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { releaseSeriesNumber, seriesKindOf } from "@/modules/accountancy/lib/releaseSeriesNumber";
 import { liveAuditCopyIds } from "@/modules/accountancy/lib/auditCopyLive";
@@ -25,7 +26,8 @@ export async function GET(req: Request) {
 
         const rows = await prisma.auditLog.findMany({
             where: {
-                ...(entityType ? { entityType } : {}),
+                // The AI search trial's pick log shares the table, not the bin.
+                ...(entityType ? { entityType } : { entityType: { not: AI_COPY_TEST_ENTITY } }),
                 ...(includeRestored ? {} : { restoredAt: null }),
             },
             orderBy: { createdAt: "desc" },
@@ -76,9 +78,10 @@ export async function DELETE(req: Request) {
     try {
         const { removed, released } = await prisma.$transaction(async (tx) => {
             const rows = await tx.auditLog.findMany({
+                where: { entityType: { not: AI_COPY_TEST_ENTITY } },
                 select: { entityType: true, subtype: true, originalRef: true, action: true, reason: true },
             });
-            const wiped = await tx.auditLog.deleteMany({});
+            const wiped = await tx.auditLog.deleteMany({ where: { entityType: { not: AI_COPY_TEST_ENTITY } } });
 
             // Only a deleted voucher's number can be free; an edit copy's voucher is alive.
             let pending = rows

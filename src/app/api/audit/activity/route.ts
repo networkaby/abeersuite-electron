@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
+import { AI_COPY_TEST_ENTITY } from "@/shared/lib/constants/ai";
 import { auditSnapshotKind } from "@/shared/lib/accountancy/auditSnapshotKind";
 
 // GET /api/audit/activity?from=<ISO>&to=<ISO>
@@ -64,7 +65,7 @@ export async function GET(req: Request) {
                 select: { id: true, cancelledAt: true, cancelledById: true, cancelReason: true },
             }),
             prisma.auditLog.findMany({
-                where: { createdAt: win },
+                where: { createdAt: win, entityType: { not: AI_COPY_TEST_ENTITY } },
                 orderBy: { createdAt: "desc" },
                 take: MAX_PER_SOURCE,
                 select: {
@@ -73,7 +74,7 @@ export async function GET(req: Request) {
                 },
             }),
             prisma.auditLog.findMany({
-                where: { restoredAt: win },
+                where: { restoredAt: win, entityType: { not: AI_COPY_TEST_ENTITY } },
                 take: MAX_PER_SOURCE,
                 select: {
                     id: true, originalId: true, originalRef: true, subtype: true, action: true,

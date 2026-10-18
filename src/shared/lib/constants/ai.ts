@@ -16,3 +16,16 @@ export const AI_BULK_BATCH_SIZE = 5;
 /** How many highlight bullets the Flipkart-style copy carries. */
 export const AI_HIGHLIGHT_COUNT = { min: 4, max: 7 } as const;
 
+
+/** Online search modes, on trial side by side since 2026-10-19: staff pick
+ *  version A (photo only) or B (with search) and each pick is logged, so the
+ *  owner can settle on one mode later. */
+export const AI_SEARCH_MODES = [
+    { value: "off", label: "Off" },
+    { value: "auto", label: "When it helps" },
+    { value: "always", label: "Always" },
+] as const;
+export type AiSearchMode = (typeof AI_SEARCH_MODES)[number]["value"];
+
+/** AuditLog.entityType for an A/B pick — kept out of the Recycle Bin and activity feed. */
+export const AI_COPY_TEST_ENTITY = "AI_COPY_TEST";
