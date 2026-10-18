@@ -346,15 +346,15 @@ The live screens are `WorkActions.tsx` and `assignments/WorkInboxBoard.tsx`.
 | File | Lines |
 |---|---|
 | `src/modules/repairing/components/StatusUpdateCombined.tsx` | 249 |
-| `src/modules/repairing/components/assignments/TicketCard.tsx` | 217 |
+| ~~`TicketCard.tsx`~~ — deleted 2026-10-18 | 217 |
 | `src/modules/repairing/components/TicketOwnershipPanel.tsx` | 181 |
 | `src/modules/repairing/components/WorkerUpdate.tsx` | 159 |
 | ~~`ServiceCenterForm.tsx`~~ — deleted 2026-10-18 | 122 |
 | `src/modules/repairing/components/TicketStatusUpdate.tsx` | 119 |
-| `src/modules/repairing/components/assignments/PassRejectModal.tsx` | 111 |
+| ~~`PassRejectModal.tsx`~~ — deleted 2026-10-18 | 111 |
 | `src/modules/repairing/components/TicketReopenButton.tsx` | 94 |
 
-Note `PassRejectModal` is imported **only** by `TicketCard`, which is itself dead — they fall together.
+Note `PassRejectModal` is imported **only** by `TicketCard`, which is itself dead — they fall together. (Both deleted 2026-10-18.)
 
 ### E2 · Other orphans — 20 files, ~1,944 lines
 
