@@ -19,6 +19,10 @@ import type { PayableStaffDto } from "@/modules/hr/lib/payrollTypes";
 // payable; the rest are listed with their balance so the screen can say why
 // they are not being paid.
 //
+// `Account.balance` holds only posted vouchers — the opening balance is a
+// master field kept apart from it, so it is added back here. Without it, staff
+// whose salary was owed when the books started read as holding an advance.
+//
 // A person who has left still appears while their balance is outstanding —
 // leaving does not cancel what is owed for the days already worked.
 
@@ -35,20 +39,22 @@ export async function GET() {
                 staffCode: true,
                 leftOn: true,
                 user: { select: { name: true } },
-                ledgerAccount: { select: { id: true, name: true, balance: true } },
+                ledgerAccount: { select: { id: true, name: true, balance: true, openingBalance: true, openingBalanceType: true } },
             },
         });
 
         const rows: PayableStaffDto[] = profiles
             .filter((p) => p.ledgerAccount)
             .map((p) => {
-                const balance = moneyNumber(p.ledgerAccount!.balance);
+                const acc = p.ledgerAccount!;
+                const opening = moneyNumber(acc.openingBalance ?? 0);
+                const balance = moneyNumber(acc.balance) + (acc.openingBalanceType === "DEBIT" ? -opening : opening);
                 return {
                     userId: p.userId,
                     name: p.user.name,
                     staffCode: p.staffCode,
                     hasLeft: staffHasLeft({ leftOn: p.leftOn }, today),
-                    ledger: { id: p.ledgerAccount!.id, name: p.ledgerAccount!.name },
+                    ledger: { id: acc.id, name: acc.name },
                     // Positive = owed to them. Negative = an advance they hold.
                     balance,
                     leftOn: p.leftOn ? toDateOnlyUtc(p.leftOn) : null,
