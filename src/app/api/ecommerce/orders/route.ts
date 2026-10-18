@@ -151,8 +151,7 @@ export async function POST(req: Request) {
                     create: {
                         orderSource: body.orderSource,
                         shippingName: body.shippingName ?? null,
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        shippingAddress: (body.shippingAddress as any) ?? undefined,
+                        shippingAddress: body.shippingAddress as Prisma.InputJsonValue | undefined,
                         totalPaise: body.totalPaise,
                         lines: {
                             create: body.lines.map((l) => ({
