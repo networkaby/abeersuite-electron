@@ -8,24 +8,24 @@ import Link from "next/link";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { toast } from "sonner";
 import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
+import { DEFAULT_SHOP_PUBLISH_RULES, type ShopPublishRules } from "@/modules/ecommerce/lib/shopQualification";
 import {
-    shopQualification,
-    DEFAULT_SHOP_PUBLISH_RULES,
-    type ShopPublishRules,
-} from "@/modules/ecommerce/lib/shopQualification";
+    EMPTY_PRODUCT_FILTERS,
+    activeFilterCount,
+    matchesProductFilters,
+    productFilterOptions,
+    productStatus,
+    type ProductFilters,
+    type ProductStatus,
+} from "@/modules/ecommerce/lib/productFilters";
+import { cachedAdminProducts, fetchAdminProducts, handOffAiPick, patchCachedAdminProduct } from "@/modules/ecommerce/lib/productListCache";
+import { ProductFilterButton, ProductFilterPanel } from "@/modules/ecommerce/components/ProductFilterPanel";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
 import { PaginationBar } from "@/shared/components/PaginationBar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import {
     Table,
     TableBody,
@@ -39,10 +39,9 @@ import {
     CircleDashed,
     Search,
     AlertCircle,
-    Filter,
     ChevronRight,
     ExternalLink,
-    X,
+    Sparkles,
     // SlidersHorizontal,
 } from "lucide-react";
 import { productPreviewPath, productShopUrl } from "@/shared/lib/shop/productPublic";
@@ -60,27 +59,15 @@ const COL_COUNT = 10;
 const PAGE_SIZE = 25;
 
 type TabKey = "all" | "published" | "pending";
-type StockFilter = "all" | "in" | "out" | "untracked";
-type ActiveFilter = "all" | "active" | "inactive";
-type StatusFilter = "all" | "live" | "ready" | "needs";
-
-type ProductStatus = { kind: "live" | "ready" | "draft"; missing: string[] };
-
 // Persist the list view (page / filters / scroll) per browser tab so leaving for
 // a product's Edit page and coming back (Esc → router.back) returns to the same
 // place instead of resetting to page 1.
-const VIEW_KEY = "ecommerce-products-view-v1";
+const VIEW_KEY = "ecommerce-products-view-v2";
 type SavedView = {
     page: number;
     pageSize: number;
     tab: TabKey;
-    query: string;
-    categoryFilter: string;
-    brandFilter: string;
-    groupFilter: string;
-    stockFilter: StockFilter;
-    statusFilter: StatusFilter;
-    activeFilter: ActiveFilter;
+    filters: ProductFilters;
     scrollTop: number;
 };
 function loadSavedView(): Partial<SavedView> {
@@ -90,29 +77,6 @@ function loadSavedView(): Partial<SavedView> {
     } catch {
         return {};
     }
-}
-
-/** Per-row shop status, reusing the same qualification gate the server enforces. */
-function productStatus(p: ShopProductAdmin, rules: ShopPublishRules): ProductStatus {
-    const shopPricePaise = p.barcodePricePaise ?? p.pricePaise;
-    const q = shopQualification(
-        {
-            pricePaise: shopPricePaise,
-            imageUrl: p.imageUrl,
-            galleryUrls: p.galleryUrls,
-            description: p.description,
-            category: p.shopCategory,
-            groupId: p.groupId,
-            brandId: p.brandId,
-            mrpPaise: p.mrpPaise,
-            stock: p.stock,
-            allowBackorder: p.allowBackorder,
-            weightGrams: p.weightGrams,
-        },
-        rules
-    );
-    if (p.isListedInShop && q.qualified) return { kind: "live", missing: [] };
-    return { kind: q.qualified ? "ready" : "draft", missing: q.missing };
 }
 
 function StatusBadge({ status }: { status: ProductStatus }) {
@@ -143,10 +107,10 @@ export default function EcommerceProductsPage() {
     // client's first paint diverge from the server HTML and triggered a
     // hydration mismatch. The saved view is restored client-side in an effect
     // below, after mount.
-    const [products, setProducts] = useState<ShopProductAdmin[]>([]);
+    // Last loaded list (shared with the AI screen) paints at once; load() refreshes it.
+    const [products, setProducts] = useState<ShopProductAdmin[]>(() => cachedAdminProducts() ?? []);
     const [open, setOpen] = useState(false);
     const [tab, setTab] = useState<TabKey>("all");
-    const [query, setQuery] = useState("");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(PAGE_SIZE);
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -162,19 +126,15 @@ export default function EcommerceProductsPage() {
 
     // Filter panel
     const [showFilters, setShowFilters] = useState(false);
-    const [categoryFilter, setCategoryFilter] = useState("all");
-    const [brandFilter, setBrandFilter] = useState("all");
-    const [groupFilter, setGroupFilter] = useState("all");
-    const [stockFilter, setStockFilter] = useState<StockFilter>("all");
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-    const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
+    const [filters, setFilters] = useState<ProductFilters>(EMPTY_PRODUCT_FILTERS);
+    const query = filters.query;
+    const setQuery = (q: string) => setFilters((f) => ({ ...f, query: q }));
     const restoredScrollTop = useRef(0);
 
     const load = () => {
-        axios
-            .get<ShopProductAdmin[]>("/api/ecommerce/products")
-            .then((r) => setProducts(r.data))
-            .catch(() => setProducts([]));
+        fetchAdminProducts()
+            .then(setProducts)
+            .catch(() => toast.error("Could not load products"));
     };
 
     useEffect(() => {
@@ -195,30 +155,13 @@ export default function EcommerceProductsPage() {
         viewRestored.current = true;
         const saved = loadSavedView();
         if (saved.tab) setTab(saved.tab);
-        if (saved.query) setQuery(saved.query);
         if (saved.page) setPage(saved.page);
         if (saved.pageSize) setPageSize(saved.pageSize);
-        if (saved.categoryFilter) setCategoryFilter(saved.categoryFilter);
-        if (saved.brandFilter) setBrandFilter(saved.brandFilter);
-        if (saved.groupFilter) setGroupFilter(saved.groupFilter);
-        if (saved.stockFilter) setStockFilter(saved.stockFilter);
-        if (saved.statusFilter) setStatusFilter(saved.statusFilter);
-        if (saved.activeFilter) setActiveFilter(saved.activeFilter);
+        if (saved.filters) setFilters({ ...EMPTY_PRODUCT_FILTERS, ...saved.filters });
         restoredScrollTop.current = saved.scrollTop ?? 0;
     }, []);
 
-    const categories = useMemo(
-        () => [...new Set(products.map((p) => p.category).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
-        [products]
-    );
-    const brands = useMemo(
-        () => [...new Set(products.map((p) => p.brandName).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b)),
-        [products]
-    );
-    const groups = useMemo(
-        () => [...new Set(products.map((p) => p.groupName).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b)),
-        [products]
-    );
+    const filterOptions = useMemo(() => productFilterOptions(products), [products]);
 
     const counts = useMemo(() => {
         let published = 0;
@@ -226,42 +169,20 @@ export default function EcommerceProductsPage() {
         return { all: products.length, published, pending: products.length - published };
     }, [products]);
 
-    const activeFilterCount =
-        (categoryFilter !== "all" ? 1 : 0) +
-        (brandFilter !== "all" ? 1 : 0) +
-        (groupFilter !== "all" ? 1 : 0) +
-        (stockFilter !== "all" ? 1 : 0) +
-        (statusFilter !== "all" ? 1 : 0) +
-        (activeFilter !== "all" ? 1 : 0);
-
-    const filtered = useMemo(() => {
-        const q = query.trim().toLowerCase();
-        return products.filter((p) => {
+    const filtered = useMemo(
+        () => products.filter((p) => {
             if (tab === "published" && !p.isListedInShop) return false;
             if (tab === "pending" && p.isListedInShop) return false;
-            if (categoryFilter !== "all" && p.category !== categoryFilter) return false;
-            if (brandFilter !== "all" && p.brandName !== brandFilter) return false;
-            if (groupFilter !== "all" && p.groupName !== groupFilter) return false;
-            if (stockFilter === "untracked" && p.stock !== null) return false;
-            if (stockFilter === "in" && !(p.stock !== null && p.stock > 0)) return false;
-            if (stockFilter === "out" && p.stock !== 0) return false;
-            if (activeFilter === "active" && !p.isActive) return false;
-            if (activeFilter === "inactive" && p.isActive) return false;
-            if (statusFilter !== "all") {
-                const k = productStatus(p, rules).kind;
-                if (statusFilter === "needs" ? k !== "draft" : k !== statusFilter) return false;
-            }
-            if (q && !`${p.name} ${p.sku} ${p.category} ${p.brandName ?? ""} ${p.groupName ?? ""} ${(p.codes ?? []).map((c) => c.value).join(" ")}`.toLowerCase().includes(q))
-                return false;
-            return true;
-        });
-    }, [products, tab, query, categoryFilter, brandFilter, groupFilter, stockFilter, statusFilter, activeFilter, rules]);
+            return matchesProductFilters(p, filters, rules);
+        }),
+        [products, tab, filters, rules]
+    );
 
     // Reset to page 1 when the filter actually changes — but NOT on the initial
     // mount, so a restored page (from sessionStorage) survives. Compare filter
     // VALUES (not a run counter) so React StrictMode's double-invoke in dev can't
     // wrongly trigger the reset.
-    const filterSig = `${tab}|${query}|${categoryFilter}|${brandFilter}|${groupFilter}|${stockFilter}|${statusFilter}|${activeFilter}`;
+    const filterSig = `${tab}|${JSON.stringify(filters)}`;
     const prevFilterSig = useRef(filterSig);
     useEffect(() => {
         if (prevFilterSig.current === filterSig) return;
@@ -283,14 +204,13 @@ export default function EcommerceProductsPage() {
             const prev = raw ? JSON.parse(raw) : {};
             const view = {
                 ...prev,
-                page, pageSize, tab, query,
-                categoryFilter, brandFilter, groupFilter, stockFilter, statusFilter, activeFilter,
+                page, pageSize, tab, filters,
             };
             sessionStorage.setItem(VIEW_KEY, JSON.stringify(view));
         } catch {
             /* ignore quota / privacy-mode errors */
         }
-    }, [page, pageSize, tab, query, categoryFilter, brandFilter, groupFilter, stockFilter, statusFilter, activeFilter]);
+    }, [page, pageSize, tab, filters]);
 
     // Restore scroll position once the product rows have rendered.
     const scrollRestored = useRef(false);
@@ -376,6 +296,7 @@ export default function EcommerceProductsPage() {
                 isListedInShop: next,
             });
             setProducts((prev) => prev.map((x) => (x.id === p.id ? data : x)));
+            patchCachedAdminProduct(data);
             toast.success(next ? "Published to shop" : "Removed from shop");
         } catch (e: unknown) {
             const msg =
@@ -399,15 +320,6 @@ export default function EcommerceProductsPage() {
             else next.add(id);
             return next;
         });
-
-    const clearFilters = () => {
-        setCategoryFilter("all");
-        setBrandFilter("all");
-        setGroupFilter("all");
-        setStockFilter("all");
-        setStatusFilter("all");
-        setActiveFilter("all");
-    };
 
     const tabs: { key: TabKey; label: string; count: number }[] = [
         { key: "all", label: "All", count: counts.all },
@@ -479,71 +391,12 @@ export default function EcommerceProductsPage() {
                             className="pl-8"
                         />
                     </div>
-                    <Button
-                        type="button"
-                        variant={showFilters || activeFilterCount > 0 ? "secondary" : "outline"}
-                        onClick={() => setShowFilters((s) => !s)}
-                        className="gap-2"
-                    >
-                        <Filter className="size-4" />
-                        Filters
-                        {activeFilterCount > 0 ? (
-                            <span className="bg-primary text-primary-foreground rounded-full px-1.5 text-xs tabular-nums">
-                                {activeFilterCount}
-                            </span>
-                        ) : null}
-                    </Button>
+                    <ProductFilterButton open={showFilters} filters={filters} onToggle={() => setShowFilters((s) => !s)} />
                 </div>
             </div>
 
             {/* Expandable filter panel */}
-            {showFilters ? (
-                <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-muted/20 p-3">
-                    <FilterSelect label="Category" value={categoryFilter} onChange={setCategoryFilter} allLabel="All categories" options={categories} />
-                    <FilterSelect label="Brand" value={brandFilter} onChange={setBrandFilter} allLabel="All brands" options={brands} />
-                    <FilterSelect label="Group" value={groupFilter} onChange={setGroupFilter} allLabel="All groups" options={groups} />
-                    <div className="grid gap-1.5">
-                        <label className="text-muted-foreground text-xs">Shop status</label>
-                        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-                            <SelectTrigger className="h-8 w-36 text-sm"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Any status</SelectItem>
-                                <SelectItem value="live">Live</SelectItem>
-                                <SelectItem value="ready">Ready to publish</SelectItem>
-                                <SelectItem value="needs">Needs info</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="grid gap-1.5">
-                        <label className="text-muted-foreground text-xs">Stock</label>
-                        <Select value={stockFilter} onValueChange={(v) => setStockFilter(v as StockFilter)}>
-                            <SelectTrigger className="h-8 w-36 text-sm"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Any stock</SelectItem>
-                                <SelectItem value="in">In stock</SelectItem>
-                                <SelectItem value="out">Out of stock</SelectItem>
-                                <SelectItem value="untracked">Untracked</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="grid gap-1.5">
-                        <label className="text-muted-foreground text-xs">Active</label>
-                        <Select value={activeFilter} onValueChange={(v) => setActiveFilter(v as ActiveFilter)}>
-                            <SelectTrigger className="h-8 w-32 text-sm"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All</SelectItem>
-                                <SelectItem value="active">Active only</SelectItem>
-                                <SelectItem value="inactive">Inactive only</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    {activeFilterCount > 0 ? (
-                        <Button type="button" variant="ghost" size="sm" onClick={clearFilters} className="gap-1">
-                            <X className="size-3.5" /> Clear
-                        </Button>
-                    ) : null}
-                </div>
-            ) : null}
+            {showFilters ? <ProductFilterPanel value={filters} onChange={setFilters} options={filterOptions} /> : null}
 
             {/* Bulk action bar — appears when rows are selected */}
             {selected.size > 0 ? (
@@ -554,6 +407,11 @@ export default function EcommerceProductsPage() {
                     </Button>
                     <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => void runBulk("unpublish")}>
                         Unpublish
+                    </Button>
+                    <Button size="sm" variant="outline" asChild>
+                        <Link href="/office/ecommerce/products/ai" onClick={() => handOffAiPick([...selected])}>
+                            <Sparkles className="size-4" /> Write with AI
+                        </Link>
                     </Button>
                     {allPageSelected && filtered.length > selected.size ? (
                         <Button size="sm" variant="ghost" onClick={selectAllFiltered}>
@@ -754,7 +612,7 @@ export default function EcommerceProductsPage() {
                 </Table>
                 {filtered.length === 0 ? (
                     <p className="text-muted-foreground p-8 text-center text-sm">
-                        {query.trim() || activeFilterCount > 0
+                        {query.trim() || activeFilterCount(filters) > 0
                             ? "No products match your filters."
                             : tab === "published"
                                 ? "No products are published to the shop yet."
@@ -779,38 +637,6 @@ export default function EcommerceProductsPage() {
     );
 }
 
-function FilterSelect({
-    label,
-    value,
-    onChange,
-    allLabel,
-    options,
-}: {
-    label: string;
-    value: string;
-    onChange: (v: string) => void;
-    allLabel: string;
-    options: string[];
-}) {
-    return (
-        <div className="grid gap-1.5">
-            <label className="text-muted-foreground text-xs">{label}</label>
-            <Select value={value} onValueChange={onChange}>
-                <SelectTrigger className="h-8 w-40 text-sm">
-                    <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">{allLabel}</SelectItem>
-                    {options.map((o) => (
-                        <SelectItem key={o} value={o}>
-                            {o}
-                        </SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
-        </div>
-    );
-}
 
 function Detail({ label, value }: { label: string; value: ReactNode }) {
     return (
