@@ -29,8 +29,8 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ userId:
             await touchStaffProfile(tx, userId);
         });
         return NextResponse.json({ ok: true });
-    } catch (e: any) {
-        if (e?.message === "NOT_FOUND") return NextResponse.json({ error: "Revision not found" }, { status: 404 });
+    } catch (e: unknown) {
+        if (e instanceof Error && e.message === "NOT_FOUND") return NextResponse.json({ error: "Revision not found" }, { status: 404 });
         return handleApiError(e, "Failed to delete the salary revision");
     }
 }

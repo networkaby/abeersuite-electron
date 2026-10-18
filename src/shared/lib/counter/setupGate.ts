@@ -73,13 +73,6 @@ interface MyBindingResponse {
     openShift?: BoundShift | null;
 }
 
-/**
- * The live shift on the counter this PC holds, as the replica sees it. Null when there
- * is none, or when the replica could not answer — the caller must not read "no shift"
- * into silence, so this is only ever acted on alongside a `valid` reconcile.
- */
-let lastOpenShift: BoundShift | null = null;
-
 export async function getLocalCounterSetup(): Promise<{ counterId: number; counterNumber: number } | null> {
     if (!isElectronEnvironment() || !window.electronAPI?.getCounterSetup) return null;
     return window.electronAPI.getCounterSetup();
@@ -113,8 +106,7 @@ export async function reconcileCounterSetup(authoritative = false): Promise<Reco
 
         // Which counter is THIS device actually bound to, per the replica —
         // independent of what the local cache says. The BINDING is the whole signal.
-        if (!body.counter || body.counter.id !== local.counterId) { lastOpenShift = null; return "released"; }
-        lastOpenShift = body.openShift ?? null;
+        if (!body.counter || body.counter.id !== local.counterId) return "released";
         return "valid";
     } catch {
         return "unreachable";

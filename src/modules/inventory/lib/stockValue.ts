@@ -9,8 +9,6 @@
 // Pairs with `aggregateClosingAsOf` in `aggregateLedger.ts` for the GL
 // side; see also `closingStock.ts` for the org-wide aggregate.
 
-import { valueStockBatch, type ValuationMethod } from "@/modules/inventory/lib/valuation";
-
 export type ProductOpeningInput = {
     openingStock?: number | null;
     openingRate?:  number | null;

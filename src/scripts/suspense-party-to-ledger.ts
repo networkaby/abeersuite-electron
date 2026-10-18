@@ -98,7 +98,7 @@ async function main(): Promise<void> {
     for (const v of others) {
         const mine = v.lines.filter((l) => l.accountId === party.id);
         const amt = mine.reduce((s, l) => s + signed(l.type, l.amount), 0);
-        if (v.status === "POSTED") for (const l of mine) l.type === "DEBIT" ? (moveDr += Number(l.amount)) : (moveCr += Number(l.amount));
+        if (v.status === "POSTED") for (const l of mine) { if (l.type === "DEBIT") moveDr += Number(l.amount); else moveCr += Number(l.amount); }
         console.log(`  ${v.date.toISOString().slice(0, 10)}  ${v.type.padEnd(8)} ${(v.voucherNo ?? "").padEnd(8)} #${String(v.id).padEnd(6)} ${v.status.padEnd(9)} ${amt >= 0 ? "Dr" : "Cr"} ${money(Math.abs(amt))}`);
     }
 

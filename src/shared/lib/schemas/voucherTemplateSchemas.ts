@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { VOUCHER_TEMPLATE_KINDS, PAPER_FORMATS } from "@/shared/lib/print/voucherTemplateDefaults";
+import { PAPER_FORMATS } from "@/shared/lib/print/voucherTemplateDefaults";
 
 const txt = (max: number) => z.string().max(max).optional();
 

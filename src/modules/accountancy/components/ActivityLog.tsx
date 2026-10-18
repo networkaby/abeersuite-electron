@@ -74,6 +74,8 @@ export function ActivityLog() {
             .finally(() => { if (!silent) setLoading(false); });
     }, [fromIso, toIso]);
 
+    // Fetch on mount / date change; the spinner flip inside load() is intended.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { void load(); }, [load]);
     useRealtimeTopics(["ledger", "stock"], () => { void load(true); });
 
