@@ -9,7 +9,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Must climb on every APK: the TWA it replaces (shop-app/) was 1, and a phone
         // refuses an "update" whose code is not higher than what it has.
-        versionCode 3
+        versionCode 4
         versionName "2.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -52,6 +52,10 @@ dependencies {
     implementation project(':capacitor-android')
     // Bills / receipts / order notifications (NsMessagingService, NsPushPlugin).
     implementation "com.google.firebase:firebase-messaging:$firebaseMessagingVersion"
+    // Google sign-in (NsGooglePlugin) — the WebView cannot open Google's popup.
+    implementation "androidx.credentials:credentials:$credentialsVersion"
+    implementation "androidx.credentials:credentials-play-services-auth:$credentialsVersion"
+    implementation "com.google.android.libraries.identity.googleid:googleid:$googleIdVersion"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

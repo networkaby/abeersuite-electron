@@ -15,7 +15,7 @@ import LegalConsentNote from "@/modules/external/legal/LegalConsentNote";
 import PortalOnboardForm from "@/modules/external/portal/PortalOnboardForm";
 import PortalOtpLoginForm, { type OtpStep } from "@/modules/external/portal/PortalOtpLoginForm";
 import { usePortalPasswordlessSignIn } from "@/modules/external/portal/usePortalPasswordlessSignIn";
-import { signInWithGoogle } from "@/shared/lib/auth/portalPasswordless";
+import { canSignInWithGoogle, signInWithGoogle } from "@/shared/lib/auth/portalPasswordless";
 import { HERO_SLIDES } from "@/shared/lib/shop/storeContent";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { isShopNativeUserAgent, SHOP_NATIVE_HOME } from "@/shared/lib/device/shopApp";
@@ -62,8 +62,8 @@ function GoogleIcon() {
  * The customer sign-in — OTP (mobile or email), password, Google, and the
  * new-customer onboarding after a first OTP. The website's /login page and the
  * customer app's sign-in screen share it; `app` drops the photo backdrop and
- * brand panel (and the app hides Google and "Create an account": a first OTP
- * already creates the account).
+ * brand panel (and the app hides "Create an account": a first OTP already
+ * creates the account; Google shows only on an APK carrying the native sheet).
  */
 export default function CustomerLoginForm({ app = false }: { app?: boolean }) {
     const router = useRouter();
@@ -80,6 +80,7 @@ export default function CustomerLoginForm({ app = false }: { app?: boolean }) {
 
     const [method, setMethod] = useState<"otp" | "password">("otp");
     const inApp = useSyncExternalStore(noSubscribe, () => isShopNativeUserAgent(navigator.userAgent), () => false) || app;
+    const showGoogle = useSyncExternalStore(noSubscribe, () => canSignInWithGoogle(inApp), () => !app);
     // One field for mobile OR email — the server works out which it is.
     const [identifier, setIdentifier] = useState("");
     const [password, setPassword] = useState("");
@@ -239,9 +240,9 @@ export default function CustomerLoginForm({ app = false }: { app?: boolean }) {
                                 </form>
                             )}
 
-                            {/* Not inside the customer app: Google refuses its sign-in popup in an
-                                app's web view. OTP and password work there as normal. */}
-                            {!inApp && (
+                            {/* Google refuses its popup in an app's web view: inside the customer
+                                app it shows only when the APK has the native sheet (NsGooglePlugin). */}
+                            {showGoogle && (
                                 <>
                                     <div className="relative">
                                         <div className="absolute inset-0 flex items-center">
