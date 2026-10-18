@@ -2,7 +2,7 @@ import "server-only";
 import { APICallError, RetryError, generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
-import { AI_HIGHLIGHT_COUNT, AI_PRODUCT_COPY_MODEL } from "@/shared/lib/constants";
+import { AI_HIGHLIGHT_COUNT, AI_PRODUCT_COPY_MODEL } from "@/shared/lib/constants/ai";
 import { verifyFacts, type CitedFact } from "@/modules/ecommerce/lib/aiFactCheck";
 
 // Flipkart-style, SEO-friendly product copy, spending search money only where

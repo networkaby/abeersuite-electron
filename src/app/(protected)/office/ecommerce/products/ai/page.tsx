@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { extractApiError } from "@/shared/lib/api";
-import { AI_BULK_BATCH_SIZE } from "@/shared/lib/constants";
+import { AI_BULK_BATCH_SIZE } from "@/shared/lib/constants/ai";
 import { fetchAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
 import { AiDraftNotes, mergeAiSpecs } from "@/modules/ecommerce/components/AiCopyPanel";
 
