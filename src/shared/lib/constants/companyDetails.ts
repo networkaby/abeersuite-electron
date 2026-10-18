@@ -216,7 +216,7 @@ export const COMPANY_DETAILS: CompanyDetails = {
         upiVpa: "network.service@ybl",
     },
 
-    hours: "Mon–Sat · 10:00 AM – 7:00 PM IST",
+    hours: "Sat–Thu · 10:00 AM – 8:00 PM IST · Friday closed",
 
     social: {
         facebook: "https://www.facebook.com/network.service.aby",
