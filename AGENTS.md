@@ -8,9 +8,7 @@
 
 **Workflow:** Understand → Repeat back → Explain plan → Wait for approval → Edit → Check impact → Update seeds/docs → Validate.
 
-eye on bug during any work.
-
-allowed to read, check and analyze without asking.
+**Always inspect and analyze code for bugs, temporary patches, code smells, technical debt, and any opportunities for improvement during all work—without asking for permission. Report every potential issue with its impact and recommended solution, even if unrelated to the current task, so the user can decide whether to fix, refactor, or defer it.**
 
 ## 2. Product
 
@@ -44,7 +42,7 @@ Before creating shared code: check `src/shared/` → extend existing if possible
 
 Read `docs/seeds.md` first — it owns the scripts and the dev loop. The rules that live here:
 
-- Every schema / permission / master-data / config change updates **generic catalog, personal snapshot and the DB in the same commit**. Permissions: add to `src/shared/lib/auth/permissionCatalog.ts` + `src/shared/lib/constants/permissions.ts`, then `pnpm prisma db seed` (a `ui:sidebar:`\* link needs no seed — the Departments / Role save creates its row on first use). (There is no `apply-permissions` script any more — the catalog IS the source of truth and both seeds apply it in full.)
+- Every schema / permission / master-data / config change updates **generic catalog, personal snapshot and the DB in the same commit**. Permissions: add to `src/shared/lib/auth/permissionCatalog.ts` + `src/shared/lib/constants/permissions.ts`, then `pnpm prisma db seed` (a `ui:sidebar:` link needs no seed — the Departments / Role save creates its row on first use). (There is no `apply-permissions` script any more — the catalog IS the source of truth and both seeds apply it in full.)
 - A full `pnpm prisma db seed` also runs the **R1 top-up**: it grants R1 every non-`systemOnly` permission in the catalog. If a permission has been deliberately taken away from R1 in the Role Matrix, a reseed puts it back.
 - Small change → **targeted idempotent script, never a full seed**. Full `pnpm prisma db seed` for reset, drift recovery, full config reassertion — and now for shipping a permission.
 - Ownership: code → `permissionCatalog.ts` (+ `codeOwnedCatalog.ts` for constraints / series); our real setup → `bootstrap-seed.ts`; brands → `helper-brands.ts`; everything else configured (categories, product groups, chart of accounts, POS, RBAC grants) → `personal.local.json`. **Never capture passwords.**
@@ -87,6 +85,6 @@ When the owner says **"do a release"** (or release / publish / ship a version), 
 
 **Publish as soon as possible.** No smoke-test stop, no pause for the owner to test — if something needs checking, test it yourself and carry on. **Ask the owner to join hand** at any step needing their eyes or their machine, rather than guessing or skipping it — the notes and their urgency tier (ask once), the `.env` variant (`APP_MODE`, `LANDING_PAGE`), a push they would rather run, and anything else that would be a guess. Say plainly what you need and wait. Handing a step back is not stopping the release: do everything either side of it, and pick the list up where you left off.
 
-**`/release urgent`** (or "release urgent") means nothing to ask: notes go out `[urgent]`, the `.env` variant is used as it is, no waiting — run the list straight through.
+`/release urgent` (or "release urgent") means nothing to ask: notes go out `[urgent]`, the `.env` variant is used as it is, no waiting — run the list straight through.
 
 **Stop and ask** on a non-fast-forward merge, a failing `verify:package`, or a publish failure (then `RELEASE_ONLY_REPO=<repo>` to retry that one repo — never as the normal path).
