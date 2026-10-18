@@ -68,7 +68,7 @@ export default function DevOverridePanel({ ticketId, pipelineId, currentStatusId
     // If the selected worker isn't valid for the chosen status, drop back to "no worker".
     useEffect(() => {
         if (workerId !== NONE && !visibleWorkers.some((w) => w.id === workerId)) setWorkerId(NONE);
-    }, [statusId, workers]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [statusId, workers]); // eslint-disable-line react-hooks/exhaustive-deps -- re-check the worker only when the status or worker list changes
 
     const dirty = statusId !== currentStatusId || (workerId === NONE ? null : workerId) !== currentWorkerId;
 

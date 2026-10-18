@@ -196,7 +196,7 @@ export default function Sidebar({ user }: { user?: SidebarUser }) {
     const [nestedChildOpen, setNestedChildOpen] = useState<Record<string, boolean>>({});
     const [defaultPipeline, setDefaultPipeline] = useState<Pipeline | null>(null);
     const [mounted, setMounted] = useState(false);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration flag, set once after mount
     useEffect(() => { setMounted(true); }, []);
 
     // Fetch live avatarUrl so it reflects changes without re-login

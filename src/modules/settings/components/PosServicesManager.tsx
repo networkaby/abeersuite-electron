@@ -60,7 +60,7 @@ export function PosServicesManager() {
     );
     useEffect(() => {
         if (default18 && draftGstRateId === null) setDraftGstRateId(default18.id);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- default the draft once, when the rates arrive
     }, [default18]);
 
     const load = useCallback((silent = false) => {

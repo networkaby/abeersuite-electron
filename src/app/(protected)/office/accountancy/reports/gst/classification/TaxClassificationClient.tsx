@@ -50,7 +50,7 @@ export function TaxClassificationClient({ canEdit }: Props) {
             .finally(() => setLoading(false));
     }, []);
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on mount; the loading flag reload() sets is intended
     useEffect(() => { reload(); }, [reload]);
     // A product re-classed on another desk: swap the figures in without the spinner.
     useRealtimeTopics(["catalogue"], () => {

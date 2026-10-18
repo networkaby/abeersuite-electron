@@ -88,7 +88,7 @@ function BufferedIntField({
     "aria-label"?: string;
 }) {
     const [text, setText] = useState(String(value));
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mirror an outside value change into the text box
     useEffect(() => setText(String(value)), [value]);
     const sanitize = allowNegative ? parseSignedInput : parseDigitsInput;
     return (

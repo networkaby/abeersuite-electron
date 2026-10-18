@@ -131,7 +131,7 @@ export default function QuickTicketButton() {
             }
         };
         load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load the pickers each time the dialog opens
     }, [open]);
 
     // `dataLoaded` is a once-per-session latch, so a pipeline or priority added
@@ -148,7 +148,7 @@ export default function QuickTicketButton() {
         } else {
             setLinkedCompanies([]);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply the identity once per identity change
     }, [identity]);
 
     const closeModal = () => reset();

@@ -103,7 +103,7 @@ export function InvVoucherDetail({ basePath, label, formPath }: {
             .catch(() => { if (!silent) toast.error("Failed to load"); })
             .finally(() => { if (!silent) setLoading(false); });
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one load per voucher id
     useEffect(() => load(), [id]);
 
     // This voucher can be posted, cancelled or deleted from another screen while

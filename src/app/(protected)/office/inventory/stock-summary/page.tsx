@@ -190,7 +190,7 @@ export default function StockSummaryPage() {
             .finally(() => setLoading(false));
     }, [method, branchId]);
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on mount; the loading flag reload() sets is intended
     useEffect(() => { reload(); }, [reload]);
     // Every stock voucher announces `stock`; re-read so the summary follows the floor.
     useRealtimeTopics(["stock"], () => { void reload(); });
@@ -280,7 +280,7 @@ export default function StockSummaryPage() {
     // names so a new group added by editing a product also opens.
     useEffect(() => {
         if (grouped.length === 0) return;
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- expand every group when the grouping changes
         setExpanded(new Set(grouped.map((g) => g.name)));
     }, [grouped]);
 

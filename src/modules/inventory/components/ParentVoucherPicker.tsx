@@ -87,7 +87,7 @@ export function ParentVoucherPicker({
             .then((r) => setRows(r.data))
             .catch(() => setRows([]))
             .finally(() => setLoading(false));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- read the candidates once per open / parent type
     }, [open, parentType]);
 
     // The candidate list is fetched once per open and then kept. A voucher
@@ -133,7 +133,7 @@ export function ParentVoucherPicker({
         if (autoPickId == null || autoPickedRef.current || pickedRef) return;
         autoPickedRef.current = true;
         void handlePick(autoPickId);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- auto-pick runs once (autoPickedRef)
     }, [autoPickId]);
 
     return (

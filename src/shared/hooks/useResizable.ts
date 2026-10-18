@@ -54,7 +54,7 @@ export function useResizable({
         } catch {
             // localStorage unavailable (SSR / private mode)
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- read the saved width once on mount
     }, []);
 
     const onMouseDown = useCallback(

@@ -96,7 +96,7 @@ export function GiftCards({ brandName }: { brandName: string }) {
             if (!q) return true;
             return c.code.toLowerCase().includes(q) || (c.ownerAccount?.name.toLowerCase().includes(q) ?? false);
         });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- matchesFilter reads only statusFilter, which is listed
     }, [cards, search, statusFilter]);
 
     async function generate() {

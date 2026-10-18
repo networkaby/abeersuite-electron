@@ -147,7 +147,7 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
         if (!parsed || parsed.headerRowIndex < 0 || !mappingOk || rows.rows.length === 0) return;
         const t = setTimeout(() => { void check(); }, 250);
         return () => clearTimeout(t);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- check() reads the latest parse; these are what change its answer
     }, [rows.rows, force, mappingOk]);
 
     async function save() {

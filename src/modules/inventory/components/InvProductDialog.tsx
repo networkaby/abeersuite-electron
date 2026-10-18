@@ -266,7 +266,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                 toast.error("Failed to load product");
                 onOpenChange(false);
             });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed the form when the dialog opens, not on every defaultValues change
     }, [open, editId, onOpenChange]);
 
     const save = useCallback(async () => {

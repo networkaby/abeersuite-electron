@@ -136,7 +136,7 @@ export default function PrintToolbar({
         } else if (autoPrint) {
             window.print();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- auto-print fires once on mount (ranRef)
     }, []);
 
     const currentValue = `${currentPaper ?? ""}|${currentWidth}`;

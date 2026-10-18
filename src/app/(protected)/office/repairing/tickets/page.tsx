@@ -89,7 +89,7 @@ export default function TicketsPage() {
 
     useEffect(() => {
         if (!repairPipelineId) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- clear the options before the new pipeline's arrive
             setStatusOptions([]);
             return;
         }

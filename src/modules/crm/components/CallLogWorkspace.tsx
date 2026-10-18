@@ -160,7 +160,7 @@ export default function CallLogWorkspace() {
         } finally {
             setLoading(false);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- buildParams reads exactly these filters
     }, [search, missedMode, showSpam, showInternal, dateFrom, dateTo, showNoNumber]);
 
     // `load` changes identity whenever a filter changes, which restarts the list
@@ -181,7 +181,7 @@ export default function CallLogWorkspace() {
             });
             setTotal(data.pagination.total);
         } catch { /* next signal, or the manual refresh button, tries again */ }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- buildParams reads exactly these filters
     }, [search, missedMode, showSpam, showInternal, dateFrom, dateTo, showNoNumber]);
 
     useRealtimeTopics(["tickets"], refreshHead);

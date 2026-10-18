@@ -161,7 +161,7 @@ export default function NeedsAttentionPage() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- load once on mount
     // Live refresh swaps the rows only — no spinner, groups stay as opened, typed edits stay.
     useRealtimeTopics(["catalogue", "stock"], () => {
         axios.get<PricingItem[]>("/api/pricing-strategy/items?onlyAttention=1")

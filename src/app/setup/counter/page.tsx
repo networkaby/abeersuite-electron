@@ -99,7 +99,7 @@ function CounterSetupForm() {
                 if (mine) setSelectedId(String(mine.id));
             })
             .catch(() => setLoadError("Could not load the counter list. Check the connection and reload."));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- onboarding reads the counter list once
     }, []);
 
     const mine = counters?.find((c) => isThisPc(c, identity)) ?? null;

@@ -178,7 +178,7 @@ export default function OnlinePayPanel({
             startedRef.current = true;
             void pay();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- auto-launch fires once (startedRef); pay reads the latest selection
     }, [autoLaunch, selected]);
 
     if (gateways.length === 0) return null;

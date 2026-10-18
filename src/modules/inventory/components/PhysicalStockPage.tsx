@@ -174,7 +174,7 @@ export function PhysicalStockPage() {
                 })))
                 .catch(() => { /* leave null */ });
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- backfills stock for loaded lines; a product pick sets its own stock
     }, [form.lines.length]);
 
     // The "in system" figure is reference data: a sale at the till while the count

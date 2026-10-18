@@ -83,7 +83,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
             })
             .catch(() => toast.error("Failed to load statuses"))
             .finally(() => setLoadingWorkers(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when the ticket's position or option set moves
     }, [ticket.status, ticket.workerId, optionsKey]);
 
     const onSubmit = async (data: FormData) => {

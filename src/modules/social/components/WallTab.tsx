@@ -33,7 +33,7 @@ export default function WallTab({ profile, sessionUserId, focusInput }: {
             })
             .finally(() => { if (first) setLoading(false); });
     };
-    useEffect(() => { readWall(true); }, [profile.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => { readWall(true); }, [profile.id]); // eslint-disable-line react-hooks/exhaustive-deps -- read the wall once per profile
     // Someone else posting on this wall announces `tasks`; only the posts are re-read.
     useRealtimeTopics(["tasks"], () => readWall(false));
 

@@ -108,7 +108,7 @@ export function PartyOutstandingsPanel({ accountId, partyName, onChanged }: {
 
     useEffect(() => {
         const hit = cache.get(accountId);
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- show the cached copy at once while it refreshes
         setData(hit?.data ?? null);
         if (hit && Date.now() - hit.at < TTL_MS) return;
         load(hit != null);

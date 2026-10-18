@@ -180,7 +180,7 @@ export default function InventoryDetailsPage() {
             return;
         }
         loadDetail(selectedId, from, to);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- a new product loads at the current dates; changed dates apply on Refresh
     }, [selectedId]);
 
     // Reset scope when product changes: org users stay on "org", branch users
@@ -193,7 +193,7 @@ export default function InventoryDetailsPage() {
         } else {
             setStockScope("org");
         }
-    }, [detail?.product.id, canViewOrg]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [detail?.product.id, canViewOrg]); // eslint-disable-line react-hooks/exhaustive-deps -- reset scope only when a different product opens
 
     const handleRefresh = () => {
         if (selectedId) loadDetail(selectedId, from, to);

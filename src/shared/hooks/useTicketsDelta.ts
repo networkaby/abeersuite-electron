@@ -383,7 +383,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
                 setLoadingMore(false);
             }
         })();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` + `search` are query's identity; see the fetch effect above
     }, [key, search, cacheable, nextCursor, loadingMore, applyPins]);
 
     return {

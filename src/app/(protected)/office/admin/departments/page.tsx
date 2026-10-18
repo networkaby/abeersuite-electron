@@ -154,7 +154,7 @@ export default function DepartmentsPage() {
             })
             .catch(() => { if (!cancelled) toast.error("Failed to load permission pool"); });
         return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- one read per selected department; the list itself is read inside
     }, [selectedId]);
 
     const selectDept = async (id: string) => {

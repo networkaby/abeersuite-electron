@@ -74,7 +74,7 @@ export default function AppointStaffDialog({ detail, canAppointSeat, onClose, on
                 label: `${p.title} · ${positionScopeLabel(p, { withDepartment: true })}`,
                 leaf:  p.title,
             })),
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- `held` is derived from user.positions; listing it would rebuild every render
         [positions, user.positions],
     );
 

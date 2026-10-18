@@ -64,7 +64,7 @@ export default function ShiftsReportPage() {
             .finally(() => setLoading(false));
     }, [status, branchScope, from, to]);
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on mount; the loading flag load() sets is intended
     useEffect(() => { load(true); }, [load]);
     // Shifts open, drop and close from the tills — re-read when the books move.
     useRealtimeTopics(["ledger"], () => load(false));

@@ -81,7 +81,7 @@ export function useBiQuery<T>(url: string): {
             .finally(() => { if (mine === latest.current) setLoading(false); });
     }, [url]);
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch when the query changes; the loading flag load() sets is intended
     useEffect(load, [load]);
 
     // Every BI report reads the books and the stock ledger, and parties for the

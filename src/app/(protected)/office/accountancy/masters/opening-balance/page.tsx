@@ -332,7 +332,7 @@ function AccountOpeningSection({
             amount: existing?.openingBalanceType ? String(existing.openingBalance ?? "") : "",
             type: existing?.openingBalanceType ?? f.type,
         }));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- prefill only when another ledger is picked; a list refresh must not overwrite what is typed
     }, [form.accountId]);
 
     const save = async () => {
@@ -556,7 +556,7 @@ function ProductOpeningSection({
             qty: existing ? String(existing.openingStock ?? "") : "",
             rate: existing ? String(existing.openingRate ?? "") : "",
         }));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- prefill only when another product is picked; a list refresh must not overwrite what is typed
     }, [form.productId]);
 
     const save = async () => {
