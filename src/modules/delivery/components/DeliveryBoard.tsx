@@ -19,10 +19,10 @@ interface DeliveryCard {
     codToCollectPaise: number; createdAt: string;
 }
 
-// TODO(bridge): "PICKUP" is the legacy manual-assign value pre-dating the
-// STORE_PICKUP checkout kind — kept so old delivery rows still label; new shop
-// orders arrive with STORE_PICKUP already set. Collapse once old rows are gone.
-const CARRIERS = ["OWN_BOY", "CUSTOM", "SHIPROCKET", "PICKUP"] as const;
+// Pickup is STORE_PICKUP — the same value the shop checkout sets. Old rows may
+// still carry the retired "PICKUP"; it keeps its label on the card and becomes
+// STORE_PICKUP the next time that delivery is edited (see openEdit).
+const CARRIERS = ["OWN_BOY", "CUSTOM", "SHIPROCKET", "STORE_PICKUP"] as const;
 const CARRIER_LABEL: Record<string, string> = {
     SHIPROCKET: "Shiprocket", SHIPWAY: "Shipway", CUSTOM: "Custom courier", OWN_BOY: "Local boy",
     PICKUP: "Pickup", STORE_PICKUP: "Store pickup", FREE_DELIVERY: "Free delivery",
@@ -41,7 +41,7 @@ export function DeliveryBoard() {
 
     function openEdit(d: DeliveryCard) {
         setForm({
-            carrier: d.carrier ?? "",
+            carrier: d.carrier === "PICKUP" ? "STORE_PICKUP" : (d.carrier ?? ""),
             awb: d.awb ?? "",
             trackingUrl: d.trackingUrl ?? "",
             chargeRupees: d.chargeToCustomerPaise ? String(d.chargeToCustomerPaise / 100) : "",

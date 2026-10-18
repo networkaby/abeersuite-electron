@@ -19,6 +19,7 @@ import { ledgerStatusFilterUv } from "./ledgerStatus";
 import { autoLinkOrder, dueDateOf } from "./billLinkPlan";
 import { OPENING_TYPE } from "./openingBills";
 import { accountIdsUnderGroup } from "./accountGroups";
+import { bucketFor } from "./ageing";
 import { round2 } from "@/shared/lib/format/moneyInr";
 
 export type AgeingBucket = "b0_30" | "b30_60" | "b60_90" | "b90_plus";
@@ -109,13 +110,6 @@ function emptyBuckets(): Buckets {
 function daysBetween(a: Date, b: Date): number {
     const ms = b.getTime() - a.getTime();
     return Math.max(0, Math.floor(ms / 86_400_000));
-}
-
-function bucketFor(days: number): AgeingBucket {
-    if (days <= 30) return "b0_30";
-    if (days <= 60) return "b30_60";
-    if (days <= 90) return "b60_90";
-    return "b90_plus";
 }
 
 /**
