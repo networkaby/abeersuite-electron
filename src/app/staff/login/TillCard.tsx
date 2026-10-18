@@ -5,7 +5,7 @@ import { formatClockTime, formatHhMmFriendly, todayIso, weekdayAndDate, weekdayN
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
 import { myDayStore } from "@/shared/lib/hr/myDay";
 import { nextOpeningText } from "@/shared/lib/hr/nextOpeningText";
-import DutyTimeline from "./DutyTimeline";
+import DutyTimeline from "@/modules/hr/timeline/DutyTimeline";
 import styles from "./login.module.css";
 
 type CounterShift = {

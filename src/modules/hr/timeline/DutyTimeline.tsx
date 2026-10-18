@@ -3,8 +3,9 @@
 import { formatHhMmFriendly, todayIso } from "@/shared/lib/format/formatDate";
 import { formatWorked, parseHhMm } from "@/shared/lib/hr/dutyTime";
 import type { MyDay } from "@/shared/lib/hr/myDay";
-import { shopMinute, useNowMinute } from "./useLocalClock";
-import styles from "./login.module.css";
+import { shopMinuteOf as shopMinute } from "@/shared/lib/hr/hhmm";
+import { useNowMinute } from "./useNowMinute";
+import styles from "./DutyTimeline.module.css";
 
 
 const clock = (m: number) => formatHhMmFriendly(`${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`);
@@ -130,7 +131,7 @@ export default function DutyTimeline({ day, inline = false }: { day: MyDay; inli
     });
 
     return (
-        <section className={inline ? `${styles.timeline} ${styles.timelineInline}` : styles.timeline} aria-label="Today's duty timeline">
+        <section className={`duty-timeline ${styles.timeline}${inline ? ` ${styles.timelineInline}` : ""}`} aria-label="Today's duty timeline">
             <p className={styles.tilllabel}>Today&apos;s duty</p>
             <div className={styles.tlrail}>
                 <div className={styles.tltrack} />
