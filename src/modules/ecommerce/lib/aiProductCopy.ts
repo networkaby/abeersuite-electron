@@ -6,7 +6,11 @@ import { AI_HIGHLIGHT_COUNT, AI_PRODUCT_COPY_MODEL } from "@/shared/lib/constant
 import { verifyFacts, type CitedFact } from "@/modules/ecommerce/lib/aiFactCheck";
 
 // Flipkart-style, SEO-friendly product copy, spending search money only where
-// it adds something:
+// it adds something. House style (owner, 2026-10-19): model + technical specs,
+// compact and SEO-friendly with no filler; colour only when the office name
+// has it; warranty always worded "Manufacturer Warranty" (label first, else
+// the product's shop term); a compatibility guide for every product type —
+// kept as its own list so a later bundle feature can use it.
 //  1. Draft  — name + photo on the FREE key (GOOGLE_GENERATIVE_AI_API_KEY;
 //     falls over to the paid key when the free daily cap answers 429), strict
 //     "nothing false" rule. Also reports what it was unsure of and whether a
@@ -25,6 +29,8 @@ export type ProductCopyInput = {
     name: string;
     brand?: string | null;
     category?: string | null;
+    /** The product's warranty term (InvWarrantyTerm.durationDays) — used only when the label shows none. */
+    shopWarrantyDays?: number | null;
     /** Gallery photos to send, already without the staff-skipped ones (photoMark.ts). */
     imageUrls: string[];
     /** Off = never run step 2, even when it would help. */
@@ -57,6 +63,17 @@ const copySchema = z.object({
             : {}),
         z.record(z.string(), z.string()),
     ).default({}),
+    /** Supporting products by kind — printers for an ink, CPUs / RAM for a motherboard. */
+    compatibility: z.preprocess(
+        (v) => (Array.isArray(v) ? v : []).flatMap((x) => {
+            if (!x || typeof x !== "object") return [];
+            const o = x as Record<string, unknown>;
+            const models = (Array.isArray(o.models) ? o.models : [o.models]).map(text).filter(Boolean);
+            const type = text(o.type);
+            return type && models.length ? [{ type, models }] : [];
+        }),
+        z.array(z.object({ type: z.string(), models: z.array(z.string()) })),
+    ).default([]),
     /** Facts left out because the model was not sure — staff "Please check". */
     unsure: textList(12).default([]),
 });
@@ -90,23 +107,24 @@ export function isAiConfigured(): boolean {
 
 const STRICT_RULES = [
     "STRICT RULE: say nothing false. State a fact only if it is in the product name, printed on the product or pack in the photo, given below as verified, or an official spec of this exact model you are certain of.",
-    "If unsure (speed, chipset, part number, yield, OS support, compatibility, switch type, warranty), leave it out and list it in \"unsure\". Fewer true facts beat more doubtful ones.",
-    "Without a photo of the product itself, never state colour, design or what is in the box.",
-    "For a consumable, spare or accessory (ink, toner, cartridge, RAM, adapter, battery, charger, cable, keyboard/screen part), give the exact compatible device models the manufacturer lists, in specs as \"Compatible Models\" and one highlight starting \"Works with\" — never a series name alone; if unsure, leave both out.",
+    "If unsure (speed, chipset, part number, yield, OS support, compatibility, switch type), leave it out and list it in \"unsure\". Fewer true facts beat more doubtful ones.",
+    "Colour: mention it only if the product name contains it — never from a photo or from memory. Never state design or what is in the box without a photo of the product itself.",
+    "Compatibility: name exact model numbers only, never a series name alone; if unsure, leave it out.",
 ];
 
-// Flipkart's product page, as words: an SEO title, Highlights, a Description,
-// Specifications led by the "General" group, and a Warranty line.
+// A Flipkart-style page, compact: an SEO title, Highlights, a short
+// Description, Compatible With, Specifications, and a Warranty line.
 const OUTPUT_KEYS = [
-    "Write like Flipkart's product pages, and SEO-friendly: words a customer would type in Google, used naturally — never keyword stuffing, no hype (\"best ever\", \"amazing\").",
+    "Style: simple, compact, SEO-friendly — brand, model number, product type and key specs in the words a customer types into Google. Lead with model and technical specifications. No filler, no repetition, no hype (\"best ever\", \"amazing\"), no keyword stuffing. Do not shorten true facts to save space.",
     "Return ONLY a JSON object, no markdown fence, with exactly these keys:",
-    '"title": Flipkart-style title, max 100 characters: Brand + Model name/number + product type, then key spec and colour/variant in brackets, e.g. "Crucial 8GB DDR4 3200 MHz Laptop RAM (CT8G4SFRA32A)" or "ANT ESPORTS MK3400 Pro V3 Wired Mechanical Gaming Keyboard (Red Switch, White)";',
-    '"summary": ONE sentence under 160 characters naming brand, model and product type with the main benefit — used as the search-result snippet;',
-    `"highlights": ${AI_HIGHLIGHT_COUNT.min}-${AI_HIGHLIGHT_COUNT.max} Flipkart-style highlights, each under 12 words, spec-first (e.g. "8 GB DDR4 RAM", "3200 MHz Speed"), most useful first;`,
-    '"description": ONE string, 2 short paragraphs in simple English separated by a blank line: what it is and who it is for, then what makes it useful;',
-    '"howToUse": 3-5 short steps for the customer (install / fit / refill / first use);',
-    '"warranty": one line, e.g. "1 Year Manufacturer Warranty", or "" if unknown;',
-    '"specs": object of label → plain-text value, Flipkart order: "In The Box", "Model Number", "Model Name", "Brand", "Colour", then the technical specs for this product type, last "Warranty Summary";',
+    '"title": max 100 characters: Brand + Model name/number + product type + key spec, a part code or spec in brackets, e.g. "Crucial 8GB DDR4 3200 MHz Laptop RAM (CT8G4SFRA32A)" or "HP 680 Black Original Ink Cartridge (F6V27AA)"; colour only if the product name has it;',
+    '"summary": ONE sentence under 160 characters naming brand, model and product type with the main spec — used as the search-result snippet;',
+    `"highlights": ${AI_HIGHLIGHT_COUNT.min}-${AI_HIGHLIGHT_COUNT.max} highlights, each under 12 words, spec-first (e.g. "8 GB DDR4 RAM", "3200 MHz Speed"), most useful first;`,
+    '"description": ONE short paragraph in simple English: what it is, who it is for, what makes it useful — no line that only repeats the highlights;',
+    '"compatibility": list of {"type": string, "models": string[]} guiding the customer to the products that go with this one, exact models only, e.g. ink/toner → {"type":"Printer","models":[...]}; printer → {"type":"Cartridge"/"Toner"/"Ink Refill","models":[part numbers]}; motherboard → {"type":"CPU","models":[socket + supported series]}, {"type":"RAM","models":["DDR5 up to 6000 MHz, max 128 GB"]}; RAM/SSD → the slot or interface it needs; [] if nothing certain;',
+    '"howToUse": steps ONLY if printed on the product/label or given on the manufacturer website; otherwise [];',
+    '"warranty": one line ending "Manufacturer Warranty", e.g. "3 Year Manufacturer Warranty" — the warranty printed on the label if any, else the shop warranty given above, else "";',
+    '"specs": object of label → plain-text value, in this order: "Model Number", "Model Name", "Brand", then the technical specs for this product type, "Compatible Models" (if any), "In The Box" (only from a photo), last "Warranty Summary" (same as warranty);',
     '"unsure": facts you left out because you were not sure;',
 ];
 
@@ -115,7 +133,15 @@ function productLines(p: ProductCopyInput): string[] {
         `Product name: ${p.name}`,
         p.brand ? `Brand: ${p.brand}` : "",
         p.category ? `Category: ${p.category}` : "",
+        p.shopWarrantyDays ? `Shop warranty (use only if no warranty is printed on the label): ${warrantyText(p.shopWarrantyDays)}` : "",
     ].filter(Boolean);
+}
+
+/** 365 → "1 Year", 180 → "6 Month", 15 → "15 Day". */
+function warrantyText(days: number): string {
+    if (days % 365 === 0) return `${days / 365} Year`;
+    if (days % 30 === 0) return `${days / 30} Month`;
+    return `${days} Day`;
 }
 
 function draftPrompt(p: ProductCopyInput, photoCount: number): string {
@@ -125,7 +151,7 @@ function draftPrompt(p: ProductCopyInput, photoCount: number): string {
         photoCount > 0 ? [
             `${photoCount} photo${photoCount > 1 ? "s are" : " is"} attached. First decide what each one shows: the product itself, its box/pack, a label or spec sheet (back of box, warranty card), a promo/lifestyle picture (people, places, posters), or something that is not this product.`,
             "Read every word, number, code and logo printed on the product, box and labels — specs come only from those.",
-            "Colour and design come from photos of the product itself. Promo pictures: ignore the people and background, use them only to confirm colour/design, and treat their slogans as marketing, not specs. Ignore any photo that is not this product, and if photos show different variants, describe the one in the product photos.",
+            "A warranty printed on the box or label is the manufacturer warranty — use it. Promo pictures: ignore the people and background and treat their slogans as marketing, not specs. Ignore any photo that is not this product.",
         ].join("\n") : "",
         ...STRICT_RULES,
         "",
@@ -141,7 +167,7 @@ function searchPrompt(p: ProductCopyInput, draft: Copy, query: string): string {
     return [
         `Find the current official product page for "${query}" on the manufacturer's website — its India English site first (e.g. hp.com/in-en), else another English one — and its listing on Flipkart or Amazon.in. Read those pages today. English pages only.`,
         ...productLines(p),
-        `Report these facts for this EXACT model (never a look-alike), each with the URL of the page you read it on: ${[...draft.unsure, "compatible models (if a consumable or accessory)", "warranty"].join("; ")}.`,
+        `Report these facts for this EXACT model (never a look-alike), each with the URL of the page you read it on: ${[...draft.unsure, "compatible products (printers / cartridges / CPUs / RAM etc. that go with it)", "how-to-use steps on the manufacturer page", ...(draft.warranty ? [] : ["manufacturer warranty"])].join("; ")}.`,
         "Copy each value as the page writes it, kept short (under 80 characters; a model list may be longer). Use simple labels such as \"Page Yield\", \"Warranty Summary\", \"Compatible Models\", \"Cable Length\", \"OS Support\". For compatible models, use the manufacturer's own list when it has one. Skip any fact you did not read on a page.",
         'Return ONLY JSON: {"facts":[{"label": string, "value": string, "url": string}]}',
     ].join("\n");
@@ -149,7 +175,7 @@ function searchPrompt(p: ProductCopyInput, draft: Copy, query: string): string {
 
 function polishPrompt(p: ProductCopyInput, draft: Copy, facts: CitedFact[]): string {
     return [
-        "Rewrite this shop listing, adding the verified facts below. Keep every fact already in the draft, and keep the colour / variant words of the draft title.",
+        "Rewrite this shop listing, adding the verified facts below. Keep every fact already in the draft, the model words of the draft title, and the draft warranty if it has one.",
         ...productLines(p),
         "Draft (from the product photos):",
         JSON.stringify(draft),
@@ -223,6 +249,7 @@ function assembleDescription(c: Copy): string {
         ["Highlights", ...c.highlights.map((h) => `• ${h}`)].join("\n"),
         ["Description", c.description.trim()].join("\n"),
     ];
+    if (c.compatibility.length) parts.push(["Compatible With", ...c.compatibility.map((x) => `• ${x.type}: ${x.models.join(", ")}`)].join("\n"));
     if (c.howToUse.length) parts.push(["How to Use", ...c.howToUse.map((s, i) => `${i + 1}. ${s}`)].join("\n"));
     if (c.warranty.trim()) parts.push(["Warranty", c.warranty.trim()].join("\n"));
     return parts.filter(Boolean).join("\n\n");
@@ -269,10 +296,10 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
                 search = "no-sources";
             } else {
                 const polished = copySchema.parse(parseJson((await callFreeFirst([{ type: "text", text: polishPrompt(p, draft, verified.facts) }])).text));
-                // The photo decides the variant: draft title and photo-read
+                // The label decides: draft title, warranty and photo-read
                 // specs win; verified facts fill what the draft lacked.
                 const verifiedSpecs = Object.fromEntries(verified.facts.map((f) => [f.label, f.value]));
-                final = { ...polished, title: draft.title, specs: { ...polished.specs, ...verifiedSpecs, ...draft.specs } };
+                final = { ...polished, title: draft.title, warranty: draft.warranty || polished.warranty, specs: { ...polished.specs, ...verifiedSpecs, ...draft.specs } };
                 sources = verified.urls.map((url) => ({ title: new URL(url).hostname.replace(/^www\./, ""), url }));
                 search = "searched";
             }

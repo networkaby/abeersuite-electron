@@ -81,6 +81,7 @@ export async function POST(req: Request) {
             select: {
                 name: true, imageUrl: true, galleryJson: true, shopCategory: true,
                 brand: { select: { name: true } }, category: { select: { name: true } },
+                warrantyTerm: { select: { durationDays: true } },
             },
         });
         if (!p) return NextResponse.json({ error: "Product not found" }, { status: 404 });
@@ -88,6 +89,7 @@ export async function POST(req: Request) {
             name: data.name ?? p.name,
             brand: p.brand?.name,
             category: p.shopCategory ?? p.category?.name,
+            shopWarrantyDays: p.warrantyTerm?.durationDays,
             imageUrls: photosForAi(data.imageUrls ?? productGalleryUrls(p.galleryJson, p.imageUrl)),
             search: data.search,
         });
