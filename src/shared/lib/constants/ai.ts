@@ -43,12 +43,17 @@ export const AI_CALL_TIMEOUT_MS = 90_000; // a grounded search took ~60 s on 202
 export const AI_WRITE_KEY_CHAIN = [
     "GOOGLE_GENERATIVE_AI_API_KEY",
     "GOOGLE_GENERATIVE_AI_API_KEY1",
+    "GOOGLE_GENERATIVE_AI_API_KEY2",
+    "GOOGLE_GENERATIVE_AI_API_KEY3",
+    "GOOGLE_GENERATIVE_AI_API_KEY4",
+    "GOOGLE_GENERATIVE_AI_API_KEY5",
     "GOOGLE_AI_SEARCH_API_KEY",
 ] as const;
 
-/** Safety gap between two calls on the same free key (free tier ≈ 10 calls/min per
- *  model). A call that cannot wait this long goes to the paid key instead. */
-export const AI_FREE_KEY_GAP_MS = 6_000;
+/** Safety gap between two calls on the same free key (owner, 2026-10-19: 10 s,
+ *  well inside the free tier's per-minute limit). A call that cannot wait this
+ *  long goes to the paid key instead. */
+export const AI_FREE_KEY_GAP_MS = 10_000;
 
 /** How long a key that answered 429 (per-minute limit) is left out. */
 export const AI_RATE_LIMIT_REST_MS = 2 * 60_000;

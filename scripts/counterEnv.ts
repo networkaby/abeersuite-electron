@@ -275,5 +275,9 @@ export const COUNTER_ENV_AI_KEYS: readonly string[] = [
     // missing one skips it; one missing them all relays.
     "GOOGLE_GENERATIVE_AI_API_KEY",
     "GOOGLE_GENERATIVE_AI_API_KEY1",
+    "GOOGLE_GENERATIVE_AI_API_KEY2",
+    "GOOGLE_GENERATIVE_AI_API_KEY3",
+    "GOOGLE_GENERATIVE_AI_API_KEY4",
+    "GOOGLE_GENERATIVE_AI_API_KEY5",
     "GOOGLE_AI_SEARCH_API_KEY",
 ];
