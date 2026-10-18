@@ -33,6 +33,8 @@ const postSchema = z.object({
     imageUrls: z.array(z.string().url()).max(30).optional(),
     // true/false from a tab opened before the three modes existed.
     search: z.union([z.boolean().transform((b) => (b ? "auto" : "off")), z.enum(["off", "auto", "always"])]).default("off"),
+    // Bulk screen: may wait a few seconds for a free key rather than use the paid one.
+    bulk: z.boolean().default(false),
 });
 
 export async function POST(req: Request) {
@@ -57,6 +59,7 @@ export async function POST(req: Request) {
             shopWarrantyDays: p.warrantyTerm?.durationDays,
             imageUrls: photosForAi(data.imageUrls ?? productGalleryUrls(p.galleryJson, p.imageUrl)),
             search: data.search,
+            bulk: data.bulk,
         });
         return NextResponse.json(copy);
     } catch (e) {

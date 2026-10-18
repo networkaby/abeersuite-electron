@@ -119,7 +119,7 @@ export default function AiBulkCopyPage() {
     const writeOne = async (r: ShopProductAdmin): Promise<string | null> => {
         patchWork(r.id, { writing: true, error: undefined });
         try {
-            const draft = await fetchAiCopy({ productId: r.id, search });
+            const draft = await fetchAiCopy({ productId: r.id, search, bulk: true });
             patchWork(r.id, { draft, writing: false });
             return null;
         } catch (e) {

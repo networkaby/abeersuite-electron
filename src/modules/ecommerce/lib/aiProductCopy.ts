@@ -34,8 +34,10 @@ export type ProductCopyInput = {
     shopWarrantyDays?: number | null;
     /** Gallery photos to send, already without the staff-skipped ones (photoMark.ts). */
     imageUrls: string[];
-    /** off = never run step 2; auto = when the draft says it helps; always = every time (A/B test, 2026-10-19). */
+    /** off = never run step 2; auto = when the draft says it helps; always = every time. */
     search: AiSearchMode;
+    /** Bulk run: wait for a free key's safety gap instead of taking the paid key. */
+    bulk?: boolean;
 };
 
 // The model's JSON drifts run to run (a spec value as a list or number, an
@@ -249,19 +251,36 @@ export class AiKeysExhaustedError extends Error {
     }
 }
 
-/** Free keys in turn — least recently used first, none used inside the safety
- *  gap — then the paid key (the chain's last), so a call never waits. With no
- *  paid key to fall back on, a free key inside its gap is still tried. */
-function keyOrder(): string[] {
-    const usable = AI_WRITE_KEY_CHAIN.filter((k) => process.env[k] && !isLockedOut(k));
-    const paid = AI_WRITE_KEY_CHAIN[AI_WRITE_KEY_CHAIN.length - 1];
-    const now = Date.now();
-    const free = usable.filter((k) => k !== paid).sort((a, b) => keyLastUsed(a) - keyLastUsed(b));
-    const rested = free.filter((k) => now - keyLastUsed(k) >= AI_FREE_KEY_GAP_MS);
-    return usable.includes(paid) ? [...rested, paid] : free;
+const PAID_KEY = AI_WRITE_KEY_CHAIN[AI_WRITE_KEY_CHAIN.length - 1];
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Free keys not resting (429) or locked for the day, least recently used first. */
+function freeKeys(): string[] {
+    return AI_WRITE_KEY_CHAIN
+        .filter((k) => k !== PAID_KEY && process.env[k] && !isLockedOut(k))
+        .sort((a, b) => keyLastUsed(a) - keyLastUsed(b));
 }
 
-async function callChain(content: Part[]) {
+/** Free keys past their safety gap, then the paid key (the chain's last). With
+ *  no paid key to fall back on, a free key inside its gap is still tried. */
+function keyOrder(): string[] {
+    const free = freeKeys();
+    const rested = free.filter((k) => Date.now() - keyLastUsed(k) >= AI_FREE_KEY_GAP_MS);
+    return process.env[PAID_KEY] && !isLockedOut(PAID_KEY) ? [...rested, PAID_KEY] : free;
+}
+
+/** Bulk (owner, 2026-10-19): when every free key is only inside its 10 s gap,
+ *  wait for the first one instead of paying. Free keys out for a 429 or the
+ *  day are not waited for — then the paid key is fine. */
+function freeKeyWait(): number {
+    const free = freeKeys();
+    return free.length ? keyLastUsed(free[0]) + AI_FREE_KEY_GAP_MS - Date.now() : 0;
+}
+
+async function callChain(content: Part[], bulk = false) {
+    // Re-checked after every sleep: parallel bulk calls queue for the keys in
+    // turn, and the key order below is read in the same tick, so none slips to paid.
+    for (let wait = bulk ? freeKeyWait() : 0; wait > 0; wait = freeKeyWait()) await sleep(wait);
     for (const name of keyOrder()) {
         noteKeyUse(name);
         try {
@@ -313,7 +332,7 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
     let draftKey = "";
     // One more try when the reply cannot be read at all (no JSON, no title…).
     const readDraft = async () => {
-        const { reply, key } = await callChain(draftParts);
+        const { reply, key } = await callChain(draftParts, p.bulk);
         tokens.draft += tokensOf(reply);
         draftKey = key;
         return draftSchema.parse(parseJson(reply.text));
@@ -359,7 +378,7 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
             if (verified.facts.length === 0) {
                 search = "no-sources";
             } else {
-                const { reply: polishReply } = await callChain([{ type: "text", text: polishPrompt(p, draft, verified.facts) }]);
+                const { reply: polishReply } = await callChain([{ type: "text", text: polishPrompt(p, draft, verified.facts) }], p.bulk);
                 tokens.polish += tokensOf(polishReply);
                 const polished = copySchema.parse(parseJson(polishReply.text));
                 // The label decides: draft title, warranty and photo-read
