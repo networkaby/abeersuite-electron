@@ -163,6 +163,3 @@ export function invProductToPublic(
     };
 }
 
-/** @deprecated use invProductToPublic */
-export const shopProductToPublic = invProductToPublic;
-
