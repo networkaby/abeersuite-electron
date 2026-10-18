@@ -1,0 +1,101 @@
+/* Today's duty timeline — DutyTimeline.tsx. Shared by the staff sign-in screen
+   and the office dashboard, so it lives outside src/app/staff (which the shop
+   build strips). Colours come from the host's --ink / --ink-dim / --line / --accent. */
+.timeline {
+    /* Pinned to the foot of the screen, so the cards keep their centre and the
+       day is never scrolled off on a short counter monitor. */
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 3;
+    padding: 10px 32px 4px;
+    background: rgba(15, 23, 42, .88);
+    border-top: 1px solid var(--line);
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+    animation: dutyIn .35s ease both;
+}
+/* Room under the cards for the band, and less sky above them: card, PIN pad and
+   the band must all fit a 1366x728 counter window without a scroll. */
+/* The office dashboard's copy (owner, 2026-10-16: "put the time line to dashboard
+   top"): the same dark band in the page's flow, carrying the sign-in screen's own
+   colours since it sits outside .root. */
+.timelineInline {
+    --ink: #f1f5f9;
+    --ink-dim: #94a3b8;
+    --line: rgba(255, 255, 255, .14);
+    --accent: #38bdf8;
+    position: static;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #0f172a;
+    color: var(--ink);
+    padding: 10px 20px 4px;
+}
+.tlrail { position: relative; height: 126px; margin: 18px 14px 0 }
+/* Height says what the time is: the duty window stands tall, work outside it
+   (early start, late close) half height, the rest of the day a thin track. */
+.tltrack, .tlseg { position: absolute; top: 34px; height: 8px; border-radius: 3px }
+.tl_work, .tl_late, .tl_left, .tl_away { top: 27px; height: 22px }
+.tl_extra { top: 31px; height: 14px }
+.tltrack { left: 0; right: 0; background: rgba(255, 255, 255, .07) }
+.tl_work  { background: var(--accent) }
+.tl_extra { background: #34d399 }
+.tl_left  { background: rgba(56, 189, 248, .22) }
+.tl_late  { background: repeating-linear-gradient(45deg, #f5b942 0 3px, rgba(245, 185, 66, .15) 3px 6px) }
+.tl_away  { background: repeating-linear-gradient(45deg, #f87171 0 3px, rgba(248, 113, 113, .15) 3px 6px) }
+/* The clock face: a hair every hour, a longer one and a time every three. */
+.tlhour { position: absolute; top: 44px; width: 1px; height: 4px; background: rgba(255, 255, 255, .18) }
+.tlhour3 { height: 7px; background: rgba(255, 255, 255, .32) }
+.tlhour span { position: absolute; top: 8px; left: 0; transform: translateX(-50%); white-space: nowrap; font-size: 10.5px; color: rgba(148, 163, 184, .7) }
+.tlmark { position: absolute; top: 22px; width: 2px; height: 30px; margin-left: -1px; background: rgba(226, 232, 240, .8) }
+.tlmark span, .tltag, .tlnow span {
+    position: absolute; transform: translateX(-50%); white-space: nowrap;
+    font-size: 11.5px; line-height: 1.3; color: var(--ink-dim); text-align: center; font-variant-numeric: tabular-nums;
+}
+.tlmark span { top: 44px; left: 1px }
+/* Duty start green, duty end amber — the post, its door badge and its time. */
+.tlopen  { background: #34d399; width: 3px; margin-left: -1.5px }
+.tlclose { background: #f5b942; width: 3px; margin-left: -1.5px }
+.tlopen b  { color: #6ee7b7 }
+.tlclose b { color: #fcd38a }
+.tlmark b { display: block; font-weight: 600; color: var(--ink) }
+.tlrow_top { top: 6px }
+.tlend { transform: translateX(-100%); margin-left: -14px }
+.tlrow_bottom { top: 66px }
+.tlrow_shift { top: 94px }
+.tlrow_low { top: 110px }
+.tt_out { color: #cbd5e1 } .tt_shift { color: #c4b5fd }
+/* A moment of the day: a short tick across the bar — joins green, leaves
+   white, shift moments violet, below the bar so they never hide a stretch. */
+.tlflag { position: absolute; top: 26px; width: 2px; height: 22px; margin-left: -1px; border-radius: 1px }
+.tf_in { background: #34d399 } .tf_out { background: #e2e8f0 }
+.tf_shiftOpen, .tf_shiftClose, .tf_handover { top: 36px; height: 18px; background: #a78bfa }
+.tt_extra { color: #6ee7b7 } .tt_late { color: #fcd38a } .tt_away { color: #fca5a5 } .tt_work { color: #7dd3fc }
+.tlnow { position: absolute; top: 20px; width: 2px; height: 26px; margin-left: -1px; background: #fff; border-radius: 1px }
+/* "Now" is a map pin: a round head turned on its corner, the point on the line. */
+.tlnow::before {
+    content: ""; position: absolute; top: -24px; left: 50%;
+    width: 20px; height: 20px; margin-left: -10px;
+    border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+    background: #fff; box-shadow: -1px 1px 5px rgba(0, 0, 0, .55);
+}
+.tlnow::after {
+    content: ""; position: absolute; top: -18px; left: 50%;
+    width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: #0f172a;
+}
+.tlnow span { top: -44px; left: 1px; font-weight: 600; color: var(--ink) }
+@media (prefers-reduced-motion: reduce) { .timeline { animation: none } }
+@keyframes dutyIn { from { opacity: 0; transform: translateY(6px) } }
+.tilllabel {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin: 0 0 6px;
+    font-size: 11.5px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+}

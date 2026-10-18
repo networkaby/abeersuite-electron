@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import DutyTimeline from "@/app/staff/login/DutyTimeline";
+import DutyTimeline from "@/modules/hr/timeline/DutyTimeline";
 import type { MyDay } from "@/shared/lib/hr/myDay";
 
 /** Re-read with the app's own heartbeat, so Now and the stretches keep up. */

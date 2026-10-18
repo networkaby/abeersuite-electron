@@ -1,30 +1,11 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useMinute } from "@/modules/hr/timeline/useNowMinute";
 import { loginGreeting } from "@/shared/lib/constants/loginShowcase";
-
-// ── The clock, as an outside thing React reads ──────────────────────────────
-// The time is not React state — it is the machine's clock — so it is subscribed
-// to rather than copied into state. Ticking every twenty seconds is plenty for a
-// display that only shows minutes, and the snapshot is the minute itself so a
-// tick that lands inside the same minute re-renders nothing.
-function subscribeToMinute(onChange: () => void): () => void {
-    const timer = setInterval(onChange, 20_000);
-    return () => clearInterval(timer);
-}
-const currentMinute = () => Math.floor(Date.now() / 60_000);
-/** The server has no idea what time it is where the user is, so it renders no clock at all. */
-const noMinuteOnServer = () => null;
-
-/** The machine's clock to the minute (ms), or null on the server. Ticks with the greeting. */
-export function useNowMinute(): number | null {
-    const minute = useSyncExternalStore(subscribeToMinute, currentMinute, noMinuteOnServer);
-    return minute === null ? null : minute * 60_000;
-}
 
 /** The greeting and the clock line, both from the user's own machine. The sign-in card. */
 export function useLocalClock(): { greet: string; clock: string } {
-    const minute = useSyncExternalStore(subscribeToMinute, currentMinute, noMinuteOnServer);
+    const minute = useMinute();
     if (minute === null) return { greet: "Welcome", clock: "" };
 
     const now = new Date(minute * 60_000);
@@ -36,5 +17,6 @@ export function useLocalClock(): { greet: string; clock: string } {
 }
 
 
+export { useNowMinute } from "@/modules/hr/timeline/useNowMinute";
 /** Re-exported for the login screen; the rule lives in hhmm.ts. */
 export { shopMinuteOf as shopMinute } from "@/shared/lib/hr/hhmm";
