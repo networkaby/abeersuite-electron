@@ -184,14 +184,6 @@ export async function resolveProductTax(
     };
 }
 
-/** Human-readable source label for UI hints. */
-export function formatTaxSource(source: TaxSource): string {
-    if (source == null) return "not set";
-    if (source === "product") return "product";
-    if (source === "org-default") return "org default";
-    return `group: ${source.groupName}`;
-}
-
 // ── Batch resolvers ──────────────────────────────────────────────────────────
 //
 // Single-product `resolveProductTax` issues N+1 queries when used across the

@@ -105,11 +105,6 @@ export const invProductGroupCreateSchema = nameIsActiveSchema.extend({
 
 export const invProductGroupUpdateSchema = invProductGroupCreateSchema.partial();
 
-// Shop presentation fields ALONE — the ecommerce masters page's PATCH body
-// touches only these, never name/hierarchy/GST, so it never needs to carry
-// (or accidentally clear) the tax-classification fields above.
-export const SHOP_PRESENTATION_FIELDS = ["slug", "imageUrl", "description"] as const;
-
 export const invBrandCreateSchema = nameIsActiveSchema.extend({
     slug:        zOptStr(120),
     imageUrl:    zOptStr(2000),

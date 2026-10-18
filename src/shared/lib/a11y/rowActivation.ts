@@ -51,28 +51,3 @@ export function rowActivation(
         },
     };
 }
-
-/**
- * Same contract for an expand/collapse control, which additionally has to say
- * whether it is currently open.
- *
- * Use on the toggle itself, never on the whole row: a row that both navigates and
- * expands cannot announce which one Enter will do.
- */
-export function disclosureActivation(
-    onToggle: () => void,
-    expanded: boolean,
-    label: string,
-): {
-    role: "button";
-    tabIndex: number;
-    "aria-label": string;
-    "aria-expanded": boolean;
-    onClick: (e: MouseEvent) => void;
-    onKeyDown: (e: KeyboardEvent) => void;
-} {
-    return {
-        ...rowActivation(onToggle, label),
-        "aria-expanded": expanded,
-    };
-}

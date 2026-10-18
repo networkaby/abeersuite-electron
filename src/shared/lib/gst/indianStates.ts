@@ -78,11 +78,6 @@ export function stateCodeForName(name: string | null | undefined): string | null
     return NAME_TO_ENTRY.get(name.trim().toLowerCase())?.code ?? null;
 }
 
-export function isUnionTerritory(code: string | null | undefined): boolean {
-    if (!code) return false;
-    return CODE_TO_ENTRY.get(code.trim())?.isUT === true;
-}
-
 export function isValidStateCode(code: string | null | undefined): boolean {
     if (!code) return false;
     return CODE_TO_ENTRY.has(code.trim());

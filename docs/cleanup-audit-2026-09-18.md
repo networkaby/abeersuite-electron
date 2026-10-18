@@ -360,24 +360,24 @@ Note `PassRejectModal` is imported **only** by `TicketCard`, which is itself dea
 
 | File | Lines | Note |
 |---|---|---|
-| `src/modules/admin/components/OrgLevels.tsx` | 310 | live org UI is `OrgExplorer` |
+| `src/modules/admin/components/OrgLevels.tsx` | 310 | live org UI is `OrgExplorer` (deleted 2026-10-18) |
 | `src/modules/delivery/components/DeliveryBoard.tsx` | 265 | only importer is `RefundBoard`, also dead |
 | `src/modules/customer/components/CompanyProfileView.tsx` | 236 | also holds a dead link (see A4 family) (deleted 2026-09-30) |
 | `src/modules/customer/components/PersonProfileView.tsx` | 224 | same (deleted 2026-09-30) |
-| `src/modules/admin/components/OrgTree.tsx` | 166 | |
+| `src/modules/admin/components/OrgTree.tsx` | 166 | (deleted 2026-10-18) |
 | `src/modules/accountancy/lib/effectiveBalance.ts` | 117 | (deleted 2026-10-12) |
 | `src/modules/refund/components/RefundBoard.tsx` | 96 | |
-| `src/shared/components/UniversalCreateMenu.tsx` | 92 | |
-| `src/modules/admin/components/SettingsNav.tsx` | 86 | |
-| `src/shared/components/Topbar.tsx` | 71 | |
-| `src/modules/accountancy/components/DrillRow.tsx` | 58 | |
-| `src/modules/ecommerce/components/AdminTabsNav.tsx` | 54 | its only use is commented out — `src/app/(protected)/office/ecommerce/layout.tsx:25-27` |
-| `src/shared/components/OfficeModuleHub.tsx` | 45 | |
+| `src/shared/components/UniversalCreateMenu.tsx` | 92 | (deleted 2026-10-18) |
+| `src/modules/admin/components/SettingsNav.tsx` | 86 | (deleted 2026-10-18) |
+| `src/shared/components/Topbar.tsx` | 71 | (deleted 2026-10-18) |
+| `src/modules/accountancy/components/DrillRow.tsx` | 58 | (deleted 2026-10-18) |
+| `src/modules/ecommerce/components/AdminTabsNav.tsx` | 54 | its only use is commented out — `src/app/(protected)/office/ecommerce/layout.tsx:25-27` (deleted 2026-10-18) |
+| `src/shared/components/OfficeModuleHub.tsx` | 45 | (deleted 2026-10-18) |
 | `src/shared/components/DataPageHeader.tsx` | 35 | |
 | `src/store/referenceStore.ts` | 28 | named only inside comments (deleted 2026-09-30) |
-| `src/shared/hooks/useBridgePresent.ts` | 25 | |
+| `src/shared/hooks/useBridgePresent.ts` | 25 | (deleted 2026-10-18) |
 | `src/shared/lib/auth/freeRoutes.ts` | 21 | **see E4 — read before deleting** (deleted 2026-09-27) |
-| `src/shared/lib/constants/index.ts` | 7 | empty barrel, everyone imports deep paths |
+| `src/shared/lib/constants/index.ts` | 7 | empty barrel, everyone imports deep paths (deleted 2026-10-18) |
 | `src/shared/lib/schemas/index.ts` | 5 | same |
 | `src/modules/customer/lib/initials.ts` | 3 | **duplicate** — live one is `src/shared/lib/format/initials.ts` |
 

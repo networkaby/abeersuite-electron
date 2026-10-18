@@ -41,10 +41,6 @@ const STOCK_ELIGIBLE_GROUP_NAMES: string[] = [
     ACCOUNT_GROUPS.PURCHASE_ACCOUNTS,
 ];
 
-/** Kept for any consumer that still wants the broad income/expense check.
- *  New code should prefer `isStockEligibleAccount` (group-name match). */
-export const STOCK_ELIGIBLE_GROUP_TYPES: GroupType[] = ["INCOME", "EXPENSE"];
-
 export function isStockEligibleAccount(
     a: { group?: { name?: string | null; type?: GroupType | null } | null } | null | undefined,
 ): boolean {

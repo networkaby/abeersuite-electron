@@ -463,10 +463,6 @@ export async function validateBankAccountIds(ids: number[]): Promise<boolean> {
 
 // ── stored rows ──────────────────────────────────────────────────────────────
 
-export async function loadGstPlanningMonth(yearMonth: string) {
-    return prisma.biGstPlanningMonth.findUnique({ where: { yearMonth } });
-}
-
 export async function loadGstPlanningMonths(yearMonths: string[]) {
     if (yearMonths.length === 0) return [];
     return prisma.biGstPlanningMonth.findMany({ where: { yearMonth: { in: yearMonths } } });

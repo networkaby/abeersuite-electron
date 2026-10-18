@@ -49,8 +49,3 @@ export function expandSidebarModules(storedIds: string[]): string[] {
     }
     return [...stored];
 }
-
-/** Does a department's pool contain a permission? All-access pools contain everything. */
-export function poolHasPermission(pool: DepartmentPool, permissionId: string): boolean {
-    return pool.isAllAccess || (pool.permissionIds?.includes(permissionId) ?? false);
-}

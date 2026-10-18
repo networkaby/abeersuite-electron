@@ -68,11 +68,6 @@ export const COUNTER_NUMBER_HEADER = "x-abeer-counter-number";
 let cache: { at: number; byNumber: Map<number, number> } | null = null;
 const CACHE_MS = 5 * 60_000;
 
-/** Drop the cache — call after a counter is created, renumbered or removed. */
-export function forgetCounterCache(): void {
-    cache = null;
-}
-
 async function counterIdForNumber(db: DbClient, counterNumber: number): Promise<number | null> {
     if (!cache || Date.now() - cache.at > CACHE_MS) {
         const rows = await db.posCounter.findMany({ select: { id: true, counterNumber: true } });

@@ -263,10 +263,3 @@ export type PosOffer = {
 };
 
 export type ChargeRow = { id: string; accountId: number | null; description: string; amount: string };
-
-export const newChargeRow = (): ChargeRow => ({
-    id: Math.random().toString(36).slice(2, 10),
-    accountId: null,
-    description: "",
-    amount: "",
-});

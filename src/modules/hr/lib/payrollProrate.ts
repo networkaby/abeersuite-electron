@@ -192,14 +192,3 @@ export function perHourPaise(amountPaise: number, payDays: number | null | undef
     if (!(dutyMinutes > 0)) return 0;
     return perDayPaise(amountPaise, payDays) / (dutyMinutes / 60);
 }
-
-/** What `minutes` of netted overtime is worth, rounded to whole paise. */
-export function overtimePaise(
-    minutes: number,
-    amountPaise: number,
-    payDays: number | null | undefined,
-    dutyMinutes: number,
-): number {
-    if (minutes <= 0) return 0;
-    return Math.round(perHourPaise(amountPaise, payDays, dutyMinutes) * (minutes / 60));
-}

@@ -179,15 +179,9 @@ const INV_ROWS: RawVoucherRow[] = INV_KINDS.map((k) => ({
 /** Every hand-created voucher kind (GL + inventory), in display order. */
 export const VOUCHER_MATRIX: VoucherMatrixRow[] = [...GL_ROWS, ...INV_ROWS];
 
-/** GL-only view — kept for callers that only deal with accountancy vouchers. */
-export const GL_VOUCHER_MATRIX: VoucherMatrixRow[] = GL_ROWS;
-
 const ROW_BY_TYPE = new Map<VoucherType | InvVoucherType, VoucherMatrixRow>(
     VOUCHER_MATRIX.map((r) => [r.type, r]),
 );
-
-/** Every per-kind permission id (all kinds × all actions) — e.g. for pool helpers. */
-export const ALL_VOUCHER_PERMISSION_IDS: string[] = VOUCHER_MATRIX.flatMap((r) => Object.values(r.perms));
 
 /** The action permission ids for one voucher kind — what a department toggle pools. */
 export function voucherKindPermissionIds(type: VoucherType | InvVoucherType): string[] {

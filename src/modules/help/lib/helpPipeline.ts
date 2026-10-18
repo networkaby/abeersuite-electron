@@ -10,12 +10,3 @@ export async function getHelpPipeline(prisma: PrismaClient) {
         include: { statuses: { orderBy: { order: "asc" } } },
     });
 }
-
-/** The terminal (Closed) stage of the Help Desk pipeline — where a closed / converted
- *  ticket lands. Falls back to the last stage if none is flagged terminal. */
-export function helpClosedStage(
-    statuses: { id: string; isTerminal: boolean; order: number }[],
-): { id: string } | null {
-    const terminal = statuses.filter((s) => s.isTerminal).sort((a, b) => a.order - b.order)[0];
-    return terminal ?? statuses[statuses.length - 1] ?? null;
-}

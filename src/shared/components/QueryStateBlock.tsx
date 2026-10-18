@@ -125,26 +125,3 @@ export function QueryStateBlock({
         </div>
     );
 }
-
-/**
- * The same decision for a page that is nothing but one table: returns the row to
- * drop into `<TableBody>`, or null when the table itself should render.
- *
- * Pairs with TableLoadingRow / TableEmptyRow / TableErrorRow in DataTableStates,
- * and exists so a caller does not have to spell out the precedence by hand — the
- * bug it prevents is showing "No brands yet" when the fetch actually failed.
- */
-export function tableStateKind({
-    loading,
-    error,
-    rowCount,
-}: {
-    loading: boolean;
-    error: string | null;
-    rowCount: number;
-}): "loading" | "error" | "empty" | "rows" {
-    if (loading && rowCount === 0) return "loading";
-    if (error && rowCount === 0) return "error";
-    if (rowCount === 0) return "empty";
-    return "rows";
-}

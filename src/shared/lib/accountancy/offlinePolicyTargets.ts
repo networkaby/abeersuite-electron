@@ -116,11 +116,6 @@ async function pipelineKinds(db: PrismaClient): Promise<Record<string, TicketKin
     return byId;
 }
 
-/** Drops the cached pipeline map — used by tests and after a pipeline rename. */
-export function invalidatePipelineKindCache(): void {
-    globalForPipelines.__offlinePipelineKinds = undefined;
-}
-
 /**
  * Decides whether one non-voucher write is allowed under the current policies.
  *

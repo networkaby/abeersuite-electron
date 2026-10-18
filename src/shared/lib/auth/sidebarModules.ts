@@ -135,10 +135,6 @@ export const SIDEBAR_MODULES: SidebarModuleRow[] = [
     MOBILE_APP_MODULE,
 ];
 
-/** Every sidebar-link permission id (all depths) — used to keep them out of the loose pool rows. */
-export const ALL_SIDEBAR_MODULE_PERMISSION_IDS: string[] =
-    SIDEBAR_MODULES.flatMap((m) => m.childPermissionIds);
-
 // Lookup: (moduleKey, nav label) → the link's permission id, at any depth. The
 // sidebar resolves a nav node to its `ui:sidebar:*` id this way (nodes carry a
 // label, not the id). Returns null for unmodelled links.

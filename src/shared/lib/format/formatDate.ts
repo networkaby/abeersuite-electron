@@ -77,17 +77,6 @@ export function toDateOnlyUtc(d: Date): string {
     return `${d.getUTCFullYear()}-${m}-${day}`;
 }
 
-/** Compare two dates as calendar dates (yyyy-mm-dd strings) — timezone-safe.
- *  Returns true when a <= b at the calendar-day level. */
-export function dateOnOrBefore(a: Date | string, b: Date | string): boolean {
-    return toDateOnly(a) <= toDateOnly(b);
-}
-
-/** True when two values fall on the same calendar day (local components). */
-export function isSameDay(a: Date | string, b: Date | string): boolean {
-    return toDateOnly(a) === toDateOnly(b);
-}
-
 /** Today as yyyy-mm-dd (local calendar, not UTC). */
 export function todayIso(): string {
     return toDateOnly(new Date());

@@ -13,9 +13,6 @@ export default function EcommerceModuleLayout({ children }: { children: React.Re
                 escapeBack
                 labels={{ ecommerce: "E-Commerce" }}
             />
-            {/* <div className="px-4 pt-3">
-                <AdminTabsNav permissions={permissions} />
-            </div> */}
             <div className="min-h-0 flex-1 overflow-auto px-4 py-4">{children}</div>
         </div>
     );

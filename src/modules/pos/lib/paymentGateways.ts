@@ -195,8 +195,6 @@ export const PAYMENT_GATEWAY_PROVIDERS: PaymentGatewayProvider[] = [
     demoProvider,
 ];
 
-export const GATEWAY_PROVIDER_IDS: string[] = PAYMENT_GATEWAY_PROVIDERS.map((p) => p.id);
-
 /**
  * The HARD-CODED payment-method catalog — like the courier catalog, these methods
  * are fixed in code, not user-addable/deletable. The app self-heals one row per

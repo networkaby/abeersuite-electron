@@ -70,17 +70,3 @@ export function denomChequesTotal(d: DenomJson): number {
 export function denomTotal(d: DenomJson): number {
     return denomNotesTotal(d) + denomChequesTotal(d);
 }
-
-/** Merge per-row captures into the FINAL voucher-level breakdown: counts sum
- *  note-wise, cheque lists concatenate. */
-export function combineDenoms(list: DenomJson[]): DenomJson {
-    const notes: Record<string, number> = {};
-    const cheques: DenomCheque[] = [];
-    for (const d of list) {
-        for (const [k, cnt] of Object.entries(d.notes)) {
-            if (cnt > 0) notes[k] = (notes[k] ?? 0) + cnt;
-        }
-        cheques.push(...d.cheques);
-    }
-    return { notes, cheques };
-}

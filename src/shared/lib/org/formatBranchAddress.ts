@@ -17,17 +17,6 @@ export interface BranchAddressInput {
     country:      string | null;
 }
 
-export function formatBranchAddressBlock(b: BranchAddressInput): string {
-    const hasStructured =
-        !!b.addressLine1 || !!b.addressLine2 || !!b.city || !!b.state || !!b.pinCode;
-
-    if (hasStructured) {
-        const cityLine = [b.city, b.state, b.pinCode].filter(Boolean).join(", ");
-        return [b.addressLine1, b.addressLine2, cityLine, b.country].filter(Boolean).join("\n");
-    }
-    return b.address ?? "";
-}
-
 /** Short single-line summary for list rows ("Address line 1, City"). */
 export function branchAddressSummary(b: BranchAddressInput): string {
     if (b.addressLine1 || b.city) {

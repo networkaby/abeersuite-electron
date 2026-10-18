@@ -83,26 +83,6 @@ export function parseSlabs(raw: unknown): CommissionSlab[] {
     return out.sort((a, b) => a.fromPaise - b.fromPaise);
 }
 
-/** `rulesJson` from the database; a rule of an unknown kind is dropped, not guessed at. */
-export function parseRules(raw: unknown): CommissionRule[] {
-    if (!Array.isArray(raw)) return [];
-    const out: CommissionRule[] = [];
-    for (const r of raw) {
-        if (!r || typeof r !== "object") continue;
-        const o = r as Record<string, unknown>;
-        if (!isCommissionKind(o.kind)) continue;
-        out.push({
-            kind: o.kind, targetPaise: num(o.targetPaise), rateBp: num(o.rateBp), slabs: parseSlabs(o.slabs), bonusPaise: num(o.bonusPaise),
-            ...(typeof o.unit === "string" ? { unit: o.unit } : {}),
-            ...(o.targetCount !== undefined ? { targetCount: num(o.targetCount) } : {}),
-            ...(o.perUnitPaise !== undefined ? { perUnitPaise: num(o.perUnitPaise) } : {}),
-            ...(o.count !== undefined ? { count: num(o.count) } : {}),
-            ...(typeof o.label === "string" ? { label: o.label } : {}),
-        });
-    }
-    return out;
-}
-
 /** "1%", "1.5%", "0.25%" — never "1.50%". */
 export const formatBp = (bp: number) => `${Number((bp / 100).toFixed(2))}%`;
 
@@ -215,8 +195,3 @@ export function describeRule(r: CommissionRule, formatPaise: (p: number) => stri
 
 /** "customers" → "customer", "posts" → "post"; a word not ending in s is left alone. */
 const singular = (unit: string) => (unit.length > 3 && unit.endsWith("s") ? unit.slice(0, -1) : unit);
-
-/** The scheme in one sentence, for the board row and the person's card. */
-export function describeScheme(terms: CommissionSchemeTerms, formatPaise: (p: number) => string): string {
-    return terms.rules.length ? terms.rules.map((r) => describeRule(r, formatPaise)).join(" · ") : "Nothing set";
-}

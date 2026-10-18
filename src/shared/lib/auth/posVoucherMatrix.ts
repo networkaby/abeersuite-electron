@@ -82,10 +82,6 @@ export const POS_VOUCHER_MATRIX: PosVoucherMatrixRow[] = POS_KINDS.map((k) => ({
     ) as Record<PosAction, string>,
 }));
 
-/** Every POS voucher permission id — used to keep them out of the loose chips. */
-export const ALL_POS_VOUCHER_PERMISSION_IDS: string[] =
-    POS_VOUCHER_MATRIX.flatMap((r) => Object.values(r.perms));
-
 /** The office-equivalent voucher permission for a POS action (superset OR-check). */
 export function officeEquivalentPosPermission(kind: string, action: PosAction): string | null {
     const def = POS_KINDS.find((k) => k.key === kind);

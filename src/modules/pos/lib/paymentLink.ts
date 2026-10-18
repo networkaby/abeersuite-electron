@@ -110,12 +110,3 @@ export function paymentLinkMessage(opts: {
     ];
     return lines.join("\n");
 }
-
-/// WhatsApp Web compose link (web.whatsapp.com) with the message prefilled.
-/// WhatsApp has no API to attach media via a link, so only the text/link travels —
-/// the QR is shown on-screen for an in-person scan. Mirrors the gift-card pattern.
-export function whatsappWebShareUrl(phone: string | null | undefined, text: string): string {
-    const num = (phone ?? "").replace(/\D/g, "");
-    const base = num ? `https://web.whatsapp.com/send?phone=${num}&text=` : "https://web.whatsapp.com/send?text=";
-    return base + encodeURIComponent(text);
-}

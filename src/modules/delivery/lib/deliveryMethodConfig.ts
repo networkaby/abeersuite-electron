@@ -92,7 +92,6 @@ export type FreeDeliveryConfig = {
 
 /** The aggregator kinds priced live by an external API (vs our own rate cards). */
 export const AGGREGATOR_KINDS: DeliveryKind[] = ["SHIPROCKET", "SHIPWAY"];
-export const isAggregatorKind = (k: DeliveryKind): boolean => AGGREGATOR_KINDS.includes(k);
 
 // ── Standard courier rate card ────────────────────────────────────────────
 // OUR own courier — the only one priced by a manually-built rate card (other
@@ -278,12 +277,6 @@ export function hasServeList(list: DeliveryExclusions | undefined): boolean {
 
 const intOrZero = (v: unknown): number => Math.max(0, Math.round(Number(v) || 0));
 
-/** Does a pincode fall inside the delivery boy's legacy whole-pincode list? */
-export function ownBoyServes(cfg: OwnBoyConfig, pincode: string): boolean {
-    const pins = Array.isArray(cfg.pincodes) ? cfg.pincodes : [];
-    return pins.map((p) => String(p).trim()).includes(pincode.trim());
-}
-
 // ── Local-delivery neighbourhood coverage (pincode → locality → neighbourhood) ─
 
 type NbMap = Record<string, Record<string, OwnBoyLocality>>;
@@ -333,34 +326,11 @@ export function ownBoyPincodeLocalities(cfg: OwnBoyMatrix, pincode: string): Rec
     return out;
 }
 
-/** True when this pincode has any neighbourhood coverage configured. */
-export function ownBoyPincodeCovered(cfg: OwnBoyMatrix, pincode: string): boolean {
-    return Object.keys(ownBoyPincodeLocalities(cfg, pincode)).length > 0;
-}
-
-/** The localities (India Post area names) we cover under a pincode. */
-export function ownBoyLocalities(cfg: OwnBoyMatrix, pincode: string): string[] {
-    return Object.keys(ownBoyPincodeLocalities(cfg, pincode));
-}
-
-/** Covered neighbourhoods under a pincode — all of them, or filtered to one locality. */
-export function ownBoyNeighbourhoods(cfg: OwnBoyMatrix, pincode: string, locality?: string): string[] {
-    const byLoc = ownBoyPincodeLocalities(cfg, pincode);
-    const names = (l: OwnBoyLocality) => l.neighbourhoods.map((n) => n.name);
-    if (locality) return byLoc[locality] ? names(byLoc[locality]) : [];
-    return [...new Set(Object.values(byLoc).flatMap(names))];
-}
-
 /** The parent locality of a covered neighbourhood (for the auto-select). */
 export function ownBoyLocalityOf(cfg: OwnBoyMatrix, pincode: string, neighbourhood: string): string | null {
     const byLoc = ownBoyPincodeLocalities(cfg, pincode);
     const nb = neighbourhood.trim();
     return Object.keys(byLoc).find((l) => byLoc[l].neighbourhoods.some((n) => n.name === nb)) ?? null;
-}
-
-/** Is this (pincode, neighbourhood) one our boy covers? */
-export function ownBoyServesNeighbourhood(cfg: OwnBoyMatrix, pincode: string, neighbourhood: string): boolean {
-    return ownBoyLocalityOf(cfg, pincode, neighbourhood) != null;
 }
 
 /**
@@ -597,26 +567,6 @@ export function cheapestCustomRatePaise(
         if (min == null || p < min) min = p;
     }
     return min;
-}
-
-/** The RTO (return-to-origin) charge for the zone/weight a parcel would fall
- *  into — decision-support only, never added to the checkout charge. Falls back
- *  to the forward rate when a zone has no RTO override (mirrors real rate cards
- *  where RTO commonly equals forward). Returns null exactly like the forward calc
- *  when the destination isn't serviceable. */
-export function computeCustomRtoPaise(
-    cfg: RateCard,
-    params: { weightGrams: number; deliveryPincode: string; deliveryState?: string }
-): number | null {
-    if ((cfg.mode ?? "FLAT") !== "ZONE") return null; // RTO only modeled for zone cards
-    const zone = pickZone(Array.isArray(cfg.zones) ? cfg.zones : [], params.deliveryPincode, params.deliveryState);
-    if (!zone) return null;
-    const rtoZone: ZoneRate = {
-        ...zone,
-        basePaise: zone.rtoBasePaise ?? zone.basePaise,
-        addlPaise: zone.rtoAddlPaise ?? zone.addlPaise,
-    };
-    return zoneSlabPaise(cfg.baseGrams ?? 500, cfg.stepGrams ?? 500, rtoZone, params.weightGrams);
 }
 
 // ── Sanitisers (operator input → stored config) ───────────────────────────

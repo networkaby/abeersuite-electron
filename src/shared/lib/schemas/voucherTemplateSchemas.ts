@@ -1,10 +1,6 @@
 import { z } from "zod";
 import { VOUCHER_TEMPLATE_KINDS, PAPER_FORMATS } from "@/shared/lib/print/voucherTemplateDefaults";
 
-export const voucherTemplateKindSchema = z.enum(
-    VOUCHER_TEMPLATE_KINDS as unknown as [string, ...string[]],
-);
-
 const txt = (max: number) => z.string().max(max).optional();
 
 export const voucherTemplateUpdateSchema = z.object({

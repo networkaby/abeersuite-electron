@@ -80,16 +80,6 @@ export function blockStartFor(counterNumber: number): number {
     return CLOUD_RANGE_END + (counterNumber - 1) * BLOCK_SIZE;
 }
 
-/**
- * Returns the last id in counter `counterNumber`'s reserved block (inclusive).
- *
- * @param counterNumber  1-based counter number (1 … 114)
- * @throws {RangeError}  if `counterNumber` is outside 1 … MAX_COUNTER_NUMBER
- */
-export function blockEndFor(counterNumber: number): number {
-    return blockStartFor(counterNumber) + BLOCK_SIZE - 1;
-}
-
 // ── Sequence catalogue ───────────────────────────────────────────────────────
 
 /**

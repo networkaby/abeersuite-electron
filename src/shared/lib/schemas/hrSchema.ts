@@ -27,12 +27,6 @@ export const STAFF_JOB_KEYS = [
     "staffCode", "joinedOn", "leftOn", "leftReason", "employmentType", "weeklyOff", "dutyMinutes", "dutyStart", "dutyEnd", "idleLimitMinutes",
 ] as const;
 
-/** The personal-side fields — a person may also send these about themselves. */
-export const STAFF_PERSONAL_KEYS = [
-    "fatherName", "address", "bloodGroup", "emergencyName", "emergencyPhone",
-    "aadhaarLast4", "panNumber", "uanNumber", "esiNumber", "bankJson", "notes",
-] as const;
-
 export const staffProfilePatchSchema = z.object({
     // job
     staffCode:        z.string().trim().max(20).nullable().optional(),

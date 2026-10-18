@@ -79,7 +79,6 @@ interface MyBindingResponse {
  * into silence, so this is only ever acted on alongside a `valid` reconcile.
  */
 let lastOpenShift: BoundShift | null = null;
-export function lastKnownOpenShift(): BoundShift | null { return lastOpenShift; }
 
 export async function getLocalCounterSetup(): Promise<{ counterId: number; counterNumber: number } | null> {
     if (!isElectronEnvironment() || !window.electronAPI?.getCounterSetup) return null;

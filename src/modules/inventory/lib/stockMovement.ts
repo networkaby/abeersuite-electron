@@ -40,15 +40,6 @@ export function stockDirectionForType(type: string): StockDirection {
     return "NONE";
 }
 
-/**
- * Units a goods line actually moves = quantity + freeQty. Complimentary units
- * leave the shelf like any other, so every reversal must put them back too —
- * reversing `quantity` alone leaked the free units out of stock permanently.
- */
-export function movedQty(line: { quantity: Numeric; freeQty?: Numeric | null }): number {
-    return toNumber(line.quantity) + (line.freeQty != null ? toNumber(line.freeQty) : 0);
-}
-
 export interface RecordStockMovementArgs {
     // Phase 5 5C: stock rows hang off the spine — callers pass the universalVoucherId.
     universalVoucherId: number;

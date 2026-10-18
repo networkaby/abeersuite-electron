@@ -125,18 +125,6 @@ export async function shiprocketServiceability(params: {
     }
 }
 
-/** The cheapest available courier for a parcel, or null when none serviceable. */
-export async function shiprocketCheapest(params: {
-    pickupPincode: string;
-    deliveryPincode: string;
-    weightGrams: number;
-    cod: boolean;
-}): Promise<SrCourierQuote | null> {
-    const list = await shiprocketServiceability(params);
-    if (list.length === 0) return null;
-    return list.reduce((best, c) => (c.ratePaise < best.ratePaise ? c : best));
-}
-
 // ── Order → shipment → AWB → pickup → label (fulfilment, wired in Phase 3) ────
 export type SrAdhocItem = { name: string; sku: string; units: number; selling_price: number };
 export type SrAdhocOrder = {

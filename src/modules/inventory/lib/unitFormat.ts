@@ -68,22 +68,6 @@ export function unitTiers(unitId: number, all: Iterable<UnitRow>): UnitTier[] {
     return tiers;
 }
 
-/** BASE units in one of `unitId` — the product of its whole chain. */
-export function baseUnitsPer(unitId: number, all: Iterable<UnitRow>): number {
-    return unitTiers(unitId, all)[0]?.factor ?? 1;
-}
-
-/** Every unit sharing a root with `unitId` — the set offerable on a line. */
-export function relatedUnits(unitId: number, all: Iterable<UnitRow>): UnitRow[] {
-    const rows = [...all];
-    const rootOf = (id: number): number => {
-        const t = unitTiers(id, rows);
-        return t.length ? (rows.find((r) => r.code === t[t.length - 1].code)?.id ?? id) : id;
-    };
-    const target = rootOf(unitId);
-    return rows.filter((r) => rootOf(r.id) === target);
-}
-
 /**
  * Render a BASE-unit quantity across a unit's tiers, largest first:
  *   1,015,005 CM on a KM→M→CM chain → "10 KM 150 M 5 CM"
@@ -113,9 +97,4 @@ export function formatQtyInTiers(baseQty: number, tiers: UnitTier[]): string {
     if (parts.length === 0) return `${baseQty} ${tiers[tiers.length - 1].code}`;
 
     return `${negative ? "-" : ""}${parts.join(" ")}`;
-}
-
-/** Convenience for callers holding the raw unit list. */
-export function formatQtyInUnit(baseQty: number, unitId: number, all: Iterable<UnitRow>): string {
-    return formatQtyInTiers(baseQty, unitTiers(unitId, all));
 }
