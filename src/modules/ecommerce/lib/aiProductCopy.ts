@@ -4,6 +4,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
 import { AI_CALL_TIMEOUT_MS, AI_WRITE_KEY_CHAIN, AI_HIGHLIGHT_COUNT, AI_PRODUCT_COPY_MODEL, type AiSearchMode } from "@/shared/lib/constants/ai";
 import { verifyFacts, type CitedFact } from "@/modules/ecommerce/lib/aiFactCheck";
+import { isLockedOut, noteKeyFailure, noteKeySuccess } from "@/shared/lib/ai/keyLockout";
 
 // Flipkart-style, SEO-friendly product copy, spending search money only where
 // it adds something. House style (owner, 2026-10-19): model + technical specs,
@@ -235,7 +236,7 @@ function aiStatus(e: unknown): number | undefined {
 
 /** Google's reason in staff words — 402 / 429 / 403 mean the key, not this product. */
 export function aiErrorMessage(e: unknown): string | null {
-    if (e instanceof AiReplyError) return e.message;
+    if (e instanceof AiReplyError || e instanceof AiKeysExhaustedError || e instanceof SearchKeyError) return e.message;
     if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) return "Gemini took too long — try again.";
     const status = aiStatus(e);
     if (status === 402) return "Gemini credit is used up — top up the AI Studio project, or use a free-tier key.";
@@ -244,39 +245,42 @@ export function aiErrorMessage(e: unknown): string | null {
     return null;
 }
 
-// Draft and polish walk AI_WRITE_KEY_CHAIN in order. A key that answers with a
-// key problem (blocked, no credit, daily cap) twice is skipped until midnight
-// India time. Kept in server memory only: a fresh server may try a dead key
-// twice more — a refused call is not billed.
-const KEY_FAULTS = new Set([400, 402, 403, 429]);
-const keyFails = new Map<string, { day: string; count: number }>();
-const indiaDay = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-const skippedToday = (name: string) => {
-    const f = keyFails.get(name);
-    return !!f && f.day === indiaDay() && f.count >= 2;
-};
-function noteFail(name: string) {
-    const day = indiaDay();
-    const f = keyFails.get(name);
-    keyFails.set(name, { day, count: f?.day === day ? f.count + 1 : 1 });
+// Draft and polish walk AI_WRITE_KEY_CHAIN in order; any failure of a key
+// (refused, out of credit, at its limit, too slow) silently moves on to the
+// next. Two failures in a row lock a key out for the day (keyLockout.ts).
+const KEY_FAULTS = new Set([400, 401, 402, 403, 429, 500, 503]);
+const isTimeout = (e: unknown) => e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
+const isKeyFailure = (e: unknown) => KEY_FAULTS.has(aiStatus(e) ?? 0) || isTimeout(e);
+
+/** No key left to try today — the only AI error staff see for the write steps. */
+export class AiKeysExhaustedError extends Error {
+    constructor() {
+        super("Every AI key failed today (blocked, out of credit or at its limit) — try again later or top up a key.");
+        this.name = "AiKeysExhaustedError";
+    }
 }
 
-/** First working key in the chain; a key problem moves on to the next key silently. */
+/** The search key failed — staff can still generate with search off. */
+export class SearchKeyError extends Error {
+    constructor() {
+        super("Online search key failed (blocked, out of credit or too slow) — turn Search online to Off and generate again.");
+        this.name = "SearchKeyError";
+    }
+}
+
 async function callChain(content: Part[]) {
-    const keys = AI_WRITE_KEY_CHAIN.filter((k) => process.env[k] && !skippedToday(k));
-    if (!keys.length) throw new Error("Every Gemini key failed twice today — check the keys in AI Studio.");
-    let last: unknown;
-    for (const name of keys) {
+    for (const name of AI_WRITE_KEY_CHAIN.filter((k) => process.env[k] && !isLockedOut(k))) {
         try {
-            return { reply: await call(process.env[name]!, content, false), key: name };
+            const reply = await call(process.env[name]!, content, false);
+            noteKeySuccess(name);
+            return { reply, key: name };
         } catch (e) {
-            if (!KEY_FAULTS.has(aiStatus(e) ?? 0)) throw e; // about this product, not the key
-            console.warn(`[aiProductCopy] ${name} refused (${aiStatus(e)}), trying the next key`);
-            noteFail(name);
-            last = e;
+            if (!isKeyFailure(e)) throw e; // about this product, not the key
+            console.warn(`[aiProductCopy] ${name} failed (${aiStatus(e) ?? "timeout"}), trying the next key`);
+            noteKeyFailure(name);
         }
     }
-    throw last;
+    throw new AiKeysExhaustedError();
 }
 
 const tokensOf = (r: { usage?: { totalTokens?: number } }) => r.usage?.totalTokens ?? 0;
@@ -324,11 +328,11 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
     try {
         draftRaw = await readDraft();
     } catch (e) {
-        if (aiStatus(e) !== undefined) throw e;
+        if (aiStatus(e) !== undefined || e instanceof AiKeysExhaustedError) throw e;
         try {
             draftRaw = await readDraft();
         } catch (again) {
-            if (aiStatus(again) !== undefined) throw again;
+            if (aiStatus(again) !== undefined || again instanceof AiKeysExhaustedError) throw again;
             throw new AiReplyError(again);
         }
     }
@@ -347,7 +351,9 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
     else if (!paidKey) search = "no-key";
     else {
         try {
-            const found = await call(paidKey, [{ type: "text", text: searchPrompt(p, draft, query) }], true);
+            // Search has no fallback key: when it fails, staff turn search off.
+            const found = await call(paidKey, [{ type: "text", text: searchPrompt(p, draft, query) }], true)
+                .catch((e: unknown) => { throw isKeyFailure(e) ? new SearchKeyError() : e; });
             tokens.search += tokensOf(found);
             console.info(`[aiProductCopy] search reply after ${Date.now() - started} ms`);
             const cited = factsSchema.parse(parseJson(found.text)).facts
@@ -371,6 +377,7 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
                 search = "searched";
             }
         } catch (e) {
+            if (e instanceof SearchKeyError || e instanceof AiKeysExhaustedError) throw e;
             console.warn("[aiProductCopy] search step failed, keeping the photo draft:", aiErrorMessage(e) ?? e);
             search = "failed";
             searchError = aiErrorMessage(e) ?? (e instanceof Error ? e.message : String(e)).slice(0, 160);

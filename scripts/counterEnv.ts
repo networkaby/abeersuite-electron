@@ -271,6 +271,9 @@ export const COUNTER_ENV_WHATSAPP_KEYS: readonly string[] = [
  * only, like the rest: a counter build without them simply keeps relaying.
  */
 export const COUNTER_ENV_AI_KEYS: readonly string[] = [
+    // Every name in AI_WRITE_KEY_CHAIN (src/shared/lib/constants/ai.ts) — a till
+    // missing one skips it; one missing them all relays.
     "GOOGLE_GENERATIVE_AI_API_KEY",
+    "GOOGLE_GENERATIVE_AI_API_KEY1",
     "GOOGLE_AI_SEARCH_API_KEY",
 ];
