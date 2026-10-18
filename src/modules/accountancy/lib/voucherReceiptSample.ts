@@ -120,10 +120,14 @@ function addDaysIso(iso: string, days: number): string {
 async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     const vRow = await prisma.voucherDetail.findUnique({
         where: { id },
-        include: { universalVoucher: { select: {
-            partyAccountId: true, description: true, voucherNo: true, date: true, type: true,   // 5D-4 party + 5D-5 desc + 5D-6 ref + 5D-10 date + 5D-11 type
-            branch: { select: branchAddressSelect },
-        } } },
+        include: {
+            universalVoucher: { select: {
+                partyAccountId: true, description: true, voucherNo: true, date: true, type: true,   // 5D-4 party + 5D-5 desc + 5D-6 ref + 5D-10 date + 5D-11 type
+                branch: { select: branchAddressSelect },
+            } },
+            // A return against a POS bill prints on the counter's POS_RETURN slip.
+            refVoucher: { select: { universalVoucher: { select: { type: true } } } },
+        },
     });
     if (!vRow) return notFoundData();
     // Phase 5 5C: goods lines hang off the spine.
@@ -354,7 +358,8 @@ async function buildInvSample(id: number): Promise<VoucherReceiptData> {
     };
 
     const vType = (v.universalVoucher?.type ?? "") as InvVoucherType;   // 5D-11
-    const kind = isVoucherTemplateKind(vType) ? vType : "SALE";
+    const posReturn = vType === "SALE_RETURN" && v.refVoucher?.universalVoucher?.type === "POS";
+    const kind: VoucherTemplateKind = posReturn ? "POS_RETURN" : isVoucherTemplateKind(vType) ? vType : "SALE";
     return { kind, sample, docTitle: `${vType} ${voucherDisplayNo(v.universalVoucher?.voucherNo, v.universalVoucherId)}` };
 }
 

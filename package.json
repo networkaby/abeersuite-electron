@@ -58,6 +58,7 @@
     "seed:apply-taxonomy": "tsx prisma/seeds/apply-taxonomy.ts",
     "seed:sync-permissions": "tsx prisma/seeds/sync-permissions.ts",
     "seed:leave-types": "tsx prisma/seeds/ensure-leave-types.ts",
+    "seed:pos-return-template": "tsx prisma/seeds/ensure-pos-return-template.ts",
     "check:counter-mode": "tsx scripts/check-counter-mode.ts vercel && tsx scripts/check-counter-mode.ts counter && tsx scripts/check-counter-mode.ts counter-write-local && tsx scripts/check-counter-mode.ts counter-write-relay && tsx scripts/check-counter-mode.ts counter-write-relay-unconfigured",
     "sync:tables": "tsx scripts/gen-sync-registry.ts",
     "sync:tables:check": "tsx scripts/gen-sync-registry.ts --check",

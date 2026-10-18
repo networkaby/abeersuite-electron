@@ -45,6 +45,10 @@ export const INVENTORY_VOUCHER_KINDS = [
     "ESTIMATE",
     "POS_ESTIMATE",
     "POS_ORDER",
+    // Print-only kind, no voucher type of its own: a SALE_RETURN made against
+    // a POS bill (the POS Return dialog) prints on this 80mm counter slip, so
+    // it can differ from the office's A4 SALE_RETURN.
+    "POS_RETURN",
     "SALE_RETURN",
     "PURCHASE_RETURN",
     "MANUFACTURING_JOURNAL",
@@ -138,6 +142,7 @@ const HEADER_LINE_2: Record<VoucherTemplateKind, string> = {
     ESTIMATE: "Estimate / Quotation",
     POS_ESTIMATE: "Estimate / Quotation",
     POS_ORDER: "Order Confirmation",
+    POS_RETURN: "Return Receipt",
     SALE_RETURN: "Sale Return",
     PURCHASE_RETURN: "Purchase Return",
     MANUFACTURING_JOURNAL: "Manufacturing Journal",
@@ -201,6 +206,7 @@ const BARCODE_KINDS: ReadonlySet<VoucherTemplateKind> = new Set<VoucherTemplateK
     "SALE",
     "POS",
     "ONLINE_INVOICE",
+    "POS_RETURN",
     "SALE_RETURN",
 ]);
 
@@ -222,6 +228,7 @@ const FOOTER_LINE_BY_KIND: Partial<Record<VoucherTemplateKind, string>> = {
     SHIPPING_SLIP: "Please return the device with this slip.",
     SERVICE_SHIPPING_LABEL: "Handle with care · Fragile electronics",
     DELIVERY_SHIPPING_LABEL: "Handle with care",
+    POS_RETURN: "Refund done. Please keep this slip.",
 };
 
 const DEFAULT_DISCLAIMER_LINE = "This is a computer-generated document and does not require a signature.";
@@ -277,6 +284,7 @@ const DEFAULT_PAPER_BY_KIND: Record<VoucherTemplateKind, PaperFormat> = {
     ESTIMATE: "A4",
     POS_ESTIMATE: "THERMAL_80MM",
     POS_ORDER: "THERMAL_80MM",
+    POS_RETURN: "THERMAL_80MM",
     SALE_RETURN: "A4",
     PURCHASE_RETURN: "A4",
     MANUFACTURING_JOURNAL: "A4",
@@ -324,8 +332,7 @@ export const PRINT_AFTER_SAVE_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boole
     ESTIMATE: true,
     POS_ESTIMATE: true,
     POS_ORDER: true,
-    // POS_RETURN: true,  // TODO: add this
-    //POS_Receipt: true,  // TODO: add this
+    POS_RETURN: true,
     SALE_RETURN: true,
     PURCHASE_RETURN: false,
     MANUFACTURING_JOURNAL: false,
@@ -377,6 +384,7 @@ export const THERMAL_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boolean> = {
     ESTIMATE:              false,
     POS_ESTIMATE:          true,
     POS_ORDER:             true,
+    POS_RETURN:            true,
     SALE_RETURN:           false,
     PURCHASE_RETURN:       false,
     MANUFACTURING_JOURNAL: false,
