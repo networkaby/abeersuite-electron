@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { productShopUrl, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import ProductGalleryUploader from "@/modules/ecommerce/components/ProductGalleryUploader";
+import AiCopyPanel from "@/modules/ecommerce/components/AiCopyPanel";
 import ProductCard from "@/modules/external/shop/ProductCard";
 import {
     shopQualification,
@@ -424,6 +425,17 @@ export default function ProductForm({
                         placeholder="Shown to customers — defaults to Name, edit to override"
                     />
                 </div>
+                <AiCopyPanel
+                    productId={initial?.id}
+                    name={name}
+                    imageUrls={galleryUrls}
+                    description={description}
+                    subheading={subheading}
+                    specPairs={specPairs}
+                    onDescription={setDescription}
+                    onSubheading={(v) => { subheadingTouched.current = true; setSubheading(v); }}
+                    onSpecs={setSpecPairs}
+                />
                 <div className="grid gap-2">
                     <Label>Description</Label>
                     <textarea

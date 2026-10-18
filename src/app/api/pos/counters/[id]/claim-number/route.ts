@@ -25,6 +25,7 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { blockStartFor, MAX_COUNTER_NUMBER } from "@/shared/lib/counter/idRange";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { z } from "zod";
+import { RELAY_KEY_CLEARED } from "@/shared/lib/counter/counterKeyHash";
 
 // Identity is resolved in the renderer — the Electron installation id on the desktop
 // app, the bridge id on the web version, never cross-matched — see
@@ -103,7 +104,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const updated = await prismaAuthoritative.$transaction(async (tx) => {
             await tx.posCounter.updateMany({
                 where: { id: { not: counterId }, boundDeviceId: { in: ids } },
-                data:  { boundDeviceId: null, boundDeviceLabel: null, boundAt: null, releasedAt: new Date() },
+                data:  { boundDeviceId: null, boundDeviceLabel: null, boundAt: null, releasedAt: new Date(), ...RELAY_KEY_CLEARED },
             });
             return tx.posCounter.update({
                 where: { id: counterId },
@@ -112,6 +113,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     boundDeviceLabel: data.deviceLabel ?? null,
                     boundAt: new Date(),
                     releasedAt: null,
+                    // A fresh PC mints its own office key; binding again lifts a revoke.
+                    ...RELAY_KEY_CLEARED,
+                    relayKeyRevokedAt: null,
                     ...(idRangeStart !== counter.idRangeStart ? { idRangeStart } : {}),
                 },
                 select: { id: true, counterNumber: true, idRangeStart: true },

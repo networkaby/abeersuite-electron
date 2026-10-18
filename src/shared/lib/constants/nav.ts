@@ -323,7 +323,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         icon: Wrench,
         key: "repair",
         dashboardHref: "/office/repairing",
-        // pathPrefixes: ["/office/repairing/tickets", "/office/repairing/service-centers", "/office/repairing/dashboard"],
+        // pathPrefixes: ["/office/repairing/tickets", "/office/repairing/dashboard"],
         pathPrefixes: ["/office/repairing"],
         createActions: [
             { label: "Repair +", subtitle: "Open repair intake", icon: Wrench, variant: "default", action: "new-ticket", pipelineRef: "default", permission: "tickets:create" },
@@ -331,7 +331,6 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         children: [
             { label: "All Repair", icon: Hammer, href: "/office/repairing/tickets", pipelineRef: "default" },
             { label: "Device Location", icon: MapPin, href: "/office/repairing/device-location" },
-            // { label: "Service Centers", icon: Building2, href: "/office/repairing/service-centers" },
 
         ],
     },
@@ -452,6 +451,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Top Customers", icon: Crown, href: "/office/bi/top-customers" },
             { label: "RFM Segmentation", icon: Target, href: "/office/bi/rfm" },
             { label: "Party Sale & Purchase", icon: Split, href: "/office/bi/party-sale-purchase" },
+            { label: "Ledger vs Ledger", icon: ArrowLeftRight, href: "/office/bi/ledger-vs-ledger" },
             { label: "GST Purchase Planning", icon: CalendarRange, href: "/office/bi/gst-purchase-planning", sidebarKey: "gst-purchase-planning" },
             { label: "Item Profit", icon: BadgeIndianRupee, href: "/office/bi/item-profit" },
             { label: "Item by Party", icon: Grid2x2, href: "/office/bi/item-by-party" },
@@ -700,6 +700,19 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Protection", icon: Umbrella, href: "/office/customer-retention/protection", permission: "retention:protection:manage" },
 
 
+        ],
+    },
+
+    // Campaigns — messages to many customers at once (greetings, offers). Uses the
+    // Retention tools (picks a coupon) but never changes them; replies land in CRM.
+    {
+        label: "Campaigns",
+        icon: Megaphone,
+        key: "campaigns",
+        dashboardHref: "/office/campaigns",
+        pathPrefixes: ["/office/campaigns"],
+        children: [
+            { label: "Campaigns", icon: Megaphone, href: "/office/campaigns" },
         ],
     },
 

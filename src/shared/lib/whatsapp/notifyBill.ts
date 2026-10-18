@@ -37,9 +37,10 @@ import { isBillSendConfigured, sendBillTemplate, sendTextMessage } from "./metaT
  *
  * Skipped without a row: a counter PC (no Meta / push keys there — the relayed
  * save runs on the office server and is announced from there), a draft or
- * cancelled voucher, a walk-in (the pooled walk-in ledger names nobody), a
- * REFUND to anyone outside Sundry Debtors (a supplier payment), and a document
- * already announced under that kind.
+ * cancelled voucher, a walk-in (the pooled walk-in ledger names nobody), any
+ * party under Sundry Creditors (a supplier — automatic or manual, every kind),
+ * a REFUND to anyone outside Sundry Debtors, and a document already announced
+ * under that kind.
  */
 export type NotifyResult = { status: "sent" | "already" | "skipped"; reason?: string };
 
@@ -143,7 +144,9 @@ async function notifyVoucher(kind: WaTemplateKind, uvId: number): Promise<Notify
     const account = await prisma.account.findUnique({ where: { id: uv.partyAccountId }, select: partySelect });
     const party = account?.person ?? account?.company;
     if (!account || !party) return { status: "skipped", reason: "walk-in" };
-    if (kind === "REFUND" && !(await isUnderDebtors(account.groupId))) return { status: "skipped", reason: "not a customer" };
+    // A supplier never hears from us — automatic or manual, any kind.
+    if (await isUnderGroup(account.groupId, ACCOUNT_GROUPS.SUNDRY_CREDITORS)) return { status: "skipped", reason: "supplier" };
+    if (kind === "REFUND" && !(await isUnderGroup(account.groupId, ACCOUNT_GROUPS.SUNDRY_DEBTORS))) return { status: "skipped", reason: "not a customer" };
 
     // An inventory document carries its own total; a money voucher is the sum of
     // its lines on the party (credit for money in, debit for money paid out).
@@ -475,11 +478,11 @@ function pickMobile(phones: PhoneRow[]): string | null {
     return null;
 }
 
-// ── Sundry Debtors check (REFUND only) ────────────────────────────────────────
+// ── Group check: Sundry Creditors (never sent) / Sundry Debtors (REFUND) ──────
 // The group tree is a few dozen rows; cached for five minutes per server.
 let groupCache: { at: number; byId: Map<number, { parentId: number | null; name: string }> } | null = null;
 
-async function isUnderDebtors(groupId: number | null): Promise<boolean> {
+async function isUnderGroup(groupId: number | null, groupName: string): Promise<boolean> {
     if (groupId == null) return false;
     if (!groupCache || Date.now() - groupCache.at > 300_000) {
         const rows = await prisma.accountGroup.findMany({ select: { id: true, parentId: true, name: true } });
@@ -490,7 +493,7 @@ async function isUnderDebtors(groupId: number | null): Promise<boolean> {
         seen.add(id);
         const g = groupCache.byId.get(id);
         if (!g) return false;
-        if (g.name === ACCOUNT_GROUPS.SUNDRY_DEBTORS) return true;
+        if (g.name === groupName) return true;
         id = g.parentId;
     }
     return false;

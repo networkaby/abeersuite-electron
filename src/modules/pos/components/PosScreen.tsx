@@ -25,6 +25,7 @@ import { chargesNetTotal } from "@/shared/lib/accountancy/serviceCharges";
 import { exactLineRate } from "@/modules/inventory/lib/voucherMath";
 import type { PromoSnapshot } from "@/shared/lib/accountancy/settlement";
 import type { ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
+import type { CartLine } from "@/modules/pos/lib/posDraftTypes";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { bridgeOk, bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
 import { openCashDrawer, printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
@@ -112,7 +113,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     discountPct: string | number | null;
                     shippingAmt: string | number | null; roundOff: string | number | null;
                     lines: { productId: number; description: string | null; note: string | null; quantity: string | number; rate: string | number; taxRate: string | number; discountAmt: string | number; amount: string | number; mrpPaise: number | null; savedSalePricePaise: number | null; product: { sku: string; name: string } }[];
-                    charges: { accountId: number; description: string | null; amount: string | number; taxAmount?: string | number | null; serviceId: number | null }[];
+                    charges: { accountId: number; description: string | null; amount: string | number; taxAmount?: string | number | null; serviceId: number | null; serviceName?: string | null; note?: string | null; quantity?: string | number | null; rate?: string | number | null; taxRate?: string | number | null }[];
                     tenders: { accountId: number; amount: number; method: string | null; reference: string | null }[];
                     description: string;
                     posCounter: { tillAccountId: number; paymentAccounts: ActiveShift["counter"]["paymentAccounts"] } | null;
@@ -160,7 +161,8 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     lines: data.lines.map((l) => ({ productId: l.productId, qty: Number(l.quantity), unitPrice: exactLineRate(l), discountAmt: Number(l.discountAmt) })),
                     shippingAmt,
                     roundOff: data.roundOff != null ? Number(data.roundOff) : 0,
-                    chargesNet: chargesNetTotal(data.charges.filter((c) => !isLoyalty(c) && !isCoupon(c))),
+                    // Services come back as cart lines (below), so they stay out of this sum.
+                    chargesNet: chargesNetTotal(data.charges.filter((c) => c.serviceId == null && !isLoyalty(c) && !isCoupon(c))),
                     coupon: couponRow ? { code: pe.promo.couponCode ?? "COUPON", rupees: Math.abs(Number(couponRow.amount)) } : null,
                     promo: pe.promo,
                     redeemedBefore: pe.redeemedBefore,
@@ -177,7 +179,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                 }
                 if (data.accountId != null) await b.fetchSnapshot(data.accountId);
                 if (cancelled) return;
-                b.setCart(data.lines.map((l) => ({
+                b.setCart(data.lines.map((l): CartLine => ({
                     productId: l.productId,
                     sku: l.product.sku,
                     name: l.product.name,
@@ -187,7 +189,21 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     taxRate: Number(l.taxRate),
                     mrpPaise: l.mrpPaise,
                     barcodePaise: l.savedSalePricePaise,
-                })));
+                })).concat(
+                    // A saved service row goes back into the cart as the service
+                    // line it was rung as (same shape as addServiceToCart), so a
+                    // service bill opens with its lines and re-saves them.
+                    data.charges.filter((c) => c.serviceId != null).map((c) => ({
+                        productId: -(c.serviceId as number),
+                        sku: "SVC",
+                        name: c.serviceName ?? c.description ?? "Service",
+                        kind: "service" as const,
+                        qty: Number(c.quantity ?? 1),
+                        unitPrice: Number(c.rate ?? c.amount),
+                        description: c.note ?? "",
+                        taxRate: Number(c.taxRate ?? 0),
+                    })),
+                ));
             } catch (e: unknown) {
                 if (cancelled) return;
                 toast.error(extractApiError(e, "Could not load the sale to edit"));
@@ -215,6 +231,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     type: string | null;
                     reference: string;
                     lines: { productId: number; description: string | null; note: string | null; quantity: string | number; rate: string | number; taxRate: string | number; mrpPaise: number | null; savedSalePricePaise: number | null; product: { sku: string; name: string } }[];
+                    redemptionHolds?: { rewardType: "LOYALTY" | "COUPON" | "GIFT_CARD"; rewardRef: string | null; points: number | null; amount: number }[];
                 }>(`/api/inventory/vouchers/${fromId}`);
                 if (cancelled) return;
                 b.setConvertFrom({ id: fromId, ref: data.reference, kind: data.type === "POS_ESTIMATE" ? "estimate" : "order" });
@@ -231,7 +248,17 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     mrpPaise: l.mrpPaise,
                     barcodePaise: l.savedSalePricePaise,
                 })));
-                toast.message("Loaded from source — review and ring up to complete the conversion.");
+                // Rewards held on the order: the sale must redeem exactly these, so
+                // pre-fill them. Codes still need the cashier's Apply (it checks them).
+                const holds = data.redemptionHolds ?? [];
+                for (const h of holds) {
+                    if (h.rewardType === "LOYALTY" && h.points) { b.setRedeemOn(true); b.setRedeemPointsStr(String(h.points)); }
+                    if (h.rewardType === "COUPON" && h.rewardRef) b.setCouponCodeStr(h.rewardRef);
+                    if (h.rewardType === "GIFT_CARD" && h.rewardRef) b.setGiftCardCodeStr(h.rewardRef);
+                }
+                toast.message(holds.some((h) => h.rewardType !== "LOYALTY")
+                    ? "Loaded from source — this order has a coupon / gift card held: press Apply on it, then ring up."
+                    : "Loaded from source — review and ring up to complete the conversion.");
             } catch (e: unknown) {
                 if (cancelled) return;
                 toast.error(extractApiError(e, "Could not load the document to convert"));
@@ -301,7 +328,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             b.setSubmitting(true);
             try {
                 await axios.patch(`/api/inventory/vouchers/${editId}`, {
-                    lines: cart.map((l, i) => ({
+                    lines: cart.flatMap((l, i) => l.kind === "service" ? [] : [{
                         productId: l.productId,
                         description: composeLineDescription({ sku: l.sku, name: l.name }),
                         note: cleanLineNote(l.description),
@@ -310,6 +337,13 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                         taxRate: l.taxRate,
                         mrpPaise: l.mrpPaise ?? undefined,
                         discountAmt: round2(b.lineTierDiscounts[i] ?? 0),
+                    }]),
+                    // Service lines, re-resolved server-side like a new sale's.
+                    services: cart.filter((l) => l.kind === "service").map((l) => ({
+                        serviceId: -l.productId,
+                        description: l.description.trim() || undefined,
+                        quantity: l.qty,
+                        unitPrice: l.unitPrice,
                     })),
                     charges: editMeta.current.charges,
                     discountPct: b.discountPct,

@@ -5,6 +5,7 @@
  * `modules/home/cards/` and decides nothing about layout — to add one, write the
  * card and add it to the row below with its own visibility rule.
  *
+ *   Timeline        — everyone on a counter: today's duty ruler, above the cards.
  *   My day          — everyone: the person's own work (POS shift for now).
  *   Business health — Purchase voucher ticks: three cards — working capital,
  *                     liquid fund, inventory value — each with its own period
@@ -17,6 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { resolvedUserFromSession } from "@/shared/lib/auth/permissions";
 import LiveRefresh from "@/shared/components/LiveRefresh";
 import MyDayCard from "@/modules/home/cards/MyDayCard";
+import MyTimelineCard from "@/modules/home/cards/MyTimelineCard";
 import BusinessHealthCard from "@/modules/home/cards/BusinessHealthCard";
 import CashFlowCard from "@/modules/home/cards/CashFlowCard";
 import CashRunwayCard from "@/modules/home/cards/CashRunwayCard";
@@ -49,6 +51,8 @@ export default async function OfficePage() {
                     {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
                 </p>
             </div>
+
+            <MyTimelineCard />
 
             {/* Flex, not grid: each card takes half a row (two across) and wraps to
                 full width when the screen is too narrow for two. */}

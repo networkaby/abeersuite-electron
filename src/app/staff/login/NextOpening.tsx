@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatHhMmFriendly } from "@/shared/lib/format/formatDate";
+import { parseHhMm } from "@/shared/lib/hr/hhmm";
 import { nextOpeningText } from "@/shared/lib/hr/nextOpeningText";
 import type { NextOfficeDay } from "@/shared/lib/hr/seasonalHours";
+import { shopMinute, useNowMinute } from "./useLocalClock";
 import styles from "./login.module.css";
 
 /**
@@ -19,7 +22,8 @@ import styles from "./login.module.css";
  * cannot log in, so the line simply does not appear.
  */
 export default function NextOpening() {
-    const [line, setLine] = useState("");
+    const [line, setLine] = useState<{ today: string; rest: string; hours?: { start: string; end: string } } | null>(null);
+    const nowMs = useNowMinute();
 
     useEffect(() => {
         let alive = true;
@@ -28,18 +32,31 @@ export default function NextOpening() {
                 const res = await fetch("/api/office-hours/next");
                 if (!res.ok) return;
                 const out = await res.json() as {
-                    today?: { iso: string; closed: boolean; startHhMm: string; holidayName: string | null };
+                    today?: { iso: string; closed: boolean; startHhMm: string; endHhMm: string | null; holidayName: string | null };
                     next?: NextOfficeDay;
                 };
                 if (!alive || !out.today || !out.next) return;
 
-                // Open today: the useful fact is tonight's closing, not next week's
-                // opening — he is about to start a shift, not plan one. The next
-                // working day is only news when today is not one.
-                if (!out.today.closed) return;
+                // Open today: tonight's closing first, then the next opening with any
+                // closure on the way — "Closes today at 8:30 PM. Closed tomorrow for
+                // Bihu. Opens Friday, 10:55 AM." (owner, 2026-10-13: the lock screen
+                // must say both).
+                // Today's sentence is the highlighted one (owner, 2026-10-13). It
+                // follows the clock (owner, 2026-10-14): before opening it says when
+                // the shop opens, after closing that it has closed — see below.
+                if (!out.today.closed) {
+                    setLine({
+                        today: out.today.endHhMm ? `Closes today at ${formatHhMmFriendly(out.today.endHhMm)}.` : "",
+                        rest: nextOpeningText(out.next, out.today.iso).full,
+                        ...(out.today.endHhMm ? { hours: { start: out.today.startHhMm, end: out.today.endHhMm } } : {}),
+                    });
+                    return;
+                }
 
-                const why = out.today.holidayName ? `Closed today for ${out.today.holidayName}.` : "Closed today.";
-                setLine(`${why} ${nextOpeningText(out.next, out.today.iso).opens}`);
+                setLine({
+                    today: out.today.holidayName ? `Closed today for ${out.today.holidayName}.` : "Closed today.",
+                    rest: nextOpeningText(out.next, out.today.iso).opens,
+                });
             } catch {
                 /* no line, never a blocked sign-in */
             }
@@ -48,5 +65,18 @@ export default function NextOpening() {
     }, []);
 
     if (!line) return null;
-    return <p className={styles.nextopen}>{line}</p>;
+    let today = line.today;
+    if (line.hours && nowMs !== null) {
+        const now = shopMinute(nowMs);
+        const open = parseHhMm(line.hours.start), close = parseHhMm(line.hours.end);
+        if (open !== null && now < open) today = `Opens today at ${formatHhMmFriendly(line.hours.start)}.`;
+        else if (close !== null && now >= close) today = "Closed for today.";
+    }
+    return (
+        <p className={styles.nextopen}>
+            {/* The next opening steps aside when the till card already says the next
+                duty (`.nexthero`, login.module.css) — never the same fact twice. */}
+            {today && <strong>{today}</strong>} <span className={styles.nextrest}>{line.rest}</span>
+        </p>
+    );
 }

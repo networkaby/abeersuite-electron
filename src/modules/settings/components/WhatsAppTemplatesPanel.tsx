@@ -347,10 +347,9 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                         <p className="whitespace-pre-wrap break-words">{fillBody(draft.body, sampleValuesFor(kind))}</p>
                         {kind === "TICKET_AUTO_REPLY" && (
                             <div className="mt-2.5 pt-2 border-t border-dashed border-gray-200 dark:border-gray-700 text-xs space-y-1.5 opacity-90">
-                                <p className="font-medium text-amber-700 dark:text-amber-400">📌 Repair #2051 — HP Laptop 15s <i>(Diagnosing)</i></p>
-                                <p>1️⃣ Yes, my message is about this repair</p>
-                                <p>2️⃣ No, I want to discuss something new</p>
-                                <p className="text-[11px] italic text-muted-foreground pt-0.5">👉 Please reply with 1 or 2.</p>
+                                <p>Is this about the <b>HP Laptop 15s repair</b>, or something else?</p>
+                                <p>1️⃣ Yes, about that</p>
+                                <p>2️⃣ Something else</p>
                             </div>
                         )}
                         <p className="mt-1 text-right text-[10px] opacity-60">10:42</p>

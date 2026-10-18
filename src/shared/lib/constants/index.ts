@@ -17,6 +17,7 @@
  *   accounting.ts     standard group / ledger names, payment instruments, bill due days
  *   business.ts       the shop's time zone
  *   whatsapp.ts       which WhatsApp number bills and replies go from (OTP stays on the main one)
+ *   appVersions.ts    latest staff / customer Android app build — older phones are told to update
  *
  *   companyDetails.ts shop name, address, GSTIN, bank — printed on every document
  *   loginShowcase.ts  what the sign-in screens say
@@ -46,3 +47,4 @@ export * from "./inventory";
 export * from "./badges";
 export * from "./whatsapp";
 export * from "./workflow";
+export * from "./ai";

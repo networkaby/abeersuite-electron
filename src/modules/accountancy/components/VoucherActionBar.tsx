@@ -30,6 +30,10 @@ interface VoucherActionBarProps {
     showThermalToggle?: boolean;
     thermal?: boolean;
     onThermalChange?: (v: boolean) => void;
+    /** Render the "Send WhatsApp" checkbox (Payment / Receipt create only). */
+    showWhatsAppToggle?: boolean;
+    sendWhatsApp?: boolean;
+    onSendWhatsAppChange?: (v: boolean) => void;
 }
 
 export function VoucherActionBar({
@@ -50,6 +54,9 @@ export function VoucherActionBar({
     showThermalToggle,
     thermal,
     onThermalChange,
+    showWhatsAppToggle,
+    sendWhatsApp,
+    onSendWhatsAppChange,
 }: VoucherActionBarProps) {
     return (
         <div className="border-t border-border bg-card px-6 py-3 flex items-center gap-2 shrink-0">
@@ -57,6 +64,14 @@ export function VoucherActionBar({
             <div className="ml-auto flex items-center gap-2">
                 <Button variant="ghost" onClick={onCancel}>Cancel</Button>
                 {extraButtons}
+                {showWhatsAppToggle && (
+                    <FooterToggle
+                        label="Send WhatsApp"
+                        checked={!!sendWhatsApp}
+                        onChange={(v) => onSendWhatsAppChange?.(v)}
+                        disabled={saving}
+                    />
+                )}
                 {showPrintToggle && (
                     <FooterToggle
                         label="Print after save"

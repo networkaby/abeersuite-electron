@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import axios from "axios";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -13,28 +12,29 @@ import { Input } from "@/components/ui/input";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PartySearchAndCreate, type PickedParty } from "@/shared/components/PartySearchAndCreate";
+import type { EscalatedTo } from "@/modules/repairing/lib/serviceCentre";
 
 interface Props { ticket: { id: number }; onClose: () => void; }
-type ServiceCenterOption = { id: number; name: string };
-type EscalationFormData = { serviceCenterId: string; externalRef: string; escalatedAt: string; expectedReturn: string };
+type EscalationFormData = { externalRef: string; escalatedAt: string; expectedReturn: string };
 
 export default function TicketEscalation({ ticket, onClose }: Props) {
     const { data: session } = useSession();
-    const [serviceCenters, setServiceCenters] = useState<ServiceCenterOption[]>([]);
+    // The service centre is a Sundry-Creditor party — same picker as the shipping slip.
+    const [centre, setCentre] = useState<EscalatedTo | null>(null);
     const { register, handleSubmit, setValue, control, formState: { isSubmitting } } = useForm({
-        defaultValues: { serviceCenterId: "", externalRef: "", escalatedAt: toIsoDate(new Date()), expectedReturn: "" },
+        defaultValues: { externalRef: "", escalatedAt: toIsoDate(new Date()), expectedReturn: "" },
     });
-    const serviceCenterId = useWatch({ control, name: "serviceCenterId" });
     const escalatedAt = useWatch({ control, name: "escalatedAt" });
     const expectedReturn = useWatch({ control, name: "expectedReturn" });
 
-    useEffect(() => { axios.get("/api/service-centers").then((r) => setServiceCenters(r.data)); }, []);
-
-    // Service centres are master data — one added under Settings appears here.
-    useRealtimeTopics(["settings"], () => {
-        axios.get("/api/service-centers").then((r) => setServiceCenters(r.data)).catch(() => {});
-    });
+    const onPicked = (p: PickedParty) => {
+        if (p.accountId == null) {
+            toast.error(`${p.name} has no ledger account yet`);
+            return;
+        }
+        setCentre({ accountId: p.accountId, name: p.name });
+    };
 
     const onSubmit = async (data: EscalationFormData) => {
         try {
@@ -43,9 +43,9 @@ export default function TicketEscalation({ ticket, onClose }: Props) {
                 escalatedAt: data.escalatedAt,
                 expectedReturn: data.expectedReturn || null,
                 externalRef: data.externalRef || null,
-                serviceCenterId: data.serviceCenterId || null,
+                escalatedTo: centre,
                 changedBy: session?.user?.id,
-                logNote: `Escalated to ${serviceCenters.find(s => s.id === Number(data.serviceCenterId))?.name || "external service center"}`,
+                logNote: `Escalated to ${centre?.name || "external service center"}`,
             });
             toast.success("Ticket escalated");
             onClose();
@@ -62,17 +62,24 @@ export default function TicketEscalation({ ticket, onClose }: Props) {
                     </Button>
                 </DialogHeader>
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                    <input type="hidden" {...register("serviceCenterId")} />
                     <div>
-                        <Label className="mb-1 block">Service Center</Label>
-                        <Select value={serviceCenterId} onValueChange={(v) => setValue("serviceCenterId", v)}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select service center..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {serviceCenters.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
+                        <Label className="mb-1 block">
+                            Service Center <span className="text-muted-foreground font-normal">(Sundry Creditor)</span>
+                        </Label>
+                        {centre ? (
+                            <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+                                <span className="font-medium">{centre.name}</span>
+                                <Button type="button" variant="ghost" size="xs" onClick={() => setCentre(null)}>Change</Button>
+                            </div>
+                        ) : (
+                            <PartySearchAndCreate
+                                partyGroup="Sundry Creditors"
+                                allowIncludeOther
+                                defaultToCompany
+                                onPicked={onPicked}
+                                placeholder="Search service centre by name / phone · ↵ on no-result to create"
+                            />
+                        )}
                     </div>
                     <div>
                         <Label className="mb-1 block">

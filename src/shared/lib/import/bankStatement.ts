@@ -430,6 +430,74 @@ export function normaliseStatementRows(
     return { rows, errors };
 }
 
+// ── Order ────────────────────────────────────────────────────────────────────
+
+const forward = (prev: number, r: StatementRow) => money2(prev - (r.withdrawal ?? 0) + (r.deposit ?? 0));
+
+/**
+ * The lines in the order the bank posted them, oldest first — whatever order
+ * the file prints them in. SBI lists oldest-first, Bandhan newest-first, and a
+ * bank we have not met may do either, or sort days one way and the lines
+ * inside a day the other. Everything downstream reads "the last line of a day"
+ * as that day's closing balance, so the order is fixed once, here, at upload.
+ *
+ *   1. A file whose dates run backwards is turned round, then sorted by date
+ *      (stable, so a day's lines keep their relative order).
+ *   2. Inside each day the printed balances decide: the lines are chained so
+ *      each balance follows from the one before (previous day's close, or the
+ *      statement's opening, as the starting point). A day that cannot be
+ *      chained — no balance column, a missing line — is left as it is, and the
+ *      continuity check reports it.
+ */
+export function orderStatementRows(rows: StatementRow[], openingBalance: number | null): StatementRow[] {
+    const backwards = rows.length > 1 && rows[0].date > rows[rows.length - 1].date;
+    const byDate = (backwards ? [...rows].reverse() : [...rows])
+        .map((r, i) => ({ r, i }))
+        .sort((a, b) => (a.r.date < b.r.date ? -1 : a.r.date > b.r.date ? 1 : a.i - b.i))
+        .map(({ r }) => r);
+
+    const out: StatementRow[] = [];
+    let start = openingBalance;
+    for (let i = 0; i < byDate.length;) {
+        let j = i;
+        while (j < byDate.length && byDate[j].date === byDate[i].date) j++;
+        const day = byDate.slice(i, j);
+        const chained = day.length > 1 && day.every((r) => r.balance != null)
+            ? (start != null ? chainDay(day, start) : null) ?? chainDay(day, null)
+            : null;
+        out.push(...(chained ?? day));
+        const last = out[out.length - 1];
+        start = chained || day.length === 1 ? last.balance : null;
+        i = j;
+    }
+    return out;
+}
+
+/**
+ * One day's lines in balance order, or null when no order fits. Tries the file
+ * order first, so a day that already chains comes back unchanged. With no known
+ * starting balance any line may open the day.
+ */
+function chainDay(lines: StatementRow[], start: number | null): StatementRow[] | null {
+    const used = new Array<boolean>(lines.length).fill(false);
+    const out: StatementRow[] = [];
+    let budget = 20000;
+    const step = (cur: number | null): boolean => {
+        if (out.length === lines.length) return true;
+        if (--budget < 0) return false;
+        for (let k = 0; k < lines.length; k++) {
+            if (used[k]) continue;
+            const r = lines[k];
+            if (cur != null && Math.abs(forward(cur, r) - r.balance!) >= 0.005) continue;
+            used[k] = true; out.push(r);
+            if (step(r.balance)) return true;
+            used[k] = false; out.pop();
+        }
+        return false;
+    };
+    return step(start) ? out : null;
+}
+
 // ── Continuity ───────────────────────────────────────────────────────────────
 
 export interface ContinuityBreak {
@@ -456,7 +524,6 @@ export function checkContinuity(rows: StatementRow[], openingBalance: number | n
     const withBal = rows.filter((r) => r.balance != null);
     if (withBal.length < 2) return { breaks: [], newestFirst: false, checked: 0 };
 
-    const forward = (prev: number, r: StatementRow) => money2(prev - (r.withdrawal ?? 0) + (r.deposit ?? 0));
     const fits = (order: StatementRow[]) => {
         let ok = 0;
         for (let i = 1; i < Math.min(order.length, 6); i++) {

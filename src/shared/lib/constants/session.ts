@@ -1,35 +1,63 @@
 /**
- * Sign-in clocks — how long a login lasts, when an idle person is signed out, and
- * how far the counter PIN and the customer OTP are trusted.
+ * Sign-in clocks — how long a login lasts, when an idle login ends, and how far the
+ * customer OTP is trusted.
  *
- * Three different clocks, easy to confuse:
- *
- *   • IDLE SIGN-OUT (45 min, per person) — no click or key for this long and the
- *     screen signs the person out. Also where duty time stops counting.
- *   • LOGIN LIFETIME (6 h) — the backstop the server enforces on its own, for a
- *     machine with the app shut where no screen timer is running.
- *   • COUNTER PIN (10 days / 3 days) — how long the PIN may stand in for the
- *     password on a till.
+ *   • SIGN OUT AFTER (45 min, per person — "Sign out after" on HR → Job) — no click
+ *     or key for this long and the person is signed out; on a counter their 4-digit
+ *     PIN signs them back in. Also where duty time stops counting.
+ *   • LOGIN LIFETIME (10 days / 3 days) — the only things that end a login on their
+ *     own: 10 days since the password was typed, or 3 days with nobody using it.
+ *     The same two clocks decide when a counter PIN may sign somebody in instead of
+ *     the password (`counterPin.ts`, owner 2026-10-15).
+ *     Owner, 2026-10-13: "this is the auto full logout condition, otherwise lock is
+ *     enough." It replaced a 6-hour lifetime that signed every till out each night.
  */
 
 // ─── Login lifetime ──────────────────────────────────────────────────────────
-// Both halves need it and they live on opposite sides: `src/auth.ts` enforces it,
-// and the screen that has just been signed out has to be able to SAY it. A number
-// copied into a sentence goes stale the first time the number changes.
-//
-// Not to be confused with the PIN clocks below, which look like the same idea and
-// are the opposite one: those say how long a PIN may stand in for a password, this
-// says how soon the PIN is asked for at all. Making this the longer of the two
-// means the PIN screen never appears and the password rule never runs — which is
-// exactly the bug it was written from.
+// Both halves need these and they live on opposite sides: `src/auth.ts` enforces
+// them, and the screen that has just been signed out has to be able to SAY it.
 
-/** Six hours. Checked against the shop's hours: tills open 10:30–12:20 and close
- *  20:30–22:18, so the shortest night is about twice this, while nothing inside a
- *  trading day sits quiet for six. It lapses every night and never mid-shift. */
-export const SESSION_IDLE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+/** Type the password again this long after last typing it. Checked against the
+ *  token's `loginAt` on every request (`isStaffTokenRevoked`), so it holds however
+ *  busy the login has been. */
+export const LOGIN_MAX_AGE_MS = 10 * 24 * 60 * 60 * 1000;
 
-/** The same span in words, for the line shown to whoever was just signed out. */
-export const SESSION_IDLE_LABEL = `${SESSION_IDLE_MAX_AGE_MS / (60 * 60 * 1000)} hours`;
+/** A login nobody has used for this long ends. It is the cookie's own rolling
+ *  lifetime, so it covers a machine with the app shut — and the counter lock checks
+ *  it too, because a locked till keeps polling and would otherwise roll it forever. */
+export const LOGIN_IDLE_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+
+/** The idle span in words, for the line shown to whoever was just signed out. */
+export const LOGIN_IDLE_LABEL = `${LOGIN_IDLE_MAX_AGE_MS / (24 * 60 * 60 * 1000)} days`;
+
+/**
+ * The staff phone app (owner, 2026-10-18): a phone stays signed in like any other
+ * app — 30 days with nobody using it, 90 days since the password was typed — and
+ * the 45-minute "Sign out after" never fires there (ActivityPulse). A phone sits in
+ * a pocket for hours; signing it out each time made the app useless. Decided at
+ * sign-in by the app's user agent (`token.phoneApp`). Sign out, an admin's "end
+ * every login" and a role change still end it at once.
+ */
+export const PHONE_LOGIN_IDLE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+export const PHONE_LOGIN_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
+
+/** Customers (website and customer app): 90 days with nobody using it — shopping
+ *  apps keep you signed in for months. It is also the longest of all the clocks,
+ *  so it is the cookie's own lifetime; the shorter staff clocks are checked on the
+ *  token (`token.seenAt`, `isStaffTokenRevoked`). */
+export const CUSTOMER_LOGIN_IDLE_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
+export const SESSION_COOKIE_MAX_AGE_MS = CUSTOMER_LOGIN_IDLE_MAX_AGE_MS;
+
+/** Re-issue the login cookie at most this often (seconds). It used to be every
+ *  request, and a request still in flight at Sign out put a fresh cookie back — the
+ *  till signed itself in again. The 3-day idle clock above still rolls with use; it
+ *  just moves in 5-minute steps. */
+export const SESSION_RENEW_EVERY_S = 5 * 60;
+
+/** A till renews its counter key (the office sign-in for the v_live relay,
+ *  counter/relayKey.ts) this often. The key never expires on its own — only an
+ *  admin's revoke ends it; renewal just limits how long a copied key stays useful. */
+export const COUNTER_KEY_RENEW_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * What a person is told when their login was ended from elsewhere (`SESSION_REVOKED`).
@@ -50,7 +78,7 @@ export const SESSION_REVOKED_MESSAGE =
  */
 export const OUTSIDE_COUNTER_SIGNIN_CODE = "outside-counter";
 
-// ─── Idle sign-out ───────────────────────────────────────────────────────────
+// ─── Sign out after (idle) ───────────────────────────────────────────────────
 
 /**
  * No click, no keypress, no touch for this long → signed out, and the stretch is
@@ -68,29 +96,25 @@ export const DEFAULT_IDLE_LIMIT_MINUTES = 45;
 /** The default as milliseconds, for anyone with no personal limit set. */
 export const IDLE_LIMIT_MS = DEFAULT_IDLE_LIMIT_MINUTES * 60 * 1000;
 
-/**
- * The longest a personal limit may be, in minutes.
- *
- * The login itself ends after SESSION_IDLE_MAX_AGE_MS (6 hours) no matter what.
- * A personal limit above it would be a promise this code cannot keep: the session
- * would go first and the person would be signed out earlier than their own setting
- * said. So it is capped, and the cap is honest.
- */
+/** The longest a personal limit may be, in minutes. Only a sane ceiling now that a
+ *  counter locks rather than signs out — a typo of 9999 must not leave a till open
+ *  for a week. */
 export const MAX_IDLE_LIMIT_MINUTES = 6 * 60;
 
 /** Warn this long before the axe, with a way to stay signed in. */
 export const IDLE_WARNING_MS = 2 * 60 * 1000;
 
 // ─── Counter PIN ─────────────────────────────────────────────────────────────
-// The PIN never replaces the password: these two clocks force the real password
-// back every so often, and after a few idle days. The rules that use them are in
-// `auth/counterPin.ts`.
 
-/** Type the password again this long after last typing it here. */
-export const PIN_PASSWORD_MAX_AGE_MS = 10 * 24 * 60 * 60 * 1000;
+/** The counter PIN — lifts the lock, and signs in on that counter inside the two
+ *  clocks above. Four digits, any four (owner, 2026-10-13): the till is already signed
+ *  in on its own key, so the PIN only has to tell one colleague from another, never
+ *  keep a stranger out. */
+export const PIN_LENGTH = 4;
 
-/** ...or this long after the last sign-in of any kind here, whichever bites first. */
-export const PIN_IDLE_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+/** Wrong PINs in a row before the password is due — on the lock (which then signs
+ *  out fully) and on the sign-in keypad alike. */
+export const UNLOCK_MAX_FAILURES = 5;
 
 // ─── Customer OTP (shop / portal sign-in) ────────────────────────────────────
 // Used by `auth/otpChallenge.ts`, for both SMS and email codes.

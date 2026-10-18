@@ -58,6 +58,7 @@ import { resolveProductTax } from "@/modules/inventory/lib/gstResolver";
 import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
 import { touchPosShift } from "@/modules/pos/lib/touchShift";
 import { convertSourceError } from "@/modules/pos/lib/convertSource";
+import { findHeldRedemptions, executeRedemptions, RedemptionHoldChangedError } from "@/modules/order/lib/redemptionHold";
 import { loadPartyPricing } from "@/modules/pricing-strategy/lib/groupPricingServer";
 import { groupRebatesExcl, rebatedRate, ruleForGroup } from "@/modules/pricing-strategy/lib/groupPricing";
 import { payAccountMdr } from "@/modules/pos/lib/paymentGateways";
@@ -265,6 +266,29 @@ export async function POST(req: Request) {
         const convertErr = await convertSourceError(prisma, body.sourceVoucherId);
         if (convertErr) return NextResponse.json({ error: convertErr, code: "ALREADY_CONVERTED" }, { status: 409 });
     }
+    // Rewards HELD on the order being converted (redemptionHold.ts). This sale burns
+    // them through its normal loyalty / coupon / gift-card path below, so the bill
+    // must carry exactly what was held — a mismatch is refused, never quietly changed.
+    const orderHolds = body.sourceVoucherId ? await findHeldRedemptions({ source: "inv", id: body.sourceVoucherId }) : [];
+    const holdsOf = (t: string) => orderHolds.filter((h) => h.rewardType === t);
+    if (["LOYALTY", "COUPON", "GIFT_CARD"].some((t) => holdsOf(t).length > 1)) {
+        return NextResponse.json({ error: "This order holds more than one reward of the same kind — it cannot be converted here.", code: "REDEMPTION_HOLD_MISMATCH" }, { status: 422 });
+    }
+    const [loyaltyHold = null] = holdsOf("LOYALTY");
+    const [couponHold = null] = holdsOf("COUPON");
+    const [giftCardHold = null] = holdsOf("GIFT_CARD");
+    const sameCode = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.trim().toUpperCase() === b.trim().toUpperCase();
+    const holdMismatch =
+        orderHolds.some((h) => h.accountId != null && h.accountId !== body.accountId)
+            ? "This order's rewards belong to a different customer. Convert it for the order's own customer."
+        : loyaltyHold && body.redeemPoints !== (loyaltyHold.points ?? 0)
+            ? `This order has ${loyaltyHold.points ?? 0} loyalty points held. Redeem exactly ${loyaltyHold.points ?? 0} points to convert it.`
+        : couponHold && body.couponId !== couponHold.rewardId && !sameCode(body.couponCode, couponHold.rewardRef)
+            ? `This order has coupon ${couponHold.rewardRef ?? `#${couponHold.rewardId}`} held. Apply it to convert the order.`
+        : giftCardHold && !sameCode(body.giftCardCode, giftCardHold.rewardRef)
+            ? `This order has gift card ${giftCardHold.rewardRef ?? ""} held. Apply it to convert the order.`
+        : null;
+    if (holdMismatch) return NextResponse.json({ error: holdMismatch, code: "REDEMPTION_HOLD_MISMATCH" }, { status: 422 });
     const tillAccountId = shift.counter.tillAccountId;
     const activeBranchId = shift.branchId;
     // The counter's payment accounts (id → {channel, ledger}). A non-cash payment
@@ -600,6 +624,13 @@ export async function POST(req: Request) {
     }
     const redeemPoints = redemption.points;
     const redemptionRupees = redemption.value;
+    // A held redemption is burned in full or not at all — never a smaller amount.
+    if (loyaltyHold && redeemPoints !== (loyaltyHold.points ?? 0)) {
+        return NextResponse.json(
+            { error: `The ${loyaltyHold.points ?? 0} points held on this order can no longer be redeemed in full (${redemption.reason ?? `balance ${loyaltyBalance} pts`}). Edit the order before converting.`, code: "LOYALTY_POINTS_GONE" },
+            { status: 422 },
+        );
+    }
     if (redemptionRupees > 0 && loyaltyConfig.redeemExpenseAccountId == null) {
         return NextResponse.json(
             { error: "Loyalty redemption ledger is not configured. Re-run the bootstrap seed.", code: "LOYALTY_LEDGER_MISSING" },
@@ -643,6 +674,9 @@ export async function POST(req: Request) {
         couponId = selected.coupon.id;
     } else if (selected.kind === "money-grant") {
         couponId = selected.coupon.id;
+    }
+    if (couponHold && (couponId == null || (couponHold.rewardId != null && couponId !== couponHold.rewardId))) {
+        return NextResponse.json({ error: `The coupon held on this order no longer applies to this bill. Edit the order before converting.`, code: "COUPON_REJECTED" }, { status: 422 });
     }
     const onTopRupees = onTopSelected?.discountRupees ?? 0;
     // Any ₹ discount (money or on-top) needs the coupon expense ledger.
@@ -838,6 +872,9 @@ export async function POST(req: Request) {
         }
         if (giftCardLiabilityAccountId == null) {
             return NextResponse.json({ error: "Gift Card Liability ledger not configured. Re-run the bootstrap seed.", code: "GIFT_CARD_LEDGER_MISSING" }, { status: 422 });
+        }
+        if (giftCardHold && gc.balance < giftCardHold.amount - 0.005) {
+            return NextResponse.json({ error: `Gift card balance (₹${gc.balance}) no longer covers the ₹${giftCardHold.amount} held on this order. Edit the order before converting.`, code: "GIFT_CARD_REJECTED" }, { status: 422 });
         }
         giftCardRedeem = Math.min(gc.balance, totalAmount);
         giftCardId = gc.id;
@@ -1125,6 +1162,10 @@ export async function POST(req: Request) {
             if (giftCardId != null && giftCardRedeem > 0) {
                 await redeemGiftCard(tx, { giftCardId, amount: giftCardRedeem, universalVoucherId: spineId, createdById: user!.id });
             }
+            // Converted order: the rewards it held were burned just above — close the
+            // holds in this same tx (throws, rolling the sale back, if another till
+            // used or released them first).
+            await executeRedemptions(orderHolds.map((h) => h.id), tx);
 
             // ── 3b. Loyalty: redeem (consume oldest lots) + earn (new lot) ─
             // Identified customers only. Runs inside the tx so points move
@@ -1386,6 +1427,9 @@ export async function POST(req: Request) {
         }
         if (err instanceof GiftCardBalanceChangedError) {
             return NextResponse.json({ error: err.message, code: err.code }, { status: 409 });
+        }
+        if (err instanceof RedemptionHoldChangedError) {
+            return NextResponse.json({ error: err.message, code: "REDEMPTION_HOLD_CHANGED" }, { status: 409 });
         }
         console.error("[pos sale]", err);
         const msg = err instanceof Error ? err.message : "Failed to create POS sale";

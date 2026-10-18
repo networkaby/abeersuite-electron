@@ -3,7 +3,7 @@
  *
  * Owner, 2026-09-18: attendance is auto from the counter sign-in. The first
  * sign-in of the business day writes PRESENT with the in time; every later one
- * leaves the row alone (a re-login after lunch is not a second arrival). The
+ * leaves the arrival alone (a re-login after lunch is not a second arrival). The
  * shift close stamps the out time. Both swallow their own errors: a person who
  * cannot be marked present must still be able to sell.
  *
@@ -24,9 +24,9 @@
 
 import type { PrismaClient } from "@/generated/prisma/client";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
-import { creditableMinutes } from "@/shared/lib/hr/dutyTime";
+import { creditStep } from "@/shared/lib/hr/dutyTime";
 import { IDLE_LIMIT_MS } from "@/shared/lib/constants/session";
-import { closeOpenSpan, openSpanOnArrival, recordSpanBeat } from "@/shared/lib/hr/attendanceSpans";
+import { openSpanOnArrival, recordSpanBeat } from "@/shared/lib/hr/attendanceSpans";
 
 /**
  * The day row is the balance; the spans are the ledger behind it. Every write
@@ -64,6 +64,10 @@ export async function stampAttendanceIn(db: Db, userId: number, counterId: numbe
             create: { userId, date, status: "PRESENT", source: "COUNTER", firstInAt: at, counterId, lastSeenAt: at },
             update: {},
         }).catch(() => undefined);
+        // A sign-in is a sign of life (owner, 2026-10-13): back inside the idle
+        // limit after a sign-out is one continuous stretch and the gap is worked
+        // time; back after it is a break. The same beat as any other decides.
+        await stampActivity(db, userId, counterId, at, IDLE_LIMIT_MS, at);
         // A re-login inside a live stretch opens nothing — see openSpanOnArrival.
         await openSpanOnArrival(db, userId, date, at, counterId);
     } catch { /* never fail the sign-in */ }
@@ -96,22 +100,11 @@ export async function stampAttendanceOut(
             update: { lastOutAt: at },
         }).catch(() => undefined);
 
-        // Closing the till is itself a sign of life, so the stretch since the last
-        // one is worked time — otherwise a quiet last hour at the counter would be
-        // thrown away. Same rule as everywhere else: a gap longer than the idle
-        // limit means they were not there, and adds nothing.
-        const prior = await db.attendanceDay.findUnique({
-            where:  { userId_date: { userId, date } },
-            select: { lastSeenAt: true },
-        }).catch(() => null);
-        const add = creditableMinutes(prior?.lastSeenAt ?? null, at);
-        await db.attendanceDay.update({
-            where: { userId_date: { userId, date } },
-            data:  { lastSeenAt: at, workedMinutes: { increment: add } },
-        }).catch(() => undefined);
-        // The same minutes on the ledger, and the stretch ends here: closing the
-        // till is the end of the working day, not an idle gap.
-        await closeOpenSpan(db, userId, date, at, add, "SHIFT_CLOSED");
+        // Closing the till is a sign of life like any other, and it does not end
+        // the stretch (owner, 2026-10-13: attendance has nothing to do with the
+        // shift). The quiet last hour at the counter is credited; a gap past the
+        // idle limit adds nothing — the same beat as everywhere else decides.
+        await stampActivity(db, userId, shift?.counterId ?? null, at, IDLE_LIMIT_MS, at);
 
         // The row already existed but carries no arrival — the sign-in stamp was
         // skipped on this till. Fill it from the shift open, never over a real one.
@@ -129,7 +122,7 @@ export async function stampAttendanceOut(
  *
  * Called by the client every few minutes WHILE THERE IS REAL INPUT — never from a
  * poll, or it would credit an empty counter. Each call adds the gap since the last
- * sign of life, and `creditableMinutes` drops any gap longer than the idle limit,
+ * sign of life, and `creditStep` drops any gap longer than the idle limit,
  * so a stretch where nobody was there adds nothing. That is the whole of "the idle
  * time is treated as absent", and it does not depend on the auto-logout having
  * fired: a PC left switched on overnight simply contributes one ignored gap.
@@ -182,25 +175,29 @@ export async function stampActivity(
             await db.attendanceDay.create({
                 data: { userId, date, status: "PRESENT", source: "COUNTER", firstInAt: at, lastSeenAt: seenAt, counterId },
             }).catch(() => undefined);
-            await recordSpanBeat(db, userId, date, null, at, 0, counterId);
+            await recordSpanBeat(db, userId, date, null, at, 0, true, counterId);
             return 0;
         }
 
         // A late-arriving request must not drag the clock backwards — two pulses can
         // cross, and the older one's `lastInputAt` would then un-count real minutes.
         const movedForward = !row.lastSeenAt || seenAt.getTime() > row.lastSeenAt.getTime();
-        const add = movedForward ? creditableMinutes(row.lastSeenAt, seenAt, idleLimitMs) : 0;
-        await db.attendanceDay.update({
-            where: { userId_date: { userId, date } },
-            data:  movedForward
-                ? { lastSeenAt: seenAt, workedMinutes: { increment: add } }
-                : { workedMinutes: { increment: 0 } },
-        });
+        if (!movedForward) return row.workedMinutes;
+        // The clock moves on by the whole minutes credited, not to `seenAt`: the
+        // seconds left over stay owed to the next beat instead of being rounded
+        // away (creditStep).
+        const step = creditStep(row.lastSeenAt, seenAt, idleLimitMs);
+        if (step.minutes > 0 || step.seenAt.getTime() !== row.lastSeenAt?.getTime()) {
+            await db.attendanceDay.update({
+                where: { userId_date: { userId, date } },
+                data:  { lastSeenAt: step.seenAt, workedMinutes: { increment: step.minutes } },
+            });
+        }
         // The ledger takes exactly what the balance took. A beat that moved
         // nothing forward is a crossed pulse, already counted — it must not break
         // the stretch, so it is not put on the ledger either.
-        if (movedForward) await recordSpanBeat(db, userId, date, row.lastSeenAt, seenAt, add, counterId);
-        return row.workedMinutes + add;
+        await recordSpanBeat(db, userId, date, row.lastSeenAt, seenAt, step.minutes, step.away, counterId);
+        return row.workedMinutes + step.minutes;
     } catch {
         return 0;   /* never fail a page over a clock */
     }

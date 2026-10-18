@@ -333,6 +333,9 @@
 .padcard .pic { font-size: 18px }
 .padcard .who { font-size: 15px }
 .padcard .post { margin: 3px 0 0 }
+.padcard .nextopen strong { margin-inline: auto }
+/* The till card's "Next duty day" already says it — say it once. */
+.stage:has(.nexthero) .nextrest { display: none }
 
 .dots { display: flex; gap: 9px; justify-content: center; margin: 14px 0 18px; min-height: 13px }
 .dots i { width: 11px; height: 11px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .35) }
@@ -388,6 +391,7 @@
 @media (max-width: 1080px) { .duty { flex-basis: 372px } }
 @keyframes dutyIn { from { opacity: 0; transform: translateY(6px) } }
 @media (prefers-reduced-motion: reduce) { .duty { animation: none } }
+
 
 /* Counter on the left, the date on the right. */
 .dutyhead {
@@ -518,6 +522,19 @@
     color: var(--ink-dim);
     margin: -14px 0 20px;
 }
+/* Today's closing (or "Closed today") — the one fact a person at the till acts on. */
+.nextopen strong {
+    display: block;
+    width: fit-content;
+    margin: 0 0 4px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(251, 191, 36, .16);
+    border: 1px solid rgba(251, 191, 36, .45);
+    color: #fde68a;
+    font-size: 13px;
+    font-weight: 600;
+}
 
 /* ── Phone app ───────────────────────────────────────────────────────────────
    Signing in for the staff phone app (`phoneApp` in page.tsx). Not the counter's
@@ -575,3 +592,8 @@
 .phone .nextopen { font-size: 13px }
 .phone .meta { bottom: calc(14px + env(safe-area-inset-bottom)) }
 .phoneNotice { position: absolute; top: 0; left: 0; right: 0; z-index: 5 }
+
+/* Room under the cards for the duty band (DutyTimeline, its own module): card,
+   PIN pad and the band must all fit a 1366x728 counter window without a scroll. */
+.stage:has(:global(.duty-timeline)) { padding: 12px 40px 174px }
+.root:has(:global(.duty-timeline)) { overflow: hidden }

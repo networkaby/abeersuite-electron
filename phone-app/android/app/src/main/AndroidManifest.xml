@@ -26,6 +26,15 @@
 
         </activity>
 
+        <!-- Customer WhatsApp messages (FCM data messages, push/staffPush.ts). -->
+        <service
+            android:name=".NsMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -43,4 +52,5 @@
     <!-- Barcode scan on Stock & price: the web page's camera ask is passed through to Android. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

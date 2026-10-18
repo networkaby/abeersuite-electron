@@ -32,6 +32,7 @@ import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActi
 import { referenceHref } from "@/modules/accountancy/lib/voucherUrls";
 import { SettlementChip } from "@/modules/accountancy/components/SettlementChip";
 import { BillLinkDialog, clearBillLinkCache } from "@/modules/accountancy/components/BillLinkDialog";
+import { removeVoucherLinks } from "@/modules/accountancy/lib/removeVoucherLinks";
 import { clearPartyCache } from "@/modules/accountancy/components/PartyOutstandingsPanel";
 import type { CombinedRow } from "@/modules/accountancy/hooks/useDayBook";
 import { moduleTableHeadStyle } from "@/shared/lib/format/moduleTheme";
@@ -152,7 +153,13 @@ export function VoucherRegisterTable({
     const [linkRow, setLinkRow] = useState<{ uvId: number; accountId: number; party: string | null } | null>(null);
     const [expanded,  setExpanded]  = useState<Set<string>>(new Set());
     // Right-click on Voucher No / Party offers "Open in new window", like the sidebar.
-    const { menu: linkMenu, close: closeLinkMenu, onContainerContextMenu } = useLinkContextMenu();
+    const { menu: linkMenu, close: closeLinkMenu, openActions, onContainerContextMenu } = useLinkContextMenu();
+    const unlink = async (uvId: number, accountId: number | null) => {
+        if (!(await removeVoucherLinks(uvId))) return;
+        clearBillLinkCache();
+        if (accountId != null) clearPartyCache(accountId);
+        onChanged();
+    };
     const [lineCache, setLineCache] = useState<Map<string, Line[] | "loading" | "error">>(new Map());
 
     const fetchLines = (r: VoucherRegisterRow) => {
@@ -385,6 +392,9 @@ export function VoucherRegisterTable({
                                                         accountId: r.partyAccountId!,
                                                         party:     r.party,
                                                     })
+                                                    : undefined}
+                                                onLinkedContextMenu={r.universalVoucherId != null
+                                                    ? (e) => openActions(e, [{ label: "Remove link", danger: true, onSelect: () => void unlink(r.universalVoucherId!, r.partyAccountId ?? null) }])
                                                     : undefined}
                                             />
                                         </td>

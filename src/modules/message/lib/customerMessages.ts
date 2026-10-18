@@ -305,16 +305,16 @@ export async function findCustomerActiveTickets(
             kind = "repair";
             const dev = t.repair.device;
             const devDesc = [dev?.brand, dev?.model].filter(Boolean).join(" ");
-            displayTitle = devDesc ? `${devDesc} Repair` : (t.repair.ticketNo ? `Repair #${t.repair.ticketNo}` : (t.title || "Device Repair"));
+            displayTitle = devDesc ? `${devDesc} repair` : (t.title || "device repair");
         } else if (t.deal) {
             kind = "deal";
-            displayTitle = t.title || "Sales Deal";
+            displayTitle = t.title || "enquiry";
         } else if (t.help) {
             kind = "help";
-            displayTitle = t.help.subject || t.title || "Support Request";
+            displayTitle = t.help.subject || t.title || "help request";
         } else if (t.order) {
             kind = "order";
-            displayTitle = t.title || `Order #${t.id}`;
+            displayTitle = t.title || "order";
         }
 
         return {
@@ -335,43 +335,32 @@ export function buildTicketAutoReplyMenu(
     tickets: ActiveTicketSummary[],
     customGreetingHeader?: string
 ): string {
-    const brand = getOrganisation().brandName;
+    // Friendly, like a shopkeeper who remembers — no ids, statuses or
+    // "ticket/deal" words; a formal menu reads as a sales pitch or a scam.
     const defaultGreeting = customerName
-        ? `Hello *${customerName}*, welcome back to ${brand}! 👋`
-        : `Hello, welcome back to ${brand}! 👋`;
-    const greeting = customGreetingHeader?.trim() || defaultGreeting;
+        ? `Hi ${customerName} 👋 Good to hear from you again!`
+        : `Hi 👋 Good to hear from you again!`;
+    const custom = customGreetingHeader?.trim();
+    // Saved copies of the old formal wording fall back to the friendly one.
+    const greeting = custom && !/active job/i.test(custom) ? custom : defaultGreeting;
 
     if (tickets.length === 1) {
-        const t = tickets[0];
-        const kindLabel = t.kind === "repair" ? "Repair" : t.kind === "deal" ? "Deal" : "Ticket";
         return `${greeting}
 
-You currently have an active job with us:
-📌 *${kindLabel} #${t.id}* — ${t.title} _(${t.statusLabel})_
+Is this about the *${tickets[0].title}*, or something else?
 
-1️⃣ Yes, my message is about this ${t.kind === "repair" ? "repair" : "ticket"}
-2️⃣ No, I want to discuss something new
-
-👉 _Please reply with 1 or 2._`;
+1️⃣ Yes, about that
+2️⃣ Something else`;
     }
 
-    const options = tickets.map((t, idx) => {
-        const emoji = NUM_EMOJIS[idx] || `${idx + 1}️⃣`;
-        const kindLabel = t.kind === "repair" ? "Repair" : t.kind === "deal" ? "Deal" : "Ticket";
-        return `${emoji} *${kindLabel} #${t.id}* — ${t.title} _(${t.statusLabel})_`;
-    });
-    const nextEmoji = NUM_EMOJIS[tickets.length] || `${tickets.length + 1}️⃣`;
-    options.push(`${nextEmoji} Something new / Speak with our support team`);
-
-    const choices = Array.from({ length: tickets.length + 1 }, (_, i) => String(i + 1)).join(", ");
+    const options = tickets.map((t, idx) => `${NUM_EMOJIS[idx] || `${idx + 1}️⃣`} ${t.title}`);
+    options.push(`${NUM_EMOJIS[tickets.length] || `${tickets.length + 1}️⃣`} Something else`);
 
     return `${greeting}
 
-We noticed you have active job(s) with us. Please let us know what your message is about:
+Is this about one of these?
 
-${options.join("\n")}
-
-👉 _Please reply with ${choices}._`;
+${options.join("\n")}`;
 }
 
 /** Which menu option a reply picks: a ticket id, "NEW", or null (not a pick).
@@ -442,14 +431,14 @@ async function sendTicketMenu(args: {
     });
 }
 
-const ACK_NEW_WITH_TEXT = "✅ Got it! Your message has been received by our support team. An executive will attend to you shortly.";
-const ACK_NEW_EMPTY = "✅ Got it! Please tell us how we can help you today, and an executive will assist you.";
+const ACK_NEW_WITH_TEXT = "Got it 👍 We'll reply here shortly.";
+const ACK_NEW_EMPTY = "Sure 👍 Tell us what you need and we'll help.";
 
-function ackForTicket(t: ActiveTicketSummary | null, ticketId: number, withText: boolean): string {
-    const label = `*${t?.kind === "repair" ? "Repair" : t?.kind === "deal" ? "Deal" : "Ticket"} #${ticketId}*${t ? ` (${t.title})` : ""}`;
+function ackForTicket(t: ActiveTicketSummary | null, withText: boolean): string {
+    const about = t ? `the *${t.title}*` : "that";
     return withText
-        ? `✅ Thank you! Your message has been connected to ${label}. Our team will update you shortly.`
-        : `✅ Thank you! You are now connected to ${label}. Please let us know how we can help you with this.`;
+        ? `Got it 👍 About ${about} — we'll reply here shortly.`
+        : `Sure 👍 What would you like to know about ${about}?`;
 }
 
 /** True when our latest message to this number is a template (bill, receipt …)
@@ -557,7 +546,7 @@ async function routeInbound(args: {
         await attachConversationToTicket(conv.id, pick, owner);
         conv = { ...conv, topic: "TICKET", ticketId: pick };
         const t = (await findCustomerActiveTickets(phone, owner)).find((x) => x.id === pick) ?? null;
-        return { conv, bareMenuPick: !withText, afterStore: () => sendAutoText({ ...base, text: ackForTicket(t, pick, withText), ticketId: pick }) };
+        return { conv, bareMenuPick: !withText, afterStore: () => sendAutoText({ ...base, text: ackForTicket(t, withText), ticketId: pick }) };
     }
     return { conv, afterStore: null };
 }
@@ -698,7 +687,11 @@ export function mediaLink(key: string | null, fileName?: string | null, download
 }
 
 /** Store the customer messages in one webhook change. Duplicates (Meta retries) are skipped. */
-export async function ingestInbound(value: WaChangeValue): Promise<number> {
+export async function ingestInbound(
+    value: WaChangeValue,
+    /** Told about each stored, non-spam message — the webhook pushes staff phones. */
+    onStored?: (m: { phone: string; name: string; text: string }) => void,
+): Promise<number> {
     const names = new Map((value.contacts ?? []).map((c) => [c.wa_id ?? "", c.profile?.name ?? null]));
     let stored = 0;
     for (const m of value.messages ?? []) {
@@ -753,6 +746,7 @@ export async function ingestInbound(value: WaChangeValue): Promise<number> {
                 },
             });
             stored++;
+            if (phone && !spam) onStored?.({ phone, name: owner?.name ?? senderName ?? `+91 ${phone}`, text: text || "[message]" });
 
             // A bare "1" answering the menu is not worth a line in the ticket's history.
             if (ticketId && text && !route?.bareMenuPick) {

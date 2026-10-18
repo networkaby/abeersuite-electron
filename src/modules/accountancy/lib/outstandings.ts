@@ -19,6 +19,7 @@ import { ledgerStatusFilterUv } from "./ledgerStatus";
 import { autoLinkOrder, dueDateOf } from "./billLinkPlan";
 import { OPENING_TYPE } from "./openingBills";
 import { accountIdsUnderGroup } from "./accountGroups";
+import { bucketFor } from "./ageing";
 import { round2 } from "@/shared/lib/format/moneyInr";
 
 export type AgeingBucket = "b0_30" | "b30_60" | "b60_90" | "b90_plus";
@@ -109,13 +110,6 @@ function emptyBuckets(): Buckets {
 function daysBetween(a: Date, b: Date): number {
     const ms = b.getTime() - a.getTime();
     return Math.max(0, Math.floor(ms / 86_400_000));
-}
-
-function bucketFor(days: number): AgeingBucket {
-    if (days <= 30) return "b0_30";
-    if (days <= 60) return "b30_60";
-    if (days <= 90) return "b60_90";
-    return "b90_plus";
 }
 
 /**
@@ -233,9 +227,14 @@ async function loadOpenBills(
                 // see it. Left out of here it linked fine in the popup and was
                 // simply missing from Receivables and Payables: two views
                 // disagreeing about the same money.
-                type:           { in: ["CREDIT_NOTE", "DEBIT_NOTE", OPENING_TYPE] },
+                // An opening counts on every date, whatever its bill date — it is
+                // the position before the books begin (aggregateLedger's
+                // `onOrBeforeOrOpening`), so "as at 31 March" still lists it.
+                OR: [
+                    { type: { in: ["CREDIT_NOTE", "DEBIT_NOTE"] }, date: { lte: asOf } },
+                    { type: OPENING_TYPE },
+                ],
                 status:         { not: "CANCELLED" },
-                date:           { lte: asOf },
             },
             select: {
                 id: true, partyAccountId: true, voucherNo: true, date: true, type: true,
@@ -340,11 +339,10 @@ async function loadOpenBills(
             : (v.type === "CREDIT_NOTE" ? -1 : 1);
 
         if (v.type === OPENING_TYPE) {
-            // An opening is worth what the PARTY leg says, not what the debit
-            // legs add up to: its other side is Suspense, so on a payable
-            // opening the debit leg is the suspense one. The leg's direction is
-            // also the only thing that says which report the row belongs in —
-            // debit = they owe us, credit = we owe them.
+            // An opening is worth what the PARTY leg says — it is the only leg
+            // (older openings also carried a Suspense leg, which must not count).
+            // The leg's direction is also the only thing that says which report
+            // the row belongs in — debit = they owe us, credit = we owe them.
             if (Math.abs(leg) <= 0.005) continue;
             const legSide = leg > 0 ? "SALE" : "PURCHASE";
             if (invType !== "BOTH" && invType !== legSide) continue;

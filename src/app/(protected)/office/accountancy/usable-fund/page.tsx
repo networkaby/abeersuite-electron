@@ -48,6 +48,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useApiResource } from "@/shared/hooks/useApiResource";
 import type { LucideIcon } from "lucide-react";
@@ -70,6 +71,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
+import { rowActivation } from "@/shared/lib/a11y/rowActivation";
+import { accountLedgerUrl } from "@/modules/accountancy/lib/accountLedgerUrl";
+import { GroupReconciledTick, LedgerReconciledTick, ReconciledLedgersProvider } from "@/modules/accountancy/components/ReconciledBadge";
 
 // ─── Shape (mirrors the API response) ────────────────────────────────────────
 
@@ -77,6 +81,8 @@ import { toIsoDate } from "@/shared/hooks/useTallyDate";
 type FundTier = "INSTANT" | "OTHER";
 
 type FundLedger = {
+    /** Account id — the row opens this ledger. */
+    id: number;
     name: string;
     note?: string | null;
     /** Balance (own-money ledgers) or amount drawn (credit facilities). */
@@ -266,6 +272,7 @@ export default function UsableFundPage() {
     const totalFund = instantTotal + otherTotal;
 
     return (
+        <ReconciledLedgersProvider>
         <ScrollArea className="h-full" type="always">
             <div className="mx-auto max-w-6xl space-y-5 px-6 pt-3 pb-8">
                 {/* ── Header ──────────────────────────────────────────────── */}
@@ -330,7 +337,7 @@ export default function UsableFundPage() {
                         ) : (
                             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                                 {instantSections.map((s) => (
-                                    <GroupCard key={s.group.key} group={s.group} ledgers={s.ledgers} drawnByKey={drawnByKey} />
+                                    <GroupCard key={s.group.key} group={s.group} ledgers={s.ledgers} drawnByKey={drawnByKey} asOf={asOf} />
                                 ))}
                             </div>
                         )}
@@ -342,7 +349,7 @@ export default function UsableFundPage() {
                         ) : (
                             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                                 {otherSections.map((s) => (
-                                    <GroupCard key={s.group.key} group={s.group} ledgers={s.ledgers} drawnByKey={drawnByKey} />
+                                    <GroupCard key={s.group.key} group={s.group} ledgers={s.ledgers} drawnByKey={drawnByKey} asOf={asOf} />
                                 ))}
                             </div>
                         )}
@@ -350,6 +357,7 @@ export default function UsableFundPage() {
                 )}
             </div>
         </ScrollArea>
+        </ReconciledLedgersProvider>
     );
 }
 
@@ -398,11 +406,14 @@ function GroupCard({
     group,
     ledgers,
     drawnByKey,
+    asOf,
 }: {
     group: FundGroup;
     ledgers: FundLedger[];
     drawnByKey: Record<string, number>;
+    asOf: string;
 }) {
+    const router = useRouter();
     const [open, setOpen] = useState(true);
     const Icon = group.icon;
     const net = sumFund(ledgers, drawnByKey);
@@ -440,7 +451,8 @@ function GroupCard({
                     </div>
                 </div>
                 <div className="shrink-0 text-right">
-                    <div className={`font-mono text-sm font-bold tabular-nums ${group.tone}`}>
+                    <div className={`flex items-center justify-end gap-1.5 font-mono text-sm font-bold tabular-nums ${group.tone}`}>
+                        <GroupReconciledTick ledgers={ledgers.map((l) => ({ id: l.id, closing: l.amount }))} />
                         ₹{fmt(net)}
                     </div>
                 </div>
@@ -451,8 +463,9 @@ function GroupCard({
                 <div className="divide-y divide-border border-t border-border">
                     {ledgers.map((l) => (
                         <LedgerRow
-                            key={l.name}
+                            key={l.id}
                             ledger={l}
+                            onOpen={() => router.push(accountLedgerUrl(l.id, { to: asOf, asOf }))}
                             barTone={group.barTone}
                             drawnByKey={drawnByKey}
                             poolCarrier={l.sharedLimitKey ? poolCarrier.get(l.sharedLimitKey) : undefined}
@@ -469,8 +482,11 @@ function LedgerRow({
     barTone,
     drawnByKey,
     poolCarrier,
+    onOpen,
 }: {
     ledger: FundLedger;
+    /** Drill into this ledger's vouchers. */
+    onOpen: () => void;
     barTone: string;
     drawnByKey: Record<string, number>;
     /** Name of the ledger whose row carries this shared pool into the group
@@ -488,7 +504,10 @@ function LedgerRow({
     const alreadyCounted = !!sharedKey && poolCarrier !== undefined && poolCarrier !== ledger.name;
 
     return (
-        <div className="px-4 py-2.5">
+        <div
+            {...rowActivation(onOpen, `Open ledger ${ledger.name}`)}
+            className="cursor-pointer px-4 py-2.5 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none"
+        >
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
@@ -507,9 +526,10 @@ function LedgerRow({
                     )}
                 </div>
                 <div
-                    className={`shrink-0 font-mono text-sm font-medium tabular-nums ${alreadyCounted ? "text-muted-foreground/60" : ""}`}
+                    className={`flex shrink-0 items-center gap-1.5 font-mono text-sm font-medium tabular-nums ${alreadyCounted ? "text-muted-foreground/60" : ""}`}
                     title={alreadyCounted ? `Already counted under "${poolCarrier}" — one shared limit, counted once.` : undefined}
                 >
+                    <LedgerReconciledTick ledgerId={ledger.id} />
                     ₹{fmt(capacity)}
                 </div>
             </div>

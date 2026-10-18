@@ -11,6 +11,7 @@ import { z } from "zod";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
+import { RELAY_KEY_CLEARED } from "@/shared/lib/counter/counterKeyHash";
 
 const schema = z.object({
     deviceId: z.string().trim().min(1).max(100),
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
         // gets the error rather than a local write that will be reverted.
         const { count } = await prismaAuthoritative.posCounter.updateMany({
             where: { boundDeviceId: data.deviceId },
-            data:  { boundDeviceId: null, boundDeviceLabel: null, boundAt: null, releasedAt: new Date() },
+            data:  { boundDeviceId: null, boundDeviceLabel: null, boundAt: null, releasedAt: new Date(), ...RELAY_KEY_CLEARED },
         });
         // Tell every other machine at once. The browser's own publisher stays silent on
         // a counter (WRITE_MODE=local) and leaves announcing to the outbox flusher —

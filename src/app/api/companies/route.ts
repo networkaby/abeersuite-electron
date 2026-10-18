@@ -13,6 +13,7 @@ import { normaliseGstinState } from "@/shared/lib/gst/validateGstinState";
 import { isValidStateCode } from "@/shared/lib/gst/indianStates";
 import { afterCursor, NAME_ORDER, nextBrowseCursor, parseBrowseCursor } from "@/shared/lib/parties/browsePage";
 import { BROWSE_PAGE_SIZE } from "@/shared/lib/constants/paging";
+import { aliasKeyOf } from "@/modules/accountancy/lib/accountAlias";
 
 const createSchema = phoneEmailSchema.merge(gstSchema).extend({
     name: z.string().trim().min(1, "Company name is required"),
@@ -53,6 +54,8 @@ export async function GET(req: Request) {
                             { name: { contains: q, mode: "insensitive" as const } },
                             { phones: { some: { phone: { contains: q } } } },
                             { companyReg: { contains: q, mode: "insensitive" as const } },
+                            // The ledger's Keywords (Profile tab) find the party, as in the voucher pickers.
+                            { account: { is: { aliases: { some: { aliasKey: { contains: aliasKeyOf(q) } } } } } },
                         ],
                     }] : []),
                     ...(paginate ? [afterCursor(cursor)] : []),

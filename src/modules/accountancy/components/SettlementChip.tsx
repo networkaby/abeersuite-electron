@@ -32,7 +32,7 @@ const STYLES: Record<SettlementState, { label: string; className: string }> = {
 // across two lines in a narrow register column.
 const CHIP = "inline-flex items-center gap-1 whitespace-nowrap rounded px-2 py-0.5 text-xs font-medium";
 
-export function SettlementChip({ state, open, onLink }: {
+export function SettlementChip({ state, open, onLink, onLinkedContextMenu }: {
     /** Null where there is nothing to settle — no party, or a documentary
      *  voucher that posts no money. Renders a plain dash. */
     state:  SettlementState | null;
@@ -41,6 +41,8 @@ export function SettlementChip({ state, open, onLink }: {
     /** Open the bill-wise popup. Omitted where the row cannot be linked — a
      *  bill taken in full at the counter has nothing to point at a receipt. */
     onLink?: () => void;
+    /** Right-click on a Settled or Partial chip — the host opens its "Remove link" menu. */
+    onLinkedContextMenu?: (e: React.MouseEvent) => void;
 }) {
     if (!state) return <span className="text-xs opacity-40">—</span>;
 
@@ -52,13 +54,15 @@ export function SettlementChip({ state, open, onLink }: {
         ? `${style.label} ${formatRupeesFromPaise(Math.round(open * 100))}`
         : style.label;
 
-    if (!onLink) return <span className={`${CHIP} ${style.className}`}>{label}</span>;
+    const onContextMenu = state !== "DUE" ? onLinkedContextMenu : undefined;
+    if (!onLink) return <span className={`${CHIP} ${style.className}`} onContextMenu={onContextMenu}>{label}</span>;
 
     return (
         <button
             type="button"
             title="Match this against the other side, bill by bill"
             onClick={(e) => { e.stopPropagation(); onLink(); }}
+            onContextMenu={onContextMenu}
             className={`${CHIP} ${style.className} cursor-pointer transition-opacity hover:opacity-80`}
         >
             {label}

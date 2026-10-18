@@ -205,14 +205,15 @@ function summariseDays(att: PayslipAttendanceData): SummaryLine[] {
     let lateCharged = 0, lateChargedMinutes = 0, lateAcc = 0;
     let shortDays = 0, shortMinutes = 0, shortAcc = 0;
     let half = 0, halfAcc = 0;
-    let absent = 0;
+    let absent = 0, incomplete = 0;
     let offDays = 0, offMinutes = 0, offAcc = 0;
     let holDays = 0, holMinutes = 0, holAcc = 0;
 
     for (const d of att.days) {
         if (d.shut === "OFF")     { offDays++; offMinutes += d.worked; offAcc += d.grantedAccounted; continue; }
         if (d.shut === "HOLIDAY") { holDays++; holMinutes += d.worked; holAcc += d.grantedAccounted; continue; }
-        if (d.status === "ABSENT") { absent++; continue; }
+        // Came but worked under 40%: unpaid, yet not an absence (no penalty).
+        if (d.status === "ABSENT") { if (d.worked > 0) incomplete++; else absent++; continue; }
         if (d.status === "HALF_DAY") { half++; halfAcc += d.shortAccounted; }
         else if (d.short > 0) { shortDays++; shortMinutes += d.short; shortAcc += d.shortAccounted; }
         if (d.overtime > 0) { otDays++; otMinutes += d.overtime; otAcc += d.overtimeAccounted; }
@@ -234,6 +235,7 @@ function summariseDays(att: PayslipAttendanceData): SummaryLine[] {
     }
     if (shortDays > 0) out.push({ key: "short", label: "Short of duty", days: dayCount(shortDays), working: `${formatWorked(shortMinutes)} × ${att.rates.shortHours}`, accounted: shortAcc });
     if (half > 0) out.push({ key: "half", label: "Half day", days: dayCount(half), working: "half the day already withheld on the pay", accounted: halfAcc || null });
+    if (incomplete > 0) out.push({ key: "incomplete", label: "Incomplete duty", days: dayCount(incomplete), working: "under 40% of duty — paid at zero, no absence penalty", accounted: null });
     if (absent > 0) out.push({ key: "absent", label: "Absent", days: dayCount(absent), working: "paid at zero", accounted: null });
     if (offDays > 0) out.push({ key: "off", label: "Weekly off worked", days: dayCount(offDays), working: `${formatWorked(offMinutes)} × ${att.rates.weeklyOff}`, accounted: offAcc });
     if (holDays > 0) out.push({ key: "hol", label: "Holiday worked", days: dayCount(holDays), working: `${formatWorked(holMinutes)} × ${att.rates.holiday}`, accounted: holAcc });
@@ -329,7 +331,7 @@ export function PayslipBody({ data, thermal = false, showAttendance = true, show
                         <Row label={`Month · ${formatWorked(att.workedMinutes)} of ${formatWorked(att.dutyMinutes)}`} value={signed(att.accountedMinutes)} strong />
                         {inDays && <Row label="  = in days" value={inDays} />}
                         <Row label="Overtime payable" value={orDash(att.payableMinutes)} />
-                        <Row label="Hours owed" value={orDash(att.owedMinutes)} />
+                        <Row label="Pending duty" value={orDash(att.owedMinutes)} />
                     </>
                 )}
             </div>
@@ -458,16 +460,16 @@ export function PayslipBody({ data, thermal = false, showAttendance = true, show
                             <tr style={{ fontWeight: 700 }}>
                                 <td style={{ ...tight, borderBottom: "1px solid #999" }}>Month</td>
                                 <td style={{ ...tightNum, borderBottom: "1px solid #999" }}>{dayCount(att.days.length)}</td>
-                                <td style={{ ...tightNum, borderBottom: "1px solid #999" }}>{formatWorked(att.workedMinutes)} of {formatWorked(att.dutyMinutes)} owed</td>
+                                <td style={{ ...tightNum, borderBottom: "1px solid #999" }}>{formatWorked(att.workedMinutes)} of {formatWorked(att.dutyMinutes)} duty</td>
                                 <td style={{ ...tightNum, borderBottom: "1px solid #999" }}>{signed(att.accountedMinutes)}</td>
                             </tr>
                         </tbody>
                     </table>
                     <div style={{ marginTop: 4, color: "#444", fontSize: 10 }}>
                         {inDays && <>Accounted <b>{signed(att.accountedMinutes)}</b> = <b>{inDays}</b>.{" "}</>}
-                        Accounted is each day on its own. The month is then netted — overtime pays back the hours
-                        fallen short first — and only what survives reaches the pay heads:{" "}
-                        <b>overtime payable {orDash(att.payableMinutes)}</b> · <b>hours owed {orDash(att.owedMinutes)}</b>.
+                        Each day&apos;s extra first makes up the duty pending from earlier days (short duty and
+                        penalties); only what is left is overtime:{" "}
+                        <b>overtime payable {orDash(att.payableMinutes)}</b> · <b>pending duty at month end {orDash(att.owedMinutes)}</b>.
                         The day-by-day working is on your My Info page.
                     </div>
                 </div>

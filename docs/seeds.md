@@ -371,7 +371,7 @@ pnpm seed:hard-clean
 - All non-admin Users (only `admin@networkservice.in` survives)
 - All Persons / Companies / Phones / Emails
 - All party-linked Account rows
-- ServiceCenter, ShopCoupon, PortalCredentials
+- ShopCoupon, PortalCredentials
 - Payment gateways (`payment_gateways`, Settings → Payment Methods — operator config, bootstrap seeds none). Cleared with an explicit `DELETE` (not a `TRUNCATE … CASCADE`) so the `ON DELETE SET NULL` on `PosCounterPaymentAccount.gatewayId` fires: counter payment rails are **preserved**, just unlinked from the deleted gateways.
 - **Non-system roles** (every `Role` with `isSystem: false` — our `R2` Branch Manager, `R3` Counter Operator, and any admin-created role). Positions pointing at them are unlinked first (restrict FK), then the roles + their grants are deleted. `R1` (the only `isSystem` role) survives. Restore with `pnpm prisma db seed`: bootstrap re-creates the `R2` / `R3` rows, the snapshot restores their grants.
 - **Department permission pools** (`DepartmentPermission`) — config, not bootstrap (bootstrap seeds none; `DEP-ADMIN` is all-access with no rows), so they are cleared. Department rows themselves are bootstrap-seeded and survive. `pnpm prisma db seed` restores our 241 pool rows from the snapshot.
@@ -418,7 +418,7 @@ These sit between `purge-vouchers` and `hard-clean`: they remove demo **contacts
 
 The shared transaction table list and the purge steps live in **`lib/purgeDemo.ts`** — one copy, consumed by both scripts. (`purge-vouchers.ts` and `hard-clean.ts` still carry their own older, narrower lists; they were left alone.)
 
-**Both preserve** (the difference from `hard-clean`): all Users, all Roles + grants (including non-system / admin-edited ones), `DepartmentPermission` pools, `payment_gateways` + POS counters + counter rails, `ServiceCenter`, **InvBrand / InvCategory / InvProductGroup / InvAttributeMaster**, Coupon + Loyalty config masters, and Chat + WallPost (staff-only — they FK to `User`, never to a party or product). Everything bootstrap seeds survives as usual.
+**Both preserve** (the difference from `hard-clean`): all Users, all Roles + grants (including non-system / admin-edited ones), `DepartmentPermission` pools, `payment_gateways` + POS counters + counter rails, **InvBrand / InvCategory / InvProductGroup / InvAttributeMaster**, Coupon + Loyalty config masters, and Chat + WallPost (staff-only — they FK to `User`, never to a party or product). Everything bootstrap seeds survives as usual.
 
 > **Products are removed with `DELETE`, never `TRUNCATE … CASCADE`.** `Coupon.freeProductId` / `.buyProductId` are `onDelete: SetNull`, but Postgres `TRUNCATE … CASCADE` cascades on FK *existence*, ignoring the `onDelete` action — it would truncate the whole `Coupon` table. A `DELETE` fires the SET NULL instead, so coupons survive with their product links blanked.
 

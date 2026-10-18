@@ -26,6 +26,16 @@ export function salaryTotals(lines: readonly SalaryLine[]): { grossPaise: number
     return { grossPaise, deductionsPaise, netPaise: grossPaise - deductionsPaise };
 }
 
+/**
+ * Every head to the nearest whole rupee — a generated payslip and its journal
+ * never carry paise (owner, 2026-10-16). A head that rounds to nothing is dropped.
+ */
+export function roundLinesToRupees(lines: readonly SalaryLine[]): SalaryLine[] {
+    return lines
+        .map((l) => ({ ...l, amountPaise: Math.round(l.amountPaise / 100) * 100 }))
+        .filter((l) => l.amountPaise > 0);
+}
+
 /** Defensive read of the JSON column — a malformed row yields no lines, never a crash. */
 export function parseSalaryLines(v: unknown): SalaryLine[] {
     if (!Array.isArray(v)) return [];

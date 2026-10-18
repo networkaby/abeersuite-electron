@@ -10,6 +10,7 @@ import { monthOvertimeFor } from "@/modules/hr/lib/monthlyOvertime";
 import { nonPayableDays } from "@/modules/hr/lib/attendancePayable";
 import { LEAVE_INCLUDE, toLeaveDto } from "@/modules/hr/lib/leaveServer";
 import { loadHoursBreakup } from "@/modules/hr/lib/attendanceHoursServer";
+import { loadPayRules } from "@/modules/hr/lib/payRulesServer";
 import { payRuleLines } from "@/modules/hr/lib/payRulesApply";
 import { parseSalaryLines } from "@/modules/hr/lib/salaryLines";
 import { leaveBalancesFor } from "@/modules/hr/lib/leaveBalance";
@@ -57,8 +58,9 @@ export async function GET(req: Request) {
         // running month stops at today, because the rest of it is not worked yet.
         const upto = to < today ? to : today;
 
-        const [seasonal, me, marks, leaveDaysRows, holidays, myLeaves, overtime, leaveBalance, sales, heads, myEntries, breakup] = await Promise.all([
+        const [seasonal, rules, me, marks, leaveDaysRows, holidays, myLeaves, overtime, leaveBalance, sales, heads, myEntries, breakup] = await Promise.all([
             loadSeasonalHours(),
+            loadPayRules(),
             prisma.user.findUnique({
                 where: { id: userId },
                 select: {
@@ -129,6 +131,7 @@ export async function GET(req: Request) {
             ownDutyStart: me.staffProfile?.dutyStart ?? null,
             ownDutyEnd: me.staffProfile?.dutyEnd ?? null,
             seasonal,
+            gradeLimits: { fullDayPct: rules.fullDayPct, halfDayPct: rules.halfDayPct },
             marks: {}, leaveDays: {},
         };
         for (const m of marks) {

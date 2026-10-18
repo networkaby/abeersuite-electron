@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
+import QRCode from "qrcode";
 import { CheckCircle2, Download } from "lucide-react";
 import { PHONE_APP_APK, PHONE_APP_HOME } from "@/shared/lib/device/phone";
 import { noSubscribe, readPlace, useApkAvailable } from "@/modules/mobile/components/installPlace";
+import { STAFF_APP_RELEASE, type AppRelease } from "@/shared/lib/constants/appVersions";
 
 /** Chrome's install event — not in the DOM typings. */
 type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
@@ -17,9 +19,15 @@ type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Pro
  *     phone's own steps; Chrome's `beforeinstallprompt` stays as the second way.
  *     No APK on the site yet (built by hand after a deploy) → Chrome's way only.
  *   • iPhone: no such event — the two Share steps.
- *   • already the installed app, or just installed: "Open app".
+ *   • already the installed app, or just installed: "Open app" — and, in Chrome on
+ *     Android, the latest version's download too: the phone cannot tell this page
+ *     WHICH version is installed, so an old one must still be able to update here.
  *   • no install offer (an http test address, another browser): open in Chrome,
  *     ⋮ → Install app — plus "Open app" to use it in the browser meanwhile.
+ *   • `apkOnly` (customer app): with the APK on the site, no Chrome install as a
+ *     second way — the real app only; Chrome's stays the fallback without it.
+ *   • `qrOnComputer` (customer app): a computer gets a QR of this page to scan
+ *     with the phone instead of the Chrome steps.
  * Used ONLY on the install pages (staff /m-staff-app/install, customer /app); the
  * apps themselves show no install prompt (owner).
  */
@@ -27,12 +35,21 @@ export default function InstallAppButton({
     appName,
     home = PHONE_APP_HOME,
     apk = PHONE_APP_APK,
+    release = STAFF_APP_RELEASE,
+    apkOnly = false,
+    qrOnComputer = false,
 }: {
     appName: string;
     /** "Open app" target — the staff app by default; the customer app passes its own. */
     home?: string;
     /** Android wrapper download. */
     apk?: string;
+    /** The APK's version, named on the update button — the staff app's by default. */
+    release?: AppRelease;
+    /** Android with the APK: hide "Or add it from Chrome instead". */
+    apkOnly?: boolean;
+    /** A computer sees a QR of this page instead of the Chrome steps. */
+    qrOnComputer?: boolean;
 }) {
     const [prompt, setPrompt] = useState<InstallPromptEvent | null>(null);
     const [installed, setInstalled] = useState(false);
@@ -40,6 +57,14 @@ export default function InstallAppButton({
     const [installedHere, setInstalledHere] = useState(false);
     const place = useSyncExternalStore(noSubscribe, readPlace, () => "server");
     const apkOk = useApkAvailable(apk, place === "android");
+    const [qr, setQr] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!qrOnComputer || place !== "browser") return;
+        void QRCode.toDataURL(window.location.origin + window.location.pathname, { width: 240, margin: 1 })
+            .then(setQr)
+            .catch(() => {});
+    }, [qrOnComputer, place]);
 
     useEffect(() => {
         // The install page's inline script catches Chrome's offer (it may fire before
@@ -80,6 +105,20 @@ export default function InstallAppButton({
                 </p>
                 <p className="text-sm text-muted-foreground">Open it from your home screen (or apps list).</p>
                 {openApp}
+                {place === "android" && apkOk && (
+                    <>
+                        <a
+                            href={apk}
+                            download
+                            className="flex w-full items-center justify-center gap-2 rounded-xl border py-3 text-sm font-medium active:bg-muted"
+                        >
+                            <Download className="size-4" /> Download latest version {release.name}
+                        </a>
+                        <p className="text-xs text-muted-foreground">
+                            Older version on the phone? Install this over it — you stay signed in.
+                        </p>
+                    </>
+                )}
             </div>
         );
     }
@@ -111,7 +150,7 @@ export default function InstallAppButton({
                     <li>If the phone asks, allow <b>Install unknown apps</b> for Chrome, then go back.</li>
                     <li>Tap <b>Install</b>, then <b>Open</b>, and sign in.</li>
                 </ol>
-                {prompt && (
+                {prompt && !apkOnly && (
                     <button
                         type="button"
                         onClick={() => installFromChrome(prompt)}
@@ -141,6 +180,19 @@ export default function InstallAppButton({
                     In <b>Safari</b>: tap <b>Share</b> (the square with an arrow), then <b>Add to Home Screen</b>, then <b>Add</b>.
                 </p>
                 {openApp}
+            </div>
+        );
+    }
+    if (qrOnComputer && place === "browser") {
+        return (
+            <div className="space-y-3 text-center">
+                {qr && (
+                    // eslint-disable-next-line @next/next/no-img-element -- data: URL, nothing to optimise
+                    <img src={qr} alt={`QR code to get ${appName} on your phone`} width={240} height={240} className="mx-auto rounded-xl border bg-white p-2" />
+                )}
+                <p className="text-sm">
+                    Scan with your <b>phone camera</b> to get the app on your phone.
+                </p>
             </div>
         );
     }

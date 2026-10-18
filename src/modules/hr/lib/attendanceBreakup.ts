@@ -4,9 +4,9 @@
 // wise."* Pure, so the API, the register's day panel and the month sheet all
 // answer the same way — and so the working can be checked without a database.
 
-import type { DutyGrade } from "@/shared/lib/hr/dutyTime";
-import { earlyMinutes, gradeDay, overtimeMinutes, shortMinutes } from "@/shared/lib/hr/dutyTime";
-import type { AttendanceEffect, PayRules } from "@/shared/lib/hr/payRules";
+import type { DutyGrade, GradeLimits } from "@/shared/lib/hr/dutyTime";
+import { earlyMinutes, gradeDay, lateMinutes, overtimeMinutes, shortMinutes } from "@/shared/lib/hr/dutyTime";
+import { dayTargetMinutes, pendingTotal, type AttendanceEffect, type PayRules, type PendingDay, type PendingItem } from "@/shared/lib/hr/payRules";
 import type { PayslipAttendanceData, PayslipAttendanceDay } from "@/shared/components/print/PayslipBody";
 
 /** One active stretch, as the screens want it: ISO instants, minutes, why it ended. */
@@ -19,6 +19,29 @@ export interface SpanDto {
     endedBy: "OPEN" | "IDLE" | "SIGNED_OUT" | "SHIFT_CLOSED";
 }
 
+/**
+ * One line of the day as it was lived, in order. Owner, 2026-10-13: *"full day
+ * in the list, on duty, off duty in sequence."*
+ *
+ *   - `late`  : duty had begun and he had not come yet (duty start to first in)
+ *   - `on`    : at the counter. Stretches with a gap inside his idle limit are
+ *               one line: a quiet minute, or a sign-out and back, is still duty.
+ *   - `off`   : a gap past the idle limit, from his last sign of life to the next.
+ *   - `early` : he stopped before duty ended (last sign of life to duty end).
+ *
+ * `on` + `off` always add up to first in to last out, because the lines are
+ * built end to end from the same instants. A `late` line has no `from` instant
+ * and an `early` line no `to`; the card prints the duty clock there.
+ */
+export interface TimelineRow {
+    kind: "late" | "on" | "off" | "early";
+    from: string | null;
+    to: string | null;
+    minutes: number;
+    /** On an `on` line: still running (today), so its end is "now". */
+    open?: boolean;
+}
+
 export interface DayBreakup {
     date: string;
     /**
@@ -29,6 +52,8 @@ export interface DayBreakup {
      */
     tracked: boolean;
     spans: SpanDto[];
+    /** The day in order, on duty and off. See `TimelineRow`. */
+    timeline: TimelineRow[];
     /** HOW MANY TIMES they were active. The count the owner asked for. */
     activeCount: number;
     /**
@@ -39,7 +64,8 @@ export interface DayBreakup {
     /** What the day owed, resolved for THAT date (the shop's opening moves). */
     dutyMinutes: number;
     /**
-     * Time between one stretch ending and the next beginning — away, mid-day.
+     * Time off duty mid-day: the `off` lines of the timeline added up, so the
+     * figure and the list can never disagree.
      *
      * Deliberately only the gaps BETWEEN stretches: the time before the first
      * arrival is lateness and the time after the last is an early finish, and
@@ -103,6 +129,12 @@ export interface DayBreakup {
      * rather than discovering it on a payslip.
      */
     lateCharged: boolean;
+    /**
+     * This day's line of the pending-duty walk (`walkPendingDuty`): duty carried
+     * in from earlier days, what today made up, today's overtime, what today
+     * added. Null where payroll does not walk the day (before joining).
+     */
+    pending?: PendingDay | null;
 }
 
 /** Minutes between two ISO instants, never negative. */
@@ -114,27 +146,69 @@ function minutesBetween(fromIso: string, toIso: string): number {
 /**
  * A stretch left open by a day that simply ended.
  *
- * Nothing stamps a sign-out on the server — the session dies, or the machine is
- * switched off — so yesterday's last stretch is still sitting there with no end
- * time. It did end, of course: at the last sign of life, which the day row knows
- * as `lastSeenAt`. Closing it at read time is the honest answer and costs nothing;
- * the alternative is a register that shows every past day still running.
+ * Nothing stamps an end on the server (the session dies, or the machine is
+ * switched off), so the last stretch is still sitting there with no end time. It
+ * did end, of course: at the last sign of life, which the day row knows as
+ * `lastSeenAt`. Closing it at read time is the honest answer and costs nothing.
  *
- * Today's open stretch is left open, because it genuinely is.
+ * Today's open stretch is left open only while it can still be running. Once
+ * the last sign of life is further back than the idle limit he has gone, and it
+ * closes there exactly as a past day's does.
  */
-export function resolveOpenSpan(span: SpanDto, lastSeenAtIso: string | null, isToday: boolean): SpanDto {
-    if (span.endedAt || isToday) return span;
-    return { ...span, endedAt: lastSeenAtIso ?? span.startedAt, endedBy: "IDLE" };
+export function resolveOpenSpan(
+    span: SpanDto, lastSeenAtIso: string | null, isToday: boolean, idleLimitMinutes: number, nowMs = Date.now(),
+): SpanDto {
+    if (span.endedAt) return span;
+    if (isToday && (!lastSeenAtIso || nowMs - new Date(lastSeenAtIso).getTime() <= idleLimitMinutes * 60000)) return span;
+    // It ran for the minutes it earned and no further. A stretch is credited
+    // beat by beat as it runs, so its own minutes ARE its length; the day's last
+    // sign of life only caps it. Ledgers before 2026-10-13 hold stray stretches
+    // left open beside the real one — stretching those to the day's last beat
+    // painted the whole afternoon as one unbroken line.
+    const startMs = new Date(span.startedAt).getTime();
+    let endMs = startMs + Math.max(0, span.minutes) * 60000;
+    if (lastSeenAtIso) endMs = Math.min(endMs, new Date(lastSeenAtIso).getTime());
+    return { ...span, endedAt: new Date(Math.max(startMs, endMs)).toISOString(), endedBy: "IDLE" };
 }
 
-/** The gaps between one stretch and the next, added up. */
-export function idleBetween(spans: readonly SpanDto[]): number {
-    let idle = 0;
-    for (let i = 1; i < spans.length; i++) {
-        const prevEnd = spans[i - 1].endedAt;
-        if (prevEnd) idle += minutesBetween(prevEnd, spans[i].startedAt);
+type LivedRow = { kind: "on" | "off"; from: string; to: string; minutes: number; open?: boolean };
+
+/**
+ * The day as on / off lines, end to end.
+ *
+ * Stretches are merged wherever the gap to the next is inside the idle limit —
+ * unless the clock already ended the first one as IDLE — and wherever they
+ * overlap (ledgers written before 2026-10-13 can, after two stretches were left
+ * open at once). Every other gap is an `off` line.
+ */
+export function buildTimeline(spans: readonly SpanDto[], idleLimitMinutes: number, nowIso: string): LivedRow[] {
+    const limitMs = idleLimitMinutes * 60000;
+    const merged: Array<{ from: string; to: string; open: boolean; idleEnd: boolean }> = [];
+    for (const s of spans) {
+        const to = s.endedAt ?? nowIso;
+        const last = merged[merged.length - 1];
+        const gapMs = last ? new Date(s.startedAt).getTime() - new Date(last.to).getTime() : 0;
+        // A stretch the clock itself ended as IDLE stays ended: the stamping ruled
+        // that gap away with the limit it had at the time, and re-judging it here
+        // against today's limit painted unpaid time as work (owner, 2026-10-14:
+        // a 58-minute gap credited 1 minute but drew as one long stretch).
+        // Overlaps from old ledgers still merge.
+        if (last && (gapMs <= 0 || (!last.idleEnd && gapMs <= limitMs))) {
+            if (to > last.to) { last.to = to; last.idleEnd = s.endedBy === "IDLE"; }
+            last.open = last.open || !s.endedAt;
+            continue;
+        }
+        merged.push({ from: s.startedAt, to, open: !s.endedAt, idleEnd: s.endedBy === "IDLE" });
     }
-    return idle;
+    const rows: LivedRow[] = [];
+    merged.forEach((m, i) => {
+        if (i > 0) {
+            const prev = merged[i - 1].to;
+            rows.push({ kind: "off", from: prev, to: m.from, minutes: minutesBetween(prev, m.from) });
+        }
+        rows.push({ kind: "on", from: m.from, to: m.to, minutes: minutesBetween(m.from, m.to), ...(m.open ? { open: true } : {}) });
+    });
+    return rows;
 }
 
 /**
@@ -151,6 +225,8 @@ export function buildDayBreakup(input: {
     tracked: boolean;
     spans: SpanDto[];
     lastSeenAt: string | null;
+    /** The person's own idle limit: what makes a gap an `off` line. */
+    idleLimitMinutes: number;
     workedMinutes: number;
     dutyMinutes: number;
     lateBy: number;
@@ -167,30 +243,46 @@ export function buildDayBreakup(input: {
     holidayName: string | null;
     latePenaltyMinutes: number;
     lateCharged: boolean;
+    /** Full / half day bars from Pay Rules. */
+    gradeLimits: GradeLimits;
 }): DayBreakup {
     const spans = input.spans
-        .map((s) => resolveOpenSpan(s, input.lastSeenAt, input.isToday))
+        .map((s) => resolveOpenSpan(s, input.lastSeenAt, input.isToday, input.idleLimitMinutes))
         .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
-    // The last stretch's end, and only when it really has ended: a day still
+    const lived = buildTimeline(spans, input.idleLimitMinutes, new Date().toISOString());
+    const onLines = lived.filter((r) => r.kind === "on");
+    // The day's last end, and only when it really has ended: a day still
     // running has not been left early, it has not been left at all.
-    const lastOut = spans.length ? spans[spans.length - 1].endedAt : null;
+    const lastOn = onLines[onLines.length - 1];
+    const lastOut = lastOn && !lastOn.open ? lastOn.to : null;
+    const shut = input.weeklyOff || !!input.holidayName;
+    const leftEarlyBy = earlyMinutes(lastOut, input.dutyEnd) ?? 0;
+    // Raw, before any grace: the line shows the time he was not there, which
+    // the grace forgives on the charge but does not turn into presence.
+    const notYetCome = lived.length && !shut ? lateMinutes(lived[0].from, input.dutyStart, undefined, 0) ?? 0 : 0;
+    const timeline: TimelineRow[] = [
+        ...(notYetCome > 0 ? [{ kind: "late" as const, from: null, to: lived[0].from, minutes: notYetCome }] : []),
+        ...lived,
+        ...(!shut && lastOut && leftEarlyBy > 0 ? [{ kind: "early" as const, from: lastOut, to: null, minutes: leftEarlyBy }] : []),
+    ];
     return {
         date: input.date,
         tracked: input.tracked,
         spans,
-        activeCount: spans.length,
+        timeline,
+        activeCount: onLines.length,
         workedMinutes: input.workedMinutes,
         dutyMinutes: input.dutyMinutes,
-        idleMinutes: idleBetween(spans),
+        idleMinutes: lived.reduce((t, r) => t + (r.kind === "off" ? r.minutes : 0), 0),
         lateBy: input.lateBy,
-        leftEarlyBy: earlyMinutes(lastOut, input.dutyEnd) ?? 0,
+        leftEarlyBy,
         dutyStart: input.dutyStart,
         dutyEnd: input.dutyEnd,
         note: input.note,
         leaveKind: input.leaveKind,
         overtimeMinutes: overtimeMinutes(input.workedMinutes, input.dutyMinutes),
         shortMinutes: shortMinutes(input.workedMinutes, input.dutyMinutes),
-        grade: gradeDay(input.workedMinutes, input.dutyMinutes),
+        grade: gradeDay(input.workedMinutes, input.dutyMinutes, input.gradeLimits),
         status: input.status,
         manual: input.manual,
         till: input.till,
@@ -215,7 +307,7 @@ export function buildDayBreakup(input: {
  * styles that are not a plain multiple ("10% of day / 5 min").
  */
 export interface AccountLine {
-    key: "duty" | "overtime" | "weeklyOff" | "holiday" | "late" | "short";
+    key: "duty" | "lateCover" | "madeUp" | "overtime" | "halfExtra" | "weeklyOff" | "holiday" | "late";
     label: string;
     /** The raw minutes this line is about — the lateness itself for the late line. */
     minutes: number;
@@ -227,10 +319,38 @@ export interface AccountLine {
     note: string | null;
 }
 
+/**
+ * The running short, shown under the day total. Owner, 2026-10-13: *"previous
+ * short − today recover + today short = final short"*.
+ */
+export interface ShortBalance {
+    /** Short carried in from earlier days, and its dated breakup. */
+    before: number;
+    beforeNote: string | null;
+    /** Earlier short recovered by today's extra. */
+    recovered: number;
+    /** Short this day adds — expected − day total, when negative. */
+    minutes: number;
+    note: string | null;
+    /** Short carried forward to the next day. */
+    after: number;
+}
+
+const NO_SHORT: ShortBalance = { before: 0, beforeNote: null, recovered: 0, minutes: 0, note: null, after: 0 };
+
 export interface DayAccount {
     lines: AccountLine[];
-    /** Every line's `accounted`, summed — the day as if it stood alone. */
+    /** Every line's `accounted`, summed: duty − penalty + extra time. */
     total: number;
+    /**
+     * Owner, 2026-10-13: *"expected − day total = if negative short (carry
+     * forward)"*. Shown below the total, never part of it: what this day leaves
+     * pending — its short plus its penalty not made up today. 0 on a day that
+     * came out even or ahead.
+     */
+    carry: ShortBalance;
+    /** The duty the day is judged against — all of it, or half on a half day. */
+    target: number;
 }
 
 const times = (n: number) => `× ${Number.isInteger(n) ? `${n}.0` : String(n)}`;
@@ -240,9 +360,8 @@ const times = (n: number) => `× ${Number.isInteger(n) ? `${n}.0` : String(n)}`;
  *
  * Nothing is re-measured here: the overtime, the shortfall and the late cut
  * arrive already worked out. This only puts the rate beside each and adds the
- * column up. The total is the day ON ITS OWN — at month end payroll nets the
- * overtime against the short days and the late cuts first, and only what
- * survives meets a rate. The screen says so beside the figure.
+ * column up. Short duty and penalties are shown but not taken off: they go to
+ * pending duty, and only what is still pending at month end is cut.
  */
 export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
     const lines: AccountLine[] = [];
@@ -265,52 +384,108 @@ export function accountDay(day: DayBreakup, rules: PayRules): DayAccount {
                 note: "paid outside the netting",
             });
         }
-        return { lines, total: sum(lines) };
+        return { lines, total: sum(lines), target: 0, carry: NO_SHORT };
     }
 
-    const normal = Math.min(day.workedMinutes, day.dutyMinutes);
-    lines.push({ key: "duty", label: "Normal duty", minutes: normal, rateLabel: times(1), accounted: normal, note: null });
+    // Owner, 2026-10-13: the day first makes up the duty pending from earlier
+    // days; only after nothing is pending is the extra overtime. Every short and
+    // every penalty is not taken off the day — it goes to pending, and what is
+    // still pending at month end is cut once.
+    const p = day.pending;
+    const carried = p ? pendingTotal(p.before) : 0;
+    const madeUp = p ? p.madeUp : 0;
+    const overtime = p ? p.overtime : day.overtimeMinutes;
+    const addedOf = (kind: "short" | "late" | "absent") =>
+        (p?.added ?? []).filter((a) => a.kind === kind).reduce((t, a) => t + a.minutes, 0);
 
+    // A half day is judged against half the duty: the other half is already
+    // cut from the salary (owner, 2026-10-13).
+    const half = day.grade === "HALF_DAY";
+    const target = dayTargetMinutes(day.dutyMinutes, day.grade);
+    const over = Math.max(0, day.workedMinutes - target);
+    const normal = Math.min(day.workedMinutes, target);
     lines.push({
-        key: "overtime", label: "Overtime", minutes: day.overtimeMinutes,
-        rateLabel: times(rules.overtimeRate), accounted: Math.round(day.overtimeMinutes * rules.overtimeRate),
-        note: day.overtimeMinutes > 0 ? "pays back short days first; only what survives the month is paid" : null,
+        key: "duty", label: half ? "Normal duty (half day)" : "Normal duty", minutes: normal, rateLabel: times(1), accounted: normal,
+        note: half ? `half day — judged against ${fmtShort(target)}; the other half is cut from salary` : null,
     });
 
-    lines.push(lateLine(day, rules));
+    // Always shown, above overtime: the extra recovers earlier short first,
+    // and only what is left is overtime (30m short + 50m extra → 30m + 20m).
+    // Normal duty never goes past the expected hours — the rest is extra.
+    // Today's extra pays today's late penalty first (owner, 2026-10-13).
+    const lateCut = day.lateCharged && rules.latePenaltyStyle !== "none" ? day.latePenaltyMinutes : 0;
+    const coveredLate = Math.min(over, lateCut);
+    if (coveredLate > 0) {
+        lines.push({
+            key: "lateCover", label: "Extra — covers today's penalty", minutes: coveredLate, rateLabel: times(1), accounted: coveredLate,
+            note: coveredLate < lateCut ? "the rest of the penalty is carried as short" : "today's extra pays the penalty first",
+        });
+    }
 
-    // A half day has already lost half its duty on the payslip; only the rest is
-    // charged here, or the same hour is taken twice (the rule payroll follows).
-    const withheld = day.grade === "HALF_DAY" ? Math.round(day.dutyMinutes / 2) : 0;
-    const shortCharged = day.grade === "ABSENT" ? 0 : Math.max(0, day.shortMinutes - withheld);
     lines.push({
-        key: "short", label: "Short of duty", minutes: day.shortMinutes,
-        rateLabel: times(rules.shortHoursRate), accounted: -Math.round(shortCharged * rules.shortHoursRate),
-        note: day.grade === "ABSENT" && day.shortMinutes > 0
-            ? "the day is paid at zero already — not charged again"
-            : withheld > 0
-                ? `half the day (${fmtShort(withheld)}) is already withheld on the payslip — only the rest counts`
-                : null,
+        key: "madeUp", label: "Short recovery", minutes: madeUp, rateLabel: times(1), accounted: madeUp,
+        note: madeUp > 0
+            ? (pendingTotal(p?.after ?? []) > 0 ? "earlier short partly recovered by today's extra" : "earlier short fully recovered by today's extra")
+            : carried > 0 ? "no extra today to recover the earlier short" : null,
     });
 
-    return { lines, total: sum(lines) };
+    if (half) {
+        const normalExtra = p ? p.normalExtra : 0;
+        lines.push({
+            key: "halfExtra", label: "Half-day extra", minutes: normalExtra, rateLabel: times(1), accounted: normalExtra,
+            note: normalExtra > 0 ? "a half day's extra is paid at the normal rate — never overtime" : null,
+        });
+    } else {
+        lines.push({
+            key: "overtime", label: "Overtime", minutes: overtime,
+            rateLabel: times(rules.overtimeRate), accounted: Math.round(overtime * rules.overtimeRate),
+            note: over > 0 && overtime === 0 ? "the extra went to recover earlier short" : null,
+        });
+    }
+
+    lines.push(lateLine(day, rules, lateCut));
+
+    // What today leaves pending: everything after today, less what is still
+    // left of the earlier days' pending (the extra makes that up first).
+    const leftOfBefore = Math.max(0, carried - madeUp);
+    const carryMinutes = p ? Math.max(0, pendingTotal(p.after) - leftOfBefore) : 0;
+    const absentAdded = addedOf("absent");
+    const parts = [
+        addedOf("short") > 0 ? `${fmtShort(addedOf("short"))} short` : null,
+        addedOf("late") > 0 && carryMinutes > 0 ? `${fmtShort(Math.min(addedOf("late"), carryMinutes))} late penalty` : null,
+        absentAdded > 0 ? `${fmtShort(absentAdded)} absence penalty` : null,
+    ].filter(Boolean);
+    const carryNote = day.grade === "ABSENT" && absentAdded === 0 && day.shortMinutes > 0
+        ? "the day is paid at zero already — nothing carried"
+        : carryMinutes > 0
+            ? parts.join(" + ")
+            : null;
+
+    return {
+        lines, total: sum(lines), target,
+        carry: {
+            before: carried, beforeNote: p && p.before.length ? pendingBreakup(p.before) : null,
+            recovered: Math.min(madeUp, carried),
+            minutes: carryMinutes, note: carryNote,
+            after: p ? pendingTotal(p.after) : 0,
+        },
+    };
 }
 
-function lateLine(day: DayBreakup, rules: PayRules): AccountLine {
+function lateLine(day: DayBreakup, rules: PayRules, added: number): AccountLine {
     const base = { key: "late" as const, label: "Late penalty", minutes: day.lateBy };
     if (day.lateBy <= 0) return { ...base, rateLabel: rateOfLate(rules), accounted: 0, note: null };
+    // An office-marked day is not judged on the clock, so its lateness is
+    // never charged — say that, not a free-day count that does not apply.
+    if (!day.lateCharged && day.manual) {
+        return { ...base, rateLabel: rateOfLate(rules), accounted: 0, note: "not charged — the office marked this day" };
+    }
     if (!day.lateCharged) {
         const n = rules.lateFreeDays;
-        return { ...base, rateLabel: rateOfLate(rules), accounted: 0, note: `not charged — inside the first ${n} free late ${n === 1 ? "day" : "days"}` };
+        return { ...base, rateLabel: rateOfLate(rules), accounted: 0, note: `forgiven — within ${rules.lateGraceMinutes} min, one of the month's ${n} grace ${n === 1 ? "day" : "days"}` };
     }
-    switch (rules.latePenaltyStyle) {
-        case "pay":
-            return { ...base, rateLabel: "money", accounted: 0, note: `${rules.latePenaltyDays} day${rules.latePenaltyDays === 1 ? "" : "s"} of basic off the payslip, not time` };
-        case "none":
-            return { ...base, rateLabel: "—", accounted: 0, note: "no late penalty is set" };
-        default:
-            return { ...base, rateLabel: rateOfLate(rules), accounted: -day.latePenaltyMinutes, note: "charged — the free late days are used up" };
-    }
+    if (rules.latePenaltyStyle === "none") return { ...base, rateLabel: "—", accounted: 0, note: "no late penalty is set" };
+    return { ...base, rateLabel: rateOfLate(rules), accounted: -added, note: "charged — the free late days are used up" };
 }
 
 /** The late rule as a short label — the multiple, or the slab, or the flat share. */
@@ -319,9 +494,19 @@ function rateOfLate(rules: PayRules): string {
         case "timesLate":    return `× ${rules.lateTimesLate}`;
         case "sharePerSlab": return `${rules.lateSlabPct}% of day / ${rules.lateSlabMinutes} min`;
         case "shareOfDay":   return `${rules.lateSharePct}% of day`;
-        case "pay":          return "money";
+        case "pay":          return `${rules.latePenaltyDays} day${rules.latePenaltyDays === 1 ? "" : "s"} of duty`;
         default:             return "—";
     }
+}
+
+const fmtDate = (iso: string) =>
+    new Date(`${iso}T00:00:00.000Z`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", timeZone: "UTC" });
+
+const PENDING_WORD = { short: "short", late: "late penalty", absent: "absence penalty" } as const;
+
+/** "02 Oct short 1h · 03 Oct absence penalty 10h" — the breakup of pending duty. */
+export function pendingBreakup(items: readonly PendingItem[]): string {
+    return items.map((i) => `${fmtDate(i.date)} ${PENDING_WORD[i.kind]} ${fmtShort(i.minutes)}`).join(" · ");
 }
 
 function sum(lines: readonly AccountLine[]): number {
@@ -355,7 +540,6 @@ export function freezeAttendanceForPayslip(
         const acc = accountDay(d, rules);
         const line = (key: AccountLine["key"]) => acc.lines.find((l) => l.key === key);
         const late = line("late");
-        const short = line("short");
         const ot = line("overtime");
         const shut = line("holiday") ?? line("weeklyOff");
         out.push({
@@ -368,8 +552,8 @@ export function freezeAttendanceForPayslip(
             overtimeAccounted: ot?.accounted ?? 0,
             late: late?.minutes ?? 0,
             lateAccounted: late?.accounted ?? 0,
-            short: short?.minutes ?? 0,
-            shortAccounted: short?.accounted ?? 0,
+            short: d.shortMinutes,
+            shortAccounted: -acc.carry.minutes,
             grantedAccounted: shut?.accounted ?? 0,
             total: acc.total,
         });

@@ -13,6 +13,7 @@ import { prismaUniqueError } from "@/shared/lib/api/prismaUniqueError";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { revalidateTag } from "next/cache";
 import { COUNTER_EXTENSIONS_TAG } from "@/shared/lib/calls/followUp";
+import { RELAY_KEY_CLEARED } from "@/shared/lib/counter/counterKeyHash";
 
 // One payment account on the counter. `id` present = update that row; absent =
 // create. `accountId` is the bank/cash-style ledger debited when collected here.
@@ -61,6 +62,9 @@ const updateSchema = z.object({
         .optional(),
     // Release the device lock — the next PC to open a shift here rebinds it.
     releaseLock: z.boolean().optional(),
+    // true = revoke the bound PC's office key (its saves stop reaching the office and
+    // run on the PC until allowed again); false = allow it to mint a new one.
+    revokeOfficeKey: z.boolean().optional(),
 });
 
 const counterInclude = {
@@ -211,10 +215,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const released = data.releaseLock
             ? await prismaAuthoritative.posCounter.update({
                 where:  { id },
-                data:   { boundDeviceId: null, boundDeviceLabel: null, boundAt: null, releasedAt: new Date() },
+                data:   { boundDeviceId: null, boundDeviceLabel: null, boundAt: null, releasedAt: new Date(), ...RELAY_KEY_CLEARED },
                 select: { boundDeviceId: true, boundDeviceLabel: true, boundAt: true },
             })
             : null;
+
+        // Straight to Supabase like the release above: the office checks the key
+        // there, and a push never carries these columns (sync/push.ts).
+        if (data.revokeOfficeKey !== undefined) {
+            await prismaAuthoritative.posCounter.update({
+                where: { id },
+                data:  data.revokeOfficeKey
+                    ? { relayKeyRevokedAt: new Date(), ...RELAY_KEY_CLEARED }
+                    : { relayKeyRevokedAt: null },
+            });
+        }
 
         const updated = await prisma.$transaction(async (tx) => {
             // Keep the till account name in sync if the counter is renamed.

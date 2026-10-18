@@ -45,7 +45,7 @@ export async function POST(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    // TODO(rbac): was requirePermission(TICKETS_MANAGE_PARTICIPANTS) — open to all staff.
+    // Open to all staff by design — owner's decision (2026-10-18).
     const { user, response } = await requireAuth();
     if (response) return response;
 
@@ -65,7 +65,7 @@ export async function POST(
             return NextResponse.json({ error: "Cannot add participant to a closed ticket" }, { status: 409 });
         }
 
-        // TODO(rbac): addedForRole validation removed (checked the legacy User.role).
+        // No addedForRole check. Removed by design — owner's decision (2026-10-18).
         const targetUser = await prisma.user.findUnique({
             where: { id: body.userId },
             select: { id: true, name: true },

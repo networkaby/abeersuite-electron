@@ -17,12 +17,11 @@ import { partyLedgerIds } from "@/modules/accountancy/lib/accountGroups";
 // was) or the several bills it really was. This is the second form. Saving here
 // moves the account off the scalar, so the two can never both count.
 //
-// The Balance Sheet's "Difference in Opening Balances" is a synthetic line over
-// the remaining SCALAR openings, so it shrinks by exactly what the converted
-// account's voucher posts to Suspense A/c. The sheet still balances; the amount
-// simply becomes a real ledger. (`reconcileOpeningSuspense` is deliberately not
-// called: it looks up a ledger the seed forbids creating, so it has never done
-// anything.)
+// An opening bill posts the party's leg only — no counter-entry anywhere — so
+// the Trial Balance and Balance Sheet show whatever the openings disagree by as
+// their computed "Difference in opening balances" line, same as for scalar
+// openings. (`reconcileOpeningSuspense` is deliberately not called: it looks up
+// a ledger the seed forbids creating, so it has never done anything.)
 
 const putSchema = z.object({
     /** Which side the opening sits on — one side per party, as on the master. */

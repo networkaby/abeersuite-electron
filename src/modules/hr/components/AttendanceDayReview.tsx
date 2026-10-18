@@ -30,7 +30,7 @@ import { useApiResource, useRealtimeTopics } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { cn } from "@/shared/lib/format/utils";
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
-import { ATTENDANCE_STATUS_META, LEAVE_KIND_LABELS, type AttendanceStatus } from "@/shared/lib/schemas/hrAttendanceSchema";
+import { ATTENDANCE_STATUS_META, LEAVE_KIND_LABELS, clockGradeLabel, type AttendanceStatus } from "@/shared/lib/schemas/hrAttendanceSchema";
 import type { DayReviewPayload, DayReviewRow } from "../lib/attendanceTypes";
 import type { HoursPayload } from "../lib/attendanceHoursTypes";
 import { saveCorrection, saveDaySource } from "../lib/attendanceDayClient";
@@ -38,8 +38,6 @@ import DayActivityCard from "./DayActivityCard";
 
 /** What a person may set by hand from here — the register's own four. */
 const MARKS: AttendanceStatus[] = ["PRESENT", "HALF_DAY", "ABSENT", "LEAVE"];
-
-const GRADE_LABEL: Record<DayReviewRow["grade"], string> = { PRESENT: "Full day", HALF_DAY: "Half day", ABSENT: "Absent" };
 
 const fmtTime = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "—";
 
@@ -237,7 +235,7 @@ export default function AttendanceDayReview({ canEdit }: { canEdit: boolean }) {
                                         </>
                                     ) : "—"}
                                 </TableCell>
-                                <TableCell className={cn("text-sm", r.uses === "MANUAL" && "text-muted-foreground")}>{autoSays(r)}</TableCell>
+                                <TableCell className={cn("text-sm", r.uses === "MANUAL" && "text-muted-foreground")}>{autoSays(r, !finished)}</TableCell>
                                 {/* Marking and switching must not open or shut the card. */}
                                 <TableCell onClick={(e) => e.stopPropagation()}>
                                     <MarkBox row={r} editable={editable && !busy} onMark={(status) => mark(r, status)} />
@@ -320,7 +318,7 @@ function DayCardRow({ userId, date, today, canCorrect, stamp, onChanged }: {
 const stampOf = (r: DayReviewRow | undefined) => `${r?.uses}|${r?.manualStatus}`;
 
 /** Auto's reading of the day in a phrase — or why there is nothing to read. */
-function autoSays(r: DayReviewRow): string {
+function autoSays(r: DayReviewRow, running: boolean): string {
     if (!r.canAuto) {
         if (r.holidayName) return `Holiday — ${r.holidayName}`;
         if (r.weeklyOff) return "Weekly off";
@@ -331,10 +329,10 @@ function autoSays(r: DayReviewRow): string {
     // A shut day owes no duty: every minute is extra, paid at its own rate.
     if (r.holidayName) return `Worked on the holiday (${r.holidayName})`;
     if (r.weeklyOff) return "Worked on the weekly off";
-    const bits = [GRADE_LABEL[r.grade]];
+    const bits = [clockGradeLabel(r.grade, r.workedMinutes, running)];
     if (r.lateBy > 0) bits.push(`late ${formatWorked(r.lateBy)}`);
     if (r.overtimeMinutes > 0) bits.push(`extra ${formatWorked(r.overtimeMinutes)}`);
-    if (r.grade !== "ABSENT" && r.shortMinutes > 0) bits.push(`short ${formatWorked(r.shortMinutes)}`);
+    if ((r.grade !== "ABSENT" || (r.workedMinutes > 0 && !running)) && r.shortMinutes > 0) bits.push(`short ${formatWorked(r.shortMinutes)}`);
     if (r.corrected.worked || r.corrected.late) bits.push("corrected");
     return bits.join(" · ");
 }

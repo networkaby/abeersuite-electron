@@ -63,9 +63,10 @@ function AttendanceView({ data }: { data: MyHrPayload }) {
     const totals = summarise(data.person, days, holidayDates);
     return (
         <div className="space-y-6">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 <StatCard label="Present" value={`${totals.present + totals.half * 0.5} days`} hint={`${totals.present} full · ${totals.half} half`} />
                 <StatCard label="Absent" value={String(totals.absent)} hint="No leave granted" tone={totals.absent > 0 ? "warn" : undefined} />
+                <StatCard label="Incomplete duty" value={String(totals.incomplete)} hint="Came, under 40% — unpaid, no penalty" tone={totals.incomplete > 0 ? "warn" : undefined} />
                 <StatCard label="On leave" value={String(totals.leave)} />
                 <StatCard label="Days lost" value={data.lostDays === 0 ? "None" : String(data.lostDays)} hint={data.lostDays === 0 ? "Nothing cut" : "Absent and half days"} />
             </div>
@@ -82,7 +83,7 @@ function AttendanceView({ data }: { data: MyHrPayload }) {
                             ? `${formatDate(iso)} — not marked`
                             : [
                                 `${formatDate(iso)} — ${ATTENDANCE_STATUS_META[r.status].label}`,
-                                r.workedMinutes ? `${formatWorked(r.workedMinutes)} worked` : null,
+                                r.workedMinutes ? `${formatWorked(r.workedMinutes)} worked${r.extraDuty ? " (extra duty)" : ""}` : null,
                                 r.lateBy ? `${r.lateBy} min late` : null,
                             ].filter(Boolean).join(", ");
                         return (
@@ -139,14 +140,14 @@ function PenaltiesView({ data }: { data: MyHrPayload }) {
             {counts && rules && (
                 <Section title="How it was counted" icon={<Activity size={15} />}>
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        <Fact label="Extra time that survived the netting" value={counts.payableMinutes > 0 ? `${formatWorked(counts.payableMinutes)} at ${rules.overtimeRate}×` : "—"} />
-                        <Fact label="Hours still owed" value={counts.owedMinutes > 0 ? `${formatWorked(counts.owedMinutes)} at ${rules.shortHoursRate}×` : "—"} />
-                        <Fact label="Late days" value={counts.lateDays === 0 ? "—" : `${counts.lateDays} · ${counts.chargedLateDays} charged (first ${rules.lateFreeDays} free)`} />
-                        <Fact label="Absent with no leave" value={counts.unaskedAbsentDays === 0 ? "—" : `${counts.unaskedAbsentDays} day${counts.unaskedAbsentDays === 1 ? "" : "s"} · ${rules.absentPenaltyDays} day${rules.absentPenaltyDays === 1 ? "" : "s"} of basic each`} />
+                        <Fact label="Overtime (after pending duty made up)" value={counts.payableMinutes > 0 ? `${formatWorked(counts.payableMinutes)} at ${rules.overtimeRate}×` : "—"} />
+                        <Fact label="Pending duty" value={counts.owedMinutes > 0 ? `${formatWorked(counts.owedMinutes)} at ${rules.shortHoursRate}×` : "—"} />
+                        <Fact label="Late days" value={counts.lateDays === 0 ? "—" : `${counts.lateDays} · ${counts.chargedLateDays} charged (${rules.lateFreeDays} grace days)`} />
+                        <Fact label="Absent with no leave" value={counts.unaskedAbsentDays === 0 ? "—" : `${counts.unaskedAbsentDays} day${counts.unaskedAbsentDays === 1 ? "" : "s"} · ${rules.absentPenaltyDays} day${rules.absentPenaltyDays === 1 ? "" : "s"} of duty to pending each`} />
                         <Fact label="Weekly-off duty" value={counts.weeklyOffMinutes > 0 ? `${formatWorked(counts.weeklyOffMinutes)} at ${rules.weeklyOffRate}×` : "—"} />
                         <Fact label="Holiday duty" value={counts.holidayMinutes > 0 ? `${formatWorked(counts.holidayMinutes)} at ${rules.holidayRate}×` : "—"} />
                         <Fact label="Late grace" value={`${rules.lateGraceMinutes} min`} />
-                        <Fact label="Late charge" value={rules.latePenaltyStyle === "pay" ? `${rules.latePenaltyDays} day${rules.latePenaltyDays === 1 ? "" : "s"} of basic per charged day` : "Minutes late counted against duty"} />
+                        <Fact label="Late charge" value={rules.latePenaltyStyle === "pay" ? `${rules.latePenaltyDays} day${rules.latePenaltyDays === 1 ? "" : "s"} of duty to pending per charged day` : "Penalty minutes go to pending duty"} />
                     </div>
                 </Section>
             )}

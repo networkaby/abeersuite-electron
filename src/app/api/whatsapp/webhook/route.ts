@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
+import { pushInboundToStaff, type InboundForPush } from "@/shared/lib/push/staffPush";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { applyStatuses, ingestInbound, type WaChangeValue } from "@/modules/message/lib/customerMessages";
 
@@ -52,11 +53,12 @@ export async function POST(req: Request) {
     }
 
     let changed = false;
+    const fresh: InboundForPush[] = [];
     for (const entry of body.entry ?? []) {
         for (const change of entry.changes ?? []) {
             if (change.field !== "messages" || !change.value) continue;
             try {
-                if (await ingestInbound(change.value)) changed = true;
+                if (await ingestInbound(change.value, (m) => fresh.push(m))) changed = true;
                 if (change.value.statuses?.length) {
                     await applyStatuses(change.value);
                     changed = true;
@@ -67,5 +69,7 @@ export async function POST(req: Request) {
         }
     }
     if (changed) void publishChangeServer(["messages"]);
+    // Staff phones with the app closed (the open app has the popup).
+    if (fresh.length) after(() => pushInboundToStaff(fresh));
     return NextResponse.json({ ok: true });
 }

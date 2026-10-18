@@ -12,6 +12,7 @@
 // (truth-path running balance) and /api/accountancy/ledgers (flat GL list).
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { DailyBreakupTable, DailyToggle, useDailyTick } from "@/shared/components/DailyBreakup";
 import axios from "axios";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -38,7 +39,7 @@ import { BookPage } from "@/modules/accountancy/components/BookPage";
 import { CreateLedgerDialog } from "@/modules/accountancy/components/CreateLedgerDialog";
 import { EditLedgerDialog, type EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
 import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
-import { ReconciledBadge } from "@/modules/accountancy/components/ReconciledBadge";
+import { ReconciledBadge, ReconciledTick } from "@/modules/accountancy/components/ReconciledBadge";
 import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
 import { voucherSourceForType, referenceHref } from "@/modules/accountancy/lib/voucherUrls";
 import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkContextMenu";
@@ -68,6 +69,8 @@ interface LedgerListItem {
     openingBalance?: number | null;
     openingBalanceType?: NormalBalance | null;
     openingBalanceDate?: string | null;
+    reconciledThrough?: string | null;
+    entriesSinceReconciled?: number | null;
 }
 
 interface SourceDoc {
@@ -184,6 +187,7 @@ export function AccountLedgerExplorer({
     // pass ?accountId=&from=&to=). Honour them instead of always defaulting.
     const [from, setFrom] = useState(params.get("from") ?? toIsoDate(indianFiscalYearStart()));
     const [to, setTo] = useState(params.get("to") ?? toIsoDate(new Date()));
+    const [daily, setDaily] = useDailyTick();
 
     // Balances on this list are summed from the GL lines (the replica on a
     // counter), and re-read on every ledger change — a voucher posted or deleted
@@ -272,6 +276,94 @@ export function AccountLedgerExplorer({
                 (a.group?.name ?? "").toLowerCase().includes(q),
         );
     }, [accounts, search]);
+
+    // One ledger row — drawn in the list, or under its day in the daily breakup.
+    const renderLedgerRow = (row: LedgerRow, reconciledThrough: string | null | undefined, normalBalance: NormalBalance) => {
+            // yyyy-mm-dd strings compare lexicographically — reconciledThrough
+            // is INCLUSIVE, so a row dated exactly on it is settled.
+            const settled = !!reconciledThrough
+                && row.date <= reconciledThrough;
+            return (
+            <tr
+                key={row.id}
+                className={cn(
+                    "hover:bg-muted/40 transition-colors",
+                    // A full-row wash was too heavy across a whole settled statement,
+                    // but the border-only version was barely visible at a glance —
+                    // a thicker border + a light fill strikes the middle ground.
+                    settled && "border-l-4 border-l-red-400 bg-red-50/50 dark:bg-red-900/15",
+                )}
+            >
+                <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                    <span className={cn(
+                        "inline-flex items-center gap-1",
+                        settled ? "text-red-700 dark:text-red-300 font-semibold" : "text-muted-foreground",
+                    )}>
+                        {settled && <CheckCircle2 size={11} className="shrink-0" />}
+                        {formatDate(row.date)}
+                    </span>
+                </td>
+                <td className="px-4 py-2.5">
+                    {(() => {
+                        const source = voucherSourceForType(row.voucherType);
+                        const rawId = source === "inv" && row.source ? row.source.id : row.journalEntryId;
+                        const href = row.source?.url ?? referenceHref(source, rawId, row.voucherType);
+                        if (!href) return <span className="font-mono text-xs text-muted-foreground">{row.reference}</span>;
+                        if (row.source) {
+                            return (
+                                <Link
+                                    href={href}
+                                    className={`inline-block text-xs px-2 py-0.5 border rounded-sm font-mono font-medium hover:underline ${SOURCE_COLOR[row.source.kind]}`}
+                                >
+                                    {row.source.reference ?? row.source.number ?? row.reference}
+                                </Link>
+                            );
+                        }
+                        return (
+                            <Link
+                                href={href}
+                                className="font-mono text-xs text-primary font-medium hover:underline"
+                            >
+                                {row.reference}
+                            </Link>
+                        );
+                    })()}
+                </td>
+                <td className="px-4 py-2.5">
+                    <p className="text-sm">{row.description}</p>
+                    {row.lineDescription && (
+                        <p className="text-xs text-muted-foreground">{row.lineDescription}</p>
+                    )}
+                </td>
+                <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+                    {row.branchName ?? <span className="text-muted-foreground/65">—</span>}
+                </td>
+                <td className="px-4 py-2.5 text-right font-mono text-xs">
+                    {row.debit != null ? fmt(row.debit) : <span className="text-muted-foreground/65">—</span>}
+                </td>
+                <td className="px-4 py-2.5 text-right font-mono text-xs">
+                    {row.credit != null ? fmt(row.credit) : <span className="text-muted-foreground/65">—</span>}
+                </td>
+                <td className={cn(
+                    "px-4 py-2.5 text-right font-mono text-xs font-semibold",
+                    row.balance < 0 && "text-destructive",
+                )}>
+                    {drCr(row.balance, normalBalance)}
+                </td>
+                <td className="px-4 py-2.5 text-right">
+                    <DayBookActionsMenu
+                        // An inventory row edits / cancels / prints by its DETAIL id
+                        // (row.source, resolved server-side); GL and journal rows by the spine id.
+                        rawId={voucherSourceForType(row.voucherType) === "inv" && row.source ? row.source.id : row.journalEntryId}
+                        source={voucherSourceForType(row.voucherType)}
+                        kind={row.voucherType}
+                        reference={row.reference}
+                        onChanged={refreshDetail}
+                    />
+                </td>
+            </tr>
+            );
+    };
 
     // Derived totals for the stat row (period debit/credit + net movement)
     const periodDebit = detail?.rows.reduce((s, r) => s + (r.debit ?? 0), 0) ?? 0;
@@ -378,6 +470,8 @@ export function AccountLedgerExplorer({
                                     >
                                         {a.group?.name ?? "Ungrouped"}
                                     </span>
+                                    <span className="flex shrink-0 items-center gap-1">
+                                    <ReconciledTick through={a.reconciledThrough} pending={a.entriesSinceReconciled} />
                                     <span
                                         className={cn(
                                             "shrink-0 rounded px-1.5 py-0.5 text-xs font-mono font-medium",
@@ -389,6 +483,7 @@ export function AccountLedgerExplorer({
                                         )}
                                     >
                                         {drCr(a.balance, a.normalBalance ?? (a.group?.type ? defaultNormalBalanceForGroupType(a.group.type as GroupTypeStr) : "DEBIT"))}
+                                    </span>
                                     </span>
                                 </div>
                             </div>
@@ -452,6 +547,7 @@ export function AccountLedgerExplorer({
                                         <ReconciledBadge
                                             accountId={detail.account.id}
                                             reconciledThrough={detail.account.reconciledThrough}
+                                            lastEntryDate={detail.rows.reduce<string | null>((max, r) => (!max || r.date > max ? r.date : max), null)}
                                             reconciledAt={detail.account.reconciledAt}
                                             onSaved={() => {
                                                 reloadAccounts();
@@ -479,6 +575,10 @@ export function AccountLedgerExplorer({
                                     <StatBox
                                         label="Closing"
                                         value={drCr(detail.closingBalance, detail.account.normalBalance)}
+                                        tick={<ReconciledTick
+                                            through={detail.account.reconciledThrough}
+                                            pending={allAccounts.find((a) => a.id === detail.account.id)?.entriesSinceReconciled}
+                                        />}
                                         emphasis
                                         sub={netMovement !== 0
                                             ? `${netMovement > 0 ? "+" : ""}${fmt(netMovement)} net`
@@ -520,6 +620,7 @@ export function AccountLedgerExplorer({
                                             monthMode="end"
                                             className="h-7 w-36 text-xs"
                                         />
+                                        <DailyToggle checked={daily} onChange={setDaily} />
                                         <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={handleRefresh}>
                                             <RefreshCw size={12} className="mr-1" />
                                             Refresh
@@ -532,146 +633,78 @@ export function AccountLedgerExplorer({
 
                                 {/* Table */}
                                 <div className="flex-1 overflow-auto" onContextMenu={onContainerContextMenu}>
-                                    <table className="w-full text-sm">
-                                        <thead className="sticky top-0 z-10">
-                                            <tr className="bg-muted/60 border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
-                                                <th className="px-4 py-2 text-left font-medium">Date</th>
-                                                <th className="px-4 py-2 text-left font-medium">Voucher</th>
-                                                <th className="px-4 py-2 text-left font-medium">Description</th>
-                                                <th className="px-4 py-2 text-left font-medium">Branch</th>
-                                                <th className="px-4 py-2 text-right font-medium">Debit</th>
-                                                <th className="px-4 py-2 text-right font-medium">Credit</th>
-                                                <th className="px-4 py-2 text-right font-medium">Balance</th>
-                                                <th className="px-4 py-2 text-right font-medium w-10" />
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-border">
-                                            {/* Opening balance pseudo-row */}
-                                            <tr className="bg-muted/30 text-xs">
-                                                <td className="px-4 py-2 text-muted-foreground" colSpan={4}>
-                                                    Opening balance
-                                                </td>
-                                                <td className="px-4 py-2" />
-                                                <td className="px-4 py-2" />
-                                                <td className="px-4 py-2 text-right font-mono font-semibold">
-                                                    {drCr(detail.openingBalance, detail.account.normalBalance)}
-                                                </td>
-                                                <td className="px-4 py-2" />
-                                            </tr>
-
-                                            {detail.rows.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground text-sm">
-                                                        No transactions in this period
-                                                    </td>
+                                    {daily ? (
+                                        <DailyBreakupTable
+                                            entries={detail.rows.map((row) => ({ date: row.date, debit: row.debit ?? 0, credit: row.credit ?? 0, row }))}
+                                            opening={detail.openingBalance}
+                                            from={from}
+                                            to={to}
+                                            normalBalance={detail.account.normalBalance}
+                                            renderVouchers={(dayRows) => (
+                                                <table className="w-full text-sm">
+                                                    <tbody className="divide-y divide-border">
+                                                        {dayRows.map((row) => renderLedgerRow(row, detail.account.reconciledThrough, detail.account.normalBalance))}
+                                                    </tbody>
+                                                </table>
+                                            )}
+                                        />
+                                    ) : (
+                                        <table className="w-full text-sm">
+                                            <thead className="sticky top-0 z-10">
+                                                <tr className="bg-muted/60 border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
+                                                    <th className="px-4 py-2 text-left font-medium">Date</th>
+                                                    <th className="px-4 py-2 text-left font-medium">Voucher</th>
+                                                    <th className="px-4 py-2 text-left font-medium">Description</th>
+                                                    <th className="px-4 py-2 text-left font-medium">Branch</th>
+                                                    <th className="px-4 py-2 text-right font-medium">Debit</th>
+                                                    <th className="px-4 py-2 text-right font-medium">Credit</th>
+                                                    <th className="px-4 py-2 text-right font-medium">Balance</th>
+                                                    <th className="px-4 py-2 text-right font-medium w-10" />
                                                 </tr>
-                                            ) : detail.rows.map((row) => {
-                                                // yyyy-mm-dd strings compare lexicographically — reconciledThrough
-                                                // is INCLUSIVE, so a row dated exactly on it is settled.
-                                                const settled = !!detail.account.reconciledThrough
-                                                    && row.date <= detail.account.reconciledThrough;
-                                                return (
-                                                <tr
-                                                    key={row.id}
-                                                    className={cn(
-                                                        "hover:bg-muted/40 transition-colors",
-                                                        // A full-row wash was too heavy across a whole settled statement,
-                                                        // but the border-only version was barely visible at a glance —
-                                                        // a thicker border + a light fill strikes the middle ground.
-                                                        settled && "border-l-4 border-l-red-400 bg-red-50/50 dark:bg-red-900/15",
-                                                    )}
-                                                >
-                                                    <td className="px-4 py-2.5 text-xs whitespace-nowrap">
-                                                        <span className={cn(
-                                                            "inline-flex items-center gap-1",
-                                                            settled ? "text-red-700 dark:text-red-300 font-semibold" : "text-muted-foreground",
-                                                        )}>
-                                                            {settled && <CheckCircle2 size={11} className="shrink-0" />}
-                                                            {formatDate(row.date)}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-2.5">
-                                                        {(() => {
-                                                            const source = voucherSourceForType(row.voucherType);
-                                                            const rawId = source === "inv" && row.source ? row.source.id : row.journalEntryId;
-                                                            const href = row.source?.url ?? referenceHref(source, rawId, row.voucherType);
-                                                            if (!href) return <span className="font-mono text-xs text-muted-foreground">{row.reference}</span>;
-                                                            if (row.source) {
-                                                                return (
-                                                                    <Link
-                                                                        href={href}
-                                                                        className={`inline-block text-xs px-2 py-0.5 border rounded-sm font-mono font-medium hover:underline ${SOURCE_COLOR[row.source.kind]}`}
-                                                                    >
-                                                                        {row.source.reference ?? row.source.number ?? row.reference}
-                                                                    </Link>
-                                                                );
-                                                            }
-                                                            return (
-                                                                <Link
-                                                                    href={href}
-                                                                    className="font-mono text-xs text-primary font-medium hover:underline"
-                                                                >
-                                                                    {row.reference}
-                                                                </Link>
-                                                            );
-                                                        })()}
-                                                    </td>
-                                                    <td className="px-4 py-2.5">
-                                                        <p className="text-sm">{row.description}</p>
-                                                        {row.lineDescription && (
-                                                            <p className="text-xs text-muted-foreground">{row.lineDescription}</p>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
-                                                        {row.branchName ?? <span className="text-muted-foreground/65">—</span>}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-right font-mono text-xs">
-                                                        {row.debit != null ? fmt(row.debit) : <span className="text-muted-foreground/65">—</span>}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-right font-mono text-xs">
-                                                        {row.credit != null ? fmt(row.credit) : <span className="text-muted-foreground/65">—</span>}
-                                                    </td>
-                                                    <td className={cn(
-                                                        "px-4 py-2.5 text-right font-mono text-xs font-semibold",
-                                                        row.balance < 0 && "text-destructive",
-                                                    )}>
-                                                        {drCr(row.balance, detail.account.normalBalance)}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-right">
-                                                        <DayBookActionsMenu
-                                                            // An inventory row edits / cancels / prints by its DETAIL id
-                                                            // (row.source, resolved server-side); GL and journal rows by the spine id.
-                                                            rawId={voucherSourceForType(row.voucherType) === "inv" && row.source ? row.source.id : row.journalEntryId}
-                                                            source={voucherSourceForType(row.voucherType)}
-                                                            kind={row.voucherType}
-                                                            reference={row.reference}
-                                                            onChanged={refreshDetail}
-                                                        />
-                                                    </td>
-                                                </tr>
-                                                );
-                                            })}
-
-                                            {/* Closing balance pseudo-row */}
-                                            {detail.rows.length > 0 && (
+                                            </thead>
+                                            <tbody className="divide-y divide-border">
+                                                {/* Opening balance pseudo-row */}
                                                 <tr className="bg-muted/30 text-xs">
-                                                    <td className="px-4 py-2 text-muted-foreground font-medium" colSpan={4}>
-                                                        Closing balance
+                                                    <td className="px-4 py-2 text-muted-foreground" colSpan={4}>
+                                                        Opening balance
                                                     </td>
+                                                    <td className="px-4 py-2" />
+                                                    <td className="px-4 py-2" />
                                                     <td className="px-4 py-2 text-right font-mono font-semibold">
-                                                        {periodDebit ? fmt(periodDebit) : ""}
-                                                    </td>
-                                                    <td className="px-4 py-2 text-right font-mono font-semibold">
-                                                        {periodCredit ? fmt(periodCredit) : ""}
-                                                    </td>
-                                                    <td className="px-4 py-2 text-right font-mono font-semibold text-primary">
-                                                        {drCr(detail.closingBalance, detail.account.normalBalance)}
+                                                        {drCr(detail.openingBalance, detail.account.normalBalance)}
                                                     </td>
                                                     <td className="px-4 py-2" />
                                                 </tr>
-                                            )}
-                                        </tbody>
-                                    </table>
+
+                                                {detail.rows.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground text-sm">
+                                                            No transactions in this period
+                                                        </td>
+                                                    </tr>
+                                                ) : detail.rows.map((row) => renderLedgerRow(row, detail.account.reconciledThrough, detail.account.normalBalance))}
+
+                                                {/* Closing balance pseudo-row */}
+                                                {detail.rows.length > 0 && (
+                                                    <tr className="bg-muted/30 text-xs">
+                                                        <td className="px-4 py-2 text-muted-foreground font-medium" colSpan={4}>
+                                                            Closing balance
+                                                        </td>
+                                                        <td className="px-4 py-2 text-right font-mono font-semibold">
+                                                            {periodDebit ? fmt(periodDebit) : ""}
+                                                        </td>
+                                                        <td className="px-4 py-2 text-right font-mono font-semibold">
+                                                            {periodCredit ? fmt(periodCredit) : ""}
+                                                        </td>
+                                                        <td className="px-4 py-2 text-right font-mono font-semibold text-primary">
+                                                            {drCr(detail.closingBalance, detail.account.normalBalance)}
+                                                        </td>
+                                                        <td className="px-4 py-2" />
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    )}
                                 </div>
                             </div>
                         </>
@@ -710,12 +743,15 @@ export function AccountLedgerExplorer({
 function StatBox({
     label,
     value,
+    tick,
     sub,
     emphasis = false,
     warn = false,
 }: {
     label: string;
     value: string;
+    /** Shown before the value — e.g. the green reconciled tick. */
+    tick?: React.ReactNode;
     sub?: string;
     emphasis?: boolean;
     /** Styles the value as a destructive warning — e.g. usage past a facility limit. */
@@ -727,7 +763,7 @@ function StatBox({
             warn ? "border-destructive/30 bg-destructive/5" : emphasis ? "border-primary/30 bg-primary/5" : "border-border bg-background",
         )}>
             <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-            <p className={cn("text-sm font-semibold font-mono", warn ? "text-destructive" : emphasis && "text-primary")}>{value}</p>
+            <p className={cn("flex items-center gap-1.5 text-sm font-semibold font-mono", warn ? "text-destructive" : emphasis && "text-primary")}>{tick}{value}</p>
             {sub && <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">{sub}</p>}
         </div>
     );

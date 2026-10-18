@@ -95,11 +95,8 @@ export interface ElectronAPI {
      */
     onServerReady: (callback: () => void) => void;
     shellSignIn: (credentials: { email: string; password: string; setPin?: boolean }) => Promise<{ ok: boolean; error?: string }>;
-    /** Read-once: returns the parked credentials and clears them in main. Exactly one
-     *  of `password` / `pin` is set — `/staff/login` picks its provider from that. */
-    takeShellCredentials: () => Promise<{ email: string; password?: string; pin?: string; setPin?: boolean } | null>;
-    /** Same handoff as `shellSignIn`, with six digits instead of a password. */
-    shellSignInPin: (credentials: { email: string; pin: string }) => Promise<{ ok: boolean; error?: string }>;
+    /** Read-once: returns the parked credentials and clears them in main. */
+    takeShellCredentials: () => Promise<{ email: string; password: string; setPin?: boolean } | null>;
     /**
      * The faces on the sign-in screen: who has signed in on THIS PC.
      *
@@ -111,9 +108,6 @@ export interface ElectronAPI {
     shellRoster: () => Promise<ShellRosterEntry[]>;
     rememberShellUser: (who: ShellRosterEntry) => Promise<boolean>;
     forgetShellUser: (email: string) => Promise<boolean>;
-    /** "none" | "ready" | "password-due", or null when it cannot be answered. Goes
-     *  through main because the shell is a file:// page and cannot fetch the server. */
-    shellPinStatus: (email: string) => Promise<string | null>;
     /** Keeps a copy of a background the shell fetched, so tomorrow needs no network. */
     cacheLoginBackground: (url: string) => void;
     /**
@@ -190,11 +184,9 @@ const electronAPI: ElectronAPI = {
     },
     shellSignIn: (credentials) => ipcRenderer.invoke("shell:sign-in", credentials),
     takeShellCredentials: () => ipcRenderer.invoke("shell:take-credentials"),
-    shellSignInPin: (credentials) => ipcRenderer.invoke("shell:sign-in-pin", credentials),
     shellRoster: () => ipcRenderer.invoke("shell:roster"),
     rememberShellUser: (who) => ipcRenderer.invoke("shell:remember-user", who),
     forgetShellUser: (email) => ipcRenderer.invoke("shell:forget-user", email),
-    shellPinStatus: (email) => ipcRenderer.invoke("shell:pin-status", email),
     cacheLoginBackground: (url) => { void ipcRenderer.invoke("shell:cache-background", url); },
     onSyncApplied: (callback) => {
         ipcRenderer.on("sync:applied", (_event, info: { rows: number; models: string[] }) => callback(info));

@@ -921,6 +921,42 @@ ALTER TABLE "Call" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DE
 ALTER TABLE "Call" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "Campaign" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "channel" TEXT NOT NULL DEFAULT 'PUSH',
+    "title" TEXT NOT NULL,
+    "body" TEXT NOT NULL,
+    "url" TEXT,
+    "couponId" INTEGER,
+    "audience" TEXT NOT NULL DEFAULT 'ALL_PUSH',
+    "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "sentAt" TIMESTAMP(3),
+    "createdById" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Campaign_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "channel" TEXT NOT NULL DEFAULT 'PUSH';
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "title" TEXT NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "body" TEXT NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "url" TEXT;
+ALTER TABLE "Campaign" ALTER COLUMN "url" DROP NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "couponId" INTEGER;
+ALTER TABLE "Campaign" ALTER COLUMN "couponId" DROP NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "audience" TEXT NOT NULL DEFAULT 'ALL_PUSH';
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'DRAFT';
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "sentAt" TIMESTAMP(3);
+ALTER TABLE "Campaign" ALTER COLUMN "sentAt" DROP NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "createdById" INTEGER;
+ALTER TABLE "Campaign" ALTER COLUMN "createdById" DROP NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "Coupon" (
     "id" SERIAL NOT NULL,
     "code" TEXT,
@@ -2424,7 +2460,6 @@ CREATE TABLE IF NOT EXISTS "InvProduct" (
     "heightCm" INTEGER,
     "costMethod" "CostMethod",
     "marginPercent" DECIMAL(6,2),
-    "priceOverridden" BOOLEAN NOT NULL DEFAULT false,
     "effectiveSalePriceSource" "EffectiveSalePriceSource" NOT NULL DEFAULT 'STRATEGY',
     "savedSalePricePaise" INTEGER,
     "salePriceFrozenAt" TIMESTAMP(3),
@@ -2508,7 +2543,6 @@ ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "costMethod" "CostMethod";
 ALTER TABLE "InvProduct" ALTER COLUMN "costMethod" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "marginPercent" DECIMAL(6,2);
 ALTER TABLE "InvProduct" ALTER COLUMN "marginPercent" DROP NOT NULL;
-ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "priceOverridden" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "effectiveSalePriceSource" "EffectiveSalePriceSource" NOT NULL DEFAULT 'STRATEGY';
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "savedSalePricePaise" INTEGER;
 ALTER TABLE "InvProduct" ALTER COLUMN "savedSalePricePaise" DROP NOT NULL;
@@ -3878,6 +3912,10 @@ CREATE TABLE IF NOT EXISTS "pos_counters" (
     "boundDeviceLabel" TEXT,
     "boundAt" TIMESTAMP(3),
     "releasedAt" TIMESTAMP(3),
+    "relayKeyHash" TEXT,
+    "relayKeyPrevHash" TEXT,
+    "relayKeyIssuedAt" TIMESTAMP(3),
+    "relayKeyRevokedAt" TIMESTAMP(3),
 
     CONSTRAINT "pos_counters_pkey" PRIMARY KEY ("id")
 );
@@ -3900,6 +3938,14 @@ ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "boundAt" TIMESTAMP(3);
 ALTER TABLE "pos_counters" ALTER COLUMN "boundAt" DROP NOT NULL;
 ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "releasedAt" TIMESTAMP(3);
 ALTER TABLE "pos_counters" ALTER COLUMN "releasedAt" DROP NOT NULL;
+ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "relayKeyHash" TEXT;
+ALTER TABLE "pos_counters" ALTER COLUMN "relayKeyHash" DROP NOT NULL;
+ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "relayKeyPrevHash" TEXT;
+ALTER TABLE "pos_counters" ALTER COLUMN "relayKeyPrevHash" DROP NOT NULL;
+ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "relayKeyIssuedAt" TIMESTAMP(3);
+ALTER TABLE "pos_counters" ALTER COLUMN "relayKeyIssuedAt" DROP NOT NULL;
+ALTER TABLE "pos_counters" ADD COLUMN IF NOT EXISTS "relayKeyRevokedAt" TIMESTAMP(3);
+ALTER TABLE "pos_counters" ALTER COLUMN "relayKeyRevokedAt" DROP NOT NULL;
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "pos_counter_payment_accounts" (
@@ -4188,6 +4234,31 @@ ALTER TABLE "PushMessage" ADD COLUMN IF NOT EXISTS "clickedAt" TIMESTAMP(3);
 ALTER TABLE "PushMessage" ALTER COLUMN "clickedAt" DROP NOT NULL;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "StaffPushDevice" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "token" TEXT NOT NULL,
+    "p256dh" TEXT,
+    "auth" TEXT,
+    "userAgent" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "StaffPushDevice_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "userId" INTEGER NOT NULL;
+ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "token" TEXT NOT NULL;
+ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "p256dh" TEXT;
+ALTER TABLE "StaffPushDevice" ALTER COLUMN "p256dh" DROP NOT NULL;
+ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "auth" TEXT;
+ALTER TABLE "StaffPushDevice" ALTER COLUMN "auth" DROP NOT NULL;
+ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "userAgent" TEXT;
+ALTER TABLE "StaffPushDevice" ALTER COLUMN "userAgent" DROP NOT NULL;
+ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "StaffPushDevice" ADD COLUMN IF NOT EXISTS "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "Role" (
     "id" TEXT NOT NULL,
     "label" TEXT NOT NULL,
@@ -4459,7 +4530,6 @@ ALTER TABLE "Ticket" ALTER COLUMN "statusEnteredAt" DROP NOT NULL;
 CREATE TABLE IF NOT EXISTS "TicketRepair" (
     "ticketId" INTEGER NOT NULL,
     "deviceId" INTEGER NOT NULL,
-    "serviceCenterId" INTEGER,
     "ticketNo" TEXT,
     "estimatedCost" DOUBLE PRECISION,
     "accessInfo" TEXT,
@@ -4481,8 +4551,6 @@ CREATE TABLE IF NOT EXISTS "TicketRepair" (
 );
 ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "ticketId" INTEGER NOT NULL;
 ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "deviceId" INTEGER NOT NULL;
-ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "serviceCenterId" INTEGER;
-ALTER TABLE "TicketRepair" ALTER COLUMN "serviceCenterId" DROP NOT NULL;
 ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "ticketNo" TEXT;
 ALTER TABLE "TicketRepair" ALTER COLUMN "ticketNo" DROP NOT NULL;
 ALTER TABLE "TicketRepair" ADD COLUMN IF NOT EXISTS "estimatedCost" DOUBLE PRECISION;
@@ -4856,26 +4924,6 @@ ALTER TABLE "Device" ALTER COLUMN "accountId" DROP NOT NULL;
 ALTER TABLE "Device" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
-CREATE TABLE IF NOT EXISTS "ServiceCenter" (
-    "id" SERIAL NOT NULL,
-    "name" TEXT NOT NULL,
-    "phone" TEXT NOT NULL,
-    "email" TEXT,
-    "address" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "ServiceCenter_pkey" PRIMARY KEY ("id")
-);
-ALTER TABLE "ServiceCenter" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
-ALTER TABLE "ServiceCenter" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL;
-ALTER TABLE "ServiceCenter" ADD COLUMN IF NOT EXISTS "phone" TEXT NOT NULL;
-ALTER TABLE "ServiceCenter" ADD COLUMN IF NOT EXISTS "email" TEXT;
-ALTER TABLE "ServiceCenter" ALTER COLUMN "email" DROP NOT NULL;
-ALTER TABLE "ServiceCenter" ADD COLUMN IF NOT EXISTS "address" TEXT;
-ALTER TABLE "ServiceCenter" ALTER COLUMN "address" DROP NOT NULL;
-ALTER TABLE "ServiceCenter" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
-
--- CreateTable
 CREATE TABLE IF NOT EXISTS "TaskRecurrence" (
     "id" SERIAL NOT NULL,
     "title" TEXT NOT NULL,
@@ -5142,6 +5190,12 @@ CREATE INDEX IF NOT EXISTS "Call_sourceHost_occurredAt_idx" ON "Call"("sourceHos
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "Call_updatedAt_idx" ON "Call"("updatedAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "Campaign_status_createdAt_idx" ON "Campaign"("status", "createdAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "Campaign_couponId_idx" ON "Campaign"("couponId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "Coupon_code_key" ON "Coupon"("code");
@@ -5732,6 +5786,12 @@ CREATE INDEX IF NOT EXISTS "PushMessage_personId_sentAt_idx" ON "PushMessage"("p
 CREATE INDEX IF NOT EXISTS "PushMessage_refType_refId_idx" ON "PushMessage"("refType", "refId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "StaffPushDevice_token_key" ON "StaffPushDevice"("token");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "StaffPushDevice_userId_idx" ON "StaffPushDevice"("userId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "UserPermission_userId_permissionId_key" ON "UserPermission"("userId", "permissionId");
 
 -- CreateIndex
@@ -5805,9 +5865,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS "Ticket_recurrenceId_occurrenceNo_key" ON "Tic
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "TicketRepair_deviceId_idx" ON "TicketRepair"("deviceId");
-
--- CreateIndex
-CREATE INDEX IF NOT EXISTS "TicketRepair_serviceCenterId_idx" ON "TicketRepair"("serviceCenterId");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "TicketRepair_warrantyStatus_idx" ON "TicketRepair"("warrantyStatus");
@@ -6029,6 +6086,20 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "Email" ADD CONSTRAINT "Email_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "Campaign" ADD CONSTRAINT "Campaign_couponId_fkey" FOREIGN KEY ("couponId") REFERENCES "Coupon"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "Campaign" ADD CONSTRAINT "Campaign_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -7099,6 +7170,13 @@ END $$;
 
 -- AddForeignKey
 DO $$ BEGIN
+    ALTER TABLE "StaffPushDevice" ADD CONSTRAINT "StaffPushDevice_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
     ALTER TABLE "Role" ADD CONSTRAINT "Role_departmentId_fkey" FOREIGN KEY ("departmentId") REFERENCES "Department"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
@@ -7240,13 +7318,6 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "TicketRepair" ADD CONSTRAINT "TicketRepair_deviceId_fkey" FOREIGN KEY ("deviceId") REFERENCES "Device"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-EXCEPTION
-    WHEN duplicate_object THEN NULL;
-END $$;
-
--- AddForeignKey
-DO $$ BEGIN
-    ALTER TABLE "TicketRepair" ADD CONSTRAINT "TicketRepair_serviceCenterId_fkey" FOREIGN KEY ("serviceCenterId") REFERENCES "ServiceCenter"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -7773,6 +7844,13 @@ DO $$ BEGIN
     IF to_regclass('public."Call"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "Call";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Call"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Campaign"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Campaign";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Campaign"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;
@@ -8338,13 +8416,6 @@ DO $$ BEGIN
     END IF;
 END $$;
 DO $$ BEGIN
-    IF to_regclass('public."ServiceCenter"') IS NOT NULL THEN
-        DROP TRIGGER IF EXISTS "_outbox_capture" ON "ServiceCenter";
-        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "ServiceCenter"
-            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
-    END IF;
-END $$;
-DO $$ BEGIN
     IF to_regclass('public."SocialConnection"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "SocialConnection";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "SocialConnection"
@@ -8356,6 +8427,13 @@ DO $$ BEGIN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "staff_profiles";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "staff_profiles"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('userId');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."StaffPushDevice"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "StaffPushDevice";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "StaffPushDevice"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;
 DO $$ BEGIN

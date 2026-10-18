@@ -1,11 +1,21 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { prisma, prismaAuthoritative } from "@/shared/lib/prisma/prismaClient";
-import { authorizeStaffCredentials } from "@/shared/lib/auth/authorizeStaff";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { authorizeStaffCredentials, authorizeStaffPin } from "@/shared/lib/auth/authorizeStaff";
 import { authorizePortalCredentials } from "@/shared/lib/auth/authorizePortal";
 import { IS_PUBLIC } from "@/shared/lib/appMode";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
-import { DEFAULT_IDLE_LIMIT_MINUTES, SESSION_IDLE_MAX_AGE_MS } from "@/shared/lib/constants/session";
+import {
+    DEFAULT_IDLE_LIMIT_MINUTES,
+    LOGIN_IDLE_MAX_AGE_MS,
+    LOGIN_MAX_AGE_MS,
+    PHONE_LOGIN_IDLE_MAX_AGE_MS,
+    PHONE_LOGIN_MAX_AGE_MS,
+    SESSION_COOKIE_MAX_AGE_MS,
+    SESSION_RENEW_EVERY_S,
+} from "@/shared/lib/constants/session";
+import { PHONE_APP_UA } from "@/shared/lib/device/phone";
+import { localSignOutAt, markLocalSignOut } from "@/shared/lib/auth/localSignOut";
 
 /**
  * One session-cookie NAME on every deployment, office and counters alike.
@@ -28,34 +38,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
     trustHost: true,
     /**
-     * A session ends overnight, so every morning starts with the PIN screen.
+     * A login lasts until one of two clocks runs out (owner, 2026-10-13): 3 days with
+     * nobody using it or 10 days since the password was typed — both checked on every
+     * request in `isStaffTokenRevoked`. The staff phone app gets 30 / 90 days and a
+     * customer 90 days with nobody using it (owner, 2026-10-18); the cookie lives as
+     * long as the longest of them, and `token.seenAt` carries the shorter idle clocks. Inside those two
+     * clocks a counter's 4-digit PIN signs a person back in (`counterPin.ts`).
      *
-     * Three clocks, and each one has its own job — all three in constants/session.ts.
-     * The two PIN clocks (enforced in counterPin.ts) govern
-     * how long the PIN itself may stand in for a password — 10 days of regular use,
-     * or 3 days idle. This one governs something else entirely: how long you stay
-     * signed in WITHOUT signing in. Left at Auth.js's default it was 30 days and
-     * rolling, which meant a till in daily use never reached the sign-in screen at
-     * all — so the PIN was never asked for, and the 10-day password rule never ran
-     * for anyone who did not sign out. On live, user 38 last authenticated on 19 Sep
-     * and was still validly signed in on the 21st.
+     * It replaced a 6-hour lifetime that signed every till out each night, which is
+     * what made coming back slow. The idle limit per person ("Sign out after", HR → Job)
+     * is the short clock now; this is only the backstop.
      *
-     * 6 hours, measured since LAST USE (`updateAge: 0` re-issues the token on every
-     * request, re-signing it without reading the database). Checked against the
-     * shop's own hours rather than picked as a round figure: tills open 10:30–12:20
-     * and close 20:30–22:18, so the shortest night is about 12 hours — twice this —
-     * while nothing inside a trading day sits quiet for 6. It therefore lapses every
-     * night and never mid-shift. A cashier who somehow does idle 6 hours in a day
-     * taps their photo and six digits again — the cheap way to be wrong.
-     *
-     * Do NOT tie this to PIN_PASSWORD_MAX_AGE_MS. They look like the same idea and
-     * are opposites: that one is how long the PIN lasts, this is how soon the PIN is
-     * asked for. Making this the longer of the two is what hid the bug above.
+     * Renewed at most every 5 minutes (`SESSION_RENEW_EVERY_S`) — it was every
+     * request, and a request still in flight at Sign out put a fresh cookie back.
      */
     session: {
         strategy:  "jwt",
-        maxAge:    SESSION_IDLE_MAX_AGE_MS / 1000,   // seconds
-        updateAge: 0,                                 // refresh on every use
+        maxAge:    SESSION_COOKIE_MAX_AGE_MS / 1000, // seconds
+        updateAge: SESSION_RENEW_EVERY_S,             // renew at most this often
     },
     cookies: {
         sessionToken: {
@@ -69,75 +69,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     callbacks: {
         async jwt({ token, user }) {
             if (user) {
-                token.loginAt = Date.now();   // for server-side revocation
-                token.id = user.id;
-                token.role = "role" in user && typeof user.role === "string" ? user.role : "";
-                token.roles = "roles" in user && Array.isArray(user.roles) ? (user.roles as string[]) : [];
-                token.permissions =
-                    "permissions" in user && Array.isArray(user.permissions)
-                        ? (user.permissions as string[])
-                        : [];
-                token.rank = "rank" in user && typeof user.rank === "number" ? user.rank : 0;
-                // Carried on the token so the client's idle timer knows this person's
-                // own limit from the first render, with no request of its own.
-                token.idleLimitMinutes =
-                    "idleLimitMinutes" in user && typeof user.idleLimitMinutes === "number"
-                        ? user.idleLimitMinutes
-                        : DEFAULT_IDLE_LIMIT_MINUTES;
-                token.scope = "scope" in user && typeof user.scope === "string" ? user.scope : "OWN";
-                token.roleLabel =
-                    "roleLabel" in user && typeof user.roleLabel === "string" ? user.roleLabel : undefined;
-                token.roleColor =
-                    "roleColor" in user && typeof user.roleColor === "string" ? user.roleColor : undefined;
-                token.departmentIds =
-                    "departmentIds" in user && Array.isArray(user.departmentIds)
-                        ? (user.departmentIds as string[])
-                        : [];
-                token.branchIds =
-                    "branchIds" in user && Array.isArray(user.branchIds) ? (user.branchIds as string[]) : [];
-                token.title = "title" in user ? (user.title as string | undefined) : undefined;
-                // Every Position they hold, for the counter's sign-in card. Two short
-                // strings per seat, and almost everyone holds one.
-                token.seats = "seats" in user && Array.isArray(user.seats) ? user.seats : [];
-                token.avatarUrl = "avatarUrl" in user ? (user.avatarUrl as string | undefined) : undefined;
-                token.kind = "kind" in user && user.kind === "customer" ? "customer" : "staff";
-                // Phone app only (auth/phoneOnly.ts) — proxy.ts reads it off the token.
-                if ("phoneOnly" in user && user.phoneOnly === true) token.phoneOnly = true;
-                token.customerId =
-                    "customerId" in user && typeof user.customerId === "string" ? user.customerId : undefined;
-                token.activeAccountId =
-                    "activeAccountId" in user && typeof user.activeAccountId === "string"
-                        ? user.activeAccountId
-                        : undefined;
-                token.activeAccountType =
-                    "activeAccountType" in user && (user.activeAccountType === "personal" || user.activeAccountType === "company")
-                        ? user.activeAccountType
-                        : undefined;
+                fillTokenFromUser(token, user);
                 return token;
             }
             // ── Server-side revocation (staff only) ──────────────────────────
             // On every subsequent request, reject a token whose login predates the
-            // user's `tokensValidFrom` (bumped on sign-out). This is what makes
-            // "logout" actually invalidate a stateless JWT server-side — so a
-            // logged-out till can't keep transacting.
-            if (token.id && token.kind !== "customer") {
-                try {
-                    const u = await prisma.user.findUnique({
-                        where: { id: Number(token.id) },
-                        select: { tokensValidFrom: true },
-                    });
-                    const validFrom = u?.tokensValidFrom?.getTime();
-                    const loginAt = typeof token.loginAt === "number" ? token.loginAt : 0;
-                    // Need a loginAt to compare — tokens minted before this feature
-                    // have none, so they're left alone (a fresh login stamps it).
-                    if (validFrom && loginAt && loginAt < validFrom) {
-                        token.revoked = true;
-                    }
-                } catch {
-                    // DB hiccup → fail OPEN so a transient outage can't mass-logout
-                    // every cashier. prisma's read-retry makes this rare.
-                }
-            }
+            // user's `tokensValidFrom` (an admin's "end every login") or, on a till,
+            // this till's own sign-out mark — see `isStaffTokenRevoked`.
+            if (await isStaffTokenRevoked(token)) token.revoked = true;
+            else token.seenAt = Date.now();   // the idle clock — saved whenever the cookie is renewed
             return token;
         },
         async session({ session, token }) {
@@ -211,48 +151,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         },
     },
     events: {
-        // Sign-out bumps tokensValidFrom → every existing token for this user is
-        // rejected on its next request (logout = log out of every tab/device).
-        //
-        // Authoritative on purpose: on a counter the ordinary client writes to the
-        // replica and queues the row for push, and `User` is a model a counter must
-        // never push — so the row dead-lettered and the shell showed "Sync error (1)"
-        // after every sign-out. Revocation is best-effort anyway; offline it is skipped.
+        // Sign-out ends THIS login only (owner, 2026-10-13). On a till it writes the
+        // till's own mark, so a cookie renewed by a request already in flight is
+        // refused here, and nothing else — the office site, other tills, the till's
+        // counter key — is touched. On the office site clearing the cookie is the
+        // whole of it. Ending every login of a person is an admin act
+        // (`revokeSessions.ts` → `User.tokensValidFrom`), no longer a side effect of
+        // pressing Sign out.
         async signOut(message) {
             const token = "token" in message ? message.token : null;
-            const id = token?.id;
-            if (!id || token?.kind === "customer") return;
-            const loginAt = typeof token.loginAt === "number" ? token.loginAt : 0;
-            let stamped: number;
-            try {
-                ({ count: stamped } = await prismaAuthoritative.user.updateMany({
-                    where: {
-                        id: Number(id),
-                        // Only a login that is still valid ends the others — the mirror
-                        // of the jwt check above. Signing out of one that was already
-                        // revoked (the browser does exactly that on SESSION_REVOKED)
-                        // would otherwise stamp "now" and throw the person out of the
-                        // fresh login they had just made on another device. A token
-                        // with no loginAt predates the check and stamps as before.
-                        ...(loginAt ? { OR: [{ tokensValidFrom: null }, { tokensValidFrom: { lte: new Date(loginAt) } }] } : {}),
-                    },
-                    data: { tokensValidFrom: new Date() },
-                }));
-            } catch {
-                return; // best-effort — don't block sign-out on a DB hiccup, or offline
-            }
-            // The stamp went to Supabase, but a counter checks sign-ins against its
-            // replica, which would go on accepting this very token until the worker
-            // next pulls `User`. A page request already in flight when Sign out
-            // cleared the cookie puts a renewed one back (`updateAge: 0`), and that
-            // cookie would open the app again. Pulled now, it is refused here too.
-            // Nothing stamped means the session was already dead in Supabase — the
-            // relay pulled `User` when the office said so — so there is nothing new
-            // to fetch, and the revoked-session sign-out is not held for it.
-            if (IS_COUNTER_PC && stamped > 0) {
-                const { pullAndWait } = await import("@/shared/lib/counter/replicaPull");
-                await pullAndWait(["User"]);
-            }
+            if (!token?.id || token.kind === "customer") return;
+            if (IS_COUNTER_PC) markLocalSignOut(String(token.id));
         },
     },
     providers: [
@@ -267,21 +176,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     email: { label: "Email", type: "email" },
                     password: { label: "Password", type: "password" },
                 },
-                async authorize(credentials) {
+                async authorize(credentials, request) {
                     if (!credentials?.email || !credentials?.password) return null;
-                    return authorizeStaffCredentials(
+                    const user = await authorizeStaffCredentials(
                         prisma,
                         credentials.email as string,
                         credentials.password as string
                     );
+                    // Signed in from the staff phone app → the phone's longer clocks.
+                    const phoneApp = (request?.headers?.get("user-agent") ?? "").includes(PHONE_APP_UA);
+                    return user && phoneApp ? { ...user, phoneApp: true } : user;
                 },
             }),
-        ]),
-        // Counter PIN — the same staff session, reached by six digits instead of a
-        // password. Left off the public build with the staff provider above, and
-        // refused outright by `authorizeStaffPin` anywhere that is not a counter,
-        // so on the office deployment this provider exists but can never succeed.
-        ...(IS_PUBLIC ? [] : [
+            // Counter PIN — the same staff session, reached by four digits on a tapped
+            // photograph (owner, 2026-10-15). `authorizeStaffPin` refuses anywhere that
+            // is not a counter, so on the office deployment it can never succeed.
             Credentials({
                 id: "credentials-staff-pin",
                 name: "Counter PIN",
@@ -291,12 +200,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 },
                 async authorize(credentials) {
                     if (!credentials?.email || !credentials?.pin) return null;
-                    const { authorizeStaffPin } = await import("@/shared/lib/auth/authorizeStaff");
-                    return authorizeStaffPin(
-                        prisma,
-                        credentials.email as string,
-                        credentials.pin as string
-                    );
+                    return authorizeStaffPin(prisma, credentials.email as string, credentials.pin as string);
                 },
             }),
         ]),
@@ -353,3 +257,102 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }),
     ],
 });
+
+/**
+ * Everything a staff or customer sign-in puts on the token. One copy, because the
+ * office mints the same token for a till's counter key (`counterRelayAuth.ts`) — a
+ * second copy would drift and hand relayed saves a different authority.
+ */
+export function fillTokenFromUser(token: Record<string, unknown>, user: { id?: string | null }): void {
+    token.loginAt = Date.now();   // for server-side revocation
+    token.seenAt = token.loginAt; // the idle clock (`isStaffTokenRevoked`)
+    // The 10-day clock. A PIN sign-in carries the counter's stamp of the last password,
+    // so it never restarts the clock; everything else typed the password just now.
+    token.passwordAt = "passwordAt" in user && typeof user.passwordAt === "number" ? user.passwordAt : token.loginAt;
+    token.id = user.id;
+    token.role = "role" in user && typeof user.role === "string" ? user.role : "";
+    token.roles = "roles" in user && Array.isArray(user.roles) ? (user.roles as string[]) : [];
+    token.permissions =
+        "permissions" in user && Array.isArray(user.permissions)
+            ? (user.permissions as string[])
+            : [];
+    token.rank = "rank" in user && typeof user.rank === "number" ? user.rank : 0;
+    // Carried on the token so the client's idle timer knows this person's
+    // own limit from the first render, with no request of its own.
+    token.idleLimitMinutes =
+        "idleLimitMinutes" in user && typeof user.idleLimitMinutes === "number"
+            ? user.idleLimitMinutes
+            : DEFAULT_IDLE_LIMIT_MINUTES;
+    token.scope = "scope" in user && typeof user.scope === "string" ? user.scope : "OWN";
+    token.roleLabel =
+        "roleLabel" in user && typeof user.roleLabel === "string" ? user.roleLabel : undefined;
+    token.roleColor =
+        "roleColor" in user && typeof user.roleColor === "string" ? user.roleColor : undefined;
+    token.departmentIds =
+        "departmentIds" in user && Array.isArray(user.departmentIds)
+            ? (user.departmentIds as string[])
+            : [];
+    token.branchIds =
+        "branchIds" in user && Array.isArray(user.branchIds) ? (user.branchIds as string[]) : [];
+    token.title = "title" in user ? (user.title as string | undefined) : undefined;
+    // Every Position they hold, for the counter's sign-in card. Two short
+    // strings per seat, and almost everyone holds one.
+    token.seats = "seats" in user && Array.isArray(user.seats) ? user.seats : [];
+    token.avatarUrl = "avatarUrl" in user ? (user.avatarUrl as string | undefined) : undefined;
+    token.kind = "kind" in user && user.kind === "customer" ? "customer" : "staff";
+    // Phone app only (auth/phoneOnly.ts) — proxy.ts reads it off the token.
+    if ("phoneOnly" in user && user.phoneOnly === true) token.phoneOnly = true;
+    // Signed in inside the staff phone app — its 30 / 90-day clocks apply.
+    if ("phoneApp" in user && user.phoneApp === true) token.phoneApp = true;
+    token.customerId =
+        "customerId" in user && typeof user.customerId === "string" ? user.customerId : undefined;
+    token.activeAccountId =
+        "activeAccountId" in user && typeof user.activeAccountId === "string"
+            ? user.activeAccountId
+            : undefined;
+    token.activeAccountType =
+        "activeAccountType" in user && (user.activeAccountType === "personal" || user.activeAccountType === "company")
+            ? user.activeAccountType
+            : undefined;
+}
+
+/**
+ * Is this staff token dead? Two stamps and one clock can end it:
+ *
+ *   • `User.tokensValidFrom` — "end every login": a role / position / permission edit,
+ *     a password change (`revokeSessions.ts`). Everywhere, office and tills alike.
+ *   • On a till, this till's own sign-out mark (`localSignOut.ts`). A Sign out on one
+ *     till ends that till's login and nothing else (owner, 2026-10-13).
+ *   • 10 days since the password was typed (`LOGIN_MAX_AGE_MS`), from `passwordAt` —
+ *     a counter PIN sign-in carries the old stamp forward, so it never resets it.
+ *     Tokens from before `passwordAt` fall back to `loginAt`.
+ *   • 3 days with nobody using it (`LOGIN_IDLE_MAX_AGE_MS`), from `seenAt`. The
+ *     cookie itself lives 90 days for customers, so this clock is on the token.
+ *   • A phone-app login (`token.phoneApp`) gets 90 days and 30 days instead.
+ *
+ * Tokens minted before `loginAt` existed are left alone. A DB hiccup fails OPEN so a
+ * transient outage cannot mass-logout every cashier; prisma's read-retry makes it rare.
+ * Shared with the write relay, which must not speak for a login the till has ended.
+ */
+export async function isStaffTokenRevoked(token: Record<string, unknown>): Promise<boolean> {
+    if (!token.id || token.kind === "customer") return false;
+    const loginAt = typeof token.loginAt === "number" ? token.loginAt : 0;
+    if (!loginAt) return false;
+    const passwordAt = typeof token.passwordAt === "number" ? token.passwordAt : loginAt;
+    const phone = token.phoneApp === true;
+    if (Date.now() - passwordAt > (phone ? PHONE_LOGIN_MAX_AGE_MS : LOGIN_MAX_AGE_MS)) return true;
+    // Tokens from before `seenAt` existed: the cookie held them to 3 days already.
+    const seenAt = typeof token.seenAt === "number" ? token.seenAt : 0;
+    if (seenAt && Date.now() - seenAt > (phone ? PHONE_LOGIN_IDLE_MAX_AGE_MS : LOGIN_IDLE_MAX_AGE_MS)) return true;
+    if (IS_COUNTER_PC && loginAt < localSignOutAt(String(token.id))) return true;
+    try {
+        const u = await prisma.user.findUnique({
+            where: { id: Number(token.id) },
+            select: { tokensValidFrom: true },
+        });
+        const validFrom = u?.tokensValidFrom?.getTime();
+        return !!validFrom && loginAt < validFrom;
+    } catch {
+        return false;
+    }
+}

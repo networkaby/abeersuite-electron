@@ -52,6 +52,9 @@ const createSchema = z.object({
     // this save — so the server must not link first. Its oldest-first choice
     // would spend the voucher's room, and the ticks would then be refused.
     autoLink:       z.boolean().optional(),
+    // true = the form's "Send WhatsApp" tick was off (backdated entries start
+    // off). Absent = send as before, so an older counter build is unchanged.
+    skipWhatsApp:   z.boolean().optional(),
 });
 
 // GET /api/accountancy/vouchers?type=CONTRA&status=DRAFT
@@ -249,7 +252,7 @@ export async function POST(req: Request) {
             });
         }
 
-        const notifyKind = (body.post ?? false) ? autoKindForVoucherType(body.type) : null;
+        const notifyKind = (body.post ?? false) && !body.skipWhatsApp ? autoKindForVoucherType(body.type) : null;
         if (notifyKind) after(() => notifyBill(notifyKind, voucher.id));
 
         return NextResponse.json(

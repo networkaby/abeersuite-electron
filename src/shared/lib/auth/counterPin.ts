@@ -1,31 +1,29 @@
 /**
  * Counter PIN — the rules, in one place.
  *
- * Typing a full email and password at the till every morning is the slowest minute of
- * the shop's day. A staff member may set six digits and then just tap their photo on
- * the sign-in shell. This module owns what that PIN is allowed to do.
- *
- * Three rules, and all three matter:
+ * Four digits, any four, and they SIGN IN on a counter (`authorizeStaffPin`) — a
+ * tapped photograph and four digits, after a restart, a sign-out, or when a colleague
+ * takes the till (owner, 2026-10-15: "don't ask for password, respect the 4-digit PIN
+ * even on a fresh boot … password only after x idle days or y days"). The lock cover
+ * it also lifted was retired 2026-10-16.
  *
  *  1. **It only works on a counter.** `thisCounterId()` answers null anywhere else —
- *     on Vercel `COUNTER_MACHINE_ID` is simply not set, so a PIN is not a credential
- *     on the website at all, whatever anyone posts at it.
+ *     on Vercel `COUNTER_MACHINE_ID` is simply not set.
  *  2. **It only works on THIS counter.** One row per person per counter. Every till
  *     holds a replica of the table, so a PIN that worked everywhere would make one
- *     stolen counter PC a key to every counter. Bound to a counter, the blast radius
- *     is that one machine.
- *  3. **It never replaces the password.** Two clocks below force the real password
- *     back every so often, and after a few idle days.
+ *     stolen counter PC a key to every counter.
+ *  3. **It never replaces the password.** Two clocks on the row, the same two that end
+ *     a login (`constants/session.ts`): 10 days since the password was typed on this
+ *     counter, 3 days with nobody using it here. Past either, the password.
  *
- * Both clocks are read and written on the counter's own replica, because the till has
- * to be able to judge this with the line down. That is also this design's honest
- * weakness: somebody with file access to the PC could wind a clock back. They already
- * hold the machine and its data — rules 1 and 2 are the ones carrying the weight.
+ * The clocks are stamped by the till on its own replica (`localAuthority` in the sync
+ * registry), so it can judge them with the line down. Somebody with file access to the
+ * PC could wind one back — they already hold the machine; rules 1 and 2 carry the weight.
  */
 
 import type { PrismaClient } from "@/generated/prisma/client";
 import { readCounterSetup } from "@/shared/lib/counter/releaseGuard";
-import { PIN_IDLE_MAX_AGE_MS, PIN_PASSWORD_MAX_AGE_MS } from "@/shared/lib/constants/session";
+import { LOGIN_IDLE_MAX_AGE_MS, LOGIN_MAX_AGE_MS, PIN_LENGTH } from "@/shared/lib/constants/session";
 
 /**
  * Which counter is this server running inside — or null for "not a counter".
@@ -41,63 +39,50 @@ export function thisCounterId(): number | null {
     return readCounterSetup()?.counterId ?? null;
 }
 
+/** Four digits, any four — no "too easy" rules (owner, 2026-10-13). */
+export function validatePin(pin: string): { ok: true } | { ok: false; reason: string } {
+    return pin.length === PIN_LENGTH && /^\d+$/.test(pin)
+        ? { ok: true }
+        : { ok: false, reason: `A PIN is exactly ${PIN_LENGTH} digits.` };
+}
+
 /**
  * Are the clocks still good, or is it password time?
  *
- * The distinction is not cosmetic. "Wrong PIN" and "the 10 days are up" look identical
- * to a cashier at 9am, and the second one is not a mistake they made — the screen has
- * to be able to say so, or a correct PIN refused in silence reads as a broken till.
+ * Kept apart from "wrong PIN" on purpose: the two look identical to a cashier at 9am,
+ * and the second is not a mistake they made — the screen has to be able to say so.
  */
 export function pinClocksExpired(pin: { lastPasswordAt: Date; lastLoginAt: Date }, now = Date.now()): boolean {
     return (
-        now - pin.lastPasswordAt.getTime() > PIN_PASSWORD_MAX_AGE_MS ||
-        now - pin.lastLoginAt.getTime() > PIN_IDLE_MAX_AGE_MS
+        now - pin.lastPasswordAt.getTime() > LOGIN_MAX_AGE_MS ||
+        now - pin.lastLoginAt.getTime() > LOGIN_IDLE_MAX_AGE_MS
     );
 }
 
 /**
- * Stamp the clocks after a successful sign-in on this counter.
+ * Stamp this person's clocks on this counter.
  *
- * `password` resets both — typing it is exactly what the 10-day rule asks for. A PIN
- * sign-in moves only the idle clock, so the password still falls due on time.
+ *   • `password` — both go back to zero; typing it is what the 10-day rule asks for.
+ *   • `used`     — only the idle clock moves (a PIN sign-in), so the password still falls due on time.
+ *   • `expire`   — the password is due now: too many wrong PINs in a row.
  *
- * Best-effort on purpose: a failed stamp must never fail the sign-in. The worst it
- * costs is one extra password next time, which is the safe way to be wrong. Nothing is
- * created here either — no PIN row, no PIN — so a user who has never set one stays
- * unaffected.
+ * Best-effort: a failed stamp never fails a sign-in — the worst it costs is one extra
+ * password. Nothing is created: somebody with no PIN here stays unaffected.
  */
-export async function stampCounterPinLogin(
+export async function stampCounterPin(
     prisma: PrismaClient,
     userId: number,
-    kind: "password" | "pin",
+    kind: "password" | "used" | "expire",
+    at = new Date(),
 ): Promise<void> {
     const counterId = thisCounterId();
-    if (!counterId) return;
-    const now = new Date();
+    if (!counterId || !Number.isFinite(userId) || userId <= 0) return;
+    const data = kind === "password" ? { lastPasswordAt: at, lastLoginAt: at }
+        : kind === "used" ? { lastLoginAt: at }
+        : { lastPasswordAt: new Date(0) };
     try {
-        await prisma.userCounterPin.updateMany({
-            where: { userId, counterId },
-            data: kind === "password" ? { lastPasswordAt: now, lastLoginAt: now } : { lastLoginAt: now },
-        });
+        await prisma.userCounterPin.updateMany({ where: { userId, counterId }, data });
     } catch {
-        /* Replica hiccup — see above. */
+        /* replica hiccup — see above */
     }
-}
-
-/**
- * Six digits, and not a guessable six.
- *
- * The rejected shapes are the ones people actually pick: one repeated digit, a straight
- * run either way, and a four-digit ATM habit padded out. Returns the reason so the
- * dialog can say it plainly instead of "invalid".
- */
-export function validatePin(pin: string): { ok: true } | { ok: false; reason: string } {
-    if (!/^\d{6}$/.test(pin)) return { ok: false, reason: "A PIN is exactly 6 digits." };
-    if (/^(\d)\1{5}$/.test(pin)) return { ok: false, reason: "All six digits are the same — pick another." };
-    const digits = [...pin].map(Number);
-    const step = digits[1] - digits[0];
-    if ((step === 1 || step === -1) && digits.every((d, i) => i === 0 || d - digits[i - 1] === step)) {
-        return { ok: false, reason: "That is a straight run of digits — pick another." };
-    }
-    return { ok: true };
 }

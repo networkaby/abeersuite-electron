@@ -5,7 +5,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { parseRange } from "@/modules/accountancy/lib/period";
 import {
     CUSTOMER_ACCOUNT_OPENING_SELECT,
-    loadCustomerTransactionVouchers,
+    loadCustomerTransactionVouchers, normalSideOf,
 } from "@/modules/customer/lib/customerTransactions";
 
 // GET /api/companies/[id]/transactions?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -38,7 +38,12 @@ export async function GET(
             to,
         );
 
-        return NextResponse.json({ invVouchers, accountId: account?.id ?? null });
+        return NextResponse.json({
+            invVouchers,
+            accountId: account?.id ?? null,
+            // Which side reads as the plus side — the daily breakup prints Dr / Cr from it.
+            normalBalance: account ? normalSideOf(account) : null,
+        });
     } catch (e) {
         return handleApiError(e, "Failed to load transactions");
     }

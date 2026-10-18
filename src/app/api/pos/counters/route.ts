@@ -118,6 +118,9 @@ export async function GET(req: NextRequest) {
                 boundDeviceId: locks ? (locks.get(c.id)?.boundDeviceId ?? null) : c.boundDeviceId,
                 boundDeviceLabel: locks ? (locks.get(c.id)?.boundDeviceLabel ?? null) : c.boundDeviceLabel,
                 boundAt: locks ? (locks.get(c.id)?.boundAt ?? null) : c.boundAt,
+                // The PC's office key (v_live relay, counter/relayKey.ts) — Admin → Counters.
+                officeKeyIssuedAt: c.relayKeyIssuedAt,
+                officeKeyRevokedAt: c.relayKeyRevokedAt,
             }));
 
             // The array shape is what every existing caller expects; only the

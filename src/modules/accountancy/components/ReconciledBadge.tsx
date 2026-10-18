@@ -13,7 +13,8 @@
 // retreatReconciliation() in lib/reconciliation.ts), so what's shown here is
 // always the last date still known to be clean.
 
-import { useState } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { useApiResource } from "@/shared/hooks/useApiResource";
 import axios from "axios";
 import { toast } from "sonner";
 import { CheckCircle2, CircleDashed, Loader2 } from "lucide-react";
@@ -30,9 +31,15 @@ export interface ReconciledBadgeProps {
     reconciledAt: string | null;
     /** Called after a successful save/clear so the parent can refetch. */
     onSaved: () => void;
+    /** yyyy-mm-dd of the latest entry on screen — offered when the editor opens
+     *  so the usual case ("matched to the end") is one click on Save. */
+    lastEntryDate?: string | null;
 }
 
-export function ReconciledBadge({ accountId, reconciledThrough, reconciledAt, onSaved }: ReconciledBadgeProps) {
+export function ReconciledBadge({ accountId, reconciledThrough, reconciledAt, onSaved, lastEntryDate }: ReconciledBadgeProps) {
+    const suggestion = lastEntryDate && (!reconciledThrough || lastEntryDate > reconciledThrough)
+        ? lastEntryDate
+        : reconciledThrough ?? "";
     const [open, setOpen] = useState(false);
     const [draft, setDraft] = useState(reconciledThrough ?? "");
     const [saving, setSaving] = useState(false);
@@ -56,7 +63,7 @@ export function ReconciledBadge({ accountId, reconciledThrough, reconciledAt, on
         <div className="flex flex-col items-end gap-1.5">
             <button
                 type="button"
-                onClick={() => { setDraft(reconciledThrough ?? ""); setOpen((v) => !v); }}
+                onClick={() => { setDraft(suggestion); setOpen((v) => !v); }}
                 className={cn(
                     "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
                     reconciledThrough
@@ -120,5 +127,62 @@ export function ReconciledBadge({ accountId, reconciledThrough, reconciledAt, on
                 </div>
             )}
         </div>
+    );
+}
+
+/** A green tick beside a balance: this ledger is reconciled right up to its
+ *  last entry (watermark set, nothing posted after it). Renders nothing
+ *  otherwise — drop it next to any balance where a ledger's status matters. */
+export function ReconciledTick({ through, pending, size = 12 }: {
+    through: string | null | undefined;
+    pending: number | null | undefined;
+    size?: number;
+}) {
+    if (!through || pending) return null;
+    const label = `Reconciled upto ${formatDate(through)}`;
+    return (
+        <span title={label} aria-label={label} className="inline-flex shrink-0 text-green-600 dark:text-green-400">
+            <CheckCircle2 size={size} />
+        </span>
+    );
+}
+
+// ── Reports: one read, a tick on every reconciled ledger row ─────────────────
+
+const ReconciledLedgers = createContext<Map<number, string> | null>(null);
+
+/** Wrap a report once; every `LedgerReconciledTick` inside it reads this list. */
+export function ReconciledLedgersProvider({ children }: { children: ReactNode }) {
+    const { data } = useApiResource<{ id: number; through: string }[]>(
+        "/api/accountancy/ledgers/reconciled", { topics: ["ledger"] },
+    );
+    const map = useMemo(() => new Map((data ?? []).map((r) => [r.id, r.through])), [data]);
+    return <ReconciledLedgers.Provider value={map}>{children}</ReconciledLedgers.Provider>;
+}
+
+/** The green tick for a ledger row, when that ledger is reconciled up to date. */
+export function LedgerReconciledTick({ ledgerId, size }: { ledgerId: number; size?: number }) {
+    const through = useContext(ReconciledLedgers)?.get(ledgerId);
+    return <ReconciledTick through={through} pending={0} size={size} />;
+}
+
+/** The green tick for a group row: every ledger under it is reconciled up to
+ *  date — a ledger closing at zero counts as reconciled. An empty group gets no
+ *  tick. The label shows the earliest watermark among them. */
+export function GroupReconciledTick({ ledgers, size = 12 }: { ledgers: { id: number; closing: number }[]; size?: number }) {
+    const map = useContext(ReconciledLedgers);
+    if (!map || ledgers.length === 0) return null;
+    let earliest: string | undefined;
+    for (const l of ledgers) {
+        if (Math.abs(l.closing) < 0.005) continue;
+        const through = map.get(l.id);
+        if (!through) return null;
+        if (!earliest || through < earliest) earliest = through;
+    }
+    const label = earliest ? `Reconciled upto ${formatDate(earliest)}` : "All balances nil";
+    return (
+        <span title={label} aria-label={label} className="inline-flex shrink-0 text-green-600 dark:text-green-400">
+            <CheckCircle2 size={size} />
+        </span>
     );
 }

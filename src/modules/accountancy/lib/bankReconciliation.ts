@@ -21,7 +21,7 @@ import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { startOfDayUtc, endOfDayUtc, toDateOnly, toDateOnlyUtc, formatDate } from "@/shared/lib/format/formatDate";
 import {
-    checkContinuity, fingerprintSource, occurrenceIndexes, sameAccountNumber, money2,
+    checkContinuity, fingerprintSource, occurrenceIndexes, orderStatementRows, sameAccountNumber, money2,
     referenceTokensOf, type StatementRow, type StatementMeta,
 } from "@/shared/lib/import/bankStatement";
 import { accountIdsUnderGroup } from "./accountGroups";
@@ -342,32 +342,18 @@ export async function loadReconciliation(accountId: number, fromIso: string, toI
         if (d < fromIso) glUnmatchedOlder++;
     }
     let depositsNotInBooks = 0, withdrawalsNotInBooks = 0, stUnmatched = 0, stUnmatchedOlder = 0;
-    let firstUnmatchedDate: string | null = null;
-    let lastLine: { date: string; balance: number | null } | null = null;
     for (const s of stLinesAll) {
         const d = toDateOnlyUtc(s.date);
-        lastLine = { date: d, balance: s.balance != null ? toNumber(s.balance) : null };
         if (byStatement.has(s.id) || inOpening(d, cover)) continue;
         depositsNotInBooks += s.deposit != null ? toNumber(s.deposit) : 0;
         withdrawalsNotInBooks += s.withdrawal != null ? toNumber(s.withdrawal) : 0;
         stUnmatched++;
         if (d < fromIso) stUnmatchedOlder++;
-        if (!firstUnmatchedDate || d < firstUnmatchedDate) firstUnmatchedDate = d;
     }
     const derived = money2(books + paymentsNotInBank - depositsNotInBank + depositsNotInBooks - withdrawalsNotInBooks);
     // Latest printed balance on/before `to`.
     const withBalance = [...stLinesAll].reverse().find((s) => s.balance != null);
     const statementBalance = withBalance ? toNumber(withBalance.balance!) : null;
-
-    let suggested: string | null = null;
-    if (lastLine) {
-        if (!firstUnmatchedDate) suggested = lastLine.date;
-        else {
-            const dayBefore = new Date(startOfDayUtc(firstUnmatchedDate).getTime() - 86400000);
-            const iso = toDateOnlyUtc(dayBefore);
-            suggested = iso >= (account.lock ?? "0000-00-00") ? iso : null;
-        }
-    }
 
     // ── Rows for the two panes (the period) ────────────────────────────────
     const visiblePeriod = collapseEditReversals(periodGl);
@@ -390,6 +376,9 @@ export async function loadReconciliation(accountId: number, fromIso: string, toI
             ticked: byStatement.has(s.id) || inOpening(toDateOnlyUtc(s.date), cover),
         })),
     });
+    // "Lock upto" offers exactly where the green Balance band runs to — books =
+    // bank and every row ticked — never further, and never behind the lock.
+    const suggested = agreedThrough && agreedThrough > (account.lock ?? "0000-00-00") ? agreedThrough : null;
     const sourceMap = await resolveSourceBatch([...new Set(visiblePeriod.map((l) => l.universalVoucher.id))]);
     const glLines: GlLineView[] = visiblePeriod.map((l) => {
         const d = toDateOnly(l.universalVoucher.date);
@@ -542,20 +531,24 @@ export async function importStatement(accountId: number, userId: number, input: 
 
     if (input.rows.length === 0) throw new BankReconError("No statement lines to import.");
 
+    // Oldest first, whatever order the bank printed: `seq` is the order inside a
+    // day, and the last line of a day is read as its closing balance.
+    const rows = orderStatementRows(input.rows, input.meta.openingBalance ?? null);
+
     // Continuity inside the file.
-    const cont = checkContinuity(input.rows, input.meta.openingBalance ?? null);
+    const cont = checkContinuity(rows, input.meta.openingBalance ?? null);
     if (cont.breaks.length && !input.force) {
         const b = cont.breaks[0];
         throw new BankReconError(
-            `Running balance breaks at line ${b.rowIndex + 1}: expected ${b.expected.toFixed(2)}, statement says ${b.actual.toFixed(2)}. A line is missing or doubled. Fix the file, or tick "save anyway".`,
+            `Running balance breaks on ${formatDate(rows[b.rowIndex].date)}: expected ${b.expected.toFixed(2)}, statement says ${b.actual.toFixed(2)}. A line is missing or doubled. Fix the file, or tick "save anyway".`,
             422,
         );
     }
     if (cont.breaks.length) warnings.push(`${cont.breaks.length} running-balance break(s) saved anyway.`);
 
     // Lock.
-    const kept = input.rows.filter((r) => !isLocked(r.date, account.lock));
-    const beforeLock = input.rows.length - kept.length;
+    const kept = rows.filter((r) => !isLocked(r.date, account.lock));
+    const beforeLock = rows.length - kept.length;
     if (beforeLock) warnings.push(`${beforeLock} line(s) dated before the reconciled lock (${account.lock}) were not saved.`);
 
     // Fingerprints; skip what an earlier upload already saved.

@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { normalizePortalEmail, normalizePortalPhone } from "@/shared/lib/auth/portalIdentifier";
 
 type ReconcileResult = {
@@ -17,8 +18,9 @@ async function ensurePersonAccount(personId: number, fallbackName: string, dryRu
     if (existing) return { accountId: existing.id, created: false };
 
     if (dryRun) return { accountId: -1, created: true };
+    const group = await prisma.accountGroup.findFirst({ where: { name: ACCOUNT_GROUPS.SUNDRY_DEBTORS }, select: { id: true } });
     const created = await prisma.account.create({
-        data: { personId, name: fallbackName || "Customer" },
+        data: { personId, name: fallbackName || "Customer", groupId: group?.id ?? null },
         select: { id: true },
     });
     return { accountId: created.id, created: true };

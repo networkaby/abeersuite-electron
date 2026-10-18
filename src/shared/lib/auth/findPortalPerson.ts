@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { canonicalPhone } from "@/shared/lib/format/phone";
+import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { normalizePortalEmail, normalizePortalPhone } from "@/shared/lib/auth/portalIdentifier";
 
 /**
@@ -135,6 +136,17 @@ async function attachEmail(db: Db, personId: number, email: string, isPrimary: b
  * self-service form is not the place to overwrite it. We only top up a contact
  * row or an Account they are missing.
  */
+/** A self-registered customer's ledger goes under Sundry Debtors, the same as
+ *  one added from the office. Without a group the ledger has no Dr/Cr side,
+ *  and its money went missing from the party list, Cur Bal and the reports. */
+async function sundryDebtorsGroupId(db: Pick<PrismaClient, "accountGroup">): Promise<number | null> {
+    const group = await db.accountGroup.findFirst({
+        where: { name: ACCOUNT_GROUPS.SUNDRY_DEBTORS },
+        select: { id: true },
+    });
+    return group?.id ?? null;
+}
+
 export async function ensurePortalPerson(
     db: PrismaClient,
     identity: PortalContactIdentity,
@@ -164,7 +176,7 @@ export async function ensurePortalPerson(
         });
         if (!account) {
             await db.account.create({
-                data: { personId: existing.id, name: existing.name, creditLimit: 0 },
+                data: { personId: existing.id, name: existing.name, groupId: await sundryDebtorsGroupId(db), creditLimit: 0 },
             });
         }
         return existing;
@@ -187,7 +199,7 @@ export async function ensurePortalPerson(
             });
         }
         await tx.account.create({
-            data: { personId: person.id, name: person.name, creditLimit: 0 },
+            data: { personId: person.id, name: person.name, groupId: await sundryDebtorsGroupId(tx), creditLimit: 0 },
         });
         return person;
     });

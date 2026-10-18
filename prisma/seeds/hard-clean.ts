@@ -10,7 +10,7 @@
 //   • All InvProduct catalog + InvCategory/Group/Brand (InvBrand comes back from
 //     helper-brands.ts; categories + groups come back from the personal snapshot)
 //   • InvAttributeMaster rows (added via Configure → Attribute masters)
-//   • ServiceCenter, PortalCredentials
+//   • PortalCredentials
 //
 // Preserves (everything bootstrap-seed.ts wrote, plus user-set config):
 //   • Admin user (admin@networkservice.in)
@@ -117,13 +117,9 @@ const INVENTORY_MASTERS = [
     "InvCategory", "InvProductGroup", "InvBrand",
 ];
 
-// Phase 6 — other dummy-only config tables.
-// NOTE: payment_gateways (Settings → Payment Methods) is NOT listed here — it's
-// cleared with an explicit DELETE in Phase 6 so its ON DELETE SET NULL fires and
-// preserves the counter payment rails. See the DELETE below.
-const DUMMY_CONFIG_TABLES = [
-    "ServiceCenter",
-];
+// Phase 6 — other dummy-only config. payment_gateways (Settings → Payment Methods)
+// is cleared with an explicit DELETE, not TRUNCATE, so its ON DELETE SET NULL fires
+// and preserves the counter payment rails. See the DELETE below.
 
 async function main(): Promise<void> {
     console.log("Hard-cleaning database — returning to bootstrap state…\n");
@@ -183,11 +179,8 @@ async function main(): Promise<void> {
     for (const t of INVENTORY_MASTERS) console.log(`      ✓ ${t}`);
     console.log("");
 
-    // ── Phase 6 — TRUNCATE other dummy-only config tables ──────────────
+    // ── Phase 6 — other dummy-only config ───────────────────────────────
     console.log("[6/7] Wiping other dummy-only config");
-    const cfgList = DUMMY_CONFIG_TABLES.map((t) => `"${t}"`).join(", ");
-    await pool.query(`TRUNCATE TABLE ${cfgList} RESTART IDENTITY CASCADE`);
-    for (const t of DUMMY_CONFIG_TABLES) console.log(`      ✓ ${t}`);
 
     // Payment-gateway catalog (Settings → Payment Methods) — operator config, not
     // bootstrap-seeded, so it's wiped here. We DELETE (not TRUNCATE … CASCADE) so the

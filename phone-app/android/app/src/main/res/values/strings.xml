@@ -8,4 +8,7 @@
          vouching back, so Chrome's getInstalledRelatedApps() on the install page sees
          it as installed. -->
     <string name="asset_statements" translatable="false">[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://office.networkservice.in\"}}]</string>
+    <!-- Push: the site a tapped notification opens, and the channel name in Android settings. -->
+    <string name="ns_site" translatable="false">https://office.networkservice.in</string>
+    <string name="ns_push_channel">Customer messages</string>
 </resources>

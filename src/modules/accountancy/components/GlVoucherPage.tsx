@@ -462,6 +462,13 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     // soft switches.
     const [printAfterSave, setPrintAfterSave] = useState(() => printAfterSaveDefault(kind));
     const [thermal, setThermal] = useState(() => thermalDefault(kind));
+    // "Send WhatsApp" — a today's Receipt goes out; a backdated one stays quiet,
+    // and a Payment (a refund message) stays off unless staff tick it. A hand
+    // tick holds only for the date it was made on: changing the date resets it.
+    const [waTick, setWaTick] = useState<{ date: string; on: boolean } | null>(null);
+    const sendWhatsApp = waTick?.date === date
+        ? waTick.on
+        : kind === "RECEIPT" && date === toIsoDate(new Date());
 
     // Top side — either a Cash/Bank ledger (Payment/Receipt/Contra) or a Party
     // ledger picked via the shared customer-supplier picker (CN/DN).
@@ -1084,6 +1091,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                     ...(isContra || isPayment ? { denomJson: buildDenomPayload() } : {}),
                     ...(postAfterSave ? { post: true } : {}),
                     ...(settlesTicks ? { autoLink: false } : {}),
+                    ...(postAfterSave && !sendWhatsApp ? { skipWhatsApp: true } : {}),
                 },
             );
             const shownNo = created.data.reference ?? `UV-${created.data.id}`;
@@ -1571,7 +1579,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
 
             {/* Sticky action bar */}
             <VoucherActionBar
-                onCancel={closeForm}
+                onCancel={handleClose}
                 onSave={() => submit(true, printAfterSave)}
                 saveLabel={isEditing ? "Save Changes" : "Save"}
                 saveDisabled={saving || !balanced || loading || (isEditing && (loadedVoucher?.status === "CANCELLED"))}
@@ -1583,6 +1591,9 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                 showThermalToggle
                 thermal={thermal}
                 onThermalChange={setThermal}
+                showWhatsAppToggle={!isEditing && (kind === "RECEIPT" || kind === "PAYMENT")}
+                sendWhatsApp={sendWhatsApp}
+                onSendWhatsAppChange={(on) => setWaTick({ date, on })}
                 showSave={isEditing || canPost}
                 saveDraftDisabled={saving || !balanced}
                 saving={saving}

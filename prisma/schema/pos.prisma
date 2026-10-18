@@ -77,6 +77,16 @@ model PosCounter {
   // a bind minted BEFORE the release is a stale replay and is refused; a genuine
   // first bind, or a rebind made after it, still applies. Cleared on every bind.
   releasedAt               DateTime?
+  // The counter's own key for signing in at the office (WRITE_MODE=v_live relay) —
+  // see shared/lib/counter/relayKey.ts. Only SHA-256 hashes are stored; the key lives
+  // on the bound PC. The till renews it every 30 days and the previous hash stays good
+  // so a save already on the wire is not refused. It never expires on its own:
+  // revoking (relayKeyRevokedAt) is what ends it, and binding the counter again
+  // clears the revoke.
+  relayKeyHash             String?
+  relayKeyPrevHash         String?
+  relayKeyIssuedAt         DateTime?
+  relayKeyRevokedAt        DateTime?
   shifts                   PosShift[]
   counterPins              UserCounterPin[]
 

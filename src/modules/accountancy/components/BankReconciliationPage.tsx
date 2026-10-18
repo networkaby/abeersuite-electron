@@ -18,7 +18,7 @@
 // balance. The lock (Reconciled upto) advances only when every statement line
 // up to that date is matched — the bank is the truth.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
@@ -99,6 +99,9 @@ function isOpen(r: MergedRow) {
     return r.kind === "st" ? (r.st.match == null || r.st.match.stale) && !r.st.locked && !r.st.inOpening : r.gl.match == null && !r.gl.locked;
 }
 
+const POS_KEY = "recon.account";
+const posKey = (id: number) => `recon.pos.${id}`;
+
 function money(n: number | null | undefined) {
     return n == null || n === 0 ? <span className="text-muted-foreground/60">—</span> : fmt(n);
 }
@@ -108,9 +111,21 @@ export function BankReconciliationPage() {
     const { menu: linkMenu, close: closeLinkMenu, onContainerContextMenu } = useLinkContextMenu();
     const today = formatDateInput(new Date());
     const [selectedId, setSelectedId] = useState<number | null>(() => {
-        const q = Number(search.get("account"));
+        let q = Number(search.get("account"));
+        if (!(Number.isInteger(q) && q > 0)) { try { q = Number(sessionStorage.getItem(POS_KEY)); } catch { /* private mode */ } }
         return Number.isInteger(q) && q > 0 ? q : null;
     });
+    // The picked bank rides in the URL (and this tab's session), so a reload or a
+    // remount after booking a voucher comes back to the same bank, not the first.
+    useEffect(() => {
+        if (selectedId == null) return;
+        try { sessionStorage.setItem(POS_KEY, String(selectedId)); } catch { /* private mode */ }
+        const u = new URL(window.location.href);
+        if (u.searchParams.get("account") !== String(selectedId)) {
+            u.searchParams.set("account", String(selectedId));
+            window.history.replaceState(window.history.state, "", u);
+        }
+    }, [selectedId]);
     const [from, setFrom] = useState(formatDateInput(indianFiscalYearStart()));
     const [to, setTo] = useState(today);
     const [filter, setFilter] = useState<Filter>("all");
@@ -394,6 +409,25 @@ export function BankReconciliationPage() {
     }
     const mCurrent = Math.min(Math.max(1, mPage), mPageCount);
     const mPageRows = mPages[mCurrent - 1] ?? [];
+    // Page + scroll per bank, kept for this tab — restored once each time a
+    // bank's rows first arrive, so returning from a voucher lands on the same row.
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const restoredFor = useRef<number | null>(null);
+    const savePos = () => {
+        if (!selectedId || restoredFor.current !== selectedId) return;
+        try { sessionStorage.setItem(posKey(selectedId), JSON.stringify({ page: mCurrent, top: scrollRef.current?.scrollTop ?? 0 })); } catch { /* private mode */ }
+    };
+    useEffect(() => {
+        if (!data || restoredFor.current === data.account.id) return;
+        restoredFor.current = data.account.id;
+        let pos: { page?: number; top?: number } = {};
+        try { pos = JSON.parse(sessionStorage.getItem(posKey(data.account.id)) ?? "{}"); } catch { /* none */ }
+        setMPage(pos.page && pos.page > 0 ? pos.page : 1);
+        requestAnimationFrame(() => { if (scrollRef.current) scrollRef.current.scrollTop = pos.top ?? 0; });
+    }, [data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { savePos(); }, [mCurrent]);
+
     const mFrom = mPages.slice(0, mCurrent - 1).reduce((n, p) => n + p.length, 0) + 1;
 
     const stTotal = useMemo(() => {
@@ -687,7 +721,7 @@ export function BankReconciliationPage() {
                                     <Link href={accountLedgerUrl(data.account.id, { from, to })} className="text-primary hover:underline">open ledger</Link>
                                 </span>
                             </div>
-                            <div className="min-h-0 flex-1 overflow-auto bg-card" onContextMenu={onContainerContextMenu}>
+                            <div ref={scrollRef} onScroll={savePos} className="min-h-0 flex-1 overflow-auto bg-card" onContextMenu={onContainerContextMenu}>
                                 <table className="w-full text-xs">
                                     <thead className="sticky top-0 z-10 text-muted-foreground" style={moduleTableHeadStyle("accountancy")}>
                                         <tr>

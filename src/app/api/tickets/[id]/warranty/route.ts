@@ -18,7 +18,7 @@ const warrantySchema = z.object({
 });
 
 export async function POST(req: Request, { params }: Params) {
-    // TODO(rbac): was requirePermission(WARRANTY_CONVERT) — open to all staff for now.
+    // Open to all staff by design — owner's decision (2026-10-18). Staff check the original invoice first.
     const { user, response } = await requireAuth();
     if (response) return response;
 

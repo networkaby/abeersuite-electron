@@ -32,6 +32,8 @@ type CompanyForm = {
 type CreateCompanyDialogProps = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    /** The new party's id, once saved — a list page opens it. */
+    onCreated?: (id: number) => void;
 };
 
 const INITIAL_FORM: CompanyForm = {
@@ -46,7 +48,7 @@ const INITIAL_FORM: CompanyForm = {
     shippingStateCode: "",
 };
 
-export default function CreateCompanyDialog({ open, onOpenChange }: CreateCompanyDialogProps) {
+export default function CreateCompanyDialog({ open, onOpenChange, onCreated }: CreateCompanyDialogProps) {
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<CompanyForm>(INITIAL_FORM);
     const [showGstSection, setShowGstSection] = useState(false);
@@ -70,7 +72,7 @@ export default function CreateCompanyDialog({ open, onOpenChange }: CreateCompan
 
         setSaving(true);
         try {
-            await axios.post("/api/companies", {
+            const res = await axios.post<{ id: number }>("/api/companies", {
                 ...form,
                 gstin:             form.gstin || undefined,
                 gstStateCode:      form.gstStateCode || undefined,
@@ -78,6 +80,7 @@ export default function CreateCompanyDialog({ open, onOpenChange }: CreateCompan
             });
             toast.success("Company created");
             onOpenChange(false);
+            onCreated?.(res.data.id);
             setForm(INITIAL_FORM);
             setShowGstSection(false);
         } catch (err) {

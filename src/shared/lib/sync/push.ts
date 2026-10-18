@@ -121,6 +121,12 @@ async function reconcileCounterBinding(
     payload: Record<string, unknown>,
     where: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+    // The office key columns are written only straight to Supabase (relayKey.ts, the
+    // bind / release routes). A replayed row carries the replica's older copy, which
+    // would roll a renewal back or lift a revoke — so a push never carries them.
+    const { relayKeyHash: _h, relayKeyPrevHash: _p, relayKeyIssuedAt: _i, relayKeyRevokedAt: _r, ...rest } = payload;
+    void _h; void _p; void _i; void _r;
+    payload = rest;
     const server = await (prismaLive as unknown as {
         posCounter: { findUnique: (a: unknown) => Promise<{ boundDeviceId: string | null; boundDeviceLabel: string | null; boundAt: Date | null; releasedAt: Date | null } | null> };
     }).posCounter.findUnique({
@@ -442,6 +448,14 @@ export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcom
             // voucherWouldUnpost): it has to be checked even when the row is newer
             // than the cloud's, because that is exactly the case LWW would wave
             // through, so it cannot sit behind the short-circuit below.
+            // A person's day has two writers and must never be won whole by either.
+            // See mergeAttendanceDay.
+            if (entry.model === "AttendanceDay") {
+                await mergeAttendanceDay(payload);
+                pushedIds.push(rec.id);
+                continue;
+            }
+
             const isVoucher = rec.table_name === "UniversalVoucher";
             const incoming = typeof payload.updatedAt === "string" || payload.updatedAt instanceof Date
                 ? new Date(payload.updatedAt as string | Date)
@@ -560,6 +574,63 @@ export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcom
 
     await rebuildTotalsAfterPush(touches);
     return { pushedIds, failure: null };
+}
+
+/** What the till measures on a day — the office never writes these. */
+const ATTENDANCE_CLOCK_COLUMNS = ["firstInAt", "lastOutAt", "lastSeenAt", "workedMinutes", "counterId"] as const;
+
+/**
+ * Push a till's image of one person's day without losing either side's half.
+ *
+ * Owner, 2026-10-13: *"keep both separate"* — an office mark decides pay on a
+ * Manual day, and the till's own record must still be there underneath. Before
+ * this the row went up whole and last-write-wins dropped it: a day marked at the
+ * office after the till had counted it (a later `updatedAt`, and often a row of
+ * its own with a different id) threw the till's minutes away, and the next pull
+ * wrote the office's 0 over the till's copy. Live showed it on every day the
+ * office had marked; the spans, a separate table, kept the hours.
+ *
+ * So the row is found by person + date, never by id, and merged by owner:
+ *   • the clock's columns only ever grow — the most minutes, the earliest
+ *     arrival, the latest out and last-seen — so a replayed or older image can
+ *     never shrink a day, and an office mark can never zero one;
+ *   • the office's columns (mark, note, source, corrections) follow
+ *     last-write-wins as before, because a till can edit them offline too.
+ */
+async function mergeAttendanceDay(payload: Record<string, unknown>): Promise<void> {
+    const db = prismaLive.attendanceDay;
+    const userId = Number(payload.userId);
+    const date = new Date(payload.date as string | Date);
+    const cloud = await db.findUnique({ where: { userId_date: { userId, date } } });
+    if (!cloud) {
+        await db.create({ data: payload as Prisma.AttendanceDayUncheckedCreateInput });
+        return;
+    }
+
+    const at = (v: unknown) => (v == null ? null : new Date(v as string | Date));
+    const earliest = (a: Date | null, b: Date | null) => (!a ? b : !b ? a : a < b ? a : b);
+    const latest = (a: Date | null, b: Date | null) => (!a ? b : !b ? a : a > b ? a : b);
+
+    const clock: Record<string, unknown> = {
+        firstInAt:     earliest(cloud.firstInAt, at(payload.firstInAt)),
+        lastOutAt:     latest(cloud.lastOutAt, at(payload.lastOutAt)),
+        lastSeenAt:    latest(cloud.lastSeenAt, at(payload.lastSeenAt)),
+        workedMinutes: Math.max(cloud.workedMinutes, Number(payload.workedMinutes) || 0),
+        counterId:     cloud.counterId ?? (payload.counterId as number | null) ?? null,
+    };
+
+    const incoming = at(payload.updatedAt);
+    const officeIsNewer = !incoming || cloud.updatedAt >= incoming;
+    const office: Record<string, unknown> = {};
+    if (!officeIsNewer) {
+        const skip = new Set<string>(["id", "userId", "date", "createdAt", "updatedAt", ...ATTENDANCE_CLOCK_COLUMNS]);
+        for (const [k, v] of Object.entries(payload)) if (!skip.has(k)) office[k] = v;
+    }
+
+    await db.update({
+        where: { id: cloud.id },
+        data:  { ...office, ...clock } as Prisma.AttendanceDayUncheckedUpdateInput,
+    });
 }
 
 /** The payload limited to the model's own columns (see SyncRegistryEntry.columns). */

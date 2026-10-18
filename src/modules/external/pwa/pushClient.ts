@@ -36,7 +36,7 @@ export async function readPushState(): Promise<PushState> {
     return (await currentSubscription()) ? "on" : "off";
 }
 
-function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
+export function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
     const padded = (base64 + "=".repeat((4 - (base64.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/");
     const raw = atob(padded);
     const out = new Uint8Array(new ArrayBuffer(raw.length));

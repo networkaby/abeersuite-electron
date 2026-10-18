@@ -125,6 +125,7 @@ export async function GET(req: Request) {
                         gatewayJson: a.gatewayJson,
                     };
                     return {
+                        id: a.id,
                         name: a.name,
                         note: noteFor(account),
                         amount: closingMap.get(a.id) ?? 0,

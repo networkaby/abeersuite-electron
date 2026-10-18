@@ -103,6 +103,8 @@ export const orgDefaultsUpdateSchema = z.object({
     /// Multiples and counts only, never a rupee. Bounds match `parsePayRules`,
     /// which is the defensive read on the way back out. See shared/lib/hr/payRules.
     hrPayRulesJson: z.object({
+        fullDayPct:        z.number().min(0).max(100),
+        halfDayPct:        z.number().min(0).max(100),
         overtimeRate:      z.number().min(0).max(10),
         shortHoursRate:    z.number().min(0).max(10),
         weeklyOffRate:     z.number().min(0).max(10),

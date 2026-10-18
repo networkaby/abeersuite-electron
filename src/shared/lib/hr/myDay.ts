@@ -49,6 +49,20 @@ export type MyDay = {
      * and a returning cashier should still see his day rather than a blank screen.
      */
     nextDuty?: NextOfficeDay;
+    /**
+     * Today as it was lived, in order — the on / off stretches the office's day
+     * card draws (attendanceBreakup.ts `buildTimeline`), for the lock screen's
+     * timeline. An `off` line is a gap past his idle limit: away. Optional for the
+     * same reason as `nextDuty`.
+     */
+    lived?: { kind: "on" | "off"; from: string; to: string; open?: boolean }[];
+    /**
+     * The day's moments, for the timeline's flags (owner, 2026-10-14: *"join,
+     * leave, shift open, shift close in time line"*). `in` / `out` are his own
+     * sign-ins and sign-outs, read off the stretches; the shift ones are his
+     * shifts on any till that day. A lock is not a leave and is not here.
+     */
+    events?: { kind: "in" | "out" | "shiftOpen" | "shiftClose" | "handover"; at: string }[];
 };
 
 /**

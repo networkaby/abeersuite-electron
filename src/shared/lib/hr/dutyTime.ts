@@ -23,7 +23,7 @@
 import { parseHhMm } from "./hhmm";
 import { seasonalStartFor, type SeasonalHours, type ShopDate } from "./seasonalHours";
 import {
-    DEFAULT_DUTY_END, DEFAULT_DUTY_MINUTES, DEFAULT_DUTY_START, FULL_DAY_FRACTION, HALF_DAY_FRACTION, LATE_GRACE_MINUTES,
+    DEFAULT_DUTY_END, DEFAULT_DUTY_MINUTES, DEFAULT_DUTY_START, FULL_DAY_FRACTION, HALF_DAY_FRACTION,
 } from "@/shared/lib/constants/hr";
 import { DEFAULT_IDLE_LIMIT_MINUTES, IDLE_LIMIT_MS, MAX_IDLE_LIMIT_MINUTES } from "@/shared/lib/constants/session";
 import { BUSINESS_TIME_ZONE } from "@/shared/lib/constants/business";
@@ -106,7 +106,10 @@ export function dutyMinutesFor(
 }
 
 /**
- * How late the arrival was, in minutes — 0 when on time or inside the grace.
+ * How late the arrival was, in minutes, counted from opening — 0 when on time.
+ *
+ * No grace is taken off here: the grace forgives a day, it does not shorten the
+ * lateness (owner, 2026-10-16) — see `lateForgiven` in shared/lib/hr/payRules.ts.
  *
  * Null when there is nothing to judge: no arrival recorded at all. The arrival is
  * a UTC instant and the office hours are shop-clock, so the comparison is made in
@@ -116,10 +119,7 @@ export function lateMinutes(
     firstInAt: Date | string | null,
     startHhMm: string,
     timeZone = BUSINESS_TIME_ZONE,
-    /* The shop's own grace, once it has one. LATE_GRACE_MINUTES is only the
-       fallback for a caller that has not read the pay rules — see
-       shared/lib/hr/payRules.ts, `lateGraceMinutes`. */
-    graceMinutes: number = LATE_GRACE_MINUTES,
+    graceMinutes = 0,
 ): number | null {
     if (!firstInAt) return null;
     const at = typeof firstInAt === "string" ? new Date(firstInAt) : firstInAt;
@@ -173,11 +173,23 @@ export type DutyGrade = "PRESENT" | "HALF_DAY" | "ABSENT";
  * a fraction of duty rather than fixed hours: a part-timer on a four-hour duty who
  * works all four has done a full day, and a fixed 6h45m rule would call it half.
  */
-export function gradeDay(workedMinutes: number, dutyMinutes: number): DutyGrade {
+export interface GradeLimits {
+    /** % of duty for a full day — HR → Pay Rules → Day grade. */
+    fullDayPct: number;
+    /** % of duty for a half day; below it the day is absent. */
+    halfDayPct: number;
+}
+
+const DEFAULT_GRADE_LIMITS: GradeLimits = {
+    fullDayPct: FULL_DAY_FRACTION * 100,
+    halfDayPct: HALF_DAY_FRACTION * 100,
+};
+
+export function gradeDay(workedMinutes: number, dutyMinutes: number, limits: GradeLimits = DEFAULT_GRADE_LIMITS): DutyGrade {
     if (dutyMinutes <= 0) return "ABSENT";
-    const share = workedMinutes / dutyMinutes;
-    if (share >= FULL_DAY_FRACTION) return "PRESENT";
-    if (share >= HALF_DAY_FRACTION) return "HALF_DAY";
+    const pct = (workedMinutes / dutyMinutes) * 100;
+    if (pct >= limits.fullDayPct) return "PRESENT";
+    if (pct >= limits.halfDayPct) return "HALF_DAY";
     return "ABSENT";
 }
 
@@ -190,7 +202,8 @@ export function formatWorked(minutes: number): string {
 }
 
 /**
- * How much of the gap since the last sign of life counts as work.
+ * How much of the gap since the last sign of life counts as work, and whether the
+ * gap meant the person was away.
  *
  * The client pings every few minutes while somebody is actually using the machine,
  * and each ping adds the gap since the previous one. A gap longer than the idle
@@ -199,11 +212,30 @@ export function formatWorked(minutes: number): string {
  * "treat the idle time as absent", and it holds whether or not the auto-logout
  * actually fired: a machine left on all night simply contributes one ignored gap.
  */
-export function creditableMinutes(previousSeenAt: Date | null, now: Date, idleLimitMs = IDLE_LIMIT_MS): number {
-    if (!previousSeenAt) return 0;
+export function creditStep(previousSeenAt: Date | null, now: Date, idleLimitMs = IDLE_LIMIT_MS): CreditStep {
+    if (!previousSeenAt) return { minutes: 0, seenAt: now, away: true };
     const gapMs = now.getTime() - previousSeenAt.getTime();
-    if (gapMs <= 0 || gapMs > idleLimitMs) return 0;
-    return Math.round(gapMs / 60000);
+    if (gapMs <= 0) return { minutes: 0, seenAt: previousSeenAt, away: false };
+    if (gapMs > idleLimitMs) return { minutes: 0, seenAt: now, away: true };
+    // Whole minutes only, and the clock moves on by exactly what was credited.
+    // Owner, 2026-10-13: rounding each beat on its own threw away up to half a
+    // minute a time — and a beat inside 30 s rounded to 0, which read as "away"
+    // and broke the stretch into 0m pieces. The leftover seconds now wait for
+    // the next beat instead of being lost.
+    const minutes = Math.floor(gapMs / 60000);
+    return { minutes, seenAt: new Date(previousSeenAt.getTime() + minutes * 60000), away: false };
+}
+
+/**
+ * One beat's answer: the minutes to add, where the day's clock now stands, and
+ * whether the gap was long enough to mean the person was not there. `away` — not
+ * `minutes === 0` — is what ends a stretch; a quick second beat credits nothing
+ * and is still the same stretch.
+ */
+export interface CreditStep {
+    minutes: number;
+    seenAt: Date;
+    away: boolean;
 }
 
 /**

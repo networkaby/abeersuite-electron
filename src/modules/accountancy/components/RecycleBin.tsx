@@ -30,6 +30,8 @@ interface AuditRow {
     reason: string | null;
     createdAt: string;
     restoredAt: string | null;
+    /** The voucher this is a copy of is still on the books — Restore reverts it in place. */
+    voucherLive?: boolean;
     actor: { id: number; name: string } | null;
     restoredBy: { id: number; name: string } | null;
 }
@@ -94,8 +96,8 @@ export function RecycleBin() {
     const restore = async (row: AuditRow) => {
         setBusyId(row.id);
         try {
-            const { data } = await axios.post<{ reference: string }>(`/api/audit/${row.id}/restore`);
-            toast.success(`Restored ${data.reference}`);
+            const { data } = await axios.post<{ reference: string; reverted?: boolean }>(`/api/audit/${row.id}/restore`);
+            toast.success(data.reverted ? `${data.reference} changed back to this version` : `Restored ${data.reference}`);
             // Update this row in place: it drops out of the default view, or flips to
             // the "Restored" badge when restored rows are being shown. Then revalidate
             // quietly so the server stays the source of truth.
@@ -258,6 +260,15 @@ export function RecycleBin() {
                                             </Button>
                                             {row.restoredAt ? (
                                                 <Badge variant="outline" className="text-xs">Restored{row.restoredBy ? ` · ${row.restoredBy.name}` : ""}</Badge>
+                                            ) : row.voucherLive && row.entityType === "JOURNAL_ENTRY" ? (
+                                                <Badge variant="outline" className="text-xs font-normal text-muted-foreground" title="This entry is still on the books. Edit it there instead.">
+                                                    Still on books
+                                                </Badge>
+                                            ) : row.voucherLive ? (
+                                                <Button size="sm" variant="outline" className="h-7" disabled={busyId === row.id} onClick={() => restore(row)}
+                                                    title="The voucher is still on the books. This changes it back to this version, under the same number, and keeps the current version here as a copy.">
+                                                    {busyId === row.id ? <Loader2 size={13} className="animate-spin" /> : <Undo2 size={13} className="mr-1" />} Revert to this version
+                                                </Button>
                                             ) : (
                                                 <Button size="sm" variant="outline" className="h-7" disabled={busyId === row.id} onClick={() => restore(row)}>
                                                     {busyId === row.id ? <Loader2 size={13} className="animate-spin" /> : <Undo2 size={13} className="mr-1" />} Restore

@@ -232,7 +232,29 @@ async function counterWriteRelayMode(): Promise<Check[]> {
         ["a body above Vercel's limit runs here", !decide("POST", "/api/settings/item-import", 5 * 1024 * 1024)],
         ["a body of unknown size runs here", !decide("POST", "/api/settings/item-import", null)],
         ["a non-API path never relays", !decide("POST", "/office/pos")],
+        ...keyedRoutes(decide),
     ];
+}
+
+/** Outside-service routes run here only when this till holds their keys, else relay. */
+function keyedRoutes(decide: (method: string, pathname: string) => boolean): Check[] {
+    const routes: [string, string[]][] = [
+        ["/api/ecommerce/products/ai-copy", ["GOOGLE_GENERATIVE_AI_API_KEY"]],
+        ["/api/messages/upload-url", ["CLOUDFLARE_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"]],
+    ];
+    return routes.flatMap(([path, keys]): Check[] => {
+        keys.forEach((k) => delete process.env[k]);
+        const relaysWithout = decide("POST", path);
+        keys.slice(1).forEach((k) => (process.env[k] = "x"));
+        const relaysWithPart = decide("POST", path) || keys.length === 1;
+        keys.forEach((k) => (process.env[k] = "x"));
+        const runsHereWith = !decide("POST", path);
+        keys.forEach((k) => delete process.env[k]);
+        return [
+            [`${path} relays on a till without its keys`, relaysWithout && relaysWithPart],
+            [`${path} runs here on a till with its keys`, runsHereWith],
+        ];
+    });
 }
 
 /**

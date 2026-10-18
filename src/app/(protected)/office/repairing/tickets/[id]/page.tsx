@@ -98,7 +98,7 @@ interface Ticket {
         isTerminal: boolean;
         title: string | null;
     }[];
-    serviceCenter?: { id: number; name: string };
+    serviceCenter?: { name: string } | null;
     logs: {
         id: number;
         status: string;
@@ -210,8 +210,7 @@ export default function TicketDetailPage() {
         successMessage: "Ticket deleted",
         onSuccess: () => router.push("/office/repairing/tickets"),
     });
-    // TODO(rbac): repairing actions temporarily open to all staff — re-gate on
-    // position-based permissions when RBAC is re-wired.
+    // Repairing actions: Open to all staff by design — owner's decision (2026-10-18).
     const canConvertWarranty = true;
     const canTransfer = false; // Pipeline transfer hidden for now (re-enable when needed).
 

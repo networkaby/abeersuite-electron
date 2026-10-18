@@ -99,7 +99,12 @@ export function MessageMedia({ m }: { m: MediaInfo }) {
     );
 }
 
+/** Meta stores "[unsupported]" for what the Business API cannot pass on —
+ *  view-once photos, polls, edited/deleted messages, some stickers. */
+const UNSUPPORTED_NOTE = "Customer sent something WhatsApp doesn't pass on (view-once photo, poll, etc.) — ask them to resend.";
+
 /** The caption of a media message: the stored body minus its "[image] " tag. */
 export function captionOf(body: string, hasMedia: boolean): string {
+    if (body.trim() === "[unsupported]") return UNSUPPORTED_NOTE;
     return hasMedia ? body.replace(/^\[[a-z]+\]\s?/, "") : body;
 }

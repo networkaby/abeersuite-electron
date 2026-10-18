@@ -4,9 +4,12 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { dutyHoursFor, dutyMinutesFor, gradeDay, lateMinutes, overtimeMinutes, shortMinutes } from "@/shared/lib/hr/dutyTime";
 import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import { shopDateFromIso, type SeasonalHours } from "@/shared/lib/hr/seasonalHours";
-import { EMPTY_ATTENDANCE_EFFECT, lateDutyCutMinutes, type AttendanceEffect, type PayRules } from "@/shared/lib/hr/payRules";
+import {
+    EMPTY_ATTENDANCE_EFFECT, dayTargetMinutes, lateDutyCutMinutes, lateForgiven, pendingTotal, walkPendingDuty,
+    type AttendanceEffect, type PayRules, type PendingDay, type PendingDayInput, type PendingItem,
+} from "@/shared/lib/hr/payRules";
 import { ATTENDANCE_SOURCE_SELECT, autoCounts, lateOf, workedOf } from "@/shared/lib/hr/attendanceSource";
-import { perDayPaise, perHourPaise, weekdayOf } from "./payrollProrate";
+import { perHourPaise, weekdayOf } from "./payrollProrate";
 import type { SalaryLine } from "./salaryLines";
 import { holidayDatesFor } from "./attendanceCalendar";
 import { userBranchIds } from "./staffBranchesServer";
@@ -28,10 +31,11 @@ import { userBranchIds } from "./staffBranchesServer";
  * `monthlyOvertime.ts` follows, deliberately: the figure on the counter's own
  * card and the figure on his payslip must be arrived at the same way.
  *
- * THE NETTING, in the owner's words (2026-09-22): *"monthly overtime is after
- * adjusting the full month. 3 day has less duty total 5h, user has to make up 5h
- * by overtime."* So a day's extra hour is not money on its own — it first pays
- * back the hours he fell short on other days, and only what survives is paid.
+ * PENDING DUTY, in the owner's words (2026-10-13): *"after no previous duty
+ * due, extra counted to overtime"*, *"all penalties go to pending"*. Walked day
+ * by day in `walkPendingDuty`: a day's extra first makes up the duty pending from
+ * earlier days, and only what is left is that day's overtime. What is still
+ * pending at the end of the period is cut once.
  * A day already graded ABSENT or HALF_DAY has had its shortfall taken by payroll
  * once; charging it here as well would dock the same absence twice, so the part
  * payroll has already withheld is excluded.
@@ -82,6 +86,24 @@ export async function attendanceEffectFor(
     fromIso: string,
     toIso: string,
 ): Promise<AttendanceEffect> {
+    return (await attendanceLedgerFor(ctx, userId, fromIso, toIso)).effect;
+}
+
+/**
+ * The effect, plus each day's pending-duty walk — what the day cards show.
+ *
+ * `clockOnly` judges every day on the till's minutes, Manual or Auto. Owner,
+ * 2026-10-13: Employee Activity *"should display correct data regardless we
+ * use manual or auto"* — it is the clock's own record. Payroll leaves it off:
+ * a Manual day still pays on the office's mark.
+ */
+export async function attendanceLedgerFor(
+    ctx: PayRulesContext,
+    userId: number,
+    fromIso: string,
+    toIso: string,
+    opts: { clockOnly?: boolean } = {},
+): Promise<{ effect: AttendanceEffect; days: PendingDay[] }> {
     const { rules, seasonal } = ctx;
     const [profile, rows, leaves, branchIds] = await Promise.all([
         prisma.staffProfile.findUnique({
@@ -103,7 +125,7 @@ export async function attendanceEffectFor(
         }),
         userBranchIds(userId),
     ]);
-    if (!rows.length) return { ...EMPTY_ATTENDANCE_EFFECT };
+    if (!rows.length) return { effect: { ...EMPTY_ATTENDANCE_EFFECT }, days: [] };
     const holidays = holidayDatesFor(ctx.holidays, branchIds);
 
     const offDays = new Set(profile?.weeklyOff ?? []);
@@ -119,9 +141,8 @@ export async function attendanceEffectFor(
     const hoursOn = (day: string) =>
         dutyHoursFor(profile?.dutyStart, profile?.dutyEnd, { on: shopDateFromIso(day), seasonal });
 
-    let surplus = 0;
-    let shortfall = 0;
     const out: AttendanceEffect = { ...EMPTY_ATTENDANCE_EFFECT };
+    const ledger: PendingDayInput[] = [];
 
     /* Late days are charged oldest first, so the free ones are the first of the
        period and not whichever the query happened to return first. */
@@ -133,48 +154,63 @@ export async function attendanceEffectFor(
         const duty = dutyMinutesFor(profile?.dutyMinutes, hours.start, hours.end);
         // Auto pays on the activity card's minutes — corrected where a person
         // fixed them; manual pays on the mark. attendanceSource.ts.
-        const measured = autoCounts(r);
+        const measured = opts.clockOnly ? workedOf(r) > 0 : autoCounts(r);
         const worked = workedOf(r);
+        const adds: PendingItem[] = [];
+        let extra = 0;
 
         // An absence nobody asked for — charged whichever hand wrote the day,
-        // because "he did not come" needs no clock to establish.
-        const status = measured ? gradeDay(worked, duty) : r.status;
-        if (status === "ABSENT" && !grantedLeave(day)) out.unaskedAbsentDays += 1;
-
-        if (!measured) continue;   // the office's mark stands; nothing to count
-
-        // A day the shop was shut is not part of the netting at all — every
-        // minute of it is extra by definition, and paid at its own rate.
-        if (holidays.has(day)) { out.holidayMinutes += worked; continue; }
-        if (offDays.has(weekdayOf(day))) { out.weeklyOffMinutes += worked; continue; }
-
-        surplus += overtimeMinutes(worked, duty);
-
-        const short = shortMinutes(worked, duty);
-        if (short > 0 && status !== "ABSENT") {
-            // Payroll has already withheld half of a half day; only the rest is
-            // his debt here, or the same hour is taken from him twice.
-            const alreadyWithheld = status === "HALF_DAY" ? Math.round(duty / 2) : 0;
-            shortfall += Math.max(0, short - alreadyWithheld);
+        // because "he did not come" needs no clock to establish. The day itself
+        // is paid at zero by payroll; only the penalty goes to pending duty.
+        // Came and worked under 40% ("incomplete duty"): unpaid like absent, but
+        // he did come — no absence penalty (owner, 2026-10-14). Nor on a shut day.
+        const status = measured ? gradeDay(worked, duty, rules) : r.status;
+        const cameIn = measured && worked > 0;
+        const shutDay = holidays.has(day) || offDays.has(weekdayOf(day));
+        if (status === "ABSENT" && !cameIn && !(measured && shutDay) && !grantedLeave(day)) {
+            out.unaskedAbsentDays += 1;
+            adds.push({ date: day, kind: "absent", minutes: Math.round(duty * rules.absentPenaltyDays) });
         }
 
-        // Lateness, against the opening that applied on that very day.
-        const late = lateOf(r, lateMinutes(r.firstInAt, hours.start, undefined, rules.lateGraceMinutes) ?? 0);
-        if (late > 0) {
-            out.lateDays += 1;
-            if (out.lateDays > rules.lateFreeDays) {
-                out.chargedLateDays += 1;
-                // A time-style penalty is a debt of duty, so it joins the same
-                // shortfall his own short days go into — and his overtime can
-                // pay it back before anything is cut.
-                shortfall += lateDutyCutMinutes(rules, late, duty);
+        if (measured) {
+            // A day the shop was shut is outside pending duty — every minute of it
+            // is extra by definition, and paid at its own rate.
+            if (holidays.has(day)) { out.holidayMinutes += worked; continue; }
+            if (offDays.has(weekdayOf(day))) { out.weeklyOffMinutes += worked; continue; }
+
+            // A half day is judged against half the duty — payroll already cut
+            // the other half from the salary.
+            const target = dayTargetMinutes(duty, status);
+            const over = overtimeMinutes(worked, target);
+            extra = over;
+
+            const short = shortMinutes(worked, target);
+            if (short > 0 && status !== "ABSENT") adds.push({ date: day, kind: "short", minutes: short });
+
+            // Lateness, against the opening that applied on that very day.
+            const late = lateOf(r, lateMinutes(r.firstInAt, hours.start) ?? 0);
+            if (late > 0) {
+                out.lateDays += 1;
+                // Days forgiven so far = late days before this one, less those charged.
+                if (!lateForgiven(late, out.lateDays - 1 - out.chargedLateDays, rules)) {
+                    out.chargedLateDays += 1;
+                    // The day's own extra pays the penalty first; only what it
+                    // cannot cover is carried as short.
+                    const cut = lateDutyCutMinutes(rules, late, duty);
+                    const covered = Math.min(over, cut);
+                    extra = over - covered;
+                    adds.push({ date: day, kind: "late", minutes: cut - covered });
+                }
             }
         }
+        ledger.push({ date: day, extra, adds, halfDay: measured && status === "HALF_DAY" });
     }
 
-    out.payableMinutes = Math.max(0, surplus - shortfall);
-    out.owedMinutes = Math.max(0, shortfall - surplus);
-    return out;
+    const days = walkPendingDuty(ledger);
+    out.payableMinutes = days.reduce((t, d) => t + d.overtime, 0);
+    out.halfDayExtraMinutes = days.reduce((t, d) => t + d.normalExtra, 0);
+    out.owedMinutes = pendingTotal(days[days.length - 1]?.after ?? []);
+    return { effect: out, days };
 }
 
 /**
@@ -199,7 +235,6 @@ export function payRuleLines(
     if (basic <= 0 || dutyMinutes <= 0) return [];
 
     const perHour = perHourPaise(basic, payDays, dutyMinutes);
-    const perDay = perDayPaise(basic, payDays);
     const out: SalaryLine[] = [];
 
     const earn = (name: string, paise: number) => {
@@ -210,14 +245,13 @@ export function payRuleLines(
     };
 
     earn("Overtime", perHour * rules.overtimeRate * (effect.payableMinutes / 60));
+    earn("Half-day extra", perHour * ((effect.halfDayExtraMinutes ?? 0) / 60));
     earn("Weekly off duty", perHour * rules.weeklyOffRate * (effect.weeklyOffMinutes / 60));
     earn("Holiday duty", perHour * rules.holidayRate * (effect.holidayMinutes / 60));
 
-    deduct("Hours owed", perHour * rules.shortHoursRate * (effect.owedMinutes / 60));
-    if (rules.latePenaltyStyle === "pay") {
-        deduct("Late penalty", perDay * rules.latePenaltyDays * effect.chargedLateDays);
-    }
-    deduct("Absence penalty", perDay * rules.absentPenaltyDays * effect.unaskedAbsentDays);
+    // Every penalty — late and absence — is already inside the pending duty, in
+    // hours (owner, 2026-10-13), so this one line is the whole of the cut.
+    deduct("Pending duty", perHour * rules.shortHoursRate * (effect.owedMinutes / 60));
 
     return out;
 }

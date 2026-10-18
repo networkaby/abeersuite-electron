@@ -25,6 +25,11 @@ const nextConfig: NextConfig = {
   // counter — no `pnpm install` on a shop machine, no node_modules to keep in sync
   // with the build.
   ...(COUNTER_BUILD ? { output: "standalone" as const } : {}),
+  // The AI SDK downloads image/file inputs through undici, loaded with a runtime
+  // `createRequire(...)("undici")` the tracer cannot see — so standalone left it
+  // out and every AI request with a photo failed "Cannot find module 'undici'" on
+  // the counter. Pinned in package.json so this top-level path exists.
+  outputFileTracingIncludes: { "/**": ["./node_modules/undici/**"] },
   experimental: {
     // `src/proxy.ts` now matches `/api` (for the counter's write relay), which makes
     // Next tee every non-GET API body for the proxy. The tee is capped at 10 MB by
@@ -104,7 +109,6 @@ const nextConfig: NextConfig = {
       { source: "/office/tickets/:path*", destination: "/office/repairing/tickets/:path*", permanent: false },
       { source: "/office/companies", destination: "/office/customers/companies", permanent: false },
       { source: "/office/companies/:path*", destination: "/office/customers/companies/:path*", permanent: false },
-      { source: "/office/service-centers", destination: "/office/repairing/service-centers", permanent: false },
       { source: "/office/dashboard", destination: "/office/repairing", permanent: false },
       // Compat: legacy /office/tally URLs (renamed to /office/accountancy 2026-05-07)
       { source: "/office/tally", destination: "/office/accountancy", permanent: false },

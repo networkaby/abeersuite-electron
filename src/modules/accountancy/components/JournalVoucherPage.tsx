@@ -13,10 +13,8 @@
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
-import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import { useEscape } from "@/shared/hooks/useEscape";
 import { useFormChanges } from "@/shared/hooks/useFormChanges";
-import { NO_ACCESS_HOME } from "@/shared/lib/auth/pageAccess";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Plus, Trash2, CheckCircle2, X, Package } from "lucide-react";
@@ -151,9 +149,6 @@ const listPath = "/office/accountancy/vouchers-registers/journal-entries";
 /** `onClose` — hosted in a dialog (Quick Actions click): every close path calls it instead of navigating. */
 export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number; onClose?: () => void } = {}) {
     const router = useRouter();
-    // After a save, back to the register — or Work Flow, for someone the page lock
-    // (pageAccess.ts) keeps out of it.
-    const canOpen = useCanOpenPage();
     const { data: session } = useSession();
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canCancel     = hasPermissionWithScope(permissions, "finance:voucher:cancel:journal");
@@ -201,7 +196,7 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
     // "Unsaved changes" asks only while the entry really differs from where the
     // user started — a ledger or product pick counts, typing a figure and
     // deleting it again does not (useFormChanges).
-    const { changed, startProps } = useFormChanges({
+    const { changed, markClean, startProps } = useFormChanges({
         date, narration,
         lines: lines.map((l) => [l.side, l.accountId, l.amount, l.stockItems.map((s) => [s.productId, s.qty, s.rate])]),
     });
@@ -455,7 +450,17 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
             if (postAfterSave) toast.success(`Journal voucher ${shownNo} saved & posted`);
             else               toast.success(`Journal voucher ${shownNo} saved as draft`);
             if (print) openReceipt(res.data.voucherId);
-            router.push(canOpen(listPath) ? listPath : NO_ACCESS_HOME);
+            // Reset for the next entry instead of navigating away — same as
+            // Payment / Receipt. Navigating did nothing visible inside the Quick
+            // Actions dialog or a pop-out window, so the filled form looked unsaved.
+            setLines([newLine("DEBIT"), newLine("CREDIT")]);
+            setNarration("");
+            setDate(toIsoDate(new Date()));
+            markClean();
+            axios.get<{ reference: string }>(`/api/accountancy/vouchers/next-ref?type=JOURNAL`)
+                .then((r) => setNextRef(r.data.reference))
+                .catch(() => { /* keep last value */ });
+            router.refresh();
         } catch (err: unknown) {
             toast.error(extractApiError(err, "Save failed"));
         } finally {
@@ -681,7 +686,7 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
 
             {/* Sticky action bar */}
             <VoucherActionBar
-                onCancel={closeForm}
+                onCancel={handleClose}
                 onSave={() => submit(true, printAfterSave)}
                 saveLabel={isEditing ? "Save Changes" : "Save"}
                 saveDisabled={saving || !balanced || loading || (isEditing && (loadedJe?.status === "CANCELLED"))}

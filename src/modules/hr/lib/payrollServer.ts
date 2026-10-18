@@ -3,7 +3,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import { paiseToRupees } from "@/shared/lib/format/moneyInr";
-import { parseSalaryLines } from "./salaryLines";
+import { parseSalaryLines, roundLinesToRupees, salaryTotals } from "./salaryLines";
 import { commissionForPeriod, commissionLine } from "./commission";
 import { nonPayableDays } from "./attendancePayable";
 import { loadPayRulesContext, payRuleLines } from "./payRulesApply";
@@ -248,13 +248,10 @@ export async function buildPayrollCandidates(
         const commissionPaise = comm?.commissionPaise ?? 0;
         const commLine = commissionLine(commissionPaise);
 
-        const lines = [...r.lines, ...ruleLines, ...(commLine ? [commLine] : [])];
-        let grossPaise = r.grossPaise, deductionsPaise = r.deductionsPaise;
-        for (const l of [...ruleLines, ...(commLine ? [commLine] : [])]) {
-            if (l.kind === "EARNING") grossPaise += l.amountPaise;
-            else deductionsPaise += l.amountPaise;
-        }
-        const netPaise = grossPaise - deductionsPaise;
+        // Each head is rounded to whole rupees before totalling, so the slip's
+        // lines, its net and the journal all agree without paise.
+        const lines = roundLinesToRupees([...r.lines, ...ruleLines, ...(commLine ? [commLine] : [])]);
+        const { grossPaise, deductionsPaise, netPaise } = salaryTotals(lines);
 
         let skipReason: string | null = null;
         if (!revisions.length) skipReason = "No salary structure entered";
@@ -282,7 +279,7 @@ export async function buildPayrollCandidates(
             payDays: payDaysOf(latest?.payDays),
             weeklyOffDays: r.weeklyOffDays,
             ledger,
-            commissionPaise,
+            commissionPaise: Math.round(commissionPaise / 100) * 100,
             commissionBasis: commLine ? (comm?.basis ?? null) : null,
             commissionBreakup: commLine ? (comm?.breakup ?? null) : null,
             attendance,

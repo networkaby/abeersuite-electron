@@ -1,23 +1,16 @@
 /**
- * Does this person have a usable PIN on this counter, right now?
+ * Can this person sign in with their PIN on this counter, right now?
  *
- * Asked by the sign-in shell before it puts a keypad up, and again when a PIN is
- * refused, so the screen can say WHICH refusal it was. That distinction is the whole
- * reason this route exists: "wrong PIN" and "the ten days are up" look identical to a
- * cashier at nine in the morning, and the second one is not a mistake they made. A
- * correct PIN refused in silence reads as a broken till.
+ * Asked by the sign-in screen when a face is tapped, before it puts the keypad up,
+ * and on the way in to remember on the face card whether a PIN exists. The answer
+ * tells the refusals apart — "wrong PIN" and "the 10 days are up" look identical to a
+ * cashier at 9am, and the second is not a mistake they made — and somebody HR has
+ * marked as left is told so instead of being refused in silence.
  *
  * Unauthenticated by necessity — nobody is signed in yet — and therefore deliberately
- * narrow:
- *   • it answers only inside a counter shell (`thisCounterId`), so it does not exist
- *     on the web deployment at all;
- *   • it answers only about the counter the asking PC holds;
- *   • it says whether a PIN is usable, never anything about the person, and never
- *     whether the account exists — an unknown email and one with no PIN on this
- *     counter give the same "none".
- *
- * Read against the ordinary client, which on a counter is the replica: the shell must
- * be able to draw its keypad with the line down.
+ * narrow: it answers only inside a counter shell (`thisCounterId`), only about the
+ * counter the asking PC holds, and an unknown email and one with no PIN on this
+ * counter give the same "none".
  */
 
 import { NextResponse } from "next/server";
@@ -30,7 +23,9 @@ import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 
 const schema = z.object({ email: z.string().email() });
 
-/** `left` — HR marked this person as left; no sign-in of any kind, and the shell
+/** `ready` — the keypad. `password-due` — a PIN exists but its clocks have run out
+ *  (`counterPin.ts`), so the password, once, and the PIN works again after it.
+ *  `left` — HR marked this person as left; no sign-in of any kind, and the shell
  *  drops the face card. The one answer that says something about the person,
  *  and deliberately so: a card that keeps failing in silence reads as a broken
  *  till, and the fact itself is one every colleague on the floor already knows. */

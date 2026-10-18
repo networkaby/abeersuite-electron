@@ -8,6 +8,7 @@ import { balanceDelta } from "./balance";
 import { computeTradingStockAdjustment } from "./tradingStockAdjustment";
 import { parseSince } from "@/shared/lib/prisma/counterMode";
 import { ledgerStatusFilterUv } from "./ledgerStatus";
+import { OPENING_TYPE } from "./openingBills";
 
 // Both live in `./ledgerStatus` now, so a caller needing only the gate does not
 // have to pull this module's `server-only` dependency chain in. Re-exported here
@@ -54,10 +55,11 @@ export async function loadNormalBalanceMap(
             map.set(a.id, a.normalBalance);
             continue;
         }
-        // Fallback: infer from group.type
+        // Fallback: infer from group.type. A ledger with neither is read as
+        // Dr — the posting engine's and the party Transactions tab's default —
+        // never dropped: a skipped account showed its money as Nil everywhere.
         const g = a.group?.type;
-        if (g === "ASSET" || g === "EXPENSE") map.set(a.id, "DEBIT");
-        else if (g) map.set(a.id, "CREDIT");
+        map.set(a.id, g && g !== "ASSET" && g !== "EXPENSE" ? "CREDIT" : "DEBIT");
     }
     return map;
 }
@@ -110,12 +112,26 @@ export async function recomputeAccountBalances(
     }
 }
 
-/** Pull master-page opening balances (Account.openingBalance / openingBalanceType / openingBalanceDate).
+/**
+ * The one rule for every opening — a master figure or an opening bill alike:
+ * it is the position BEFORE the books begin, so it counts on every date, as the
+ * opening, whatever date it carries. 1 April already has transactions, so the
+ * only place the real opening can be read is the 31 March closing — and that
+ * closing must therefore hold every opening (owner, 2026-10-14). An opening
+ * bill's date is for ageing and the bill list, never for which balance it
+ * belongs to.
+ *
+ * As a `universalVoucher` filter: "dated on or before `asOf`, or an opening".
+ */
+function onOrBeforeOrOpening(asOf: Date): Prisma.UniversalVoucherWhereInput {
+    return { OR: [{ date: { lte: asOf } }, { type: OPENING_TYPE }] };
+}
+
+/** Pull master-page opening balances (Account.openingBalance / openingBalanceType).
  *  Returns Map<accountId, signedOpening> already converted into normal-balance terms (positive
- *  when on the account's normal side). Only accounts whose openingBalanceDate is null or
- *  <= the given as-of date are included. */
+ *  when on the account's normal side). Every one counts, whatever its
+ *  `openingBalanceDate` — see `onOrBeforeOrOpening`. */
 export async function loadMasterOpeningBalances(
-    asOf: Date | null,
     nbMap: Map<number, "DEBIT" | "CREDIT">,
     accountIds?: number[],
     db: LedgerReadClient = prisma,
@@ -125,11 +141,10 @@ export async function loadMasterOpeningBalances(
             openingBalance: { not: null },
             ...(accountIds ? { id: { in: accountIds } } : {}),
         },
-        select: { id: true, openingBalance: true, openingBalanceType: true, openingBalanceDate: true },
+        select: { id: true, openingBalance: true, openingBalanceType: true },
     });
     const out = new Map<number, number>();
     for (const a of accounts) {
-        if (asOf && a.openingBalanceDate && a.openingBalanceDate > asOf) continue;
         const nb = nbMap.get(a.id);
         if (!nb || !a.openingBalanceType) continue;
         // Treat the opening figure as a single signed entry on the recorded side.
@@ -205,10 +220,10 @@ export async function aggregateClosingAsOf(
             _sum: { amount: true },
             where: {
                 ...(accountIds ? { accountId: { in: accountIds } } : {}),
-                universalVoucher: { ...ledgerStatusFilterUv(), ...(asOf ? { date: { lte: asOf } } : {}) },
+                universalVoucher: { ...ledgerStatusFilterUv(), ...(asOf ? onOrBeforeOrOpening(asOf) : {}) },
             },
         }),
-        loadMasterOpeningBalances(asOf, nbMap, accountIds, db),
+        loadMasterOpeningBalances(nbMap, accountIds, db),
     ]);
     const buckets = new Map<number, { d: number; c: number }>();
     for (const r of sums) {
@@ -323,16 +338,11 @@ export async function aggregateRolledUpByGroup(
 
 /** Opening + transactions + closing per account over a date range.
  *
- * Master-page opening balances (Account.openingBalance) are one-sided —
- * they live on the master record, not in a balanced JE. They are folded
- * into the opening bucket whenever their `openingBalanceDate` is <= `to`
- * (regardless of whether it falls inside or before the period). That
- * keeps the Trial Balance balanced (Dr-from-JEs always equals Cr-from-JEs)
- * while still surfacing the master opening on every downstream report
- * via the `closing = opening + period-Δ` rollup.
- *
- *   • dated <= to → folded into the opening bucket (carry-forward into the period).
- *   • dated > to  → ignored entirely.
+ * Every opening — master figure (Account.openingBalance) or opening bill
+ * (`OPENING` voucher, party leg only) — is one-sided, and goes to the opening
+ * bucket whatever its date (`onOrBeforeOrOpening`), never to debits / credits.
+ * That keeps the Trial Balance's Debit and Credit columns equal, while the
+ * one-sided slack shows as its "Difference in opening balances" row.
  */
 export async function aggregateRange(
     from: Date,
@@ -343,14 +353,14 @@ export async function aggregateRange(
         prisma.voucherGlLine.groupBy({
             by: ["accountId", "type"],
             _sum: { amount: true },
-            where: { universalVoucher: { ...ledgerStatusFilterUv(), date: { lt: from } } },
+            where: { universalVoucher: { ...ledgerStatusFilterUv(), OR: [{ date: { lt: from } }, { type: OPENING_TYPE }] } },
         }),
         prisma.voucherGlLine.groupBy({
             by: ["accountId", "type"],
             _sum: { amount: true },
-            where: { universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: from, lte: to } } },
+            where: { universalVoucher: { ...ledgerStatusFilterUv(), type: { not: OPENING_TYPE }, date: { gte: from, lte: to } } },
         }),
-        loadMasterOpeningBalances(to, nbMap),
+        loadMasterOpeningBalances(nbMap),
     ]);
 
     const result = new Map<number, AccountAggregate>();
@@ -369,9 +379,9 @@ export async function aggregateRange(
         const v = ensure(r.accountId);
         v.opening += balanceDelta(nb, r.type, Number(r._sum.amount ?? 0));
     }
-    // Master openings dated on or before `to` → opening bucket. One-sided by
-    // nature, so they must NOT enter the period debits / credits columns —
-    // otherwise the Trial Balance's Dr column ≠ Cr column.
+    // Master openings → opening bucket. One-sided by nature, so they must NOT
+    // enter the period debits / credits columns — otherwise the Trial
+    // Balance's Dr column ≠ Cr column.
     for (const [accId, openVal] of masterOpening) {
         const v = ensure(accId);
         v.opening += openVal;

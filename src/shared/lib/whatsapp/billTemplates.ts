@@ -53,7 +53,7 @@ export const WA_TEMPLATE_LABEL: Record<WaTemplateKind, string> = {
  *  them can also be sent by hand from the 3-dot menu. */
 export const WA_TEMPLATE_WHEN: Record<WaTemplateKind, string> = {
     SALE: "POS sale, or an office Sale / Online invoice when posted.",
-    RECEIPT: "Office Receipt posted, or money received at the counter.",
+    RECEIPT: "Office Receipt posted, or money received at the counter — never to suppliers (Sundry Creditors).",
     SALE_RETURN: "Sale return posted (counter or office).",
     REFUND: "Payment voucher posted to a customer (Sundry Debtors) — not to suppliers.",
     ORDER: "POS order, or an office Sales Order when saved and posted.",
@@ -311,8 +311,7 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
     },
     TICKET_AUTO_REPLY: {
         body:
-            "Hello {customer}, welcome back to {shop}! 👋\n\n" +
-            "We noticed you have active job(s) with us. Please let us know if your message is about an existing ticket or something new:",
+            "Hi {customer} 👋 Good to hear from you again!",
         viewButton: null,
         appButton: null,
     },

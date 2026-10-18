@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DailyBreakupTable } from "@/shared/components/DailyBreakup";
 import Link from "next/link";
 import type { SettlementState } from "@/modules/accountancy/lib/billLink";
 import { formatDate } from "@/shared/lib/format/formatDate";
@@ -10,6 +11,8 @@ import { voucherTypeLabel } from "@/shared/lib/format/voucherTypeLabel";
 import { referenceHref, type VoucherSource } from "@/modules/accountancy/lib/voucherUrls";
 import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
 import { BillLinkDialog, clearBillLinkCache } from "@/modules/accountancy/components/BillLinkDialog";
+import { removeVoucherLinks } from "@/modules/accountancy/lib/removeVoucherLinks";
+import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkContextMenu";
 import { SettlementChip } from "@/modules/accountancy/components/SettlementChip";
 import { clearPartyCache } from "@/modules/accountancy/components/PartyOutstandingsPanel";
 import { Card, CardContent } from "@/components/ui/card";
@@ -66,7 +69,11 @@ export type TxInvVoucher = {
 // now pass a single `invVouchers` list.
 /** `accountId` is the party's ledger — the bill-wise popup measures a link on
  *  it. Null when the party has no ledger account, and then nothing is linkable. */
-export type CustomerTransactions = { invVouchers: TxInvVoucher[]; accountId: number | null };
+export type CustomerTransactions = {
+    invVouchers:    TxInvVoucher[];
+    accountId:      number | null;
+    normalBalance?: "DEBIT" | "CREDIT" | null;
+};
 
 // Settled — nothing of this voucher is left sitting on the party's account.
 // Due — none of it has been matched to the other side yet.
@@ -89,16 +96,30 @@ const TYPE_DOT: Record<string, string> = {
     OPENING: "bg-muted-foreground/40",
 };
 
-export function TransactionsTable({ invVouchers, accountId, partyName, onChanged }: {
+export function TransactionsTable({ invVouchers, accountId, partyName, onChanged, daily, normalBalance }: {
     invVouchers: TxInvVoucher[];
     /** The party's ledger account — what the bill-wise popup settles against.
      *  Null only where the party has no ledger, and then nothing is linkable. */
     accountId?:  number | null;
     partyName?:  string;
     onChanged?:  () => void;
+    /** Tally's daily breakup for this period — every day with Debit, Credit and
+     *  Closing balance; a day opens to its vouchers. Off = the plain voucher list. */
+    daily?:      { from: string; to: string } | null;
+    /** The party ledger's normal side, so the breakup can print Dr / Cr. */
+    normalBalance?: "DEBIT" | "CREDIT" | null;
 }) {
     // Which voucher's bill-wise popup is open, if any.
     const [linkVoucherId, setLinkVoucherId] = useState<number | null>(null);
+    // Right-click: "Open in new window" on a voucher number (as in the Day Book),
+    // "Remove link" on a Settled chip.
+    const { menu, close: closeMenu, openActions, onContainerContextMenu } = useLinkContextMenu();
+    const unlink = async (uvId: number) => {
+        if (!(await removeVoucherLinks(uvId))) return;
+        clearBillLinkCache();
+        if (accountId != null) clearPartyCache(accountId);
+        onChanged?.();
+    };
 
     type Row = {
         rowKey:          string;
@@ -173,28 +194,7 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
 
     const money = (n: number) => formatRupeesFromPaise(Math.round(n * 100));
 
-    return (
-        <Card className="py-0 overflow-hidden">
-            <CardContent className="p-0">
-                <Table>
-                    <TableHeader>
-                        {/* Tinted, and its hover suppressed — a header is not a row you
-                            can land on, so it should not light up like one. */}
-                        <TableRow className="bg-muted/60 hover:bg-muted/60">
-                            <TableHead>Type</TableHead>
-                            <TableHead>Reference</TableHead>
-                            <TableHead>Date</TableHead>
-                            <TableHead className="text-muted-foreground/70 font-normal">Branch</TableHead>
-                            <TableHead className="text-muted-foreground/70 font-normal">Created by</TableHead>
-                            <TableHead className="text-right">Total</TableHead>
-                            <TableHead className="text-right">Paid</TableHead>
-                            <TableHead className="text-right">Balance</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="w-10" />
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {rows.map((row) => (
+    const renderRow = (row: Row) => (
                             <TableRow
                                 key={row.rowKey}
                                 // Faint striping so the eye can carry one voucher across ten
@@ -258,6 +258,9 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
                                         onLink={row.canLink && row.uvId !== null && accountId != null && Math.abs(row.movement) > 0.005
                                             ? () => setLinkVoucherId(row.uvId)
                                             : undefined}
+                                        onLinkedContextMenu={row.uvId !== null
+                                            ? (e) => openActions(e, [{ label: "Remove link", danger: true, onSelect: () => void unlink(row.uvId!) }])
+                                            : undefined}
                                     />
                                 </TableCell>
                                 <TableCell className="text-right">
@@ -272,11 +275,10 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
                                     )}
                                 </TableCell>
                             </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </CardContent>
+    );
 
+    const dialogs = (
+        <>
             {/* The same bill-wise popup the receipt and trading voucher forms
                 open after posting — tick list, Auto, part amounts and all. */}
             {linkVoucherId !== null && accountId != null && (
@@ -297,6 +299,84 @@ export function TransactionsTable({ invVouchers, accountId, partyName, onChanged
                     }}
                 />
             )}
+            <LinkContextMenu menu={menu} onClose={closeMenu} />
+        </>
+    );
+
+    // Daily breakup: `movement` is signed onto the ledger's normal side, so a
+    // plus lands on that side's column and a minus on the other.
+    if (daily) {
+        const nb = normalBalance ?? "DEBIT";
+        const opening = rows.filter((r) => r.isOpening).reduce((s, r) => s + r.movement, 0);
+        const entries = rows.filter((r) => !r.isOpening).map((r) => {
+            const plus = Math.max(r.movement, 0);
+            const minus = Math.max(-r.movement, 0);
+            return { date: r.date, debit: nb === "DEBIT" ? plus : minus, credit: nb === "DEBIT" ? minus : plus, row: r };
+        });
+        return (
+            <Card className="py-0 overflow-hidden" onContextMenu={onContainerContextMenu}>
+                <CardContent className="p-0">
+                    <DailyBreakupTable
+                        entries={entries}
+                        opening={opening}
+                        from={daily.from}
+                        to={daily.to}
+                        normalBalance={normalBalance ?? null}
+                        renderVouchers={(dayRows) => (
+                            <Table>
+                                <TableHeader>
+                                    {/* Tinted, and its hover suppressed — a header is not a row you
+                                        can land on, so it should not light up like one. */}
+                                    <TableRow className="bg-muted/60 hover:bg-muted/60">
+                                        <TableHead>Type</TableHead>
+                                        <TableHead>Reference</TableHead>
+                                        <TableHead>Date</TableHead>
+                                        <TableHead className="text-muted-foreground/70 font-normal">Branch</TableHead>
+                                        <TableHead className="text-muted-foreground/70 font-normal">Created by</TableHead>
+                                        <TableHead className="text-right">Total</TableHead>
+                                        <TableHead className="text-right">Paid</TableHead>
+                                        <TableHead className="text-right">Balance</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead className="w-10" />
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>{dayRows.map(renderRow)}</TableBody>
+                            </Table>
+                        )}
+                    />
+                </CardContent>
+                {dialogs}
+            </Card>
+        );
+    }
+
+    return (
+        <Card className="py-0 overflow-hidden" onContextMenu={onContainerContextMenu}>
+            <CardContent className="p-0">
+                <Table>
+                    <TableHeader>
+                        {/* Tinted, and its hover suppressed — a header is not a row you
+                            can land on, so it should not light up like one. */}
+                        <TableRow className="bg-muted/60 hover:bg-muted/60">
+                            <TableHead>Type</TableHead>
+                            <TableHead>Reference</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead className="text-muted-foreground/70 font-normal">Branch</TableHead>
+                            <TableHead className="text-muted-foreground/70 font-normal">Created by</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead className="text-right">Paid</TableHead>
+                            <TableHead className="text-right">Balance</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="w-10" />
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {rows.map(renderRow)}
+                    </TableBody>
+                </Table>
+            </CardContent>
+
+            {dialogs}
         </Card>
     );
 }

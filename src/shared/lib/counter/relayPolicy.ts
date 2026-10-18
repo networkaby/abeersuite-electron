@@ -51,6 +51,22 @@ const NEVER_RELAY: readonly RegExp[] = [
     /^\/api\/me\/counter-pin(\/|$)/,             // set or remove one FOR this counter
 ];
 
+/**
+ * Writes that save nothing in our database — they only talk to an outside service — so
+ * running them here skips the ~0.4s relay hop. Only when this till holds that service's
+ * keys (office builds, `scripts/counterEnv.ts`); a till without them relays, and the
+ * office answers. Never list a route that saves a row: that write belongs to the office.
+ */
+const LOCAL_WHEN_KEYED: readonly { path: RegExp; keys: readonly string[] }[] = [
+    // AI product copy: reads one product from the replica, calls Gemini.
+    { path: /^\/api\/ecommerce\/products\/ai-copy$/, keys: ["GOOGLE_GENERATIVE_AI_API_KEY"] },
+    // WhatsApp attachment: signs an R2 upload URL; the browser uploads straight to R2.
+    { path: /^\/api\/messages\/upload-url$/, keys: ["CLOUDFLARE_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"] },
+];
+
+const runsHereWithKeys = (pathname: string): boolean =>
+    LOCAL_WHEN_KEYED.some((r) => r.path.test(pathname) && r.keys.every((k) => process.env[k]?.trim()));
+
 export type RelaySkipReason =
     | "read" | "not-api" | "already-relayed" | "excluded"
     | "body-too-large" | "body-size-unknown";
@@ -81,6 +97,7 @@ export function decideRelay(input: {
     if (pathname === null) return skip("excluded");
     if (!pathname.startsWith("/api/")) return skip("not-api");
     if (NEVER_RELAY.some((re) => re.test(pathname))) return skip("excluded");
+    if (runsHereWithKeys(pathname)) return skip("excluded");
     // No segment allowlist beyond this point: every other write is the office's to
     // make. The old "relay boundary is the build boundary" rule let any segment the
     // counter build strips (customer-tools, accountancy, companies, …) run HERE on a

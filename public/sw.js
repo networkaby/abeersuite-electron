@@ -1,6 +1,8 @@
 /*
- * Customer app service worker (shop.networkservice.in) — registered by
- * src/modules/external/pwa/ServiceWorkerRegister.tsx.
+ * Service worker for the customer app (shop.networkservice.in, registered by
+ * src/modules/external/pwa/ServiceWorkerRegister.tsx) and for staff browsers on
+ * the office site (StaffPushRegister — customer WhatsApp messages, push/staffPush.ts;
+ * those carry no id, so nothing is acked).
  *
  * Three jobs, nothing else:
  *  1. Show a push notification (src/shared/lib/push/sendPush.ts) even when the
@@ -13,7 +15,7 @@
  *
  * Bump VERSION when this file changes; phones pick the new worker up on their own.
  */
-const VERSION = "2026-10-07.1";
+const VERSION = "2026-10-17.1";
 const OFFLINE_CACHE = `offline-${VERSION}`;
 const OFFLINE_URL = "/offline.html";
 

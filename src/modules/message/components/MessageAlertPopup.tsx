@@ -61,12 +61,15 @@ import { extractApiError } from "@/shared/lib/api";
 import StaffPickerDialog, { type PickMode, type Staff } from "./StaffPickerDialog";
 import MentionTextarea, { mentionTargets } from "./MentionTextarea";
 import { requestOpenChat, useChatDrawerOpen } from "../lib/chatDrawer";
+import { MessageMedia, captionOf, type MediaInfo } from "@/modules/crm/components/MessageMedia";
 
 const MESSAGES_HREF = "/office/crm/messages";
 const DISMISS_KEY = "message-alert-dismissed:v1";
 const MAX_CARDS = 3;
 const PLACE_KEY = "message-alert-place:v1";
 const EDGE = 16;
+/** How long the phone banner stays before sliding away, like WhatsApp's. */
+const BANNER_MS = 3_000;
 
 /** Where the popup sits: its distance from the window's right and bottom edges. */
 type Place = { right: number; bottom: number; minimised: boolean };
@@ -131,7 +134,7 @@ type Alert = {
     /** Newest customer message — a ticket is raised from it. */
     lastInId: number | null;
     /** Up to the last 3 customer messages (the waiting ones while any wait), oldest first. */
-    recent: string[];
+    recent: (MediaInfo & { body: string })[];
     /** Customer messages still waiting for the shop to get back to them. */
     count: number;
     lastAt: string;
@@ -174,18 +177,27 @@ function chime() {
 
 const inChat = (a: Alert, me: number) => !!a.claim && (a.claim.owner.id === me || a.claim.helpers.some((h) => h.id === me));
 
-export default function MessageAlertPopup() {
+/**
+ * `href` is where "open the full chat" goes — the staff phone app passes its own
+ * Inbox, since a phone never leaves the app; `mayOpen` is that screen's own rule.
+ *
+ * `banner` (the phone app): no cards at all — each new message slides a slim
+ * WhatsApp-style banner down from the top for 3 seconds, silently; a tap opens
+ * the chat in `href`, ✕ hides it. A floating WhatsApp button with the waiting
+ * count opens `href` and hides when nothing waits. Replying happens in the Inbox.
+ */
+export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banner = false }: { href?: string; mayOpen?: (permissions: string[]) => boolean; banner?: boolean } = {}) {
     const router = useRouter();
     const pathname = usePathname();
     const { data } = useSession();
     const user = data?.user as { id?: string; permissions?: string[] } | undefined;
     const me = user?.id ? Number(user.id) : null;
     const permissions = user?.permissions;
-    const allowed = !!me && !!permissions && canOpenPage(MESSAGES_HREF, permissions);
+    const allowed = !!me && !!permissions && (mayOpen ? mayOpen(permissions) : canOpenPage(href, permissions));
     const canReply = !!permissions && (permissions.includes(PERMISSIONS.MESSAGES_REPLY) || permissions.includes(PERMISSIONS.ADMIN_BYPASS));
     // The POS Messages drawer shows everything too — hide while it is up.
     const drawerOpen = useChatDrawerOpen();
-    const onMessagesScreen = (pathname?.startsWith(MESSAGES_HREF) ?? false) || drawerOpen;
+    const onMessagesScreen = (pathname?.startsWith(href) ?? false) || drawerOpen;
 
     const [items, setItems] = useState<Alert[]>([]);
     const [loaded, setLoaded] = useState(false);
@@ -195,6 +207,12 @@ export default function MessageAlertPopup() {
     const [sending, setSending] = useState<string | null>(null);
     const [pick, setPick] = useState<{ mode: PickMode; alert: Alert } | null>(null);
     const notified = useRef<Set<number> | null>(null);
+    const [flash, setFlash] = useState<Alert | null>(null);
+    useEffect(() => {
+        if (!flash) return;
+        const t = setTimeout(() => setFlash(null), BANNER_MS);
+        return () => clearTimeout(t);
+    }, [flash]);
     const [place, setPlace] = useState<Place>({ right: EDGE, bottom: EDGE, minimised: false });
     const boxRef = useRef<HTMLDivElement>(null);
     const bubbleRef = useRef<HTMLButtonElement>(null);
@@ -300,6 +318,9 @@ export default function MessageAlertPopup() {
         const fresh = visible.filter((a) => !notified.current!.has(a.lastId));
         for (const id of ids) notified.current.add(id);
         if (!fresh.length || onMessagesScreen) return;
+        // The phone is in hand: the banner is enough — no sound. A locked or
+        // closed phone is alerted by the Android shell (FCM) instead.
+        if (banner) { setFlash(fresh[0]); return; }
         chime();
         if (typeof Notification !== "undefined" && Notification.permission === "granted") {
             const a = fresh[0];
@@ -309,13 +330,13 @@ export default function MessageAlertPopup() {
             );
             n.onclick = () => { window.focus(); n.close(); };
         }
-    }, [visible, allowed, onMessagesScreen]);
+    }, [visible, allowed, onMessagesScreen, banner]);
 
     useEffect(() => {
-        if (allowed && typeof Notification !== "undefined" && Notification.permission === "default") {
+        if (allowed && !banner && typeof Notification !== "undefined" && Notification.permission === "default") {
             void Notification.requestPermission();
         }
-    }, [allowed]);
+    }, [allowed, banner]);
 
     const close = (a: Alert) => {
         const next = { ...loadDismissed(), [a.phone]: a.lastId };
@@ -383,6 +404,48 @@ export default function MessageAlertPopup() {
     };
 
     if (!allowed || onMessagesScreen || !me) return null;
+    if (banner) {
+        const waiting = visible.filter((a) => a.waiting).length;
+        return (
+            <>
+            {waiting > 0 && (
+                <button
+                    onClick={() => router.push(href)}
+                    className="fixed right-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-[60] flex size-14 items-center justify-center rounded-full bg-green-600 text-white shadow-lg active:bg-green-700"
+                    aria-label={`${waiting} chats waiting — open Inbox`}
+                >
+                    <MessageCircle className="size-7" />
+                    <span className="absolute -top-1 -right-1 min-w-5 rounded-full bg-red-600 px-1 text-center text-xs font-semibold leading-5">{waiting}</span>
+                </button>
+            )}
+            {flash && (
+            <div className="fixed inset-x-2 top-[max(0.5rem,env(safe-area-inset-top))] z-[60] animate-in slide-in-from-top fade-in duration-200">
+                <div className="flex items-center gap-3 rounded-2xl border border-green-300 bg-background p-3 shadow-lg dark:border-green-800">
+                    <button
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                        onClick={() => { setFlash(null); router.push(`${href}?phone=${flash.phone}`); }}
+                    >
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-green-600 text-white">
+                            <MessageCircle className="size-5" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold">
+                                {flash.note ? `${flash.note.by} mentioned you · ${flash.name}` : flash.name}
+                            </span>
+                            <span className="block truncate text-xs text-muted-foreground">
+                                {flash.note?.text ?? flash.body}
+                            </span>
+                        </span>
+                    </button>
+                    <button onClick={() => setFlash(null)} className="shrink-0 p-1 text-muted-foreground" aria-label="Hide">
+                        <X className="size-4" />
+                    </button>
+                </div>
+            </div>
+            )}
+            </>
+        );
+    }
     const shown = visible.slice(0, MAX_CARDS);
     const more = visible.length - shown.length;
     const stacked = shown.filter((a) => !cards[a.phone]);
@@ -422,7 +485,7 @@ export default function MessageAlertPopup() {
                                     : `${a.claim.owner.name} has not answered for 10 min`}
                         </p>
                     </div>
-                    <button onClick={() => { if (!requestOpenChat(a.phone)) router.push(`${MESSAGES_HREF}?phone=${a.phone}`); }} className="text-muted-foreground hover:text-foreground" title="Open the full chat">
+                    <button onClick={() => { if (!requestOpenChat(a.phone)) router.push(`${href}?phone=${a.phone}`); }} className="text-muted-foreground hover:text-foreground" title="Open the full chat">
                         <ExternalLink className="size-4" />
                     </button>
                     <button onClick={() => changePlace({ ...place, minimised: true })} className="text-muted-foreground hover:text-foreground" title="Minimise to a chat bubble">
@@ -437,9 +500,15 @@ export default function MessageAlertPopup() {
                     )}
                 </div>
                 <div className="mt-2 space-y-1">
-                    {a.recent.map((b, i) => (
-                        <p key={i} className="w-fit max-w-full whitespace-pre-wrap break-words rounded-md bg-muted px-2 py-1 text-sm">{b}</p>
-                    ))}
+                    {a.recent.map((m, i) => {
+                        const caption = captionOf(m.body, !!(m.mediaUrl || m.mediaType));
+                        return (
+                            <div key={i} className="w-fit max-w-full space-y-1 rounded-md bg-muted px-2 py-1 text-sm [&_img]:max-h-40 [&_video]:max-h-40">
+                                <MessageMedia m={m} />
+                                {caption && <p className="whitespace-pre-wrap break-words">{caption}</p>}
+                            </div>
+                        );
+                    })}
                     {a.note && (
                         <p className="whitespace-pre-wrap break-words rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-50">
                             <span className="text-[11px] font-medium">{a.note.by} · staff note</span><br />{a.note.text}
@@ -523,7 +592,7 @@ export default function MessageAlertPopup() {
                 <div ref={boxRef} style={{ right: place.right, bottom: Math.max(0, Math.min(place.bottom, (typeof window === "undefined" ? 0 : window.innerHeight) - boxH - 8)) }} className="fixed z-[60] flex w-96 max-w-[calc(100vw-1rem)] flex-col gap-2">
                     {stacked.map(renderCard)}
                     {more > 0 && (
-                        <button onClick={() => router.push(MESSAGES_HREF)} className="self-end rounded-md bg-green-600 px-2 py-1 text-xs text-white shadow">
+                        <button onClick={() => router.push(href)} className="self-end rounded-md bg-green-600 px-2 py-1 text-xs text-white shadow">
                             +{more} more waiting
                         </button>
                     )}

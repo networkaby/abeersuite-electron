@@ -6,6 +6,7 @@ import { getRepairPipeline } from "@/modules/repairing/lib/repairPipeline";
 import { WORKFLOW_STATUS } from "@/shared/lib/constants/workflow";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 import LiveRefresh from "@/shared/components/LiveRefresh";
+import { serviceCentreName } from "@/modules/repairing/lib/serviceCentre";
 
 // Where every open device physically is — the ones still IN HAND at the shop and
 // the ones OUT at a service centre, grouped by the latest shipping-slip party.
@@ -58,7 +59,7 @@ export default async function DeviceLocationPage() {
             };
             const slips = Array.isArray(ctx.shippingSlips) ? ctx.shippingSlips : ctx.shippingSlip ? [ctx.shippingSlip] : [];
             const slip = slips.length ? slips[slips.length - 1] : null;
-            const centre = slip?.partyName ?? "Unknown centre";
+            const centre = serviceCentreName(t.context) ?? "Unknown centre";
             const list = byCentre.get(centre) ?? [];
             list.push({ ...base, ref: slip?.ref ?? null, note: null, at: slip?.date ?? slip?.createdAt ?? null });
             byCentre.set(centre, list);

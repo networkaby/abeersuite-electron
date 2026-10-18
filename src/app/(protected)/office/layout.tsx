@@ -11,6 +11,7 @@ import ModuleSurface from "@/shared/components/ModuleSurface";
 import GlobalInboxListener from "@/modules/message/components/GlobalInboxListener";
 import CallFollowUpPopup from "@/modules/pos/components/CallFollowUpPopup";
 import MessageAlertPopup from "@/modules/message/components/MessageAlertPopup";
+import StaffPushRegister from "@/modules/mobile/components/StaffPushRegister";
 import FinanceTopBar from "@/shared/components/FinanceTopBar";
 import NoAccessNotice from "@/shared/components/NoAccessNotice";
 import { Suspense } from "react";
@@ -75,6 +76,7 @@ export default async function ProtectedLayout({
                 <GlobalInboxListener currentUserId={userId} />
                 <CallFollowUpPopup />
                 <MessageAlertPopup />
+                <StaffPushRegister />
             </div>
         </SessionWrapper>
     );

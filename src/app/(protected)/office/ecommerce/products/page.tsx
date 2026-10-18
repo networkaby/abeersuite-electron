@@ -424,7 +424,9 @@ export default function EcommerceProductsPage() {
                         One catalogue across shop, POS and Sale vouchers. Publish a product once it’s shop-ready.
                     </p>
                 </div>
-
+                <Button asChild variant="outline" size="sm">
+                    <Link href="/office/ecommerce/products/ai">Write descriptions with AI</Link>
+                </Button>
             </div>
 
             {/* Tabs + search + filter button */}

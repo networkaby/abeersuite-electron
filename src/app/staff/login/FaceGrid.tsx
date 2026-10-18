@@ -9,7 +9,7 @@
  * same words, same order: change one, change the other.
  *
  * The roster is a local convenience cache on that PC and never an authority: a card is a
- * shortcut to an address and a keypad, and the sign-in behind it is the ordinary
+ * shortcut to an address, and the sign-in behind it is the ordinary
  * server-side one. A hand-edited roster buys nobody a permission.
  */
 
@@ -79,10 +79,7 @@ export function Seats({ entry }: { entry: ShellRosterEntry }) {
     if (entry.title) return <p className={styles.post}>{entry.title}</p>;
 
     const seats = entry.seats ?? [];
-    // No seat and no PIN: say what tapping the card will ask for, rather than nothing.
-    if (seats.length === 0) {
-        return <p className={styles.post}>{entry.hasPin ? "" : "Password"}</p>;
-    }
+    if (seats.length === 0) return null;
 
     return (
         <>

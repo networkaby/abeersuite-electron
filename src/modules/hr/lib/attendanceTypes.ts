@@ -2,6 +2,7 @@
 
 import type { AttendanceStatus, LeaveKind, LeaveStatus } from "@/shared/lib/schemas/hrAttendanceSchema";
 import type { SeasonalHours } from "@/shared/lib/hr/seasonalHours";
+import type { GradeLimits } from "@/shared/lib/hr/dutyTime";
 
 export interface AttendanceMark {
     status: AttendanceStatus;
@@ -47,6 +48,8 @@ export interface RegisterPerson {
     ownDutyEnd: string | null;
     /** The shop's seasonal hours, so the grid can work out any day's opening. */
     seasonal: SeasonalHours;
+    /** Full / half day bars from HR → Pay Rules, so the grid grades like payroll. */
+    gradeLimits: GradeLimits;
     /** Stored marks by ISO date. Days absent here are read off the calendar. */
     marks: Record<string, AttendanceMark>;
     /** Approved leave days inside the range, by ISO date → kind. */

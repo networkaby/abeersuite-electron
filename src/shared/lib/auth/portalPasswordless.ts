@@ -9,7 +9,8 @@
  *
  *   mobile → 6-digit code on WhatsApp (our API → Meta), SMS as fallback or on request
  *   email  → emailed 6-digit code (our API → Resend delivery)
- *   google → popup              (Firebase — the only remaining Firebase use)
+ *   google → popup              (Firebase — the only remaining Firebase use);
+ *            in the customer app, the phone's own Google sheet (NsGooglePlugin)
  *
  * Both OTP channels are identical from here down: one send endpoint, one verify
  * endpoint, one ticket. The WhatsApp/email vendors only *deliver* — our own server
@@ -22,6 +23,7 @@
 
 import { isFirebaseConfigured } from "@/shared/lib/auth/firebaseClient";
 import { isLikelyEmail } from "@/shared/lib/auth/portalIdentifier";
+import { SHOP_APP_GOOGLE_WEB_CLIENT_ID } from "@/shared/lib/device/shopApp";
 
 /** Which channel the customer verified through. */
 export type OtpChannel = "mobile" | "email";
@@ -109,13 +111,26 @@ export async function sendOtp(identifier: string, sms?: { smsTry: number }): Pro
     );
 }
 
-/** Google sign-in via popup; resolves to a Firebase ID token. */
+type NativeGoogle = { signIn: (o: { clientId: string }) => Promise<{ idToken: string }> };
+
+/** The customer app's native Google sheet — absent in a browser and in APKs before versionCode 4. */
+function nativeGoogle(): NativeGoogle | undefined {
+    if (typeof window === "undefined") return undefined;
+    return (window as { Capacitor?: { Plugins?: { NsGoogle?: NativeGoogle } } }).Capacitor?.Plugins?.NsGoogle;
+}
+
+/** Google sign-in can run here: a browser popup, or the app's native sheet. */
+export function canSignInWithGoogle(inApp: boolean): boolean {
+    return !inApp || Boolean(nativeGoogle());
+}
+
+/** Google sign-in via popup (or the app's native sheet); resolves to a Firebase ID token. */
 export async function signInWithGoogle(): Promise<string> {
     if (!isFirebaseConfigured()) {
         throw new Error("Google sign-in is not set up yet. Please use mobile/email and password.");
     }
 
-    const [{ firebaseAuth }, { GoogleAuthProvider, signInWithPopup }] = await Promise.all([
+    const [{ firebaseAuth }, { GoogleAuthProvider, signInWithCredential, signInWithPopup }] = await Promise.all([
         import("@/shared/lib/auth/firebaseClient"),
         import("firebase/auth"),
     ]);
@@ -124,7 +139,12 @@ export async function signInWithGoogle(): Promise<string> {
         const provider = new GoogleAuthProvider();
         // Always show the chooser — shared family devices are common.
         provider.setCustomParameters({ prompt: "select_account" });
-        const cred = await signInWithPopup(firebaseAuth(), provider);
+        const native = nativeGoogle();
+        // Google refuses its popup in a WebView: the app's sheet hands us a Google
+        // ID token, and Firebase swaps it for the same token the popup gives.
+        const cred = native
+            ? await signInWithCredential(firebaseAuth(), GoogleAuthProvider.credential((await native.signIn({ clientId: SHOP_APP_GOOGLE_WEB_CLIENT_ID })).idToken))
+            : await signInWithPopup(firebaseAuth(), provider);
         return await cred.user.getIdToken();
     } catch (e) {
         throw new Error(friendlyFirebaseError(e));

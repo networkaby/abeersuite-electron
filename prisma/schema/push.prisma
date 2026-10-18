@@ -48,3 +48,28 @@ model PushMessage {
   @@index([personId, sentAt])
   @@index([refType, refId])
 }
+
+// ── Staff phone app push (Android shell in phone-app/, FCM) ──────────────────
+// A customer's WhatsApp message reaches staff phones even with the app closed.
+// One row per device + signed-in staff member (a device that changes hands moves
+// to the new user). Two kinds: the Android staff app (`token` = Firebase install
+// token, no keys) and a browser — office site, POS, phone Chrome — (`token` = web
+// push endpoint, with `p256dh` + `auth`). Deleted when the push service says the
+// device is gone. Syncs to the counters as a child of User.
+
+/// One staff device that receives notifications (push/staffPush.ts).
+model StaffPushDevice {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  token      String   @unique
+  /// Web push keys — null for the Android app (FCM).
+  p256dh     String?
+  auth       String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

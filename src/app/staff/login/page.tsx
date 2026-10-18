@@ -7,7 +7,7 @@ import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { refreshCounterStatus } from "@/shared/hooks/useCounterMode";
 import { refreshSyncStatus } from "@/shared/hooks/useSyncStatus";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { OUTSIDE_COUNTER_SIGNIN_CODE } from "@/shared/lib/constants/session";
+import { OUTSIDE_COUNTER_SIGNIN_CODE, PIN_LENGTH } from "@/shared/lib/constants/session";
 import { isPhoneAppPath, PHONE_APP_FORGOT, PHONE_APP_HOME } from "@/shared/lib/device/phone";
 import { isPhoneOnlySession } from "@/shared/lib/auth/phoneOnly";
 import {
@@ -19,17 +19,19 @@ import {
     LOGIN_SPOTLIGHTS,
     LOGIN_TAGLINE,
     LOGIN_TIPS,
-    loginGreeting,
 } from "@/shared/lib/constants/loginShowcase";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import Link from "next/link";
-import { Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import styles from "./login.module.css";
 import FaceGrid from "./FaceGrid";
 import TillCard from "./TillCard";
+import { useBackdropPhoto } from "./useBackdropPhoto";
 import NextOpening from "./NextOpening";
+import ChoosePinCard from "./ChoosePinCard";
 import PinPad from "./PinPad";
+import { useLocalClock } from "./useLocalClock";
 import DesktopSiteNotice from "@/modules/mobile/components/DesktopSiteNotice";
 import { ShiftTakeoverDialog, type CounterTakeover } from "@/modules/pos/components/ShiftTakeoverDialog";
 import { fetchCounterTakeover } from "@/modules/pos/lib/currentShift";
@@ -72,90 +74,33 @@ function useRotation(length: number, seconds: number): { index: number; fading: 
 }
 
 /**
- * The backdrop photo — tried in order, first one that loads wins.
- *
- * Nothing waits on it. The drawn CSS background is already a finished screen, so
- * a photo that is slow or never arrives costs a photograph, not a blank page.
- * It is loaded through an `Image` rather than set straight on the layer so the
- * fade only starts once the picture is actually decoded — half a photo sliding
- * in looks worse than none.
+ * Can this person use their PIN on this counter now? `/api/counter-pin/status`:
+ * "ready", "password-due", "left", "none" — or null when it could not be asked
+ * (offline from an older server, not a counter).
  */
-function useBackdropPhoto(candidates: readonly string[]): string | null {
-    const [url, setUrl] = useState<string | null>(null);
-
-    useEffect(() => {
-        let cancelled = false;
-        let at = 0;
-        const tryNext = () => {
-            if (cancelled || at >= candidates.length) return;
-            const candidate = candidates[at++];
-            const img = new Image();
-            img.onload = () => { if (!cancelled) setUrl(candidate); };
-            img.onerror = tryNext;
-            img.src = candidate;
-        };
-        tryNext();
-        return () => { cancelled = true; };
-    }, [candidates]);
-
-    return url;
-}
-
-// ── The clock, as an outside thing React reads ──────────────────────────────
-// The time is not React state — it is the machine's clock — so it is subscribed
-// to rather than copied into state. Ticking every twenty seconds is plenty for a
-// display that only shows minutes, and the snapshot is the minute itself so a
-// tick that lands inside the same minute re-renders nothing.
-function subscribeToMinute(onChange: () => void): () => void {
-    const timer = setInterval(onChange, 20_000);
-    return () => clearInterval(timer);
-}
-const currentMinute = () => Math.floor(Date.now() / 60_000);
-/** The server has no idea what time it is where the user is, so it renders no clock at all. */
-const noMinuteOnServer = () => null;
-
-/** The greeting and the clock line, both from the user's own machine. */
-function useLocalClock(): { greet: string; clock: string } {
-    const minute = useSyncExternalStore(subscribeToMinute, currentMinute, noMinuteOnServer);
-    if (minute === null) return { greet: "Welcome", clock: "" };
-
-    const now = new Date(minute * 60_000);
-    return {
-        greet: loginGreeting(now.getHours()),
-        clock: now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })
-            + " · " + now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }),
-    };
-}
-
-/**
- * Does this person have a live PIN on this counter?
- *
- * Only so the shell knows whether to put a keypad up next time. Silent on every
- * failure — off a counter, offline, or on an older server the answer is simply "no
- * keypad", which costs one typed password and never a sign-in.
- */
-async function hasCounterPin(email: string): Promise<boolean> {
+async function counterPinState(email: string): Promise<string | null> {
     try {
         const res = await fetch("/api/counter-pin/status", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ email }),
         });
-        if (!res.ok) return false;
+        if (!res.ok) return null;
         const out = await res.json() as { state?: string };
-        // "password-due" still means a PIN exists — the card should show, and the
-        // shell asks again when it is tapped.
-        return out.state === "ready" || out.state === "password-due";
+        return out.state ?? null;
     } catch {
-        return false;
+        return null;
     }
+}
+
+/** Does a PIN exist here — so the face card knows, and "Set PIN" reads "Change PIN". */
+async function hasCounterPin(email: string): Promise<boolean> {
+    const state = await counterPinState(email);
+    return state === "ready" || state === "password-due";
 }
 
 /** The phone-app sign-in shows no photograph — it costs mobile data for nothing. */
 const NO_PHOTOS: readonly string[] = [];
-
-/** A PIN box takes digits and nothing else — six of them. */
-const digitsOnly = (value: string) => value.replace(/\D/g, "").slice(0, 6);
 
 function StaffLoginForm() {
     const router = useRouter();
@@ -192,29 +137,30 @@ function StaffLoginForm() {
 
     // ── The sequence ────────────────────────────────────────────────────────
     //
-    //   faces ──tap a face with a PIN──→ keypad ──6 digits──→ signed in
-    //     ↑                                │ Back / Escape
-    //     │ Login with PIN                 └──────→ faces
-    //     │
-    //   password ──sign in──→ signed in ──(if Set PIN was pressed)──→ choosePin
+    //   faces ──tap a face with a live PIN──→ keypad ──4 digits──→ signed in
+    //     ↑   └─tap, no PIN / password due──→ password ──sign in──→ signed in
+    //     └── Pick your photo / Back ─────────┘          (if Set PIN was pressed) └──→ choosePin
     //
-    // The same four names, in the same order, as `resources/shell/login.html`. The shell
-    // paints these before this page exists and hands over; this page owns them for every
-    // OTHER arrival — a sign-out, a session expiry, a released counter, a proxy bounce —
-    // which is every arrival but one. Before this, all of those put a cashier in front of
-    // a bare email box on a PC that had a photograph of them on disk.
+    // The same names as `resources/shell/login.html`, which paints before this page
+    // exists and hands a tapped face over; this page owns them for every OTHER arrival
+    // — a sign-out, an expiry, a released counter, a proxy bounce.
     //
-    // `choosePin` is only here: a PIN cannot be set before anyone is signed in.
+    // The PIN signs in on this counter inside its two clocks (owner, 2026-10-15:
+    // "respect the 4-digit PIN even on a fresh boot"); past them, the password once.
+    // `choosePin` is only after a password: a PIN cannot be set before anyone is in.
     const [stage, setStage] = useState<"faces" | "keypad" | "password" | "choosePin">("password");
     const [roster, setRoster] = useState<ShellRosterEntry[]>([]);
     const [chosen, setChosen] = useState<ShellRosterEntry | null>(null);
-    const [padNote, setPadNote] = useState("Enter your 6-digit PIN");
+    // The digits live in a ref as well as state: keys can arrive faster than React
+    // re-renders, and a press reading a stale `typed` would drop digits.
+    const [typed, setTypedState] = useState("");
+    const typedRef = useRef("");
+    const setTyped = useCallback((next: string | ((was: string) => string)) => {
+        typedRef.current = typeof next === "function" ? next(typedRef.current) : next;
+        setTypedState(typedRef.current);
+    }, []);
     const [padError, setPadError] = useState("");
     const [editing, setEditing] = useState(false);
-    const [pin, setPin] = useState("");
-    const [pinAgain, setPinAgain] = useState("");
-    const [pinBusy, setPinBusy] = useState(false);
-    const [pinError, setPinError] = useState("");
     const [counterNumber, setCounterNumber] = useState<number | null>(null);
 
     const spotlight = useRotation(LOGIN_SPOTLIGHTS.length, LOGIN_ROTATE_SECONDS);
@@ -222,14 +168,6 @@ function StaffLoginForm() {
     const { greet, clock } = useLocalClock();
     const backdrop = useBackdropPhoto(phoneApp ? NO_PHOTOS : LOGIN_BACKGROUNDS);
 
-    /**
-     * `kind` picks the provider, and nothing else changes.
-     *
-     * A PIN buys a faster way to prove who you are, never a shorter way in: the
-     * counter reconciliation, the released-PC reset and the "login outside counter"
-     * rule below run exactly the same for both, and both end up with the identical
-     * session (see shared/lib/auth/authorizeStaff.ts).
-     */
     /**
      * Into the app — unless another cashier's drawer is waiting on this counter.
      *
@@ -245,18 +183,40 @@ function StaffLoginForm() {
         router.replace(dest);
     }, [router]);
 
+    /**
+     * `kind` picks the provider, and nothing else changes: the counter reconciliation,
+     * the released-PC reset and the "login outside counter" rule below run the same for
+     * both, and both end with the identical session (authorizeStaff.ts).
+     */
     const doSignIn = useCallback(async (
         emailValue: string,
         secret: string,
-        kind: "password" | "pin" = "password",
         setPin = false,
+        kind: "password" | "pin" = "password",
     ) => {
         setLoading(true);
         setError("");
+        setPadError("");
 
         const res = kind === "pin"
             ? await signIn("credentials-staff-pin", { email: emailValue, pin: secret, redirect: false })
             : await signIn("credentials-staff", { email: emailValue, password: secret, redirect: false });
+
+        if (res?.error && kind === "pin") {
+            // Wrong digits — or, since the face was tapped, the clocks ran out or the
+            // tries did. Ask once more which, so the screen says the right thing.
+            const state = await counterPinState(emailValue);
+            if (state === "ready") {
+                setPadError("That PIN is not right.");
+            } else {
+                setStage("password");
+                setError(state === "left"
+                    ? "No longer on the staff list."
+                    : "Too many wrong PINs, or a few days since your password — type your password once.");
+            }
+            setLoading(false);
+            return;
+        }
 
         if (res?.error && res.code === OUTSIDE_COUNTER_SIGNIN_CODE) {
             // The password was right; the server refused because this is not a counter
@@ -269,21 +229,10 @@ function StaffLoginForm() {
             // cloud — offline, that fails and reads as a wrong password. Say what it is:
             // this machine must be online to bind a counter before it can sign in offline.
             const unbound = isElectronEnvironment() && !(await getLocalCounterSetup());
-            const message = unbound
+            setError(unbound
                 ? "Sign-in failed. This PC is not set up as a counter yet, so it needs the internet to sign in and bind a counter. Check the connection, or the email and password."
-                : kind === "pin"
-                    ? "That PIN is not right."
-                    : "Invalid email or password";
-            // A refused PIN goes back to the KEYPAD with the reason — not to a bare
-            // password box, which is where it used to land with the keypad and the
-            // photograph gone.
-            if (kind === "pin" && !unbound && chosen) {
-                setPadError(message);
-                setStage("keypad");
-            } else {
-                setError(message);
-                setStage("password");
-            }
+                : "Invalid email or password");
+            setStage("password");
             setLoading(false);
         } else {
             const dest = callbackUrl.startsWith("/") ? callbackUrl : "/office/work-flow-inbox";
@@ -363,16 +312,14 @@ function StaffLoginForm() {
                     title: u.title,
                     seats: u.seats,
                     avatarUrl: u.avatarUrl,
-                    // Signed in BY a PIN is proof of one. Otherwise ask the server, so a
-                    // PIN set yesterday still puts a keypad up tomorrow.
+                    // Signed in BY a PIN is proof of one.
                     hasPin: kind === "pin" || await hasCounterPin(emailValue),
                 }).catch(() => { /* a missing face costs nothing */ });
             }
 
             // Asked for a PIN: stop here rather than navigating. They are signed in —
             // the session is real — but the app waits behind this card until they have
-            // chosen their six digits or said no. Only ever reached from the password
-            // path, which is the only one that can prove who they are again.
+            // chosen their four digits or said no.
             if (setPin && kind === "password") {
                 setCounterNumber((await getLocalCounterSetup())?.counterNumber ?? null);
                 setPending({ dest, password: secret, hasPin: await hasCounterPin(emailValue), isCounter });
@@ -383,62 +330,48 @@ function StaffLoginForm() {
 
             await enter(dest, isCounter);
         }
-        // `chosen` is read in the failure branch to decide whether a refused PIN goes
-        // back to the keypad. Without it here, that branch closes over a stale null and
-        // the cashier is dropped on the password form — the very thing being fixed.
-    }, [callbackUrl, router, chosen, enter]);
-
-    /** Save the six digits, then let the app open. */
-    const savePin = async () => {
-        if (!pending) return;
-        if (pin !== pinAgain) { setPinError("The two PINs are not the same."); return; }
-        setPinBusy(true);
-        setPinError("");
-        try {
-            const res = await fetch("/api/me/counter-pin", {
-                method: "PUT",
-                headers: { "content-type": "application/json" },
-                // The password they typed a moment ago. The route asks for it because a
-                // PIN is a second key to this account, and an unattended till with a
-                // session open must not be enough to cut one.
-                body: JSON.stringify({ pin, password: pending.password }),
-            });
-            const out = await res.json().catch(() => ({})) as { error?: string };
-            if (!res.ok) { setPinError(out.error || "Could not save your PIN."); return; }
-            void enter(pending.dest, pending.isCounter);
-        } catch {
-            setPinError("Could not reach the office. A PIN can only be saved with the line up.");
-        } finally {
-            setPinBusy(false);
-        }
-    };
-
-    const removePin = async (scope: "counter" | "all") => {
-        if (!pending) return;
-        setPinBusy(true);
-        setPinError("");
-        try {
-            const res = await fetch(`/api/me/counter-pin?scope=${scope}`, { method: "DELETE" });
-            const out = await res.json().catch(() => ({})) as { error?: string };
-            if (!res.ok) { setPinError(out.error || "Could not remove your PIN."); return; }
-            void enter(pending.dest, pending.isCounter);
-        } catch {
-            setPinError("Could not reach the office. A PIN can only be removed with the line up.");
-        } finally {
-            setPinBusy(false);
-        }
-    };
+    }, [callbackUrl, router, enter]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await doSignIn(email, password, "password", wantsPin);
+        await doSignIn(email, password, wantsPin);
     };
+
+    // ── A face was tapped: the keypad, or their password with the email filled in ──
+    // The status is asked first — a local round trip on a counter — so the screen goes
+    // straight to the right card: the keypad, or the password with the reason why.
+    const tapFace = useCallback(async (entry: ShellRosterEntry) => {
+        setError("");
+        setPadError("");
+        setTyped("");
+        setEmail(entry.email);
+        setChosen(entry);
+        const state = await counterPinState(entry.email);
+        if (state === "left") {
+            // HR marked them as left. The card goes (same as the shell's Forget — a
+            // cache, nothing more), and the screen says so once.
+            void window.electronAPI?.forgetShellUser?.(entry.email).catch(() => { });
+            setRoster((was) => was.filter((r) => r.email !== entry.email));
+            setChosen(null);
+            setEmail("");
+            setStage("faces");
+            setError(`${entry.name} is no longer on the staff list.`);
+        } else if (state === "ready" || (state === null && entry.hasPin)) {
+            setStage("keypad");
+        } else {
+            setStage("password");
+            if (state === "password-due") {
+                setError("A few days since your password — type it once, and your PIN works again.");
+            }
+        }
+    }, [setTyped]);
 
     // ── Credentials typed on the counter's sign-in shell ────────────────────────
     // The desktop app shows its own sign-in screen off disk while Postgres and this
     // server are still starting (electron/main.ts, resources/shell/login.html), so the
     // cashier types during the boot instead of watching it. Main parks what they typed
-    // and navigates here; this picks it up and runs the ordinary sign-in.
+    // — or only the email of a tapped photograph, for the keypad here — and navigates
+    // here; this picks it up and carries on.
     //
     // It has to land HERE rather than main signing in directly, because everything
     // below the signIn call — the counter reconciliation, the released-PC reset, the
@@ -450,10 +383,8 @@ function StaffLoginForm() {
     // ONE effect, in order, on purpose. The parked credentials are asked for first and
     // the photographs only after: two effects racing here would sometimes paint a grid
     // underneath a sign-in that was already running, which is a flicker with no meaning.
-    // Once, and only once. `doSignIn` is rebuilt whenever `chosen` changes — which is
-    // every tap on a face — and without this guard the effect ran again, re-read the
-    // roster and threw the screen straight back to the photographs. The credentials are
-    // read-once on main's side anyway, so a second run could never do anything useful.
+    // Once, and only once: without this guard a rebuilt `doSignIn` ran the effect
+    // again, re-read the roster and threw the screen back to the photographs.
     //
     // No cancellation flag alongside it, deliberately. React runs an effect twice in
     // development — mount, clean up, mount — and a guard that blocks the second run
@@ -467,71 +398,51 @@ function StaffLoginForm() {
         void (async () => {
             const held = await window.electronAPI?.takeShellCredentials?.().catch(() => null);
 
-            if (held) {
+            if (held?.password) {
                 setEmail(held.email);
-                // Exactly one of the two is ever set. A PIN is never put in the password
-                // box: it would be shown by the peek button and submitted to the wrong
-                // provider on a retry.
-                if (held.pin) {
-                    setChosen((await readShellRoster()).find((r) => r.email === held.email) ?? null);
-                    void doSignIn(held.email, held.pin, "pin");
-                    return;
-                }
-                if (held.password) {
-                    setPassword(held.password);
-                    void doSignIn(held.email, held.password, "password", held.setPin === true);
-                    return;
-                }
+                setPassword(held.password);
+                void doSignIn(held.email, held.password, held.setPin === true);
+                return;
             }
 
-            // Nobody was handed over — a sign-out, an expiry, a release, a bounce. This
-            // is where the photographs matter most, and where there were none before.
+            // Nobody was handed over — a sign-out, an expiry, a release, a bounce — or
+            // only a tapped photograph. This is where the photographs matter most.
             const list = await readShellRoster();
-            if (list.length === 0) return;
             setRoster(list);
-            setStage("faces");
+            const tapped = held?.email ? list.find((r) => r.email === held.email) : undefined;
+            if (tapped) { void tapFace(tapped); return; }
+            if (held?.email) setEmail(held.email);
+            if (list.length > 0) setStage("faces");
         })();
-    }, [doSignIn]);
+    }, [doSignIn, tapFace]);
 
-    // ── The keypad's own sign-in ────────────────────────────────────────────
-    const tapFace = useCallback(async (entry: ShellRosterEntry) => {
-        setChosen(entry);
+    // ── The keypad ─────────────────────────────────────────────────────────────
+    // The fourth digit goes straight out and the dots empty with it, so a refused PIN
+    // is already waiting on a clean pad.
+    const press = useCallback((digit: string) => {
+        if (loading || !chosen) return;
         setPadError("");
-        setPadNote("Enter your 6-digit PIN");
-        setError("");
-        setEmail(entry.email);
-        if (!entry.hasPin) { setStage("password"); return; }
-        setStage("keypad");
-
-        // Is that PIN still live? Unlike the shell — whose `file://` origin cannot reach
-        // the server at all — this page is served over http and can simply ask.
-        try {
-            const res = await fetch("/api/counter-pin/status", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ email: entry.email }),
-            });
-            const out = res.ok ? await res.json() as { state?: string } : null;
-            if (out?.state === "password-due") {
-                setStage("password");
-                setError("Password time — it has been a few days. Your PIN keeps working after this.");
-            } else if (out?.state === "none") {
-                setStage("password");
-            } else if (out?.state === "left") {
-                // HR marked this person as left. The card goes (same as the shell's
-                // Forget — a cache, nothing more), and the screen says so once
-                // rather than refusing a correct PIN in silence.
-                void window.electronAPI?.forgetShellUser?.(entry.email).catch(() => { });
-                setRoster((was) => was.filter((r) => r.email !== entry.email));
-                setChosen(null);
-                setEmail("");
-                setStage("faces");
-                setError(`${entry.name} is no longer on the staff list.`);
-            }
-        } catch {
-            /* offline or not a counter — the sign-in itself is the real check */
+        const next = typedRef.current + digit;
+        if (next.length >= PIN_LENGTH) {
+            setTyped("");
+            void doSignIn(chosen.email, next.slice(0, PIN_LENGTH), false, "pin");
+        } else {
+            setTyped(next);
         }
-    }, []);
+    }, [loading, chosen, doSignIn, setTyped]);
+
+    // The number row and the numpad both work — a cashier who reaches for the keyboard
+    // should not have to go back to the mouse.
+    useEffect(() => {
+        if (stage !== "keypad") return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key >= "0" && e.key <= "9") { press(e.key); e.preventDefault(); }
+            else if (e.key === "Backspace") { setTyped((t) => t.slice(0, -1)); e.preventDefault(); }
+            else if (e.key === "Escape") { setChosen(null); setPadError(""); setStage("faces"); }
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [stage, press, setTyped]);
 
     const forgetFace = useCallback((entry: ShellRosterEntry) => {
         void window.electronAPI?.forgetShellUser?.(entry.email).catch(() => { });
@@ -619,78 +530,35 @@ function StaffLoginForm() {
                 ) : stage === "keypad" && chosen ? (
                     <PinPad
                         entry={chosen}
-                        note={padNote}
+                        length={PIN_LENGTH}
+                        typed={typed}
+                        note={loading ? "Signing in…" : `Enter your ${PIN_LENGTH}-digit PIN`}
                         error={padError}
-                        busy={loading}
-                        onSubmit={(pin) => void doSignIn(chosen.email, pin, "pin")}
-                        onBack={backToFaces}
-                        onUsePassword={() => { setEmail(chosen.email); setPadError(""); setStage("password"); }}
-                    />
+                        onPress={press}
+                        onDelete={() => setTyped((t) => t.slice(0, -1))}
+                        header={<><h1 className={styles.greet}>{greet}</h1><p className={styles.clock}>{clock || " "}</p></>}
+                    >
+                        <div className={styles.rowlinks}>
+                            <button type="button" className={styles.pinlink} disabled={loading} onClick={backToFaces}>
+                                Not {chosen.name.split(/\s+/)[0]}? Pick your photo
+                            </button>
+                            <button type="button" className={styles.pinlink} disabled={loading}
+                                onClick={() => { setPadError(""); setTyped(""); setStage("password"); }}>
+                                Use password
+                            </button>
+                        </div>
+                    </PinPad>
                 ) : pending ? (
-                    <section className={styles.card}>
-                        <h1 className={styles.greet}>
-                            {pending.hasPin ? "Change your PIN" : "Choose your PIN"}
-                        </h1>
-                        <p className={styles.clock}>
-                            Six digits{counterNumber !== null ? `, for counter ${counterNumber} only` : ""}.
-                            Tomorrow you just tap your photo.
-                        </p>
-
-                        <div className={styles.field}>
-                            <label htmlFor="pin">{pending.hasPin ? "New PIN" : "PIN"}</label>
-                            <input
-                                id="pin" type="password" inputMode="numeric" autoComplete="off"
-                                placeholder="6 digits" autoFocus
-                                value={pin}
-                                onChange={(e) => { setPin(digitsOnly(e.target.value)); setPinError(""); }}
-                            />
-                        </div>
-
-                        <div className={styles.field}>
-                            <label htmlFor="pin2">Type it again</label>
-                            <input
-                                id="pin2" type="password" inputMode="numeric" autoComplete="off"
-                                placeholder="6 digits"
-                                value={pinAgain}
-                                onChange={(e) => { setPinAgain(digitsOnly(e.target.value)); setPinError(""); }}
-                                onKeyDown={(e) => { if (e.key === "Enter" && pin.length === 6) void savePin(); }}
-                            />
-                        </div>
-
-                        <button
-                            className={styles.go} type="button"
-                            disabled={pinBusy || pin.length !== 6 || pinAgain.length !== 6}
-                            onClick={() => void savePin()}
-                        >
-                            {pinBusy ? "Saving…" : "Save and open"}
-                        </button>
-                        {pinError && <p className={styles.err}>{pinError}</p>}
-
-                        {/* Removing is the same errand, so it lives on the same card —
-                            there is nowhere else to do it now, and nowhere else needed. */}
-                        {pending.hasPin && (
-                            <div className={styles.pinrow}>
-                                <button type="button" className={styles.pinlink} disabled={pinBusy}
-                                    onClick={() => void removePin("counter")}>
-                                    Remove from this counter
-                                </button>
-                                <button type="button" className={styles.pinlink} disabled={pinBusy}
-                                    onClick={() => void removePin("all")}>
-                                    Remove from all
-                                </button>
-                            </div>
-                        )}
-
-                        <button type="button" className={styles.pinlink} disabled={pinBusy}
-                            onClick={() => void enter(pending.dest, pending.isCounter)}>
-                            Skip for now
-                        </button>
-
-                        <p className={styles.pinnote}>
-                            The line must be up to save a PIN. Using one later works offline, and your
-                            password is still asked for every few days.
-                        </p>
-                    </section>
+                    <ChoosePinCard
+                        hasPin={pending.hasPin}
+                        counterNumber={counterNumber}
+                        // The password they typed a moment ago — nothing asked twice.
+                        password={pending.password}
+                        saveLabel="Save and open"
+                        skipLabel="Skip for now"
+                        onDone={() => void enter(pending.dest, pending.isCounter)}
+                        onSkip={() => void enter(pending.dest, pending.isCounter)}
+                    />
                 ) : (
                 <form className={styles.card} onSubmit={handleSubmit} autoComplete="on">
                     {/* Plain <img>: a single-path vector has nothing for the optimizer to
@@ -754,17 +622,14 @@ function StaffLoginForm() {
                     </button>
                     {error && <p className={styles.err}>{error}</p>}
 
-                    {/* Desktop only — six digits mean nothing on the website. Pressed
+                    {/* Desktop only — a counter PIN means nothing on the website. Pressed
                         before signing in, so all it can do is ask; the panel opens on
-                        the other side. */}
-                    {/* TWO controls, never one link doing both jobs — the same pair as
-                        the shell. "Login with PIN" is offered whenever this PC has any,
-                        never conditional on who holds a PIN: that condition is what made
-                        this a dead end. */}
+                        the other side. "Pick your photo" goes back to the faces whenever
+                        this PC has any — the same pair as the shell. */}
                     <div className={styles.rowlinks}>
                         {roster.length > 0 ? (
                             <button type="button" className={styles.pinlink} onClick={backToFaces}>
-                                Login with PIN
+                                Pick your photo
                             </button>
                         ) : <span />}
                         {isDesktop && (

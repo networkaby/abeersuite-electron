@@ -194,6 +194,10 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     // retention protection — blacklist products from discount engines.
     { id: "retention:protection:manage", label: "Manage product protection", module: "retention", description: "Add/remove products from the discount blacklist (protection)." },
 
+    // campaigns — writing and saving a campaign opens on the sidebar link; sending
+    // reaches every customer at once, so it is its own tick (wired in phase 2).
+    { id: "campaigns:send", label: "Send campaigns", module: "campaigns", description: "Send a campaign to customers (app notification now, WhatsApp later). Writing and saving drafts rides the Campaigns sidebar link." },
+
 
     // repair — the ticket resource (All Repair list + ticket page). View rides the
     // repair sidebar link; these gate the create / edit / delete actions on a ticket.

@@ -335,8 +335,6 @@ model InvProduct {
   /// Per-item margin override in percent (e.g. 18.50 = +18.5%). null = walk the
   /// PricingStrategy chain (BRAND → GROUP → CATEGORY → ORG).
   marginPercent   Decimal?    @db.Decimal(6, 2)
-  /// True when a user has manually set effectiveSalePricePaise — bulk recompute skips this row.
-  priceOverridden Boolean     @default(false)
 
   // ── Saved "Sale Price" (the human sale price — barcode source) ──────────────
   /// Which source materializes effectiveSalePricePaise. SAVED = the frozen

@@ -91,7 +91,7 @@ export async function GET(req: Request) {
             const hours = dutyHoursFor(p?.dutyStart, p?.dutyEnd, { on: shopDateFromIso(date), seasonal });
             const duty = dutyMinutesFor(p?.dutyMinutes, hours.start, hours.end);
             const worked = m ? workedOf(m) : 0;
-            const tillLate = lateMinutes(m?.firstInAt ?? null, hours.start, undefined, rules.lateGraceMinutes) ?? 0;
+            const tillLate = lateMinutes(m?.firstInAt ?? null, hours.start) ?? 0;
             const corrected = { worked: m?.overrideWorkedMinutes != null, late: m?.overrideLateMinutes != null };
             const holiday = holidayDtos.find((h) => holidayDatesFor([h], branchIdsFrom(u)).size > 0) ?? null;
 
@@ -111,7 +111,7 @@ export async function GET(req: Request) {
                 dutyMinutes: duty,
                 dutyStart: hours.start,
                 dutyEnd: hours.end,
-                grade: gradeDay(worked, duty),
+                grade: gradeDay(worked, duty, rules),
                 overtimeMinutes: overtimeMinutes(worked, duty),
                 shortMinutes: shortMinutes(worked, duty),
                 weeklyOff: (p?.weeklyOff ?? [0]).includes(weekdayOf(date)),

@@ -51,13 +51,19 @@ type Loaded = {
 };
 
 export function OpeningBillsDialog({
-    open, onOpenChange, accountId, onSaved,
+    open, onOpenChange, accountId, onSaved, retarget,
 }: {
     open:         boolean;
     onOpenChange: (v: boolean) => void;
     accountId:    number;
     /** Called after a successful save, so the caller can refresh its figures. */
     onSaved?:     () => void;
+    /**
+     * A new figure typed on the master card while the opening already lives in
+     * bills. The breakup opens prefilled with it: one bill takes the new amount,
+     * several must be adjusted to add up to it, 0 empties the list (clears it).
+     */
+    retarget?:    { amount: number; type: "DEBIT" | "CREDIT" };
 }) {
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -71,11 +77,15 @@ export function OpeningBillsDialog({
             const { data: d } = await axios.get<Loaded>(`/api/accountancy/accounts/${accountId}/opening-bills`);
             setData(d);
             if (d.bills.length > 0) {
-                setType(d.bills[0].type);
-                setRows(d.bills.map((b) => ({
+                setType(retarget?.type ?? d.bills[0].type);
+                const loaded = d.bills.map((b) => ({
                     universalVoucherId: b.universalVoucherId,
                     ref: b.ref, date: b.date, amount: String(b.amount), linked: b.linked,
-                })));
+                }));
+                // Clearing drops every bill; one bill simply takes the new figure.
+                if (retarget && retarget.amount <= 0) setRows([]);
+                else if (retarget && loaded.length === 1) setRows([{ ...loaded[0], amount: String(retarget.amount) }]);
+                else setRows(loaded);
             } else {
                 // First time: seed one row from the master figure, so the common
                 // case ("it was all one bill") is already filled in.
@@ -92,7 +102,7 @@ export function OpeningBillsDialog({
         } finally {
             setLoading(false);
         }
-    }, [accountId]);
+    }, [accountId, retarget]);
 
     useEffect(() => {
         if (open && accountId) void load();
@@ -101,7 +111,9 @@ export function OpeningBillsDialog({
     const total = round2(rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0));
     // While the party is still on the master figure, the breakup has to add up to
     // it — the money is not changing, only gaining detail.
-    const target = data?.scalarOpening ?? null;
+    const target = retarget ? retarget.amount : (data?.scalarOpening ?? null);
+    // With bills already posted, saving an empty list is how the opening is cleared.
+    const clearing = rows.length === 0 && (data?.bills.length ?? 0) > 0;
     const mismatch = target !== null && Math.abs(total - target) > 0.01;
 
     const setRow = (i: number, patch: Partial<Row>) =>
@@ -131,7 +143,7 @@ export function OpeningBillsDialog({
                 amount: round2(parseFloat(r.amount) || 0),
             }))
             .filter((b) => b.amount > 0.005);
-        if (bills.length === 0) {
+        if (bills.length === 0 && !clearing) {
             toast.error("Add at least one bill with an amount.");
             return;
         }
@@ -142,7 +154,8 @@ export function OpeningBillsDialog({
         setSaving(true);
         try {
             await axios.put(`/api/accountancy/accounts/${accountId}/opening-bills`, { type, bills });
-            toast.success(bills.length === 1 ? "Opening bill saved." : `${bills.length} opening bills saved.`);
+            toast.success(bills.length === 0 ? "Opening balance cleared."
+                : bills.length === 1 ? "Opening bill saved." : `${bills.length} opening bills saved.`);
             onSaved?.();
             onOpenChange(false);
         } catch (e) {
@@ -179,9 +192,9 @@ export function OpeningBillsDialog({
                             says which way it goes, so asking again could only
                             introduce a wrong answer — it is shown, not picked. */}
                         <p className="text-sm text-muted-foreground">
-                            {type === "DEBIT" ? "Debit — they owe us" : "Credit — we owe them"}
-                            {target !== null && (
-                                <> · opening balance on the master <span className="font-mono">₹ {fmt(target)}</span></>
+                            {clearing ? "No bills — saving clears the opening balance" : type === "DEBIT" ? "Debit — they owe us" : "Credit — we owe them"}
+                            {target !== null && !clearing && (
+                                <> · {retarget ? "new opening balance" : "opening balance on the master"} <span className="font-mono">₹ {fmt(target)}</span></>
                             )}
                         </p>
 
@@ -258,9 +271,9 @@ export function OpeningBillsDialog({
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
                         Cancel
                     </Button>
-                    <Button type="button" onClick={save} disabled={saving || loading || mismatch || data?.isParty === false}>
+                    <Button type="button" variant={clearing ? "destructive" : "default"} onClick={save} disabled={saving || loading || mismatch || data?.isParty === false}>
                         {saving && <Loader2 className="mr-1 animate-spin" size={14} />}
-                        Save breakup
+                        {clearing ? "Clear opening balance" : "Save breakup"}
                     </Button>
                 </DialogFooter>
             </DialogContent>

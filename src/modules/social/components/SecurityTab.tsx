@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useForwardEmail } from "@/shared/hooks/useForwardEmail";
+import { PIN_LENGTH } from "@/shared/lib/constants/session";
 
 const securitySchema = z.object({
     currentPassword: z.string(),
@@ -129,7 +130,7 @@ function CounterPinCard() {
     const [pinAgain, setPinAgain] = useState("");
     const [password, setPassword] = useState("");
     const [busy, setBusy] = useState(false);
-    const digits = (v: string) => v.replace(/\D/g, "").slice(0, 6);
+    const digits = (v: string) => v.replace(/\D/g, "").slice(0, PIN_LENGTH);
 
     const save = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -146,7 +147,7 @@ function CounterPinCard() {
 
     const remove = async (scope: "counter" | "all") => {
         const where = scope === "all" ? "every counter" : "this counter";
-        if (!confirm(`Remove your PIN from ${where}? You will sign in with your password there.`)) return;
+        if (!confirm(`Remove your PIN from ${where}? You will use your password there.`)) return;
         setBusy(true);
         try {
             await axios.delete(`/api/me/counter-pin?scope=${scope}`);
@@ -162,11 +163,11 @@ function CounterPinCard() {
                 <Lock size={14} className="text-muted-foreground" />
                 <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Counter PIN</h3>
             </div>
-            <p className="text-xs text-muted-foreground">Six digits to sign in on this counter. Saved only for the counter you are on.</p>
+            <p className="text-xs text-muted-foreground">Four digits to unlock this counter when it is locked. Saved only for the counter you are on.</p>
             <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                     <Label>New PIN</Label>
-                    <Input type="password" inputMode="numeric" autoComplete="off" value={pin} onChange={e => setPin(digits(e.target.value))} placeholder="6 digits" />
+                    <Input type="password" inputMode="numeric" autoComplete="off" value={pin} onChange={e => setPin(digits(e.target.value))} placeholder="4 digits" />
                 </div>
                 <div className="space-y-1.5">
                     <Label>Confirm PIN</Label>
@@ -178,7 +179,7 @@ function CounterPinCard() {
                 <Input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Needed to set a PIN" />
             </div>
             <div className="flex justify-end pt-1">
-                <Button type="submit" disabled={busy || pin.length !== 6 || !password}>{busy ? "Saving…" : "Set PIN"}</Button>
+                <Button type="submit" disabled={busy || pin.length !== PIN_LENGTH || !password}>{busy ? "Saving…" : "Set PIN"}</Button>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
                 <span className="mr-auto text-xs text-muted-foreground">Remove PIN</span>

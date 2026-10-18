@@ -18,17 +18,11 @@
  * else — and the packaging gate enforces it, rather than trusting whoever next edits an
  * `extraResources` filter to remember why it was written that way.
  *
- * `AUTH_SECRET` IS here, since 2026-09-07, and only because of `WRITE_MODE=v_live`: a
- * till in that mode relays its writes to the office and authenticates there with its own
- * session cookie, which the office can only decrypt with the same secret (Auth.js keys
- * the token on secret + cookie name; `src/auth.ts` pins the name). It used to be
- * generated per machine (`ensureAuthSecret` in electron/main.ts) on the argument that
- * cookies never leave 127.0.0.1 — still true, and still what happens when the build's
- * `.env` carries no secret. What shipping it costs: anyone holding an installer can mint
- * a staff session at the office. The same installer already carries `DATABASE_URL`, full
- * read/write on production, which is strictly more; rotating both is an open item.
- * `generate-counter-env.ts` writes it ONLY when the build's `WRITE_MODE` is `v_live`,
- * refuses a placeholder or short value, and requires an https `WRITE_API_URL`.
+ * `AUTH_SECRET` is NOT here (since 2026-10-13). Every machine generates its own
+ * (`ensureAuthSecret` in electron/main.ts), so a till's staff cookie is good on that till
+ * only. A `WRITE_MODE=v_live` till signs in at the office with its own revocable counter
+ * key instead (`src/shared/lib/counter/relayKey.ts`); before that it shipped the office's
+ * secret, which let anyone holding an installer mint an office session for any user.
  *
  * NOT here, on purpose:
  *   - `DIRECT_URL` — only seeds and maintenance scripts read it, so the direct 5432
@@ -82,10 +76,8 @@ export const COUNTER_ENV_COPIED: readonly string[] = [
     // neither behaves exactly as it did before either existed.
     "READ_MODE",
     "WRITE_MODE",
-    // v_live only: the office origin the till relays its writes to, and the office's
-    // own session secret so that relay authenticates. See the header for the cost.
+    // v_live only: the office origin the till relays its writes to.
     "WRITE_API_URL",
-    "AUTH_SECRET",
     // Electron window's start URL — see src/shared/lib/appModeCore.ts's
     // resolveLandingPage(). A path only, validated at load time; not a credential.
     "LANDING_PAGE",
@@ -165,7 +157,7 @@ export function counterEnvCopiedFor(mode: AppMode): readonly string[] {
     return mode === "office"
         ? [...COUNTER_ENV_COPIED, ...COUNTER_ENV_BACKUP_KEYS, ...COUNTER_ENV_CLOUDINARY_KEYS,
         ...COUNTER_ENV_CLOUDFLARE_KEYS, ...COUNTER_ENV_COURIER_KEYS, ...COUNTER_ENV_SUPER_ADMIN_KEYS,
-        ...COUNTER_ENV_WHATSAPP_KEYS]
+        ...COUNTER_ENV_WHATSAPP_KEYS, ...COUNTER_ENV_AI_KEYS]
         : COUNTER_ENV_COPIED;
 }
 
@@ -189,16 +181,6 @@ export const COUNTER_ENV_REQUIRED: readonly string[] = [
     "DATABASE_URL",
     "INTERNAL_STAFF_EMAIL_DOMAINS",
 ];
-
-/**
- * Example secrets from `.env.example`. Present but worthless — baking one would sign
- * every counter's cookies with a string published in this repository. Mirrors
- * `PLACEHOLDER_ENV_VALUES` in electron/main.ts, which cannot import from here.
- */
-export const PLACEHOLDER_SECRET_VALUES: ReadonlySet<string> = new Set([
-    "replace-me-with-a-generated-secret",
-    "your-auth-secret-here",
-]);
 
 /** Every key the packaged file is allowed to contain, for the given variant. Used by
  *  `verify-package.ts`'s packaging gate. */
@@ -282,4 +264,13 @@ export const COUNTER_ENV_WHATSAPP_KEYS: readonly string[] = [
     "META_WA_ACCESS_TOKEN",
     "META_WA_PHONE_NUMBER_ID",
     "META_WA_BUSINESS_ACCOUNT_ID",
+];
+/**
+ * Gemini keys for AI product copy. With them the till calls Google itself instead of
+ * relaying through the office (`relayPolicy.ts` NEVER_RELAY) — one hop faster. Office
+ * only, like the rest: a counter build without them simply keeps relaying.
+ */
+export const COUNTER_ENV_AI_KEYS: readonly string[] = [
+    "GOOGLE_GENERATIVE_AI_API_KEY",
+    "GOOGLE_AI_SEARCH_API_KEY",
 ];

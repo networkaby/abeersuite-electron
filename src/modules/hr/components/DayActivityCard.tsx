@@ -24,8 +24,9 @@ import { ArrowRight, Check, Pencil, Undo2, X } from "lucide-react";
 import { NumericInput } from "@/shared/components/NumericInput";
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
 import { cn } from "@/shared/lib/format/utils";
-import type { PayRules } from "@/shared/lib/hr/payRules";
-import { accountDay, type AccountLine, type DayBreakup, type SpanDto } from "../lib/attendanceBreakup";
+import { pendingTotal, type PayRules } from "@/shared/lib/hr/payRules";
+import { clockGradeLabel } from "@/shared/lib/schemas/hrAttendanceSchema";
+import { accountDay, pendingBreakup, type AccountLine, type DayBreakup, type TimelineRow } from "../lib/attendanceBreakup";
 
 const fmtTime = (iso: string | null) =>
     iso ? new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "—";
@@ -33,12 +34,12 @@ const fmtTime = (iso: string | null) =>
 const fmtDay = (iso: string) =>
     new Date(`${iso}T00:00:00.000Z`).toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short", timeZone: "UTC" });
 
-/** Why a stretch finished, in words the reader does not have to decode. */
-const ENDED_BY: Record<SpanDto["endedBy"], string> = {
-    OPEN:         "still going",
-    IDLE:         "left the counter",
-    SIGNED_OUT:   "signed out",
-    SHIFT_CLOSED: "shift closed",
+/** Each line of the day, in plain words. */
+const TIMELINE_LABEL: Record<TimelineRow["kind"], string> = {
+    late:  "Not yet came",
+    on:    "On duty",
+    off:   "Off duty",
+    early: "Left early",
 };
 
 /** "HALF_DAY" → "half day". The words are for a reader, not for a database. */
@@ -68,11 +69,24 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
     /** Correct (minutes) or hand back to the till (null). Absent = read-only card. */
     onCorrect?: (field: CorrectableField, minutes: number | null) => Promise<void>;
 }) {
-    const first = day.spans[0]?.startedAt ?? null;
-    const last = day.spans.length ? day.spans[day.spans.length - 1].endedAt : null;
+    // First in and last out from the day in order, not the raw stretches: old
+    // ledgers can hold overlapping stretches, and the last one is not the latest.
+    const onLines = day.timeline.filter((r) => r.kind === "on");
+    const first = onLines[0]?.from ?? null;
+    const lastOn = onLines[onLines.length - 1];
+    const last = lastOn && !lastOn.open ? lastOn.to : null;
     const reads = day.status || day.grade;
     const shut = day.weeklyOff || !!day.holidayName;
+    // Came and worked under 40%: "on duty" / "incomplete duty" (unpaid), never
+    // "absent". A shut day owes no duty, so any work there is just "worked" — paid.
+    const cameIn = day.grade === "ABSENT" && day.workedMinutes > 0;
+    const clockWords = shut && day.workedMinutes > 0 ? "worked"
+        : cameIn ? clockGradeLabel(day.grade, day.workedMinutes, isToday).toLowerCase() : inWords(day.grade);
+    const showsClock = !day.manual && reads === day.grade;
     const account = accountDay(day, rules);
+    // Owner, 2026-10-13: day total against the expected duty, nothing else.
+    // On a half day, against half the duty (the other half is cut from salary).
+    const overShort = account.total - account.target;
 
     // A day with no stretches is not a day with no hours — it is a day from
     // before this was recorded, or one nobody worked. A card full of zeroes would
@@ -97,6 +111,13 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                     </span>
                 </div>
                 {day.note && <p className="mt-1 text-xs text-muted-foreground">Note: {day.note}</p>}
+                {/* An absence penalty lands on a day with no stretches, and it is
+                    exactly the line a person asks about later. */}
+                {day.pending && day.pending.added.length > 0 && (
+                    <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                        Today&apos;s short +{formatWorked(pendingTotal(day.pending.added))} ({pendingBreakup(day.pending.added)}) · short carried forward {formatWorked(pendingTotal(day.pending.after))}
+                    </p>
+                )}
             </article>
         );
     }
@@ -107,7 +128,7 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
             <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-2">
                 <span className="text-sm font-semibold">{fmtDay(day.date)}</span>
                 {isToday && <span className="text-[11px] font-medium text-primary">today</span>}
-                <Chip tone={GRADE_TONE[reads] ?? GRADE_TONE.PRESENT}>{inWords(reads)}</Chip>
+                <Chip tone={showsClock && shut && day.workedMinutes > 0 ? GRADE_TONE.PRESENT : showsClock && cameIn ? GRADE_TONE.HALF_DAY : GRADE_TONE[reads] ?? GRADE_TONE.PRESENT}>{showsClock ? clockWords : inWords(reads)}</Chip>
                 {day.holidayName && <Chip tone={GRADE_TONE.HOLIDAY}>{day.holidayName}</Chip>}
                 {!day.holidayName && day.weeklyOff && <Chip tone={GRADE_TONE.WEEKLY_OFF}>weekly off</Chip>}
                 {day.leaveKind && <Chip tone={GRADE_TONE.LEAVE}>{inWords(day.leaveKind)} leave</Chip>}
@@ -115,7 +136,7 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                     unanswerable, so the clock's own answer stays beside it. */}
                 {day.manual && (
                     <span className="text-xs text-muted-foreground">
-                        marked by office{!shut && day.status !== day.grade && ` · clock said ${inWords(day.grade)}`}
+                        marked by office{!shut && day.status !== day.grade && ` · clock said ${clockWords}`}
                     </span>
                 )}
                 <span className="ml-auto flex items-center gap-1.5 font-mono text-xs tabular-nums text-muted-foreground">
@@ -124,20 +145,27 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
             </header>
 
             {/* The figures the day was arrived at from */}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-3 sm:grid-cols-4 lg:grid-cols-8">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-3 sm:grid-cols-4 lg:grid-cols-9">
                 <Figure label="Duty window" value={`${day.dutyStart}–${day.dutyEnd}`} hint="The shop's hours on this very date — they move through the year" />
-                <Figure label="Duty owed" value={formatWorked(day.dutyMinutes)} hint="What this day owed" />
+                <Figure label="Expected Duty Hours" value={formatWorked(day.dutyMinutes)} hint="The full duty as per the Duty window — not the time he was present" />
+                {/* Owner, 2026-10-13: "actual worked, adjusted worked" — the till's
+                    own measurement always shows, even on a Manual day that pays on
+                    the office's mark; the adjusted figure is the one pay uses. */}
+                <Figure label="Actual Worked" value={formatWorked(day.till.workedMinutes)} hint="What the counter measured — never changed by hand" />
                 <CorrectableFigure
-                    label="Worked" minutes={day.workedMinutes} till={day.till.workedMinutes} corrected={day.corrected.worked}
-                    strong hint="Credited by the clock itself, stretch by stretch"
+                    label="Adjusted Worked" minutes={day.workedMinutes} till={day.till.workedMinutes} corrected={day.corrected.worked}
+                    // Owner, 2026-10-13: shows the day total by default. The pencil
+                    // still corrects the worked minutes the total is built from.
+                    display={shut ? undefined : account.total}
+                    strong hint="The day total — worked, plus extra, less penalty. The pencil corrects the worked minutes it starts from"
                     onCorrect={onCorrect && ((m) => onCorrect("worked", m))}
                 />
-                <Figure label="Times active" value={String(day.activeCount)} hint="Separate stretches at the machine" />
+                <Figure label="Duty segments" value={String(day.activeCount)} hint="Separate on-duty segments at the machine" />
                 <Figure label="Away" value={orDash(day.idleMinutes)} hint={`Between stretches. A gap past ${idleLimitMinutes} min stops the clock — not counted, not paid`} />
                 <CorrectableFigure
                     label="Late by" minutes={day.lateBy} till={day.till.lateBy} corrected={day.corrected.late}
                     tone={day.lateBy > 0 ? "warn" : undefined} dashZero
-                    hint={`Against ${day.dutyStart}, after ${rules.lateGraceMinutes} min of grace`}
+                    hint={`Against ${day.dutyStart}; up to ${rules.lateGraceMinutes} min forgiven on ${rules.lateFreeDays} days a month`}
                     onCorrect={onCorrect && ((m) => onCorrect("late", m))}
                 />
                 {/* A day the shop was shut owes nothing, so it cannot be left early
@@ -153,9 +181,9 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                 />
                 <Figure
                     label="Over / short"
-                    value={shut ? "—" : day.overtimeMinutes > 0 ? `+${formatWorked(day.overtimeMinutes)}` : day.shortMinutes > 0 ? `−${formatWorked(day.shortMinutes)}` : "—"}
-                    tone={shut ? undefined : day.overtimeMinutes > 0 ? "good" : day.shortMinutes > 0 ? "warn" : undefined}
-                    hint={shut ? "Not judged — every minute of a shut day is granted at its own rate" : "Against the duty owed, before the month is netted"}
+                    value={shut ? "—" : overShort > 0 ? `+${formatWorked(overShort)}` : overShort < 0 ? `−${formatWorked(-overShort)}` : "—"}
+                    tone={shut ? undefined : overShort > 0 ? "good" : overShort < 0 ? "warn" : undefined}
+                    hint={shut ? "Not judged — every minute of a shut day is granted at its own rate" : "Day total against the expected duty hours"}
                 />
             </div>
 
@@ -165,6 +193,11 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                 A line that costs nothing still shows, greyed: the reader sees the
                 free late day being spent rather than finding out on a payslip. */}
             <div className="border-t border-border px-4 py-2">
+                {/* Owner, 2026-10-13: two columns — the day's own time on the left,
+                    the running short on the right. The short is neither today's
+                    time nor a penalty, so it is never inside the day total. */}
+                <div className={cn("grid gap-x-6 gap-y-3", !shut && "xl:grid-cols-[3fr_2fr]")}>
+                <div>
                 <p className="mb-1 text-[11px] font-medium text-muted-foreground">How the day is accounted</p>
                 <table className="w-full text-xs">
                     <thead>
@@ -177,7 +210,10 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                         </tr>
                     </thead>
                     <tbody>
-                        {account.lines.map((l) => <AccountRow key={l.key} line={l} />)}
+                        {/* A line with nothing in it is hidden — normal duty always stays. */}
+                        {account.lines
+                            .filter((l) => l.key === "duty" || l.minutes > 0 || l.accounted !== 0)
+                            .map((l) => <AccountRow key={l.key} line={l} />)}
                     </tbody>
                     <tfoot>
                         <tr className="border-t border-border font-medium text-foreground">
@@ -186,11 +222,36 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                             <td />
                             <td className="py-1 text-right font-mono tabular-nums">{signed(account.total)}</td>
                             <td className="hidden py-1 pl-3 text-[11px] font-normal text-muted-foreground sm:table-cell">
-                                {shut ? "paid at its own rate, outside the netting" : "the day on its own — before the month is netted"}
+                                {shut ? "paid at its own rate, outside the short balance" : "normal duty + recovery + overtime − penalty"}
                             </td>
                         </tr>
                     </tfoot>
                 </table>
+                </div>
+                {!shut && (
+                    <div>
+                        <p className="mb-1 text-[11px] font-medium text-muted-foreground">Short balance</p>
+                        <table className="w-full text-xs">
+                            <thead>
+                                <tr className="text-[11px] text-muted-foreground">
+                                    <th className="py-0.5 text-left font-normal">Line</th>
+                                    <th className="py-0.5 text-right font-normal">Minutes</th>
+                                    <th className="hidden py-0.5 pl-3 text-left font-normal sm:table-cell">Why</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {account.carry.before > 0 && <BalanceRow label="Earlier short" minutes={account.carry.before} note={account.carry.beforeNote} />}
+                                {account.carry.recovered > 0 && <BalanceRow label="− Recovered today" minutes={account.carry.recovered} note="by today's extra" />}
+                                {account.carry.minutes > 0 && <BalanceRow label="+ Today's short" minutes={account.carry.minutes} note={account.carry.note} warn />}
+                            </tbody>
+                            <tfoot>
+                                <BalanceRow label="= Short carried forward" minutes={account.carry.after} strong warn
+                                    note={account.carry.after > 0 ? "recovered by a later day's extra, or cut at month end" : null} />
+                            </tfoot>
+                        </table>
+                    </div>
+                )}
+                </div>
             </div>
 
             {/* Whatever the office wrote on the day. It is the one part of a card
@@ -201,22 +262,28 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                 </p>
             )}
 
-            {/* The log — every stretch, in order */}
-            {day.spans.length > 0 && (
+            {/* The day in order — owner, 2026-10-13: "full day in the list, on
+                duty, off duty in sequence." Off-duty lines are red, so the gaps
+                that cost him are the first thing the eye lands on. */}
+            {day.timeline.length > 0 && (
                 <div className="border-t border-border px-4 py-2">
-                    <p className="mb-1 text-[11px] font-medium text-muted-foreground">
-                        Active {day.activeCount} {day.activeCount === 1 ? "time" : "times"}
-                    </p>
-                    <ul className="space-y-0.5 text-xs text-muted-foreground">
-                        {day.spans.map((s, i) => (
-                            <li key={`${s.startedAt}-${i}`} className="flex flex-wrap items-center gap-x-2">
-                                <span className="w-4 shrink-0 tabular-nums">{i + 1}.</span>
-                                <span className="font-mono tabular-nums whitespace-nowrap">{fmtTime(s.startedAt)} – {fmtTime(s.endedAt)}</span>
-                                <span className="font-medium text-foreground">{formatWorked(s.minutes)}</span>
-                                <span>· {ENDED_BY[s.endedBy]}</span>
-                                {s.counterId ? <span>· counter {s.counterId}</span> : null}
-                            </li>
-                        ))}
+                    <p className="mb-1 text-[11px] font-medium text-muted-foreground">The day in order</p>
+                    <ul className="space-y-0.5 text-xs">
+                        {day.timeline.map((r, i) => {
+                            const away = r.kind !== "on";
+                            return (
+                                <li
+                                    key={`${r.kind}-${r.from ?? r.to}-${i}`}
+                                    className={cn("flex flex-wrap items-center gap-x-2", away ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}
+                                >
+                                    <span className="font-mono tabular-nums whitespace-nowrap">
+                                        {r.from ? fmtTime(r.from) : day.dutyStart} – {r.open ? "now" : r.to ? fmtTime(r.to) : day.dutyEnd}
+                                    </span>
+                                    <span className={cn("w-24 shrink-0", !away && "text-foreground")}>{TIMELINE_LABEL[r.kind]}</span>
+                                    <span className={cn("font-medium tabular-nums", !away && "text-foreground")}>{formatWorked(r.minutes)}</span>
+                                </li>
+                            );
+                        })}
                     </ul>
                 </div>
             )}
@@ -225,8 +292,8 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                 question this whole screen exists to answer. */}
             <footer className="border-t border-border bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
                 {shut
-                    ? <>Worked {formatWorked(day.workedMinutes)} on a day the shop was shut — no duty owed</>
-                    : <>Worked {formatWorked(day.workedMinutes)} of {formatWorked(day.dutyMinutes)} owed ({day.dutyStart}–{day.dutyEnd})</>}
+                    ? <>Worked {formatWorked(day.workedMinutes)} on a day the shop was shut — no duty due</>
+                    : <>Worked {formatWorked(day.workedMinutes)} of {formatWorked(day.dutyMinutes)} due ({day.dutyStart}–{day.dutyEnd})</>}
                 {day.idleMinutes > 0 && <> · away {formatWorked(day.idleMinutes)} in between, not counted</>}
                 {!shut && day.lateBy > 0 && <> · late by {formatWorked(day.lateBy)}</>}
                 {!shut && day.leftEarlyBy > 0 && <> · left {formatWorked(day.leftEarlyBy)} early</>}
@@ -234,10 +301,21 @@ export default function DayActivityCard({ day, rules, idleLimitMinutes, isToday,
                     ten-hour duty an absence, which on a holiday is nonsense: there
                     was no duty to fall short of. */}
                 {" "}· accounted <span className="font-medium text-foreground">{signed(account.total)}</span>
-                {!shut && <>{" "}→ <span className="font-medium text-foreground">{inWords(day.grade)}</span></>}
+                {!shut && <>{" "}→ <span className="font-medium text-foreground">{clockWords}</span></>}
                 {!shut && day.manual && day.status !== day.grade && <> · office says {inWords(day.status)}</>}
             </footer>
         </article>
+    );
+}
+
+/** One line of the running short. Kept out of the Accounted column — it is not the day's time. */
+function BalanceRow({ label, minutes, note, warn, strong }: { label: string; minutes: number; note: string | null; warn?: boolean; strong?: boolean }) {
+    return (
+        <tr className={cn("text-xs", minutes === 0 ? "text-muted-foreground/60" : warn ? "text-amber-700 dark:text-amber-400" : "text-foreground", strong && "border-t border-border font-medium")}>
+            <td className="whitespace-nowrap py-0.5 pr-3">{label}</td>
+            <td className="whitespace-nowrap py-0.5 text-right font-mono tabular-nums">{orDash(minutes)}</td>
+            <td className="hidden py-0.5 pl-3 text-[11px] sm:table-cell">{note ?? ""}</td>
+        </tr>
     );
 }
 
@@ -249,17 +327,19 @@ function AccountRow({ line }: { line: AccountLine }) {
     const idle = line.minutes === 0 && line.accounted === 0;
     return (
         <tr className={cn(idle && "text-muted-foreground/60")}>
-            <td className="py-0.5">{line.label}</td>
-            <td className="py-0.5 text-right font-mono tabular-nums">{line.minutes > 0 ? formatWorked(line.minutes) : "—"}</td>
-            <td className="py-0.5 text-right font-mono tabular-nums text-muted-foreground">{line.rateLabel}</td>
+            <td className="whitespace-nowrap py-0.5 pr-3">{line.label}</td>
+            <td className="whitespace-nowrap py-0.5 text-right font-mono tabular-nums">{line.minutes > 0 ? formatWorked(line.minutes) : "—"}</td>
+            <td className="whitespace-nowrap py-0.5 pl-3 text-right font-mono tabular-nums text-muted-foreground">{line.rateLabel}</td>
             <td className={cn(
-                "py-0.5 text-right font-mono tabular-nums",
+                "py-0.5 text-right font-mono tabular-nums whitespace-nowrap",
                 line.accounted < 0 && "text-amber-600 dark:text-amber-400",
                 line.accounted > 0 && line.key !== "duty" && "text-emerald-600 dark:text-emerald-400",
             )}>
                 {line.key === "duty" ? (line.accounted > 0 ? formatWorked(line.accounted) : "—") : signed(line.accounted)}
             </td>
-            <td className="hidden py-0.5 pl-3 text-[11px] text-muted-foreground sm:table-cell">{line.note ?? ""}</td>
+            <td className="hidden py-0.5 pl-3 text-[11px] text-muted-foreground sm:table-cell">
+                {line.note ?? ""}
+            </td>
         </tr>
     );
 }
@@ -299,9 +379,11 @@ function Figure({ label, value, hint, strong, tone }: {
  * value with the till's own beside it, so the override never hides what it
  * overrode; ↺ hands the figure back to the till.
  */
-function CorrectableFigure({ label, minutes, till, corrected, hint, strong, tone, dashZero, onCorrect }: {
+function CorrectableFigure({ label, minutes, display, till, corrected, hint, strong, tone, dashZero, onCorrect }: {
     label: string;
     minutes: number;
+    /** What to show when not editing, if not `minutes` itself. Editing still edits `minutes`. */
+    display?: number;
     till: number;
     corrected: boolean;
     hint?: string;
@@ -350,7 +432,8 @@ function CorrectableFigure({ label, minutes, till, corrected, hint, strong, tone
         );
     }
 
-    const show = dashZero ? orDash(minutes) : formatWorked(minutes);
+    const shown = display ?? minutes;
+    const show = dashZero ? orDash(shown) : formatWorked(shown);
     return (
         <div title={hint}>
             <div className="flex items-center gap-1 text-[11px] text-muted-foreground">

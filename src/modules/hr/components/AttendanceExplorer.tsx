@@ -139,6 +139,7 @@ export default function AttendanceExplorer({ canEdit }: { canEdit: boolean }) {
                                     <div className="mt-0.5 flex items-center gap-2 font-mono text-[11px] tabular-nums text-muted-foreground">
                                         <span title="Present, a half day counting as half">P {totals.present + totals.half / 2}</span>
                                         <span title="Absent" className={totals.absent > 0 ? "text-amber-600" : undefined}>A {totals.absent}</span>
+                                        {totals.incomplete > 0 && <span title="Incomplete duty — came, under 40% of duty (unpaid, no absence penalty)" className="text-amber-600">ID {totals.incomplete}</span>}
                                         <span title="On leave">L {totals.leave}</span>
                                     </div>
                                 </div>

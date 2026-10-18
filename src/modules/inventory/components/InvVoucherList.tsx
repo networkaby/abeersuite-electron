@@ -26,8 +26,13 @@ import {
 import { RegisterFilterBar } from "@/modules/accountancy/components/RegisterFilterBar";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useRegisterReads } from "@/shared/hooks/useRegisterReads";
-import type { InvVoucherKind } from "./InvVoucherForm";
 import type { SettlementState } from "@/modules/accountancy/lib/billLink";
+
+export type InvVoucherKind =
+    | "SALES_ORDER" | "PURCHASE_ORDER"
+    | "GRN" | "CHALLAN"
+    | "MANUFACTURING_JOURNAL" | "PHYSICAL_STOCK"
+    | "REJECTION_IN" | "REJECTION_OUT";
 
 export type InvVoucherListKind =
     | InvVoucherKind

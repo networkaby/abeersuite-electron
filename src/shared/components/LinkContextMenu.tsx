@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useEscapeLayer } from "@/shared/hooks/useEscape";
 
-/** Where the menu sits and which page it would open. */
-export interface LinkMenuState { x: number; y: number; href: string; }
+/** One extra line in the menu — e.g. "Remove link" on a Settled chip. */
+export interface MenuAction { label: string; onSelect: () => void; danger?: boolean; }
+
+/** Where the menu sits, which page it would open (if any), and any extra lines. */
+export interface LinkMenuState { x: number; y: number; href?: string; actions?: MenuAction[]; }
 
 /**
  * Right-click menu for a navigation link — used by the Quick Actions bar, the
@@ -59,13 +62,25 @@ export function LinkContextMenu({ menu, onClose }: { menu: LinkMenuState | null;
             style={{ left: x, top: y }}
             onContextMenu={(e) => e.preventDefault()}
         >
-            <button
-                type="button"
-                onClick={() => { window.open(menu.href, "_blank", "noopener"); onClose(); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-[12px] text-foreground hover:bg-muted"
-            >
-                Open in new window
-            </button>
+            {menu.href && (
+                <button
+                    type="button"
+                    onClick={() => { window.open(menu.href, "_blank", "noopener"); onClose(); }}
+                    className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-[12px] text-foreground hover:bg-muted"
+                >
+                    Open in new window
+                </button>
+            )}
+            {menu.actions?.map((a) => (
+                <button
+                    key={a.label}
+                    type="button"
+                    onClick={() => { onClose(); a.onSelect(); }}
+                    className={`w-full text-left flex items-center gap-2 px-3 py-1.5 text-[12px] hover:bg-muted ${a.danger ? "text-destructive" : "text-foreground"}`}
+                >
+                    {a.label}
+                </button>
+            ))}
         </div>
     );
 }
@@ -88,7 +103,13 @@ export function useLinkContextMenu() {
         e.preventDefault();
         setMenu({ x: e.clientX, y: e.clientY, href });
     }, []);
-    return { menu, openAt, close, onContainerContextMenu };
+    /** Opens the menu with action lines only, no "Open in new window". */
+    const openActions = useCallback((e: ReactMouseEvent, actions: MenuAction[]) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setMenu({ x: e.clientX, y: e.clientY, actions });
+    }, []);
+    return { menu, openAt, openActions, close, onContainerContextMenu };
 }
 
 export default LinkContextMenu;

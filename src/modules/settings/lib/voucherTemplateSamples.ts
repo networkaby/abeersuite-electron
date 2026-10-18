@@ -606,6 +606,15 @@ function kindSample(kind: VoucherTemplateKind): ThermalReceiptSample {
                 notes: kind === "POS_ORDER" ? "Counter order — deliver later." : "Quotation — valid 7 days.",
                 taxBreakdown: intraBreakdown,
             };
+        case "POS_RETURN":
+            return {
+                reference: "SR/26-27/0002",
+                date: today,
+                partyName: "Walk-in", partyPhone: null,
+                lines: [productLines[0]], subtotal: 598, taxAmount: 107.64, total: 705.64,
+                notes: "Sale return of POS/26-27/0042",
+                taxBreakdown: intraBreakdown,
+            };
         case "REPAIR_TICKET":
             // Repair-shop job slip — no ledger table; the "lines" stand in for the
             // device / problem body so the header + footer chrome can be previewed.
@@ -696,6 +705,7 @@ export const VOUCHER_KIND_LABEL: Record<VoucherTemplateKind, string> = {
     ESTIMATE: "Estimate",
     POS_ESTIMATE: "POS Estimate",
     POS_ORDER: "POS Order",
+    POS_RETURN: "POS Return",
     SALE_RETURN: "Sale Return",
     PURCHASE_RETURN: "Purchase Return",
     MANUFACTURING_JOURNAL: "Manufacturing Journal",

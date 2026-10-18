@@ -11,18 +11,26 @@ import { businessTodayIso, toDateOnlyUtc } from "@/shared/lib/format/formatDate"
 import { dutyHoursFor, dutyMinutesFor, idleLimitMinutesFor, lateMinutes } from "@/shared/lib/hr/dutyTime";
 import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import { loadPayRules } from "@/modules/hr/lib/payRulesServer";
-import { lateDutyCutMinutes } from "@/shared/lib/hr/payRules";
+import { lateDutyCutMinutes, lateForgiven } from "@/shared/lib/hr/payRules";
 import { ATTENDANCE_SOURCE_SELECT, autoCounts, lateOf, workedOf } from "@/shared/lib/hr/attendanceSource";
 import { shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
 import { holidayDatesFor, isoDaysBetween, weekdayOf } from "@/modules/hr/lib/attendanceCalendar";
-import { attendanceEffectFor } from "@/modules/hr/lib/payRulesApply";
+import { attendanceLedgerFor } from "@/modules/hr/lib/payRulesApply";
 import { userBranchIds } from "@/modules/hr/lib/staffBranchesServer";
 import { buildDayBreakup, type DayBreakup, type SpanDto } from "@/modules/hr/lib/attendanceBreakup";
 import type { HoursPayload } from "@/modules/hr/lib/attendanceHoursTypes";
 
 const dayOf = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 
-export async function loadHoursBreakup(userId: number, from: string, to: string): Promise<HoursPayload | null> {
+/**
+ * `clockOnly`: judge every day on the till's minutes, Manual or Auto — the
+ * Employee Activity view. Payroll's own read leaves it off, so a Manual day
+ * there still pays on the office's mark.
+ */
+export async function loadHoursBreakup(
+    userId: number, from: string, to: string, opts: { clockOnly?: boolean } = {},
+): Promise<HoursPayload | null> {
+    const clockOnly = !!opts.clockOnly;
     const [user, seasonal, rules, dayRows, spanRows, holidayRows, branchIds, leaveRows] = await Promise.all([
         prisma.user.findUnique({
             where:  { id: userId },
@@ -87,6 +95,7 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
         leaveRows.find((l) => toDateOnlyUtc(l.fromDate) <= iso && iso <= toDateOnlyUtc(l.toDate))?.kind ?? null;
 
     const today = businessTodayIso();
+    const idleLimit = idleLimitMinutesFor(user.staffProfile?.idleLimitMinutes);
     const joined = user.staffProfile?.joinedOn ? toDateOnlyUtc(user.staffProfile.joinedOn) : null;
     const left   = user.staffProfile?.leftOn   ? toDateOnlyUtc(user.staffProfile.leftOn)   : null;
 
@@ -94,7 +103,7 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
     // range and not whichever the loop happens to reach first — the same order
     // `attendanceEffectFor` uses, or the card and the payslip would disagree
     // about which day was the free one.
-    let lateSoFar = 0;
+    let forgivenSoFar = 0;
 
     const days: DayBreakup[] = [];
     for (const iso of isoDaysBetween(from, to)) {
@@ -116,7 +125,7 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
 
         // The clock's lateness, and the one the day stands on — a correction
         // made on the card wins (attendanceSource.ts).
-        const tillLate = lateMinutes(row?.firstInAt ?? null, hours.start, undefined, rules.lateGraceMinutes) ?? 0;
+        const tillLate = lateMinutes(row?.firstInAt ?? null, hours.start) ?? 0;
         const lateBy = row ? lateOf(row, tillLate) : tillLate;
         const weeklyOff = offDays.has(weekdayOf(iso));
         const holidayName = myHolidays.get(iso) ?? null;
@@ -125,11 +134,13 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
         // was shut cannot be arrived late for. Counting one of those here would
         // spend a free late day the payslip never spent, and from then on every
         // later day would disagree with payroll about whether it was charged.
-        const judged = !!row && autoCounts(row) && !weeklyOff && !holidayName;
+        // The clock's own record: Manual or Auto, every day with minutes is
+        // judged here (owner, 2026-10-13) — the same `clockOnly` walk below.
+        const judged = !!row && (clockOnly ? workedOf(row) > 0 : autoCounts(row)) && !weeklyOff && !holidayName;
         let lateCharged = false;
         if (lateBy > 0 && judged) {
-            lateSoFar += 1;
-            lateCharged = lateSoFar > rules.lateFreeDays;
+            if (lateForgiven(lateBy, forgivenSoFar, rules)) forgivenSoFar += 1;
+            else lateCharged = true;
         }
 
         days.push(buildDayBreakup({
@@ -140,6 +151,7 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
             tracked: spans.length > 0,
             spans,
             lastSeenAt: row?.lastSeenAt?.toISOString() ?? null,
+            idleLimitMinutes: idleLimit,
             workedMinutes: row ? workedOf(row) : 0,
             dutyMinutes: duty,
             lateBy,
@@ -154,23 +166,26 @@ export async function loadHoursBreakup(userId: number, from: string, to: string)
             manualStatus: row?.manualStatus ?? null,
             weeklyOff,
             holidayName,
-            // The rule's own function, not a second copy of it. A "pay" style
-            // charges money rather than duty and correctly returns 0 here; the
-            // card reads the style off `rules` and says so in words.
+            // The rule's own function, not a second copy of it.
             latePenaltyMinutes: lateCharged ? lateDutyCutMinutes(rules, lateBy, duty) : 0,
             lateCharged,
+            gradeLimits: rules,
         }));
     }
 
-    // The netting is payroll's own, run here rather than re-derived: overtime is
-    // only paid once it has made up the hours fallen short on other days, and a
-    // screen that adds the daily surpluses up by itself would promise more than
-    // the payslip pays. The reads it would make for the context are ones we have
+    // The pending-duty walk is payroll's own, run here rather than re-derived:
+    // overtime only counts once the duty pending from earlier days is made up,
+    // and a screen that worked it out by itself would promise more than the
+    // payslip pays. The reads it would make for the context are ones we have
     // already done, so it is handed them rather than repeating them.
-    const effect = await attendanceEffectFor({ rules, seasonal, holidays }, userId, from, to);
+    const { effect, days: ledger } = await attendanceLedgerFor({ rules, seasonal, holidays }, userId, from, to, { clockOnly });
+    // Each card carries its own line of the walk — pending carried in, made up,
+    // overtime, added — so the card and the payslip are one calculation.
+    const pendingByIso = new Map(ledger.map((p) => [p.date, p]));
+    for (const d of days) d.pending = pendingByIso.get(d.date) ?? null;
 
     return {
         userId: user.id, userName: user.name, from, to, days, rules, effect,
-        idleLimitMinutes: idleLimitMinutesFor(user.staffProfile?.idleLimitMinutes),
+        idleLimitMinutes: idleLimit,
     };
 }

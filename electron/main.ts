@@ -153,13 +153,13 @@ function loadCounterEnv(): void {
 }
 
 /**
- * Session signing key: the baked one when the build ships it, else one per machine.
+ * Session signing key: one per machine.
  *
- * A build carries `AUTH_SECRET` in counter.env only for `WRITE_MODE=v_live`, where the
- * till relays its writes to the office and must present a cookie the office can decrypt
- * (see scripts/counterEnv.ts). Every other build ships none, and this generates one:
- * that counter's Next server serves only http://127.0.0.1, so its cookies never cross
- * machines, and a secret read off one such PC forges nothing on another. A placeholder
+ * No build ships `AUTH_SECRET` (scripts/counterEnv.ts), so this generates one: the
+ * counter's Next server serves only http://127.0.0.1, so its cookies never cross
+ * machines, and a secret read off one PC forges nothing on another or at the office. A
+ * `WRITE_MODE=v_live` till signs in at the office with its counter key instead
+ * (src/shared/lib/counter/relayKey.ts). A placeholder
  * from .env.example counts as absent — it would sign real cookies with a published string.
  *
  * Stored beside counter-installation-id.json, which survives upgrades, so an update does
@@ -716,6 +716,8 @@ ipcMain.handle("shell:sign-in", async (_, credentials: { email: string; password
         // a race — the cashier hitting Enter in the same tick readiness arrived.
         return { ok: false, error: "Still starting. Try again in a moment." };
     }
+    // An empty password is a tapped photograph with a PIN: /staff/login puts its
+    // keypad up for that email (resources/shell/login.html → toKeypad).
     parkedCredentials = {
         email: credentials.email,
         password: credentials.password,
@@ -724,6 +726,11 @@ ipcMain.handle("shell:sign-in", async (_, credentials: { email: string; password
         // the other side. Just an intent — it grants nothing.
         setPin: credentials.setPin === true,
     };
+    // Choosing a person here starts a fresh login. A session left alive — a reinstall
+    // keeps userData, or a tap that beat the boot's own hasStaffSession check — would
+    // otherwise walk straight in as whoever held it, with no PIN. A clear that fails
+    // still costs nothing: the sign-in that follows replaces the cookie.
+    await clearStaffSession();
     // From here the real /staff/login takes over: it collects these through
     // shell:take-credentials, submits them, and does the counter reconciliation the
     // shell has no business doing.
@@ -735,24 +742,6 @@ ipcMain.handle("shell:take-credentials", () => {
     const held = parkedCredentials;
     parkedCredentials = null;   // Read once. A retry types them again.
     return held;
-});
-
-/**
- * Sign in with a counter PIN. Same handoff as `shell:sign-in`, different field.
- *
- * Main checks nothing about the PIN itself — it cannot: the check needs the database,
- * and the rules around it (this counter only, the ten-day password clock) live in
- * `shared/lib/auth/counterPin.ts` where the server can enforce them. This only carries
- * the digits across to `/staff/login`.
- */
-ipcMain.handle("shell:sign-in-pin", async (_, credentials: { email: string; pin: string }) => {
-    if (!credentials || typeof credentials.email !== "string" || typeof credentials.pin !== "string") {
-        return { ok: false, error: "Enter your PIN." };
-    }
-    if (!serverUrl) return { ok: false, error: "Still starting. Try again in a moment." };
-    parkedCredentials = { email: credentials.email, pin: credentials.pin };
-    await loadApp(serverUrl);
-    return { ok: true };
 });
 
 // ── The face roster ─────────────────────────────────────────────────────────
@@ -818,35 +807,6 @@ ipcMain.handle("shell:remember-user", async (_, who: {
  * action (`/api/me/counter-pin`); letting an unauthenticated screen reach an account
  * would be a door, not a convenience.
  */
-/**
- * Does this person have a usable PIN on this counter?
- *
- * Asked by the shell before it puts a keypad up — and it has to come through main,
- * because the shell is a `file://` page: a relative `fetch("/api/...")` there resolves
- * to `file:///api/...` and fails. That was the bug this replaces; the check looked
- * present and had never once run, so a password falling due was only discovered after
- * six digits had been typed.
- *
- * Null whenever the question cannot be answered — the server not up yet, or anything
- * thrown. The sign-in itself is the real check either way; this only decides whether
- * the cashier is shown a keypad or asked for their password.
- */
-ipcMain.handle("shell:pin-status", async (_, email: string): Promise<string | null> => {
-    if (typeof email !== "string" || !email.trim() || !serverUrl) return null;
-    try {
-        const res = await net.fetch(`${serverUrl}/api/counter-pin/status`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ email }),
-        });
-        if (!res.ok) return null;
-        const out = await res.json() as { state?: unknown };
-        return typeof out.state === "string" ? out.state : null;
-    } catch {
-        return null;
-    }
-});
-
 ipcMain.handle("shell:forget-user", (_, email: string) => {
     if (typeof email !== "string") return false;
     const key = email.trim().toLowerCase();
@@ -1395,12 +1355,10 @@ function shellQuery(): Record<string, string> {
  * "login outside counter" permission, and signing in behind its back would skip both.
  * So the shell saves the cashier the typing and the real page still does the work.
  *
- * Exactly ONE of `password` / `pin` is ever set, and they are separate fields on
- * purpose: `/staff/login` picks the auth provider from which one arrived. Reusing the
- * password field for six digits would let an older shell paired with a newer page
- * submit a PIN as a password — refused, but refused confusingly.
+ * A password, or an empty one for a tapped photograph with a PIN — then `/staff/login`
+ * puts its keypad up for that email (owner, 2026-10-15).
  */
-let parkedCredentials: { email: string; password?: string; pin?: string; setPin?: boolean } | null = null;
+let parkedCredentials: { email: string; password: string; setPin?: boolean } | null = null;
 
 /** Tells the shell its button may go live. */
 function notifyServerReady(): void {
@@ -1424,6 +1382,28 @@ async function hasStaffSession(): Promise<boolean> {
     } catch {
         return false;   // Unreadable jar → show the sign-in screen. The safe way to be wrong.
     }
+}
+
+/** Drop the staff session cookie(s) so the next page load asks who this is. */
+async function clearStaffSession(): Promise<boolean> {
+    try {
+        const jar = await session.defaultSession.cookies.get({ name: "authjs.session-token" });
+        await Promise.all(jar.map((c) => {
+            const host = (c.domain ?? "localhost").replace(/^\./, "");
+            const url = `${c.secure ? "https" : "http"}://${host}${c.path ?? "/"}`;
+            return session.defaultSession.cookies.remove(url, c.name);
+        }));
+        return true;
+    } catch (err) {
+        console.error("[Shell] could not clear the old session:", err);
+        return false;
+    }
+}
+
+/** The retired counter lock's file (2026-10-13 → 2026-10-16). Removed on start so a
+ *  till updated from a locked state leaves nothing behind. */
+function removeRetiredLockFile(): void {
+    try { fs.rmSync(path.join(app.getPath("userData"), "local-lock.json"), { force: true }); } catch { /* nothing to remove */ }
 }
 
 function bootErrorHtml(triedUrl: string): string {
@@ -1770,6 +1750,9 @@ function buildApplicationMenu(): void {
 }
 
 app.whenReady().then(async () => {
+    // Windows shows a page's Notification (WhatsApp message popup) only for an app
+    // id that matches the installed shortcut — electron-builder's build.appId.
+    if (process.platform === "win32") app.setAppUserModelId("com.abeersuite.desktop");
     buildApplicationMenu();
     createSystemTray();
 
@@ -1935,14 +1918,12 @@ app.whenReady().then(async () => {
         // nothing else wants the server yet. See serverManager.ts's warmRoutes().
         warmRoutes(result.url, Array.from(new Set([...DEFAULT_WARM_ROUTES, ...loadPersistedWarmRoutes()])));
 
-        // A cashier who never signed out still holds a session cookie, and must not be
-        // shown a login screen for a session they already have. Straight in for them;
-        // everyone else stays on the shell, which is now live and takes their typing.
-        if (await hasStaffSession()) {
-            await loadApp(result.url);
-        } else {
-            notifyServerReady();
-        }
+        // A start never walks onto the last person's screen (owner, 2026-10-16: the lock
+        // cover is retired). A login left alive is ended here, and everyone lands on the
+        // photographs: tap a face, type the 4-digit PIN.
+        removeRetiredLockFile();
+        if (await hasStaffSession()) await clearStaffSession();
+        notifyServerReady();
     } else {
         // A hidden start normally stays hidden — but a boot failure is the one thing
         // nobody can act on from an invisible window, and the tray icon alone gives no

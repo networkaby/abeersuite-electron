@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { formatClockTime, formatHhMmFriendly, weekdayAndDate, weekdayName } from "@/shared/lib/format/formatDate";
+import { formatClockTime, formatHhMmFriendly, todayIso, weekdayAndDate, weekdayName } from "@/shared/lib/format/formatDate";
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
-import { myDayStore, type MyDay } from "@/shared/lib/hr/myDay";
+import { myDayStore } from "@/shared/lib/hr/myDay";
 import { nextOpeningText } from "@/shared/lib/hr/nextOpeningText";
+import DutyTimeline from "@/modules/hr/timeline/DutyTimeline";
 import styles from "./login.module.css";
 
 type CounterShift = {
@@ -23,7 +24,7 @@ const inr = (paise: string) =>
     (Number(paise) / 100).toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
 
 /**
- * The till's own card on the lock screen — one card, three things the person
+ * The till's own card on the sign-in screen — one card, three things the person
  * standing at the counter wants to know, in the order they matter:
  *
  *   1. NEXT DUTY — when he is next expected, said big. The most useful line on
@@ -35,23 +36,25 @@ const inr = (paise: string) =>
  *      when he simply left, and every payment method the counter takes with what
  *      each collected. Zero rows stay, so a quiet evening still shows the methods.
  *
- * The day comes from `sessionStorage` when someone has just signed out here
- * (read exactly once — the idle auto-logout leaves nobody to read a dialog).
- * Otherwise — a restart, a fresh install, first thing in the morning — it is
- * fetched from `/api/counter/day`: whoever last ran a shift on this counter
- * (owner, 2026-09-25: the card always shows). The drawer comes from
- * `/api/counter/shift`. Both counter PCs only, silent on every failure: a panel
- * that cannot load must never stand between a cashier and the keypad.
+ * Whose day it is (owner, 2026-10-14: *"the whole information is related to some
+ * user + counter; if it's fully logged out only general information"*):
  *
- * Renders nothing when neither is there, so an ordinary locked till is exactly
+ *   - SIGNED OUT: nobody's day — except the one just handed over by a sign-out
+ *     here, read exactly once from `sessionStorage` (the idle auto-logout leaves
+ *     nobody to read a dialog).
+ *
+ * The drawer belongs to the counter, not to a person, so it shows either way —
+ * the next person checks it before taking over. `/api/counter/shift`, counter
+ * PCs only, silent on every failure: a panel that cannot load must never stand
+ * between a cashier and the keypad.
+ *
+ * Renders nothing when neither is there, so an ordinary signed-out till is exactly
  * the shell's screen and the cold-start handover does not jump.
  */
 export default function TillCard() {
-    const signedOutDay = useSyncExternalStore(
+    const day = useSyncExternalStore(
         myDayStore.subscribe, myDayStore.getSnapshot, myDayStore.getServerSnapshot,
     );
-    const [counterDay, setCounterDay] = useState<MyDay | null>(null);
-    const day = signedOutDay ?? counterDay;
     const [shift, setShift] = useState<CounterShift | null>(null);
 
     useEffect(() => {
@@ -69,31 +72,15 @@ export default function TillCard() {
         return () => { alive = false; };
     }, []);
 
-    // Only when no sign-out handed a day over — that one is fresher and his own.
-    useEffect(() => {
-        if (signedOutDay) return;
-        let alive = true;
-        (async () => {
-            try {
-                const res = await fetch("/api/counter/day");
-                if (!res.ok) return;
-                const out = await res.json() as MyDay | null;
-                if (alive && out?.tracked) setCounterDay(out);
-            } catch {
-                /* no panel, never a blocked sign-in */
-            }
-        })();
-        return () => { alive = false; };
-    }, [signedOutDay]);
-
     if (!day && !shift) return null;
 
     const counterName = day?.counterName ?? shift?.counterName ?? "";
     const next = day?.nextDuty;
     const nextWords = next && day ? nextOpeningText(next, day.date, "mine") : null;
-    // "Tomorrow" on its own is the whole answer; a day further out is named in full.
+    // "Today" / "Tomorrow" on its own is the whole answer; a day further out is named in full.
+    const near = next && day ? weekdayName(next.iso, day.date) : "";
     const nextDay = next && day
-        ? (weekdayName(next.iso, day.date) === "Tomorrow" ? "Tomorrow" : weekdayAndDate(next.iso))
+        ? (near === "Today" || near === "Tomorrow" ? near : weekdayAndDate(next.iso))
         : "";
 
     const verdict = !day ? "" :
@@ -102,7 +89,7 @@ export default function TillCard() {
       // He came and worked, just not 40% of duty yet — "Absent" would be wrong
       // to his face. An office mark of absent, or no work at all, stays Absent.
       // Never "not counted": the drawer's "counted" sits right below.
-      : day.workedMinutes > 0 && !day.officeMarked ? "Duty joined"
+      : day.workedMinutes > 0 && !day.officeMarked ? "On duty"
       :                            "Absent";
 
     const filled = day && day.dutyMinutes > 0 ? Math.min(100, (day.workedMinutes / day.dutyMinutes) * 100) : null;
@@ -110,10 +97,12 @@ export default function TillCard() {
     const firstName = shift?.cashierName.split(/\s+/)[0] ?? "";
 
     return (
+        <>
         <section className={styles.duty}>
             <p className={styles.dutyhead}>
                 <span>{counterName || "This counter"}</span>
-                {day && <span>{weekdayAndDate(day.date)}</span>}
+                {/* Today's date is already under the greeting; only an older day is named. */}
+                {day && day.date !== todayIso() && <span>{weekdayAndDate(day.date)}</span>}
             </p>
 
             {/* ── 1. Next duty ─────────────────────────────────────────────── */}
@@ -149,7 +138,6 @@ export default function TillCard() {
                         </div>
                         {day.overtimeMinutes > 0 && <div><b>{formatWorked(day.overtimeMinutes)}</b><span>overtime</span></div>}
                         {day.shortMinutes > 0 && <div><b>{formatWorked(day.shortMinutes)}</b><span>away</span></div>}
-                        {day.lateMinutes ? <div><b>{formatWorked(day.lateMinutes)}</b><span>late</span></div> : null}
                     </div>
                 </div>
             )}
@@ -196,5 +184,8 @@ export default function TillCard() {
                 </div>
             )}
         </section>
+        {/* Full width under both cards — the stage wraps it to its own row. */}
+        {day && <DutyTimeline day={day} />}
+        </>
     );
 }
