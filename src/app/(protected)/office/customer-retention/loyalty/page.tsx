@@ -7,10 +7,9 @@ import { LoyaltyEarnRules } from "@/modules/loyalty/components/LoyaltyEarnRules"
 import { LoyaltyMilestones } from "@/modules/loyalty/components/LoyaltyMilestones";
 import { ratesFromConfig, expiryCutoff } from "@/modules/loyalty/lib";
 import LiveRefresh from "@/shared/components/LiveRefresh";
+import { formatInr as fmtINR } from "@/shared/lib/format/moneyInr";
 
 export const metadata = { title: "Loyalty" };
-
-const fmtINR = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default async function LoyaltyHubPage() {
     const config = await prisma.loyaltyConfig.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
