@@ -25,6 +25,7 @@ import { LoyaltyBalanceChangedError } from "@/modules/loyalty/lib";
 import { GiftCardBalanceChangedError } from "@/modules/coupons/lib";
 import { correctClosedShiftForEdit, tillPaiseOf } from "@/modules/pos/lib/shiftCloseCorrection";
 import { shouldWriteLocal } from "@/shared/lib/prisma/counterMode";
+import { findHeldRedemptions } from "@/modules/order/lib/redemptionHold";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -114,6 +115,12 @@ export async function GET(req: Request, { params }: Params) {
             : null,
     } : null;
 
+    // A counter order's HELD rewards — the till's convert pre-fills them, since the
+    // converting sale must redeem exactly what was held (see /api/pos/sale).
+    const redemptionHolds = voucher.universalVoucher?.type === "POS_ORDER"
+        ? (await findHeldRedemptions({ source: "inv", id: voucher.id })).map((h) => ({ rewardType: h.rewardType, rewardRef: h.rewardRef, points: h.points, amount: h.amount }))
+        : [];
+
     // Derive party display fields from the frozen snapshot so the detail page +
     // form edit-load keep reading partyName / partyPhone / partyAddress.
     return NextResponse.json({
@@ -144,6 +151,7 @@ export async function GET(req: Request, { params }: Params) {
         charges:      settlement.charges.map(withAccount),
         posCounter,
         posEdit,
+        redemptionHolds,
         partyName:    readPartyName(voucher.partyJson),
         partyPhone:   readPartyPhone(voucher.partyJson),
         partyAddress: readPartyAddress(voucher.partyJson),

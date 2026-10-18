@@ -2,6 +2,8 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
+import { ORDER_RELEASE_STAGES } from "./orderPipeline";
+import { releaseRedemptions } from "./redemptionHold";
 
 // The unified Order is polymorphic: an "order" is either an order-type InvVoucher
 // (POS_ORDER / SALES_ORDER) or an order-flavour Ticket (the former ShopOrder, now a
@@ -128,7 +130,11 @@ export async function resolveOrderStatus(ref: OrderRef): Promise<{ statusId: str
 export async function writeOrderStatus(ref: OrderRef, statusId: string): Promise<void> {
     if (ref.source === "inv") {
         const v = await prisma.voucherDetail.findUnique({ where: { id: ref.id }, select: { universalVoucherId: true } });
-        await prisma.$transaction((tx) => syncVoucherLink(tx, v?.universalVoucherId, "ORDER_STATUS", statusId));
+        await prisma.$transaction(async (tx) => {
+            await syncVoucherLink(tx, v?.universalVoucherId, "ORDER_STATUS", statusId);
+            // A dead order (Cancelled / Returned) frees the rewards it held.
+            if (ORDER_RELEASE_STAGES.includes(statusId)) await releaseRedemptions(ref, tx);
+        });
     } else {
         await prisma.ticket.update({ where: { id: ref.id }, data: { status: statusId } });
     }

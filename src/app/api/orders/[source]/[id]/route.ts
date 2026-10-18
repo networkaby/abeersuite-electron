@@ -11,6 +11,7 @@ import { resolveServiceCharges, chargesNetTotal, type ServiceLineInput } from "@
 import { Prisma } from "@/generated/prisma/client";
 import { cleanLineNote } from "@/shared/lib/print/lineDescription";
 import { findLiveConversion } from "@/modules/pos/lib/convertSource";
+import { capRedemptionsToTotal } from "@/modules/order/lib/redemptionHold";
 
 // GET  /api/orders/[source]/[id]      → order detail (lines) for the detail/edit view
 // PATCH/api/orders/[source]/[id]      → edit the order's lines (G2): drop a damaged
@@ -182,6 +183,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ source
                     discountPct: 0, discountAmt: l.discountAmt, taxRate: l.taxRate ?? 0, taxAmount: l.taxAmount, amount: l.amount,
                 })),
             });
+            // Rewards held on the order can never come to more than its new total.
+            await capRedemptionsToTotal({ source: "inv", id }, totalAmount, tx);
         }, { timeout: 30_000, maxWait: 10_000 });
 
         return NextResponse.json({ id, subtotal, taxAmount, totalAmount });
