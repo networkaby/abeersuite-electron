@@ -11,6 +11,17 @@ import PaymentMethodLogos from "@/modules/external/shop/PaymentMethodLogos";
 import SocialLinks from "@/modules/external/shop/SocialLinks";
 import { SHOP_APP_INSTALL } from "@/shared/lib/device/shopApp";
 
+/** The business story lives on the company site — linked here, never in the
+ *  shop's top bar, so buying stays uncluttered. */
+const COMPANY_LINKS = [
+    { path: "/about", label: "Our story" },
+    { path: "/services", label: "Services" },
+    { path: "/blog", label: "Blog" },
+    { path: "/life", label: "Life at Network Service" },
+    { path: "/community", label: "Community" },
+    { path: "/visit", label: "Visit us" },
+];
+
 export default function ShopFooter() {
     const pathname = usePathname();
 
@@ -45,7 +56,7 @@ export default function ShopFooter() {
 
     return (
         <footer className="mt-auto border-t border-border/80 bg-muted/30">
-            <div className="mx-auto max-w-6xl px-4 py-12 grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mx-auto max-w-6xl px-4 py-12 grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
                 <div>
                     <div className="flex items-center gap-2 font-semibold text-lg">
                         <ShopBrandMark className="h-10 w-36" />
@@ -110,6 +121,18 @@ export default function ShopFooter() {
                                 Get our app
                             </Link>
                         </li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 className="text-sm font-semibold uppercase tracking-wide">{COMPANY_DETAILS.brandName}</h4>
+                    <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                        {COMPANY_LINKS.map((link) => (
+                            <li key={link.path}>
+                                <a href={`${COMPANY_DETAILS.sites.company}${link.path}`} className="hover:text-foreground">
+                                    {link.label}
+                                </a>
+                            </li>
+                        ))}
                     </ul>
                 </div>
                 <div>
