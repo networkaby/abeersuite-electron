@@ -46,7 +46,7 @@ async function ensureMembership(roomId: string, userId: number) {
 // `ResolvedUser` already carries `branchIds` / `departmentIds`, so this is a
 // like-for-like swap of what role rooms did — it needs ChatRoom.branchId /
 // .departmentId columns plus BRANCH_GROUP / DEPARTMENT_GROUP enum values,
-// i.e. one `prisma db push`. See PROJECT_BRAIN.md.
+// i.e. one migration (docs/migrations.md). See PROJECT_BRAIN.md.
 export async function ensureCoreRoomsForUser(user: Pick<ResolvedUser, "id">) {
     const existing = await prisma.chatRoom.findUnique({
         where: { key: ROOM_KEY.system(user.id) },

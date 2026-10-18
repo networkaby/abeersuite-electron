@@ -55,7 +55,7 @@ async function resolveAdvance(ref: OrderRef): Promise<{ amountPaise: number; sou
  * Spawn a Refund for a rejected/cancelled order that collected an advance.
  * Idempotent (one refund per order); a no-op when there's no advance to refund.
  * GL-silent — the actual pay-back (a Payment voucher reversing the advance Receipt)
- * is posted when staff mark the refund Refunded (TODO(refund-apply)).
+ * is posted when staff mark the refund Refunded (api/refunds/[id]/status).
  */
 export async function spawnRefund(ref: OrderRef): Promise<void> {
     // A refund is a Ticket (flavour "refund") + TicketRefund detail; the core Ticket
