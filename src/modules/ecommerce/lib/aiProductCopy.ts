@@ -231,13 +231,14 @@ export function aiErrorMessage(e: unknown): string | null {
     return null;
 }
 
-/** Free key first; the paid key takes over when the free daily cap answers 429. */
+/** Free key first; the paid key takes over when the free daily cap answers 429, or Google blocks the free project (403). */
 async function callFreeFirst(content: Part[]) {
     try {
         return await call(freeKey()!, content, false);
     } catch (e) {
         const paid = searchKey();
-        if (aiStatus(e) !== 429 || !paid) throw e;
+        // 403 = Google blocked the free project (seen 2026-10-19), not this product.
+        if ((aiStatus(e) !== 429 && aiStatus(e) !== 403) || !paid) throw e;
         return call(paid, content, false);
     }
 }
