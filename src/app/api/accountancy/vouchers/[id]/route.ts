@@ -7,6 +7,7 @@ import { parseDenomJson } from "@/shared/lib/accountancy/denomJson";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { isoDateSchema } from "@/shared/lib/schemas";
 import { isBalanced, applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { auditSnapshot } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
@@ -80,7 +81,7 @@ const denomJsonSchema = z.object({
 });
 
 const patchSchema = z.object({
-    date:           z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+    date:           isoDateSchema,
     narration:      z.string().trim().optional(),
     partyAccountId: z.number().int().positive().optional(),
     lines:          z.array(lineSchema).min(2, "At least 2 lines required"),

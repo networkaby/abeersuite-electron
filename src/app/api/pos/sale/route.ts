@@ -3,6 +3,7 @@ import { NextResponse, after } from "next/server";
 import { notifyBill } from "@/shared/lib/whatsapp/notifyBill";
 import { requirePosVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { isoDateSchema } from "@/shared/lib/schemas";
 import { cleanLineNote } from "@/shared/lib/print/lineDescription";
 import { invNextRef, calcVoucherTotals, calcLineTotals, resolveShippingGstRate } from "@/modules/inventory/lib/stock";
 import { recordStockMovementsBatch } from "@/modules/inventory/lib/stockMovement";
@@ -134,8 +135,8 @@ const serviceLineSchema = z.object({
 
 const createSchema = z.object({
     accountId: z.number().int().positive(),                                       // customer AR account
-    issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    issueDate: isoDateSchema,
+    dueDate: isoDateSchema,
     notes: z.string().trim().optional(),
     // Goods lines. A sale may also be services-only — the cross-field refine
     // below enforces "at least one line OR one service".

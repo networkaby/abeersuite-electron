@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { isoDateSchema } from "@/shared/lib/schemas";
 import { validateRequest, handleApiError, parseIdParam } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { startOfDayUtc, toDateOnlyUtc, todayIso } from "@/shared/lib/format/formatDate";
@@ -21,7 +22,7 @@ import { BankReconError, assertLockAllowed } from "@/modules/accountancy/lib/ban
 // entry. See retreatReconciliation() in modules/accountancy/lib/reconciliation.ts.
 const schema = z.object({
     /** yyyy-mm-dd — matched up to and including this business date. null clears. */
-    reconciledThrough: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected yyyy-mm-dd").nullable(),
+    reconciledThrough: isoDateSchema.nullable(),
 });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {

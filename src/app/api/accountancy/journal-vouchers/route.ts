@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireVoucherPermission } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { isoDateSchema } from "@/shared/lib/schemas";
 import { isBalanced } from "@/modules/accountancy/lib/balance";
 import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
 import { recordStockMovement } from "@/modules/inventory/lib/stockMovement";
@@ -46,7 +47,7 @@ const lineSchema = z.object({
 
 const createSchema = z.object({
     type:            z.enum(["CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE", "JOURNAL"]),
-    date:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    date:            isoDateSchema,
     narration:       z.string().trim().optional(),
     postImmediately: z.boolean().default(false),
     lines:           z.array(lineSchema).min(2),

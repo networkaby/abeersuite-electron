@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { requireAuth, requireVoucherPermission } from "@/shared/lib/auth/permissions";
 import { requireWritableBranchId } from "@/shared/lib/auth/activeBranch";
 import { z } from "zod";
+import { isoDateSchema } from "@/shared/lib/schemas";
 import { isBalanced } from "@/modules/accountancy/lib/balance";
 import { parseDenomJson } from "@/shared/lib/accountancy/denomJson";
 import { engineCreateVoucher } from "@/modules/accountancy/lib/transactionEngine";
@@ -38,7 +39,7 @@ const denomJsonSchema = z.object({
 
 const createSchema = z.object({
     type:           z.enum(["CONTRA", "PAYMENT", "RECEIPT", "CREDIT_NOTE", "DEBIT_NOTE"]),
-    date:           z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+    date:           isoDateSchema,
     narration:      z.string().trim().optional(),
     partyAccountId: z.number().int().positive().optional(),
     lines:          z.array(lineSchema).min(2, "At least 2 lines required"),

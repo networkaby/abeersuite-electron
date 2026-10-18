@@ -1,6 +1,7 @@
 // Request-side validation for attendance, holidays and leave.
 
 import { z } from "zod";
+import { isoDateSchema } from "./commonSchemas";
 
 export const ATTENDANCE_STATUSES = ["PRESENT", "HALF_DAY", "ABSENT", "LEAVE", "WEEKLY_OFF", "HOLIDAY"] as const;
 export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
@@ -35,12 +36,11 @@ export const LEAVE_KIND_LABELS: Record<LeaveKind, string> = {
 export const LEAVE_STATUSES = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const;
 export type LeaveStatus = (typeof LEAVE_STATUSES)[number];
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 
 /** PUT /api/hr/attendance — mark one day. `status: null` clears the mark. */
 export const attendanceMarkSchema = z.object({
     userId: z.number().int().positive(),
-    date:   isoDate,
+    date:   isoDateSchema,
     status: z.enum(ATTENDANCE_STATUSES).nullable(),
     note:   z.string().trim().max(200).nullable().optional(),
 });
@@ -53,7 +53,7 @@ export const attendanceMarkSchema = z.object({
  */
 const dayMinutes = z.number().int().min(0, "Cannot be below 0").max(1440, "A day has only 24 hours");
 export const attendanceDaySourceSchema = z.object({
-    date:                  isoDate,
+    date:                  isoDateSchema,
     userId:                z.number().int().positive(),
     useManual:             z.boolean().optional(),
     overrideWorkedMinutes: dayMinutes.nullable().optional(),
@@ -61,15 +61,15 @@ export const attendanceDaySourceSchema = z.object({
 });
 
 export const holidayCreateSchema = z.object({
-    date:     isoDate,
+    date:     isoDateSchema,
     name:     z.string().trim().min(1, "A holiday needs a name").max(80),
     branchId: z.string().trim().min(1).nullable().optional(),
 });
 
 export const leaveCreateSchema = z.object({
     userId:   z.number().int().positive().optional(),   // HR may file for someone; default = self
-    fromDate: isoDate,
-    toDate:   isoDate,
+    fromDate: isoDateSchema,
+    toDate:   isoDateSchema,
     kind:     z.enum(LEAVE_KINDS).default("CASUAL"),
     reason:   z.string().trim().max(300).nullable().optional(),
 }).refine((v) => v.toDate >= v.fromDate, { message: "The last day cannot be before the first", path: ["toDate"] });

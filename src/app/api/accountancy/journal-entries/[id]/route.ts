@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
+import { isoDateSchema } from "@/shared/lib/schemas";
 import { isBalanced, applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -16,7 +17,7 @@ const lineSchema = z.object({
 });
 
 const updateSchema = z.object({
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    date: isoDateSchema.optional(),
     description: z.string().trim().min(1).optional(),
     lines: z.array(lineSchema).min(2).optional(),
 });

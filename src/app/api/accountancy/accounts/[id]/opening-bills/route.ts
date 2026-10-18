@@ -4,6 +4,7 @@ import { requireAuth, hasPermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { round2 } from "@/shared/lib/format";
 import { z } from "zod";
+import { isoDateSchema } from "@/shared/lib/schemas";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import {
     loadOpeningBills, saveOpeningBills, defaultOpeningDateIso, DEFAULT_OPENING_REF, OpeningBillError,
@@ -29,7 +30,7 @@ const putSchema = z.object({
     bills: z.array(z.object({
         universalVoucherId: z.number().int().positive().optional(),
         ref:                z.string().trim().max(60),
-        date:               z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD"),
+        date:               isoDateSchema,
         amount:             z.number().positive(),
     })).max(500),
 });
