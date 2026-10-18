@@ -1,6 +1,5 @@
-// TODO(rbac): this layout previously gated Service Centers on warranty:convert.
-// Gating removed — open to all authenticated staff (the office layout already
-// blocks non-staff). Re-add a position-based gate here when RBAC is re-wired.
+// Service Centers: Open to all staff by design — owner's decision (2026-10-18).
+// The office layout already blocks non-staff.
 export default function ServiceCentersLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
 }

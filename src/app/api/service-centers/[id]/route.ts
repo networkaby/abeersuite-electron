@@ -16,7 +16,7 @@ export async function PUT(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    // TODO(rbac): was requirePermission(WARRANTY_CONVERT) — open to all staff for now.
+    // Open to all staff by design — owner's decision (2026-10-18).
     const { response } = await requireAuth();
     if (response) return response;
     try {
@@ -43,7 +43,7 @@ export async function DELETE(
     _: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    // TODO(rbac): was requirePermission(WARRANTY_CONVERT) — open to all staff for now.
+    // Open to all staff by design — owner's decision (2026-10-18).
     const { response } = await requireAuth();
     if (response) return response;
     try {

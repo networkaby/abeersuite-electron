@@ -55,7 +55,7 @@ export async function GET(
         const { id } = await params;
         const { response } = await requireAuth();
         if (response) return response;
-        // TODO(rbac): scope filtering removed — any authenticated staff can read any ticket.
+        // Any staff can read any ticket. Open to all staff by design — owner's decision (2026-10-18).
 
         const ticket = await prisma.ticket.findFirst({
             where: {

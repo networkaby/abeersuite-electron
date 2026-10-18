@@ -192,7 +192,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-    // TODO(rbac): was requirePermission(TICKETS_CREATE) — open to all staff for now.
+    // Open to all staff by design — owner's decision (2026-10-18).
     const { user, response } = await requireAuth();
     if (response) return response;
     try {

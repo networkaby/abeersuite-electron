@@ -23,8 +23,7 @@ export async function POST(
     req: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    // TODO(rbac): was requirePermission(TICKETS_ASSIGN) + owner/manager authority
-    // checks — open to all staff for now. Re-add when RBAC is re-wired.
+    // Open to all staff by design — owner's decision (2026-10-18).
     const { user, response } = await requireAuth();
     if (response) return response;
 

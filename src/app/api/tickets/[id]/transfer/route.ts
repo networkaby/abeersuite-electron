@@ -19,7 +19,7 @@ export async function POST(
     try {
         const { user, response } = await requireAuth();
         if (response) return response;
-        // TODO(rbac): was gated on tickets:transfer — open to all staff for now.
+        // Open to all staff by design — owner's decision (2026-10-18).
 
         const { id } = await params;
         const { data, error } = await validateRequest(req, transferSchema);

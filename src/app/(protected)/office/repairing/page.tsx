@@ -12,10 +12,8 @@ import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import { PathBreadcrumb } from "@/shared/components/PathBreadcrumb";
 import LiveRefresh from "@/shared/components/LiveRefresh";
 
-// TODO(rbac): repairing is temporarily open to all authenticated staff and shows a
-// single shared overview. The old role/permission-keyed dashboards (Admin / Technician
-// / Front Desk / Despatch) and per-branch scope were removed pending the RBAC re-wire
-// on the Position model. Re-introduce role/scope-aware views then.
+// Repairing: Open to all staff by design — owner's decision (2026-10-18).
+// One shared overview for everyone — no role dashboards, no branch scope.
 
 export default async function RepairingDashboardPage({
     searchParams,
