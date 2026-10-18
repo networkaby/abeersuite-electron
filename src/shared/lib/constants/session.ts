@@ -30,6 +30,24 @@ export const LOGIN_IDLE_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 /** The idle span in words, for the line shown to whoever was just signed out. */
 export const LOGIN_IDLE_LABEL = `${LOGIN_IDLE_MAX_AGE_MS / (24 * 60 * 60 * 1000)} days`;
 
+/**
+ * The staff phone app (owner, 2026-10-18): a phone stays signed in like any other
+ * app — 30 days with nobody using it, 90 days since the password was typed — and
+ * the 45-minute "Sign out after" never fires there (ActivityPulse). A phone sits in
+ * a pocket for hours; signing it out each time made the app useless. Decided at
+ * sign-in by the app's user agent (`token.phoneApp`). Sign out, an admin's "end
+ * every login" and a role change still end it at once.
+ */
+export const PHONE_LOGIN_IDLE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+export const PHONE_LOGIN_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
+
+/** Customers (website and customer app): 90 days with nobody using it — shopping
+ *  apps keep you signed in for months. It is also the longest of all the clocks,
+ *  so it is the cookie's own lifetime; the shorter staff clocks are checked on the
+ *  token (`token.seenAt`, `isStaffTokenRevoked`). */
+export const CUSTOMER_LOGIN_IDLE_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
+export const SESSION_COOKIE_MAX_AGE_MS = CUSTOMER_LOGIN_IDLE_MAX_AGE_MS;
+
 /** Re-issue the login cookie at most this often (seconds). It used to be every
  *  request, and a request still in flight at Sign out put a fresh cookie back — the
  *  till signed itself in again. The 3-day idle clock above still rolls with use; it

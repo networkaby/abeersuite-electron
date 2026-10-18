@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { SHOP_APP_APK, SHOP_APP_START } from "@/shared/lib/device/shopApp";
+import { SHOP_APP_RELEASE } from "@/shared/lib/constants/appVersions";
 import InstallAppButton from "@/modules/mobile/components/InstallAppButton";
 
 export const metadata: Metadata = { title: "Get the app" };
@@ -31,7 +32,7 @@ export default function ShopAppInstallPage() {
                     </p>
                 </div>
                 <div className="w-full">
-                    <InstallAppButton appName={COMPANY_DETAILS.brandName} home={SHOP_APP_START} apk={SHOP_APP_APK} />
+                    <InstallAppButton appName={COMPANY_DETAILS.brandName} home={SHOP_APP_START} apk={SHOP_APP_APK} release={SHOP_APP_RELEASE} />
                 </div>
             </main>
         </>

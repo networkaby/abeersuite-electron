@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CheckCircle2, Download } from "lucide-react";
 import { PHONE_APP_APK, PHONE_APP_HOME } from "@/shared/lib/device/phone";
 import { noSubscribe, readPlace, useApkAvailable } from "@/modules/mobile/components/installPlace";
+import { STAFF_APP_RELEASE, type AppRelease } from "@/shared/lib/constants/appVersions";
 
 /** Chrome's install event — not in the DOM typings. */
 type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
@@ -17,7 +18,9 @@ type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Pro
  *     phone's own steps; Chrome's `beforeinstallprompt` stays as the second way.
  *     No APK on the site yet (built by hand after a deploy) → Chrome's way only.
  *   • iPhone: no such event — the two Share steps.
- *   • already the installed app, or just installed: "Open app".
+ *   • already the installed app, or just installed: "Open app" — and, in Chrome on
+ *     Android, the latest version's download too: the phone cannot tell this page
+ *     WHICH version is installed, so an old one must still be able to update here.
  *   • no install offer (an http test address, another browser): open in Chrome,
  *     ⋮ → Install app — plus "Open app" to use it in the browser meanwhile.
  * Used ONLY on the install pages (staff /m-staff-app/install, customer /app); the
@@ -27,12 +30,15 @@ export default function InstallAppButton({
     appName,
     home = PHONE_APP_HOME,
     apk = PHONE_APP_APK,
+    release = STAFF_APP_RELEASE,
 }: {
     appName: string;
     /** "Open app" target — the staff app by default; the customer app passes its own. */
     home?: string;
     /** Android wrapper download. */
     apk?: string;
+    /** The APK's version, named on the update button — the staff app's by default. */
+    release?: AppRelease;
 }) {
     const [prompt, setPrompt] = useState<InstallPromptEvent | null>(null);
     const [installed, setInstalled] = useState(false);
@@ -80,6 +86,20 @@ export default function InstallAppButton({
                 </p>
                 <p className="text-sm text-muted-foreground">Open it from your home screen (or apps list).</p>
                 {openApp}
+                {place === "android" && apkOk && (
+                    <>
+                        <a
+                            href={apk}
+                            download
+                            className="flex w-full items-center justify-center gap-2 rounded-xl border py-3 text-sm font-medium active:bg-muted"
+                        >
+                            <Download className="size-4" /> Download latest version {release.name}
+                        </a>
+                        <p className="text-xs text-muted-foreground">
+                            Older version on the phone? Install this over it — you stay signed in.
+                        </p>
+                    </>
+                )}
             </div>
         );
     }

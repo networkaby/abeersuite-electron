@@ -9,6 +9,7 @@ import { markDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
 import { captureMyDay } from "@/shared/lib/hr/myDay";
 import { idleLimitMsFor } from "@/shared/lib/hr/dutyTime";
 import { IDLE_WARNING_MS } from "@/shared/lib/constants/session";
+import { PHONE_APP_UA } from "@/shared/lib/device/phone";
 
 /**
  * Two jobs, one listener: keep the day's worked minutes honest, and sign out
@@ -25,7 +26,9 @@ import { IDLE_WARNING_MS } from "@/shared/lib/constants/session";
  *     minutes' warning first. The server counts nothing for that stretch
  *     (dutyTime.ts drops any gap longer than the limit), so this is about the till
  *     not being left open on somebody's name, not about the maths. (The counter
- *     lock cover was retired 2026-10-16.)
+ *     lock cover was retired 2026-10-16.) Never in the staff phone app (owner,
+ *     2026-10-18): a phone lives in a pocket, and its login has its own 30-day
+ *     clock on the server. The pulse still runs there — duty counts only touches.
  *
  * Mounted beside SessionWrapper in the protected layouts, so it exists only for
  * signed-in staff and never on the customer portal.
@@ -118,6 +121,7 @@ export default function ActivityPulse() {
         let channel: BroadcastChannel | null = null;
         try { channel = new BroadcastChannel(ACTIVITY_CHANNEL); } catch { /* one window's clock, as before */ }
         let sharedAt = 0;
+        const inPhoneApp = navigator.userAgent.includes(PHONE_APP_UA);
 
         const onInput = () => {
             priorInputAtModule = lastInputAt.current;   // before this one overwrites it
@@ -149,7 +153,7 @@ export default function ActivityPulse() {
             const idleFor = now - lastInputAt.current;
 
             // ── Idle: warn, then end it ─────────────────────────────────────────
-            if (idleFor >= idleLimitMs) {
+            if (!inPhoneApp && idleFor >= idleLimitMs) {
                 markDeliberateSignOut(IDLE_SIGNED_OUT_MESSAGE);   // explained here, and in the other windows
                 toast.error(IDLE_SIGNED_OUT_MESSAGE);
                 // The day's figures, read while the session is still good, so the
@@ -163,7 +167,7 @@ export default function ActivityPulse() {
                     .finally(() => window.location.assign("/staff/login"));
                 return;
             }
-            if (!warned.current && idleFor >= idleLimitMs - IDLE_WARNING_MS) {
+            if (!inPhoneApp && !warned.current && idleFor >= idleLimitMs - IDLE_WARNING_MS) {
                 warned.current = true;
                 toast("Still there? You will be signed out shortly.", { duration: IDLE_WARNING_MS });
             }

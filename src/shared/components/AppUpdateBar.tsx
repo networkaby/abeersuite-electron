@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Download, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { AppRelease } from "@/shared/lib/constants/appVersions";
@@ -8,6 +8,15 @@ import type { AppRelease } from "@/shared/lib/constants/appVersions";
 /** Builds before the version was stamped into the user agent all carry versionCode 2. */
 const UNSTAMPED_CODE = 2;
 const LATER_MS = 24 * 60 * 60 * 1000;
+/** useSyncExternalStore subscribe for values that never change during a visit. */
+const noSubscribe = () => () => {};
+
+/** The installed app's versionCode from its user agent; null outside the app. */
+function installedAppCode(uaTag: string): number | null {
+    const m = navigator.userAgent.match(new RegExp(`${uaTag}(?:/(\\d+))?`));
+    if (!m) return null;
+    return m[1] ? Number(m[1]) : UNSTAMPED_CODE;
+}
 
 /**
  * "New version available" for the sideloaded Android apps (no Play Store). The
@@ -24,27 +33,24 @@ const LATER_MS = 24 * 60 * 60 * 1000;
  * deployed whenever its APK changes, or phones reinstall the old file in a loop.
  */
 export default function AppUpdateBar({ uaTag, release, apkUrl }: { uaTag: string; release: AppRelease; apkUrl: string }) {
-    const [show, setShow] = useState(false);
+    const [dismissed, setDismissed] = useState(false);
     const laterKey = `app-update-later:${uaTag}:${release.code}`;
+    // Read once per visit, never on the server — the user agent and a "Later" tap
+    // from an earlier visit do not change while the page is open.
+    const due = useSyncExternalStore(noSubscribe, () => {
+        const installed = installedAppCode(uaTag);
+        if (installed === null || installed >= release.code) return false;
+        if (release.urgent) return true;
+        try {
+            return Date.now() - Number(localStorage.getItem(laterKey) ?? 0) >= LATER_MS;
+        } catch { return true; /* storage blocked — just show it */ }
+    }, () => false);
 
-    useEffect(() => {
-        const m = navigator.userAgent.match(new RegExp(`${uaTag}(?:/(\\d+))?`));
-        if (!m) return;
-        const installed = m[1] ? Number(m[1]) : UNSTAMPED_CODE;
-        if (installed >= release.code) return;
-        if (!release.urgent) {
-            try {
-                if (Date.now() - Number(localStorage.getItem(laterKey) ?? 0) < LATER_MS) return;
-            } catch { /* storage blocked — just show it */ }
-        }
-        setShow(true);
-    }, [uaTag, release.code, release.urgent, laterKey]);
-
-    if (!show) return null;
+    if (!due || dismissed) return null;
 
     const later = () => {
         try { localStorage.setItem(laterKey, String(Date.now())); } catch { /* fine */ }
-        setShow(false);
+        setDismissed(true);
     };
     const download = (
         <Button asChild size="sm" className="gap-1.5">
@@ -81,5 +87,24 @@ export default function AppUpdateBar({ uaTag, release, apkUrl }: { uaTag: string
                 <Button size="sm" variant="ghost" onClick={later}>Later</Button>
             </div>
         </div>
+    );
+}
+
+/**
+ * One quiet line — "App build 2 · latest 2.1.0" — so anyone can see at a glance
+ * whether this phone is up to date, with the download always on hand when it is
+ * not (even after "Later" hid the bar). Shown only inside the app.
+ */
+export function AppVersionLine({ uaTag, release, apkUrl }: { uaTag: string; release: AppRelease; apkUrl: string }) {
+    const installed = useSyncExternalStore(noSubscribe, () => installedAppCode(uaTag), () => null);
+    if (installed === null) return null;
+    const old = installed < release.code;
+    return (
+        <p className="py-3 text-center text-xs text-muted-foreground">
+            App build {installed} · latest {release.name} (build {release.code})
+            {old ? (
+                <> · <a href={apkUrl} target="_blank" rel="noopener" className="font-medium text-primary underline">Download update</a></>
+            ) : " · up to date"}
+        </p>
     );
 }
