@@ -20,9 +20,9 @@ export async function GET() {
             pricePaise: p.pricePaise,
             mrpPaise: p.mrpPaise,
         }));
-        const { brandName, contact, address, hours, sites } = COMPANY_DETAILS;
+        const { brandName, contact, address, hours, openingHours, sites } = COMPANY_DETAILS;
         return NextResponse.json(
-            { business: { brandName, contact, address, hours, sites }, deals },
+            { business: { brandName, contact, address, hours, openingHours, sites }, deals },
             { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=3600" } },
         );
     } catch (e) {

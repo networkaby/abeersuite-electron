@@ -115,6 +115,9 @@ export type CompanyDetails = {
 
     /** Working-hours line shown in the footer / contact strip. */
     hours: string;
+    /** The same hours in schema.org form — the company site's Google tags read them
+     *  through /api/shop/site-info. Keep in step with `hours`. */
+    openingHours: { days: string[]; opens: string; closes: string };
 
     /** Social media handles (full URLs). Empty string = hidden. */
     social: {
@@ -217,6 +220,11 @@ export const COMPANY_DETAILS: CompanyDetails = {
     },
 
     hours: "Sat–Thu · 10:00 AM – 8:00 PM IST · Friday closed",
+    openingHours: {
+        days: ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"],
+        opens: "10:00",
+        closes: "20:00",
+    },
 
     social: {
         facebook: "https://www.facebook.com/network.service.aby",
