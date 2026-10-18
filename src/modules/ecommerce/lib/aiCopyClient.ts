@@ -4,19 +4,16 @@ import axios from "axios";
 import type { ProductCopy as ServerCopy } from "@/modules/ecommerce/lib/aiProductCopy";
 import type { AiSearchMode } from "@/shared/lib/constants/ai";
 
-/** fromCache = this machine's saved answer, no new AI call (the A/B log skips it). */
+/** fromCache = this machine's saved answer, no new AI call. */
 export type ProductCopy = ServerCopy & { fromCache?: boolean };
 
 export type AiCopyRequest = { productId: number; name?: string; imageUrls?: string[]; search: AiSearchMode };
-
-/** One version of the copy — B is the copy itself, A its photoOnly draft. */
-export type AiVersion = NonNullable<ProductCopy["photoOnly"]>;
 
 // Every AI call costs money, so a draft is kept on this machine for the session:
 // pressing Generate again for the same name + photo + search mode is free.
 // Not in the DB on purpose — a draft is only kept once staff save it.
 function cacheKey(r: AiCopyRequest): string {
-    return `aiCopy5:${r.productId}:${r.search}:${r.name ?? ""}:${(r.imageUrls ?? []).join("|")}`;
+    return `aiCopy6:${r.productId}:${r.search}:${r.name ?? ""}:${(r.imageUrls ?? []).join("|")}`;
 }
 
 function readCache(key: string): ProductCopy | null {
@@ -41,12 +38,4 @@ export async function fetchAiCopy(r: AiCopyRequest, opts: { fresh?: boolean } = 
         /* storage full or blocked — the draft still shows */
     }
     return data;
-}
-
-/** A/B trial: record which version staff kept. Fire-and-forget — a lost log row never blocks the save. */
-export function logAiPick(productId: number, ref: string, picked: "A" | "B" | "only", copy: ProductCopy): void {
-    const { mode, verifiedFacts, tokens, draftKey, ms } = copy.stats;
-    void axios.post("/api/ecommerce/products/ai-copy/pick", {
-        productId, ref, picked, mode, search: copy.search, verifiedFacts, tokens, draftKey, ms,
-    }).catch(() => { /* trial log only */ });
 }

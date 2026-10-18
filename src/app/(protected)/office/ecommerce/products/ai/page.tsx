@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { extractApiError } from "@/shared/lib/api";
 import { cloudinaryThumb } from "@/shared/lib/cloudinaryImage";
-import { AI_BULK_BATCH_SIZE, type AiSearchMode } from "@/shared/lib/constants/ai";
+import { AI_BULK_BATCH_SIZE, AI_DEFAULT_SEARCH_MODE, type AiSearchMode } from "@/shared/lib/constants/ai";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { runPool } from "@/shared/lib/runPool";
 import { isAiSkipped, photosForAi } from "@/shared/lib/shop/photoMark";
@@ -31,10 +31,9 @@ import {
     takeAiPick,
 } from "@/modules/ecommerce/lib/productListCache";
 import { ProductFilterButton, ProductFilterPanel } from "@/modules/ecommerce/components/ProductFilterPanel";
-import { fetchAiCopy, logAiPick, type AiVersion, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
+import { fetchAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
 import { AiDraftNotes, mergeAiSpecs } from "@/modules/ecommerce/components/AiCopyPanel";
-import { AbCompare, SearchModeButtons } from "@/modules/ecommerce/components/AiAbCompare";
-import AiTestLog from "@/modules/ecommerce/components/AiTestLog";
+import { SearchModeButtons } from "@/modules/ecommerce/components/AiSearchModeButtons";
 
 // Bulk AI copy for products with no shop description (the one-time backlog,
 // then each month's new items). Same filters as Products so staff pick what
@@ -53,7 +52,7 @@ type Work = { draft?: ProductCopy; error?: string; saved?: boolean; discarded?: 
 const resolved = (w: Work | undefined) => !!(w?.saved || w?.discarded);
 
 /** What Save will change — the online name only fills a blank (or stock-name copy), specs only add missing labels. */
-function changeNote(p: ShopProductAdmin, d: AiVersion) {
+function changeNote(p: ShopProductAdmin, d: ProductCopy) {
     const nameKept = !!p.subheading?.trim() && p.subheading.trim() !== p.name.trim();
     const have = new Set(Object.keys(p.specs).map((k) => k.trim().toLowerCase()));
     const newSpecs = Object.entries(d.specs).filter(([k, v]) => k.trim() && v.trim() && !have.has(k.trim().toLowerCase())).length;
@@ -75,8 +74,7 @@ export default function AiBulkCopyPage() {
     const [filters, setFilters] = useState<ProductFilters>(AI_DEFAULT_FILTERS);
     const [showFilters, setShowFilters] = useState(false);
     const [shown, setShown] = useState(SHOW_STEP);
-    const [search, setSearch] = useState<AiSearchMode>("off"); // off by default — see AiCopyPanel
-    const [showLog, setShowLog] = useState(false);
+    const [search, setSearch] = useState<AiSearchMode>(AI_DEFAULT_SEARCH_MODE);
     const [running, setRunning] = useState(false);
     const [progress, setProgress] = useState({ done: 0, of: 0 });
     // The set sent by the last Generate: only these show (in tick order, no
@@ -175,8 +173,8 @@ export default function AiBulkCopyPage() {
         setBatch(null);
     }, [batch, running, work]);
 
-    // `version` = the A/B pick; a single-version draft saves itself.
-    const save = async (r: ShopProductAdmin, draft: AiVersion | undefined = work[r.id]?.draft): Promise<boolean> => {
+    const save = async (r: ShopProductAdmin): Promise<boolean> => {
+        const draft = work[r.id]?.draft;
         if (!draft) return false;
         const specs = Object.fromEntries(
             mergeAiSpecs(Object.entries(r.specs).map(([k, v]) => ({ k, v })), draft.specs)
@@ -203,8 +201,7 @@ export default function AiBulkCopyPage() {
     };
 
     const saveAll = async () => {
-        // Two-version rows wait for staff to keep one.
-        const ready = rows.filter((r) => work[r.id]?.draft && !work[r.id]?.draft?.photoOnly && !work[r.id]?.saved);
+        const ready = rows.filter((r) => work[r.id]?.draft && !resolved(work[r.id]));
         let ok = 0;
         await runPool(ready, SAVE_POOL, async (r) => { if (await save(r)) ok++; });
         if (ok) toast.success(`Saved ${ok} product${ok === 1 ? "" : "s"}`);
@@ -216,7 +213,7 @@ export default function AiBulkCopyPage() {
     const locked = !!batch;
     const left = batch ? batch.filter((id) => !resolved(work[id])) : [];
     const allTicked = open.length > 0 && open.every((r) => selected.has(r.id));
-    const draftsReady = rows.filter((r) => work[r.id]?.draft && !work[r.id]?.draft?.photoOnly && !work[r.id]?.saved).length;
+    const draftsReady = rows.filter((r) => work[r.id]?.draft && !resolved(work[r.id])).length;
     const toggle = (id: number, on: boolean) => setSelected((s) => {
         const n = new Set(s);
         if (on) n.add(id); else n.delete(id);
@@ -380,20 +377,7 @@ export default function AiBulkCopyPage() {
                                 {w.draft && !resolved(w) && (
                                     <p className="text-xs font-medium text-blue-700 dark:text-blue-300">{changeNote(r, w.draft)}</p>
                                 )}
-                                {w.draft?.photoOnly && !resolved(w) && (
-                                    <AbCompare
-                                        draft={w.draft}
-                                        pickLabel="Save this"
-                                        onPick={(which, v) => {
-                                            logAiPick(r.id, r.name, which, w.draft!);
-                                            void save(r, v);
-                                        }}
-                                    />
-                                )}
-                                {w.draft?.photoOnly && !resolved(w) && (
-                                    <Button size="sm" variant="ghost" onClick={() => discard([r.id])}>Don&apos;t save either</Button>
-                                )}
-                                {w.draft && !w.draft.photoOnly && !resolved(w) && (
+                                {w.draft && !resolved(w) && (
                                     <div className="bg-muted/40 space-y-1 rounded-md p-2">
                                         <p className="font-medium">{w.draft.title}</p>
                                         <p className="whitespace-pre-line">{w.draft.shopDescription}</p>
@@ -413,7 +397,7 @@ export default function AiBulkCopyPage() {
                                         )}
                                         <AiDraftNotes draft={w.draft} />
                                         <div className="flex gap-2">
-                                            <Button size="sm" onClick={() => { logAiPick(r.id, r.name, "only", w.draft!); void save(r); }}>Save</Button>
+                                            <Button size="sm" onClick={() => void save(r)}>Save</Button>
                                             <Button size="sm" variant="ghost" onClick={() => discard([r.id])}>Don&apos;t save</Button>
                                         </div>
                                     </div>
@@ -433,12 +417,6 @@ export default function AiBulkCopyPage() {
                     Show more ({rows.length - shown} left)
                 </Button>
             )}
-            <div className="border-t border-border pt-3">
-                <Button variant="ghost" size="sm" onClick={() => setShowLog((v) => !v)}>
-                    {showLog ? "Hide" : "Show"} search test log
-                </Button>
-                {showLog && <AiTestLog />}
-            </div>
         </div>
     );
 }

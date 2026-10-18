@@ -5,9 +5,9 @@ import { toast } from "sonner";
 import { ExternalLink, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { extractApiError } from "@/shared/lib/api";
-import type { AiSearchMode } from "@/shared/lib/constants/ai";
-import { fetchAiCopy, logAiPick, type AiVersion, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
-import { AbCompare, SearchModeButtons } from "@/modules/ecommerce/components/AiAbCompare";
+import { AI_DEFAULT_SEARCH_MODE, type AiSearchMode } from "@/shared/lib/constants/ai";
+import { fetchAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
+import { SearchModeButtons } from "@/modules/ecommerce/components/AiSearchModeButtons";
 
 type SpecRow = { k: string; v: string };
 
@@ -75,18 +75,10 @@ export default function AiCopyPanel({
     onSubheading: (v: string) => void;
     onSpecs: (rows: SpecRow[]) => void;
 }) {
-    // Off by default: Gemini rarely really searches and most cited pages fail the link check (2026-10-17).
-    const [search, setSearch] = useState<AiSearchMode>("off");
+    // The first call decides whether a second, searched call would add anything (owner, 2026-10-19).
+    const [search, setSearch] = useState<AiSearchMode>(AI_DEFAULT_SEARCH_MODE);
     const [busy, setBusy] = useState(false);
     const [draft, setDraft] = useState<ProductCopy | null>(null);
-    // A/B trial: true once staff kept A or B for the current draft.
-    const [picked, setPicked] = useState(false);
-
-    const apply = (v: AiVersion) => {
-        onDescription(v.shopDescription);
-        if (!subheading.trim() || subheading.trim() === name.trim()) onSubheading(v.title);
-        onSpecs(mergeAiSpecs(specPairs, v.specs));
-    };
 
     const run = async (fresh: boolean) => {
         if (!productId) { toast.error("Save the product first, then generate"); return; }
@@ -95,11 +87,6 @@ export default function AiCopyPanel({
         try {
             const copy = await fetchAiCopy({ productId, name: name.trim(), imageUrls, search }, { fresh });
             setDraft(copy);
-            setPicked(false);
-            // Two versions: nothing is filled until staff keep one below.
-            if (copy.photoOnly) { toast.success("Two versions ready — compare below and keep one"); return; }
-            // The product form saves later — log the single version now, new answers only.
-            if (!copy.fromCache) logAiPick(productId, name.trim(), "only", copy);
             const filled: string[] = [];
             if (!description.trim()) { onDescription(copy.shopDescription); filled.push("description"); }
             if (!subheading.trim() || subheading.trim() === name.trim()) { onSubheading(copy.title); filled.push("online name"); }
@@ -131,22 +118,10 @@ export default function AiCopyPanel({
             {draft && (
                 <div className="space-y-2 text-sm">
                     <AiDraftNotes draft={draft} />
-                    {draft.photoOnly && !picked && productId && (
-                        <AbCompare
-                            draft={draft}
-                            pickLabel="Use this"
-                            onPick={(which, v) => {
-                                apply(v);
-                                logAiPick(productId, name.trim(), which, draft);
-                                setPicked(true);
-                                toast.success(`Version ${which} filled in — review, then Save`);
-                            }}
-                        />
-                    )}
-                    {!draft.photoOnly && titleDiffers && (
+                    {titleDiffers && (
                         <DraftRow label="Online name" text={draft.title} onUse={() => onSubheading(draft.title)} />
                     )}
-                    {!draft.photoOnly && descDiffers && (
+                    {descDiffers && (
                         <DraftRow label="Description" text={draft.shopDescription} onUse={() => onDescription(draft.shopDescription)} />
                     )}
                     <div className="flex items-center gap-2">

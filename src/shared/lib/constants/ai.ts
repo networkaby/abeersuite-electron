@@ -17,17 +17,18 @@ export const AI_BULK_BATCH_SIZE = 5;
 export const AI_HIGHLIGHT_COUNT = { min: 4, max: 7 } as const;
 
 
-/** Online search modes, on trial side by side since 2026-10-19: staff pick
- *  version A (photo only) or B (with search) and each pick is logged, so the
- *  owner can settle on one mode later. */
+/** Online search modes. "When it helps" = the first (photo) call says whether
+ *  a second, searched call would add anything (owner settled 2026-10-19). */
 export const AI_SEARCH_MODES = [
     { value: "off", label: "Off" },
     { value: "auto", label: "When it helps" },
     { value: "always", label: "Always" },
 ] as const;
 export type AiSearchMode = (typeof AI_SEARCH_MODES)[number]["value"];
+export const AI_DEFAULT_SEARCH_MODE: AiSearchMode = "auto";
 
-/** AuditLog.entityType for an A/B pick — kept out of the Recycle Bin and activity feed. */
+/** AuditLog.entityType of the finished A/B search trial's picks (2026-10-19). Nothing
+ *  writes it any more; the old rows stay hidden from the Recycle Bin and activity feed. */
 export const AI_COPY_TEST_ENTITY = "AI_COPY_TEST";
 
 /** Longest one Gemini call may take before it is cut off (each step; maxRetries=1 can double it). */

@@ -97,17 +97,6 @@ export type ProductCopy = Copy & {
     search: "searched" | "not-needed" | "off" | "no-key" | "failed" | "no-sources";
     /** Why the search step failed, in staff words — only with search "failed". */
     searchError?: string;
-    /** Version A — the name-and-photo draft, whenever search is on (version B is the copy itself). */
-    photoOnly?: Pick<ProductCopy, "title" | "summary" | "highlights" | "description" | "compatibility" | "howToUse" | "warranty" | "specs" | "unsure" | "shopDescription">;
-    /** For the A/B test log: what this run cost and found. */
-    stats: {
-        mode: AiSearchMode;
-        verifiedFacts: number;
-        tokens: { draft: number; search: number; polish: number };
-        /** .env name of the key that wrote the draft. */
-        draftKey: string;
-        ms: number;
-    };
 };
 
 const searchKey = () => process.env.GOOGLE_AI_SEARCH_API_KEY;
@@ -236,7 +225,7 @@ function aiStatus(e: unknown): number | undefined {
 
 /** Google's reason in staff words — 402 / 429 / 403 mean the key, not this product. */
 export function aiErrorMessage(e: unknown): string | null {
-    if (e instanceof AiReplyError || e instanceof AiKeysExhaustedError || e instanceof SearchKeyError) return e.message;
+    if (e instanceof AiReplyError || e instanceof AiKeysExhaustedError) return e.message;
     if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) return "Gemini took too long — try again.";
     const status = aiStatus(e);
     if (status === 402) return "Gemini credit is used up — top up the AI Studio project, or use a free-tier key.";
@@ -257,14 +246,6 @@ export class AiKeysExhaustedError extends Error {
     constructor() {
         super("Every AI key failed today (blocked, out of credit or at its limit) — try again later or top up a key.");
         this.name = "AiKeysExhaustedError";
-    }
-}
-
-/** The search key failed — staff can still generate with search off. */
-export class SearchKeyError extends Error {
-    constructor() {
-        super("Online search key failed (blocked, out of credit or too slow) — turn Search online to Off and generate again.");
-        this.name = "SearchKeyError";
     }
 }
 
@@ -352,8 +333,7 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
     else {
         try {
             // Search has no fallback key: when it fails, staff turn search off.
-            const found = await call(paidKey, [{ type: "text", text: searchPrompt(p, draft, query) }], true)
-                .catch((e: unknown) => { throw isKeyFailure(e) ? new SearchKeyError() : e; });
+            const found = await call(paidKey, [{ type: "text", text: searchPrompt(p, draft, query) }], true);
             tokens.search += tokensOf(found);
             console.info(`[aiProductCopy] search reply after ${Date.now() - started} ms`);
             const cited = factsSchema.parse(parseJson(found.text)).facts
@@ -377,16 +357,17 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
                 search = "searched";
             }
         } catch (e) {
-            if (e instanceof SearchKeyError || e instanceof AiKeysExhaustedError) throw e;
+            // Search is an extra: any failure (its key included) keeps the photo draft.
             console.warn("[aiProductCopy] search step failed, keeping the photo draft:", aiErrorMessage(e) ?? e);
             search = "failed";
-            searchError = aiErrorMessage(e) ?? (e instanceof Error ? e.message : String(e)).slice(0, 160);
+            searchError = isKeyFailure(e)
+                ? "Online search key failed (blocked, out of credit or too slow) — this draft is from the photos only."
+                : aiErrorMessage(e) ?? (e instanceof Error ? e.message : String(e)).slice(0, 160);
         }
     }
 
     final = { ...final, specs: cleanSpecs(final.specs) };
-    const photoDraft = { ...draft, specs: cleanSpecs(draft.specs) };
-    const stats = { mode: p.search, verifiedFacts, tokens, draftKey, ms: Date.now() - started };
+    console.info(`[aiProductCopy] done in ${Date.now() - started} ms · mode ${p.search} · search ${search} · ${verifiedFacts} facts · key ${draftKey} · tokens`, tokens);
 
     return {
         ...final,
@@ -394,8 +375,5 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
         shopDescription: assembleDescription(final),
         search,
         ...(searchError ? { searchError } : {}),
-        // Search on = both versions every time, even when B adds nothing (owner, 2026-10-19).
-        ...(p.search !== "off" ? { photoOnly: { ...photoDraft, shopDescription: assembleDescription(photoDraft) } } : {}),
-        stats,
     };
 }
