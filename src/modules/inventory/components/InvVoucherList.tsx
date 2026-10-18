@@ -21,7 +21,7 @@ import {
 } from "@/modules/accountancy/components/VoucherRegisterTable";
 import {
     useRegisterFilters,
-    applyRegisterFilters,
+    useFilteredRegister,
 } from "@/modules/accountancy/hooks/useRegisterFilters";
 import { RegisterFilterBar } from "@/modules/accountancy/components/RegisterFilterBar";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
@@ -172,11 +172,7 @@ export function InvVoucherList({
         return [...seen.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
     }, [allRows]);
 
-    const filtered = useMemo(
-        () => applyRegisterFilters(allRows, filters),
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [allRows, filters.from, filters.to, filters.search, filters.statuses, filters.branchFilter],
-    );
+    const filtered = useFilteredRegister(allRows, filters);
 
     const postedTotal = useMemo(
         () => filtered.filter((r) => r.status === "POSTED").reduce((s, r) => s + r.totalAmount, 0),

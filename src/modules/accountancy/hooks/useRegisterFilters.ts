@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { presetRangeOf } from "@/shared/lib/format/datePresets";
@@ -50,6 +50,21 @@ export function applyRegisterFilters<T extends {
 
         return true;
     });
+}
+
+type RegisterRow = Parameters<typeof applyRegisterFilters>[0][number];
+type RegisterFilterValues = Parameters<typeof applyRegisterFilters>[1];
+
+/** `applyRegisterFilters`, memoised on every filter field it reads. The filters
+ *  object is new each render, so callers used to list its fields by hand — and
+ *  two registers forgot `branchFilter`, leaving the Branch box with no effect.
+ *  Listing them once here keeps every register in step. */
+export function useFilteredRegister<T extends RegisterRow>(rows: T[], filters: RegisterFilterValues): T[] {
+    const { from, to, search, statuses, branchFilter } = filters;
+    return useMemo(
+        () => applyRegisterFilters(rows, { from, to, search, statuses, branchFilter }),
+        [rows, from, to, search, statuses, branchFilter],
+    );
 }
 
 /**
