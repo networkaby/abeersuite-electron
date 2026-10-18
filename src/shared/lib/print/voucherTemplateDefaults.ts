@@ -324,8 +324,6 @@ export const PRINT_AFTER_SAVE_DEFAULT_BY_KIND: Record<VoucherTemplateKind, boole
     ESTIMATE: true,
     POS_ESTIMATE: true,
     POS_ORDER: true,
-    // POS_RETURN: true,  // TODO: add this
-    //POS_Receipt: true,  // TODO: add this
     SALE_RETURN: true,
     PURCHASE_RETURN: false,
     MANUFACTURING_JOURNAL: false,
