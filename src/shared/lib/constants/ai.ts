@@ -33,6 +33,11 @@ export const AI_COPY_TEST_ENTITY = "AI_COPY_TEST";
 /** Longest one Gemini call may take before it is cut off (each step; maxRetries=1 can double it). */
 export const AI_CALL_TIMEOUT_MS = 90_000; // a grounded search took ~60 s on 2026-10-19
 
-/** Owner, 2026-10-19: every step on the paid key (GOOGLE_AI_SEARCH_API_KEY) —
- *  the free project answers 403. Set false to go back to free-key-first. */
-export const AI_PAID_KEY_ONLY = true;
+/** .env keys that write drafts and polish, tried in order (owner, 2026-10-19).
+ *  A key refused twice in a day is skipped until midnight. The search step
+ *  still uses GOOGLE_AI_SEARCH_API_KEY only. Replaced later by the AI setup page. */
+export const AI_WRITE_KEY_CHAIN = [
+    "GOOGLE_GENERATIVE_AI_API_KEY",
+    "GOOGLE_GENERATIVE_AI_API_KEY1",
+    "GOOGLE_AI_SEARCH_API_KEY",
+] as const;

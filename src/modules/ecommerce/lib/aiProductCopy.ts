@@ -2,7 +2,7 @@ import "server-only";
 import { APICallError, RetryError, generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
-import { AI_CALL_TIMEOUT_MS, AI_PAID_KEY_ONLY, AI_HIGHLIGHT_COUNT, AI_PRODUCT_COPY_MODEL, type AiSearchMode } from "@/shared/lib/constants/ai";
+import { AI_CALL_TIMEOUT_MS, AI_WRITE_KEY_CHAIN, AI_HIGHLIGHT_COUNT, AI_PRODUCT_COPY_MODEL, type AiSearchMode } from "@/shared/lib/constants/ai";
 import { verifyFacts, type CitedFact } from "@/modules/ecommerce/lib/aiFactCheck";
 
 // Flipkart-style, SEO-friendly product copy, spending search money only where
@@ -103,16 +103,16 @@ export type ProductCopy = Copy & {
         mode: AiSearchMode;
         verifiedFacts: number;
         tokens: { draft: number; search: number; polish: number };
-        draftKey: "free" | "paid";
+        /** .env name of the key that wrote the draft. */
+        draftKey: string;
         ms: number;
     };
 };
 
-const freeKey = () => process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 const searchKey = () => process.env.GOOGLE_AI_SEARCH_API_KEY;
 
 export function isAiConfigured(): boolean {
-    return !!freeKey();
+    return AI_WRITE_KEY_CHAIN.some((k) => !!process.env[k]);
 }
 
 const STRICT_RULES = [
@@ -244,18 +244,39 @@ export function aiErrorMessage(e: unknown): string | null {
     return null;
 }
 
-/** Free key first; the paid key takes over when the free daily cap answers 429, or Google blocks the free project (403). */
-async function callFreeFirst(content: Part[]) {
-    const paidOnly = searchKey();
-    if (AI_PAID_KEY_ONLY && paidOnly) return { reply: await call(paidOnly, content, false), key: "paid" as const };
-    try {
-        return { reply: await call(freeKey()!, content, false), key: "free" as const };
-    } catch (e) {
-        const paid = searchKey();
-        // 403 = Google blocked the free project (seen 2026-10-19), not this product.
-        if ((aiStatus(e) !== 429 && aiStatus(e) !== 403) || !paid) throw e;
-        return { reply: await call(paid, content, false), key: "paid" as const };
+// Draft and polish walk AI_WRITE_KEY_CHAIN in order. A key that answers with a
+// key problem (blocked, no credit, daily cap) twice is skipped until midnight
+// India time. Kept in server memory only: a fresh server may try a dead key
+// twice more — a refused call is not billed.
+const KEY_FAULTS = new Set([400, 402, 403, 429]);
+const keyFails = new Map<string, { day: string; count: number }>();
+const indiaDay = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+const skippedToday = (name: string) => {
+    const f = keyFails.get(name);
+    return !!f && f.day === indiaDay() && f.count >= 2;
+};
+function noteFail(name: string) {
+    const day = indiaDay();
+    const f = keyFails.get(name);
+    keyFails.set(name, { day, count: f?.day === day ? f.count + 1 : 1 });
+}
+
+/** First working key in the chain; a key problem moves on to the next key silently. */
+async function callChain(content: Part[]) {
+    const keys = AI_WRITE_KEY_CHAIN.filter((k) => process.env[k] && !skippedToday(k));
+    if (!keys.length) throw new Error("Every Gemini key failed twice today — check the keys in AI Studio.");
+    let last: unknown;
+    for (const name of keys) {
+        try {
+            return { reply: await call(process.env[name]!, content, false), key: name };
+        } catch (e) {
+            if (!KEY_FAULTS.has(aiStatus(e) ?? 0)) throw e; // about this product, not the key
+            console.warn(`[aiProductCopy] ${name} refused (${aiStatus(e)}), trying the next key`);
+            noteFail(name);
+            last = e;
+        }
     }
+    throw last;
 }
 
 const tokensOf = (r: { usage?: { totalTokens?: number } }) => r.usage?.totalTokens ?? 0;
@@ -291,10 +312,10 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
 
     const started = Date.now();
     const tokens = { draft: 0, search: 0, polish: 0 };
-    let draftKey: "free" | "paid" = "free";
+    let draftKey = "";
     // One more try when the reply cannot be read at all (no JSON, no title…).
     const readDraft = async () => {
-        const { reply, key } = await callFreeFirst(draftParts);
+        const { reply, key } = await callChain(draftParts);
         tokens.draft += tokensOf(reply);
         draftKey = key;
         return draftSchema.parse(parseJson(reply.text));
@@ -339,7 +360,7 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
             if (verified.facts.length === 0) {
                 search = "no-sources";
             } else {
-                const { reply: polishReply } = await callFreeFirst([{ type: "text", text: polishPrompt(p, draft, verified.facts) }]);
+                const { reply: polishReply } = await callChain([{ type: "text", text: polishPrompt(p, draft, verified.facts) }]);
                 tokens.polish += tokensOf(polishReply);
                 const polished = copySchema.parse(parseJson(polishReply.text));
                 // The label decides: draft title, warranty and photo-read

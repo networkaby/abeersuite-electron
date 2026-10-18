@@ -22,7 +22,7 @@ const pickSchema = z.object({
     search: z.string().max(20),
     verifiedFacts: z.number().int().min(0),
     tokens: z.object({ draft: z.number().min(0), search: z.number().min(0), polish: z.number().min(0) }),
-    draftKey: z.enum(["free", "paid"]),
+    draftKey: z.string().max(60),
     ms: z.number().min(0),
 });
 
