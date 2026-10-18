@@ -19,13 +19,11 @@ interface DeliveryCard {
     codToCollectPaise: number; createdAt: string;
 }
 
-// Pickup is STORE_PICKUP — the same value the shop checkout sets. Old rows may
-// still carry the retired "PICKUP"; it keeps its label on the card and becomes
-// STORE_PICKUP the next time that delivery is edited (see openEdit).
+// Pickup is STORE_PICKUP — the same value the shop checkout sets.
 const CARRIERS = ["OWN_BOY", "CUSTOM", "SHIPROCKET", "STORE_PICKUP"] as const;
 const CARRIER_LABEL: Record<string, string> = {
     SHIPROCKET: "Shiprocket", SHIPWAY: "Shipway", CUSTOM: "Custom courier", OWN_BOY: "Local boy",
-    PICKUP: "Pickup", STORE_PICKUP: "Store pickup", FREE_DELIVERY: "Free delivery",
+    STORE_PICKUP: "Store pickup", FREE_DELIVERY: "Free delivery",
 };
 
 export function DeliveryBoard() {
@@ -41,7 +39,7 @@ export function DeliveryBoard() {
 
     function openEdit(d: DeliveryCard) {
         setForm({
-            carrier: d.carrier === "PICKUP" ? "STORE_PICKUP" : (d.carrier ?? ""),
+            carrier: d.carrier ?? "",
             awb: d.awb ?? "",
             trackingUrl: d.trackingUrl ?? "",
             chargeRupees: d.chargeToCustomerPaise ? String(d.chargeToCustomerPaise / 100) : "",
