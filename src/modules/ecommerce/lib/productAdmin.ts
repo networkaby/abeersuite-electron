@@ -78,6 +78,3 @@ export function invProductToAdmin(
         codes: p.codes ?? [],
     };
 }
-
-/** @deprecated use invProductToAdmin */
-export const shopProductToAdmin = invProductToAdmin;
