@@ -39,6 +39,13 @@ export function SearchModeButtons({ value, onChange, disabled }: {
     );
 }
 
+const B_NOTE: Partial<Record<ProductCopy["search"], string>> = {
+    "not-needed": "AI said search would not help",
+    "no-sources": "no web page confirmed anything",
+    failed: "search failed",
+    "no-key": "paid key not set",
+};
+
 /** Version A and B side by side (stacked on a phone), each with its own pick button. */
 export function AbCompare({ draft, pickLabel, onPick }: {
     draft: ProductCopy;
@@ -59,7 +66,9 @@ export function AbCompare({ draft, pickLabel, onPick }: {
                     onPick={() => onPick("A", draft.photoOnly!)}
                 />
                 <VersionCard
-                    heading={`B · With online search (${draft.stats.verifiedFacts} fact${draft.stats.verifiedFacts === 1 ? "" : "s"} checked)`}
+                    heading={draft.search === "searched"
+                        ? `B · With online search (${draft.stats.verifiedFacts} fact${draft.stats.verifiedFacts === 1 ? "" : "s"} checked)`
+                        : `B · With online search — ${B_NOTE[draft.search] ?? draft.search}, same as A`}
                     cost={`${(t.draft + t.search + t.polish).toLocaleString("en-IN")} tokens`}
                     version={draft}
                     pickLabel={pickLabel}

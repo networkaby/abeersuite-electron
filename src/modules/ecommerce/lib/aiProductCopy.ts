@@ -96,7 +96,7 @@ export type ProductCopy = Copy & {
     search: "searched" | "not-needed" | "off" | "no-key" | "failed" | "no-sources";
     /** Why the search step failed, in staff words — only with search "failed". */
     searchError?: string;
-    /** Version A — the name-and-photo draft, only when search changed it (version B is the copy itself). */
+    /** Version A — the name-and-photo draft, whenever search is on (version B is the copy itself). */
     photoOnly?: Pick<ProductCopy, "title" | "summary" | "highlights" | "description" | "compatibility" | "howToUse" | "warranty" | "specs" | "unsure" | "shopDescription">;
     /** For the A/B test log: what this run cost and found. */
     stats: {
@@ -366,7 +366,8 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
         shopDescription: assembleDescription(final),
         search,
         ...(searchError ? { searchError } : {}),
-        ...(search === "searched" ? { photoOnly: { ...photoDraft, shopDescription: assembleDescription(photoDraft) } } : {}),
+        // Search on = both versions every time, even when B adds nothing (owner, 2026-10-19).
+        ...(p.search !== "off" ? { photoOnly: { ...photoDraft, shopDescription: assembleDescription(photoDraft) } } : {}),
         stats,
     };
 }
