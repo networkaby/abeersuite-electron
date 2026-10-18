@@ -66,7 +66,8 @@ Priority: **UX → DB → Server**.
 
 - Worktree work **starts from** `main` (`git merge --ff-only main` before editing) and **merges back into** `main`. If the checkout is currently on `dev`, merge it into `dev` as well — `dev` is not a substitute for `main`.
 - **Releases go out from** `main` **only** — never `dev`, `d_office`, or a detached HEAD; the tag points at `HEAD`.
-- **Never push.** Release is the one exception — §9 steps 5, 7 and 8 are pushes the owner asked for by saying "release". Everything else stops at the commit.
+- **Pushing to GitHub is allowed.** Push any branch you work on (`main`, `dev`, `claude/*`, feature branches).
+- **Never push a branch whose name starts with `d_`** (`d_office`, `d_shop`, …). These are the Vercel deploy branches — a push starts a production deployment. Only the owner pushes them, by hand.
 
 ## 9. Release — the agent carries it out
 
