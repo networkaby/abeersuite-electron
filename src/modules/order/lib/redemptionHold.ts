@@ -9,13 +9,16 @@ import type { OrderRef } from "./orderAdapter";
 // Cancel/Return it's RELEASED. GL-silent — like reservations this only tracks intent;
 // the ledger/wallet effect lives on the Sale at Fulfil, never here.
 //
-// FOUNDATION NOTE (Phase 2b): the lifecycle below (hold → execute → release) is
-// complete and the order backbone carries holds through it. The remaining slice is
-// the *application* at execution — having the Fulfil Sale actually consume loyalty
-// lots / record the coupon redemption / draw the gift card (+ the negative-charge GL
-// legs) from the returned holds. Until that lands, do NOT ship the capture UI that
-// produces holds, or a fulfilled order would show "redeemed" without burning the
-// reward. See executeRedemptions' TODO.
+// Where each step happens (counter POS_ORDER, ref { source: "inv", id: voucherDetail.id }):
+//   • hold    — /api/pos/order, when the order is created with `redemptions`.
+//   • execute — /api/pos/sale converting the order (sourceVoucherId). The sale burns the
+//     rewards through its own normal POS path (loyalty / coupon / gift card + their GL
+//     legs); `executeRedemptions` flips the holds inside that same transaction.
+//   • release — cancelling the order (voucher cancel, or a CANCELLED / RETURNED stage).
+//   • re-hold — cancelling the converted sale gives the rewards back, so the holds
+//     return to HELD and the reopened order can be converted again.
+//   • cap     — editing the order shrinks the holds to fit the new total.
+// Online shop orders do NOT use holds — checkout freezes the reward on the order itself.
 
 export type RewardType = "LOYALTY" | "COUPON" | "GIFT_CARD";
 
@@ -63,26 +66,15 @@ export async function holdRedemptions(ref: OrderRef, intents: RedemptionIntent[]
     }, { timeout: 30_000, maxWait: 10_000 });
 }
 
-/**
- * Mark an order's held redemptions EXECUTED and return them so the caller (the Fulfil
- * Sale) can burn each reward for real. Pass the Fulfil transaction client so the
- * status flip is atomic with the sale post.
- *
- * TODO(2b-apply): the caller does not yet apply the returned holds to the Sale
- * (consume loyalty lots via applyLoyaltyForSale / recordCouponRedemption /
- * redeemGiftCard + the negative-charge GL legs). Until that's implemented, holds are
- * only produced by an explicit API caller (no capture UI ships yet), so this stays a
- * no-op in practice.
- */
-export async function executeRedemptions(ref: OrderRef, tx?: Prisma.TransactionClient): Promise<HeldRedemption[]> {
-    const client = tx ?? prisma;
-    const held = await client.redemptionHold.findMany({
+/** Thrown when an order's holds changed under the sale (another till executed or
+ *  released them first). The sale rolls back; the route answers 409. */
+export class RedemptionHoldChangedError extends Error {}
+
+/** An order's HELD redemptions, for the converting sale to check against before it posts. */
+export async function findHeldRedemptions(ref: OrderRef, db: Prisma.TransactionClient = prisma): Promise<HeldRedemption[]> {
+    const held = await db.redemptionHold.findMany({
         where: { orderSource: ref.source, orderId: ref.id, status: "HELD" },
-    });
-    if (held.length === 0) return [];
-    await client.redemptionHold.updateMany({
-        where: { orderSource: ref.source, orderId: ref.id, status: "HELD" },
-        data: { status: "EXECUTED" },
+        orderBy: { id: "asc" },
     });
     return held.map((h) => ({
         id: h.id,
@@ -93,15 +85,71 @@ export async function executeRedemptions(ref: OrderRef, tx?: Prisma.TransactionC
         points: h.points,
         amount: Number(h.amount),
         meta: h.meta,
-        status: "EXECUTED" as const,
+        status: "HELD" as const,
     }));
+}
+
+/**
+ * Mark the holds the sale has just burned EXECUTED, inside the sale's own transaction.
+ * The sale itself burns the rewards (its normal loyalty / coupon / gift-card path), so
+ * this only closes the holds. Flips exactly the ids the sale checked; if any is no
+ * longer HELD, another till got there first — throws so the whole sale rolls back and
+ * the reward is never burned twice.
+ */
+export async function executeRedemptions(holdIds: number[], tx: Prisma.TransactionClient): Promise<void> {
+    if (holdIds.length === 0) return;
+    const flipped = await tx.redemptionHold.updateMany({
+        where: { id: { in: holdIds }, status: "HELD" },
+        data: { status: "EXECUTED" },
+    });
+    if (flipped.count !== holdIds.length) {
+        throw new RedemptionHoldChangedError("This order's rewards were already used or released on another screen. Reload the order and try again.");
+    }
 }
 
 /** Release any held redemptions for an order (cancel / return). Nothing was burned,
  *  so there's no ledger/wallet effect to undo — just flip the status. */
-export async function releaseRedemptions(ref: OrderRef): Promise<void> {
-    await prisma.redemptionHold.updateMany({
+export async function releaseRedemptions(ref: OrderRef, db: Prisma.TransactionClient = prisma): Promise<void> {
+    await db.redemptionHold.updateMany({
         where: { orderSource: ref.source, orderId: ref.id, status: "HELD" },
         data: { status: "RELEASED" },
     });
+}
+
+/** The sale that converted this order was cancelled — its cancel already gave the
+ *  rewards back, so the holds go back to HELD for the next conversion. */
+export async function reholdRedemptions(ref: OrderRef, db: Prisma.TransactionClient): Promise<void> {
+    await db.redemptionHold.updateMany({
+        where: { orderSource: ref.source, orderId: ref.id, status: "EXECUTED" },
+        data: { status: "HELD" },
+    });
+}
+
+// Coupon value goes first, then points, then the gift card — the card is a payment,
+// so it is what shrinks when the bill does.
+const CAP_ORDER: Record<RewardType, number> = { COUPON: 0, LOYALTY: 1, GIFT_CARD: 2 };
+
+/**
+ * The order was edited — shrink its holds so together they never exceed the new total.
+ * A hold cut to ₹0 is released; loyalty points shrink in the same ratio (rounded down,
+ * so the ₹ value never grows).
+ */
+export async function capRedemptionsToTotal(ref: OrderRef, total: number, db: Prisma.TransactionClient): Promise<void> {
+    const held = (await findHeldRedemptions(ref, db)).sort((a, b) => CAP_ORDER[a.rewardType] - CAP_ORDER[b.rewardType] || a.id - b.id);
+    let left = Math.max(0, total);
+    for (const h of held) {
+        const amount = Math.min(h.amount, left);
+        left = Math.round((left - amount) * 100) / 100;
+        if (amount >= h.amount) continue;
+        if (amount <= 0.005) {
+            await db.redemptionHold.update({ where: { id: h.id }, data: { status: "RELEASED" } });
+            continue;
+        }
+        const points = h.points == null ? null : Math.floor((h.points * amount) / h.amount);
+        if (points === 0) {
+            await db.redemptionHold.update({ where: { id: h.id }, data: { status: "RELEASED" } });
+            continue;
+        }
+        await db.redemptionHold.update({ where: { id: h.id }, data: { amount, points } });
+    }
 }

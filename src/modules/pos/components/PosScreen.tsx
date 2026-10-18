@@ -231,6 +231,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     type: string | null;
                     reference: string;
                     lines: { productId: number; description: string | null; note: string | null; quantity: string | number; rate: string | number; taxRate: string | number; mrpPaise: number | null; savedSalePricePaise: number | null; product: { sku: string; name: string } }[];
+                    redemptionHolds?: { rewardType: "LOYALTY" | "COUPON" | "GIFT_CARD"; rewardRef: string | null; points: number | null; amount: number }[];
                 }>(`/api/inventory/vouchers/${fromId}`);
                 if (cancelled) return;
                 b.setConvertFrom({ id: fromId, ref: data.reference, kind: data.type === "POS_ESTIMATE" ? "estimate" : "order" });
@@ -247,7 +248,17 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     mrpPaise: l.mrpPaise,
                     barcodePaise: l.savedSalePricePaise,
                 })));
-                toast.message("Loaded from source — review and ring up to complete the conversion.");
+                // Rewards held on the order: the sale must redeem exactly these, so
+                // pre-fill them. Codes still need the cashier's Apply (it checks them).
+                const holds = data.redemptionHolds ?? [];
+                for (const h of holds) {
+                    if (h.rewardType === "LOYALTY" && h.points) { b.setRedeemOn(true); b.setRedeemPointsStr(String(h.points)); }
+                    if (h.rewardType === "COUPON" && h.rewardRef) b.setCouponCodeStr(h.rewardRef);
+                    if (h.rewardType === "GIFT_CARD" && h.rewardRef) b.setGiftCardCodeStr(h.rewardRef);
+                }
+                toast.message(holds.some((h) => h.rewardType !== "LOYALTY")
+                    ? "Loaded from source — this order has a coupon / gift card held: press Apply on it, then ring up."
+                    : "Loaded from source — review and ring up to complete the conversion.");
             } catch (e: unknown) {
                 if (cancelled) return;
                 toast.error(extractApiError(e, "Could not load the document to convert"));

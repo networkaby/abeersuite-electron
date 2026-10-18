@@ -9,6 +9,7 @@ import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recom
 import { ensureCancelable, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { reverseCouponRedemption, refundGiftCard, netDrawsByCard } from "@/modules/coupons/lib";
 import { reverseLoyaltyForReturn, ratesFromConfig } from "@/modules/loyalty/lib";
+import { releaseRedemptions, reholdRedemptions } from "@/modules/order/lib/redemptionHold";
 import * as Sentry from "@sentry/nextjs";
 import { handleApiError } from "@/shared/lib/api";
 
@@ -147,6 +148,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                         createdById:                userId,
                     });
                 }
+            }
+
+            // ── 2c. Reward holds (redemptionHold.ts) ─────────────────────────
+            // A cancelled order frees what it held. A cancelled converted sale just
+            // gave its rewards back above and reopens its source order, so that
+            // order's holds go back to HELD for the next conversion.
+            await releaseRedemptions({ source: "inv", id: voucher.id }, tx);
+            if (voucher.refVoucherId != null) {
+                await reholdRedemptions({ source: "inv", id: voucher.refVoucherId }, tx);
             }
 
             // ── 3. Cancellation is recorded ENTIRELY on the spine ─────────────
