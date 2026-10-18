@@ -237,7 +237,7 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
             })));
         }
         toast.success("Duplicated — review and Save to create a new journal entry");
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- the duplicate stash is read once, on mount
     }, []);
 
     // ── Prefill in edit mode ────────────────────────────────────────────────

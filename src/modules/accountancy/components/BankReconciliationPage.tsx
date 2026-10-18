@@ -425,7 +425,7 @@ export function BankReconciliationPage() {
         setMPage(pos.page && pos.page > 0 ? pos.page : 1);
         requestAnimationFrame(() => { if (scrollRef.current) scrollRef.current.scrollTop = pos.top ?? 0; });
     }, [data]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- save only when the page moves; savePos reads the scroll through a ref
     useEffect(() => { savePos(); }, [mCurrent]);
 
     const mFrom = mPages.slice(0, mCurrent - 1).reduce((n, p) => n + p.length, 0) + 1;

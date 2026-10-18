@@ -382,8 +382,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         axios.get<{ reference: string }>(`/api/inventory/vouchers/next-ref?type=${copy.nextRefType}`)
             .then((r) => setNextRef(r.data.reference))
             .catch(() => setNextRef(""));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isEditing]);
+    }, [isEditing, copy.nextRefType]);
 
     // ── Party preload ──────────────────────────────────────────────────────
     // Quick Actions clicked while a customer profile was open stashes that
@@ -395,7 +394,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         if (!p) return;
         setPayMode("CREDIT");
         setParty(p);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- the preload is consumed exactly once, on mount
     }, []);
 
     // ── Duplicate hydration ────────────────────────────────────────────────
@@ -475,7 +474,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         }
 
         toast.success("Duplicated — review and Save to create a new voucher");
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- the duplicate stash is read once, on mount
     }, []);
 
     // Pre-fill credit period from OrgDefaults on new vouchers (create mode only).
@@ -490,8 +489,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 setHeader((h) => ({ ...h, creditPeriodDays: String(days) }));
             })
             .catch(() => {/* silent — defaults are optional */ });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isEditing]);
+    }, [isEditing, kind, copy.showPaymentTerms]);
 
     // ── Edit mode: fetch the voucher and prefill all form state ──────────
     // Run once on mount when `?voucherId=` is set. The fetch payload is the
@@ -778,7 +776,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             })
             .finally(() => { if (!cancelled) setEditLoading(false); });
         return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- one load per voucher id; router / helpers are stable
     }, [editVoucherId, isEditing]);
 
     // Load the money ledgers once and pre-select the default till (last-used, else
@@ -828,7 +826,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             })
             .catch(() => { if (!cancelled) { setCashBankAccounts([]); setChargeAccounts([]); } });
         return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- reference data reloads on refDataKey; the tender seed reads the latest values
     }, [refDataKey]);
 
     // Service catalogue — the same active-rows read the POS cart uses, so the
@@ -840,7 +838,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             .then((r) => { if (!cancelled) setAllServices(r.data); })
             .catch(() => { if (!cancelled) setAllServices([]); });
         return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- reloads with the other reference data (refDataKey)
     }, [refDataKey]);
 
     // Edit-mode payment-account resolver: when both the loaded voucher's
@@ -939,7 +937,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             const raw = window.localStorage.getItem(PREFS_KEY);
             if (raw) setPrefs({ ...DEFAULT_PREFS, ...JSON.parse(raw) });
         } catch { /* ignore */ }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- saved column prefs are read once; PREFS_KEY / DEFAULT_PREFS are constants
     }, []);
     const togglePref = (k: keyof ColumnPrefs) => {
         setPrefs((p) => {
@@ -1152,7 +1150,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 })
                 .catch(() => {/* non-fatal — user can set taxRate manually */ });
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- stable product handler: reads lines / prefs through refs, never stale state
     }, []);
 
     // ── Totals ────────────────────────────────────────────────────────────

@@ -431,7 +431,7 @@ export function useDayBook(query: DayBookQuery) {
                 setLoadingMore(false);
             }
         })();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` (from viewKey(query)) is query's identity; see the fetch effect above
     }, [key, search, cacheable]);
 
     /**
@@ -473,7 +473,7 @@ export function useDayBook(query: DayBookQuery) {
                 syncingRef.current = false;
             }
         })();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` (from viewKey(query)) is query's identity; see the fetch effect above
     }, [key, search, cacheable, reload]);
 
     // A voucher written at another counter — or in another tab — lands here on its
