@@ -2,7 +2,7 @@ import "server-only";
 import { APICallError, RetryError, generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
-import { AI_CALL_TIMEOUT_MS, AI_HIGHLIGHT_COUNT, AI_PRODUCT_COPY_MODEL, type AiSearchMode } from "@/shared/lib/constants/ai";
+import { AI_CALL_TIMEOUT_MS, AI_PAID_KEY_ONLY, AI_HIGHLIGHT_COUNT, AI_PRODUCT_COPY_MODEL, type AiSearchMode } from "@/shared/lib/constants/ai";
 import { verifyFacts, type CitedFact } from "@/modules/ecommerce/lib/aiFactCheck";
 
 // Flipkart-style, SEO-friendly product copy, spending search money only where
@@ -246,6 +246,8 @@ export function aiErrorMessage(e: unknown): string | null {
 
 /** Free key first; the paid key takes over when the free daily cap answers 429, or Google blocks the free project (403). */
 async function callFreeFirst(content: Part[]) {
+    const paidOnly = searchKey();
+    if (AI_PAID_KEY_ONLY && paidOnly) return { reply: await call(paidOnly, content, false), key: "paid" as const };
     try {
         return { reply: await call(freeKey()!, content, false), key: "free" as const };
     } catch (e) {
