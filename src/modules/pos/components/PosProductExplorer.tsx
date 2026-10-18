@@ -201,7 +201,7 @@ export const PosProductExplorer = memo(function PosProductExplorer({
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- re-bound per open/close; `close` only calls setters + the stable hover callback
     }, [open]);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount-only cleanup, onHoverProduct is stable enough that re-running this on every render would be pointless churn

@@ -192,12 +192,6 @@ export function PosSalesRegister() {
     const [ledger, setLedger] = useState<LedgerData | null>(null);
     const [ledgerLoading, setLedgerLoading] = useState(false);
 
-    // Lock to current counter from active shift
-    useEffect(() => {
-        if (tab !== "ledger" || !activeShift) return;
-        // No need to fetch counters; use the counter from the active shift
-    }, [tab, activeShift]);
-
     useEffect(() => {
         if (tab !== "ledger" || !activeShift) return;
         // Shared range; the cash book needs a bounded daily view, so empty ⇒ today.

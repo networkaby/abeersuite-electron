@@ -214,7 +214,7 @@ export function ShiftCloseDialog({
         if (mode !== "vault") return;
         if (anchor === "keep") setToVaultInput(splitFmt(declaredNum - carryOverNum));
         else                   setCarryOver(splitFmt(declaredNum - sweepNum));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new counted total re-splits; typing in a box already moves the other (editKeep / editSweep)
     }, [declaredNum, mode]);
 
     const submitVault = async (print: boolean) => {

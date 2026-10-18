@@ -159,9 +159,10 @@ export function usePosCustomerDisplay({
         }, showUpi ? UPI_SETTLE_MS : FRAME_SETTLE_MS);
 
         return () => clearTimeout(timer);
-        // Dependency list kept identical to the original inline effect (some values
-        // are intentionally read-latest via closure — see the exhaustive-deps note
-        // that rode with it in both screens).
+        // Left out on purpose: lineRows / posExtraCharges are new arrays every render
+        // (listing them would restart the debounce on every render and could starve
+        // the display), and they, payableTotal and posTierLabel only move together
+        // with cart / snapshot / total, which are listed. upiPayeeName is fixed.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         displayHold, checkoutOpen, cart, snapshot,

@@ -265,7 +265,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             }
         })();
         return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot load keyed on the source voucher id; `b`'s setters are stable
     }, [fromId, isEdit]);
 
     const generateInvoice = async (printAfter = false) => {

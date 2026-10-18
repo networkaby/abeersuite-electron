@@ -942,7 +942,7 @@ export function usePosBilling(opts: {
             })
             .catch(() => { /* keep prior value; checkout re-validates */ });
         return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on couponSig (the bill's content) and the coupon key, not on object identity
     }, [couponSig, appliedCouponKey, snapshot?.account?.id]);
 
     // Auto-apply: when there's no manual coupon, surface the best eligible AUTO
@@ -954,7 +954,7 @@ export function usePosBilling(opts: {
             .then((data) => { if (!cancelled) setAutoCoupon(data?.ok ? { ...hit(data), freeLines: data.freeLines } : null); })
             .catch(() => { if (!cancelled) setAutoCoupon(null); });
         return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on couponSig (the bill's content) and the coupon key, not on object identity
     }, [couponSig, appliedCouponKey, snapshot?.account?.id, cart.length]);
 
     // Re-validate the applied FREE-GRANT coupon when the cart changes — its
@@ -978,7 +978,7 @@ export function usePosBilling(opts: {
             })
             .catch(() => { /* keep prior value; checkout re-validates */ });
         return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on couponSig (the bill's content) and the coupon key, not on object identity
     }, [couponSig, appliedFreeKey, snapshot?.account?.id]);
 
     // Auto free-grant: surface the best eligible independent AUTO FREE_ITEM /
@@ -1000,7 +1000,7 @@ export function usePosBilling(opts: {
             })
             .catch(() => { if (!cancelled) setAutoFree(null); });
         return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on couponSig (the bill's content) and the coupon key, not on object identity
     }, [couponSig, appliedFreeKey, snapshot?.account?.id, cart.length]);
 
     // Offers panel — refresh on the same beat as coupon re-validation, debounced
@@ -1022,7 +1022,7 @@ export function usePosBilling(opts: {
                 .catch(() => { if (!cancelled) { setOffers(null); setCrossSell([]); } });
         }, 350);
         return () => { cancelled = true; clearTimeout(t); };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on couponSig (the bill's content) and the coupon key, not on object identity
     }, [couponSig, snapshot?.account?.id]);
 
     // Apply an independent free-grant coupon — store it + surface the free items.
