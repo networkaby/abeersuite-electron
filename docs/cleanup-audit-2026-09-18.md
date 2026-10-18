@@ -365,7 +365,7 @@ Note `PassRejectModal` is imported **only** by `TicketCard`, which is itself dea
 | `src/modules/customer/components/CompanyProfileView.tsx` | 236 | also holds a dead link (see A4 family) (deleted 2026-09-30) |
 | `src/modules/customer/components/PersonProfileView.tsx` | 224 | same (deleted 2026-09-30) |
 | `src/modules/admin/components/OrgTree.tsx` | 166 | |
-| `src/modules/accountancy/lib/effectiveBalance.ts` | 117 | |
+| `src/modules/accountancy/lib/effectiveBalance.ts` | 117 | (deleted 2026-10-12) |
 | `src/modules/refund/components/RefundBoard.tsx` | 96 | |
 | `src/shared/components/UniversalCreateMenu.tsx` | 92 | |
 | `src/modules/admin/components/SettingsNav.tsx` | 86 | |
