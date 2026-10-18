@@ -48,7 +48,17 @@ const SHOW_STEP = 50;
 const STRIP_MAX = 8;
 const SAVE_POOL = 4;
 
-type Work = { draft?: ProductCopy; error?: string; saved?: boolean };
+type Work = { draft?: ProductCopy; error?: string; saved?: boolean; discarded?: boolean; writing?: boolean };
+
+const resolved = (w: Work | undefined) => !!(w?.saved || w?.discarded);
+
+/** What Save will change — the online name only fills a blank (or stock-name copy), specs only add missing labels. */
+function changeNote(p: ShopProductAdmin, d: AiVersion) {
+    const nameKept = !!p.subheading?.trim() && p.subheading.trim() !== p.name.trim();
+    const have = new Set(Object.keys(p.specs).map((k) => k.trim().toLowerCase()));
+    const newSpecs = Object.entries(d.specs).filter(([k, v]) => k.trim() && v.trim() && !have.has(k.trim().toLowerCase())).length;
+    return `Display name: ${nameKept ? "kept (yours)" : "will be set"} · Specs: ${newSpecs ? `+${newSpecs} new` : "no new"}`;
+}
 
 /** In stock first, then more photos (a better draft), then name. */
 function priority(a: ShopProductAdmin, b: ShopProductAdmin) {
@@ -69,6 +79,9 @@ export default function AiBulkCopyPage() {
     const [showLog, setShowLog] = useState(false);
     const [running, setRunning] = useState(false);
     const [progress, setProgress] = useState({ done: 0, of: 0 });
+    // The set sent by the last Generate: only these show (in tick order, no
+    // rows in between) and the list stays locked until each is saved or dropped.
+    const [batch, setBatch] = useState<number[] | null>(null);
 
     useEffect(() => {
         const ids = takeAiPick();
@@ -85,14 +98,17 @@ export default function AiBulkCopyPage() {
 
     const query = useDebouncedValue(filters.query, 250);
     const options = useMemo(() => productFilterOptions(products), [products]);
-    // Rows saved this session stay on screen (faded) instead of vanishing.
     const rows = useMemo(() => {
+        if (batch) {
+            const byId = new Map(products.map((p) => [p.id, p]));
+            return batch.map((id) => byId.get(id)).filter((p): p is ShopProductAdmin => !!p);
+        }
         const f = { ...filters, query };
         return products
-            .filter((p) => (pick ? pick.has(p.id) : !hasDescription(p) || work[p.id]?.saved))
+            .filter((p) => (pick ? pick.has(p.id) && !work[p.id]?.saved : !hasDescription(p)))
             .filter((p) => matchesProductFilters(p, f, DEFAULT_SHOP_PUBLISH_RULES))
             .sort(priority);
-    }, [products, pick, filters, query, work]);
+    }, [products, pick, filters, query, work, batch]);
     const backlog = useMemo(() => products.filter((p) => p.isActive && !hasDescription(p)).length, [products]);
     const withPhoto = useMemo(() => products.filter((p) => p.isActive && !hasDescription(p) && p.galleryUrls.length > 0).length, [products]);
 
@@ -101,10 +117,27 @@ export default function AiBulkCopyPage() {
     const patchWork = (id: number, patch: Work) =>
         setWork((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
 
+    /** One AI call; the message when the key itself is out (503), so the caller can stop. */
+    const writeOne = async (r: ShopProductAdmin): Promise<string | null> => {
+        patchWork(r.id, { writing: true, error: undefined });
+        try {
+            const draft = await fetchAiCopy({ productId: r.id, search });
+            patchWork(r.id, { draft, writing: false });
+            return null;
+        } catch (e) {
+            const msg = extractApiError(e, "AI failed");
+            patchWork(r.id, { error: msg, writing: false });
+            return axios.isAxiosError(e) && e.response?.status === 503 ? msg : null;
+        }
+    };
+
     const generate = async () => {
+        const picked = rows.filter((r) => selected.has(r.id) && !work[r.id]?.saved);
+        if (!picked.length) { toast.error("Tick the products to write"); return; }
+        setBatch(picked.map((r) => r.id));
+        setSelected(new Set());
         // A row that already has a draft costs nothing to keep — only write the rest.
-        const todo = rows.filter((r) => selected.has(r.id) && !work[r.id]?.saved && !work[r.id]?.draft);
-        if (!todo.length) { toast.error("Tick the products to write"); return; }
+        const todo = picked.filter((r) => !work[r.id]?.draft);
         setRunning(true);
         setProgress({ done: 0, of: todo.length });
         // 503 = the key itself is out (credit / limit / not set up) — every
@@ -113,21 +146,34 @@ export default function AiBulkCopyPage() {
         // Each product is still its own call with all its photos (quality); a
         // free slot starts the next product at once (speed).
         await runPool(todo, AI_BULK_BATCH_SIZE, async (r) => {
-            try {
-                const draft = await fetchAiCopy({ productId: r.id, search });
-                patchWork(r.id, { draft, error: undefined });
-            } catch (e) {
-                const msg = extractApiError(e, "AI failed");
-                if (axios.isAxiosError(e) && e.response?.status === 503) stopped = msg;
-                patchWork(r.id, { error: msg });
-            } finally {
-                setProgress((p) => ({ ...p, done: p.done + 1 }));
-            }
+            stopped = (await writeOne(r)) ?? stopped;
+            setProgress((p) => ({ ...p, done: p.done + 1 }));
             return !stopped;
         });
         setRunning(false);
         if (stopped) toast.error(`Stopped: ${stopped}`);
     };
+
+    const retry = async (r: ShopProductAdmin) => {
+        const stopped = await writeOne(r);
+        if (stopped) toast.error(stopped);
+    };
+    const discard = (ids: number[]) =>
+        setWork((prev) => ({ ...prev, ...Object.fromEntries(ids.map((id) => [id, { ...prev[id], discarded: true }])) }));
+
+    // Every row of the set saved or dropped → back to the list. Dropped rows
+    // return to the backlog clean (their draft stays cached, so a retry is free).
+    useEffect(() => {
+        if (!batch || running || !batch.every((id) => resolved(work[id]))) return;
+        const saved = batch.filter((id) => work[id]?.saved).length;
+        toast.success(`Done: ${saved} saved, ${batch.length - saved} not saved`);
+        setWork((prev) => {
+            const next = { ...prev };
+            for (const id of batch) if (!prev[id]?.saved) delete next[id];
+            return next;
+        });
+        setBatch(null);
+    }, [batch, running, work]);
 
     // `version` = the A/B pick; a single-version draft saves itself.
     const save = async (r: ShopProductAdmin, draft: AiVersion | undefined = work[r.id]?.draft): Promise<boolean> => {
@@ -165,8 +211,10 @@ export default function AiBulkCopyPage() {
         if (ok < ready.length) toast.error(`${ready.length - ok} could not be saved — see the row`);
     };
 
-    const visible = rows.slice(0, shown);
+    const visible = batch ? rows : rows.slice(0, shown);
     const open = rows.filter((r) => !work[r.id]?.saved);
+    const locked = !!batch;
+    const left = batch ? batch.filter((id) => !resolved(work[id])) : [];
     const allTicked = open.length > 0 && open.every((r) => selected.has(r.id));
     const draftsReady = rows.filter((r) => work[r.id]?.draft && !work[r.id]?.draft?.photoOnly && !work[r.id]?.saved).length;
     const toggle = (id: number, on: boolean) => setSelected((s) => {
@@ -190,8 +238,8 @@ export default function AiBulkCopyPage() {
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                    <SearchModeButtons value={search} onChange={setSearch} disabled={running} />
-                    <Button onClick={() => void generate()} disabled={running || selected.size === 0}>
+                    <SearchModeButtons value={search} onChange={setSearch} disabled={locked} />
+                    <Button onClick={() => void generate()} disabled={locked || selected.size === 0}>
                         <Sparkles className="size-4" />
                         {running ? `Writing ${progress.done}/${progress.of}…` : `Generate ${selected.size || ""}`.trim()}
                     </Button>
@@ -201,7 +249,21 @@ export default function AiBulkCopyPage() {
                 </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            {batch && (
+                <div className="border-primary/30 bg-primary/5 flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 text-sm">
+                    <span>
+                        <b>{batch.length} in this set</b>
+                        {" · "}{batch.filter((id) => work[id]?.saved).length} saved
+                        {" · "}{batch.filter((id) => work[id]?.discarded).length} not saved
+                        {" · "}{left.length} waiting
+                    </span>
+                    <span className="text-muted-foreground">Save or drop each one to get back to the list.</span>
+                    <Button size="sm" variant="ghost" disabled={running} onClick={() => discard(left)}>
+                        Discard the rest
+                    </Button>
+                </div>
+            )}
+            <div className={`flex flex-wrap items-center gap-2 ${locked ? "pointer-events-none opacity-50" : ""}`}>
                 <div className="relative w-full sm:w-72">
                     <Search className="text-muted-foreground absolute left-2.5 top-1/2 size-4 -translate-y-1/2" />
                     <Input
@@ -209,6 +271,7 @@ export default function AiBulkCopyPage() {
                         onChange={(e) => setFilters((f) => ({ ...f, query: e.target.value }))}
                         placeholder="Search name, SKU, brand…"
                         className="pl-8"
+                        disabled={locked}
                     />
                 </div>
                 <ProductFilterButton
@@ -219,7 +282,7 @@ export default function AiBulkCopyPage() {
                 />
                 <span className="text-muted-foreground text-sm">{rows.length} shown</span>
             </div>
-            {showFilters && (
+            {showFilters && !locked && (
                 <ProductFilterPanel
                     value={filters}
                     onChange={setFilters}
@@ -228,7 +291,7 @@ export default function AiBulkCopyPage() {
                     defaults={pick ? EMPTY_PRODUCT_FILTERS : AI_DEFAULT_FILTERS}
                 />
             )}
-            {pick && (
+            {pick && !locked && (
                 <div className="border-primary/30 bg-primary/5 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
                     Showing the {pick.size} you ticked on Products. Saving replaces any description they already have.
                     <Button size="sm" variant="ghost" onClick={() => { setPick(null); setSelected(new Set()); setFilters(AI_DEFAULT_FILTERS); }}>
@@ -237,13 +300,13 @@ export default function AiBulkCopyPage() {
                 </div>
             )}
 
-            <label className="flex items-center gap-2 text-sm">
+            {!locked && <label className="flex items-center gap-2 text-sm">
                 <Checkbox
                     checked={allTicked}
                     onCheckedChange={(v) => setSelected(v ? new Set(open.map((r) => r.id)) : new Set())}
                 />
                 Tick all shown ({open.length})
-            </label>
+            </label>}
 
             <div className="divide-y divide-border rounded-md border border-border">
                 {visible.map((r) => {
@@ -251,13 +314,14 @@ export default function AiBulkCopyPage() {
                     const photos = r.galleryUrls;
                     const forAi = photosForAi(photos).length;
                     return (
-                        <div key={r.id} className={`flex gap-3 p-3 ${w.saved ? "opacity-50" : ""}`}>
-                            <Checkbox
-                                className="mt-1"
-                                disabled={w.saved}
-                                checked={selected.has(r.id)}
-                                onCheckedChange={(v) => toggle(r.id, !!v)}
-                            />
+                        <div key={r.id} className={`flex gap-3 p-3 ${resolved(w) ? "opacity-50" : ""}`}>
+                            {!locked && (
+                                <Checkbox
+                                    className="mt-1"
+                                    checked={selected.has(r.id)}
+                                    onCheckedChange={(v) => toggle(r.id, !!v)}
+                                />
+                            )}
                             <div className="min-w-0 flex-1 space-y-1 text-sm">
                                 <div className="flex flex-wrap items-start justify-between gap-2">
                                     <div className="min-w-0 space-y-1">
@@ -299,9 +363,24 @@ export default function AiBulkCopyPage() {
                                         </div>
                                     )}
                                 </div>
-                                {w.error && <p className="text-destructive text-xs">{w.error}</p>}
+                                {w.writing && <p className="text-muted-foreground text-xs">Writing…</p>}
+                                {batch && !w.writing && !w.draft && !w.error && !resolved(w) && running && (
+                                    <p className="text-muted-foreground text-xs">Waiting…</p>
+                                )}
+                                {batch && !w.writing && !w.draft && !resolved(w) && (w.error || !running) && (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <p className={`text-xs ${w.error ? "text-destructive" : "text-muted-foreground"}`}>{w.error ?? "Not written — stopped"}</p>
+                                        <Button size="sm" variant="outline" onClick={() => void retry(r)}>Try again</Button>
+                                        <Button size="sm" variant="ghost" onClick={() => discard([r.id])}>Don&apos;t save</Button>
+                                    </div>
+                                )}
+                                {w.error && w.draft && !resolved(w) && <p className="text-destructive text-xs">{w.error}</p>}
                                 {w.saved && <p className="text-xs text-green-600">Saved</p>}
-                                {w.draft?.photoOnly && !w.saved && (
+                                {w.discarded && <p className="text-muted-foreground text-xs">Not saved</p>}
+                                {w.draft && !resolved(w) && (
+                                    <p className="text-xs font-medium text-blue-700 dark:text-blue-300">{changeNote(r, w.draft)}</p>
+                                )}
+                                {w.draft?.photoOnly && !resolved(w) && (
                                     <AbCompare
                                         draft={w.draft}
                                         pickLabel="Save this"
@@ -311,7 +390,10 @@ export default function AiBulkCopyPage() {
                                         }}
                                     />
                                 )}
-                                {w.draft && !w.draft.photoOnly && !w.saved && (
+                                {w.draft?.photoOnly && !resolved(w) && (
+                                    <Button size="sm" variant="ghost" onClick={() => discard([r.id])}>Don&apos;t save either</Button>
+                                )}
+                                {w.draft && !w.draft.photoOnly && !resolved(w) && (
                                     <div className="bg-muted/40 space-y-1 rounded-md p-2">
                                         <p className="font-medium">{w.draft.title}</p>
                                         <p className="whitespace-pre-line">{w.draft.shopDescription}</p>
@@ -330,7 +412,10 @@ export default function AiBulkCopyPage() {
                                             </p>
                                         )}
                                         <AiDraftNotes draft={w.draft} />
-                                        <Button size="sm" onClick={() => { logAiPick(r.id, r.name, "only", w.draft!); void save(r); }}>Save</Button>
+                                        <div className="flex gap-2">
+                                            <Button size="sm" onClick={() => { logAiPick(r.id, r.name, "only", w.draft!); void save(r); }}>Save</Button>
+                                            <Button size="sm" variant="ghost" onClick={() => discard([r.id])}>Don&apos;t save</Button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -343,7 +428,7 @@ export default function AiBulkCopyPage() {
                     </p>
                 )}
             </div>
-            {rows.length > shown && (
+            {!batch && rows.length > shown && (
                 <Button variant="outline" onClick={() => setShown((n) => n + SHOW_STEP)}>
                     Show more ({rows.length - shown} left)
                 </Button>
