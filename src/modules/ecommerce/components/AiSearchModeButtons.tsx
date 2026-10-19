@@ -41,7 +41,7 @@ export function PremiumSwitch({ value, onChange, disabled }: { value: boolean; o
     );
 }
 
-/** Off · When it helps · Always. Without Premium it reads Off and is locked. */
+/** Off · When it helps · Always. Off never needs Premium; the two search modes do. */
 export function SearchModeButtons({ value, onChange, disabled, premium }: {
     value: AiSearchMode;
     onChange: (v: AiSearchMode) => void;
@@ -59,7 +59,8 @@ export function SearchModeButtons({ value, onChange, disabled, premium }: {
                         type="button"
                         role="radio"
                         aria-checked={shown === m.value}
-                        disabled={disabled || !premium}
+                        disabled={disabled || (!premium && m.value !== "off")}
+                        title={!premium && m.value !== "off" ? "Needs Premium API" : undefined}
                         onClick={() => onChange(m.value)}
                         className={`rounded px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
                             shown === m.value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
@@ -69,7 +70,7 @@ export function SearchModeButtons({ value, onChange, disabled, premium }: {
                     </button>
                 ))}
             </div>
-            {!premium && <span className="text-muted-foreground text-xs">needs Premium</span>}
+            {!premium && <span className="text-muted-foreground text-xs">search needs Premium</span>}
         </div>
     );
 }
