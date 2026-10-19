@@ -240,8 +240,8 @@ export function aiErrorMessage(e: unknown): string | null {
 }
 
 // Draft and polish try keys in keyOrder(); any failure of a key (refused, out
-// of credit, at its limit, too slow) silently moves on to the next. Two
-// failures in a row lock a key out for the day; a 429 only rests it (keyLockout.ts).
+// of credit, at its limit, too slow) silently moves on to the next and rests
+// that key — 2 min for a 429, 30 min otherwise (keyLockout.ts).
 const KEY_FAULTS = new Set([400, 401, 402, 403, 429, 500, 503]);
 const isTimeout = (e: unknown) => e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
 const isKeyFailure = (e: unknown) => KEY_FAULTS.has(aiStatus(e) ?? 0) || isTimeout(e);
@@ -257,7 +257,7 @@ export class AiRegularKeysOutError extends Error {
 
 export class AiKeysExhaustedError extends Error {
     constructor() {
-        super("Every AI key failed today (blocked, out of credit or at its limit) — try again later or top up a key.");
+        super("Every AI key is resting after a failure (busy, too slow, blocked or out of credit) — try again in a few minutes.");
         this.name = "AiKeysExhaustedError";
     }
 }
@@ -265,7 +265,7 @@ export class AiKeysExhaustedError extends Error {
 const PAID_KEY = AI_WRITE_KEY_CHAIN[AI_WRITE_KEY_CHAIN.length - 1];
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Free keys not resting (429) or locked for the day, least recently used first. */
+/** Free keys not resting after a failure, least recently used first. */
 function freeKeys(): string[] {
     return AI_WRITE_KEY_CHAIN
         .filter((k) => k !== PAID_KEY && process.env[k] && !isLockedOut(k))
@@ -281,8 +281,8 @@ function keyOrder(premium: boolean): string[] {
 }
 
 /** Bulk (owner, 2026-10-19): when every free key is only inside its 10 s gap,
- *  wait for the first one instead of paying. Free keys out for a 429 or the
- *  day are not waited for — then the paid key is fine. */
+ *  wait for the first one instead of paying. Free keys resting after a failure
+ *  are not waited for — then the paid key is fine. */
 function freeKeyWait(): number {
     const free = freeKeys();
     return free.length ? keyLastUsed(free[0]) + AI_FREE_KEY_GAP_MS - Date.now() : 0;

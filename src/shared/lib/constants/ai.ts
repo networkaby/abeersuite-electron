@@ -37,8 +37,8 @@ export const AI_CALL_TIMEOUT_MS = 90_000; // a grounded search took ~60 s on 202
 /** .env keys that write drafts and polish (owner, 2026-10-19). Every key but the
  *  last is a free-tier key, taken in turn (least recently used first) so one key
  *  is rarely hit twice inside a minute; the last is the paid key, used when no
- *  free key is ready. A key refused twice in a row is skipped until midnight; a
- *  429 (per-minute limit) only rests it for AI_RATE_LIMIT_REST_MS. The search
+ *  free key is ready. A failing key rests for AI_KEY_FAILURE_REST_MS (no day
+ *  lockout); a 429 (per-minute limit) only for AI_RATE_LIMIT_REST_MS. The search
  *  step still uses GOOGLE_AI_SEARCH_API_KEY only. Replaced later by the AI setup page. */
 export const AI_WRITE_KEY_CHAIN = [
     "GOOGLE_GENERATIVE_AI_API_KEY",
@@ -57,3 +57,7 @@ export const AI_FREE_KEY_GAP_MS = 10_000;
 
 /** How long a key that answered 429 (per-minute limit) is left out. */
 export const AI_RATE_LIMIT_REST_MS = 2 * 60_000;
+
+/** How long a key is left out after any other failure (refused, 503, too slow) —
+ *  owner, 2026-10-19: 30 min, then tried again; it mostly depends on server load. */
+export const AI_KEY_FAILURE_REST_MS = 30 * 60_000;
