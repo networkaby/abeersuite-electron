@@ -262,7 +262,17 @@ export default function AiBulkCopyPage() {
                     </Button>
                 </div>
             )}
+            {/* One row: Tick all on the left, search + filters on the right. */}
             <div className={`flex flex-wrap items-center gap-2 ${locked ? "pointer-events-none opacity-50" : ""}`}>
+                <label className="mr-auto flex items-center gap-2 text-sm">
+                    <Checkbox
+                        checked={allTicked}
+                        disabled={locked}
+                        onCheckedChange={(v) => setSelected(v ? new Set(open.map((r) => r.id)) : new Set())}
+                    />
+                    Tick all shown ({open.length})
+                </label>
+                <span className="text-muted-foreground text-sm">{rows.length} shown</span>
                 <div className="relative w-full sm:w-72">
                     <Search className="text-muted-foreground absolute left-2.5 top-1/2 size-4 -translate-y-1/2" />
                     <Input
@@ -279,7 +289,6 @@ export default function AiBulkCopyPage() {
                     defaults={pick ? EMPTY_PRODUCT_FILTERS : AI_DEFAULT_FILTERS}
                     onToggle={() => setShowFilters((s) => !s)}
                 />
-                <span className="text-muted-foreground text-sm">{rows.length} shown</span>
             </div>
             {showFilters && !locked && (
                 <ProductFilterPanel
@@ -298,14 +307,6 @@ export default function AiBulkCopyPage() {
                     </Button>
                 </div>
             )}
-
-            {!locked && <label className="flex items-center gap-2 text-sm">
-                <Checkbox
-                    checked={allTicked}
-                    onCheckedChange={(v) => setSelected(v ? new Set(open.map((r) => r.id)) : new Set())}
-                />
-                Tick all shown ({open.length})
-            </label>}
 
             <div className="divide-y divide-border rounded-md border border-border">
                 {visible.map((r) => {
