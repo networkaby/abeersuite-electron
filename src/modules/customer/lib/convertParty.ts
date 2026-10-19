@@ -52,22 +52,20 @@ const ZERO_COUNTS: PartyRefCounts = {
 
 async function countPartyRefs(db: Db, at: PartyAt): Promise<PartyRefCounts> {
     const by = at.kind === "person" ? { personId: at.id } : { companyId: at.id };
-    const [phones, emails, deals, helpTickets, timelineLogs, vouchers, links] = await Promise.all([
-        db.phone.count({ where: by }),
-        db.email.count({ where: by }),
-        db.ticketDeal.count({ where: by }),
-        db.ticketHelp.count({ where: by }),
-        db.ticketLog.count({ where: by }),
-        db.voucherDetail.count({ where: { partyType: PARTY_TYPE[at.kind], partyId: at.id } }),
-        db.personCompany.count({ where: by }),
-    ]);
+    // One after another, not Promise.all: `db` is a transaction in the merge and
+    // convert paths, and pg 9 refuses two queries on one connection at once.
+    const phones = await db.phone.count({ where: by });
+    const emails = await db.email.count({ where: by });
+    const deals = await db.ticketDeal.count({ where: by });
+    const helpTickets = await db.ticketHelp.count({ where: by });
+    const timelineLogs = await db.ticketLog.count({ where: by });
+    const vouchers = await db.voucherDetail.count({ where: { partyType: PARTY_TYPE[at.kind], partyId: at.id } });
+    const links = await db.personCompany.count({ where: by });
     const counts = { ...ZERO_COUNTS, phones, emails, deals, helpTickets, timelineLogs, vouchers, personCompanyLinks: links };
     if (at.kind === "person") {
-        const [shopOrders, portalCredential, socialProfile] = await Promise.all([
-            db.ticketOrder.count({ where: { personId: at.id } }),
-            db.personPortalCredential.count({ where: { personId: at.id } }),
-            db.customerSocialProfile.count({ where: { personId: at.id } }),
-        ]);
+        const shopOrders = await db.ticketOrder.count({ where: { personId: at.id } });
+        const portalCredential = await db.personPortalCredential.count({ where: { personId: at.id } });
+        const socialProfile = await db.customerSocialProfile.count({ where: { personId: at.id } });
         Object.assign(counts, { shopOrders, portalCredential, socialProfile });
     }
     return counts;
@@ -93,10 +91,9 @@ async function movePartyRefs(tx: Prisma.TransactionClient, from: PartyAt, to: Pa
         ? { personId: to.id, companyId: null }
         : { personId: null, companyId: to.id };
 
-    const [deals, helps] = await Promise.all([
-        tx.ticketDeal.findMany({ where: fromBy, select: { ticketId: true } }),
-        tx.ticketHelp.findMany({ where: fromBy, select: { ticketId: true } }),
-    ]);
+    // Sequential — one transaction is one connection (see countPartyRefs).
+    const deals = await tx.ticketDeal.findMany({ where: fromBy, select: { ticketId: true } });
+    const helps = await tx.ticketHelp.findMany({ where: fromBy, select: { ticketId: true } });
     await tx.ticketDeal.updateMany({ where: fromBy, data: toData });
     await tx.ticketHelp.updateMany({ where: fromBy, data: toData });
     await tx.ticketLog.updateMany({ where: fromBy, data: toData });
@@ -547,13 +544,13 @@ export async function mergeParty(
         const partyCounts = await countPartyRefs(tx, loserAt);
 
         // 1. Re-point every Account FK from loser's Account → winner's Account.
-        const [vp, gll, t, d] = await Promise.all([
-            tx.universalVoucher.updateMany({ where: { partyAccountId: loserAccountId }, data: { partyAccountId: winnerAccountId } }),
-            // Covers role=TENDER/CHARGE + body legs pointing at the loser ledger.
-            tx.voucherGlLine.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
-            tx.ticket.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
-            tx.device.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } }),
-        ]);
+        //    One after another: a transaction is one connection, and pg 9 refuses
+        //    two queries on it at once (Promise.all here warned in pg 8).
+        const vp = await tx.universalVoucher.updateMany({ where: { partyAccountId: loserAccountId }, data: { partyAccountId: winnerAccountId } });
+        // Covers role=TENDER/CHARGE + body legs pointing at the loser ledger.
+        const gll = await tx.voucherGlLine.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } });
+        const t = await tx.ticket.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } });
+        const d = await tx.device.updateMany({ where: { accountId: loserAccountId }, data: { accountId: winnerAccountId } });
         // The winner takes the loser's entries and its opening: every day it has
         // changes, so its reconciliation starts over (see reconciliation.ts).
         await resetReconciliation(tx, [winnerAccountId]);
@@ -587,10 +584,8 @@ export async function mergeParty(
             openingBalance: true,
             openingBalanceType: true,
         } as const;
-        const [winnerAcct, loserAcct] = await Promise.all([
-            tx.account.findUniqueOrThrow({ where: { id: winnerAccountId }, select: accountSelect }),
-            tx.account.findUniqueOrThrow({ where: { id: loserAccountId }, select: accountSelect }),
-        ]);
+        const winnerAcct = await tx.account.findUniqueOrThrow({ where: { id: winnerAccountId }, select: accountSelect });
+        const loserAcct = await tx.account.findUniqueOrThrow({ where: { id: loserAccountId }, select: accountSelect });
 
         // Cached balance — straight sum (both are already signed in the same direction).
         const summedBalance = Number(winnerAcct.balance) + Number(loserAcct.balance);
@@ -631,10 +626,8 @@ export async function mergeParty(
         const partyKey = kind === "person" ? "personId" : "companyId";
         const winnerPartyWhere = { [partyKey]: winnerId } as const;
 
-        const [winnerHasPhones, winnerHasEmails] = await Promise.all([
-            tx.phone.count({ where: winnerPartyWhere }),
-            tx.email.count({ where: winnerPartyWhere }),
-        ]);
+        const winnerHasPhones = await tx.phone.count({ where: winnerPartyWhere });
+        const winnerHasEmails = await tx.email.count({ where: winnerPartyWhere });
         const loserPhoneOwnerWhere = { [partyKey]: loserId } as const;
 
         // When the winner already owns phones/emails, strip the loser's

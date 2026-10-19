@@ -224,24 +224,24 @@ export async function loadOpeningCover(accountId: number, db: Prisma.Transaction
     if (!fyStart) return null;
     const fy = startOfDayUtc(fyStart);
 
-    const [before, firstIn, lastBefore] = await Promise.all([
-        // Edit reversals net to nothing on the account, so a raw sum is right here.
-        db.voucherGlLine.groupBy({
-            by: ["type"],
-            where: { accountId, universalVoucher: { ...ledgerStatusFilterUv(), date: { lt: fy } } },
-            _sum: { amount: true },
-        }),
-        db.bankStatementLine.findFirst({
-            where: { accountId, date: { gte: fy } },
-            orderBy: [{ date: "asc" }, { seq: "asc" }],
-            select: { balance: true, deposit: true, withdrawal: true },
-        }),
-        db.bankStatementLine.findFirst({
-            where: { accountId, date: { lt: fy }, balance: { not: null } },
-            orderBy: [{ date: "desc" }, { seq: "desc" }],
-            select: { balance: true },
-        }),
-    ]);
+    // One after another, not Promise.all: `db` may be a transaction, and a
+    // transaction is one connection — pg 9 refuses two queries on it at once.
+    // Edit reversals net to nothing on the account, so a raw sum is right here.
+    const before = await db.voucherGlLine.groupBy({
+        by: ["type"],
+        where: { accountId, universalVoucher: { ...ledgerStatusFilterUv(), date: { lt: fy } } },
+        _sum: { amount: true },
+    });
+    const firstIn = await db.bankStatementLine.findFirst({
+        where: { accountId, date: { gte: fy } },
+        orderBy: [{ date: "asc" }, { seq: "asc" }],
+        select: { balance: true, deposit: true, withdrawal: true },
+    });
+    const lastBefore = await db.bankStatementLine.findFirst({
+        where: { accountId, date: { lt: fy }, balance: { not: null } },
+        orderBy: [{ date: "desc" }, { seq: "desc" }],
+        select: { balance: true },
+    });
     let booksOpening = 0;
     if (acc?.openingBalance != null && acc.openingBalanceType) {
         const ob = toNumber(acc.openingBalance);
@@ -695,20 +695,19 @@ export async function runAutoMatch(accountId: number, userId: number, fromIso: s
         const matchedSt = new Set(live.map((m) => m.statementLineId));
         const matchedGl = new Set(live.map((m) => m.glLineId));
 
-        const [stRows, glRows, cover] = await Promise.all([
-            tx.bankStatementLine.findMany({
-                where: { accountId, date: { gte: from, lte: to } },
-                select: { id: true, date: true, deposit: true, withdrawal: true, narration: true, reference: true },
-            }),
-            tx.voucherGlLine.findMany({
-                where: {
-                    accountId,
-                    universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: from, lte: to } },
-                },
-                select: glLineSelect(),
-            }),
-            loadOpeningCover(accountId, tx),
-        ]);
+        // Sequential: one transaction is one connection (pg 9 refuses parallel queries on it).
+        const stRows = await tx.bankStatementLine.findMany({
+            where: { accountId, date: { gte: from, lte: to } },
+            select: { id: true, date: true, deposit: true, withdrawal: true, narration: true, reference: true },
+        });
+        const glRows = await tx.voucherGlLine.findMany({
+            where: {
+                accountId,
+                universalVoucher: { ...ledgerStatusFilterUv(), date: { gte: from, lte: to } },
+            },
+            select: glLineSelect(),
+        });
+        const cover = await loadOpeningCover(accountId, tx);
         const glVisible = collapseEditReversals(glRows);
 
         const statement: StCandidate[] = stRows
@@ -751,21 +750,20 @@ export async function createMatch(accountId: number, userId: number, statementLi
     if (statementLineIds.length === 0 || glLineIds.length === 0) throw new BankReconError("Pick at least one line on each side.");
 
     return prisma.$transaction(async (tx) => {
-        const [st, gl, taken, cover] = await Promise.all([
-            tx.bankStatementLine.findMany({
-                where: { id: { in: statementLineIds }, accountId },
-                select: { id: true, date: true, deposit: true, withdrawal: true },
-            }),
-            tx.voucherGlLine.findMany({
-                where: { id: { in: glLineIds }, accountId, universalVoucher: { ...ledgerStatusFilterUv() } },
-                select: { id: true, type: true, amount: true, universalVoucher: { select: { id: true, date: true, voucherNo: true } } },
-            }),
-            tx.bankStatementMatch.findMany({
-                where: { OR: [{ statementLineId: { in: statementLineIds } }, { glLineId: { in: glLineIds } }] },
-                select: { groupId: true, statementLineId: true, glLineId: true },
-            }),
-            loadOpeningCover(accountId, tx),
-        ]);
+        // Sequential: one transaction is one connection (pg 9 refuses parallel queries on it).
+        const st = await tx.bankStatementLine.findMany({
+            where: { id: { in: statementLineIds }, accountId },
+            select: { id: true, date: true, deposit: true, withdrawal: true },
+        });
+        const gl = await tx.voucherGlLine.findMany({
+            where: { id: { in: glLineIds }, accountId, universalVoucher: { ...ledgerStatusFilterUv() } },
+            select: { id: true, type: true, amount: true, universalVoucher: { select: { id: true, date: true, voucherNo: true } } },
+        });
+        const taken = await tx.bankStatementMatch.findMany({
+            where: { OR: [{ statementLineId: { in: statementLineIds } }, { glLineId: { in: glLineIds } }] },
+            select: { groupId: true, statementLineId: true, glLineId: true },
+        });
+        const cover = await loadOpeningCover(accountId, tx);
         if (st.length !== statementLineIds.length) throw new BankReconError("A statement line was not found on this ledger.");
         if (gl.length !== glLineIds.length) throw new BankReconError("A book entry was not found on this ledger, or its voucher is not posted.");
         for (const s of st) if (isLocked(toDateOnlyUtc(s.date), account.lock)) throw new BankReconError("A statement line is before the reconciled lock.");

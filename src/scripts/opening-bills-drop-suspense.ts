@@ -82,17 +82,16 @@ async function main(): Promise<void> {
         // Rebuild the movement cache for the ledgers that lost lines, straight
         // from what is left (same rule as `recomputeAccountBalances`, which this
         // script cannot import — its module reaches `server-only`).
-        const [sums, accounts] = await Promise.all([
-            tx.voucherGlLine.groupBy({
-                by:    ["accountId", "type"],
-                where: { accountId: { in: accountIds }, universalVoucher: { status: "POSTED" } },
-                _sum:  { amount: true },
-            }),
-            tx.account.findMany({
-                where:  { id: { in: accountIds } },
-                select: { id: true, normalBalance: true, group: { select: { type: true } } },
-            }),
-        ]);
+        // One after another — a transaction is one connection (pg 9 refuses parallel queries).
+        const sums = await tx.voucherGlLine.groupBy({
+            by:    ["accountId", "type"],
+            where: { accountId: { in: accountIds }, universalVoucher: { status: "POSTED" } },
+            _sum:  { amount: true },
+        });
+        const accounts = await tx.account.findMany({
+            where:  { id: { in: accountIds } },
+            select: { id: true, normalBalance: true, group: { select: { type: true } } },
+        });
         for (const a of accounts) {
             const nb = a.normalBalance ?? (a.group?.type === "ASSET" || a.group?.type === "EXPENSE" ? "DEBIT" : "CREDIT");
             const balance = sums
