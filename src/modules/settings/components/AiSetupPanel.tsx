@@ -53,6 +53,12 @@ const EMPTY_FORM: Omit<AiKeyRow, "id"> = {
     canSearch: false, canPhoto: false, paid: false, active: true, validTill: "",
 };
 
+// The key box is type="password", so Chrome treats the form as a sign-in and
+// fills the saved login into it (email into Model, password into the key).
+// "new-password" on the key box + off elsewhere stops that; the data-* tags
+// ask password managers to stay out too.
+const NO_AUTOFILL = { autoComplete: "off", "data-1p-ignore": true, "data-lpignore": "true" } as const;
+
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const isExpired = (k: AiKeyRow) => !!k.validTill && k.validTill < todayIso();
 const providerLabel = (p: AiProvider) => AI_PROVIDERS.find((x) => x.value === p)?.label ?? p;
@@ -275,7 +281,7 @@ function KeyDialog({ initial, nextId, onClose, onSave }: {
                 <div className="grid gap-3">
                     <div className="grid gap-1">
                         <Label>Name</Label>
-                        <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Gemini free 1" />
+                        <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Gemini free 1" {...NO_AUTOFILL} />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div className="grid gap-1">
@@ -287,7 +293,7 @@ function KeyDialog({ initial, nextId, onClose, onSave }: {
                         </div>
                         <div className="grid gap-1">
                             <Label>Model</Label>
-                            <Input value={form.model} onChange={(e) => set("model", e.target.value)} placeholder="gemini-3.8-flash" className="font-mono" />
+                            <Input value={form.model} onChange={(e) => set("model", e.target.value)} placeholder="gemini-3.8-flash" className="font-mono" {...NO_AUTOFILL} />
                         </div>
                     </div>
                     <div className="grid gap-1">
@@ -302,7 +308,8 @@ function KeyDialog({ initial, nextId, onClose, onSave }: {
                             <Label>API key</Label>
                             <Input
                                 type="password"
-                                autoComplete="off"
+                                {...NO_AUTOFILL}
+                                autoComplete="new-password"
                                 value={secret}
                                 onChange={(e) => setSecret(e.target.value)}
                                 placeholder={initial?.source === "db" ? `•••• ${initial.keyHint} — leave empty to keep` : "Paste the key"}
@@ -316,6 +323,7 @@ function KeyDialog({ initial, nextId, onClose, onSave }: {
                                 value={form.keyHint}
                                 onChange={(e) => set("keyHint", e.target.value)}
                                 placeholder="GOOGLE_GENERATIVE_AI_API_KEY"
+                                {...NO_AUTOFILL}
                                 className="font-mono"
                             />
                             <p className="text-xs text-muted-foreground">
