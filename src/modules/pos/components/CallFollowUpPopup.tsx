@@ -120,6 +120,13 @@ import { CALL_POPUP_POLL_MS, CALL_POPUP_MAX_AGE_MS, CALL_POPUP_REMIND_MS, CALL_P
 import { formatCallerNumber, formatDateTime, isCallableNumber } from "@/shared/lib/format";
 import { extractApiError } from "@/shared/lib/api";
 
+/** Tables GET /api/calls reads — the replica wake-up filter below. User (staff
+ *  names only) is left out: a rename shows at the next CALL_POPUP_POLL_MS tick. */
+const CALL_POPUP_MODELS = [
+    "Call", "Phone", "Person", "Company", "PosCounter", "Account", "UniversalVoucher",
+    "Ticket", "TicketLog", "Message", "MessageConversation", "MessageClaim",
+] as const;
+
 const STORAGE_KEY = "call-followup-popup:v1";
 
 // Floating-button screen position — dragged once, remembered everywhere
@@ -385,7 +392,10 @@ export default function CallFollowUpPopup() {
     const pollEnabled = extension !== "unknown";
     usePolling(() => void refresh(), CALL_POPUP_POLL_MS, pollEnabled);
     // A WhatsApp reply to the caller answers their calls too (lastContactByPhone).
-    useRealtimeTopics(["tickets", "messages"], () => void refresh(), pollEnabled);
+    // On a replica PC the local half wakes on ANY table's sync cycle unless told
+    // which ones matter — that re-read /api/calls about once a second (2026-10-19).
+    // These are the tables GET /api/calls reads (route, followUp.ts, customerMessages.ts).
+    useRealtimeTopics(["tickets", "messages"], () => void refresh(), pollEnabled, CALL_POPUP_MODELS);
 
     // Fresh call, fresh form state.
     useEffect(() => {

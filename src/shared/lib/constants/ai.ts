@@ -32,7 +32,7 @@ export const AI_DEFAULT_SEARCH_MODE: AiSearchMode = "auto";
 export const AI_COPY_TEST_ENTITY = "AI_COPY_TEST";
 
 /** Longest one Gemini call may take before it is cut off (each step; maxRetries=1 can double it). */
-export const AI_CALL_TIMEOUT_MS = 90_000; // a grounded search took ~60 s on 2026-10-19
+export const AI_CALL_TIMEOUT_MS = 150_000; // drafts took 40–108 s under load (owner, 2026-10-19)
 
 /** .env keys that write drafts and polish (owner, 2026-10-19). Every key but the
  *  last is a free-tier key, taken in turn (least recently used first) so one key
