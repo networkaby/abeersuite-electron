@@ -82,10 +82,9 @@ export async function correctClosedShiftForEdit(tx: Prisma.TransactionClient, ar
         if (oldJournal) await discardParkedDraftInTx(tx, oldJournal.id);
         varianceJournalId = null;
     } else {
-        const [shortAcc, overAcc] = await Promise.all([
-            tx.account.findFirst({ where: { name: "Cash Short" }, select: { id: true } }),
-            tx.account.findFirst({ where: { name: "Cash Over" },  select: { id: true } }),
-        ]);
+        // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+        const shortAcc = await tx.account.findFirst({ where: { name: "Cash Short" }, select: { id: true } });
+        const overAcc = await tx.account.findFirst({ where: { name: "Cash Over" },  select: { id: true } });
         if (!shortAcc || !overAcc) throw new Error("Cash Short / Cash Over ledgers missing. Re-run bootstrap seed.");
         // Same lines and wording as the shift close posts.
         const rupees = Math.abs(Number(variance)) / 100;

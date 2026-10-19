@@ -48,20 +48,19 @@ export async function tillBalancesPaise(tx: Tx, accountIds: number[]): Promise<M
     const out = new Map<number, bigint>();
     if (ids.length === 0) return out;
 
-    const [accounts, sums] = await Promise.all([
-        tx.account.findMany({
-            where:  { id: { in: ids } },
-            select: {
-                id: true, normalBalance: true, group: { select: { type: true } },
-                openingBalance: true, openingBalanceType: true, openingBalanceDate: true,
-            },
-        }),
-        tx.voucherGlLine.groupBy({
-            by:    ["accountId", "type"],
-            where: { accountId: { in: ids }, universalVoucher: { ...ledgerStatusFilterUv() } },
-            _sum:  { amount: true },
-        }),
-    ]);
+    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+    const accounts = await tx.account.findMany({
+        where:  { id: { in: ids } },
+        select: {
+            id: true, normalBalance: true, group: { select: { type: true } },
+            openingBalance: true, openingBalanceType: true, openingBalanceDate: true,
+        },
+    });
+    const sums = await tx.voucherGlLine.groupBy({
+        by:    ["accountId", "type"],
+        where: { accountId: { in: ids }, universalVoucher: { ...ledgerStatusFilterUv() } },
+        _sum:  { amount: true },
+    });
 
     const now = new Date();
     const rupees = new Map<number, number>();

@@ -80,17 +80,16 @@ export async function recomputeAccountBalances(
     const ids = [...new Set(accountIds)];
     if (ids.length === 0) return;
 
-    const [sums, accounts] = await Promise.all([
-        tx.voucherGlLine.groupBy({
-            by:    ["accountId", "type"],
-            where: { accountId: { in: ids }, universalVoucher: { ...ledgerStatusFilterUv() } },
-            _sum:  { amount: true },
-        }),
-        tx.account.findMany({
-            where:  { id: { in: ids } },
-            select: { id: true, normalBalance: true, group: { select: { type: true } } },
-        }),
-    ]);
+    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+    const sums = await tx.voucherGlLine.groupBy({
+        by:    ["accountId", "type"],
+        where: { accountId: { in: ids }, universalVoucher: { ...ledgerStatusFilterUv() } },
+        _sum:  { amount: true },
+    });
+    const accounts = await tx.account.findMany({
+        where:  { id: { in: ids } },
+        select: { id: true, normalBalance: true, group: { select: { type: true } } },
+    });
 
     const nb = new Map<number, "DEBIT" | "CREDIT">();
     for (const a of accounts) {
@@ -214,17 +213,16 @@ export async function aggregateClosingAsOf(
     db: LedgerReadClient = prisma,
 ): Promise<Map<number, number>> {
     if (accountIds && accountIds.length === 0) return new Map();
-    const [sums, masterOpening] = await Promise.all([
-        db.voucherGlLine.groupBy({
-            by: ["accountId", "type"],
-            _sum: { amount: true },
-            where: {
-                ...(accountIds ? { accountId: { in: accountIds } } : {}),
-                universalVoucher: { ...ledgerStatusFilterUv(), ...(asOf ? onOrBeforeOrOpening(asOf) : {}) },
-            },
-        }),
-        loadMasterOpeningBalances(nbMap, accountIds, db),
-    ]);
+    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+    const sums = await db.voucherGlLine.groupBy({
+        by: ["accountId", "type"],
+        _sum: { amount: true },
+        where: {
+            ...(accountIds ? { accountId: { in: accountIds } } : {}),
+            universalVoucher: { ...ledgerStatusFilterUv(), ...(asOf ? onOrBeforeOrOpening(asOf) : {}) },
+        },
+    });
+    const masterOpening = await loadMasterOpeningBalances(nbMap, accountIds, db);
     const buckets = new Map<number, { d: number; c: number }>();
     for (const r of sums) {
         const v = buckets.get(r.accountId) ?? { d: 0, c: 0 };

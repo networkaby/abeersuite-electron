@@ -102,18 +102,17 @@ export async function loadPosEditContext(db: Tx, voucher: {
     const settlement = readSettlement(voucher.settlementJson);
     const used = usageOf(settlement);
     const spineId = voucher.universalVoucherId;
-    const [config, ledger, draws] = await Promise.all([
-        db.loyaltyConfig.findUnique({ where: { id: 1 } }),
-        spineId == null ? [] : db.loyaltyLedger.findMany({
-            where: { universalVoucherId: spineId, reason: { in: ["EARN_SALE", "REDEEM_SALE"] } },
-            orderBy: { id: "asc" },
-            select: { reason: true, delta: true, balanceAfter: true },
-        }),
-        spineId == null || used.giftUsed <= 0 ? [] : db.giftCardTxn.findMany({
-            where: { universalVoucherId: spineId, type: "REDEEM" },
-            select: { giftCardId: true, amount: true },
-        }),
-    ]);
+    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+    const config = await db.loyaltyConfig.findUnique({ where: { id: 1 } });
+    const ledger = await (spineId == null ? [] : db.loyaltyLedger.findMany({
+        where: { universalVoucherId: spineId, reason: { in: ["EARN_SALE", "REDEEM_SALE"] } },
+        orderBy: { id: "asc" },
+        select: { reason: true, delta: true, balanceAfter: true },
+    }));
+    const draws = await (spineId == null || used.giftUsed <= 0 ? [] : db.giftCardTxn.findMany({
+        where: { universalVoucherId: spineId, type: "REDEEM" },
+        select: { giftCardId: true, amount: true },
+    }));
     const configRates = config ? ratesFromConfig(config) : null;
     const promo = trustedSnapshot(settlement.promoSnapshot) ?? derivePromoSnapshot(settlement, voucher.discountPct, ledger, configRates);
 
@@ -174,12 +173,11 @@ export function planRedemption(ctx: PosEditContext, input: PosEditInput): { row:
 /** Goods value that earns points, after the bill's discounts — rule multipliers applied. */
 async function earnBases(db: Tx, oldLines: EarnInputLine[], newLines: EarnInputLine[], oldDiscount: number, newDiscount: number) {
     const ids = [...new Set([...oldLines, ...newLines].map((l) => l.productId))];
-    const [products, groups, categories, rules] = await Promise.all([
-        db.invProduct.findMany({ where: { id: { in: ids } }, select: { id: true, groupId: true, categoryId: true } }),
-        db.invProductGroup.findMany({ select: { id: true, parentId: true } }),
-        db.invCategory.findMany({ select: { id: true, parentId: true } }),
-        db.loyaltyEarnRule.findMany({ where: { enabled: true }, select: { scope: true, categoryId: true, groupId: true, productId: true, multiplier: true, redeemCapPct: true, enabled: true } }),
-    ]);
+    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+    const products = await db.invProduct.findMany({ where: { id: { in: ids } }, select: { id: true, groupId: true, categoryId: true } });
+    const groups = await db.invProductGroup.findMany({ select: { id: true, parentId: true } });
+    const categories = await db.invCategory.findMany({ select: { id: true, parentId: true } });
+    const rules = await db.loyaltyEarnRule.findMany({ where: { enabled: true }, select: { scope: true, categoryId: true, groupId: true, productId: true, multiplier: true, redeemCapPct: true, enabled: true } });
     const byId = new Map(products.map((p) => [p.id, p]));
     const idx = buildRulesIndex(rules.map((r) => ({ ...r, multiplier: Number(r.multiplier), redeemCapPct: r.redeemCapPct == null ? null : Number(r.redeemCapPct) })));
     const maps = {

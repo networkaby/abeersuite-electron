@@ -74,10 +74,9 @@ export async function commissionForPeriod(
     toIso: string,
 ): Promise<Map<number, CommissionResult>> {
     if (!userIds.length) return new Map();
-    const [heads, users] = await Promise.all([
-        loadHeads(db),
-        db.user.findMany({ where: { id: { in: [...userIds] } }, select: { id: true, ...COMMISSION_USER_SELECT } }),
-    ]);
+    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+    const heads = await loadHeads(db);
+    const users = await db.user.findMany({ where: { id: { in: [...userIds] } }, select: { id: true, ...COMMISSION_USER_SELECT } });
     if (!heads.some((h) => h.active)) return new Map();
     const people = users.map((u) => ({
         userId: u.id,

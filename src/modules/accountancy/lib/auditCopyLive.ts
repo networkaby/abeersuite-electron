@@ -30,11 +30,10 @@ export async function liveAuditCopyIds(db: Db, rows: AuditCopyRef[]): Promise<Se
     const spineIds  = rows.filter((r) => r.entityType !== "INV_VOUCHER").map((r) => r.originalId);
     const refs      = rows.filter((r) => r.originalRef && r.subtype).map((r) => r.originalRef);
 
-    const [details, spines, byNumber] = await Promise.all([
-        detailIds.length ? db.voucherDetail.findMany({ where: { id: { in: detailIds } }, select: { id: true } }) : [],
-        spineIds.length ? db.universalVoucher.findMany({ where: { id: { in: spineIds } }, select: { id: true } }) : [],
-        refs.length ? db.universalVoucher.findMany({ where: { voucherNo: { in: refs } }, select: { voucherNo: true, type: true } }) : [],
-    ]);
+    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+    const details = await (detailIds.length ? db.voucherDetail.findMany({ where: { id: { in: detailIds } }, select: { id: true } }) : []);
+    const spines = await (spineIds.length ? db.universalVoucher.findMany({ where: { id: { in: spineIds } }, select: { id: true } }) : []);
+    const byNumber = await (refs.length ? db.universalVoucher.findMany({ where: { voucherNo: { in: refs } }, select: { voucherNo: true, type: true } }) : []);
     const liveDetail = new Set(details.map((d) => d.id));
     const liveSpine  = new Set(spines.map((s) => s.id));
     const liveNumber = new Set(byNumber.map((v) => `${v.type}|${v.voucherNo}`));

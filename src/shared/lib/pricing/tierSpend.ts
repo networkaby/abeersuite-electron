@@ -59,36 +59,37 @@ export async function resolveTierForAccount(
         include: { levels: { where: { enabled: true }, orderBy: { minSpend: "desc" } } },
     });
 
-    const [periodAggs, invoiceCount, couponConfig] = await Promise.all([
-        // Spend inside each period's bracket — `fromDay <= age < toDay`, older
-        // edge exclusive / newer edge inclusive so tiled brackets (0-30, 30-90)
-        // hand a sale to exactly one period. fromDay 0 has no upper bound.
-        Promise.all(tierPeriods.map((p) => {
-            const notBefore = new Date();
-            notBefore.setDate(notBefore.getDate() - p.toDay);
-            const notAfter = new Date();
-            notAfter.setDate(notAfter.getDate() - p.fromDay);
-            return db.voucherDetail.aggregate({
-                where: {
-                    universalVoucher: {
-                        partyAccountId: accountId, status: "POSTED",
-                        type: { in: [...TIER_SPEND_VOUCHER_TYPES] },
-                        date: p.fromDay === 0 ? { gt: notBefore } : { gt: notBefore, lte: notAfter },
-                    },
-                },
-                _sum: { totalAmount: true },
-            });
-        })),
-        db.voucherDetail.count({
+    // One after another: `db` may be a transaction (one connection), where pg 9
+    // refuses parallel queries.
+    // Spend inside each period's bracket — `fromDay <= age < toDay`, older
+    // edge exclusive / newer edge inclusive so tiled brackets (0-30, 30-90)
+    // hand a sale to exactly one period. fromDay 0 has no upper bound.
+    const periodAggs: { _sum: { totalAmount: unknown } }[] = [];
+    for (const p of tierPeriods) {
+        const notBefore = new Date();
+        notBefore.setDate(notBefore.getDate() - p.toDay);
+        const notAfter = new Date();
+        notAfter.setDate(notAfter.getDate() - p.fromDay);
+        periodAggs.push(await db.voucherDetail.aggregate({
             where: {
                 universalVoucher: {
                     partyAccountId: accountId, status: "POSTED",
                     type: { in: [...TIER_SPEND_VOUCHER_TYPES] },
+                    date: p.fromDay === 0 ? { gt: notBefore } : { gt: notBefore, lte: notAfter },
                 },
             },
-        }),
-        db.couponConfig.findUnique({ where: { id: 1 }, select: { maxTotalDiscountPct: true } }),
-    ]);
+            _sum: { totalAmount: true },
+        }));
+    }
+    const invoiceCount = await db.voucherDetail.count({
+        where: {
+            universalVoucher: {
+                partyAccountId: accountId, status: "POSTED",
+                type: { in: [...TIER_SPEND_VOUCHER_TYPES] },
+            },
+        },
+    });
+    const couponConfig = await db.couponConfig.findUnique({ where: { id: 1 }, select: { maxTotalDiscountPct: true } });
 
     const tierPeriodInputs: TierPeriodInput[] = tierPeriods.map((p, i) => ({
         id:               p.id,

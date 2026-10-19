@@ -300,20 +300,19 @@ export async function loadLinkableDocs(
         .map(([id]) => id);
     if (ids.length === 0) return [];
 
-    const [spines, details, linked, here] = await Promise.all([
-        db.universalVoucher.findMany({
-            where:  { id: { in: ids } },
-            select: { id: true, type: true, voucherNo: true, date: true },
-        }),
-        db.voucherDetail.findMany({
-            where:  { universalVoucherId: { in: ids } },
-            select: { universalVoucherId: true, totalAmount: true, creditPeriodDays: true },
-        }),
-        sumLinked(db, ids),
-        opts.excludeId === undefined
-            ? Promise.resolve({} as Record<number, number>)
-            : pairAmounts(db, opts.excludeId, ids),
-    ]);
+    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+    const spines = await db.universalVoucher.findMany({
+        where:  { id: { in: ids } },
+        select: { id: true, type: true, voucherNo: true, date: true },
+    });
+    const details = await db.voucherDetail.findMany({
+        where:  { universalVoucherId: { in: ids } },
+        select: { universalVoucherId: true, totalAmount: true, creditPeriodDays: true },
+    });
+    const linked = await sumLinked(db, ids);
+    const here = await (opts.excludeId === undefined
+        ? Promise.resolve({} as Record<number, number>)
+        : pairAmounts(db, opts.excludeId, ids));
 
     const detailBySpine = new Map(details.map((d) => [d.universalVoucherId, d]));
 
@@ -396,26 +395,24 @@ export async function loadDocOpen(
     accountId: number,
     spineId: number,
 ): Promise<LinkableDoc | null> {
-    const [legs, spine] = await Promise.all([
-        loadPartyLegs(db, accountId, [spineId]),
-        db.universalVoucher.findFirst({
-            where:  { id: spineId, ...ledgerStatusFilterUv() },
-            select: { id: true, type: true, voucherNo: true, date: true },
-        }),
-    ]);
+    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+    const legs = await loadPartyLegs(db, accountId, [spineId]);
+    const spine = await db.universalVoucher.findFirst({
+        where:  { id: spineId, ...ledgerStatusFilterUv() },
+        select: { id: true, type: true, voucherNo: true, date: true },
+    });
     if (!spine) return null;
 
     const signed = legs.get(spineId) ?? 0;
     const side = sideOf(signed);
     if (side === 0) return null;
 
-    const [detail, linked] = await Promise.all([
-        db.voucherDetail.findFirst({
-            where:  { universalVoucherId: spineId },
-            select: { totalAmount: true, creditPeriodDays: true },
-        }),
-        sumLinked(db, [spineId]),
-    ]);
+    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+    const detail = await db.voucherDetail.findFirst({
+        where:  { universalVoucherId: spineId },
+        select: { totalAmount: true, creditPeriodDays: true },
+    });
+    const linked = await sumLinked(db, [spineId]);
 
     const open = round2(Math.abs(signed) - (linked[spineId] ?? 0));
     const due = dueDateOf(spine.date, detail?.creditPeriodDays);
@@ -616,13 +613,12 @@ export async function assertLinkPlan(
     }
     const refById = new Map(alive.map((v) => [v.id, v.voucherNo ?? formatUvNo(v.id)]));
 
-    const [legs, linked, pairs] = await Promise.all([
-        loadPartyLegs(tx, args.accountId, allIds),
-        sumLinked(tx, allIds),
-        args.mode === "set"
-            ? pairAmounts(tx, args.voucherId, otherIds)
-            : Promise.resolve({} as Record<number, number>),
-    ]);
+    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+    const legs = await loadPartyLegs(tx, args.accountId, allIds);
+    const linked = await sumLinked(tx, allIds);
+    const pairs = await (args.mode === "set"
+        ? pairAmounts(tx, args.voucherId, otherIds)
+        : Promise.resolve({} as Record<number, number>));
 
     const selfSigned = legs.get(args.voucherId) ?? 0;
     const selfSide = sideOf(selfSigned);
@@ -868,26 +864,25 @@ export async function loadSettlements(
     // The party's own leg on each voucher. Only the vouchers on this page, and
     // only the party ledgers they name — two indexed `in` lists, one query.
     const legs = partyMovement ?? new Map<number, number>();
-    const [, linked] = await Promise.all([
-        partyMovement ? Promise.resolve(null) : db.voucherGlLine.findMany({
+    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+    if (!partyMovement) {
+        const lines = await db.voucherGlLine.findMany({
             where: {
                 universalVoucherId: { in: uvIds },
                 accountId:          { in: [...new Set(partyByUv.values())] },
                 universalVoucher:   ledgerStatusFilterUv(),
             },
             select: { universalVoucherId: true, accountId: true, type: true, amount: true },
-        }).then((lines) => {
-            for (const l of lines) {
-                // A journal can touch two party ledgers; only the voucher's OWN
-                // party leg is its settlement.
-                if (partyByUv.get(l.universalVoucherId) !== l.accountId) continue;
-                const delta = l.type === "DEBIT" ? Number(l.amount) : -Number(l.amount);
-                legs.set(l.universalVoucherId, round2((legs.get(l.universalVoucherId) ?? 0) + delta));
-            }
-            return null;
-        }),
-        sumLinked(db, uvIds),
-    ]);
+        });
+        for (const l of lines) {
+            // A journal can touch two party ledgers; only the voucher's OWN
+            // party leg is its settlement.
+            if (partyByUv.get(l.universalVoucherId) !== l.accountId) continue;
+            const delta = l.type === "DEBIT" ? Number(l.amount) : -Number(l.amount);
+            legs.set(l.universalVoucherId, round2((legs.get(l.universalVoucherId) ?? 0) + delta));
+        }
+    }
+    const linked = await sumLinked(db, uvIds);
 
     const out: Record<number, Settlement> = {};
     for (const uvId of uvIds) {

@@ -43,18 +43,17 @@ export async function leaveBalancesFor(
     tx: Prisma.TransactionClient | typeof prisma = prisma,
 ): Promise<{ year: { from: string; to: string; label: string }; balances: LeaveBalance[] }> {
     const year = leaveYearOf(onIso);
-    const [types, requests] = await Promise.all([
-        tx.leaveType.findMany({ where: { active: true }, orderBy: [{ sortOrder: "asc" }, { code: "asc" }] }),
-        tx.leaveRequest.findMany({
-            where: {
-                userId,
-                status: { in: ["APPROVED", "PENDING"] },
-                fromDate: { lte: new Date(`${year.to}T00:00:00.000Z`) },
-                toDate: { gte: new Date(`${year.from}T00:00:00.000Z`) },
-            },
-            select: { fromDate: true, toDate: true, kind: true, status: true },
-        }),
-    ]);
+    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+    const types = await tx.leaveType.findMany({ where: { active: true }, orderBy: [{ sortOrder: "asc" }, { code: "asc" }] });
+    const requests = await tx.leaveRequest.findMany({
+        where: {
+            userId,
+            status: { in: ["APPROVED", "PENDING"] },
+            fromDate: { lte: new Date(`${year.to}T00:00:00.000Z`) },
+            toDate: { gte: new Date(`${year.from}T00:00:00.000Z`) },
+        },
+        select: { fromDate: true, toDate: true, kind: true, status: true },
+    });
 
     const taken = new Map<string, number>();
     const pending = new Map<string, number>();

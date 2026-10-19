@@ -352,12 +352,11 @@ export async function computeShopCartBenefits(
         // Cart-aware redeem ceiling — Σ (line goods − tier allocation) × the
         // item's redeem-cap % (product → group → category → global), exactly
         // as the POS computes it. Needs the earn-rule index + parent chains.
-        const [tax, groups, categories, rules] = await Promise.all([
-            loadTaxonomy(),
-            db.invProductGroup.findMany({ select: { id: true, parentId: true } }),
-            db.invCategory.findMany({ select: { id: true, parentId: true } }),
-            db.loyaltyEarnRule.findMany({ where: { enabled: true }, select: { scope: true, categoryId: true, groupId: true, productId: true, multiplier: true, redeemCapPct: true, enabled: true } }),
-        ]);
+        // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+        const tax = await loadTaxonomy();
+        const groups = await db.invProductGroup.findMany({ select: { id: true, parentId: true } });
+        const categories = await db.invCategory.findMany({ select: { id: true, parentId: true } });
+        const rules = await db.loyaltyEarnRule.findMany({ where: { enabled: true }, select: { scope: true, categoryId: true, groupId: true, productId: true, multiplier: true, redeemCapPct: true, enabled: true } });
         const earnLinesAll: EarnLine[] = lines.map((l) => ({
             productId: l.productId,
             groupId: tax.get(l.productId)?.groupId ?? null,

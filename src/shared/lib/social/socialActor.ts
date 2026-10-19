@@ -51,20 +51,19 @@ export async function resolveSocialActors(
     const userIds = [...new Set(refs.filter((r) => r.kind === "USER").map((r) => r.id))];
     const personIds = [...new Set(refs.filter((r) => r.kind === "PERSON").map((r) => r.id))];
 
-    const [users, persons] = await Promise.all([
-        userIds.length
-            ? db.user.findMany({
-                where: { id: { in: userIds } },
-                select: { id: true, name: true, avatarUrl: true, role: true, userRole: { select: { label: true, color: true } } },
-            })
-            : Promise.resolve([]),
-        personIds.length
-            ? db.person.findMany({
-                where: { id: { in: personIds } },
-                select: { id: true, name: true, avatarUrl: true, socialProfile: { select: { handle: true } } },
-            })
-            : Promise.resolve([]),
-    ]);
+    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+    const users = await (userIds.length
+        ? db.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, name: true, avatarUrl: true, role: true, userRole: { select: { label: true, color: true } } },
+        })
+        : Promise.resolve([]));
+    const persons = await (personIds.length
+        ? db.person.findMany({
+            where: { id: { in: personIds } },
+            select: { id: true, name: true, avatarUrl: true, socialProfile: { select: { handle: true } } },
+        })
+        : Promise.resolve([]));
 
     const map = new Map<string, ResolvedSocialActor>();
     for (const u of users) {
@@ -101,10 +100,9 @@ export async function getCommunityFriends(
     exclude?: SocialActorRef,
     db: Prisma.TransactionClient = prisma,
 ): Promise<ResolvedSocialActor[]> {
-    const [staff, customers] = await Promise.all([
-        db.user.findMany({ orderBy: { name: "asc" }, take: 200, select: { id: true } }),
-        db.person.findMany({ where: { socialProfile: { isNot: null } }, orderBy: { name: "asc" }, take: 200, select: { id: true } }),
-    ]);
+    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+    const staff = await db.user.findMany({ orderBy: { name: "asc" }, take: 200, select: { id: true } });
+    const customers = await db.person.findMany({ where: { socialProfile: { isNot: null } }, orderBy: { name: "asc" }, take: 200, select: { id: true } });
     const refs: SocialActorRef[] = [
         ...staff.map((u) => ({ kind: "USER" as const, id: u.id })),
         ...customers.map((p) => ({ kind: "PERSON" as const, id: p.id })),
@@ -124,13 +122,12 @@ export async function getFriendsFor(
     if (actor.kind === "USER") return getCommunityFriends(actor, db);
 
     const personId = actor.id;
-    const [staff, connections] = await Promise.all([
-        db.user.findMany({ orderBy: { name: "asc" }, take: 200, select: { id: true } }),
-        db.socialConnection.findMany({
-            where:  { status: "ACCEPTED", OR: [{ requesterId: personId }, { addresseeId: personId }] },
-            select: { requesterId: true, addresseeId: true },
-        }),
-    ]);
+    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+    const staff = await db.user.findMany({ orderBy: { name: "asc" }, take: 200, select: { id: true } });
+    const connections = await db.socialConnection.findMany({
+        where:  { status: "ACCEPTED", OR: [{ requesterId: personId }, { addresseeId: personId }] },
+        select: { requesterId: true, addresseeId: true },
+    });
     const peerIds = connections.map((c) => (c.requesterId === personId ? c.addresseeId : c.requesterId));
     const refs: SocialActorRef[] = [
         ...staff.map((u) => ({ kind: "USER" as const, id: u.id })),

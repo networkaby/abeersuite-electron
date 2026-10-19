@@ -350,11 +350,10 @@ export async function recomputeProductStock(
     const ids = [...new Set(productIds)];
     if (ids.length === 0) return;
 
-    const [byProduct, byBranch, products] = await Promise.all([
-        tx.invStockLedger.groupBy({ by: ["productId"], where: { productId: { in: ids } }, _sum: { inQty: true, outQty: true } }),
-        tx.invStockLedger.groupBy({ by: ["productId", "branchId"], where: { productId: { in: ids } }, _sum: { inQty: true, outQty: true } }),
-        tx.invProduct.findMany({ where: { id: { in: ids } }, select: { id: true, openingStock: true } }),
-    ]);
+    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+    const byProduct = await tx.invStockLedger.groupBy({ by: ["productId"], where: { productId: { in: ids } }, _sum: { inQty: true, outQty: true } });
+    const byBranch = await tx.invStockLedger.groupBy({ by: ["productId", "branchId"], where: { productId: { in: ids } }, _sum: { inQty: true, outQty: true } });
+    const products = await tx.invProduct.findMany({ where: { id: { in: ids } }, select: { id: true, openingStock: true } });
 
     const ledgerByProduct = new Map<number, number>();
     for (const r of byProduct) ledgerByProduct.set(r.productId, toNumber(r._sum.inQty ?? 0) - toNumber(r._sum.outQty ?? 0));

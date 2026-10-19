@@ -117,10 +117,9 @@ export async function recomputeGiftCardBalances(tx: Tx, giftCardIds: number[]): 
     const ids = [...new Set(giftCardIds)];
     if (ids.length === 0) return;
 
-    const [sums, cards] = await Promise.all([
-        tx.giftCardTxn.groupBy({ by: ["giftCardId"], where: { giftCardId: { in: ids } }, _sum: { amount: true } }),
-        tx.giftCard.findMany({ where: { id: { in: ids } }, select: { id: true, balance: true, status: true } }),
-    ]);
+    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
+    const sums = await tx.giftCardTxn.groupBy({ by: ["giftCardId"], where: { giftCardId: { in: ids } }, _sum: { amount: true } });
+    const cards = await tx.giftCard.findMany({ where: { id: { in: ids } }, select: { id: true, balance: true, status: true } });
     const ledger = new Map(sums.map((r) => [r.giftCardId, round2(moneyNumber(r._sum.amount ?? 0))]));
 
     for (const card of cards) {
