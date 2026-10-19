@@ -61,3 +61,49 @@ export const AI_RATE_LIMIT_REST_MS = 2 * 60_000;
 /** How long a key is left out after any other failure (refused, 503, too slow) —
  *  owner, 2026-10-19: 30 min, then tried again; it mostly depends on server load. */
 export const AI_KEY_FAILURE_REST_MS = 30 * 60_000;
+
+// ── AI Setup page (Settings → AI Setup). UI preview only for now (2026-10-19):
+//    nothing is saved yet; the tables, key lookup and Test call come next. ──
+
+/** Providers a key can belong to. */
+export const AI_PROVIDERS = [
+    { value: "gemini", label: "Google Gemini" },
+    { value: "openai", label: "OpenAI" },
+    { value: "claude", label: "Anthropic Claude" },
+] as const;
+export type AiProvider = (typeof AI_PROVIDERS)[number]["value"];
+
+/** Where the actual key lives. Every other setting is the same for all three
+ *  (owner, 2026-10-19): db = pasted on the page, saved locked, every counter
+ *  and the website; env = .env name, counters on a release that carries it and
+ *  Vercel; ini = counter .ini name, that one counter only. */
+export const AI_KEY_SOURCES = [
+    { value: "db", label: "Saved here (all counters + website)" },
+    { value: "env", label: ".env variable (release / Vercel)" },
+    { value: "ini", label: "Counter .ini (this counter only)" },
+] as const;
+export type AiKeySource = (typeof AI_KEY_SOURCES)[number]["value"];
+
+/** Steps an AI use can have. */
+export const AI_STEPS = [
+    { value: "draft", label: "Draft" },
+    { value: "search", label: "Search" },
+    { value: "polish", label: "Polish" },
+] as const;
+export type AiStep = (typeof AI_STEPS)[number]["value"];
+
+/** Every place the app uses AI — listed in code; the page only picks keys.
+ *  `needs` says which tick a key must carry to be offered for that step. */
+export const AI_USES: readonly {
+    key: string;
+    label: string;
+    description: string;
+    steps: readonly { step: AiStep; needs?: "search" | "photo" }[];
+}[] = [
+    {
+        key: "product_copy",
+        label: "Product description",
+        description: "E-Commerce → Products: writes the description and highlights from the name and photo.",
+        steps: [{ step: "draft", needs: "photo" }, { step: "search", needs: "search" }, { step: "polish" }],
+    },
+];

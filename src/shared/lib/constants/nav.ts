@@ -12,6 +12,7 @@ import type { LucideIcon } from "lucide-react";
 import {
     Activity,
     ArrowDownUp,
+    Bot,
     Globe,
     WalletCards,
     AlertTriangle,
@@ -778,6 +779,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     { label: "Print Templates", href: "/office/settings/voucher-templates", icon: Printer, permission: "settings:manage", sidebarKey: "voucher-templates" },
     { label: "WhatsApp Templates", href: "/office/settings/whatsapp-templates", icon: MessageSquareText, permission: "settings:manage", sidebarKey: "whatsapp-templates" },
     { label: "Due Reminders", href: "/office/settings/due-reminders", icon: BellRing, permission: "settings:manage", sidebarKey: "due-reminders" },
+    { label: "AI Setup", href: "/office/settings/ai-setup", icon: Bot, permission: "settings:ai:manage", sidebarKey: "ai-setup" },
     // { label: "Print Preview", href: "/office/settings/voucher-templates/preview", icon: FileText, permission: "settings:manage", sidebarKey: "voucher-preview" },
     { label: "Backup & Restore", href: "/office/settings/backup-restore", icon: Database, permission: "settings:manage" },
     { label: "Downloads", href: "/office/settings/downloads", icon: Download, permission: "settings:manage" },

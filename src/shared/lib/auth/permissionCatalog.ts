@@ -54,6 +54,7 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
 
     // admin
     { id: "settings:manage", label: "Manage org settings", module: "admin", description: "Organisation-wide settings — org defaults, payment methods, printer/QR/voucher templates, backups, downloads, imports." },
+    { id: "settings:ai:manage", label: "Manage AI setup", module: "admin", description: "Settings → AI Setup — add, edit and test AI keys (Gemini / OpenAI / Claude) and choose which keys each AI use tries, in order. Separate from settings:manage because the page handles secret keys." },
     { id: "branches:create", label: "Create branches", module: "admin", description: "Create branch records." },
     { id: "branches:edit", label: "Edit branches", module: "admin", description: "Edit branch records." },
     { id: "branches:delete", label: "Delete branches", module: "admin", description: "Delete branch records." },
