@@ -33,7 +33,7 @@ import {
 import { ProductFilterButton, ProductFilterPanel } from "@/modules/ecommerce/components/ProductFilterPanel";
 import { fetchAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
 import { AiDraftNotes, mergeAiSpecs } from "@/modules/ecommerce/components/AiCopyPanel";
-import { SearchModeButtons } from "@/modules/ecommerce/components/AiSearchModeButtons";
+import { PremiumSwitch, SearchModeButtons, usePremiumAi } from "@/modules/ecommerce/components/AiSearchModeButtons";
 
 // Bulk AI copy for products with no shop description (the one-time backlog,
 // then each month's new items). Same filters as Products so staff pick what
@@ -75,6 +75,7 @@ export default function AiBulkCopyPage() {
     const [showFilters, setShowFilters] = useState(false);
     const [shown, setShown] = useState(SHOW_STEP);
     const [search, setSearch] = useState<AiSearchMode>(AI_DEFAULT_SEARCH_MODE);
+    const [premium, setPremium] = usePremiumAi();
     const [running, setRunning] = useState(false);
     const [progress, setProgress] = useState({ done: 0, of: 0 });
     // The set sent by the last Generate: only these show (in tick order, no
@@ -119,7 +120,7 @@ export default function AiBulkCopyPage() {
     const writeOne = async (r: ShopProductAdmin): Promise<string | null> => {
         patchWork(r.id, { writing: true, error: undefined });
         try {
-            const draft = await fetchAiCopy({ productId: r.id, search, bulk: true });
+            const draft = await fetchAiCopy({ productId: r.id, search: premium ? search : "off", bulk: true, premium });
             patchWork(r.id, { draft, writing: false });
             return null;
         } catch (e) {
@@ -235,7 +236,8 @@ export default function AiBulkCopyPage() {
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                    <SearchModeButtons value={search} onChange={setSearch} disabled={locked} />
+                    <PremiumSwitch value={premium} onChange={setPremium} disabled={locked} />
+                    <SearchModeButtons value={search} onChange={setSearch} disabled={locked} premium={premium} />
                     <Button onClick={() => void generate()} disabled={locked || selected.size === 0}>
                         <Sparkles className="size-4" />
                         {running ? `Writing ${progress.done}/${progress.of}…` : `Generate ${selected.size || ""}`.trim()}

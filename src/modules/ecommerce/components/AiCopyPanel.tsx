@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { extractApiError } from "@/shared/lib/api";
 import { AI_DEFAULT_SEARCH_MODE, type AiSearchMode } from "@/shared/lib/constants/ai";
 import { fetchAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
-import { SearchModeButtons } from "@/modules/ecommerce/components/AiSearchModeButtons";
+import { PremiumSwitch, SearchModeButtons, usePremiumAi } from "@/modules/ecommerce/components/AiSearchModeButtons";
 
 type SpecRow = { k: string; v: string };
 
@@ -77,6 +77,7 @@ export default function AiCopyPanel({
 }) {
     // The first call decides whether a second, searched call would add anything (owner, 2026-10-19).
     const [search, setSearch] = useState<AiSearchMode>(AI_DEFAULT_SEARCH_MODE);
+    const [premium, setPremium] = usePremiumAi();
     const [busy, setBusy] = useState(false);
     const [draft, setDraft] = useState<ProductCopy | null>(null);
 
@@ -85,7 +86,7 @@ export default function AiCopyPanel({
         if (!name.trim()) { toast.error("Name is required"); return; }
         setBusy(true);
         try {
-            const copy = await fetchAiCopy({ productId, name: name.trim(), imageUrls, search }, { fresh });
+            const copy = await fetchAiCopy({ productId, name: name.trim(), imageUrls, search: premium ? search : "off", premium }, { fresh });
             setDraft(copy);
             const filled: string[] = [];
             if (!description.trim()) { onDescription(copy.shopDescription); filled.push("description"); }
@@ -113,7 +114,8 @@ export default function AiCopyPanel({
                     <Sparkles className="size-4" />
                     {busy ? "Writing…" : draft ? "Generate again" : "Generate with AI"}
                 </Button>
-                <SearchModeButtons value={search} onChange={setSearch} disabled={busy} />
+                <PremiumSwitch value={premium} onChange={setPremium} disabled={busy} />
+                <SearchModeButtons value={search} onChange={setSearch} disabled={busy} premium={premium} />
             </div>
             {draft && (
                 <div className="space-y-2 text-sm">

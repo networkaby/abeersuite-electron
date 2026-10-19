@@ -7,13 +7,13 @@ import type { AiSearchMode } from "@/shared/lib/constants/ai";
 /** fromCache = this machine's saved answer, no new AI call. */
 export type ProductCopy = ServerCopy & { fromCache?: boolean };
 
-export type AiCopyRequest = { productId: number; name?: string; imageUrls?: string[]; search: AiSearchMode; bulk?: boolean };
+export type AiCopyRequest = { productId: number; name?: string; imageUrls?: string[]; search: AiSearchMode; bulk?: boolean; premium?: boolean };
 
 // Every AI call costs money, so a draft is kept on this machine for the session:
 // pressing Generate again for the same name + photo + search mode is free.
 // Not in the DB on purpose — a draft is only kept once staff save it.
 function cacheKey(r: AiCopyRequest): string {
-    return `aiCopy6:${r.productId}:${r.search}:${r.name ?? ""}:${(r.imageUrls ?? []).join("|")}`;
+    return `aiCopy7:${r.productId}:${r.premium ? "p" : "r"}:${r.search}:${r.name ?? ""}:${(r.imageUrls ?? []).join("|")}`;
 }
 
 function readCache(key: string): ProductCopy | null {

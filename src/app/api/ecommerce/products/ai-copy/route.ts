@@ -35,6 +35,8 @@ const postSchema = z.object({
     search: z.union([z.boolean().transform((b) => (b ? "auto" : "off")), z.enum(["off", "auto", "always"])]).default("off"),
     // Bulk screen: may wait a few seconds for a free key rather than use the paid one.
     bulk: z.boolean().default(false),
+    // "Use Premium API" — off (default, also for an old tab) never touches the paid key.
+    premium: z.boolean().default(false),
 });
 
 export async function POST(req: Request) {
@@ -60,6 +62,7 @@ export async function POST(req: Request) {
             imageUrls: photosForAi(data.imageUrls ?? productGalleryUrls(p.galleryJson, p.imageUrl)),
             search: data.search,
             bulk: data.bulk,
+            premium: data.premium,
         });
         return NextResponse.json(copy);
     } catch (e) {

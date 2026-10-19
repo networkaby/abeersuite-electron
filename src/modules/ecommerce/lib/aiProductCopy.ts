@@ -38,6 +38,9 @@ export type ProductCopyInput = {
     search: AiSearchMode;
     /** Bulk run: wait for a free key's safety gap instead of taking the paid key. */
     bulk?: boolean;
+    /** Staff switched "Use Premium API" on. Off = regular (free) keys only and no
+     *  online search, which runs on the paid key — nothing is spent unknowingly. */
+    premium?: boolean;
 };
 
 // The model's JSON drifts run to run (a spec value as a list or number, an
@@ -227,7 +230,7 @@ function aiStatus(e: unknown): number | undefined {
 
 /** Google's reason in staff words — 402 / 429 / 403 mean the key, not this product. */
 export function aiErrorMessage(e: unknown): string | null {
-    if (e instanceof AiReplyError || e instanceof AiKeysExhaustedError) return e.message;
+    if (e instanceof AiReplyError || e instanceof AiKeysExhaustedError || e instanceof AiRegularKeysOutError) return e.message;
     if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) return "Gemini took too long — try again.";
     const status = aiStatus(e);
     if (status === 402) return "Gemini credit is used up — top up the AI Studio project, or use a free-tier key.";
@@ -244,6 +247,14 @@ const isTimeout = (e: unknown) => e instanceof Error && (e.name === "TimeoutErro
 const isKeyFailure = (e: unknown) => KEY_FAULTS.has(aiStatus(e) ?? 0) || isTimeout(e);
 
 /** No key left to try today — the only AI error staff see for the write steps. */
+/** Premium off and every regular key is resting or locked — say so, never pay. */
+export class AiRegularKeysOutError extends Error {
+    constructor() {
+        super("Regular keys are used up for now — turn on Premium API, or try again later.");
+        this.name = "AiRegularKeysOutError";
+    }
+}
+
 export class AiKeysExhaustedError extends Error {
     constructor() {
         super("Every AI key failed today (blocked, out of credit or at its limit) — try again later or top up a key.");
@@ -261,12 +272,12 @@ function freeKeys(): string[] {
         .sort((a, b) => keyLastUsed(a) - keyLastUsed(b));
 }
 
-/** Free keys past their safety gap, then the paid key (the chain's last). With
- *  no paid key to fall back on, a free key inside its gap is still tried. */
-function keyOrder(): string[] {
+/** Free keys past their safety gap, then the paid key (the chain's last) when
+ *  Premium is on. With no paid key to fall back on, a free key inside its gap is still tried. */
+function keyOrder(premium: boolean): string[] {
     const free = freeKeys();
     const rested = free.filter((k) => Date.now() - keyLastUsed(k) >= AI_FREE_KEY_GAP_MS);
-    return process.env[PAID_KEY] && !isLockedOut(PAID_KEY) ? [...rested, PAID_KEY] : free;
+    return premium && process.env[PAID_KEY] && !isLockedOut(PAID_KEY) ? [...rested, PAID_KEY] : free;
 }
 
 /** Bulk (owner, 2026-10-19): when every free key is only inside its 10 s gap,
@@ -277,11 +288,13 @@ function freeKeyWait(): number {
     return free.length ? keyLastUsed(free[0]) + AI_FREE_KEY_GAP_MS - Date.now() : 0;
 }
 
-async function callChain(content: Part[], bulk = false) {
-    // Re-checked after every sleep: parallel bulk calls queue for the keys in
-    // turn, and the key order below is read in the same tick, so none slips to paid.
-    for (let wait = bulk ? freeKeyWait() : 0; wait > 0; wait = freeKeyWait()) await sleep(wait);
-    for (const name of keyOrder()) {
+async function callChain(content: Part[], { bulk = false, premium = false }: { bulk?: boolean; premium?: boolean }) {
+    // Re-checked after every sleep: parallel calls queue for the keys in turn,
+    // and the key order below is read in the same tick, so none slips to paid.
+    // Premium off waits too — there is nothing else it may use.
+    const mayWait = bulk || !premium;
+    for (let wait = mayWait ? freeKeyWait() : 0; wait > 0; wait = freeKeyWait()) await sleep(wait);
+    for (const name of keyOrder(premium)) {
         noteKeyUse(name);
         try {
             const reply = await call(process.env[name]!, content, false);
@@ -293,7 +306,7 @@ async function callChain(content: Part[], bulk = false) {
             noteKeyFailure(name, { rateLimited: aiStatus(e) === 429 });
         }
     }
-    throw new AiKeysExhaustedError();
+    throw premium ? new AiKeysExhaustedError() : new AiRegularKeysOutError();
 }
 
 const tokensOf = (r: { usage?: { totalTokens?: number } }) => r.usage?.totalTokens ?? 0;
@@ -329,10 +342,11 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
 
     const started = Date.now();
     const tokens = { draft: 0, search: 0, polish: 0 };
+    const keyOpts = { bulk: p.bulk, premium: p.premium };
     let draftKey = "";
     // One more try when the reply cannot be read at all (no JSON, no title…).
     const readDraft = async () => {
-        const { reply, key } = await callChain(draftParts, p.bulk);
+        const { reply, key } = await callChain(draftParts, keyOpts);
         tokens.draft += tokensOf(reply);
         draftKey = key;
         return draftSchema.parse(parseJson(reply.text));
@@ -341,11 +355,11 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
     try {
         draftRaw = await readDraft();
     } catch (e) {
-        if (aiStatus(e) !== undefined || e instanceof AiKeysExhaustedError) throw e;
+        if (aiStatus(e) !== undefined || e instanceof AiKeysExhaustedError || e instanceof AiRegularKeysOutError) throw e;
         try {
             draftRaw = await readDraft();
         } catch (again) {
-            if (aiStatus(again) !== undefined || again instanceof AiKeysExhaustedError) throw again;
+            if (aiStatus(again) !== undefined || again instanceof AiKeysExhaustedError || again instanceof AiRegularKeysOutError) throw again;
             throw new AiReplyError(again);
         }
     }
@@ -358,9 +372,11 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
     let verifiedFacts = 0;
     const paidKey = searchKey();
     // "always" searches even when the draft says no — by the brand + name if it gave no query.
-    const query = searchQuery.trim() || (p.search === "always" ? [p.brand, p.name].filter(Boolean).join(" ") : "");
-    if (p.search === "off") search = "off";
-    else if (p.search === "auto" && (!searchWorthy || !query)) search = "not-needed";
+    // Search runs on the paid key, so Premium off means search off.
+    const mode = p.premium ? p.search : "off";
+    const query = searchQuery.trim() || (mode === "always" ? [p.brand, p.name].filter(Boolean).join(" ") : "");
+    if (mode === "off") search = "off";
+    else if (mode === "auto" && (!searchWorthy || !query)) search = "not-needed";
     else if (!paidKey) search = "no-key";
     else {
         try {
@@ -378,7 +394,7 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
             if (verified.facts.length === 0) {
                 search = "no-sources";
             } else {
-                const { reply: polishReply } = await callChain([{ type: "text", text: polishPrompt(p, draft, verified.facts) }], p.bulk);
+                const { reply: polishReply } = await callChain([{ type: "text", text: polishPrompt(p, draft, verified.facts) }], keyOpts);
                 tokens.polish += tokensOf(polishReply);
                 const polished = copySchema.parse(parseJson(polishReply.text));
                 // The label decides: draft title, warranty and photo-read
@@ -399,7 +415,7 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
     }
 
     final = { ...final, specs: cleanSpecs(final.specs) };
-    console.info(`[aiProductCopy] done in ${Date.now() - started} ms · mode ${p.search} · search ${search} · ${verifiedFacts} facts · key ${draftKey} · tokens`, tokens);
+    console.info(`[aiProductCopy] done in ${Date.now() - started} ms · mode ${mode} · premium ${p.premium ? "yes" : "no"} · search ${search} · ${verifiedFacts} facts · key ${draftKey} · tokens`, tokens);
 
     return {
         ...final,
