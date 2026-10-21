@@ -5,7 +5,9 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.webkit.WebView;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
@@ -19,6 +21,23 @@ public class MainActivity extends BridgeActivity {
         NsMessagingService.ensureChannel(this);
         askForNotifications();
         openFromNotification(getIntent());
+        backStepsThroughPages();
+    }
+
+    /**
+     * The phone's Back walks the app's own history (Inbox → Home, a voucher sheet →
+     * its list). Only on the first screen does it leave — to the background, like
+     * Home, so the next open does not reload from scratch.
+     */
+    private void backStepsThroughPages() {
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                WebView web = getBridge().getWebView();
+                if (web.canGoBack()) web.goBack();
+                else moveTaskToBack(true);
+            }
+        });
     }
 
     @Override
