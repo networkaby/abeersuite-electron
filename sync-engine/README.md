@@ -157,8 +157,11 @@ no later cycle asked for them: a till showed a bank upload with none of its stat
 lines until pass 3 happened to reconcile the table. Now a `watermark`/`append` parent
 with children in the cycle holds its watermark until pass 2 is done, and keeps holding
 it if any child under it failed; the next cycle re-pulls the parent rows (an upsert)
-and the children come along. `full` parents have no watermark to hold — their children
-still rely on pass 3. `test-child-watermark.js` drives it.
+and the children come along. A `full` parent has no watermark, and its fingerprint
+matches the moment it lands, so it is marked `children_pending` in `_sync_state` before
+it is replaced; the mark clears only once pass 2 has pulled its children, and a cycle
+that finds it set re-pulls the parent whatever the fingerprint says (2026-10-21, same
+day). `test-child-watermark.js` drives both.
 
 **Four tables at a time (2026-09-03).** An idle cycle is ~80 small round-trips to
 Supabase; run one after another on a single connection they cost ~0.6 s of pure

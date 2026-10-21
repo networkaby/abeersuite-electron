@@ -428,7 +428,9 @@ async function main(opts, cfg, pools = null, hooks = {}) {
          * UniversalVoucher has the same shape. Held back, the next cycle re-pulls the
          * parent rows (an upsert, harmless) and their children come with them.
          *
-         * `full` parents have no watermark to hold; their children rely on pass 3.
+         * A `full` parent has no watermark; it is marked `children_pending` before it is
+         * replaced and that mark is cleared here, so the next cycle re-pulls it even
+         * though its fingerprint already matches.
          */
         const held = new Map();
         const parentsInCycle = new Set(order.children.filter(want).map((m) => tables[m].parent));
@@ -455,13 +457,18 @@ async function main(opts, cfg, pools = null, hooks = {}) {
                     // list is what the local side hashes against.
                     const srcFp = await reconcile.fingerprint(source, entry);
                     const localFp = await reconcile.fingerprint(local, entry, srcFp.columns || []);
-                    if (reconcile.same(srcFp, localFp)) {
+                    // A parent whose children never arrived is pulled again, whatever
+                    // its fingerprint says (state.js `children_pending`).
+                    const pending = parentsInCycle.has(model) && prior.get(entry.n)?.children_pending === true;
+                    if (pending) console.log(`  ${model.padEnd(28)} children pending from an earlier cycle - re-pulling`);
+                    if (reconcile.same(srcFp, localFp) && !pending) {
                         skipped++;
                         // Still record the pass so every table has a freshness stamp.
                         if (!DRY) await state.recordSuccess(local, entry, model, null);
                         moved.set(model, []);
                         return;
                     }
+                    if (!DRY && parentsInCycle.has(model)) await state.markChildrenPending(local, entry, model);
                     res = DRY ? { pulled: -1, ids: [] } : await pullFull(source, local, entry);
                 } else {
                     // Not `prior.watermark` directly: a stored high-water mark is only
@@ -517,7 +524,7 @@ async function main(opts, cfg, pools = null, hooks = {}) {
                 if (res.pulled !== 0) changedModels.add(model);
                 pulledTotal += Math.max(res.pulled, 0);
                 // A parent's watermark waits for its children (see `held`).
-                if (!DRY && res.watermark != null && parentsInCycle.has(model)) {
+                if (!DRY && parentsInCycle.has(model) && (res.watermark != null || entry.strategy === "full")) {
                     held.set(model, { entry, watermark: res.watermark, watermarkId: res.watermarkId });
                 } else if (!DRY) {
                     await state.recordSuccess(local, entry, model, res.watermark, res.watermarkId);
@@ -592,7 +599,7 @@ async function main(opts, cfg, pools = null, hooks = {}) {
         // failed child, where the parent rows re-pull next cycle and bring it along.
         for (const [model, h] of held) {
             if (childFailedUnder.has(model)) {
-                console.log(`  ${model.padEnd(28)} watermark held - a child pull failed; re-pulling next cycle`);
+                console.log(`  ${model.padEnd(28)} held - a child pull failed; re-pulling next cycle`);
                 continue;
             }
             await state.recordSuccess(local, h.entry, model, h.watermark, h.watermarkId);

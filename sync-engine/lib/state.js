@@ -48,6 +48,12 @@ const COLUMNS = [
     // schedule rather than inferred from a successful pull.
     ["last_verify_at", "timestamptz"],
     ["last_error", "text"],
+    // A `full` parent's children are not in yet. Set before the parent is replaced,
+    // cleared by recordSuccess once pass 2 has pulled its children. A full table has
+    // no watermark to hold back, and its fingerprint matches as soon as the parent
+    // landed — so without this, a cycle killed between the passes (or a child pull that
+    // failed) left those children behind until the hourly reconcile.
+    ["children_pending", "boolean NOT NULL DEFAULT false"],
 ];
 
 async function ensure(client) {
@@ -107,8 +113,19 @@ async function recordSuccess(client, entry, model, watermark, watermarkId) {
                                THEN ${q(TABLE)}.watermark_id
                                ELSE EXCLUDED.watermark_id END,
            last_ok_at = now(),
-           last_error = NULL`,
+           last_error = NULL,
+           children_pending = false`,
         [entry.n, model, entry.table, entry.strategy, entry.column || null, watermark || null, watermarkId != null ? String(watermarkId) : null],
+    );
+}
+
+/** A full parent is about to be replaced; its children follow in pass 2. See COLUMNS. */
+async function markChildrenPending(client, entry, model) {
+    await client.query(
+        `INSERT INTO ${q(TABLE)} (table_num, model, table_name, strategy, children_pending)
+         VALUES ($1, $2, $3, $4, true)
+         ON CONFLICT (table_num) DO UPDATE SET children_pending = true`,
+        [entry.n, model, entry.table, entry.strategy],
     );
 }
 
@@ -129,4 +146,4 @@ async function recordVerified(client, entry, count, checksum) {
     );
 }
 
-module.exports = { ensure, readAll, cursorFor, recordSuccess, recordFailure, recordVerified, TABLE };
+module.exports = { ensure, readAll, cursorFor, recordSuccess, recordFailure, recordVerified, markChildrenPending, TABLE };
