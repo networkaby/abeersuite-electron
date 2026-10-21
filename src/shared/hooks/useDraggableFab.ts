@@ -1,21 +1,42 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import { useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent } from "react";
 
 type Pos = { x: number; y: number };
 
 /** Below this many pixels of movement a press is still a tap, not a drag. */
 const DRAG_THRESHOLD = 4;
 
-function readPos(key: string): Pos | null {
+const SAVED_EVENT = "fab-pos-saved";
+
+function readRaw(key: string): string | null {
     try {
-        const raw = window.localStorage.getItem(key);
-        if (!raw) return null;
+        return window.localStorage.getItem(key);
+    } catch {
+        return null;
+    }
+}
+
+function parsePos(raw: string | null): Pos | null {
+    if (!raw) return null;
+    try {
         const p = JSON.parse(raw) as Partial<Pos>;
         return typeof p.x === "number" && typeof p.y === "number" ? { x: p.x, y: p.y } : null;
     } catch {
         return null;
     }
+}
+
+// Re-read on a save, and on resize so a phone turn keeps the button on screen.
+function subscribe(cb: () => void) {
+    window.addEventListener(SAVED_EVENT, cb);
+    window.addEventListener("resize", cb);
+    window.addEventListener("storage", cb);
+    return () => {
+        window.removeEventListener(SAVED_EVENT, cb);
+        window.removeEventListener("resize", cb);
+        window.removeEventListener("storage", cb);
+    };
 }
 
 const clamp = (p: Pos, w: number, h: number): Pos => ({
@@ -33,20 +54,13 @@ const clamp = (p: Pos, w: number, h: number): Pos => ({
  * the click that ends a drag is swallowed.
  */
 export function useDraggableFab(storageKey: string) {
-    const [pos, setPos] = useState<Pos | null>(null);
+    // Saved spot from localStorage (null on the server); `live` only while a drag is under way.
+    const saved = useSyncExternalStore(subscribe, () => readRaw(storageKey), () => null);
+    const [live, setLive] = useState<Pos | null>(null);
     const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number; w: number; h: number; moved: boolean } | null>(null);
-    const lastPos = useRef<Pos | null>(null);
     const justDragged = useRef(false);
-
-    // Read after mount (no localStorage on the server); keep it on screen when
-    // the phone turns or the window shrinks.
-    useEffect(() => {
-        const saved = readPos(storageKey);
-        if (saved) setPos(clamp(saved, 56, 56));
-        const onResize = () => setPos((p) => (p ? clamp(p, 56, 56) : p));
-        window.addEventListener("resize", onResize);
-        return () => window.removeEventListener("resize", onResize);
-    }, [storageKey]);
+    const savedPos = parsePos(saved);
+    const pos = live ?? (savedPos ? clamp(savedPos, 56, 56) : null);
 
     const bind = {
         onPointerDown: (e: PointerEvent<HTMLElement>) => {
@@ -63,17 +77,18 @@ export function useDraggableFab(storageKey: string) {
             if (!d.moved && Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
             d.moved = true;
             const next = clamp({ x: d.origX + dx, y: d.origY + dy }, d.w, d.h);
-            lastPos.current = next;
-            setPos(next);
+            setLive(next);
         },
         onPointerUp: () => {
             const d = dragRef.current;
             dragRef.current = null;
-            if (!d?.moved || !lastPos.current) return;
+            if (!d?.moved || !live) return;
             justDragged.current = true;
             try {
-                window.localStorage.setItem(storageKey, JSON.stringify(lastPos.current));
-            } catch { /* private mode — position just isn't remembered */ }
+                window.localStorage.setItem(storageKey, JSON.stringify(live));
+                window.dispatchEvent(new Event(SAVED_EVENT));
+                setLive(null);
+            } catch { /* private mode — keep the live spot for this visit */ }
         },
         onPointerCancel: () => { dragRef.current = null; },
     };
