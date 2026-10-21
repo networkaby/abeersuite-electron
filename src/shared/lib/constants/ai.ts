@@ -37,14 +37,38 @@ export const AI_KEY_DEFAULTS = {
 
 // ── AI Setup page (Settings → AI Setup) ──
 
-/** Providers a key can belong to. */
+/** Providers a key can belong to. `kind`: model = an AI that writes text;
+ *  web = a web search / page-reading service (no model, no writing).
+ *  `nativeSearch` = the model searches the web itself; any other model with
+ *  "Can search online" ticked searches through the Web search keys (aiWeb.ts).
+ *  `baseURL` = OpenAI-compatible endpoint. `hint` = model placeholder. */
 export const AI_PROVIDERS = [
-    { value: "gemini", label: "Google Gemini", ready: true },
-    // Listed for later — no SDK package yet, so the page offers them disabled.
-    { value: "openai", label: "OpenAI", ready: false },
-    { value: "claude", label: "Anthropic Claude", ready: false },
-] as const;
+    { value: "gemini", label: "Google Gemini", kind: "model", ready: true, nativeSearch: true, hint: "gemini-2.5-flash" },
+    { value: "openai", label: "OpenAI", kind: "model", ready: true, nativeSearch: true, hint: "gpt-5-mini" },
+    { value: "claude", label: "Anthropic Claude", kind: "model", ready: true, nativeSearch: true, hint: "claude-sonnet-5-5" },
+    { value: "groq", label: "Groq", kind: "model", ready: true, nativeSearch: false, hint: "llama-3.3-70b-versatile", baseURL: "https://api.groq.com/openai/v1" },
+    { value: "openrouter", label: "OpenRouter", kind: "model", ready: true, nativeSearch: false, hint: "google/gemini-2.5-flash", baseURL: "https://openrouter.ai/api/v1" },
+    { value: "deepseek", label: "DeepSeek", kind: "model", ready: true, nativeSearch: false, hint: "deepseek-chat", baseURL: "https://api.deepseek.com/v1" },
+    { value: "mistral", label: "Mistral", kind: "model", ready: true, nativeSearch: false, hint: "mistral-small-latest", baseURL: "https://api.mistral.ai/v1" },
+    { value: "xai", label: "xAI Grok", kind: "model", ready: true, nativeSearch: false, hint: "grok-4", baseURL: "https://api.x.ai/v1" },
+    { value: "together", label: "Together AI", kind: "model", ready: true, nativeSearch: false, hint: "meta-llama/Llama-3.3-70B-Instruct-Turbo", baseURL: "https://api.together.xyz/v1" },
+    { value: "perplexity", label: "Perplexity", kind: "model", ready: true, nativeSearch: true, hint: "sonar", baseURL: "https://api.perplexity.ai" },
+    // Web tools — searchable = finds pages for a query; readable = fetches a given page.
+    { value: "exa", label: "Exa (web search)", kind: "web", ready: true, searchable: true, readable: true },
+    { value: "tavily", label: "Tavily (web search)", kind: "web", ready: true, searchable: true, readable: true },
+    { value: "firecrawl", label: "Firecrawl (search + scrape)", kind: "web", ready: true, searchable: true, readable: true },
+    { value: "scrapedo", label: "Scrape.do (page scrape)", kind: "web", ready: true, searchable: false, readable: true },
+] as const satisfies readonly {
+    value: string; label: string; kind: "model" | "web"; ready: boolean;
+    nativeSearch?: boolean; hint?: string; baseURL?: string; searchable?: boolean; readable?: boolean;
+}[];
 export type AiProvider = (typeof AI_PROVIDERS)[number]["value"];
+export type AiProviderInfo = { value: AiProvider; label: string; kind: "model" | "web"; ready: boolean; nativeSearch?: boolean; hint?: string; baseURL?: string; searchable?: boolean; readable?: boolean };
+export const aiProviderInfo = (p: string): AiProviderInfo | undefined => (AI_PROVIDERS as readonly AiProviderInfo[]).find((x) => x.value === p);
+export const isWebProvider = (p: string) => aiProviderInfo(p)?.kind === "web";
+
+/** Highlights per page a web search hands to the model, and how much of a read page it keeps. */
+export const AI_WEB_LIMITS = { results: 6, pageChars: 12_000 } as const;
 
 /** Where the actual key lives. Every other setting is the same for all three
  *  (owner, 2026-10-21): db = pasted on the page, saved locked in the database,
@@ -63,8 +87,12 @@ export const AI_STEPS = [
     { value: "draft", label: "Draft" },
     { value: "search", label: "Search" },
     { value: "polish", label: "Polish" },
+    { value: "read", label: "Read page" },
 ] as const;
 export type AiStep = (typeof AI_STEPS)[number]["value"];
+
+/** What a key must offer to sit in a step: a model tick, or a web tool's ability. */
+export type AiNeed = "search" | "photo" | "webSearch" | "webRead";
 
 /** Every place the app uses AI — listed in code; the page only picks keys.
  *  `needs` says which tick a key must carry to be offered for that step. */
@@ -72,12 +100,18 @@ export const AI_USES: readonly {
     key: string;
     label: string;
     description: string;
-    steps: readonly { step: AiStep; needs?: "search" | "photo" }[];
+    steps: readonly { step: AiStep; needs?: AiNeed }[];
 }[] = [
     {
         key: "product_copy",
         label: "Product description",
         description: "E-Commerce → Products: writes the description and highlights from the name and photo.",
         steps: [{ step: "draft", needs: "photo" }, { step: "search", needs: "search" }, { step: "polish" }],
+    },
+    {
+        key: "web",
+        label: "Web search & page reading",
+        description: "Shared by every AI job: a model without its own search finds pages here, and any job that must read a page fetches it here.",
+        steps: [{ step: "search", needs: "webSearch" }, { step: "read", needs: "webRead" }],
     },
 ];

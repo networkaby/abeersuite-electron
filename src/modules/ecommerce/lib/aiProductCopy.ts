@@ -205,10 +205,10 @@ function parseJson(text: string): unknown {
 type Part = { type: "text"; text: string } | { type: "file"; data: URL; mediaType: string };
 
 /** One step on its chain of keys. `search` = with the web-search tool. */
-async function callStep(step: AiStep, content: Part[], opts: { premium: boolean; wait?: boolean; search?: boolean }) {
+async function callStep(step: AiStep, content: Part[], opts: { premium: boolean; wait?: boolean; search?: boolean; searchQuery?: string }) {
     const { result, key } = await runChain(
         { use: USE, step, premium: opts.premium, wait: opts.wait },
-        (k, apiKey, signal) => callModel(k, apiKey, [{ role: "user", content }], { search: opts.search, signal }),
+        (k, apiKey, signal) => callModel(k, apiKey, [{ role: "user", content }], { search: opts.search, searchQuery: opts.searchQuery, signal }),
     );
     return { reply: result, key: key.name };
 }
@@ -299,7 +299,7 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
     else {
         try {
             // Every search key failing keeps the photo draft (catch below).
-            const { reply: found } = await callStep("search", [{ type: "text", text: searchPrompt(p, draft, query) }], { premium: true, search: true });
+            const { reply: found } = await callStep("search", [{ type: "text", text: searchPrompt(p, draft, query) }], { premium: true, search: true, searchQuery: query });
             tokens.search += tokensOf(found);
             console.info(`[aiProductCopy] search reply after ${Date.now() - started} ms`);
             const cited = factsSchema.parse(parseJson(found.text)).facts

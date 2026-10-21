@@ -1,8 +1,11 @@
 import "server-only";
-import { APICallError, RetryError, generateText, type ModelMessage } from "ai";
+import { APICallError, RetryError, generateText, type LanguageModel, type ModelMessage, type ToolSet } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { AI_PROVIDERS, AI_SETUP_CACHE_MS, type AiKeySource, type AiProvider, type AiStep } from "@/shared/lib/constants/ai";
+import { aiProviderInfo, AI_SETUP_CACHE_MS, type AiKeySource, type AiProvider, type AiStep } from "@/shared/lib/constants/ai";
 import { hasSharedSecret, unlockSecret } from "@/shared/lib/ai/secretBox";
 import { hasLocalKey, readLocalKey } from "@/shared/lib/ai/aiLocalKeys";
 
@@ -78,7 +81,7 @@ const localDay = () => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-const providerReady = (p: AiProvider) => AI_PROVIDERS.find((x) => x.value === p)?.ready ?? false;
+const providerReady = (p: AiProvider) => aiProviderInfo(p)?.ready ?? false;
 
 /** The actual key on this server, or null. */
 export function keyValue(k: AiKeyConfig): string | null {
@@ -284,15 +287,62 @@ export async function runChain<T>(
 
 // ── Provider call ─────────────────────────────────────────────────────────────
 
-/** One plain call on this key. `search` adds the provider's web-search tool (Gemini only). */
-export function callModel(key: AiKeyConfig, apiKey: string, messages: ModelMessage[], opts: { search?: boolean; signal?: AbortSignal } = {}) {
-    if (key.provider !== "gemini") throw new Error(`${key.provider} is not built in yet`);
-    const google = createGoogleGenerativeAI({ apiKey });
+/** The provider's model and its own web-search tool, if it has one. */
+function modelOf(key: AiKeyConfig, apiKey: string): { model: LanguageModel; searchTools?: ToolSet } {
+    const info = aiProviderInfo(key.provider);
+    switch (key.provider) {
+        case "gemini": {
+            const google = createGoogleGenerativeAI({ apiKey });
+            return { model: google(key.model), searchTools: { google_search: google.tools.googleSearch({}) } };
+        }
+        case "openai": {
+            const openai = createOpenAI({ apiKey });
+            // Cast: @ai-sdk/openai pulls a newer provider-utils than `ai` (two copies in the lockfile), so the
+            // tool's schema type differs only by package copy. Drop the cast after `pnpm dedupe`.
+            return { model: openai(key.model), searchTools: { web_search: openai.tools.webSearch({}) } as unknown as ToolSet };
+        }
+        case "claude": {
+            const anthropic = createAnthropic({ apiKey });
+            return { model: anthropic(key.model), searchTools: { web_search: anthropic.tools.webSearch_20250305({ maxUses: 5 }) } as unknown as ToolSet }; // same cast as openai
+        }
+        default: {
+            if (!info?.baseURL) throw new Error(`${key.provider} is not an AI model — it is a web tool`);
+            // Perplexity searches on every call by itself; the others have no search tool.
+            return { model: createOpenAICompatible({ name: key.provider, baseURL: info.baseURL, apiKey })(key.model), searchTools: undefined };
+        }
+    }
+}
+
+/**
+ * One plain call on this key. `search` = with web search: the provider's own
+ * tool, or — for a model without one — the Web search keys (aiWeb.ts) run on
+ * `searchQuery` first and the pages go into the prompt.
+ */
+export async function callModel(
+    key: AiKeyConfig,
+    apiKey: string,
+    messages: ModelMessage[],
+    opts: { search?: boolean; searchQuery?: string; signal?: AbortSignal } = {},
+) {
+    const { model, searchTools } = modelOf(key, apiKey);
+    const native = aiProviderInfo(key.provider)?.nativeSearch;
+    if (opts.search && !native) {
+        const { webSearch, pagesForPrompt } = await import("@/shared/lib/ai/aiWeb");
+        const query = opts.searchQuery ?? lastText(messages).slice(0, 300);
+        messages = [{ role: "user", content: pagesForPrompt(await webSearch(query)) }, ...messages];
+    }
     return generateText({
-        model: google(key.model),
-        tools: opts.search ? { google_search: google.tools.googleSearch({}) } : undefined,
+        model,
+        tools: opts.search && native ? searchTools : undefined,
         messages,
         maxRetries: 0, // the chain moves on, or retries per the key's own setting
         abortSignal: opts.signal,
     });
+}
+
+/** The last user message's text, for a search query when the caller gave none. */
+function lastText(messages: ModelMessage[]): string {
+    const c = messages.at(-1)?.content;
+    if (typeof c === "string") return c;
+    return (Array.isArray(c) ? c : []).map((p) => (p.type === "text" ? p.text : "")).join(" ");
 }

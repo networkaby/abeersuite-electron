@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { AI_KEY_SOURCES, AI_PROVIDERS } from "@/shared/lib/constants/ai";
+import { AI_KEY_SOURCES, AI_PROVIDERS, isWebProvider } from "@/shared/lib/constants/ai";
 import { keyUsage, whyNotUsable, type AiKeyConfig } from "@/shared/lib/ai/aiKeys";
 import { hasLocalKey } from "@/shared/lib/ai/aiLocalKeys";
 import { hasSharedSecret, lockSecret } from "@/shared/lib/ai/secretBox";
@@ -13,7 +13,8 @@ const seconds = (max: number) => z.number().int().min(0).max(max);
 export const aiKeyBodySchema = z.object({
     name: z.string().trim().min(1).max(80),
     provider: z.enum(AI_PROVIDERS.map((p) => p.value) as [string, ...string[]]),
-    model: z.string().trim().min(1).max(120),
+    /** Empty for a web tool (Exa, Tavily …) — it has no model. */
+    model: z.string().trim().max(120),
     source: z.enum(AI_KEY_SOURCES.map((s) => s.value) as [string, ...string[]]),
     /** env: the variable name. */
     envName: z.string().trim().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "Variable name: letters, digits and _ only").max(120).nullable().optional(),
@@ -32,7 +33,7 @@ export const aiKeyBodySchema = z.object({
     failRestSeconds: seconds(24 * 3600),
     timeoutSeconds: z.number().int().min(5).max(600),
     retries: z.number().int().min(0).max(3),
-});
+}).refine((b) => isWebProvider(b.provider) || b.model.length > 0, { message: "Model is required", path: ["model"] });
 export type AiKeyBody = z.infer<typeof aiKeyBodySchema>;
 
 /** What the setup page gets for one key — usable/why on THIS server, and its counts here. */

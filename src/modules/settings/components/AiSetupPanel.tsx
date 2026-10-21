@@ -25,7 +25,7 @@ import { useApiResource } from "@/shared/hooks/useApiResource";
 import { extractApiError } from "@/shared/lib/api";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import {
-    AI_KEY_DEFAULTS, AI_KEY_SOURCES, AI_PROVIDERS, AI_STEPS, AI_USES,
+    AI_KEY_DEFAULTS, AI_KEY_SOURCES, AI_PROVIDERS, AI_STEPS, AI_USES, aiProviderInfo, isWebProvider, type AiNeed,
     type AiKeySource, type AiProvider, type AiStep,
 } from "@/shared/lib/constants/ai";
 
@@ -121,7 +121,8 @@ const NO_AUTOFILL = { autoComplete: "off", "data-1p-ignore": true, "data-lpignor
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const isExpired = (k: AiKeyRow) => !!k.validTill && k.validTill < todayIso();
-const providerLabel = (p: AiProvider) => AI_PROVIDERS.find((x) => x.value === p)?.label ?? p;
+const providerLabel = (p: AiProvider) => aiProviderInfo(p)?.label ?? p;
+const NEED_LABEL: Record<AiNeed, string> = { search: "search tick", photo: "photo tick", webSearch: "a web search tool", webRead: "a page-reading tool" };
 const sourceShort: Record<AiKeySource, string> = { db: "Saved here", env: ".env", ini: "This PC only" };
 const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 const secs = (n: number) => (n >= 3600 && n % 3600 === 0 ? `${n / 3600} h` : n >= 60 && n % 60 === 0 ? `${n / 60} min` : `${n} s`);
@@ -244,7 +245,7 @@ export function AiSetupPanel() {
                                     <td className="space-x-1 px-3 py-2">
                                         {k.canPhoto && <Badge variant="secondary">Photo</Badge>}
                                         {k.canSearch && <Badge variant="secondary">Search</Badge>}
-                                        {!k.canPhoto && !k.canSearch && <span className="text-muted-foreground">Text only</span>}
+                                        {isWebProvider(k.provider) ? <span className="text-muted-foreground">Web tool</span> : !k.canPhoto && !k.canSearch && <span className="text-muted-foreground">Text only</span>}
                                     </td>
                                     <td className="px-3 py-2">
                                         {k.paid ? <Badge>Paid</Badge> : <Badge variant="outline">Free</Badge>}
@@ -319,13 +320,19 @@ export function AiSetupPanel() {
 
 function StepChain({ label, needs, ids, keys, byId, onChange }: {
     label: string;
-    needs?: "search" | "photo";
+    needs?: AiNeed;
     ids: number[];
     keys: AiKeyRow[];
     byId: Map<number, AiKeyRow>;
     onChange: (ids: number[]) => void;
 }) {
-    const fits = (k: AiKeyRow) => (needs === "search" ? k.canSearch : needs === "photo" ? k.canPhoto : true);
+    const fits = (k: AiKeyRow) => {
+        const info = aiProviderInfo(k.provider);
+        if (needs === "webSearch") return !!info?.searchable;
+        if (needs === "webRead") return !!info?.readable;
+        if (info?.kind === "web") return false;
+        return needs === "search" ? k.canSearch : needs === "photo" ? k.canPhoto : true;
+    };
     const addable = keys.filter((k) => fits(k) && !ids.includes(k.id));
     const move = (i: number, d: -1 | 1) => {
         const next = [...ids];
@@ -337,7 +344,7 @@ function StepChain({ label, needs, ids, keys, byId, onChange }: {
         <div className="space-y-2">
             <div className="text-sm font-medium">
                 {label}
-                {needs && <span className="ml-1 text-xs font-normal text-muted-foreground">(needs {needs} tick)</span>}
+                {needs && <span className="ml-1 text-xs font-normal text-muted-foreground">(needs {NEED_LABEL[needs]})</span>}
             </div>
             {ids.length === 0 && <div className="text-sm text-muted-foreground">No keys — this step is skipped.</div>}
             <ol className="space-y-1">
@@ -394,8 +401,9 @@ function KeyDialog({ initial, here, onClose, onSaved }: {
         s === "db" && !here.sharedSecret ? "AI_KEY_SECRET is not set here"
             : s === "ini" && !here.localStore ? "only in the counter app" : null;
 
+    const web = isWebProvider(form.provider);
     const submit = async () => {
-        if (!form.name.trim() || !form.model.trim()) return toast.error("Name and model are required.");
+        if (!form.name.trim() || (!web && !form.model.trim())) return toast.error(web ? "Name is required." : "Name and model are required.");
         if (form.source === "env" && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(form.envName.trim())) return toast.error("Variable name: letters, digits and _ only.");
         if (form.source !== "env" && !secret.trim() && !hasSaved) return toast.error("Paste the key.");
         setSaving(true);
@@ -436,7 +444,10 @@ function KeyDialog({ initial, here, onClose, onSaved }: {
                     <div className="grid grid-cols-2 gap-3">
                         <div className="grid gap-1">
                             <Label>Provider</Label>
-                            <Select value={form.provider} onValueChange={(v) => set("provider", v as AiProvider)}>
+                            <Select value={form.provider} onValueChange={(v) => {
+                                set("provider", v as AiProvider);
+                                if (isWebProvider(v)) { set("model", ""); set("canPhoto", false); set("canSearch", false); }
+                            }}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     {AI_PROVIDERS.map((p) => (
@@ -445,10 +456,12 @@ function KeyDialog({ initial, here, onClose, onSaved }: {
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="grid gap-1">
-                            <Label>Model</Label>
-                            <Input value={form.model} onChange={(e) => set("model", e.target.value)} placeholder="gemini-3.8-flash" className="font-mono" {...NO_AUTOFILL} />
-                        </div>
+                        {!web && (
+                            <div className="grid gap-1">
+                                <Label>Model</Label>
+                                <Input value={form.model} onChange={(e) => set("model", e.target.value)} placeholder={aiProviderInfo(form.provider)?.hint ?? ""} className="font-mono" {...NO_AUTOFILL} />
+                            </div>
+                        )}
                     </div>
                     <div className="grid gap-1">
                         <Label>Key kept in</Label>
@@ -487,14 +500,20 @@ function KeyDialog({ initial, here, onClose, onSaved }: {
                             </p>
                         </div>
                     )}
-                    <div className="flex flex-wrap gap-x-6 gap-y-2">
-                        <label className="flex items-center gap-2 text-sm">
-                            <Checkbox checked={form.canPhoto} onCheckedChange={(v) => set("canPhoto", v === true)} />Can read photo
-                        </label>
-                        <label className="flex items-center gap-2 text-sm">
-                            <Checkbox checked={form.canSearch} onCheckedChange={(v) => set("canSearch", v === true)} />Can search online
-                        </label>
-                    </div>
+                    {web ? (
+                        <p className="text-xs text-muted-foreground">
+                            A web tool — add it under &quot;Web search &amp; page reading&quot; below. An AI model whose provider has no search of its own uses these keys when it needs the web.
+                        </p>
+                    ) : (
+                        <div className="flex flex-wrap gap-x-6 gap-y-2">
+                            <label className="flex items-center gap-2 text-sm">
+                                <Checkbox checked={form.canPhoto} onCheckedChange={(v) => set("canPhoto", v === true)} />Can read photo
+                            </label>
+                            <label className="flex items-center gap-2 text-sm">
+                                <Checkbox checked={form.canSearch} onCheckedChange={(v) => set("canSearch", v === true)} />Can search online
+                            </label>
+                        </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                         <div className="grid gap-1">
                             <Label>Plan</Label>
