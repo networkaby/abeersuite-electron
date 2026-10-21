@@ -107,8 +107,9 @@ function writePrompt(p: VerifiedCopyInput, c: Check, pages: PageRead[]): string 
         ...pages.map((pg, i) => `--- Page ${letter(i)}: ${pg.site}${pg.maker ? " (maker's site)" : " (seller)"} — ${pg.codeMatch ? "OUR CODE IS ON THIS PAGE: same product, accept it" : "no code match"}\n${pg.text}`),
         "Page rules:",
         "- A page with our code on it is the same product: accept it. If it disagrees with our typed data, add a dataFlag (e.g. \"Page with your barcode says 8 sockets; your name says 4\").",
-        "- Any other page: accept only if it agrees with EVERY label fact and identity fact. One disagreement rejects the whole page — it may be another version. A sister model (different capacity, size, volume, yield) is a different product. \"Seen\" counts are minimums, never a disagreement.",
+        "- Any other page: accept only if it says nothing against any label fact or identity fact, and its identity facts (model, capacity, size, volume, yield) match where it states them. A page that simply does not mention a label fact (origin, series, colour code) is NOT a disagreement. One real disagreement rejects the whole page — it may be another version. A sister model (different capacity, size, volume, yield) is a different product. \"Seen\" counts are minimums, never a disagreement.",
         "- A page may add detail the label does not print; that is not a disagreement.",
+        "- Use English text only; leave out product names or values written in another language.",
         "- Never use a fact from a rejected page.",
         "Warranty: only the MAKER's warranty from the label or an accepted page. Our shop support period is never written.",
         "",
@@ -138,10 +139,11 @@ export async function generateVerifiedCopy(p: VerifiedCopyInput): Promise<Produc
     }
 
     // ── 2. Pages
-    const query = check.searchQuery.trim();
-    const found = query && (check.branded || check.labelWebsite)
+    // No model code but a barcode of ours: the maker's and sellers' pages often carry it.
+    const query = check.searchQuery.trim() || (p.codes[0] && p.brand ? `${p.brand} ${p.codes[0]}` : "");
+    const found = query && (check.branded || check.labelWebsite || p.codes.length)
         ? await findProductPages({ query, brand: p.brand ?? query.split(/\s+/)[0], labelSite: check.labelWebsite, codes: [...p.codes, ...(p.modelNo ? [p.modelNo] : []), ...check.labelCodes] })
-        : { pages: [] as PageRead[], dropped: [] as string[], searchNote: "No brand with a model code or website on the box — no page search" };
+        : { pages: [] as PageRead[], dropped: [] as string[], searchNote: "No brand with a model code, barcode or website on the box — no page search" };
 
     // ── 3. Write
     const [writeUse, writeStep] = await chainFor("write", premium);

@@ -102,6 +102,13 @@ function isMakerSite(host: string, brand: string, labelSite: string): boolean {
 
 const isSeller = (host: string) => AI_SELLER_SITES.some((s) => host === s || host.endsWith(`.${s}`));
 
+/** The Indian site of a brand: a .in host, "in." in the host (shop.in.canon), or an India path (/en-in/, /in-en/, /in/). */
+function isIndia(url: string): boolean {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase();
+    return host.endsWith(".in") || /(^|\.)in\./.test(host) || /^\/(en-in|in-en|in)(\/|$)/i.test(u.pathname);
+}
+
 async function searchSafe(query: string): Promise<WebPage[] | string> {
     try {
         return await webSearch(query);
@@ -120,7 +127,8 @@ async function searchSafe(query: string): Promise<WebPage[] | string> {
 export async function findProductPages(o: { query: string; brand: string; labelSite: string; codes: string[] }): Promise<PageSearch> {
     const labelSite = o.labelSite.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
     const searches = await Promise.all([
-        searchSafe(labelSite ? `${o.query} site:${labelSite}` : `${o.query} official`),
+        // India first (owner, 2026-10-21): an Indian shop's buyers want the Indian pack and printer list.
+        searchSafe(labelSite ? `${o.query} site:${labelSite}` : `${o.query} India official`),
         searchSafe(`${o.query} ${AI_SELLER_SITES.slice(0, 2).join(" OR ")}`),
     ]);
     const found = searches.flatMap((s) => (typeof s === "string" ? [] : s));
@@ -128,14 +136,18 @@ export async function findProductPages(o: { query: string; brand: string; labelS
     if (!found.length) return { pages: [], dropped: [], searchNote: failed ?? "Search found no pages" };
 
     // Maker first, then sellers; anything else (blogs, price sites, other shops) is left out.
+    // Within the maker's sites, India first; when an Indian maker page exists, other countries' are left out.
     const seen = new Set<string>();
-    const picked = found
+    const ranked = found
         .map((r) => r.url)
         .filter((u) => isPublicHttps(u) && !seen.has(u) && seen.add(u))
-        .map((u) => ({ u, host: hostOf(u) }))
+        .map((u) => ({ u, host: hostOf(u), india: isIndia(u) }))
         .map((x) => ({ ...x, rank: isMakerSite(x.host, o.brand, labelSite) ? 0 : isSeller(x.host) ? 1 : 2 }))
-        .filter((x) => x.rank < 2)
-        .sort((a, b) => a.rank - b.rank)
+        .filter((x) => x.rank < 2);
+    const indianMaker = ranked.some((x) => x.rank === 0 && x.india);
+    const picked = ranked
+        .filter((x) => x.rank !== 0 || x.india || !indianMaker)
+        .sort((a, b) => a.rank - b.rank || Number(b.india) - Number(a.india))
         .slice(0, AI_VERIFIED_LIMITS.pages);
     if (!picked.length) return { pages: [], dropped: [], searchNote: "Search found no maker or seller page" };
 
