@@ -266,13 +266,15 @@ export const COUNTER_ENV_WHATSAPP_KEYS: readonly string[] = [
     "META_WA_BUSINESS_ACCOUNT_ID",
 ];
 /**
- * Gemini keys for AI product copy. With them the till calls Google itself instead of
- * relaying through the office (`relayPolicy.ts` NEVER_RELAY) — one hop faster. Office
- * only, like the rest: a counter build without them simply keeps relaying.
+ * AI keys for product copy. With them the till calls the AI itself instead of
+ * relaying through the office (`relayPolicy.ts` LOCAL_WHEN_KEYED) — one hop faster.
+ * Office only, like the rest: a counter build without them simply keeps relaying.
  */
 export const COUNTER_ENV_AI_KEYS: readonly string[] = [
-    // Every name in AI_WRITE_KEY_CHAIN (src/shared/lib/constants/ai.ts) — a till
-    // missing one skips it; one missing them all relays.
+    // Opens the keys pasted on Settings → AI Setup (ai_keys.secretEnc). Must match Vercel's.
+    "AI_KEY_SECRET",
+    // The .env names today's AI Setup rows point at (migration 20261021120000_ai_setup) —
+    // a till missing one skips that key.
     "GOOGLE_GENERATIVE_AI_API_KEY",
     "GOOGLE_GENERATIVE_AI_API_KEY1",
     "GOOGLE_GENERATIVE_AI_API_KEY2",

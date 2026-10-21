@@ -1,12 +1,16 @@
 "use client";
 
-// Settings → AI Setup — register AI keys and choose, for every AI use, which
-// keys each step tries and in what order. PREVIEW ONLY (2026-10-19): the rows
-// below live in screen state and are lost on reload. Tables, the key lookup
-// (db / .env / counter .ini) and the Test call come in the next step.
+// Settings → AI Setup — the AI keys the app may use, and for every AI use which
+// keys each step tries, in order. Saved in ai_keys / ai_chain_steps; run time in
+// src/shared/lib/ai/aiKeys.ts. Where a key lives:
+//   db  — pasted here, saved locked in the database (every counter + website)
+//   env — only the .env variable NAME; the key is already in that .env
+//   ini — pasted here, saved locked on THIS PC only (PUT …/[id]/local, never relayed)
+// "Usable here" and the counts are this server's — on a counter, that counter's.
 
-import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, FlaskConical, Pencil, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import axios from "axios";
+import { ArrowDown, ArrowUp, FlaskConical, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,10 +20,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { NumericInput } from "@/shared/components/NumericInput";
+import { useApiResource } from "@/shared/hooks/useApiResource";
+import { extractApiError } from "@/shared/lib/api";
+import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import {
-    AI_KEY_SOURCES, AI_PROVIDERS, AI_STEPS, AI_USES,
+    AI_KEY_DEFAULTS, AI_KEY_SOURCES, AI_PROVIDERS, AI_STEPS, AI_USES,
     type AiKeySource, type AiProvider, type AiStep,
 } from "@/shared/lib/constants/ai";
+
+const API = "/api/settings/ai-keys";
 
 type AiKeyRow = {
     id: number;
@@ -27,31 +37,81 @@ type AiKeyRow = {
     provider: AiProvider;
     model: string;
     source: AiKeySource;
-    /** db: last 4 of the pasted key. env / ini: the variable name. */
+    envName: string | null;
+    /** db / ini: last 4 of the key. env: the variable name. */
     keyHint: string;
-    canSearch: boolean;
     canPhoto: boolean;
+    canSearch: boolean;
     paid: boolean;
     active: boolean;
-    /** yyyy-mm-dd, or "" for none. */
-    validTill: string;
+    validTill: string | null;
+    gapSeconds: number;
+    dailyLimit: number | null;
+    limitRestSeconds: number;
+    failRestSeconds: number;
+    timeoutSeconds: number;
+    retries: number;
+    /** Why it cannot run on this server (null = it can). */
+    notUsableHere: string | null;
+    /** ini: saved on this PC. */
+    onThisPc: boolean | null;
+    usage: {
+        callsToday: number;
+        lastUsedAt: number | null;
+        restingUntil: number | null;
+        lastOkAt: number | null;
+        lastError: string | null;
+        lastErrorAt: number | null;
+    };
 };
 
 /** chains[useKey][step] = ordered key ids. */
 type Chains = Record<string, Partial<Record<AiStep, number[]>>>;
+type Setup = { keys: AiKeyRow[]; chains: Chains; here: { sharedSecret: boolean; localStore: boolean } };
 
-// Example rows standing in for today's .env chain until the tables exist.
-const SAMPLE_KEYS: AiKeyRow[] = [
-    { id: 1, name: "Gemini free 1", provider: "gemini", model: "gemini-3.8-flash", source: "env", keyHint: "GOOGLE_GENERATIVE_AI_API_KEY", canSearch: false, canPhoto: true, paid: false, active: true, validTill: "" },
-    { id: 2, name: "Gemini free 2", provider: "gemini", model: "gemini-3.8-flash", source: "env", keyHint: "GOOGLE_GENERATIVE_AI_API_KEY1", canSearch: false, canPhoto: true, paid: false, active: true, validTill: "" },
-    { id: 3, name: "Gemini paid", provider: "gemini", model: "gemini-3.8-flash", source: "env", keyHint: "GOOGLE_AI_SEARCH_API_KEY", canSearch: true, canPhoto: true, paid: true, active: true, validTill: "" },
-];
-const SAMPLE_CHAINS: Chains = { product_copy: { draft: [1, 2, 3], search: [3], polish: [1, 2, 3] } };
-
-const EMPTY_FORM: Omit<AiKeyRow, "id"> = {
-    name: "", provider: "gemini", model: "", source: "db", keyHint: "",
-    canSearch: false, canPhoto: false, paid: false, active: true, validTill: "",
+/** The dialog's fields — numbers as typed text (NumericInput). */
+type Form = {
+    name: string; provider: AiProvider; model: string; source: AiKeySource; envName: string;
+    canPhoto: boolean; canSearch: boolean; paid: boolean; active: boolean; validTill: string;
+    gapSeconds: string; dailyLimit: string; limitRestSeconds: string; failRestSeconds: string;
+    timeoutSeconds: string; retries: string;
 };
+
+const EMPTY_FORM: Form = {
+    name: "", provider: "gemini", model: "", source: "db", envName: "",
+    canPhoto: true, canSearch: false, paid: false, active: true, validTill: "",
+    gapSeconds: String(AI_KEY_DEFAULTS.gapSeconds.free), dailyLimit: "",
+    limitRestSeconds: String(AI_KEY_DEFAULTS.limitRestSeconds), failRestSeconds: String(AI_KEY_DEFAULTS.failRestSeconds),
+    timeoutSeconds: String(AI_KEY_DEFAULTS.timeoutSeconds), retries: String(AI_KEY_DEFAULTS.retries),
+};
+
+const formOf = (k: AiKeyRow): Form => ({
+    name: k.name, provider: k.provider, model: k.model, source: k.source, envName: k.envName ?? "",
+    canPhoto: k.canPhoto, canSearch: k.canSearch, paid: k.paid, active: k.active, validTill: k.validTill ?? "",
+    gapSeconds: String(k.gapSeconds), dailyLimit: k.dailyLimit == null ? "" : String(k.dailyLimit),
+    limitRestSeconds: String(k.limitRestSeconds), failRestSeconds: String(k.failRestSeconds),
+    timeoutSeconds: String(k.timeoutSeconds), retries: String(k.retries),
+});
+
+const num = (s: string, fallback: number) => (s.trim() === "" ? fallback : Number(s));
+
+/** The API body for this form; `secret` only for db, `keyHint` only for ini. */
+function bodyOf(f: Form, secret: string) {
+    return {
+        name: f.name.trim(), provider: f.provider, model: f.model.trim(), source: f.source,
+        envName: f.source === "env" ? f.envName.trim() : null,
+        ...(f.source === "db" && secret.trim() ? { secret: secret.trim() } : {}),
+        ...(f.source === "ini" && secret.trim() ? { keyHint: secret.trim().slice(-4) } : {}),
+        canPhoto: f.canPhoto, canSearch: f.canSearch, paid: f.paid, active: f.active,
+        validTill: f.validTill || null,
+        gapSeconds: num(f.gapSeconds, 0),
+        dailyLimit: f.dailyLimit.trim() === "" ? null : Number(f.dailyLimit),
+        limitRestSeconds: num(f.limitRestSeconds, AI_KEY_DEFAULTS.limitRestSeconds),
+        failRestSeconds: num(f.failRestSeconds, AI_KEY_DEFAULTS.failRestSeconds),
+        timeoutSeconds: num(f.timeoutSeconds, AI_KEY_DEFAULTS.timeoutSeconds),
+        retries: num(f.retries, 0),
+    };
+}
 
 // The key box is type="password", so Chrome treats the form as a sign-in and
 // fills the saved login into it (email into Model, password into the key).
@@ -62,46 +122,91 @@ const NO_AUTOFILL = { autoComplete: "off", "data-1p-ignore": true, "data-lpignor
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const isExpired = (k: AiKeyRow) => !!k.validTill && k.validTill < todayIso();
 const providerLabel = (p: AiProvider) => AI_PROVIDERS.find((x) => x.value === p)?.label ?? p;
-const sourceShort: Record<AiKeySource, string> = { db: "Saved here", env: ".env", ini: "Counter .ini" };
+const sourceShort: Record<AiKeySource, string> = { db: "Saved here", env: ".env", ini: "This PC only" };
+const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const secs = (n: number) => (n >= 3600 && n % 3600 === 0 ? `${n / 3600} h` : n >= 60 && n % 60 === 0 ? `${n / 60} min` : `${n} s`);
 
 export function AiSetupPanel() {
-    const [keys, setKeys] = useState<AiKeyRow[]>(SAMPLE_KEYS);
-    const [chains, setChains] = useState<Chains>(SAMPLE_CHAINS);
+    const { data, loading, error, reload } = useApiResource<Setup>(API, { topics: ["settings"] });
+    // Local copy for optimistic edits; the server's answer replaces it on every read.
+    const [keys, setKeys] = useState<AiKeyRow[]>([]);
+    const [chains, setChains] = useState<Chains>({});
     const [editing, setEditing] = useState<AiKeyRow | "new" | null>(null);
+    const [testing, setTesting] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (!data) return;
+        setKeys(data.keys);
+        setChains(data.chains);
+    }, [data]);
 
     const byId = useMemo(() => new Map(keys.map((k) => [k.id, k])), [keys]);
+    const here = data?.here ?? { sharedSecret: false, localStore: false };
 
-    const saveKey = (row: AiKeyRow) => {
-        setKeys((prev) => (prev.some((k) => k.id === row.id) ? prev.map((k) => (k.id === row.id ? row : k)) : [...prev, row]));
-        setEditing(null);
+    const toggleActive = async (k: AiKeyRow, active: boolean) => {
+        setKeys((prev) => prev.map((x) => (x.id === k.id ? { ...x, active } : x)));
+        try {
+            await axios.patch(`${API}/${k.id}`, bodyOf({ ...formOf(k), active }, ""));
+        } catch (e) {
+            setKeys((prev) => prev.map((x) => (x.id === k.id ? { ...x, active: k.active } : x)));
+            toast.error(extractApiError(e, "Could not save"));
+        }
     };
 
-    const deleteKey = (id: number) => {
-        setKeys((prev) => prev.filter((k) => k.id !== id));
-        setChains((prev) => {
-            const next: Chains = {};
-            for (const [use, steps] of Object.entries(prev)) {
-                next[use] = Object.fromEntries(Object.entries(steps).map(([s, ids]) => [s, (ids ?? []).filter((x) => x !== id)]));
-            }
-            return next;
-        });
+    const deleteKey = async (k: AiKeyRow) => {
+        if (!(await confirmAction({ title: `Delete key "${k.name}"?`, body: "It is taken out of every AI step too.", confirmLabel: "Delete" }))) return;
+        const before = { keys, chains };
+        setKeys((prev) => prev.filter((x) => x.id !== k.id));
+        setChains((prev) => Object.fromEntries(Object.entries(prev).map(([use, steps]) => [
+            use, Object.fromEntries(Object.entries(steps).map(([s, ids]) => [s, (ids ?? []).filter((x) => x !== k.id)])),
+        ])));
+        try {
+            // The PC's copy first: once the row is gone nothing points at it.
+            if (k.source === "ini" && k.onThisPc) await axios.delete(`${API}/${k.id}/local`);
+            await axios.delete(`${API}/${k.id}`);
+        } catch (e) {
+            setKeys(before.keys);
+            setChains(before.chains);
+            toast.error(extractApiError(e, "Could not delete"));
+        }
     };
 
-    const setChain = (use: string, step: AiStep, ids: number[]) =>
+    const testKey = async (k: AiKeyRow) => {
+        setTesting(k.id);
+        try {
+            const { data: r } = await axios.post<{ ok: boolean; message: string }>(`${API}/${k.id}/test`);
+            (r.ok ? toast.success : toast.error)(`${k.name}: ${r.message}`);
+        } catch (e) {
+            toast.error(extractApiError(e, "Test failed"));
+        } finally {
+            setTesting(null);
+        }
+    };
+
+    const setChain = async (use: string, step: AiStep, ids: number[]) => {
+        const before = chains;
         setChains((prev) => ({ ...prev, [use]: { ...prev[use], [step]: ids } }));
+        try {
+            await axios.put(`${API}/chains`, { use, step, keyIds: ids });
+        } catch (e) {
+            setChains(before);
+            toast.error(extractApiError(e, "Could not save the order"));
+        }
+    };
+
+    if (loading && !data) return <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading…</div>;
+    if (error && !data) return <div className="text-sm text-destructive">{error}</div>;
 
     return (
         <div className="space-y-6">
-            <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
-                Preview — not saved yet. Changes here are lost when the page reloads; product descriptions still use the .env keys.
-            </div>
-
             {/* ── Keys ── */}
             <section className="space-y-3">
                 <div className="flex items-center justify-between">
                     <div>
                         <h2 className="text-base font-semibold">AI keys</h2>
-                        <p className="text-sm text-muted-foreground">Every key has the same settings; only where the actual key is kept differs.</p>
+                        <p className="text-sm text-muted-foreground">
+                            Every key has the same settings; only where the actual key is kept differs. &quot;Usable&quot; and the counts are for this {here.localStore ? "PC" : "server"}.
+                        </p>
                     </div>
                     <Button size="sm" onClick={() => setEditing("new")}><Plus className="mr-1 h-4 w-4" />Add key</Button>
                 </div>
@@ -113,8 +218,8 @@ export function AiSetupPanel() {
                                 <th className="px-3 py-2">Provider · model</th>
                                 <th className="px-3 py-2">Key kept in</th>
                                 <th className="px-3 py-2">Can do</th>
-                                <th className="px-3 py-2">Plan</th>
-                                <th className="px-3 py-2">Valid till</th>
+                                <th className="px-3 py-2">Plan · gap</th>
+                                <th className="px-3 py-2">Today here</th>
                                 <th className="px-3 py-2">Active</th>
                                 <th className="px-3 py-2" />
                             </tr>
@@ -124,31 +229,45 @@ export function AiSetupPanel() {
                                 <tr><td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">No keys yet — add one.</td></tr>
                             )}
                             {keys.map((k) => (
-                                <tr key={k.id} className="border-t">
-                                    <td className="px-3 py-2 font-medium">{k.name}</td>
+                                <tr key={k.id} className="border-t align-top">
+                                    <td className="px-3 py-2">
+                                        <div className="font-medium">{k.name}</div>
+                                        {k.notUsableHere && k.active && <div className="text-xs text-amber-700 dark:text-amber-400">Not here: {k.notUsableHere}</div>}
+                                        {isExpired(k) && <div className="text-xs font-medium text-destructive">Offer ended {k.validTill}</div>}
+                                        {!isExpired(k) && k.validTill && <div className="text-xs text-muted-foreground">Valid till {k.validTill}</div>}
+                                    </td>
                                     <td className="px-3 py-2">{providerLabel(k.provider)} · <span className="font-mono text-xs">{k.model}</span></td>
                                     <td className="px-3 py-2">
                                         <div>{sourceShort[k.source]}</div>
-                                        <div className="font-mono text-xs text-muted-foreground">{k.source === "db" ? `•••• ${k.keyHint}` : k.keyHint}</div>
+                                        <div className="font-mono text-xs text-muted-foreground">{k.source === "env" ? k.keyHint : k.keyHint ? `•••• ${k.keyHint}` : "—"}</div>
                                     </td>
                                     <td className="space-x-1 px-3 py-2">
                                         {k.canPhoto && <Badge variant="secondary">Photo</Badge>}
                                         {k.canSearch && <Badge variant="secondary">Search</Badge>}
                                         {!k.canPhoto && !k.canSearch && <span className="text-muted-foreground">Text only</span>}
                                     </td>
-                                    <td className="px-3 py-2">{k.paid ? <Badge>Paid</Badge> : <Badge variant="outline">Free</Badge>}</td>
-                                    <td className={`px-3 py-2 ${isExpired(k) ? "font-medium text-destructive" : ""}`}>
-                                        {k.validTill || "—"}{isExpired(k) && " (expired)"}
+                                    <td className="px-3 py-2">
+                                        {k.paid ? <Badge>Paid</Badge> : <Badge variant="outline">Free</Badge>}
+                                        <div className="mt-1 text-xs text-muted-foreground">
+                                            gap {secs(k.gapSeconds)}{k.dailyLimit != null && ` · ${k.dailyLimit}/day`}
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-2 text-xs">
+                                        <div>{k.usage.callsToday} call{k.usage.callsToday === 1 ? "" : "s"}{k.dailyLimit != null && ` of ${k.dailyLimit}`}</div>
+                                        {k.usage.restingUntil && <div className="text-amber-700 dark:text-amber-400">Resting till {clock(k.usage.restingUntil)}</div>}
+                                        {k.usage.lastError && k.usage.lastErrorAt && (!k.usage.lastOkAt || k.usage.lastErrorAt > k.usage.lastOkAt) && (
+                                            <div className="max-w-56 truncate text-destructive" title={k.usage.lastError}>{clock(k.usage.lastErrorAt)}: {k.usage.lastError}</div>
+                                        )}
                                     </td>
                                     <td className="px-3 py-2">
-                                        <Switch checked={k.active} onCheckedChange={(v) => saveKey({ ...k, active: v })} />
+                                        <Switch checked={k.active} onCheckedChange={(v) => toggleActive(k, v)} />
                                     </td>
                                     <td className="whitespace-nowrap px-3 py-2 text-right">
-                                        <Button variant="ghost" size="sm" onClick={() => toast.info("Test comes with the next step — the page is a preview.")}>
-                                            <FlaskConical className="mr-1 h-4 w-4" />Test
+                                        <Button variant="ghost" size="sm" disabled={testing !== null} onClick={() => testKey(k)} title="One tiny call on this key, from here">
+                                            {testing === k.id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FlaskConical className="mr-1 h-4 w-4" />}Test
                                         </Button>
                                         <Button variant="ghost" size="icon" aria-label="Edit" onClick={() => setEditing(k)}><Pencil className="h-4 w-4" /></Button>
-                                        <Button variant="ghost" size="icon" aria-label="Delete" onClick={() => deleteKey(k.id)}><Trash2 className="h-4 w-4" /></Button>
+                                        <Button variant="ghost" size="icon" aria-label="Delete" onClick={() => deleteKey(k)}><Trash2 className="h-4 w-4" /></Button>
                                     </td>
                                 </tr>
                             ))}
@@ -162,7 +281,7 @@ export function AiSetupPanel() {
                 <div>
                     <h2 className="text-base font-semibold">AI uses</h2>
                     <p className="text-sm text-muted-foreground">
-                        Each step tries its keys top to bottom. Free keys take turns; a paid key is used only when no free key is ready.
+                        Each step tries its keys in order. Free keys take turns, each after its own gap; a paid key is used only with Premium on and no free key ready. A failing key rests and the next one is tried.
                     </p>
                 </div>
                 {AI_USES.map((use) => (
@@ -189,9 +308,9 @@ export function AiSetupPanel() {
             {editing && (
                 <KeyDialog
                     initial={editing === "new" ? null : editing}
-                    nextId={Math.max(0, ...keys.map((k) => k.id)) + 1}
+                    here={here}
                     onClose={() => setEditing(null)}
-                    onSave={saveKey}
+                    onSaved={() => { setEditing(null); void reload(); }}
                 />
             )}
         </div>
@@ -229,7 +348,7 @@ function StepChain({ label, needs, ids, keys, byId, onChange }: {
                     return (
                         <li key={id} className="flex items-center gap-1 rounded border px-2 py-1 text-sm">
                             <span className="w-4 text-xs text-muted-foreground">{i + 1}.</span>
-                            <span className={`flex-1 truncate ${off ? "text-muted-foreground line-through" : ""}`}>{k.name}</span>
+                            <span className={`flex-1 truncate ${off ? "text-muted-foreground line-through" : k.notUsableHere ? "text-muted-foreground" : ""}`} title={k.notUsableHere ?? undefined}>{k.name}</span>
                             {k.paid && <Badge className="h-5 px-1 text-[10px]">Paid</Badge>}
                             <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp className="h-3 w-3" /></Button>
                             <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="Move down" disabled={i === ids.length - 1} onClick={() => move(i, 1)}><ArrowDown className="h-3 w-3" /></Button>
@@ -250,33 +369,64 @@ function StepChain({ label, needs, ids, keys, byId, onChange }: {
     );
 }
 
-function KeyDialog({ initial, nextId, onClose, onSave }: {
+function KeyDialog({ initial, here, onClose, onSaved }: {
     initial: AiKeyRow | null;
-    nextId: number;
+    here: Setup["here"];
     onClose: () => void;
-    onSave: (row: AiKeyRow) => void;
+    onSaved: () => void;
 }) {
-    const [form, setForm] = useState<Omit<AiKeyRow, "id">>(initial ?? EMPTY_FORM);
+    const [form, setForm] = useState<Form>(initial ? formOf(initial) : EMPTY_FORM);
     // A pasted key is write-only: the box starts empty, and empty on edit keeps the old key.
     const [secret, setSecret] = useState("");
-    const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
+    const [saving, setSaving] = useState(false);
+    const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
 
-    const sourceChanged = initial && initial.source !== form.source;
-    const submit = () => {
+    // Plan swaps the gap between the two defaults, unless staff typed their own.
+    const setPaid = (paid: boolean) => setForm((f) => ({
+        ...f, paid,
+        gapSeconds: f.gapSeconds === String(AI_KEY_DEFAULTS.gapSeconds[paid ? "free" : "paid"])
+            ? String(AI_KEY_DEFAULTS.gapSeconds[paid ? "paid" : "free"]) : f.gapSeconds,
+    }));
+
+    const sameSource = initial?.source === form.source;
+    const hasSaved = sameSource && (form.source === "db" || (form.source === "ini" && !!initial?.onThisPc));
+    const sourceOff = (s: AiKeySource) =>
+        s === "db" && !here.sharedSecret ? "AI_KEY_SECRET is not set here"
+            : s === "ini" && !here.localStore ? "only in the counter app" : null;
+
+    const submit = async () => {
         if (!form.name.trim() || !form.model.trim()) return toast.error("Name and model are required.");
-        let keyHint = form.keyHint.trim();
-        if (form.source === "db") {
-            if (secret.trim()) keyHint = secret.trim().slice(-4);
-            else if (!initial || sourceChanged) return toast.error("Paste the key.");
-        } else if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(keyHint)) {
-            return toast.error("Variable name: letters, digits and _ only.");
+        if (form.source === "env" && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(form.envName.trim())) return toast.error("Variable name: letters, digits and _ only.");
+        if (form.source !== "env" && !secret.trim() && !hasSaved) return toast.error("Paste the key.");
+        setSaving(true);
+        try {
+            const body = bodyOf(form, secret);
+            const id = initial
+                ? (await axios.patch<{ id: number }>(`${API}/${initial.id}`, body), initial.id)
+                : (await axios.post<{ id: number }>(API, body)).data.id;
+            if (form.source === "ini" && secret.trim()) {
+                try {
+                    await axios.put(`${API}/${id}/local`, { key: secret.trim() });
+                } catch (e) {
+                    toast.error(`Key details saved, but not the key on this PC: ${extractApiError(e, "failed")} — edit it and paste again.`);
+                    onSaved();
+                    return;
+                }
+            } else if (initial?.source === "ini" && form.source !== "ini" && initial.onThisPc) {
+                await axios.delete(`${API}/${id}/local`).catch(() => undefined);
+            }
+            toast.success("Saved");
+            onSaved();
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not save"));
+        } finally {
+            setSaving(false);
         }
-        onSave({ ...form, name: form.name.trim(), model: form.model.trim(), keyHint, id: initial?.id ?? nextId });
     };
 
     return (
         <Dialog open onOpenChange={(o) => !o && onClose()}>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
                 <DialogHeader><DialogTitle>{initial ? "Edit AI key" : "Add AI key"}</DialogTitle></DialogHeader>
                 <div className="grid gap-3">
                     <div className="grid gap-1">
@@ -288,7 +438,11 @@ function KeyDialog({ initial, nextId, onClose, onSave }: {
                             <Label>Provider</Label>
                             <Select value={form.provider} onValueChange={(v) => set("provider", v as AiProvider)}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>{AI_PROVIDERS.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
+                                <SelectContent>
+                                    {AI_PROVIDERS.map((p) => (
+                                        <SelectItem key={p.value} value={p.value} disabled={!p.ready}>{p.label}{!p.ready && " (later)"}</SelectItem>
+                                    ))}
+                                </SelectContent>
                             </Select>
                         </div>
                         <div className="grid gap-1">
@@ -298,12 +452,23 @@ function KeyDialog({ initial, nextId, onClose, onSave }: {
                     </div>
                     <div className="grid gap-1">
                         <Label>Key kept in</Label>
-                        <Select value={form.source} onValueChange={(v) => set("source", v as AiKeySource)}>
+                        <Select value={form.source} onValueChange={(v) => { set("source", v as AiKeySource); setSecret(""); }}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>{AI_KEY_SOURCES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
+                            <SelectContent>
+                                {AI_KEY_SOURCES.map((s) => {
+                                    const off = sourceOff(s.value);
+                                    return <SelectItem key={s.value} value={s.value} disabled={!!off && initial?.source !== s.value}>{s.label}{off && ` — ${off}`}</SelectItem>;
+                                })}
+                            </SelectContent>
                         </Select>
                     </div>
-                    {form.source === "db" ? (
+                    {form.source === "env" ? (
+                        <div className="grid gap-1">
+                            <Label>Variable name</Label>
+                            <Input value={form.envName} onChange={(e) => set("envName", e.target.value)} placeholder="GOOGLE_GENERATIVE_AI_API_KEY" className="font-mono" {...NO_AUTOFILL} />
+                            <p className="text-xs text-muted-foreground">The key is already in that .env — counters on a release that carries it, and the website once it is set in Vercel.</p>
+                        </div>
+                    ) : (
                         <div className="grid gap-1">
                             <Label>API key</Label>
                             <Input
@@ -312,24 +477,13 @@ function KeyDialog({ initial, nextId, onClose, onSave }: {
                                 autoComplete="new-password"
                                 value={secret}
                                 onChange={(e) => setSecret(e.target.value)}
-                                placeholder={initial?.source === "db" ? `•••• ${initial.keyHint} — leave empty to keep` : "Paste the key"}
-                            />
-                            <p className="text-xs text-muted-foreground">Saved locked; never shown again — only the last 4 characters.</p>
-                        </div>
-                    ) : (
-                        <div className="grid gap-1">
-                            <Label>Variable name</Label>
-                            <Input
-                                value={form.keyHint}
-                                onChange={(e) => set("keyHint", e.target.value)}
-                                placeholder="GOOGLE_GENERATIVE_AI_API_KEY"
-                                {...NO_AUTOFILL}
-                                className="font-mono"
+                                placeholder={hasSaved && initial?.keyHint ? `•••• ${initial.keyHint} — leave empty to keep` : "Paste the key"}
                             />
                             <p className="text-xs text-muted-foreground">
-                                {form.source === "env"
-                                    ? "Works where that .env carries it — counters on that release, and the website once it is set in Vercel."
-                                    : "Works only on counters whose .ini has this name."}
+                                {form.source === "db"
+                                    ? "Saved locked in the database — every counter and the website can use it. Never shown again, only the last 4 characters."
+                                    : "Saved locked on this PC only — never in the database; other counters and the website cannot use it."}
+                                {form.source === "ini" && initial?.source === "ini" && !initial.onThisPc && " This key was saved on another PC — paste it to keep a copy here too."}
                             </p>
                         </div>
                     )}
@@ -344,7 +498,7 @@ function KeyDialog({ initial, nextId, onClose, onSave }: {
                     <div className="grid grid-cols-2 gap-3">
                         <div className="grid gap-1">
                             <Label>Plan</Label>
-                            <Select value={form.paid ? "paid" : "free"} onValueChange={(v) => set("paid", v === "paid")}>
+                            <Select value={form.paid ? "paid" : "free"} onValueChange={(v) => setPaid(v === "paid")}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="free">Free</SelectItem>
@@ -357,15 +511,40 @@ function KeyDialog({ initial, nextId, onClose, onSave }: {
                             <Input type="date" value={form.validTill} onChange={(e) => set("validTill", e.target.value)} />
                         </div>
                     </div>
+
+                    <div className="rounded-md border p-3">
+                        <div className="mb-2 text-sm font-medium">Limits &amp; safety</div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <SecondsField label="Wait between calls (s)" hint="Paid: 0" value={form.gapSeconds} onChange={(v) => set("gapSeconds", v)} max={3600} />
+                            <SecondsField label="Calls per day" hint="Empty = no limit" value={form.dailyLimit} onChange={(v) => set("dailyLimit", v)} min={1} max={1_000_000} />
+                            <SecondsField label="Rest after limit hit (s)" hint='Provider said "too many"' value={form.limitRestSeconds} onChange={(v) => set("limitRestSeconds", v)} max={86_400} />
+                            <SecondsField label="Rest after failure (s)" hint="Refused, busy, too slow" value={form.failRestSeconds} onChange={(v) => set("failRestSeconds", v)} max={86_400} />
+                            <SecondsField label="Give up after (s)" hint="One call, 5–600" value={form.timeoutSeconds} onChange={(v) => set("timeoutSeconds", v)} min={5} max={600} />
+                            <SecondsField label="Retries on this key" hint="0–3, then the next key" value={form.retries} onChange={(v) => set("retries", v)} max={3} />
+                        </div>
+                    </div>
+
                     <label className="flex items-center gap-2 text-sm">
                         <Switch checked={form.active} onCheckedChange={(v) => set("active", v)} />Active
                     </label>
                 </div>
                 <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>Cancel</Button>
-                    <Button onClick={submit}>Save</Button>
+                    <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+                    <Button onClick={submit} disabled={saving}>{saving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}Save</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+    );
+}
+
+function SecondsField({ label, hint, value, onChange, min = 0, max }: {
+    label: string; hint: string; value: string; onChange: (v: string) => void; min?: number; max: number;
+}) {
+    return (
+        <div className="grid gap-1">
+            <Label className="text-xs">{label}</Label>
+            <NumericInput value={value} onValueChange={onChange} min={min} max={max} inputMode="numeric" />
+            <p className="text-[11px] text-muted-foreground">{hint}</p>
+        </div>
     );
 }

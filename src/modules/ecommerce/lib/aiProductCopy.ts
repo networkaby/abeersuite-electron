@@ -1,10 +1,11 @@
 import "server-only";
-import { APICallError, RetryError, generateText } from "ai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
-import { AI_CALL_TIMEOUT_MS, AI_FREE_KEY_GAP_MS, AI_WRITE_KEY_CHAIN, AI_HIGHLIGHT_COUNT, AI_PRODUCT_COPY_MODEL, type AiSearchMode } from "@/shared/lib/constants/ai";
+import { AI_HIGHLIGHT_COUNT, type AiSearchMode, type AiStep } from "@/shared/lib/constants/ai";
 import { verifyFacts, type CitedFact } from "@/modules/ecommerce/lib/aiFactCheck";
-import { isLockedOut, keyLastUsed, noteKeyFailure, noteKeySuccess, noteKeyUse } from "@/shared/lib/ai/keyLockout";
+import {
+    AiKeysExhaustedError, AiNoKeyError, AiRegularKeysOutError, aiErrorMessage as keyErrorMessage, aiStatus,
+    callModel, isKeyFailure, runChain, stepHasKey,
+} from "@/shared/lib/ai/aiKeys";
 
 // Flipkart-style, SEO-friendly product copy, spending search money only where
 // it adds something. House style (owner, 2026-10-19): model + technical specs,
@@ -12,12 +13,12 @@ import { isLockedOut, keyLastUsed, noteKeyFailure, noteKeySuccess, noteKeyUse } 
 // has it; warranty always worded "Manufacturer Warranty" (label first, else
 // the product's shop term); a compatibility guide for every product type —
 // kept as its own list so a later bundle feature can use it.
-//  1. Draft  — name + photo on the FREE key (GOOGLE_GENERATIVE_AI_API_KEY;
-//     falls over to the paid key when the free daily cap answers 429), strict
-//     "nothing false" rule. Also reports what it was unsure of and whether a
-//     web search could fill that.
-//  2. Search — only when step 1 says it helps, on the PAID key
-//     (GOOGLE_AI_SEARCH_API_KEY; free-tier keys get no Google Search quota).
+// Each step tries the keys chosen for it on Settings → AI Setup (aiKeys.ts).
+//  1. Draft  — name + photo, free keys in turn (a paid key only with Premium
+//     on), strict "nothing false" rule. Also reports what it was unsure of and
+//     whether a web search could fill that.
+//  2. Search — only when step 1 says it helps, on the search step's keys
+//     (paid; free-tier keys get no Google Search quota).
 //     Asks for each missing fact WITH the page URL it was read on; the server
 //     opens every URL and keeps a fact only if the page shows the value
 //     (aiFactCheck.ts) — Gemini answers specs from memory and invents URLs.
@@ -104,10 +105,11 @@ export type ProductCopy = Copy & {
     searchError?: string;
 };
 
-const searchKey = () => process.env.GOOGLE_AI_SEARCH_API_KEY;
+const USE = "product_copy";
 
-export function isAiConfigured(): boolean {
-    return AI_WRITE_KEY_CHAIN.some((k) => !!process.env[k]);
+/** Drafting can run on this server — some draft key works here. */
+export function isAiConfigured(): Promise<boolean> {
+    return stepHasKey({ use: USE, step: "draft", premium: true });
 }
 
 const STRICT_RULES = [
@@ -202,16 +204,13 @@ function parseJson(text: string): unknown {
 
 type Part = { type: "text"; text: string } | { type: "file"; data: URL; mediaType: string };
 
-function call(apiKey: string, content: Part[], withSearch: boolean) {
-    const google = createGoogleGenerativeAI({ apiKey });
-    return generateText({
-        model: google(AI_PRODUCT_COPY_MODEL),
-        tools: withSearch ? { google_search: google.tools.googleSearch({}) } : undefined,
-        messages: [{ role: "user", content }],
-        maxRetries: 1,
-        // A grounded search call has hung for minutes (2026-10-19) — cut it off.
-        abortSignal: AbortSignal.timeout(AI_CALL_TIMEOUT_MS),
-    });
+/** One step on its chain of keys. `search` = with the web-search tool. */
+async function callStep(step: AiStep, content: Part[], opts: { premium: boolean; wait?: boolean; search?: boolean }) {
+    const { result, key } = await runChain(
+        { use: USE, step, premium: opts.premium, wait: opts.wait },
+        (k, apiKey, signal) => callModel(k, apiKey, [{ role: "user", content }], { search: opts.search, signal }),
+    );
+    return { reply: result, key: key.name };
 }
 
 /** The model answered, twice, with something that is not a usable listing. */
@@ -222,92 +221,12 @@ export class AiReplyError extends Error {
     }
 }
 
-/** Google's HTTP status, looking inside the SDK's retry wrapper. */
-function aiStatus(e: unknown): number | undefined {
-    const inner = RetryError.isInstance(e) ? e.lastError : e;
-    return APICallError.isInstance(inner) ? inner.statusCode : undefined;
-}
-
-/** Google's reason in staff words — 402 / 429 / 403 mean the key, not this product. */
+/** The reason in staff words, or null for an unexpected error. */
 export function aiErrorMessage(e: unknown): string | null {
-    if (e instanceof AiReplyError || e instanceof AiKeysExhaustedError || e instanceof AiRegularKeysOutError) return e.message;
-    if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) return "Gemini took too long — try again.";
-    const status = aiStatus(e);
-    if (status === 402) return "Gemini credit is used up — top up the AI Studio project, or use a free-tier key.";
-    if (status === 429) return "Gemini limit reached for now — wait a minute and try again.";
-    if (status === 400 || status === 403) return "Gemini refused the key — check GOOGLE_GENERATIVE_AI_API_KEY.";
-    return null;
+    return e instanceof AiReplyError ? e.message : keyErrorMessage(e);
 }
 
-// Draft and polish try keys in keyOrder(); any failure of a key (refused, out
-// of credit, at its limit, too slow) silently moves on to the next and rests
-// that key — 2 min for a 429, 30 min otherwise (keyLockout.ts).
-const KEY_FAULTS = new Set([400, 401, 402, 403, 429, 500, 503]);
-const isTimeout = (e: unknown) => e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
-const isKeyFailure = (e: unknown) => KEY_FAULTS.has(aiStatus(e) ?? 0) || isTimeout(e);
-
-/** No key left to try today — the only AI error staff see for the write steps. */
-/** Premium off and every regular key is resting or locked — say so, never pay. */
-export class AiRegularKeysOutError extends Error {
-    constructor() {
-        super("Regular keys are used up for now — turn on Premium API, or try again later.");
-        this.name = "AiRegularKeysOutError";
-    }
-}
-
-export class AiKeysExhaustedError extends Error {
-    constructor() {
-        super("Every AI key is resting after a failure (busy, too slow, blocked or out of credit) — try again in a few minutes.");
-        this.name = "AiKeysExhaustedError";
-    }
-}
-
-const PAID_KEY = AI_WRITE_KEY_CHAIN[AI_WRITE_KEY_CHAIN.length - 1];
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** Free keys not resting after a failure, least recently used first. */
-function freeKeys(): string[] {
-    return AI_WRITE_KEY_CHAIN
-        .filter((k) => k !== PAID_KEY && process.env[k] && !isLockedOut(k))
-        .sort((a, b) => keyLastUsed(a) - keyLastUsed(b));
-}
-
-/** Free keys past their safety gap, then the paid key (the chain's last) when
- *  Premium is on. With no paid key to fall back on, a free key inside its gap is still tried. */
-function keyOrder(premium: boolean): string[] {
-    const free = freeKeys();
-    const rested = free.filter((k) => Date.now() - keyLastUsed(k) >= AI_FREE_KEY_GAP_MS);
-    return premium && process.env[PAID_KEY] && !isLockedOut(PAID_KEY) ? [...rested, PAID_KEY] : free;
-}
-
-/** Bulk (owner, 2026-10-19): when every free key is only inside its 10 s gap,
- *  wait for the first one instead of paying. Free keys resting after a failure
- *  are not waited for — then the paid key is fine. */
-function freeKeyWait(): number {
-    const free = freeKeys();
-    return free.length ? keyLastUsed(free[0]) + AI_FREE_KEY_GAP_MS - Date.now() : 0;
-}
-
-async function callChain(content: Part[], { bulk = false, premium = false }: { bulk?: boolean; premium?: boolean }) {
-    // Re-checked after every sleep: parallel calls queue for the keys in turn,
-    // and the key order below is read in the same tick, so none slips to paid.
-    // Premium off waits too — there is nothing else it may use.
-    const mayWait = bulk || !premium;
-    for (let wait = mayWait ? freeKeyWait() : 0; wait > 0; wait = freeKeyWait()) await sleep(wait);
-    for (const name of keyOrder(premium)) {
-        noteKeyUse(name);
-        try {
-            const reply = await call(process.env[name]!, content, false);
-            noteKeySuccess(name);
-            return { reply, key: name };
-        } catch (e) {
-            if (!isKeyFailure(e)) throw e; // about this product, not the key
-            console.warn(`[aiProductCopy] ${name} failed (${aiStatus(e) ?? "timeout"}), trying the next key`);
-            noteKeyFailure(name, { rateLimited: aiStatus(e) === 429 });
-        }
-    }
-    throw premium ? new AiKeysExhaustedError() : new AiRegularKeysOutError();
-}
+const isKeysOut = (e: unknown) => e instanceof AiKeysExhaustedError || e instanceof AiRegularKeysOutError || e instanceof AiNoKeyError;
 
 const tokensOf = (r: { usage?: { totalTokens?: number } }) => r.usage?.totalTokens ?? 0;
 
@@ -342,11 +261,11 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
 
     const started = Date.now();
     const tokens = { draft: 0, search: 0, polish: 0 };
-    const keyOpts = { bulk: p.bulk, premium: p.premium };
+    const keyOpts = { wait: p.bulk, premium: !!p.premium };
     let draftKey = "";
     // One more try when the reply cannot be read at all (no JSON, no title…).
     const readDraft = async () => {
-        const { reply, key } = await callChain(draftParts, keyOpts);
+        const { reply, key } = await callStep("draft", draftParts, keyOpts);
         tokens.draft += tokensOf(reply);
         draftKey = key;
         return draftSchema.parse(parseJson(reply.text));
@@ -355,11 +274,11 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
     try {
         draftRaw = await readDraft();
     } catch (e) {
-        if (aiStatus(e) !== undefined || e instanceof AiKeysExhaustedError || e instanceof AiRegularKeysOutError) throw e;
+        if (aiStatus(e) !== undefined || isKeysOut(e)) throw e;
         try {
             draftRaw = await readDraft();
         } catch (again) {
-            if (aiStatus(again) !== undefined || again instanceof AiKeysExhaustedError || again instanceof AiRegularKeysOutError) throw again;
+            if (aiStatus(again) !== undefined || isKeysOut(again)) throw again;
             throw new AiReplyError(again);
         }
     }
@@ -370,18 +289,17 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
     let search: ProductCopy["search"];
     let searchError: string | undefined;
     let verifiedFacts = 0;
-    const paidKey = searchKey();
     // "always" searches even when the draft says no — by the brand + name if it gave no query.
-    // Search runs on the paid key, so Premium off means search off.
+    // Search runs on paid keys, so Premium off means search off.
     const mode = p.premium ? p.search : "off";
     const query = searchQuery.trim() || (mode === "always" ? [p.brand, p.name].filter(Boolean).join(" ") : "");
     if (mode === "off") search = "off";
     else if (mode === "auto" && (!searchWorthy || !query)) search = "not-needed";
-    else if (!paidKey) search = "no-key";
+    else if (!(await stepHasKey({ use: USE, step: "search", premium: true }))) search = "no-key";
     else {
         try {
-            // Search has no fallback key: when it fails, staff turn search off.
-            const found = await call(paidKey, [{ type: "text", text: searchPrompt(p, draft, query) }], true);
+            // Every search key failing keeps the photo draft (catch below).
+            const { reply: found } = await callStep("search", [{ type: "text", text: searchPrompt(p, draft, query) }], { premium: true, search: true });
             tokens.search += tokensOf(found);
             console.info(`[aiProductCopy] search reply after ${Date.now() - started} ms`);
             const cited = factsSchema.parse(parseJson(found.text)).facts
@@ -394,7 +312,7 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
             if (verified.facts.length === 0) {
                 search = "no-sources";
             } else {
-                const { reply: polishReply } = await callChain([{ type: "text", text: polishPrompt(p, draft, verified.facts) }], keyOpts);
+                const { reply: polishReply } = await callStep("polish", [{ type: "text", text: polishPrompt(p, draft, verified.facts) }], keyOpts);
                 tokens.polish += tokensOf(polishReply);
                 const polished = copySchema.parse(parseJson(polishReply.text));
                 // The label decides: draft title, warranty and photo-read
@@ -408,7 +326,7 @@ export async function generateProductCopy(p: ProductCopyInput): Promise<ProductC
             // Search is an extra: any failure (its key included) keeps the photo draft.
             console.warn("[aiProductCopy] search step failed, keeping the photo draft:", aiErrorMessage(e) ?? e);
             search = "failed";
-            searchError = isKeyFailure(e)
+            searchError = isKeyFailure(e) || isKeysOut(e)
                 ? "Online search key failed (blocked, out of credit or too slow) — this draft is from the photos only."
                 : aiErrorMessage(e) ?? (e instanceof Error ? e.message : String(e)).slice(0, 160);
         }

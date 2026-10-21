@@ -615,6 +615,76 @@ ALTER TABLE "CustomerTier" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT
 ALTER TABLE "CustomerTier" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "ai_keys" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "provider" TEXT NOT NULL DEFAULT 'gemini',
+    "model" TEXT NOT NULL,
+    "source" TEXT NOT NULL,
+    "envName" TEXT,
+    "secretEnc" TEXT,
+    "keyHint" TEXT NOT NULL DEFAULT '',
+    "canPhoto" BOOLEAN NOT NULL DEFAULT false,
+    "canSearch" BOOLEAN NOT NULL DEFAULT false,
+    "paid" BOOLEAN NOT NULL DEFAULT false,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "validTill" DATE,
+    "gapSeconds" INTEGER NOT NULL DEFAULT 10,
+    "dailyLimit" INTEGER,
+    "limitRestSeconds" INTEGER NOT NULL DEFAULT 120,
+    "failRestSeconds" INTEGER NOT NULL DEFAULT 1800,
+    "timeoutSeconds" INTEGER NOT NULL DEFAULT 150,
+    "retries" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ai_keys_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "provider" TEXT NOT NULL DEFAULT 'gemini';
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "model" TEXT NOT NULL;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "source" TEXT NOT NULL;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "envName" TEXT;
+ALTER TABLE "ai_keys" ALTER COLUMN "envName" DROP NOT NULL;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "secretEnc" TEXT;
+ALTER TABLE "ai_keys" ALTER COLUMN "secretEnc" DROP NOT NULL;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "keyHint" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "canPhoto" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "canSearch" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "paid" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "active" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "validTill" DATE;
+ALTER TABLE "ai_keys" ALTER COLUMN "validTill" DROP NOT NULL;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "gapSeconds" INTEGER NOT NULL DEFAULT 10;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "dailyLimit" INTEGER;
+ALTER TABLE "ai_keys" ALTER COLUMN "dailyLimit" DROP NOT NULL;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "limitRestSeconds" INTEGER NOT NULL DEFAULT 120;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "failRestSeconds" INTEGER NOT NULL DEFAULT 1800;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "timeoutSeconds" INTEGER NOT NULL DEFAULT 150;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "retries" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "ai_chain_steps" (
+    "id" SERIAL NOT NULL,
+    "use" TEXT NOT NULL,
+    "step" TEXT NOT NULL,
+    "keyId" INTEGER NOT NULL,
+    "position" INTEGER NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ai_chain_steps_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "ai_chain_steps" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "ai_chain_steps" ADD COLUMN IF NOT EXISTS "use" TEXT NOT NULL;
+ALTER TABLE "ai_chain_steps" ADD COLUMN IF NOT EXISTS "step" TEXT NOT NULL;
+ALTER TABLE "ai_chain_steps" ADD COLUMN IF NOT EXISTS "keyId" INTEGER NOT NULL;
+ALTER TABLE "ai_chain_steps" ADD COLUMN IF NOT EXISTS "position" INTEGER NOT NULL;
+ALTER TABLE "ai_chain_steps" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "Person" (
     "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
@@ -5126,6 +5196,12 @@ CREATE INDEX IF NOT EXISTS "CustomerTier_enabled_idx" ON "CustomerTier"("enabled
 CREATE INDEX IF NOT EXISTS "CustomerTier_periodId_idx" ON "CustomerTier"("periodId");
 
 -- CreateIndex
+CREATE INDEX IF NOT EXISTS "ai_chain_steps_keyId_idx" ON "ai_chain_steps"("keyId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "ai_chain_steps_use_step_keyId_key" ON "ai_chain_steps"("use", "step", "keyId");
+
+-- CreateIndex
 CREATE INDEX IF NOT EXISTS "Person_updatedAt_idx" ON "Person"("updatedAt");
 
 -- CreateIndex
@@ -6002,6 +6078,13 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "CustomerTier" ADD CONSTRAINT "CustomerTier_periodId_fkey" FOREIGN KEY ("periodId") REFERENCES "CustomerTierPeriod"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "ai_chain_steps" ADD CONSTRAINT "ai_chain_steps_keyId_fkey" FOREIGN KEY ("keyId") REFERENCES "ai_keys"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -7746,6 +7829,20 @@ DO $$ BEGIN
     IF to_regclass('public."additional_cost_allocations"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "additional_cost_allocations";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "additional_cost_allocations"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."ai_chain_steps"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "ai_chain_steps";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "ai_chain_steps"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."ai_keys"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "ai_keys";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "ai_keys"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;

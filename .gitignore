@@ -236,3 +236,6 @@ resources/7za.exe
 
 certificates
 /phone-app/android/app/google-services.json
+
+# AI keys saved "on this PC only" in dev (src/shared/lib/ai/aiLocalKeys.ts)
+.ai-keys.local.json

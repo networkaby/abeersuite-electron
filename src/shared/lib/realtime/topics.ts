@@ -176,7 +176,7 @@ export const TOPIC_MODELS: Readonly<Record<Topic, readonly string[]>> = {
         "RolePermission", "Permission", "Position", "User", "UserPermission", "UserPosition",
         "PosCounter", "PaymentGateway", "AccountGroup", "OfflinePolicy", "BackupConfig",
         "VoucherPrintTemplate", "VoucherSeries", "Device", "CustomerGroup",
-        "CreditLimitConfig", "StaffProfile", "StaffSalary",
+        "CreditLimitConfig", "StaffProfile", "StaffSalary", "AiKey", "AiChainStep",
     ],
     chat: ["ChatRoom", "ChatRoomMember"],
     messages: ["Message", "MessageClaim"],

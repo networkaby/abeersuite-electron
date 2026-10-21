@@ -1,0 +1,64 @@
+// ── AI Setup (Settings → AI Setup) ───────────────────────────────────────────
+//
+// The AI keys the app may use, and, for every AI use + step, which keys it tries
+// in order. Read by src/shared/lib/ai/aiKeys.ts. Both tables sync to the
+// counters (a till runs AI calls itself), so the migration carries the till gate.
+
+/// One AI key. Where the actual key lives (`source`):
+///   db  — pasted on the page; `secretEnc` holds it locked (AES-GCM, AI_KEY_SECRET).
+///         Usable wherever AI_KEY_SECRET is set: the website and office tills.
+///   env — `envName` names a .env variable; usable where that .env carries it.
+///   ini — pasted on one PC and saved in that PC's own file (aiLocalKeys.ts);
+///         nothing secret is in this row. Only that PC can use it.
+/// `keyHint` = last 4 characters (db / ini) or the variable name (env), for the list.
+/// Rest, gap and daily-limit counters are kept in memory per server, not here.
+model AiKey {
+  id               Int       @id @default(autoincrement())
+  name             String
+  provider         String    @default("gemini")
+  model            String
+  source           String
+  envName          String?
+  secretEnc        String?
+  keyHint          String    @default("")
+  canPhoto         Boolean   @default(false)
+  canSearch        Boolean   @default(false)
+  paid             Boolean   @default(false)
+  active           Boolean   @default(true)
+  /// Last day the offer / credit is good for; the key is skipped after it.
+  validTill        DateTime? @db.Date
+  /// Safety gap between two calls on this key (paid keys: 0).
+  gapSeconds       Int       @default(10)
+  /// Calls per day (server's local day); null = no limit.
+  dailyLimit       Int?
+  /// Left out this long after the provider answers "too many requests" (429).
+  limitRestSeconds Int       @default(120)
+  /// Left out this long after any other failure (refused, out of credit, 5xx, too slow).
+  failRestSeconds  Int       @default(1800)
+  /// One call is cut off after this long.
+  timeoutSeconds   Int       @default(150)
+  /// Extra tries on this same key before moving to the next one.
+  retries          Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  chainSteps AiChainStep[]
+
+  @@map("ai_keys")
+}
+
+/// One key's place in one step of one AI use (AI_USES in constants/ai.ts).
+model AiChainStep {
+  id        Int      @id @default(autoincrement())
+  use       String
+  step      String
+  keyId     Int
+  position  Int
+  updatedAt DateTime @default(now()) @updatedAt
+
+  key AiKey @relation(fields: [keyId], references: [id], onDelete: Cascade)
+
+  @@unique([use, step, keyId])
+  @@index([keyId])
+  @@map("ai_chain_steps")
+}

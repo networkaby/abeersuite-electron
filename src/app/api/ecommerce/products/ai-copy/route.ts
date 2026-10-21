@@ -7,7 +7,7 @@ import { aiErrorMessage, generateProductCopy, isAiConfigured } from "@/modules/e
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { photosForAi } from "@/shared/lib/shop/photoMark";
 
-// AI product copy (Gemini + Google Search). Nothing is written here — the
+// AI product copy (keys and order from Settings → AI Setup). Nothing is written here — the
 // caller shows the draft and saves through the normal product PATCH, so staff
 // always review before a customer sees it.
 //
@@ -19,8 +19,8 @@ async function guard() {
     // Anyone who can open E-Commerce may use it — owner's call, no tick of its own.
     const { response } = await requireModuleAccess("e-commerce");
     if (response) return { response };
-    if (!isAiConfigured()) {
-        return { response: NextResponse.json({ error: "AI is not set up — add GOOGLE_GENERATIVE_AI_API_KEY to .env" }, { status: 503 }) };
+    if (!(await isAiConfigured())) {
+        return { response: NextResponse.json({ error: "AI is not set up here — add a key on Settings → AI Setup." }, { status: 503 }) };
     }
     return { response: null };
 }
