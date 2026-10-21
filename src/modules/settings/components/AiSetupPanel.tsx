@@ -1,7 +1,7 @@
 "use client";
 
-// Settings → AI Setup — the AI keys the app may use, and for every AI use which
-// keys each step tries, in order. Saved in ai_keys / ai_chain_steps; run time in
+// Settings → AI Setup — a Keys tab (the one place keys are added, tested and
+// limited) and one tab per AI use: which keys each of its steps tries, in order. Saved in ai_keys / ai_chain_steps; run time in
 // src/shared/lib/ai/aiKeys.ts. Where a key lives:
 //   db  — pasted here, saved locked in the database (every counter + website)
 //   env — only the .env variable NAME; the key is already in that .env
@@ -9,6 +9,7 @@
 // "Usable here" and the counts are this server's — on a counter, that counter's.
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import axios from "axios";
 import { ArrowDown, ArrowUp, FlaskConical, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -20,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NumericInput } from "@/shared/components/NumericInput";
 import { useApiResource } from "@/shared/hooks/useApiResource";
 import { extractApiError } from "@/shared/lib/api";
@@ -30,6 +32,8 @@ import {
 } from "@/shared/lib/constants/ai";
 
 const API = "/api/settings/ai-keys";
+/** The Keys tab; every other tab is an AI_USES key. */
+const KEYS_TAB = "keys";
 
 type AiKeyRow = {
     id: number;
@@ -134,6 +138,18 @@ export function AiSetupPanel() {
     const [chains, setChains] = useState<Chains>({});
     const [editing, setEditing] = useState<AiKeyRow | "new" | null>(null);
     const [testing, setTesting] = useState<number | null>(null);
+    // ?tab= keeps a link or reload on the same tab.
+    const searchParams = useSearchParams();
+    const [tab, setTab] = useState(() => {
+        const t = searchParams.get("tab");
+        return t && AI_USES.some((u) => u.key === t) ? t : KEYS_TAB;
+    });
+    const pickTab = (t: string) => {
+        setTab(t);
+        const url = new URL(window.location.href);
+        url.searchParams.set("tab", t);
+        window.history.replaceState(null, "", url);
+    };
 
     useEffect(() => {
         if (!data) return;
@@ -199,9 +215,19 @@ export function AiSetupPanel() {
     if (error && !data) return <div className="text-sm text-destructive">{error}</div>;
 
     return (
-        <div className="space-y-6">
-            {/* ── Keys ── */}
-            <section className="space-y-3">
+        <Tabs value={tab} onValueChange={pickTab} className="space-y-4">
+            <TabsList className="h-auto flex-wrap">
+                <TabsTrigger value={KEYS_TAB}>Keys ({keys.length})</TabsTrigger>
+                {AI_USES.map((use) => (
+                    <TabsTrigger key={use.key} value={use.key}>
+                        {use.label}
+                        {use.steps.every(({ step }) => !(chains[use.key]?.[step]?.length)) && <span className="ml-1 text-xs text-amber-700 dark:text-amber-400">· no keys</span>}
+                    </TabsTrigger>
+                ))}
+            </TabsList>
+
+            {/* ── Keys: the one place keys are added, tested and limited ── */}
+            <TabsContent value={KEYS_TAB} className="space-y-3">
                 <div className="flex items-center justify-between">
                     <div>
                         <h2 className="text-base font-semibold">AI keys</h2>
@@ -275,20 +301,19 @@ export function AiSetupPanel() {
                         </tbody>
                     </table>
                 </div>
-            </section>
+            </TabsContent>
 
-            {/* ── Uses ── */}
-            <section className="space-y-3">
-                <div>
-                    <h2 className="text-base font-semibold">AI uses</h2>
-                    <p className="text-sm text-muted-foreground">
-                        Each step tries its keys in order. Free keys take turns, each after its own gap; a paid key is used only with Premium on and no free key ready. A failing key rests and the next one is tried.
-                    </p>
-                </div>
-                {AI_USES.map((use) => (
-                    <div key={use.key} className="rounded-md border p-4">
-                        <div className="font-medium">{use.label}</div>
-                        <div className="mb-3 text-sm text-muted-foreground">{use.description}</div>
+            {/* ── One tab per AI use: which keys each step of that flow tries ── */}
+            {AI_USES.map((use) => (
+                <TabsContent key={use.key} value={use.key} className="space-y-3">
+                    <div>
+                        <h2 className="text-base font-semibold">{use.label}</h2>
+                        <p className="text-sm text-muted-foreground">{use.description}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            Each step tries its keys in order. Free keys take turns, each after its own gap; a paid key is used only with Premium on and no free key ready. A failing key rests and the next one is tried. Keys are added on the Keys tab.
+                        </p>
+                    </div>
+                    <div className="rounded-md border p-4">
                         <div className="grid gap-4 md:grid-cols-3">
                             {use.steps.map(({ step, needs }) => (
                                 <StepChain
@@ -303,8 +328,8 @@ export function AiSetupPanel() {
                             ))}
                         </div>
                     </div>
-                ))}
-            </section>
+                </TabsContent>
+            ))}
 
             {editing && (
                 <KeyDialog
@@ -314,7 +339,7 @@ export function AiSetupPanel() {
                     onSaved={() => { setEditing(null); void reload(); }}
                 />
             )}
-        </div>
+        </Tabs>
     );
 }
 
