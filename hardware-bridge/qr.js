@@ -21,6 +21,9 @@ const QRCode   = require("qrcode");
 const WIDTH  = 320;
 const HEIGHT = 480;
 
+/** How often the idle slideshow tries again while the display cannot be reached. */
+const IDLE_RETRY_MS = 60_000;
+
 const fmt = (n) =>
     Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -483,6 +486,7 @@ function start({ getConfig, setConfig }) {
                 job.reject(e);
                 continue;
             }
+            noteDisplayBack();
             job.resolve(true);
             if (job.repeat && !waiting) {
                 waiting = {
@@ -496,6 +500,29 @@ function start({ getConfig, setConfig }) {
     }
 
     // ── Idle slideshow ────────────────────────────────────────────────────────
+    //
+    // A display that is not there (unplugged, wrong COM port, a PC that never had one)
+    // used to log one line per picture, every 5 s, for as long as the app ran. Now the
+    // first failure is logged, the slideshow then retries quietly once a minute, and the
+    // log says so again only when the error changes or the display comes back. No COM
+    // port set at all = no slideshow; saving one in settings starts it.
+
+    /** The error the display last failed with, or null while it is taking pictures. */
+    let displayDown = null;
+    /** Pictures that would not render — skipped, and named once. */
+    const badFiles  = new Set();
+
+    function noteDisplayDown(e) {
+        if (displayDown === e.message) return;
+        displayDown = e.message;
+        console.error(`[qr:idle] display not reachable — ${e.message}. Retrying every ${IDLE_RETRY_MS / 1000} s without logging.`);
+    }
+
+    function noteDisplayBack() {
+        if (displayDown == null) return;
+        displayDown = null;
+        console.log(`[qr:idle] display back on ${getConfig().comPort}`);
+    }
 
     let idleTimer   = null;
     let idleIndex   = 0;
@@ -530,30 +557,49 @@ function start({ getConfig, setConfig }) {
         const cfg = getConfig();
         const interval = Math.max(1000, Number(cfg.idleIntervalMs) || 5000);
 
-        if (idleFiles.length === 0) {
+        const usable = idleFiles.filter((f) => !badFiles.has(f));
+        if (usable.length === 0) {
+            // One welcome card, then the display is left alone — unless it never got there.
             try {
                 await display(await renderWelcomeFallback(cfg.companyName));
+                return;
             } catch (e) {
-                console.error("[qr:idle] welcome fallback failed:", e.message);
+                noteDisplayDown(e);
             }
+            if (run !== idleRun) return;
+            idleTimer = setTimeout(() => tickIdle(run), IDLE_RETRY_MS);
             return;
         }
 
-        const file = idleFiles[idleIndex % idleFiles.length];
+        const file = usable[idleIndex % usable.length];
         idleIndex++;
+        let rgb = null;
         try {
-            await display(await fileToRgb(file));
+            rgb = await fileToRgb(file);
         } catch (e) {
-            console.error("[qr:idle] failed to show", path.basename(file), "—", e.message);
+            badFiles.add(file);
+            console.error("[qr:idle] skipping", path.basename(file), "— cannot read it as a picture:", e.message);
+        }
+        if (rgb) {
+            try {
+                await display(rgb);
+            } catch (e) {
+                noteDisplayDown(e);
+            }
         }
         if (run !== idleRun) return;
-        idleTimer = setTimeout(() => tickIdle(run), interval);
+        idleTimer = setTimeout(() => tickIdle(run), displayDown ? IDLE_RETRY_MS : interval);
     }
 
     function startIdle() {
         stopIdle();
+        if (!getConfig().comPort) {
+            console.log("[qr:idle] no COM port set — slideshow off");
+            return;
+        }
         idleFiles = loadIdleFiles();
         idleIndex = 0;
+        badFiles.clear();
         tickIdle(idleRun);
     }
 
@@ -593,8 +639,15 @@ function start({ getConfig, setConfig }) {
         "config:get": async () => getConfig(),
 
         "config:set": async (payload) => {
+            const before = getConfig();
             const updated = setConfig(payload || {});
             console.log("[qr:config] updated:", payload);
+            // A new port, folder or speed takes effect now, not at the next restart —
+            // and a display that was down gets a fresh first attempt (and log line).
+            if (["comPort", "baudRate", "idleFolder", "idleIntervalMs"].some((k) => updated[k] !== before[k])) {
+                displayDown = null;
+                startIdle();
+            }
             return { ok: true, config: updated };
         },
 
