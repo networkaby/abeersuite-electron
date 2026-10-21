@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { extractApiError } from "@/shared/lib/api";
 import { cloudinaryThumb } from "@/shared/lib/cloudinaryImage";
-import { AI_BULK_BATCH_SIZE, AI_DEFAULT_SEARCH_MODE, type AiSearchMode } from "@/shared/lib/constants/ai";
+import { AI_BULK_BATCH_SIZE } from "@/shared/lib/constants/ai";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { runPool } from "@/shared/lib/runPool";
 import { isAiSkipped, photosForAi } from "@/shared/lib/shop/photoMark";
@@ -33,7 +33,7 @@ import {
 import { ProductFilterButton, ProductFilterPanel } from "@/modules/ecommerce/components/ProductFilterPanel";
 import { fetchAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
 import { AiDraftNotes, mergeAiSpecs } from "@/modules/ecommerce/components/AiCopyPanel";
-import { PremiumSwitch, SearchModeButtons, usePremiumAi } from "@/modules/ecommerce/components/AiSearchModeButtons";
+import { FlowButtons, PremiumSwitch, useCopyFlow, usePremiumAi } from "@/modules/ecommerce/components/AiCopyControls";
 
 // Bulk AI copy for products with no shop description (the one-time backlog,
 // then each month's new items). Same filters as Products so staff pick what
@@ -74,7 +74,7 @@ export default function AiBulkCopyPage() {
     const [filters, setFilters] = useState<ProductFilters>(AI_DEFAULT_FILTERS);
     const [showFilters, setShowFilters] = useState(false);
     const [shown, setShown] = useState(SHOW_STEP);
-    const [search, setSearch] = useState<AiSearchMode>(AI_DEFAULT_SEARCH_MODE);
+    const [flow, setFlow] = useCopyFlow();
     const [premium, setPremium] = usePremiumAi();
     const [running, setRunning] = useState(false);
     const [progress, setProgress] = useState({ done: 0, of: 0 });
@@ -120,7 +120,7 @@ export default function AiBulkCopyPage() {
     const writeOne = async (r: ShopProductAdmin): Promise<string | null> => {
         patchWork(r.id, { writing: true, error: undefined });
         try {
-            const draft = await fetchAiCopy({ productId: r.id, search: premium ? search : "off", bulk: true, premium });
+            const draft = await fetchAiCopy({ productId: r.id, flow, bulk: true, premium });
             patchWork(r.id, { draft, writing: false });
             return null;
         } catch (e) {
@@ -237,7 +237,7 @@ export default function AiBulkCopyPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                     <PremiumSwitch value={premium} onChange={setPremium} disabled={locked} />
-                    <SearchModeButtons value={search} onChange={setSearch} disabled={locked} premium={premium} />
+                    <FlowButtons value={flow} onChange={setFlow} disabled={locked} />
                     <Button onClick={() => void generate()} disabled={locked || selected.size === 0}>
                         <Sparkles className="size-4" />
                         {running ? `Writing ${progress.done}/${progress.of}…` : `Generate ${selected.size || ""}`.trim()}

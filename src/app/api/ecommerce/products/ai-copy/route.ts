@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
-import { aiErrorMessage, generateProductCopy, isAiConfigured } from "@/modules/ecommerce/lib/aiProductCopy";
+import { AiDataCheckError, aiErrorMessage, generateProductCopy, isAiConfigured } from "@/modules/ecommerce/lib/aiProductCopy";
+import { generateVerifiedCopy } from "@/modules/ecommerce/lib/aiVerifiedCopy";
+import { AI_DEFAULT_COPY_FLOW, type AiCopyFlow } from "@/shared/lib/constants/ai";
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { photosForAi } from "@/shared/lib/shop/photoMark";
 
@@ -13,7 +15,8 @@ import { photosForAi } from "@/shared/lib/shop/photoMark";
 //
 // The bulk screen lists its backlog from GET /api/ecommerce/products (shared
 // filters and cache with Products), so this route only drafts.
-// POST { productId, name?, imageUrls?, search: off|auto|always } → one draft (+ version A when search changed it) (photos marked "Skip for AI" are not sent)
+// POST { productId, name?, imageUrls?, flow: direct|verified } → one draft (photos marked "Skip for AI" are not sent).
+// Verified answers 422 when the photo check finds our own data disagreeing with itself.
 
 async function guard() {
     // Anyone who can open E-Commerce may use it — owner's call, no tick of its own.
@@ -31,8 +34,8 @@ const postSchema = z.object({
     name: z.string().trim().min(1).max(500).optional(),
     // The form's current (possibly unsaved) gallery, skip marks included.
     imageUrls: z.array(z.string().url()).max(30).optional(),
-    // true/false from a tab opened before the three modes existed.
-    search: z.union([z.boolean().transform((b) => (b ? "auto" : "off")), z.enum(["off", "auto", "always"])]).default("off"),
+    // Direct AI or Verified (AI_COPY_FLOWS). An old tab still sends `search` — ignored.
+    flow: z.enum(["direct", "verified"] satisfies AiCopyFlow[]).default(AI_DEFAULT_COPY_FLOW),
     // Bulk screen: may wait a few seconds for a free key rather than use the paid one.
     bulk: z.boolean().default(false),
     // "Use Premium API" — off (default, also for an old tab) never touches the paid key.
@@ -48,26 +51,42 @@ export async function POST(req: Request) {
         const p = await prisma.invProduct.findUnique({
             where: { id: data.productId },
             select: {
-                name: true, imageUrl: true, galleryJson: true, shopCategory: true,
+                name: true, imageUrl: true, galleryJson: true, shopCategory: true, modelNo: true, specsJson: true,
+                codes: { where: { kind: { in: ["EAN", "UPC"] } }, select: { value: true } },
                 brand: { select: { name: true } }, category: { select: { name: true } },
                 warrantyTerm: { select: { durationDays: true } },
             },
         });
         if (!p) return NextResponse.json({ error: "Product not found" }, { status: 404 });
-        const copy = await generateProductCopy({
+        const base = {
             name: data.name ?? p.name,
             brand: p.brand?.name,
             category: p.shopCategory ?? p.category?.name,
-            shopWarrantyDays: p.warrantyTerm?.durationDays,
             imageUrls: photosForAi(data.imageUrls ?? productGalleryUrls(p.galleryJson, p.imageUrl)),
-            search: data.search,
             bulk: data.bulk,
             premium: data.premium,
-        });
+        };
+        const copy = data.flow === "verified"
+            ? await generateVerifiedCopy({
+                ...base,
+                modelNo: p.modelNo,
+                // Our own shop barcodes (BARCODE) are not the maker's — only EAN / UPC are matched.
+                codes: p.codes.map((c) => c.value),
+                typedSpecs: specsOf(p.specsJson),
+                shopWarrantyDays: p.warrantyTerm?.durationDays,
+            })
+            : await generateProductCopy(base);
         return NextResponse.json(copy);
     } catch (e) {
+        if (e instanceof AiDataCheckError) return NextResponse.json({ error: e.message, flags: e.flags }, { status: 422 });
         const reason = aiErrorMessage(e);
         if (reason) return NextResponse.json({ error: reason }, { status: 503 });
         return handleApiError(e, "AI could not write this product");
     }
+}
+
+/** InvProduct.specsJson as label → text, or null. */
+function specsOf(raw: unknown): Record<string, string> | null {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, String(v)]));
 }

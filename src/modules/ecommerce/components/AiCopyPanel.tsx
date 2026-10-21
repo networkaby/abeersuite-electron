@@ -1,33 +1,28 @@
 "use client";
 
 import { useState } from "react";
+import axios from "axios";
 import { toast } from "sonner";
 import { ExternalLink, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { extractApiError } from "@/shared/lib/api";
-import { AI_DEFAULT_SEARCH_MODE, type AiSearchMode } from "@/shared/lib/constants/ai";
 import { fetchAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
-import { PremiumSwitch, SearchModeButtons, usePremiumAi } from "@/modules/ecommerce/components/AiSearchModeButtons";
+import { FlowButtons, PremiumSwitch, useCopyFlow, usePremiumAi } from "@/modules/ecommerce/components/AiCopyControls";
 
 type SpecRow = { k: string; v: string };
 
-const SEARCH_NOTE: Record<ProductCopy["search"], string | null> = {
-    searched: null,
-    "not-needed": "Written from name and photo — online search would not add anything for this product, so it was skipped (no charge).",
-    off: "Written from name and photo only (online search switched off).",
-    "no-key": "Written from name and photo — online search needs the paid key (GOOGLE_AI_SEARCH_API_KEY), not set up.",
-    failed: "Online search failed, so this is the name-and-photo draft.",
-    "no-sources": "Online search found nothing that a real web page confirmed, so nothing from it was added — this is the name-and-photo draft.",
-};
-
-/** How the draft was made + what staff should check before saving. */
+/** How the draft was made, what looks wrong in our own data, and what staff should check before saving. */
 export function AiDraftNotes({ draft }: { draft: ProductCopy }) {
-    const note = draft.search === "failed" && draft.searchError
-        ? `${SEARCH_NOTE.failed} (${draft.searchError})`
-        : SEARCH_NOTE[draft.search];
+    const sourced = Object.entries(draft.specSources ?? {});
     return (
         <>
-            {note && <p className="text-muted-foreground text-xs">{note}</p>}
+            <p className="text-muted-foreground text-xs">{draft.note}</p>
+            {draft.flags.length > 0 && <DataFlags flags={draft.flags} />}
+            {sourced.length > 0 && (
+                <p className="text-muted-foreground text-xs">
+                    Spec sources: {sourced.map(([k, v]) => `${k} — ${v}`).join(" · ")}
+                </p>
+            )}
             {draft.unsure.length > 0 && (
                 <div className="text-xs text-amber-700 dark:text-amber-400">
                     <p className="font-medium">Please check / add by hand:</p>
@@ -37,6 +32,18 @@ export function AiDraftNotes({ draft }: { draft: ProductCopy }) {
                 </div>
             )}
         </>
+    );
+}
+
+/** Our own product data looks wrong — staff fix the product, the AI never does. */
+export function DataFlags({ flags, title = "Your product data may be wrong:" }: { flags: string[]; title?: string }) {
+    return (
+        <div className="text-destructive text-xs">
+            <p className="font-medium">{title}</p>
+            <ul className="ml-4 list-disc">
+                {flags.map((f) => <li key={f}>{f}</li>)}
+            </ul>
+        </div>
     );
 }
 
@@ -75,18 +82,20 @@ export default function AiCopyPanel({
     onSubheading: (v: string) => void;
     onSpecs: (rows: SpecRow[]) => void;
 }) {
-    // The first call decides whether a second, searched call would add anything (owner, 2026-10-19).
-    const [search, setSearch] = useState<AiSearchMode>(AI_DEFAULT_SEARCH_MODE);
+    const [flow, setFlow] = useCopyFlow();
     const [premium, setPremium] = usePremiumAi();
     const [busy, setBusy] = useState(false);
     const [draft, setDraft] = useState<ProductCopy | null>(null);
+    // Verified stopped at the photo check: our own data disagrees with itself.
+    const [checkFlags, setCheckFlags] = useState<string[] | null>(null);
 
     const run = async (fresh: boolean) => {
         if (!productId) { toast.error("Save the product first, then generate"); return; }
         if (!name.trim()) { toast.error("Name is required"); return; }
         setBusy(true);
+        setCheckFlags(null);
         try {
-            const copy = await fetchAiCopy({ productId, name: name.trim(), imageUrls, search: premium ? search : "off", premium }, { fresh });
+            const copy = await fetchAiCopy({ productId, name: name.trim(), imageUrls, flow, premium }, { fresh });
             setDraft(copy);
             const filled: string[] = [];
             if (!description.trim()) { onDescription(copy.shopDescription); filled.push("description"); }
@@ -98,7 +107,9 @@ export default function AiCopyPanel({
             }
             toast.success(filled.length ? `AI filled ${filled.join(", ")} — review, then Save` : "AI draft ready — use what you like, then Save");
         } catch (e) {
-            toast.error(extractApiError(e, "AI could not write this product"));
+            const flags = axios.isAxiosError(e) && e.response?.status === 422 ? (e.response.data as { flags?: string[] }).flags : undefined;
+            if (flags?.length) setCheckFlags(flags);
+            else toast.error(extractApiError(e, "AI could not write this product"));
         } finally {
             setBusy(false);
         }
@@ -115,8 +126,9 @@ export default function AiCopyPanel({
                     {busy ? "Writing…" : draft ? "Generate again" : "Generate with AI"}
                 </Button>
                 <PremiumSwitch value={premium} onChange={setPremium} disabled={busy} />
-                <SearchModeButtons value={search} onChange={setSearch} disabled={busy} premium={premium} />
+                <FlowButtons value={flow} onChange={setFlow} disabled={busy} />
             </div>
+            {checkFlags && <DataFlags flags={checkFlags} title="Not written — fix this product's data first:" />}
             {draft && (
                 <div className="space-y-2 text-sm">
                     <AiDraftNotes draft={draft} />

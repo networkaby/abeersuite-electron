@@ -1,17 +1,12 @@
 import "server-only";
 
-// Checks a fact the AI says it read on a web page: the page must load and
-// actually contain the value. Gemini often invents believable product URLs
-// (half were 404 on 2026-10-17), so nothing from the search step is kept
-// without passing here.
+// Checks a fact the AI says it read on a web page against that page's text:
+// the value must really be there. The AI copies wrong or drifts, so nothing
+// from a page reaches the description without passing here. The page itself
+// is downloaded once by aiPageReader.ts.
 
-export type CitedFact = { label: string; value: string; url: string };
-
-const FETCH_TIMEOUT_MS = 10_000;
-const MAX_PAGE_BYTES = 3_000_000;
-
-/** Public https pages only — the URL comes from the AI, so never our own network. */
-function isPublicHttps(raw: string): URL | null {
+/** Public https pages only — URLs come from search results, so never our own network. */
+export function isPublicHttps(raw: string): URL | null {
     let u: URL;
     try { u = new URL(raw); } catch { return null; }
     if (u.protocol !== "https:") return null;
@@ -21,29 +16,15 @@ function isPublicHttps(raw: string): URL | null {
     return u;
 }
 
-const norm = (s: string) => s.toLowerCase().replace(/&nbsp;|&#160;/g, " ").replace(/[, ]/g, "").replace(/\s+/g, " ");
-
-async function pageText(url: URL): Promise<string | null> {
-    try {
-        const res = await fetch(url, {
-            headers: { "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36", "accept-language": "en-IN,en" },
-            redirect: "follow",
-            signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-        });
-        if (!res.ok || !isPublicHttps(res.url)) return null;
-        const html = (await res.text()).slice(0, MAX_PAGE_BYTES);
-        return norm(html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " "));
-    } catch {
-        return null;
-    }
-}
+/** Page text as the check compares it: lower case, no commas or spaces. */
+export const normForCheck = (s: string) => s.toLowerCase().replace(/&nbsp;|&#160;/g, " ").replace(/[, ]/g, "").replace(/\s+/g, " ");
 
 /** Every number in the value must be on the page; a value with no numbers needs most of its words. */
 function pageHas(text: string, value: string): boolean {
-    const v = norm(value);
+    const v = normForCheck(value);
     const nums = v.match(/\d+(?:\.\d+)?/g) ?? [];
     if (nums.length) return nums.every((n) => text.includes(n));
-    const words = v.split(/[^a-z0-9]+/).filter((w) => w.length >= 3);
+    const words = value.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3);
     if (!words.length) return false;
     return words.filter((w) => text.includes(w)).length / words.length >= 0.75;
 }
@@ -51,29 +32,15 @@ function pageHas(text: string, value: string): boolean {
 const isListLabel = (label: string) => /compatib|works with|supported (printer|model|device)/i.test(label);
 
 /**
- * Keeps only facts whose page loaded and shows the value. A compatibility list
- * is checked item by item and keeps the models the page really names.
+ * The value as far as the page shows it, or null. A compatibility list is
+ * checked item by item and keeps the models the page really names.
+ * `pageNorm` is the page text through normForCheck.
  */
-export async function verifyFacts(facts: CitedFact[]): Promise<{ facts: CitedFact[]; urls: string[] }> {
-    const pages = new Map<string, Promise<string | null>>();
-    const load = (u: URL) => {
-        const key = u.href;
-        if (!pages.has(key)) pages.set(key, pageText(u));
-        return pages.get(key)!;
-    };
-
-    const checked = await Promise.all(facts.map(async (f): Promise<CitedFact | null> => {
-        const u = isPublicHttps(f.url);
-        if (!u || !f.value.trim()) return null;
-        const text = await load(u);
-        if (!text) return null;
-        if (isListLabel(f.label)) {
-            const kept = f.value.split(/[,;\n]|\band\b/).map((x) => x.trim()).filter((x) => x && pageHas(text, x));
-            return kept.length ? { ...f, value: kept.join(", ") } : null;
-        }
-        return pageHas(text, f.value) ? f : null;
-    }));
-
-    const ok = checked.filter((f): f is CitedFact => f !== null);
-    return { facts: ok, urls: [...new Set(ok.map((f) => f.url))] };
+export function checkFact(pageNorm: string, label: string, value: string): string | null {
+    if (!value.trim()) return null;
+    if (isListLabel(label)) {
+        const kept = value.split(/[,;\n]|\band\b/).map((x) => x.trim()).filter((x) => x && pageHas(pageNorm, x));
+        return kept.length ? kept.join(", ") : null;
+    }
+    return pageHas(pageNorm, value) ? value : null;
 }

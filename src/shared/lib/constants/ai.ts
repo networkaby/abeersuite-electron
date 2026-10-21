@@ -9,15 +9,22 @@ export const AI_BULK_BATCH_SIZE = 5;
 export const AI_HIGHLIGHT_COUNT = { min: 4, max: 7 } as const;
 
 
-/** Online search modes. "When it helps" = the first (photo) call says whether
- *  a second, searched call would add anything (owner settled 2026-10-19). */
-export const AI_SEARCH_MODES = [
-    { value: "off", label: "Off" },
-    { value: "auto", label: "When it helps" },
-    { value: "always", label: "Always" },
+/** The two ways to write a product description (owner, 2026-10-21). Direct = one
+ *  call from name + photo (the old model-search step added nothing and is gone).
+ *  Verified = photo check, then the maker's / sellers' pages, then a write-up
+ *  from those facts only — "no information is better than false information". */
+export const AI_COPY_FLOWS = [
+    { value: "direct", label: "Direct AI", hint: "One call from name and photo" },
+    { value: "verified", label: "Verified", hint: "Checks the photo, reads the maker's page, writes only proven facts" },
 ] as const;
-export type AiSearchMode = (typeof AI_SEARCH_MODES)[number]["value"];
-export const AI_DEFAULT_SEARCH_MODE: AiSearchMode = "auto";
+export type AiCopyFlow = (typeof AI_COPY_FLOWS)[number]["value"];
+/** Each PC remembers its own pick; this is where a new PC starts. */
+export const AI_DEFAULT_COPY_FLOW: AiCopyFlow = "verified";
+
+/** Verified flow: pages read per product, how much of each is kept, and the
+ *  e-commerce sites searched after the maker's own (domains). */
+export const AI_VERIFIED_LIMITS = { pages: 4, pageChars: 9000, fetchMs: 15_000 } as const;
+export const AI_SELLER_SITES = ["flipkart.com", "amazon.in", "reliancedigital.in", "croma.com"] as const;
 
 /** AuditLog.entityType of the finished A/B search trial's picks (2026-10-19). Nothing
  *  writes it any more; the old rows stay hidden from the Recycle Bin and activity feed. */
@@ -88,6 +95,8 @@ export const AI_STEPS = [
     { value: "search", label: "Search" },
     { value: "polish", label: "Polish" },
     { value: "read", label: "Read page" },
+    { value: "check", label: "Check" },
+    { value: "write", label: "Write" },
 ] as const;
 export type AiStep = (typeof AI_STEPS)[number]["value"];
 
@@ -105,8 +114,14 @@ export const AI_USES: readonly {
     {
         key: "product_copy",
         label: "Product description",
-        description: "E-Commerce → Products: writes the description and highlights from the name and photo.",
-        steps: [{ step: "draft", needs: "photo" }, { step: "search", needs: "search" }, { step: "polish" }],
+        description: "E-Commerce → Products, Direct AI: one call writes the description and highlights from the name and photo.",
+        steps: [{ step: "draft", needs: "photo" }],
+    },
+    {
+        key: "product_copy_verified",
+        label: "Product description (verified)",
+        description: "E-Commerce → Products, Verified: Check reads the photo and our data; pages come from Web search & page reading; Write uses only proven facts. An empty step borrows the Direct AI keys.",
+        steps: [{ step: "check", needs: "photo" }, { step: "write" }],
     },
     {
         key: "web",
