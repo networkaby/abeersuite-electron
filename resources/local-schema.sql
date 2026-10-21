@@ -631,6 +631,7 @@ CREATE TABLE IF NOT EXISTS "ai_keys" (
     "validTill" DATE,
     "gapSeconds" INTEGER NOT NULL DEFAULT 10,
     "dailyLimit" INTEGER,
+    "monthlyLimit" INTEGER,
     "limitRestSeconds" INTEGER NOT NULL DEFAULT 120,
     "failRestSeconds" INTEGER NOT NULL DEFAULT 1800,
     "timeoutSeconds" INTEGER NOT NULL DEFAULT 150,
@@ -659,6 +660,8 @@ ALTER TABLE "ai_keys" ALTER COLUMN "validTill" DROP NOT NULL;
 ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "gapSeconds" INTEGER NOT NULL DEFAULT 10;
 ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "dailyLimit" INTEGER;
 ALTER TABLE "ai_keys" ALTER COLUMN "dailyLimit" DROP NOT NULL;
+ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "monthlyLimit" INTEGER;
+ALTER TABLE "ai_keys" ALTER COLUMN "monthlyLimit" DROP NOT NULL;
 ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "limitRestSeconds" INTEGER NOT NULL DEFAULT 120;
 ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "failRestSeconds" INTEGER NOT NULL DEFAULT 1800;
 ALTER TABLE "ai_keys" ADD COLUMN IF NOT EXISTS "timeoutSeconds" INTEGER NOT NULL DEFAULT 150;
@@ -3614,6 +3617,7 @@ CREATE TABLE IF NOT EXISTS "OrgDefaults" (
     "shippingPoolGroupId" INTEGER,
     "shopPublishRulesJson" JSONB,
     "shopOutOfStockPolicy" "ShopOutOfStockPolicy" NOT NULL DEFAULT 'NOTIFY',
+    "aiCopyFlow" TEXT NOT NULL DEFAULT 'verified',
     "posEstimateShowDiscountsJson" JSONB,
     "storefrontHomeJson" JSONB,
     "storefrontAdsJson" JSONB,
@@ -3655,6 +3659,7 @@ ALTER TABLE "OrgDefaults" ALTER COLUMN "shippingPoolGroupId" DROP NOT NULL;
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "shopPublishRulesJson" JSONB;
 ALTER TABLE "OrgDefaults" ALTER COLUMN "shopPublishRulesJson" DROP NOT NULL;
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "shopOutOfStockPolicy" "ShopOutOfStockPolicy" NOT NULL DEFAULT 'NOTIFY';
+ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "aiCopyFlow" TEXT NOT NULL DEFAULT 'verified';
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "posEstimateShowDiscountsJson" JSONB;
 ALTER TABLE "OrgDefaults" ALTER COLUMN "posEstimateShowDiscountsJson" DROP NOT NULL;
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "storefrontHomeJson" JSONB;

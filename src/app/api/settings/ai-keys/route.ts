@@ -19,10 +19,11 @@ export async function GET() {
     if (response) return response;
     try {
         invalidateAiSetup(); // the page always sees the saved rows
-        const { keys, chains } = await loadAiSetup();
+        const { keys, chains, copyFlow } = await loadAiSetup();
         return NextResponse.json({
             keys: keys.map(aiKeyView),
             chains,
+            copyFlow,
             here: { sharedSecret: hasSharedSecret(), localStore: localKeyStoreAvailable() },
         });
     } catch (e) {

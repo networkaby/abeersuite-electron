@@ -109,7 +109,7 @@ const STRICT_RULES = [
 export const OUTPUT_KEYS = [
     "Style: simple, compact, SEO-friendly — brand, model number, product type and key specs in the words a customer types into Google. Lead with model and technical specifications. No filler, no repetition, no hype (\"best ever\", \"amazing\"), no keyword stuffing. Do not shorten true facts to save space.",
     "Return ONLY a JSON object, no markdown fence, with exactly these keys:",
-    '"title": max 100 characters: Brand + Model name/number + product type + key spec, a part code or spec in brackets, e.g. "Crucial 8GB DDR4 3200 MHz Laptop RAM (CT8G4SFRA32A)" or "HP 680 Black Original Ink Cartridge (F6V27AA)"; colour only if the product name has it;',
+    '"title": max 100 characters, written in your own words: Brand (official spelling) + Model name/number + product type + the top specs customers search for, a part code or spec in brackets, e.g. "Crucial 8GB DDR4 3200 MHz Laptop RAM (CT8G4SFRA32A)" or "HP 680 Black Original Ink Cartridge (F6V27AA)"; prefer an original title over copying a store listing or box tagline — if the natural best title happens to match one, that is fine; brand, model number and part codes stay exact; colour only if the product name has it;',
     '"summary": ONE sentence under 160 characters naming brand, model and product type with the main spec — used as the search-result snippet;',
     `"highlights": ${AI_HIGHLIGHT_COUNT.min}-${AI_HIGHLIGHT_COUNT.max} highlights, each under 12 words, spec-first (e.g. "8 GB DDR4 RAM", "3200 MHz Speed"), most useful first;`,
     '"description": ONE short paragraph in simple English: what it is, who it is for, what makes it useful — no line that only repeats the highlights;',

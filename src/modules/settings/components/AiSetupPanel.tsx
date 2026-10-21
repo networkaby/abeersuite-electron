@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import axios from "axios";
-import { ArrowDown, ArrowUp, FlaskConical, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, FlaskConical, Loader2, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,12 +27,18 @@ import { useApiResource } from "@/shared/hooks/useApiResource";
 import { extractApiError } from "@/shared/lib/api";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import {
-    AI_KEY_DEFAULTS, AI_KEY_SOURCES, AI_PROVIDERS, AI_STEPS, AI_USES, aiProviderInfo, isWebProvider, type AiNeed,
-    type AiKeySource, type AiProvider, type AiStep,
+    AI_COPY_FLOWS, AI_DEFAULT_COPY_FLOW, AI_KEY_DEFAULTS, AI_KEY_SOURCES, AI_PROVIDER_MODELS, AI_PROVIDERS, AI_STEPS, AI_USES, aiProviderInfo, isWebProvider, type AiNeed,
+    type AiCopyFlow, type AiKeySource, type AiProvider, type AiStep,
 } from "@/shared/lib/constants/ai";
 
 const API = "/api/settings/ai-keys";
-/** The Keys tab; every other tab is an AI_USES key. */
+/** Uses with a tab of their own; a hidden use's lists show inside the jobs that use them,
+ *  and a use with `tab` is a section of that tab. */
+const TAB_USES = AI_USES.filter((u) => !u.hidden && !u.tab);
+const sectionsOf = (tabKey: string) => AI_USES.filter((u) => !u.hidden && (u.tab ?? u.key) === tabKey);
+/** The tab a use lives on — an old ?tab= link to a section opens its tab. */
+const tabOf = (useKey: string) => AI_USES.find((u) => u.key === useKey && !u.hidden)?.tab ?? useKey;
+/** The Keys tab; every other tab is a TAB_USES key. */
 const KEYS_TAB = "keys";
 
 type AiKeyRow = {
@@ -51,6 +57,7 @@ type AiKeyRow = {
     validTill: string | null;
     gapSeconds: number;
     dailyLimit: number | null;
+    monthlyLimit: number | null;
     limitRestSeconds: number;
     failRestSeconds: number;
     timeoutSeconds: number;
@@ -61,6 +68,7 @@ type AiKeyRow = {
     onThisPc: boolean | null;
     usage: {
         callsToday: number;
+        callsMonth: number;
         lastUsedAt: number | null;
         restingUntil: number | null;
         lastOkAt: number | null;
@@ -71,20 +79,20 @@ type AiKeyRow = {
 
 /** chains[useKey][step] = ordered key ids. */
 type Chains = Record<string, Partial<Record<AiStep, number[]>>>;
-type Setup = { keys: AiKeyRow[]; chains: Chains; here: { sharedSecret: boolean; localStore: boolean } };
+type Setup = { keys: AiKeyRow[]; chains: Chains; copyFlow: AiCopyFlow; here: { sharedSecret: boolean; localStore: boolean } };
 
 /** The dialog's fields — numbers as typed text (NumericInput). */
 type Form = {
     name: string; provider: AiProvider; model: string; source: AiKeySource; envName: string;
     canPhoto: boolean; canSearch: boolean; paid: boolean; active: boolean; validTill: string;
-    gapSeconds: string; dailyLimit: string; limitRestSeconds: string; failRestSeconds: string;
+    gapSeconds: string; dailyLimit: string; monthlyLimit: string; limitRestSeconds: string; failRestSeconds: string;
     timeoutSeconds: string; retries: string;
 };
 
 const EMPTY_FORM: Form = {
     name: "", provider: "gemini", model: "", source: "db", envName: "",
     canPhoto: true, canSearch: false, paid: false, active: true, validTill: "",
-    gapSeconds: String(AI_KEY_DEFAULTS.gapSeconds.free), dailyLimit: "",
+    gapSeconds: String(AI_KEY_DEFAULTS.gapSeconds.free), dailyLimit: "", monthlyLimit: "",
     limitRestSeconds: String(AI_KEY_DEFAULTS.limitRestSeconds), failRestSeconds: String(AI_KEY_DEFAULTS.failRestSeconds),
     timeoutSeconds: String(AI_KEY_DEFAULTS.timeoutSeconds), retries: String(AI_KEY_DEFAULTS.retries),
 };
@@ -92,7 +100,7 @@ const EMPTY_FORM: Form = {
 const formOf = (k: AiKeyRow): Form => ({
     name: k.name, provider: k.provider, model: k.model, source: k.source, envName: k.envName ?? "",
     canPhoto: k.canPhoto, canSearch: k.canSearch, paid: k.paid, active: k.active, validTill: k.validTill ?? "",
-    gapSeconds: String(k.gapSeconds), dailyLimit: k.dailyLimit == null ? "" : String(k.dailyLimit),
+    gapSeconds: String(k.gapSeconds), dailyLimit: k.dailyLimit == null ? "" : String(k.dailyLimit), monthlyLimit: k.monthlyLimit == null ? "" : String(k.monthlyLimit),
     limitRestSeconds: String(k.limitRestSeconds), failRestSeconds: String(k.failRestSeconds),
     timeoutSeconds: String(k.timeoutSeconds), retries: String(k.retries),
 });
@@ -110,6 +118,7 @@ function bodyOf(f: Form, secret: string) {
         validTill: f.validTill || null,
         gapSeconds: num(f.gapSeconds, 0),
         dailyLimit: f.dailyLimit.trim() === "" ? null : Number(f.dailyLimit),
+        monthlyLimit: f.monthlyLimit.trim() === "" ? null : Number(f.monthlyLimit),
         limitRestSeconds: num(f.limitRestSeconds, AI_KEY_DEFAULTS.limitRestSeconds),
         failRestSeconds: num(f.failRestSeconds, AI_KEY_DEFAULTS.failRestSeconds),
         timeoutSeconds: num(f.timeoutSeconds, AI_KEY_DEFAULTS.timeoutSeconds),
@@ -136,13 +145,15 @@ export function AiSetupPanel() {
     // Local copy for optimistic edits; the server's answer replaces it on every read.
     const [keys, setKeys] = useState<AiKeyRow[]>([]);
     const [chains, setChains] = useState<Chains>({});
+    const [copyFlow, setCopyFlow] = useState<AiCopyFlow>(AI_DEFAULT_COPY_FLOW);
     const [editing, setEditing] = useState<AiKeyRow | "new" | null>(null);
     const [testing, setTesting] = useState<number | null>(null);
     // ?tab= keeps a link or reload on the same tab.
     const searchParams = useSearchParams();
     const [tab, setTab] = useState(() => {
         const t = searchParams.get("tab");
-        return t && AI_USES.some((u) => u.key === t) ? t : KEYS_TAB;
+        const owner = t ? tabOf(t) : "";
+        return TAB_USES.some((u) => u.key === owner) ? owner : KEYS_TAB;
     });
     const pickTab = (t: string) => {
         setTab(t);
@@ -155,6 +166,7 @@ export function AiSetupPanel() {
         if (!data) return;
         setKeys(data.keys);
         setChains(data.chains);
+        setCopyFlow(data.copyFlow);
     }, [data]);
 
     const byId = useMemo(() => new Map(keys.map((k) => [k.id, k])), [keys]);
@@ -211,6 +223,17 @@ export function AiSetupPanel() {
         }
     };
 
+    const saveCopyFlow = async (f: AiCopyFlow) => {
+        const before = copyFlow;
+        setCopyFlow(f);
+        try {
+            await axios.put(`${API}/copy-flow`, { copyFlow: f });
+        } catch (e) {
+            setCopyFlow(before);
+            toast.error(extractApiError(e, "Could not save the default"));
+        }
+    };
+
     if (loading && !data) return <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading…</div>;
     if (error && !data) return <div className="text-sm text-destructive">{error}</div>;
 
@@ -218,10 +241,10 @@ export function AiSetupPanel() {
         <Tabs value={tab} onValueChange={pickTab} className="space-y-4">
             <TabsList className="h-auto flex-wrap">
                 <TabsTrigger value={KEYS_TAB}>Keys ({keys.length})</TabsTrigger>
-                {AI_USES.map((use) => (
+                {TAB_USES.map((use) => (
                     <TabsTrigger key={use.key} value={use.key}>
                         {use.label}
-                        {use.steps.every(({ step }) => !(chains[use.key]?.[step]?.length)) && <span className="ml-1 text-xs text-amber-700 dark:text-amber-400">· no keys</span>}
+                        {sectionsOf(use.key).every((u) => u.steps.every(({ step, chain }) => !(chains[chain ?? u.key]?.[step]?.length))) && <span className="ml-1 text-xs text-amber-700 dark:text-amber-400">· no keys</span>}
                     </TabsTrigger>
                 ))}
             </TabsList>
@@ -276,11 +299,12 @@ export function AiSetupPanel() {
                                     <td className="px-3 py-2">
                                         {k.paid ? <Badge>Paid</Badge> : <Badge variant="outline">Free</Badge>}
                                         <div className="mt-1 text-xs text-muted-foreground">
-                                            gap {secs(k.gapSeconds)}{k.dailyLimit != null && ` · ${k.dailyLimit}/day`}
+                                            gap {secs(k.gapSeconds)}{k.dailyLimit != null && ` · ${k.dailyLimit}/day`}{k.monthlyLimit != null && ` · ${k.monthlyLimit}/month`}
                                         </div>
                                     </td>
                                     <td className="px-3 py-2 text-xs">
                                         <div>{k.usage.callsToday} call{k.usage.callsToday === 1 ? "" : "s"}{k.dailyLimit != null && ` of ${k.dailyLimit}`}</div>
+                                        <div className="text-xs text-muted-foreground">month: {k.usage.callsMonth}{k.monthlyLimit != null && ` of ${k.monthlyLimit}`}</div>
                                         {k.usage.restingUntil && <div className="text-amber-700 dark:text-amber-400">Resting till {clock(k.usage.restingUntil)}</div>}
                                         {k.usage.lastError && k.usage.lastErrorAt && (!k.usage.lastOkAt || k.usage.lastErrorAt > k.usage.lastOkAt) && (
                                             <div className="max-w-56 truncate text-destructive" title={k.usage.lastError}>{clock(k.usage.lastErrorAt)}: {k.usage.lastError}</div>
@@ -303,33 +327,70 @@ export function AiSetupPanel() {
                 </div>
             </TabsContent>
 
-            {/* ── One tab per AI use: which keys each step of that flow tries ── */}
-            {AI_USES.map((use) => (
-                <TabsContent key={use.key} value={use.key} className="space-y-3">
-                    <div>
-                        <h2 className="text-base font-semibold">{use.label}</h2>
-                        <p className="text-sm text-muted-foreground">{use.description}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                            Each step tries its keys in order. Free keys take turns, each after its own gap; a paid key is used only with Premium on and no free key ready. A failing key rests and the next one is tried. Keys are added on the Keys tab.
-                        </p>
-                    </div>
-                    <div className="rounded-md border p-4">
-                        <div className="grid gap-4 md:grid-cols-3">
-                            {use.steps.map(({ step, needs }) => (
-                                <StepChain
-                                    key={step}
-                                    label={AI_STEPS.find((s) => s.value === step)?.label ?? step}
-                                    needs={needs}
-                                    ids={chains[use.key]?.[step] ?? []}
-                                    keys={keys}
-                                    byId={byId}
-                                    onChange={(ids) => setChain(use.key, step, ids)}
-                                />
-                            ))}
+            {/* ── One tab per AI job: which keys each step tries; a job with options shows one section each ── */}
+            {TAB_USES.map((tabUse) => {
+                const sections = sectionsOf(tabUse.key);
+                return (
+                    <TabsContent key={tabUse.key} value={tabUse.key} className="space-y-4">
+                        <div>
+                            <h2 className="text-base font-semibold">{tabUse.label}</h2>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                                Each step tries its keys in order. Free keys take turns, each after its own gap; a paid key is used only with Premium on and no free key ready. A failing key rests and the next one is tried. Keys are added on the Keys tab.
+                            </p>
                         </div>
-                    </div>
-                </TabsContent>
-            ))}
+                        {tabUse.key === "product_copy" && (
+                            <div className="flex flex-wrap items-center gap-2 rounded-md border p-3">
+                                <span className="text-sm font-medium">Active on load:</span>
+                                <div role="radiogroup" aria-label="Active on load" className="inline-flex rounded-md border border-border p-0.5">
+                                    {AI_COPY_FLOWS.map((f) => (
+                                        <button
+                                            key={f.value}
+                                            type="button"
+                                            role="radio"
+                                            aria-checked={copyFlow === f.value}
+                                            title={f.hint}
+                                            onClick={() => copyFlow !== f.value && saveCopyFlow(f.value)}
+                                            className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                                                copyFlow === f.value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+                                            }`}
+                                        >
+                                            {f.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <span className="text-xs text-muted-foreground">Every product page opens on this; staff can pick the other option for any one write.</span>
+                            </div>
+                        )}
+                        {sections.map((use) => (
+                            <div key={use.key} className="space-y-2">
+                                <div>
+                                    {sections.length > 1 && <h3 className="text-sm font-semibold">{use.section ?? use.label}</h3>}
+                                    <p className="text-sm text-muted-foreground">{use.description}</p>
+                                </div>
+                                <div className="rounded-md border p-4">
+                                    <div className={`grid gap-4 ${use.steps.length > 3 ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-3"}`}>
+                                        {use.steps.map(({ step, needs, chain }, i) => {
+                                            const owner = chain ?? use.key;
+                                            const label = AI_STEPS.find((s) => s.value === step)?.label ?? step;
+                                            return (
+                                                <StepChain
+                                                    key={`${owner}-${step}`}
+                                                    label={`${i + 1}. ${label}${chain ? " · shared with other AI jobs" : ""}`}
+                                                    needs={needs}
+                                                    ids={chains[owner]?.[step] ?? []}
+                                                    keys={keys}
+                                                    byId={byId}
+                                                    onChange={(ids) => setChain(owner, step, ids)}
+                                                />
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </TabsContent>
+                );
+            })}
 
             {editing && (
                 <KeyDialog
@@ -412,6 +473,24 @@ function KeyDialog({ initial, here, onClose, onSaved }: {
     const [secret, setSecret] = useState("");
     const [saving, setSaving] = useState(false);
     const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
+    // Models the provider itself listed for this key (Load); null = the built-in suggestions.
+    const [liveModels, setLiveModels] = useState<string[] | null>(null);
+    const [loadingModels, setLoadingModels] = useState(false);
+    const loadModels = async () => {
+        setLoadingModels(true);
+        try {
+            const { data } = await axios.post<{ models: string[] }>(`${API}/models`, {
+                provider: form.provider, source: form.source, apiKey: secret.trim() || undefined,
+                envName: form.envName.trim() || undefined, keyId: initial?.id,
+            });
+            setLiveModels(data.models);
+            toast.success(data.models.length ? `${data.models.length} models — open the Model list` : "The provider listed no models for this key");
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not load models"));
+        } finally {
+            setLoadingModels(false);
+        }
+    };
 
     // Plan swaps the gap between the two defaults, unless staff typed their own.
     const setPaid = (paid: boolean) => setForm((f) => ({
@@ -459,9 +538,10 @@ function KeyDialog({ initial, here, onClose, onSaved }: {
 
     return (
         <Dialog open onOpenChange={(o) => !o && onClose()}>
-            <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+            <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto md:max-w-4xl">
                 <DialogHeader><DialogTitle>{initial ? "Edit AI key" : "Add AI key"}</DialogTitle></DialogHeader>
-                <div className="grid gap-3">
+                <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
+                <div className="grid content-start gap-3">
                     <div className="grid gap-1">
                         <Label>Name</Label>
                         <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Gemini free 1" {...NO_AUTOFILL} />
@@ -471,6 +551,7 @@ function KeyDialog({ initial, here, onClose, onSaved }: {
                             <Label>Provider</Label>
                             <Select value={form.provider} onValueChange={(v) => {
                                 set("provider", v as AiProvider);
+                                setLiveModels(null);
                                 if (isWebProvider(v)) { set("model", ""); set("canPhoto", false); set("canSearch", false); }
                             }}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -483,8 +564,18 @@ function KeyDialog({ initial, here, onClose, onSaved }: {
                         </div>
                         {!web && (
                             <div className="grid gap-1">
-                                <Label>Model</Label>
-                                <Input value={form.model} onChange={(e) => set("model", e.target.value)} placeholder={aiProviderInfo(form.provider)?.hint ?? ""} className="font-mono" {...NO_AUTOFILL} />
+                                <div className="flex items-center justify-between">
+                                    <Label>Model</Label>
+                                    <button type="button" onClick={loadModels} disabled={loadingModels} title="Ask the provider which models this key can use"
+                                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50">
+                                        {loadingModels ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                                        {liveModels ? `${liveModels.length} from provider` : "Load from provider"}
+                                    </button>
+                                </div>
+                                <Input value={form.model} onChange={(e) => set("model", e.target.value)} placeholder={aiProviderInfo(form.provider)?.hint ?? ""} className="font-mono" list="ai-model-options" {...NO_AUTOFILL} />
+                                <datalist id="ai-model-options">
+                                    {(liveModels ?? AI_PROVIDER_MODELS[form.provider] ?? []).map((m) => <option key={m} value={m} />)}
+                                </datalist>
                             </div>
                         )}
                     </div>
@@ -555,12 +646,15 @@ function KeyDialog({ initial, here, onClose, onSaved }: {
                             <Input type="date" value={form.validTill} onChange={(e) => set("validTill", e.target.value)} />
                         </div>
                     </div>
+                </div>
 
+                <div className="grid content-start gap-3">
                     <div className="rounded-md border p-3">
                         <div className="mb-2 text-sm font-medium">Limits &amp; safety</div>
                         <div className="grid grid-cols-2 gap-3">
                             <SecondsField label="Wait between calls (s)" hint="Paid: 0" value={form.gapSeconds} onChange={(v) => set("gapSeconds", v)} max={3600} />
                             <SecondsField label="Calls per day" hint="Empty = no limit" value={form.dailyLimit} onChange={(v) => set("dailyLimit", v)} min={1} max={1_000_000} />
+                            <SecondsField label="Calls per month" hint="Empty = no limit; resets on the 1st" value={form.monthlyLimit} onChange={(v) => set("monthlyLimit", v)} min={1} max={100_000_000} />
                             <SecondsField label="Rest after limit hit (s)" hint='Provider said "too many"' value={form.limitRestSeconds} onChange={(v) => set("limitRestSeconds", v)} max={86_400} />
                             <SecondsField label="Rest after failure (s)" hint="Refused, busy, too slow" value={form.failRestSeconds} onChange={(v) => set("failRestSeconds", v)} max={86_400} />
                             <SecondsField label="Give up after (s)" hint="One call, 5–600" value={form.timeoutSeconds} onChange={(v) => set("timeoutSeconds", v)} min={5} max={600} />
@@ -571,6 +665,8 @@ function KeyDialog({ initial, here, onClose, onSaved }: {
                     <label className="flex items-center gap-2 text-sm">
                         <Switch checked={form.active} onCheckedChange={(v) => set("active", v)} />Active
                     </label>
+                    <p className="text-xs text-muted-foreground">Day and month counts are kept by each server in memory — a restart starts them again.</p>
+                </div>
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>

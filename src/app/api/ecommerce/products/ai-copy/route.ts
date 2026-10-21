@@ -5,7 +5,8 @@ import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { AiDataCheckError, aiErrorMessage, generateProductCopy, isAiConfigured } from "@/modules/ecommerce/lib/aiProductCopy";
 import { generateVerifiedCopy } from "@/modules/ecommerce/lib/aiVerifiedCopy";
-import { AI_DEFAULT_COPY_FLOW, type AiCopyFlow } from "@/shared/lib/constants/ai";
+import { type AiCopyFlow } from "@/shared/lib/constants/ai";
+import { loadAiSetup } from "@/shared/lib/ai/aiKeys";
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { photosForAi } from "@/shared/lib/shop/photoMark";
 
@@ -35,12 +36,23 @@ const postSchema = z.object({
     // The form's current (possibly unsaved) gallery, skip marks included.
     imageUrls: z.array(z.string().url()).max(30).optional(),
     // Direct AI or Verified (AI_COPY_FLOWS). An old tab still sends `search` — ignored.
-    flow: z.enum(["direct", "verified"] satisfies AiCopyFlow[]).default(AI_DEFAULT_COPY_FLOW),
+    flow: z.enum(["direct", "verified"] satisfies AiCopyFlow[]).optional(), // left out → the shop-wide default
     // Bulk screen: may wait a few seconds for a free key rather than use the paid one.
     bulk: z.boolean().default(false),
     // "Use Premium API" — off (default, also for an old tab) never touches the paid key.
     premium: z.boolean().default(false),
 });
+
+// GET → the option the product page opens on (the admin's pick on AI Setup; cached server-side).
+export async function GET() {
+    const { response } = await requireModuleAccess("e-commerce");
+    if (response) return response;
+    try {
+        return NextResponse.json({ defaultFlow: (await loadAiSetup()).copyFlow });
+    } catch (e) {
+        return handleApiError(e, "Failed to load the default option");
+    }
+}
 
 export async function POST(req: Request) {
     const { response } = await guard();
@@ -66,7 +78,8 @@ export async function POST(req: Request) {
             bulk: data.bulk,
             premium: data.premium,
         };
-        const copy = data.flow === "verified"
+        const flow = data.flow ?? (await loadAiSetup()).copyFlow;
+        const copy = flow === "verified"
             ? await generateVerifiedCopy({
                 ...base,
                 modelNo: p.modelNo,

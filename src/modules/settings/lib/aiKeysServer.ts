@@ -29,6 +29,7 @@ export const aiKeyBodySchema = z.object({
     validTill: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
     gapSeconds: seconds(3600),
     dailyLimit: z.number().int().min(1).max(1_000_000).nullable(),
+    monthlyLimit: z.number().int().min(1).max(100_000_000).nullable(),
     limitRestSeconds: seconds(24 * 3600),
     failRestSeconds: seconds(24 * 3600),
     timeoutSeconds: z.number().int().min(5).max(600),
@@ -53,7 +54,7 @@ export function aiKeyRowData(data: AiKeyBody, prev?: { source: string; secretEnc
         name: data.name, provider: data.provider, model: data.model, source: data.source,
         canPhoto: data.canPhoto, canSearch: data.canSearch, paid: data.paid, active: data.active,
         validTill: data.validTill ? new Date(`${data.validTill}T00:00:00Z`) : null,
-        gapSeconds: data.gapSeconds, dailyLimit: data.dailyLimit, limitRestSeconds: data.limitRestSeconds,
+        gapSeconds: data.gapSeconds, dailyLimit: data.dailyLimit, monthlyLimit: data.monthlyLimit, limitRestSeconds: data.limitRestSeconds,
         failRestSeconds: data.failRestSeconds, timeoutSeconds: data.timeoutSeconds, retries: data.retries,
     };
     if (data.source === "env") {

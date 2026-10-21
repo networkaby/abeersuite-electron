@@ -18,7 +18,7 @@ export const AI_COPY_FLOWS = [
     { value: "verified", label: "Verified", hint: "Checks the photo, reads the maker's page, writes only proven facts" },
 ] as const;
 export type AiCopyFlow = (typeof AI_COPY_FLOWS)[number]["value"];
-/** Each PC remembers its own pick; this is where a new PC starts. */
+/** Fallback when OrgDefaults.aiCopyFlow is unreadable — the admin picks the real one on AI Setup. */
 export const AI_DEFAULT_COPY_FLOW: AiCopyFlow = "verified";
 
 /** Verified flow: pages read per product, how much of each is kept, and the
@@ -74,6 +74,21 @@ export type AiProviderInfo = { value: AiProvider; label: string; kind: "model" |
 export const aiProviderInfo = (p: string): AiProviderInfo | undefined => (AI_PROVIDERS as readonly AiProviderInfo[]).find((x) => x.value === p);
 export const isWebProvider = (p: string) => aiProviderInfo(p)?.kind === "web";
 
+/** Common models offered in the Model box's list. Only suggestions — staff can
+ *  still type any model name; refresh when a provider ships new ones. */
+export const AI_PROVIDER_MODELS: Partial<Record<AiProvider, readonly string[]>> = {
+    gemini: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"],
+    openai: ["gpt-5-mini", "gpt-5-nano", "gpt-5", "gpt-4.1-mini"],
+    claude: ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"],
+    groq: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-120b"],
+    openrouter: ["google/gemini-2.5-flash", "openai/gpt-5-mini", "anthropic/claude-sonnet-5-5", "deepseek/deepseek-chat"],
+    deepseek: ["deepseek-chat", "deepseek-reasoner"],
+    mistral: ["mistral-small-latest", "mistral-medium-latest", "mistral-large-latest", "pixtral-large-latest"],
+    xai: ["grok-4", "grok-3-mini"],
+    together: ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "Qwen/Qwen2.5-72B-Instruct-Turbo", "deepseek-ai/DeepSeek-V3"],
+    perplexity: ["sonar", "sonar-pro", "sonar-reasoning"],
+};
+
 /** Highlights per page a web search hands to the model, and how much of a read page it keeps. */
 export const AI_WEB_LIMITS = { results: 6, pageChars: 12_000 } as const;
 
@@ -109,24 +124,40 @@ export const AI_USES: readonly {
     key: string;
     label: string;
     description: string;
-    steps: readonly { step: AiStep; needs?: AiNeed }[];
+    /** `chain` = the step edits another use's shared list (shown here, saved there). */
+    steps: readonly { step: AiStep; needs?: AiNeed; chain?: string }[];
+    /** No tab of its own — its lists are shown inside the jobs that use them. */
+    hidden?: boolean;
+    /** Shown as a section of another use's tab (that use's key). */
+    tab?: string;
+    /** Section heading when a tab holds more than one use. */
+    section?: string;
 }[] = [
     {
         key: "product_copy",
         label: "Product description",
+        section: "Direct AI",
         description: "E-Commerce → Products, Direct AI: one call writes the description and highlights from the name and photo.",
         steps: [{ step: "draft", needs: "photo" }],
     },
     {
         key: "product_copy_verified",
         label: "Product description (verified)",
-        description: "E-Commerce → Products, Verified: Check reads the photo and our data; pages come from Web search & page reading; Write uses only proven facts. An empty step borrows the Direct AI keys.",
-        steps: [{ step: "check", needs: "photo" }, { step: "write" }],
+        tab: "product_copy",
+        section: "Verified",
+        description: "E-Commerce → Products, Verified, in run order: Check reads the photo and our data and picks the search words; Search finds the maker's and sellers' pages; our server opens each page itself and Read page tools are only the backup for a site that blocks it; Write uses only proven facts. An empty Check or Write borrows the Direct AI keys.",
+        steps: [
+            { step: "check", needs: "photo" },
+            { step: "search", needs: "webSearch", chain: "web" },
+            { step: "read", needs: "webRead", chain: "web" },
+            { step: "write" },
+        ],
     },
     {
         key: "web",
         label: "Web search & page reading",
         description: "Shared by every AI job: a model without its own search finds pages here, and any job that must read a page fetches it here.",
         steps: [{ step: "search", needs: "webSearch" }, { step: "read", needs: "webRead" }],
+        hidden: true,
     },
 ];

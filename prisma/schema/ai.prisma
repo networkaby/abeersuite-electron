@@ -31,6 +31,9 @@ model AiKey {
   gapSeconds       Int       @default(10)
   /// Calls per day (server's local day); null = no limit.
   dailyLimit       Int?
+  /// Calls per calendar month (server's local month); null = no limit.
+  /// Counted in memory like the daily one, so a restart starts the count again.
+  monthlyLimit     Int?
   /// Left out this long after the provider answers "too many requests" (429).
   limitRestSeconds Int       @default(120)
   /// Left out this long after any other failure (refused, out of credit, 5xx, too slow).

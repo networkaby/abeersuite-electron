@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { AI_COPY_FLOWS, AI_DEFAULT_COPY_FLOW, type AiCopyFlow } from "@/shared/lib/constants/ai";
@@ -8,10 +8,11 @@ import { AI_COPY_FLOWS, AI_DEFAULT_COPY_FLOW, type AiCopyFlow } from "@/shared/l
 // AI controls shared by the product form and the bulk screen: the "Use
 // Premium API" switch (owner, 2026-10-19 — off by default so a paid key is
 // never spent unknowingly) and the flow, Direct AI or Verified (2026-10-21).
-// Both are remembered on this PC; the flow last picked is this PC's default.
+// Premium is remembered on this PC. The flow always opens on the admin's pick
+// (Settings → AI Setup, read once per page load); picking the other one lasts
+// only while this screen is open (owner, 2026-10-22).
 
 const PREMIUM_KEY = "ai-premium-api";
-const FLOW_KEY = "ai-copy-flow";
 
 const listeners = new Set<() => void>();
 function subscribe(fn: () => void) {
@@ -32,15 +33,30 @@ export function usePremiumAi(): [boolean, (on: boolean) => void] {
     return [premium, (on) => write(PREMIUM_KEY, on ? "1" : "0")];
 }
 
-const readFlow = (): AiCopyFlow => {
-    const v = read(FLOW_KEY);
-    return AI_COPY_FLOWS.some((f) => f.value === v) ? (v as AiCopyFlow) : AI_DEFAULT_COPY_FLOW;
-};
+let adminFlow: AiCopyFlow = AI_DEFAULT_COPY_FLOW;
+let adminFlowAsked = false;
+/** One read per page load; a failure keeps the built-in fallback. */
+function askAdminFlow() {
+    if (adminFlowAsked) return;
+    adminFlowAsked = true;
+    void fetch("/api/ecommerce/products/ai-copy")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { defaultFlow?: string } | null) => {
+            const f = AI_COPY_FLOWS.find((x) => x.value === d?.defaultFlow);
+            if (f) {
+                adminFlow = f.value;
+                listeners.forEach((fn) => fn());
+            }
+        })
+        .catch(() => undefined);
+}
 
-/** Direct AI or Verified, remembered on this PC. */
+/** Direct AI or Verified: opens on the admin's pick; another pick lasts only while this screen is open. */
 export function useCopyFlow(): [AiCopyFlow, (f: AiCopyFlow) => void] {
-    const flow = useSyncExternalStore(subscribe, readFlow, () => AI_DEFAULT_COPY_FLOW);
-    return [flow, (f) => write(FLOW_KEY, f)];
+    useEffect(askAdminFlow, []);
+    const preferred = useSyncExternalStore(subscribe, () => adminFlow, () => AI_DEFAULT_COPY_FLOW);
+    const [picked, setPicked] = useState<AiCopyFlow | null>(null);
+    return [picked ?? preferred, setPicked];
 }
 
 export function PremiumSwitch({ value, onChange, disabled }: { value: boolean; onChange: (on: boolean) => void; disabled?: boolean }) {

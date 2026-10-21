@@ -5,7 +5,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { aiProviderInfo, AI_SETUP_CACHE_MS, type AiKeySource, type AiProvider, type AiStep } from "@/shared/lib/constants/ai";
+import { aiProviderInfo, AI_COPY_FLOWS, AI_DEFAULT_COPY_FLOW, AI_SETUP_CACHE_MS, type AiCopyFlow, type AiKeySource, type AiProvider, type AiStep } from "@/shared/lib/constants/ai";
 import { hasSharedSecret, unlockSecret } from "@/shared/lib/ai/secretBox";
 import { hasLocalKey, readLocalKey } from "@/shared/lib/ai/aiLocalKeys";
 
@@ -37,6 +37,7 @@ export type AiKeyConfig = {
     validTill: string | null;
     gapSeconds: number;
     dailyLimit: number | null;
+    monthlyLimit: number | null;
     limitRestSeconds: number;
     failRestSeconds: number;
     timeoutSeconds: number;
@@ -48,29 +49,33 @@ export type AiChains = Record<string, Partial<Record<AiStep, number[]>>>;
 
 // ── Saved setup, cached (one DB read per AI_SETUP_CACHE_MS per server) ─────────
 
-let setupCache: { at: number; keys: AiKeyConfig[]; chains: AiChains } | null = null;
+/** copyFlow = the option every product page opens on (OrgDefaults.aiCopyFlow). */
+export type AiSetup = { keys: AiKeyConfig[]; chains: AiChains; copyFlow: AiCopyFlow };
+let setupCache: (AiSetup & { at: number }) | null = null;
 
 export function invalidateAiSetup() {
     setupCache = null;
 }
 
-export async function loadAiSetup(): Promise<{ keys: AiKeyConfig[]; chains: AiChains }> {
+export async function loadAiSetup(): Promise<AiSetup> {
     if (setupCache && Date.now() - setupCache.at < AI_SETUP_CACHE_MS) return setupCache;
-    const [rows, steps] = await Promise.all([
+    const [rows, steps, org] = await Promise.all([
         prisma.aiKey.findMany({ orderBy: { id: "asc" } }),
         prisma.aiChainStep.findMany({ orderBy: [{ use: "asc" }, { step: "asc" }, { position: "asc" }], select: { use: true, step: true, keyId: true } }),
+        prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { aiCopyFlow: true } }),
     ]);
     const keys: AiKeyConfig[] = rows.map((r) => ({
         id: r.id, name: r.name, provider: r.provider as AiProvider, model: r.model, source: r.source as AiKeySource,
         envName: r.envName, secretEnc: r.secretEnc, keyHint: r.keyHint,
         canPhoto: r.canPhoto, canSearch: r.canSearch, paid: r.paid, active: r.active,
         validTill: r.validTill ? r.validTill.toISOString().slice(0, 10) : null,
-        gapSeconds: r.gapSeconds, dailyLimit: r.dailyLimit, limitRestSeconds: r.limitRestSeconds,
+        gapSeconds: r.gapSeconds, dailyLimit: r.dailyLimit, monthlyLimit: r.monthlyLimit, limitRestSeconds: r.limitRestSeconds,
         failRestSeconds: r.failRestSeconds, timeoutSeconds: r.timeoutSeconds, retries: r.retries,
     }));
     const chains: AiChains = {};
     for (const s of steps) ((chains[s.use] ??= {})[s.step as AiStep] ??= []).push(s.keyId);
-    setupCache = { at: Date.now(), keys, chains };
+    const copyFlow = AI_COPY_FLOWS.find((f) => f.value === org?.aiCopyFlow)?.value ?? AI_DEFAULT_COPY_FLOW;
+    setupCache = { at: Date.now(), keys, chains, copyFlow };
     return setupCache;
 }
 
@@ -80,6 +85,7 @@ const localDay = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
+const localMonth = () => localDay().slice(0, 7);
 
 const providerReady = (p: AiProvider) => aiProviderInfo(p)?.ready ?? false;
 
@@ -107,13 +113,14 @@ export function whyNotUsable(k: AiKeyConfig): string | null {
 
 // ── Run-time state, in memory ─────────────────────────────────────────────────
 
-type KeyState = { lastUsed: number; restUntil: number; day: string; callsToday: number; lastOkAt: number; lastError: string; lastErrorAt: number };
+type KeyState = { lastUsed: number; restUntil: number; day: string; callsToday: number; month: string; callsMonth: number; lastOkAt: number; lastError: string; lastErrorAt: number };
 const state = new Map<number, KeyState>();
 
 function stateOf(id: number): KeyState {
     let s = state.get(id);
-    if (!s) state.set(id, (s = { lastUsed: 0, restUntil: 0, day: localDay(), callsToday: 0, lastOkAt: 0, lastError: "", lastErrorAt: 0 }));
+    if (!s) state.set(id, (s = { lastUsed: 0, restUntil: 0, day: localDay(), callsToday: 0, month: localMonth(), callsMonth: 0, lastOkAt: 0, lastError: "", lastErrorAt: 0 }));
     if (s.day !== localDay()) Object.assign(s, { day: localDay(), callsToday: 0 });
+    if (s.month !== localMonth()) Object.assign(s, { month: localMonth(), callsMonth: 0 });
     return s;
 }
 
@@ -122,6 +129,7 @@ export function keyUsage(id: number) {
     const s = stateOf(id);
     return {
         callsToday: s.callsToday,
+        callsMonth: s.callsMonth,
         lastUsedAt: s.lastUsed || null,
         restingUntil: s.restUntil > Date.now() ? s.restUntil : null,
         lastOkAt: s.lastOkAt || null,
@@ -131,7 +139,10 @@ export function keyUsage(id: number) {
 }
 
 const resting = (k: AiKeyConfig) => stateOf(k.id).restUntil > Date.now();
-const overLimit = (k: AiKeyConfig) => k.dailyLimit != null && stateOf(k.id).callsToday >= k.dailyLimit;
+// Both counts live in memory: a restart starts them again (owner's pick, 2026-10-21).
+const overLimit = (k: AiKeyConfig) =>
+    (k.dailyLimit != null && stateOf(k.id).callsToday >= k.dailyLimit)
+    || (k.monthlyLimit != null && stateOf(k.id).callsMonth >= k.monthlyLimit);
 /** ms until this key's gap has passed (0 = ready). */
 const gapLeft = (k: AiKeyConfig) => Math.max(0, stateOf(k.id).lastUsed + k.gapSeconds * 1000 - Date.now());
 
@@ -139,6 +150,7 @@ function noteUse(k: AiKeyConfig) {
     const s = stateOf(k.id);
     s.lastUsed = Date.now();
     s.callsToday += 1;
+    s.callsMonth += 1;
 }
 
 function noteFailure(k: AiKeyConfig, e: unknown) {
@@ -159,8 +171,10 @@ function noteSuccess(k: AiKeyConfig) {
 
 /** Premium off and every regular key is resting or used up — say so, never pay. */
 export class AiRegularKeysOutError extends Error {
-    constructor() {
-        super("Regular keys are used up for now — turn on Premium API, or try again later.");
+    constructor(onlyPaid = false) {
+        super(onlyPaid
+            ? "This AI job has only paid keys — turn on Premium API, or add a free key on Settings → AI Setup."
+            : "Regular keys are used up for now — turn on Premium API, or try again later.");
         this.name = "AiRegularKeysOutError";
     }
 }
@@ -242,7 +256,11 @@ export async function runChain<T>(
     fn: (key: AiKeyConfig, apiKey: string, signal: AbortSignal) => Promise<T>,
 ): Promise<{ result: T; key: AiKeyConfig }> {
     const all = await chainKeys(opts);
-    if (all.length === 0) throw opts.premium ? new AiNoKeyError() : new AiRegularKeysOutError();
+    if (all.length === 0) {
+        if (opts.premium) throw new AiNoKeyError();
+        // No free key in the chain at all is not "used up" — say what is actually missing.
+        throw new AiRegularKeysOutError((await chainKeys({ ...opts, premium: true })).length > 0);
+    }
     // Premium off has nothing else it may use, so it waits for a free key too.
     const mayWait = opts.wait || !opts.premium;
 
