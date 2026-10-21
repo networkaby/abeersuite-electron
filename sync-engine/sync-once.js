@@ -415,6 +415,31 @@ async function main(opts, cfg, pools = null, hooks = {}) {
         // moment is seen by this cycle, so a signal for it need not queue another (index.js).
         if (hooks.onReading) hooks.onReading();
 
+        /**
+         * Parent watermarks not yet written, model -> { entry, watermark, watermarkId }.
+         *
+         * Children ride their parent: pass 2 pulls only the children of parent rows that
+         * pass 1 wrote THIS cycle. So a parent's watermark may not move until its children
+         * are in. Written straight away, a cycle killed between the two passes (a targeted
+         * pull steps it aside, the app quits) or a child pull that fails leaves the parent
+         * behind the watermark with no children — and no later cycle asks for them, since
+         * the parent never moves again. That is how an upload's header reached the till on
+         * 19 Oct 2026 with its three statement lines missing; VoucherGlLine under
+         * UniversalVoucher has the same shape. Held back, the next cycle re-pulls the
+         * parent rows (an upsert, harmless) and their children come with them.
+         *
+         * `full` parents have no watermark to hold; their children rely on pass 3.
+         */
+        const held = new Map();
+        const parentsInCycle = new Set(order.children.filter(want).map((m) => tables[m].parent));
+        /** Pass-1 models whose subtree had a child pull fail this cycle. */
+        const childFailedUnder = new Set();
+        const rootOf = (model) => {
+            let m = model;
+            while (tables[m] && tables[m].strategy === "child") m = tables[m].parent;
+            return m;
+        };
+
         // Pass 1: tables that stand on their own, CONCURRENCY at a time.
         await runLimited(order.independent.filter(want), CONCURRENCY, (model) => withLane(async (source, local) => {
             const entry = tables[model];
@@ -491,7 +516,12 @@ async function main(opts, cfg, pools = null, hooks = {}) {
                 moved.set(model, res.ids);
                 if (res.pulled !== 0) changedModels.add(model);
                 pulledTotal += Math.max(res.pulled, 0);
-                if (!DRY) await state.recordSuccess(local, entry, model, res.watermark, res.watermarkId);
+                // A parent's watermark waits for its children (see `held`).
+                if (!DRY && res.watermark != null && parentsInCycle.has(model)) {
+                    held.set(model, { entry, watermark: res.watermark, watermarkId: res.watermarkId });
+                } else if (!DRY) {
+                    await state.recordSuccess(local, entry, model, res.watermark, res.watermarkId);
+                }
                 if (res.pulled !== 0) {
                     console.log(`  ${model.padEnd(28)} ${entry.strategy.padEnd(9)} ${res.pulled === -1 ? "(full)" : res.pulled}`);
                 }
@@ -551,10 +581,21 @@ async function main(opts, cfg, pools = null, hooks = {}) {
                         return;
                     }
                     failed++;
+                    childFailedUnder.add(rootOf(model));
                     console.error(`  ${model.padEnd(28)} FAILED: ${e.message}`);
                     if (!DRY) await state.recordFailure(local, entry, model, e).catch(() => {});
                 }
             }));
+        }
+
+        // Every child is in: the held parent watermarks can move now — except under a
+        // failed child, where the parent rows re-pull next cycle and bring it along.
+        for (const [model, h] of held) {
+            if (childFailedUnder.has(model)) {
+                console.log(`  ${model.padEnd(28)} watermark held - a child pull failed; re-pulling next cycle`);
+                continue;
+            }
+            await state.recordSuccess(local, h.entry, model, h.watermark, h.watermarkId);
         }
         // ---- Pass 3: reconcile a few tables against the source ----------------
         //
@@ -855,4 +896,4 @@ if (require.main === module) {
     }
 }
 
-module.exports = { repairReferencing };
+module.exports = { repairReferencing, main };

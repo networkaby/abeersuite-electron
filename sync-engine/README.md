@@ -149,6 +149,17 @@ row changed" but never "this row is gone". Nesting is handled — `TicketOrderLi
 sits at depth 2 behind `TicketOrder` behind `Ticket`, so its parent's ids are already
 known by the time it runs.
 
+**A parent's watermark waits for its children (2026-10-21).** Pass 2 pulls only the
+children of parent rows pass 1 wrote *this* cycle. When pass 1 wrote the parent's
+watermark at once, a cycle killed between the passes (a targeted pull steps it aside)
+or a child pull that failed left the parent behind its watermark with no children, and
+no later cycle asked for them: a till showed a bank upload with none of its statement
+lines until pass 3 happened to reconcile the table. Now a `watermark`/`append` parent
+with children in the cycle holds its watermark until pass 2 is done, and keeps holding
+it if any child under it failed; the next cycle re-pulls the parent rows (an upsert)
+and the children come along. `full` parents have no watermark to hold — their children
+still rely on pass 3. `test-child-watermark.js` drives it.
+
 **Four tables at a time (2026-09-03).** An idle cycle is ~80 small round-trips to
 Supabase; run one after another on a single connection they cost ~0.6 s of pure
 latency. Tables inside a pass are independent of each other — foreign keys are
@@ -435,7 +446,8 @@ Seen live on 2026-09-08: a counter still on the previous build reported all 405
 ### Testing this
 
 ```powershell
-node test-reconcile.js   # needs TEST_SOURCE_URL and TEST_LOCAL_URL — two empty databases
+node test-reconcile.js        # needs TEST_SOURCE_URL and TEST_LOCAL_URL — two empty databases
+node test-child-watermark.js  # same two databases: a failed child pull must not lose the children
 ```
 
 Reproduces every fault above against a throwaway pair of databases — the FK-rewritten

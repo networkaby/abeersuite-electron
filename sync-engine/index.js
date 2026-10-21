@@ -355,7 +355,8 @@ function onRelayPull(request) {
     // A safety-net cycle is in the way — and after every relayed write the app's own
     // change signal starts one, so this is the common case, not the exception. The
     // cycle is a safety net; the person at the till is not. Step it aside: it is
-    // killed (per-table transactions, nothing half-written), the targeted pull runs,
+    // killed (per-table transactions, nothing half-written; a parent's watermark waits
+    // for its children, so a kill between the passes re-pulls both), the targeted pull runs,
     // and the interrupted cycle resumes protected from a second pre-emption. A
     // targeted cycle already running is left alone: this request folds into the next.
     if (child && !inFlight && !protectedCycle && !preempting) {
