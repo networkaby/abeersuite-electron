@@ -29,3 +29,4 @@ export { useIfscLookup, type IfscDetails, type IfscLookupState, type IfscPatch }
 export { useCanOpenPage } from "./useCanOpenPage";
 export { useWaSendStates, sendOnWhatsApp, type WaSendStates, type WaSendTarget } from "./useWhatsAppSend";
 export { useSessionState, useSessionScroll } from "./useSessionState";
+export { useDraggableFab } from "./useDraggableFab";

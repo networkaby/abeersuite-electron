@@ -9,6 +9,7 @@ import MobileSignOut from "./MobileSignOut";
 import DesktopSiteNotice from "./DesktopSiteNotice";
 import { MOBILE_GROUPS, isOnScreen, quickEntryFor, screensFor } from "../lib/mobileScreens";
 import { PHONE_APP_HOME } from "@/shared/lib/device/phone";
+import { useDraggableFab } from "@/shared/hooks/useDraggableFab";
 
 const MenuContext = createContext<{ openMenu: () => void }>({ openMenu: () => { } });
 
@@ -119,6 +120,7 @@ function SideMenu({ user, open, onClose }: { user: ShellUser; open: boolean; onC
 function QuickEntryButton({ permissions }: { permissions: string[] }) {
     const pathname = usePathname();
     const [open, setOpen] = useState(false);
+    const fab = useDraggableFab("fab-pos:quick-entry");
     const quick = quickEntryFor(permissions);
     const onEntry =
         pathname.startsWith(`${PHONE_APP_HOME}/quick`) ||
@@ -131,9 +133,11 @@ function QuickEntryButton({ permissions }: { permissions: string[] }) {
         <>
             <button
                 type="button"
-                onClick={() => setOpen(true)}
-                aria-label="Quick receive or pay"
-                className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-30 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95"
+                {...fab.bind}
+                style={fab.style}
+                onClick={() => { if (!fab.wasDrag()) setOpen(true); }}
+                aria-label="Quick receive or pay — drag to move"
+                className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-30 flex size-14 touch-none items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95"
             >
                 <Plus className="size-7" />
             </button>

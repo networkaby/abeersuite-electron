@@ -54,6 +54,7 @@ import { toast } from "sonner";
 import { MessageCircle, X, Send, Users, ArrowRightLeft, ExternalLink, Minus, Ticket, HandCoins, PhoneCall } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useDraggableFab } from "@/shared/hooks/useDraggableFab";
 import { canOpenPage } from "@/shared/lib/auth/pageAccess";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { MESSAGE_CLAIM_FALLBACK_MS, MESSAGE_REPLY_WINDOW_MS } from "@/shared/lib/constants/polling";
@@ -403,6 +404,9 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
         }
     };
 
+    // Phone app green bubble — draggable so it never sits on the + button.
+    const fab = useDraggableFab("fab-pos:whatsapp");
+
     if (!allowed || onMessagesScreen || !me) return null;
     if (banner) {
         const waiting = visible.filter((a) => a.waiting).length;
@@ -410,8 +414,12 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
             <>
             {waiting > 0 && (
                 <button
-                    onClick={() => router.push(href)}
-                    className="fixed right-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-[60] flex size-14 items-center justify-center rounded-full bg-green-600 text-white shadow-lg active:bg-green-700"
+                    type="button"
+                    {...fab.bind}
+                    style={fab.style}
+                    onClick={() => { if (!fab.wasDrag()) router.push(href); }}
+                    // Default spot is just above the + button; drag to move.
+                    className="fixed right-4 bottom-[calc(9.5rem+env(safe-area-inset-bottom))] z-[60] flex size-14 touch-none items-center justify-center rounded-full bg-green-600 text-white shadow-lg active:bg-green-700"
                     aria-label={`${waiting} chats waiting — open Inbox`}
                 >
                     <MessageCircle className="size-7" />
