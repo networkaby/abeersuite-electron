@@ -230,6 +230,7 @@ async function photoAdvice(p: VerifiedCopyInput, ours: ReturnType<typeof photoPa
 
 /** The AI's order and looks as URLs. A photo staff framed by hand (a focus point) keeps its framing. */
 function arrangeFrom(answer: z.infer<typeof photoSchema>, ourUrls: string[], removed: Set<string>): PhotoArrange | null {
+    if (answer.look.length) console.info(`[aiVerifiedCopy] photo look asked: ${JSON.stringify(answer.look)}`);
     const picked = answer.order.map((n) => ourUrls[n - 1]).filter((u): u is string => !!u && !removed.has(u));
     const order = [...new Set(picked)];
     // A changed order only; the AI naming every photo in the same order is no suggestion.
