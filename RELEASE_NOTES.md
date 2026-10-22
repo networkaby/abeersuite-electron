@@ -1,6 +1,6 @@
-# v1.16.12 [urgent]
+# v1.16.11 [urgent]
 
-Every counter must install this today. It carries everything from the unreleased 1.16.11 (more reliable sync, QR display retry, phone apps 2.1.1) plus the new AI Setup and product photo help. **This release changes the database** — new AI tables and new settings columns. Counters must update first; until a counter has this version, its sync will pause once the office site is updated.
+Every counter must install this today. It brings more reliable sync, the QR display retry, phone apps 2.1.1, and the new AI Setup and product photo help. **This release changes the database** — new AI tables and new settings columns. Counters must update first; until a counter has this version, its sync will pause once the office site is updated.
 
 ## Sync
 - A counter no longer marks a bill, voucher or order as synced until all of its lines have arrived too. If lines are missing, the counter pulls them again until they are in.
