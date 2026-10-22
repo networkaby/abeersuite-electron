@@ -5,11 +5,12 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, parseIdParam } from "@/shared/lib/api";
 import { aiProviderInfo } from "@/shared/lib/constants/ai";
 import { readOn, searchOn } from "@/shared/lib/ai/aiWeb";
-import { aiErrorMessage, aiStatus, callModel, invalidateAiSetup, keyValue, loadAiSetup, whyNotUsable } from "@/shared/lib/ai/aiKeys";
+import { aiErrorMessage, aiStatus, callModel, claimTestCall, invalidateAiSetup, keyValue, loadAiSetup, noteTestResult, whyNotUsable } from "@/shared/lib/ai/aiKeys";
 
 // POST /api/settings/ai-keys/[id]/test — one tiny call on this key, from THIS
 // server (never relayed: an .env or this-PC key may work here and not at the
-// office). Runs even while the key is resting; spends one request of its quota.
+// office). Same gates as a real call (gap, rest, day/month limits) and counted
+// like one, so a test never lands a second call on a free key too soon.
 
 const TEST_TIMEOUT_MS = 30_000;
 
@@ -40,22 +41,29 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         const blocker = whyNotUsable({ ...key, active: true, validTill: null });
         const apiKey = keyValue(key);
         if (blocker || !apiKey) return NextResponse.json({ ok: false, message: blocker ?? "No key here" });
+        const notYet = claimTestCall(key);
+        if (notYet) return NextResponse.json({ ok: false, message: `Not called: ${notYet}` });
         const started = Date.now();
         try {
             const signal = AbortSignal.timeout(Math.min(TEST_TIMEOUT_MS, key.timeoutSeconds * 1000));
             const took = () => `${((Date.now() - started) / 1000).toFixed(1)} s`;
             const info = aiProviderInfo(key.provider);
             if (info?.kind === "web") {
+                // A web tool answering at all is a working key, even with no pages.
                 if (info.searchable) {
                     const pages = await searchOn(key, apiKey, "HP 680 ink cartridge page yield", signal);
+                    noteTestResult(key);
                     return NextResponse.json({ ok: pages.length > 0, message: pages.length ? `Works — found ${pages.length} pages in ${took()}` : "Answered, but found no pages" });
                 }
                 const page = await readOn(key, apiKey, "https://example.com", signal);
+                noteTestResult(key);
                 return NextResponse.json({ ok: !!page.text, message: page.text ? `Works — read a page (${page.text.length} characters) in ${took()}` : "Answered, but the page came back empty" });
             }
             const reply = await callModel(key, apiKey, [{ role: "user", content: "Reply with the single word OK." }], { signal });
+            noteTestResult(key);
             return NextResponse.json({ ok: true, message: `Works — answered "${reply.text.trim().slice(0, 40)}" in ${took()}` });
         } catch (e) {
+            noteTestResult(key, e);
             const status = aiStatus(e);
             const base = aiErrorMessage(e) ?? (e instanceof Error ? e.message : String(e)).slice(0, 200);
             // Staff need the provider's own words here (bad model name vs bad key both come back 400).

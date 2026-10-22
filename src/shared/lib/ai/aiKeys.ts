@@ -167,6 +167,27 @@ function noteSuccess(k: AiKeyConfig) {
     s.lastOkAt = Date.now();
 }
 
+/**
+ * The Test button's call, under the same gates as a real one: null = it may go
+ * (and is counted now, so the next call waits its gap); otherwise why not yet.
+ */
+export function claimTestCall(k: AiKeyConfig): string | null {
+    const s = stateOf(k.id);
+    const secs = (ms: number) => `${Math.ceil(ms / 1000)} s`;
+    if (resting(k)) return `Resting after a failure or limit hit — ${secs(s.restUntil - Date.now())} more`;
+    if (k.dailyLimit != null && s.callsToday >= k.dailyLimit) return `Today's ${k.dailyLimit} calls are used up`;
+    if (k.monthlyLimit != null && s.callsMonth >= k.monthlyLimit) return `This month's ${k.monthlyLimit} calls are used up`;
+    if (gapLeft(k) > 0) return `Wait ${secs(gapLeft(k))} — last call was ${secs(Date.now() - s.lastUsed)} ago`;
+    noteUse(k);
+    return null;
+}
+
+/** After the Test call: success clears a rest, a key failure starts one — as in runChain. */
+export function noteTestResult(k: AiKeyConfig, e?: unknown) {
+    if (e === undefined) noteSuccess(k);
+    else if (isKeyFailure(e)) noteFailure(k, e);
+}
+
 // ── Errors ────────────────────────────────────────────────────────────────────
 
 /** Premium off and every regular key is resting or used up — say so, never pay. */
