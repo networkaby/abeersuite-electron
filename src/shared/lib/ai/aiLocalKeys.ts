@@ -14,7 +14,7 @@ import { lockSecret, unlockSecret } from "@/shared/lib/ai/secretBox";
 
 export const localKeyStoreAvailable = () => !process.env.VERCEL;
 
-export const localKeysFile = () => process.env.AI_LOCAL_KEYS_FILE || path.join(process.cwd(), ".ai-keys.local.json");
+export const localKeysFile = () => process.env.AI_LOCAL_KEYS_FILE || path.join(/* turbopackIgnore: true */ process.cwd(), ".ai-keys.local.json"); // the ignore stops Next tracing the whole project into the counter build
 
 let cache: Record<string, string> | null = null;
 
