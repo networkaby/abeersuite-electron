@@ -24,8 +24,10 @@ export function AiPhotoPicker({
     onAdd: (urls: string[], kinds: PhotoKind[]) => void;
 }) {
     const missing = new Set(checklist?.items.filter((i) => !i.done).map((i) => i.kind) ?? []);
+    // Already added this session: hidden, so a photo cannot go in twice.
+    const [added, setAdded] = useState<Set<string>>(new Set());
     // Photos that fill a gap first.
-    const ordered = [...suggestions].sort((a, b) => Number(!!b.kind && missing.has(b.kind)) - Number(!!a.kind && missing.has(a.kind)));
+    const ordered = suggestions.filter((s) => !added.has(s.url)).sort((a, b) => Number(!!b.kind && missing.has(b.kind)) - Number(!!a.kind && missing.has(a.kind)));
     const [open, setOpen] = useState(!checklist?.enough);
     const [picked, setPicked] = useState<Set<string>>(new Set());
     const [busy, setBusy] = useState(false);
@@ -43,12 +45,13 @@ export function AiPhotoPicker({
         const chosen = ordered.filter((s) => picked.has(s.url));
         const done = await Promise.all(chosen.map(async (s) => {
             try {
-                return { url: await uploadImageToCloudinary(s.url, "/api/upload-signature", "shop/products"), kind: s.kind };
+                return { from: s.url, url: await uploadImageToCloudinary(s.url, "/api/upload-signature", "shop/products"), kind: s.kind };
             } catch {
                 return null;
             }
         }));
-        const ok = done.filter((d): d is { url: string; kind: PhotoKind | null } => d !== null);
+        const ok = done.filter((d): d is { from: string; url: string; kind: PhotoKind | null } => d !== null);
+        setAdded((a) => new Set([...a, ...ok.map((d) => d.from)]));
         if (ok.length) onAdd(ok.map((d) => d.url), ok.flatMap((d) => (d.kind ? [d.kind] : [])));
         if (ok.length < chosen.length) toast.error(`${chosen.length - ok.length} photo(s) could not be copied — the site may block downloads`);
         else toast.success(`${ok.length} photo(s) added to the gallery`);
