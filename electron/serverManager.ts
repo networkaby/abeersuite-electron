@@ -1,4 +1,5 @@
 import * as path from "path";
+import * as fs from "fs";
 import * as net from "net";
 import { app } from "electron";
 import { fork, type ChildProcess } from "child_process";
@@ -100,6 +101,10 @@ async function bootServer(port: number, compileCacheDir?: string): Promise<Serve
     // transitive requires resolve relative to `next`'s location.)
     const standaloneDir = path.join(process.resourcesPath, "standalone");
     const serverScript = path.join(standaloneDir, "server.js");
+
+    // The retired "this PC only" AI keys file (removed 2026-10-22): nothing reads it
+    // any more, and it holds locked keys, so a till that had one drops it.
+    fs.rm(path.join(app.getPath("userData"), "ai-keys.json"), { force: true }, () => undefined);
 
     const proc = fork(serverScript, [], {
         cwd: standaloneDir,

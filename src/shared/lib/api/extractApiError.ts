@@ -16,6 +16,11 @@ export function extractApiError(e: unknown, fallback = "Something went wrong"): 
         if (error === OFFLINE_READ_ONLY && typeof message === "string" && message) return message;
         return error;
     }
+    // No `{ error }` from our route: say what did come back, so "Failed to load"
+    // on a till tells crash (500) from missing route (404) from no server at all.
+    if (axios.isAxiosError(e) && e.code !== "ERR_CANCELED") {
+        return e.response ? `${fallback} (${e.response.status})` : `${fallback} (no answer from the server)`;
+    }
     return fallback;
 }
 
