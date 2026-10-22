@@ -219,20 +219,15 @@ resources/7za.exe
 # Android app (phone-app/, Capacitor). The signing key NEVER goes in git — losing
 # it means the app can never be updated under the same package id, and leaking it lets
 # anyone ship an "update" to every phone. Keep it backed up off this PC.
-# (/android/ is the retired Bubblewrap TWA; its keystore copy stays ignored until removed.)
-/android/
 /phone-app/node_modules/
 /phone-app/*.keystore
 /phone-app/*.jks
-# Customer app (shop-app-native/, Capacitor) — signs with shop-app/ns-shop.keystore.
+# Customer app (shop-app-native/, Capacitor). Same key rule.
 /shop-app-native/node_modules/
+/shop-app-native/*.keystore
+/shop-app-native/*.jks
 # Firebase app config for push - downloaded from the Firebase console, kept off git like the key.
 /shop-app-native/android/app/google-services.json
-# Customer app (shop-app/, Bubblewrap TWA): only the manifest and build script are
-# source; the Gradle project is regenerated from twa-manifest.json. Same key rule.
-/shop-app/*
-!/shop-app/twa-manifest.json
-!/shop-app/build-apk.ps1
 
 certificates
 /phone-app/android/app/google-services.json

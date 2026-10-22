@@ -533,7 +533,7 @@ Pages are in `src/app/m-staff-app`, APIs in `src/app/api/mobile`.
 - The 512 px icon is upscaled from `build/icon.png`.
 - The narrow rider / salesman permission is not built (§1).
 - Play Store listing is future work; both APKs are sideloaded.
-- **Customer app (`shop-app/`, TWA) offer:** on an Android/iPhone browser the shop + portal
+- **Customer app (`shop-app-native/`, Capacitor) offer:** on an Android/iPhone browser the shop + portal
   show a "Get our app" strip ([`GetAppBanner`](../src/modules/external/pwa/GetAppBanner.tsx));
   ✕ hides it for 14 days on that phone (localStorage). Android with `public/ns-shop.apk`
   present → APK download, and Chrome's own PWA install popup is held back (one offer, as

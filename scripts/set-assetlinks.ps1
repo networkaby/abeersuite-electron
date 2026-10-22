@@ -1,8 +1,7 @@
 # Writes one app's entry into public/.well-known/assetlinks.json, keeping every
 # other app's entry. Both Android apps share the file: the staff app
-# (phone-app/, Capacitor) and the customer app (shop-app/, TWA). A build script
-# that overwrote the whole file would cut the other app off — for the TWA that
-# means an address bar over every screen.
+# (phone-app/) and the customer app (shop-app-native/), both Capacitor. A build
+# script that overwrote the whole file would cut the other app off.
 #   . "$PSScriptRoot\..\scripts\set-assetlinks.ps1"
 #   Set-AssetLink -Package in.networkservice.shop -Apk .\app-release-signed.apk
 function Set-AssetLink {

@@ -88,8 +88,6 @@ const eslintConfig = defineConfig([
     // Standalone mobile Capacitor app shells and build outputs; not part of the Next.js workspace.
     "phone-app/**",
     "shop-app-native/**",
-    "shop-app/**",
-    "android/**",
     // Local scratch / temporary scripts (mirrors .gitignore).
     "**/_tmp_*",
   ]),

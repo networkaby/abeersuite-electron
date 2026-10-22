@@ -7,7 +7,7 @@ android {
         applicationId "in.networkservice.shop"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // Must climb on every APK: the TWA it replaces (shop-app/) was 1, and a phone
+        // Must climb on every APK: the retired TWA was 1, and a phone
         // refuses an "update" whose code is not higher than what it has.
         versionCode 5
         versionName "2.1.1"
@@ -18,12 +18,12 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    // The TWA's key (shop-app/ns-shop.keystore, also in assetlinks.json), so this
+    // The retired TWA's key (shop-app-native/ns-shop.keystore, also in assetlinks.json), so this
     // installs over it as an update. Passwords come from the environment —
     // build-apk.ps1 asks for them; they are never written to a file.
     signingConfigs {
         release {
-            storeFile file("../../../shop-app/ns-shop.keystore")
+            storeFile file("../../ns-shop.keystore")
             storePassword System.getenv("NS_SHOP_KEYSTORE_PASSWORD")
             keyAlias "ns-shop"
             keyPassword System.getenv("NS_SHOP_KEY_PASSWORD")

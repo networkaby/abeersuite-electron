@@ -9,7 +9,7 @@ export const noSubscribe = () => () => {};
 export function readPlace(): string {
     const standalone = window.matchMedia("(display-mode: standalone)").matches
         || (navigator as { standalone?: boolean }).standalone === true
-        // The customer app (shop-app/, TWA) opens its first page with this referrer.
+        // Phones still on the retired customer TWA open their first page with this referrer.
         || document.referrer.startsWith("android-app://");
     // The staff app (phone-app/, Capacitor) is a WebView, not "standalone" — it
     // says so through its own global.

@@ -17,8 +17,8 @@ $env:ANDROID_HOME = "$tools\android-sdk"
 $env:GRADLE_USER_HOME = "$tools\gradle-home"
 
 Set-Location $PSScriptRoot
-if (-not (Test-Path "..\shop-app\ns-shop.keystore")) {
-    throw "shop-app\ns-shop.keystore is missing (the TWA's key - this app updates it). Restore it from the backup - a new key cannot update phones that already have the app."
+if (-not (Test-Path ".\ns-shop.keystore")) {
+    throw "shop-app-native\ns-shop.keystore is missing (the key phones already trust - it came from the retired TWA). Restore it from the backup - a new key cannot update phones that already have the app."
 }
 
 # Version into the user agent + appVersions.ts, so older phones are told to update.

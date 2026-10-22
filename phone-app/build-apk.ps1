@@ -47,7 +47,7 @@ try {
 $apk = ".\android\app\build\outputs\apk\release\app-release.apk"
 Copy-Item $apk "..\public\ns-staff.apk" -Force
 
-# Keeps the customer app's entry (shop-app/) — see scripts/set-assetlinks.ps1.
+# Keeps the customer app's entry (shop-app-native/) — see scripts/set-assetlinks.ps1.
 . "$PSScriptRoot\..\scripts\set-assetlinks.ps1"
 Set-AssetLink -Package (Get-Content ".\capacitor.config.json" -Raw | ConvertFrom-Json).appId -Apk $apk
 Write-Host "Done: public\ns-staff.apk and public\.well-known\assetlinks.json updated."

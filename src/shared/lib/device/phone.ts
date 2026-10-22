@@ -44,7 +44,7 @@ export const PHONE_APP_INSTALL = `${PHONE_APP_HOME}/install`;
  * app full screen through Chrome — every screen is still this website, so a deploy
  * reaches the phones without a new APK. Sideloaded from the install page for now.
  * The package id is permanent once phones carry it (Android treats a new id as a
- * different app); it must match `android/twa-manifest.json` and
+ * different app); it must match `phone-app/capacitor.config.json` and
  * `public/.well-known/assetlinks.json`.
  */
 export const PHONE_APP_ANDROID_PACKAGE = "in.networkservice.staff";
