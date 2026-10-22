@@ -34,6 +34,7 @@ export const shopProductPatchSchema = z.object({
         items: z.array(z.object({ kind: z.enum(PHOTO_KIND_KEYS as [string, ...string[]]), done: z.boolean(), must: z.boolean().default(false) })).max(PHOTO_KIND_KEYS.length),
         enough: z.boolean(),
         at: z.string().max(40),
+        remove: z.array(z.object({ url: z.string().url(), why: z.enum(["duplicate", "irrelevant", "quality"]), note: z.string().max(200) })).max(30).default([]),
     }).nullable().optional(),
     stock: z.coerce.number().int().min(0).optional().nullable(),
     lowStockThreshold: z.coerce.number().int().min(0).optional(),

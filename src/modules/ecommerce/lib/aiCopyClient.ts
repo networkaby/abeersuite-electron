@@ -13,7 +13,7 @@ export type AiCopyRequest = { productId: number; name?: string; imageUrls?: stri
 // pressing Generate again for the same name + photo + flow is free.
 // Not in the DB on purpose — a draft is only kept once staff save it.
 function cacheKey(r: AiCopyRequest): string {
-    return `aiCopy10:${r.productId}:${r.premium ? "p" : "r"}:${r.flow}:${r.name ?? ""}:${(r.imageUrls ?? []).join("|")}`;
+    return `aiCopy11:${r.productId}:${r.premium ? "p" : "r"}:${r.flow}:${r.name ?? ""}:${(r.imageUrls ?? []).join("|")}`;
 }
 
 function readCache(key: string): ProductCopy | null {

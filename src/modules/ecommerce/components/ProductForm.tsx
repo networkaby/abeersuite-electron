@@ -708,7 +708,17 @@ export default function ProductForm({
                                     <span className={c.ok ? "" : "text-muted-foreground"}>{c.label}</span>
                                 </div>
                                 {c.key === "image" && photoChecklist && photoChecklist.items.length > 0 && (
-                                    <PhotoChecklistRows checklist={photoChecklist} onToggle={(k) => tickPhotoKinds([k], true)} />
+                                    <PhotoChecklistRows
+                                        checklist={photoChecklist}
+                                        gallery={galleryUrls}
+                                        onToggle={(k) => tickPhotoKinds([k], true)}
+                                        onRemove={(url) => {
+                                            // Same as the gallery's Delete; the gallery autosaves.
+                                            setGalleryUrls((g) => g.filter((u) => u !== url));
+                                            setSelectedImage(0);
+                                            savePhotoChecklist({ ...photoChecklist, remove: photoChecklist.remove.filter((r) => r.url !== url) });
+                                        }}
+                                    />
                                 )}
                             </li>
                         ))}

@@ -8,7 +8,7 @@ import {
     AiDataCheckError, OUTPUT_KEYS, assembleDescription, callParsed, callStep, cleanSpecs, copySchema, photoLines, photoParts,
     productLines, text, textList, type ProductCopy, type ProductCopyInput,
 } from "@/modules/ecommerce/lib/aiProductCopy";
-import { PHOTO_GROUPS, PHOTO_KINDS, checklistFrom, isPhotoKind, type PhotoKind, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
+import { PHOTO_GROUPS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, checklistFrom, isPhotoKind, type PhotoKind, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 
 // Verified product copy (owner, 2026-10-21): "no information is better than
 // false information". Tested on 6 real products before it was built.
@@ -129,6 +129,7 @@ const photoSchema = z.object({
     have: kindList,
     must: kindList,
     nice: kindList,
+    remove: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.object({ photo: z.coerce.number(), why: z.unknown(), note: z.preprocess(text, z.string()).default("") }))).default([]),
     web: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.object({ n: z.coerce.number(), kind: z.unknown(), same: z.boolean().default(true) }))).default([]),
 });
 
@@ -149,8 +150,9 @@ function photoPrompt(p: VerifiedCopyInput, ours: number, web: number): string {
         "- Box sides: list a side only if this product's box would carry something useful there (specs, feature list, compatibility list, barcode, contents). Never a blank side or one that repeats another.",
         "- Feel photos: always consider them, fitted to the product (a cable: size, working; a speaker: in_use, cinematic). size = any photo that lets the buyer gauge the size.",
         "- Never list a kind that makes no sense for this product.",
-        web ? "web: for every web photo, its number, its kind, and same=false if it shows a different product, a different model or colour, or only a logo." : "",
-        'Return ONLY JSON: {"have":[kind],"must":[kind],"nice":[kind],"web":[{"n":number,"kind":kind,"same":boolean}]}',
+        ours ? `remove: our photos (numbered 1 to ${ours} in the order given) that should go — why "duplicate" (almost the same picture as another of ours: keep the better one, list only the weaker; a box shot and a product shot are never duplicates), "irrelevant" (not this product, only a logo, a poster unrelated to it), or "quality" (blurry, dark, tiny, cut off, heavy watermark). note: a few words for staff. Empty when every photo is fine.` : "",
+        web ? "web: for every web photo, its number, its kind, and same=false if it shows a different product, a different model or colour, only a logo, or is almost the same picture as one of ours." : "",
+        'Return ONLY JSON: {"have":[kind],"must":[kind],"nice":[kind],"remove":[{"photo":number,"why":string,"note":string}],"web":[{"n":number,"kind":kind,"same":boolean}]}',
     ].filter(Boolean).join("\n");
 }
 
@@ -179,13 +181,20 @@ async function photoAdvice(p: VerifiedCopyInput, ours: ReturnType<typeof photoPa
         if (!web.length) { console.warn("[aiVerifiedCopy] photo advice failed", e); return null; }
         try { answer = (await ask(false)).value; } catch (e2) { console.warn("[aiVerifiedCopy] photo advice failed", e2); return null; }
     }
+    // Same order photoParts sent them in; saved by URL so a reorder cannot point at the wrong photo.
+    const ourUrls = p.imageUrls.filter((u) => /^https?:\/\//.test(u));
+    const removals = answer.remove.flatMap((x) => {
+        const url = ourUrls[x.photo - 1];
+        const why = String(x.why).toLowerCase();
+        return url && why in PHOTO_REMOVE_REASONS ? [{ url, why: why as PhotoRemoveReason, note: x.note.slice(0, 200) }] : [];
+    }).filter((x, i, all) => all.findIndex((y) => y.url === x.url) === i);
     const verdict = new Map(answer.web.map((x) => [x.n, x]));
     const suggestions: PhotoSuggestion[] = web.flatMap((x, i) => {
         const v = verdict.get(i + 1);
         if (v && !v.same) return [];
         return [{ ...x, kind: v && isPhotoKind(v.kind) ? v.kind : null }];
     });
-    return { checklist: checklistFrom(answer.have as PhotoKind[], answer.must as PhotoKind[], answer.nice as PhotoKind[]), suggestions };
+    return { checklist: checklistFrom(answer.have as PhotoKind[], answer.must as PhotoKind[], answer.nice as PhotoKind[], removals), suggestions };
 }
 
 const letter = (i: number) => String.fromCharCode(65 + i);

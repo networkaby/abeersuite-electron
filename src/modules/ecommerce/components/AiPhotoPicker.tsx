@@ -6,7 +6,7 @@ import { Check, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { uploadImageToCloudinary } from "@/shared/lib/uploadToCloudinary";
-import { PHOTO_GROUPS, PHOTO_KINDS, photoKindLabel, type PhotoChecklist, type PhotoGroup, type PhotoKind, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
+import { PHOTO_GROUPS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, photoKindLabel, type PhotoChecklist, type PhotoGroup, type PhotoKind, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 
 // Verified's photo suggestions (owner, 2026-10-22): shown while the draft is
 // open, never added on their own. A gallery the AI calls enough keeps them
@@ -105,12 +105,37 @@ export function AiPhotoPicker({
 }
 
 /** The rows under Product image in Shop readiness, by group; must rows in bold. Staff tick a kind once the gallery has it. */
-export function PhotoChecklistRows({ checklist, onToggle }: { checklist: PhotoChecklist; onToggle: (kind: PhotoKind) => void }) {
+export function PhotoChecklistRows({ checklist, gallery, onToggle, onRemove }: {
+    checklist: PhotoChecklist;
+    /** The form's current gallery — advice about a photo no longer there is not shown. */
+    gallery: string[];
+    onToggle: (kind: PhotoKind) => void;
+    onRemove: (url: string) => void;
+}) {
+    const removals = checklist.remove.filter((r) => gallery.includes(r.url));
     const groups = (Object.keys(PHOTO_GROUPS) as PhotoGroup[])
         .map((g) => ({ g, items: checklist.items.filter((i) => PHOTO_KINDS[i.kind].group === g) }))
         .filter((x) => x.items.length);
     return (
         <div className="ml-6 space-y-2">
+            {removals.length > 0 && (
+                <div>
+                    <p className="text-[11px] font-medium uppercase text-amber-700 dark:text-amber-400">AI suggests removing</p>
+                    <ul className="space-y-1">
+                        {removals.map((r) => (
+                            <li key={r.url} className="flex items-center gap-2 text-xs">
+                                {/* eslint-disable-next-line @next/next/no-img-element -- our own gallery photo, a tiny thumbnail */}
+                                <img src={r.url} alt="" className="size-8 shrink-0 rounded border border-border bg-muted object-contain" />
+                                <span className="min-w-0 flex-1">
+                                    <span className="font-medium">{PHOTO_REMOVE_REASONS[r.why]}</span>
+                                    {r.note ? <span className="text-muted-foreground"> — {r.note}</span> : null}
+                                </span>
+                                <Button type="button" size="sm" variant="outline" onClick={() => onRemove(r.url)}>Remove</Button>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
             {groups.map(({ g, items }) => (
                 <div key={g}>
                     <p className="text-muted-foreground text-[11px] font-medium uppercase">{PHOTO_GROUPS[g]}</p>

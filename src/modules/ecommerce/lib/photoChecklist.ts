@@ -48,8 +48,13 @@ const OLD_KINDS: Record<string, PhotoKind> = { side: "left", label: "box_back" }
  * staff ticked it). `must` = needed to judge the product; the rest add feel.
  */
 export type PhotoChecklistItem = { kind: PhotoKind; done: boolean; must: boolean };
+export const PHOTO_REMOVE_REASONS = { duplicate: "Almost the same as another photo", irrelevant: "Not this product", quality: "Poor quality" } as const;
+export type PhotoRemoveReason = keyof typeof PHOTO_REMOVE_REASONS;
+/** A gallery photo the AI says to remove — by URL, so reordering keeps it right. Staff decide. */
+export type PhotoRemoval = { url: string; why: PhotoRemoveReason; note: string };
+
 /** `enough` = every must row is done (worked out, not the AI's word). */
-export type PhotoChecklist = { items: PhotoChecklistItem[]; enough: boolean; at: string };
+export type PhotoChecklist = { items: PhotoChecklistItem[]; enough: boolean; at: string; remove: PhotoRemoval[] };
 
 /** A web photo from a page Verified kept, with the kind the AI says it shows. */
 export type PhotoSuggestion = { url: string; site: string; kind: PhotoKind | null };
@@ -57,7 +62,7 @@ export type PhotoSuggestion = { url: string; site: string; kind: PhotoKind | nul
 export const isEnough = (items: PhotoChecklistItem[]) => items.every((i) => i.done || !i.must);
 
 /** AI answer → checklist: what we have is done, what we miss is open (must first); nothing else is listed. */
-export function checklistFrom(have: PhotoKind[], must: PhotoKind[], nice: PhotoKind[]): PhotoChecklist {
+export function checklistFrom(have: PhotoKind[], must: PhotoKind[], nice: PhotoKind[], remove: PhotoRemoval[] = []): PhotoChecklist {
     const seen = new Set<PhotoKind>();
     const items: PhotoChecklistItem[] = [];
     const add = (kind: PhotoKind, done: boolean, isMust: boolean) => {
@@ -68,7 +73,7 @@ export function checklistFrom(have: PhotoKind[], must: PhotoKind[], nice: PhotoK
     have.forEach((k) => add(k, true, must.includes(k)));
     must.forEach((k) => add(k, false, true));
     nice.forEach((k) => add(k, false, false));
-    return { items, enough: isEnough(items), at: new Date().toISOString() };
+    return { items, enough: isEnough(items), at: new Date().toISOString(), remove };
 }
 
 /** A saved InvProduct.photoChecklistJson, or null when unset or unreadable. */
@@ -86,5 +91,11 @@ export function readPhotoChecklist(raw: unknown): PhotoChecklist | null {
         // A first-menu row has no `must`; its gallery verdict stands in.
         return [{ kind, done: o.done === true, must: typeof o.must === "boolean" ? o.must : r.enough !== true }];
     });
-    return { items, enough: isEnough(items), at: typeof r.at === "string" ? r.at : "" };
+    const remove = (Array.isArray(r.remove) ? r.remove : []).flatMap((x): PhotoRemoval[] => {
+        const o = (x ?? {}) as Record<string, unknown>;
+        return typeof o.url === "string" && typeof o.why === "string" && o.why in PHOTO_REMOVE_REASONS
+            ? [{ url: o.url, why: o.why as PhotoRemoveReason, note: typeof o.note === "string" ? o.note : "" }]
+            : [];
+    });
+    return { items, enough: isEnough(items), at: typeof r.at === "string" ? r.at : "", remove };
 }
