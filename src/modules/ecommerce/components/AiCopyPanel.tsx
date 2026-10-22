@@ -7,7 +7,7 @@ import { ExternalLink, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { extractApiError } from "@/shared/lib/api";
 import { fetchAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
-import { FlowButtons, PremiumSwitch, useCopyFlow, usePhotoAiOn, usePremiumAi } from "@/modules/ecommerce/components/AiCopyControls";
+import { FlowButtons, PhotoAiSwitch, PremiumSwitch, useCopyFlow, usePhotoAi, usePremiumAi } from "@/modules/ecommerce/components/AiCopyControls";
 import { AiPhotoPicker } from "@/modules/ecommerce/components/AiPhotoPicker";
 import type { PhotoChecklist, PhotoKind } from "@/modules/ecommerce/lib/photoChecklist";
 
@@ -94,7 +94,7 @@ export default function AiCopyPanel({
 }) {
     const [flow, setFlow] = useCopyFlow();
     const [premium, setPremium] = usePremiumAi();
-    const photoAi = usePhotoAiOn();
+    const [photoAi, setPhotoAi] = usePhotoAi();
     const [busy, setBusy] = useState(false);
     const [draft, setDraft] = useState<ProductCopy | null>(null);
     // Verified stopped at the photo check: our own data disagrees with itself.
@@ -139,11 +139,14 @@ export default function AiCopyPanel({
                     {busy ? "Writing…" : draft ? "Generate again" : "Generate with AI"}
                 </Button>
                 <PremiumSwitch value={premium} onChange={setPremium} disabled={busy} />
+                {flow === "verified" && <PhotoAiSwitch value={photoAi} onChange={setPhotoAi} disabled={busy} />}
                 <FlowButtons value={flow} onChange={setFlow} disabled={busy} />
             </div>
             {flow === "verified" && (
                 <p className="text-muted-foreground text-xs">
-                    Photo AI: {photoAi ? "on — photo checklist and labelled suggestions" : "off — photos suggested without labels (AI Setup → Verified)"}
+                    {photoAi
+                        ? `Photo AI on: one extra AI call${premium ? " (paid key allowed)" : " (free keys only — skipped if none is free)"} — photo checklist, remove advice, labelled suggestions.`
+                        : "Photo AI off: photos suggested without labels, no AI cost."}
                 </p>
             )}
             {checkFlags && <DataFlags flags={checkFlags} title="Not written — fix this product's data first:" />}

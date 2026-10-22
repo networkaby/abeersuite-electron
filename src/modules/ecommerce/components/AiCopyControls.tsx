@@ -13,6 +13,8 @@ import { AI_COPY_FLOWS, AI_DEFAULT_COPY_FLOW, type AiCopyFlow } from "@/shared/l
 // only while this screen is open (owner, 2026-10-22).
 
 const PREMIUM_KEY = "ai-premium-api";
+// Photo AI (owner, 2026-10-22): staff may flip it per PC; until they do, the admin's AI Setup switch.
+const PHOTO_KEY = "ai-photo-check";
 
 const listeners = new Set<() => void>();
 function subscribe(fn: () => void) {
@@ -51,10 +53,25 @@ function askAdminFlow() {
         .catch(() => undefined);
 }
 
-/** Verified's Photo AI switch on AI Setup (read with the admin's flow, same request). */
-export function usePhotoAiOn(): boolean {
+/** Verified's Photo AI: this PC's own pick, else the admin's AI Setup switch (read with the flow, same request). */
+export function usePhotoAi(): [boolean, (on: boolean) => void] {
     useEffect(askAdminFlow, []);
-    return useSyncExternalStore(subscribe, () => adminPhotoCheck, () => false);
+    const on = useSyncExternalStore(subscribe, () => {
+        const mine = read(PHOTO_KEY);
+        return mine === null ? adminPhotoCheck : mine === "1";
+    }, () => false);
+    return [on, (v) => write(PHOTO_KEY, v ? "1" : "0")];
+}
+
+export function PhotoAiSwitch({ value, onChange, disabled }: { value: boolean; onChange: (on: boolean) => void; disabled?: boolean }) {
+    return (
+        <div className="flex items-center gap-2" title="On = one extra AI call per Verified run (paid if Premium is on): photo checklist, which photos to remove, labelled suggestions. Off = photos suggested without labels, no AI cost.">
+            <Switch id="ai-photo" checked={value} onCheckedChange={onChange} disabled={disabled} />
+            <Label htmlFor="ai-photo" className="text-sm">
+                Photo AI: <b>{value ? "Yes" : "No"}</b>
+            </Label>
+        </div>
+    );
 }
 
 /** Direct AI or Verified: opens on the admin's pick; another pick lasts only while this screen is open. */

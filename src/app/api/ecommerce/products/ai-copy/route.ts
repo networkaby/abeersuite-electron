@@ -41,6 +41,8 @@ const postSchema = z.object({
     bulk: z.boolean().default(false),
     // "Use Premium API" — off (default, also for an old tab) never touches the paid key.
     premium: z.boolean().default(false),
+    // Product page's Photo AI switch; left out (an old tab, bulk) → AI Setup's switch.
+    photoAi: z.boolean().optional(),
 });
 
 // GET → the option the product page opens on and the Photo AI switch (the admin's picks on AI Setup; cached server-side).
@@ -88,6 +90,7 @@ export async function POST(req: Request) {
                 codes: p.codes.map((c) => c.value),
                 typedSpecs: specsOf(p.specsJson),
                 shopWarrantyDays: p.warrantyTerm?.durationDays,
+                photoAi: data.photoAi,
             })
             : await generateProductCopy(base);
         return NextResponse.json(copy);

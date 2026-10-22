@@ -39,6 +39,8 @@ export type VerifiedCopyInput = ProductCopyInput & {
     typedSpecs?: Record<string, string> | null;
     /** Our own support period, in days — not the maker's warranty. */
     shopWarrantyDays?: number | null;
+    /** Product page's Photo AI switch; undefined → AI Setup's switch. */
+    photoAi?: boolean;
 };
 
 const USE = "product_copy_verified";
@@ -169,9 +171,9 @@ function webPhotos(p: VerifiedCopyInput, pages: PageRead[]): { url: string; site
         .slice(0, AI_PHOTO_LIMITS.total);
 }
 
-/** Step 5; null when Photo AI is off on AI Setup or the AI could not answer. On, an empty Photos step borrows the Check keys. */
+/** Step 5; null when Photo AI is off (the page's switch, else AI Setup's) or the AI could not answer — with Premium off and no free key, it fails quietly here. On, an empty Photos step borrows the Check keys. */
 async function photoAdvice(p: VerifiedCopyInput, ours: ReturnType<typeof photoParts>, web: { url: string; site: string }[], premium: boolean) {
-    if (!(await loadAiSetup()).photoCheck) return null;
+    if (!(p.photoAi ?? (await loadAiSetup()).photoCheck)) return null;
     const [use, step] = (await stepHasKey({ use: USE, step: "photos", premium })) ? [USE, "photos" as AiStep] : await chainFor("check", premium);
     const ask = (withWeb: boolean) => callParsed(
         () => callStep(use, step, [
