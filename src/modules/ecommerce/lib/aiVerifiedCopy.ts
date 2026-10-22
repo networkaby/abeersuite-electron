@@ -243,8 +243,13 @@ function arrangeFrom(answer: z.infer<typeof photoSchema>, ourUrls: string[], rem
         const crop = (CROP_MODES as readonly string[]).includes(String(x.crop)) ? (x.crop as CropMode) : now.crop;
         const gravity = (GRAVITY_MODES as readonly string[]).includes(String(x.focus)) ? (x.focus as GravityMode) : now.gravity;
         const fixes = x.fixes.filter((f): f is ImageFix => (IMAGE_FIX_KEYS as string[]).includes(f));
-        const next = withAdjust(url, { crop, gravity, focal: null, fixes });
-        return next === url ? [] : [{ url, next, why: x.why.slice(0, 120) }];
+        // An untouched photo already shows as pad — "pad, no fixes" is no change, whatever the URL text says.
+        // Pad takes only a positional focus (auto / face focus means centre there); fit takes none.
+        const padPos = (g: GravityMode) => (["north", "south", "east", "west"].includes(g) ? g : "center");
+        const same = crop === now.crop
+            && (crop === "fit" || (crop === "pad" ? padPos(gravity) === padPos(now.gravity) : gravity === now.gravity))
+            && fixes.length === (now.fixes?.length ?? 0) && fixes.every((f) => now.fixes?.includes(f));
+        return same ? [] : [{ url, next: withAdjust(url, { crop, gravity, focal: null, fixes }), why: x.why.slice(0, 120) }];
     }).filter((x, i, all) => all.findIndex((y) => y.url === x.url) === i);
     return reordered || looks.length ? { order: reordered ? order : [], looks } : null;
 }
