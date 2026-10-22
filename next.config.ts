@@ -30,6 +30,13 @@ const nextConfig: NextConfig = {
   // out and every AI request with a photo failed "Cannot find module 'undici'" on
   // the counter. Pinned in package.json so this top-level path exists.
   outputFileTracingIncludes: { "/**": ["./node_modules/undici/**"] },
+  // aiLocalKeys.ts reads/writes a file under process.cwd(), so the tracer copied the
+  // whole project (.env copies, .ai-keys.local.json, seeds, android builds) into every
+  // AI route — verify:package refused v1.16.11 at 1.8 GB. Keep only node_modules + .next.
+  outputFileTracingExcludes: Object.fromEntries(
+    ["/api/settings/ai-keys", "/api/settings/ai-keys/**", "/api/ecommerce/products/ai-copy", "/api/ecommerce/products/ai-copy/**"]
+      .map((route) => [route, ["./!(node_modules|.next)/**", "./*", "./.*"]]),
+  ),
   experimental: {
     // `src/proxy.ts` now matches `/api` (for the counter's write relay), which makes
     // Next tee every non-GET API body for the proxy. The tee is capped at 10 MB by
