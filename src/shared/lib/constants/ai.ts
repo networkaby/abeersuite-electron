@@ -24,8 +24,9 @@ export const AI_DEFAULT_COPY_FLOW: AiCopyFlow = "verified";
 /** Verified flow: pages read per product, how much of each is kept, and the
  *  e-commerce sites searched after the maker's own (domains). */
 export const AI_VERIFIED_LIMITS = { pages: 4, pageChars: 9000, fetchMs: 15_000 } as const;
-/** Verified photo suggestions: per page read, and in all (each one goes to the AI). */
-export const AI_PHOTO_LIMITS = { perPage: 4, total: 8 } as const;
+/** Verified photo suggestions: per page read, and in all (each one goes to the AI). `maxPx`: our
+ *  Cloudinary photos go to the AI capped at this size — a full phone shot made the call time out. */
+export const AI_PHOTO_LIMITS = { perPage: 4, total: 8, maxPx: 1600 } as const;
 export const AI_SELLER_SITES = ["flipkart.com", "amazon.in", "reliancedigital.in", "croma.com"] as const;
 
 /** AuditLog.entityType of the finished A/B search trial's picks (2026-10-19). Nothing

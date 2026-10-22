@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
-import { AI_HIGHLIGHT_COUNT, type AiCopyFlow, type AiStep } from "@/shared/lib/constants/ai";
+import { AI_HIGHLIGHT_COUNT, AI_PHOTO_LIMITS, type AiCopyFlow, type AiStep } from "@/shared/lib/constants/ai";
+import { isCloudinaryUrl } from "@/shared/lib/cloudinaryImage";
 import type { PhotoArrange, PhotoChecklist, PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 import {
     AiKeysExhaustedError, AiNoKeyError, AiRegularKeysOutError, aiErrorMessage as keyErrorMessage, aiStatus,
@@ -167,7 +168,20 @@ export type Part = { type: "text"; text: string } | { type: "file"; data: URL; m
 
 /** The product's photos as message parts (http(s) only). */
 export function photoParts(imageUrls: string[]): Part[] {
-    return imageUrls.filter((u) => /^https?:\/\//.test(u)).map((u) => ({ type: "file", data: new URL(u), mediaType: "image" }));
+    return imageUrls.filter((u) => /^https?:\/\//.test(u)).map((u) => ({ type: "file", data: new URL(forAi(u)), mediaType: "image" }));
+}
+
+/**
+ * Our Cloudinary photo as the AI gets it: no bigger than AI_PHOTO_LIMITS.maxPx, as
+ * JPEG (every model reads it; f_auto could hand it AVIF). Shrunk first, then the
+ * photo's own Adjust steps, so the AI still sees the look staff chose. A phone
+ * shot sent whole made the call time out (owner's #1450, 2026-10-22). Other
+ * sites' photos go as they are.
+ */
+function forAi(u: string): string {
+    return isCloudinaryUrl(u)
+        ? u.replace("/image/upload/", `/image/upload/c_limit,w_${AI_PHOTO_LIMITS.maxPx},h_${AI_PHOTO_LIMITS.maxPx},f_jpg,q_auto/`)
+        : u;
 }
 
 /** One step of one AI use, on that step's chain of keys. */
