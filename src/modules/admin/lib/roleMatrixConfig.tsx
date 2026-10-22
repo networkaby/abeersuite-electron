@@ -654,6 +654,9 @@ export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, ExtraToggle | ExtraToggle
     // Backup & Restore — the page opens on its link; taking a backup or restoring
     // one is settings:manage (which also allows the repair ticket's dev override).
     [sidebarChildPermissionId("settings", "backup-restore")]: { id: "settings:manage", label: "Can back up & restore" },
+    // AI Setup — the page opens on its link; its API holds secret keys, so reading
+    // or changing them is settings:ai:manage (no other box grants it).
+    [sidebarChildPermissionId("settings", "ai-setup")]: { id: "settings:ai:manage", label: "Can manage AI keys" },
     // CRM → Messages — reading opens on the link; a reply is a paid WhatsApp message.
     [sidebarChildPermissionId("crm", "messages")]: { id: "messages:reply", label: "Can reply on WhatsApp" },
     // Campaigns — writing opens on the link; sending goes to every customer at once.
