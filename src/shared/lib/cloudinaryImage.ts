@@ -9,7 +9,8 @@ import type { ImageLoaderProps } from "next/image";
 //
 // Everything here uses STANDARD transformations only (1 transformation each,
 // CDN-cached after the first request; the fix effects e_trim / e_improve /
-// e_auto_contrast / e_sharpen are standard too). Generative AI params (b_gen_fill,
+// e_auto_contrast / e_sharpen / e_auto_color / e_auto_brightness / e_vibrance
+// and the a_ rotation are standard too). Generative AI params (b_gen_fill,
 // e_gen_remove, …) cost 50-230x per use and are deliberately not offered.
 
 const UPLOAD_MARKER = "/image/upload/";
@@ -50,12 +51,23 @@ export type GravityMode = (typeof GRAVITY_MODES)[number];
  */
 export const IMAGE_FIXES = {
     trim: "Trim empty border",
+    auto_color: "Fix colour tint (yellow / blue light)",
+    auto_brightness: "Brighten a dark photo",
     improve: "Auto-improve colour & light",
     auto_contrast: "Auto-contrast",
+    vibrance: "Livelier colours",
     sharpen: "Sharpen",
 } as const;
 export type ImageFix = keyof typeof IMAGE_FIXES;
 export const IMAGE_FIX_KEYS = Object.keys(IMAGE_FIXES) as ImageFix[];
+
+/** Quarter turns for a sideways phone photo — applied first, before the fixes. */
+export const IMAGE_ROTATIONS = [0, 90, 180, 270] as const;
+export type ImageRotation = (typeof IMAGE_ROTATIONS)[number];
+
+/** Pad's gap colour: matched to the photo's edge, or plain white (marketplace look). */
+export const PAD_BACKGROUNDS = { auto: "Matching background", white: "Plain white" } as const;
+export type PadBackground = keyof typeof PAD_BACKGROUNDS;
 
 export type ImageAdjust = {
     crop: CropMode;
@@ -64,6 +76,10 @@ export type ImageAdjust = {
     focal?: { x: number; y: number } | null;
     /** Look fixes, applied before the crop. */
     fixes?: ImageFix[];
+    /** Clockwise quarter turn; 0 / unset = as uploaded. */
+    rotate?: ImageRotation;
+    /** Pad only: the gap colour (unset = auto). */
+    padBg?: PadBackground;
 };
 
 /** No adjustment chosen yet: pad to the frame, never crop, auto-matched background. */
@@ -78,11 +94,11 @@ export const IMAGE_FRAMES = {
 } as const;
 export type ImageFrame = keyof typeof IMAGE_FRAMES;
 
-type SplitUrl = { head: string; transform: string | null; fixes: ImageFix[]; tail: string };
+type SplitUrl = { head: string; transform: string | null; fixes: ImageFix[]; rotate: ImageRotation; tail: string };
 
 /**
  * Split a Cloudinary URL into `<…/image/upload/>`, its leading transformation
- * segments (fix effects, then the crop) and the rest. A bare secure_url starts
+ * segments (rotation, fix effects, then the crop) and the rest. A bare secure_url starts
  * at the version segment (`v1712345678/`), which never contains an underscore —
  * that is how we tell "already transformed" from "untouched".
  */
@@ -93,27 +109,34 @@ function split(src: string): SplitUrl | null {
     let rest = src.slice(at + UPLOAD_MARKER.length);
     let transform: string | null = null;
     const fixes: ImageFix[] = [];
+    let rotate: ImageRotation = 0;
     for (;;) {
         const slash = rest.indexOf("/");
         const first = slash === -1 ? "" : rest.slice(0, slash);
         // A transformation segment is comma-joined `x_y` params.
         if (!first || !/^[a-z]{1,3}_/.test(first)) break;
         const fix = first.startsWith("e_") ? first.slice(2) : "";
+        const turn = /^a_(90|180|270)$/.exec(first);
         if (fix in IMAGE_FIXES) fixes.push(fix as ImageFix);
+        else if (turn) rotate = Number(turn[1]) as ImageRotation;
         else transform = first;
         rest = rest.slice(slash + 1);
     }
-    return { head, transform, fixes, tail: rest };
+    return { head, transform, fixes, rotate, tail: rest };
 }
 
-/** The fix effects as chained components, in Cloudinary's order. */
-const fixSegments = (fixes: ImageFix[] | undefined) =>
-    IMAGE_FIX_KEYS.filter((f) => fixes?.includes(f)).map((f) => `e_${f}/`).join("");
+/** The rotation and fix effects as chained components, in Cloudinary's order. */
+const fixSegments = (a: Pick<ImageAdjust, "fixes" | "rotate">) =>
+    (a.rotate ? `a_${a.rotate}/` : "") + IMAGE_FIX_KEYS.filter((f) => a.fixes?.includes(f)).map((f) => `e_${f}/`).join("");
 
 /** Read the adjustment baked into a URL; DEFAULT_ADJUST when there is none. */
 export function readAdjust(src: string): ImageAdjust {
     const parts = split(src);
-    if (!parts?.transform) return parts?.fixes.length ? { ...DEFAULT_ADJUST, fixes: parts.fixes } : DEFAULT_ADJUST;
+    if (!parts?.transform) {
+        return parts?.fixes.length || parts?.rotate
+            ? { ...DEFAULT_ADJUST, fixes: parts.fixes, ...(parts.rotate ? { rotate: parts.rotate } : {}) }
+            : DEFAULT_ADJUST;
+    }
 
     const params = new Map<string, string>();
     for (const p of parts.transform.split(",")) {
@@ -133,6 +156,8 @@ export function readAdjust(src: string): ImageAdjust {
             : DEFAULT_ADJUST.gravity,
         focal: gravity === "xy_center" && Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null,
         fixes: parts.fixes,
+        ...(parts.rotate ? { rotate: parts.rotate } : {}),
+        ...(params.get("b") === "white" ? { padBg: "white" as const } : {}),
     };
 }
 
@@ -152,9 +177,9 @@ function adjustParams(adjust: ImageAdjust): string[] {
     const out = [`c_${adjust.crop}`];
 
     if (adjust.crop === "pad") {
-        // Auto-matched letterbox background, so a padded tile doesn't show as
+        // Auto-matched letterbox background (or plain white, staff/AI pick), so a padded tile doesn't show as
         // a grey bar against the card.
-        out.push("b_auto");
+        out.push(adjust.padBg === "white" ? "b_white" : "b_auto");
         if ((POSITIONAL_GRAVITY as readonly string[]).includes(adjust.gravity)) {
             out.push(`g_${adjust.gravity}`);
         }
@@ -184,7 +209,7 @@ function frameHeight(frame: ImageFrame, width: number): number {
 export function withAdjust(src: string, adjust: ImageAdjust): string {
     const parts = split(src);
     if (!parts || !isCloudinaryUrl(src)) return src;
-    return `${parts.head}${fixSegments(adjust.fixes)}${adjustParams(adjust).join(",")}/${parts.tail}`;
+    return `${parts.head}${fixSegments(adjust)}${adjustParams(adjust).join(",")}/${parts.tail}`;
 }
 
 /** Strip any stored adjustment — used to preview the untouched original. */
@@ -214,7 +239,7 @@ export function buildUrl(
 
     if (!frame) {
         // Nothing to crop to — just cap the width.
-        return `${parts.head}${fixSegments(adjust.fixes)}${[...delivery, `w_${width}`, "c_limit"].join(",")}/${parts.tail}`;
+        return `${parts.head}${fixSegments(adjust)}${[...delivery, `w_${width}`, "c_limit"].join(",")}/${parts.tail}`;
     }
 
     const shape = adjustParams(adjust);
@@ -225,7 +250,7 @@ export function buildUrl(
             : [`ar_${IMAGE_FRAMES[frame]}`, `w_${width}`])
     );
 
-    return `${parts.head}${fixSegments(adjust.fixes)}${shape.join(",")}/${delivery.join(",")}/${parts.tail}`;
+    return `${parts.head}${fixSegments(adjust)}${shape.join(",")}/${delivery.join(",")}/${parts.tail}`;
 }
 
 /**

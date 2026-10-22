@@ -20,6 +20,8 @@ import {
     GRAVITY_MODES,
     IMAGE_FIXES,
     IMAGE_FIX_KEYS,
+    IMAGE_ROTATIONS,
+    PAD_BACKGROUNDS,
     buildUrl,
     readAdjust,
     withAdjust,
@@ -27,6 +29,8 @@ import {
     type CropMode,
     type GravityMode,
     type ImageAdjust,
+    type ImageRotation,
+    type PadBackground,
 } from "@/shared/lib/cloudinaryImage";
 
 const CROP_LABEL: Record<CropMode, string> = {
@@ -78,6 +82,9 @@ export default function ImageAdjustDialog({
     // focus marker re-positions when the image finishes loading.
     const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
     const original = withoutAdjust(url);
+    // The original as turned: a focus point is picked on the picture the crop really sees
+    // (rotation comes first). c_limit at 10000 px never resizes, so pixels stay original.
+    const turned = adjust.rotate ? buildUrl(withAdjust(original, { ...DEFAULT_ADJUST, rotate: adjust.rotate }), { width: 10000 }) : original;
 
     const preview = (frame: "card" | "square") =>
         buildUrl(withAdjust(original, adjust), { width: 480, frame });
@@ -120,7 +127,7 @@ export default function ImageAdjustDialog({
                         <div className="relative overflow-hidden rounded-md border bg-muted/40">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
-                                src={original}
+                                src={turned}
                                 alt=""
                                 onLoad={(e) =>
                                     setNatural({
@@ -219,6 +226,38 @@ export default function ImageAdjustDialog({
                                     automatic subject focus.
                                 </p>
                             ) : null}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label>Rotate</Label>
+                                <Select
+                                    value={String(adjust.rotate ?? 0)}
+                                    onValueChange={(v) => setAdjust((a) => ({ ...a, rotate: Number(v) as ImageRotation }))}
+                                >
+                                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {IMAGE_ROTATIONS.map((d) => (
+                                            <SelectItem key={d} value={String(d)}>{d ? `${d}° clockwise` : "As uploaded"}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>Pad background</Label>
+                                <Select
+                                    value={adjust.padBg ?? "auto"}
+                                    onValueChange={(v) => setAdjust((a) => ({ ...a, padBg: v as PadBackground }))}
+                                    disabled={adjust.crop !== "pad"}
+                                >
+                                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {(Object.keys(PAD_BACKGROUNDS) as PadBackground[]).map((b) => (
+                                            <SelectItem key={b} value={b}>{PAD_BACKGROUNDS[b]}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
 
                         <div className="space-y-1.5">

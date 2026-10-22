@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Check, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { uploadImageToCloudinary } from "@/shared/lib/uploadToCloudinary";
-import { IMAGE_FIXES, cloudinaryThumb, readAdjust } from "@/shared/lib/cloudinaryImage";
+import { IMAGE_FIXES, PAD_BACKGROUNDS, cloudinaryThumb, readAdjust, withoutAdjust } from "@/shared/lib/cloudinaryImage";
 import { PHOTO_GROUPS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, photoKindLabel, type PhotoArrange, type PhotoChecklist, type PhotoGroup, type PhotoKind, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 
 // Verified's photo suggestions (owner, 2026-10-22): shown while the draft is
@@ -162,8 +162,10 @@ export function PhotoChecklistRows({ checklist, gallery, onToggle, onRemove }: {
 
 /**
  * Photo AI's arrangement (owner, 2026-10-22): a better order and look for our
- * gallery. Staff apply it or not; a look is a normal Adjust edit, undone in the
- * Adjust dialog. Applying changes the gallery, which autosaves as usual.
+ * gallery. "Each photo should be done by AI automatically": a look goes straight
+ * onto every photo nobody has adjusted yet, with Undo; a photo staff framed keeps
+ * its framing and gets an Apply button instead. The order stays a button. A look
+ * is a normal Adjust edit; the gallery autosaves as usual.
  */
 export function AiPhotoArrange({
     arrange,
@@ -181,8 +183,24 @@ export function AiPhotoArrange({
     };
     const order = arrange.order.map(now).filter((u) => gallery.includes(u));
     const orderDone = order.length < 2 || order.every((u, i) => gallery[i] === u);
-    const looks = arrange.looks.filter((l) => gallery.includes(l.url));
-    if (orderDone && !looks.length) return null;
+    // Looks the AI put on by itself this session, and the ones staff undid (never re-applied).
+    const [auto, setAuto] = useState<{ url: string; next: string; why: string }[]>([]);
+    const declined = useRef(new Set<string>());
+    useEffect(() => {
+        const fresh = arrange.looks.filter((l) => gallery.includes(l.url) && withoutAdjust(l.url) === l.url && !declined.current.has(l.url));
+        if (!fresh.length) return;
+        onGallery((g) => g.map((u) => fresh.find((l) => l.url === u)?.next ?? u));
+        setAuto((a) => [...a.filter((x) => !fresh.some((l) => l.url === x.url)), ...fresh]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- once per AI answer; the gallery is read at that moment
+    }, [arrange]);
+    const undo = (l: { url: string; next: string }) => {
+        declined.current.add(l.url);
+        onGallery((g) => g.map((u) => (u === l.next ? l.url : u)));
+        setAuto((a) => a.filter((x) => x.url !== l.url));
+    };
+    const applied = auto.filter((l) => gallery.includes(l.next));
+    const looks = arrange.looks.filter((l) => gallery.includes(l.url) && !applied.some((a) => a.url === l.url));
+    if (orderDone && !looks.length && !applied.length) return null;
 
     const applyOrder = () => onGallery((g) => [...order.filter((u) => g.includes(u)), ...g.filter((u) => !order.includes(u))]);
     const applyLook = (url: string, next: string) => onGallery((g) => g.map((u) => (u === url ? next : u)));
@@ -205,6 +223,22 @@ export function AiPhotoArrange({
                             </figure>
                         ))}
                     </div>
+                </div>
+            )}
+            {applied.length > 0 && (
+                <div className="space-y-1">
+                    <span className="text-muted-foreground text-xs">AI improved {applied.length} photo{applied.length > 1 ? "s" : ""} — before → after:</span>
+                    {applied.map((l) => (
+                        <div key={l.url} className="flex items-center gap-2">
+                            {/* eslint-disable-next-line @next/next/no-img-element -- small Cloudinary thumb */}
+                            <img src={cloudinaryThumb(l.url, 160, "card")} alt="Before" className="h-15 w-20 rounded border object-cover" />
+                            <span className="text-muted-foreground text-xs">→</span>
+                            {/* eslint-disable-next-line @next/next/no-img-element -- small Cloudinary thumb */}
+                            <img src={cloudinaryThumb(l.next, 160, "card")} alt="After" className="h-15 w-20 rounded border object-cover" />
+                            <span className="text-muted-foreground min-w-0 flex-1 text-xs">{l.why || describeLook(l.next)}</span>
+                            <Button type="button" size="sm" variant="ghost" onClick={() => undo(l)}>Undo</Button>
+                        </div>
+                    ))}
                 </div>
             )}
             {looks.length > 0 && (
@@ -235,5 +269,10 @@ export function AiPhotoArrange({
 /** "Fill · Sharpen" — when the AI gave no reason. */
 function describeLook(url: string): string {
     const a = readAdjust(url);
-    return [a.crop[0].toUpperCase() + a.crop.slice(1), ...(a.fixes ?? []).map((f) => IMAGE_FIXES[f])].join(" · ");
+    return [
+        a.crop[0].toUpperCase() + a.crop.slice(1),
+        ...(a.crop === "pad" && a.padBg === "white" ? [PAD_BACKGROUNDS.white] : []),
+        ...(a.rotate ? [`Rotate ${a.rotate}°`] : []),
+        ...(a.fixes ?? []).map((f) => IMAGE_FIXES[f]),
+    ].join(" · ");
 }
