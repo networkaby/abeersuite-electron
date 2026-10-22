@@ -283,6 +283,10 @@ model InvProduct {
   galleryJson             Json?
   /// JSON object of label → value for specs tab
   specsJson               Json?
+  /// Photo checklist under Product image: { items: [{ kind, done }], enough, at }
+  /// — kinds of photo the gallery has / misses, from the Verified AI, ticked by
+  /// staff (modules/ecommerce/lib/photoChecklist.ts). null = never checked.
+  photoChecklistJson      Json?
   /// Free-form custom attributes — flat { key: value } pairs used for SEO-rich
   /// naming convention tokens and additional product info (colour, storage, OS, …).
   attrsJson               Json?

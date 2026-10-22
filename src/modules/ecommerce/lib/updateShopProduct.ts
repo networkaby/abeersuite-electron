@@ -7,6 +7,7 @@ import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { invProductToAdmin, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
+import { PHOTO_KIND_KEYS } from "@/modules/ecommerce/lib/photoChecklist";
 
 export const shopProductPatchSchema = z.object({
     // inventory fields
@@ -28,6 +29,12 @@ export const shopProductPatchSchema = z.object({
     imageUrl: z.string().url().optional().nullable().or(z.literal("")),
     galleryUrls: z.array(z.string().url()).optional(),
     specs: z.record(z.string(), z.string()).optional(),
+    // Photo checklist under Product image (photoChecklist.ts); null clears it.
+    photoChecklist: z.object({
+        items: z.array(z.object({ kind: z.enum(PHOTO_KIND_KEYS as [string, ...string[]]), done: z.boolean() })).max(PHOTO_KIND_KEYS.length),
+        enough: z.boolean(),
+        at: z.string().max(40),
+    }).nullable().optional(),
     stock: z.coerce.number().int().min(0).optional().nullable(),
     lowStockThreshold: z.coerce.number().int().min(0).optional(),
     weightGrams: z.coerce.number().int().min(0).max(1_000_000).optional().nullable(),
@@ -103,6 +110,7 @@ export async function updateShopProduct(
         if (b.imageUrl !== undefined) data.imageUrl = b.imageUrl && b.imageUrl !== "" ? b.imageUrl : null;
         if (galleryJson !== undefined) data.galleryJson = galleryJson;
         if (specsJson !== undefined) data.specsJson = specsJson;
+        if (b.photoChecklist !== undefined) data.photoChecklistJson = b.photoChecklist ?? Prisma.DbNull;
         if (b.stock !== undefined) data.stock = b.stock;
         if (b.lowStockThreshold !== undefined) data.lowStockThreshold = b.lowStockThreshold;
         if (b.weightGrams !== undefined) data.weightGrams = b.weightGrams;

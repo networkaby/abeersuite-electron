@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { AI_HIGHLIGHT_COUNT, type AiCopyFlow, type AiStep } from "@/shared/lib/constants/ai";
+import type { PhotoChecklist, PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 import {
     AiKeysExhaustedError, AiNoKeyError, AiRegularKeysOutError, aiErrorMessage as keyErrorMessage, aiStatus,
     callModel, runChain, stepHasKey,
@@ -88,6 +89,10 @@ export type ProductCopy = Copy & {
     flags: string[];
     /** Verified only: where each spec came from ("Label" or a site name). */
     specSources?: Record<string, string>;
+    /** Verified only: what kinds of photo the gallery has / misses (photoChecklist.ts). */
+    photoChecklist?: PhotoChecklist;
+    /** Verified only: photos on the kept pages, for staff to pick from. */
+    photoSuggestions?: PhotoSuggestion[];
 };
 
 const USE = "product_copy";

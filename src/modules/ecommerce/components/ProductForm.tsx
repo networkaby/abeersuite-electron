@@ -14,6 +14,8 @@ import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { productShopUrl, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import ProductGalleryUploader from "@/modules/ecommerce/components/ProductGalleryUploader";
 import AiCopyPanel from "@/modules/ecommerce/components/AiCopyPanel";
+import { PhotoChecklistRows } from "@/modules/ecommerce/components/AiPhotoPicker";
+import type { PhotoChecklist, PhotoKind } from "@/modules/ecommerce/lib/photoChecklist";
 import ProductCard from "@/modules/external/shop/ProductCard";
 import {
     shopQualification,
@@ -59,6 +61,7 @@ export default function ProductForm({
     // preview card can show that photo, not just index 0.
     const [selectedImage, setSelectedImage] = useState(0);
     const [galleryStatus, setGalleryStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+    const [photoChecklist, setPhotoChecklist] = useState<PhotoChecklist | null>(initial?.photoChecklist ?? null);
     const galleryFirstRun = useRef(true);
     const galleryDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
     const gallerySeq = useRef(0);
@@ -177,6 +180,7 @@ export default function ProductForm({
         setDescription(initial.description ?? "");
         setBadge(initial.badge ?? "");
         setGalleryUrls(initial.galleryUrls ?? []);
+        setPhotoChecklist(initial.photoChecklist ?? null);
         setSelectedImage(0);
         // Loading a product's own saved gallery is not a user edit — skip the
         // next autosave run so it doesn't re-PATCH the value right back.
@@ -229,6 +233,21 @@ export default function ProductForm({
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps -- fires on gallery edits only, not every initial/id change
     }, [galleryUrls]);
+
+    // Photo checklist saves at once, like the photos — it is about the gallery, not the form.
+    const savePhotoChecklist = (next: PhotoChecklist) => {
+        setPhotoChecklist(next);
+        if (!initial?.id) return;
+        axios.patch(`/api/ecommerce/products/${initial.id}`, { photoChecklist: next })
+            .catch((e: unknown) => toast.error(extractApiError(e, "Couldn't save the photo checklist")));
+    };
+    const tickPhotoKinds = (kinds: PhotoKind[], flip = false) => {
+        if (!photoChecklist) return;
+        savePhotoChecklist({
+            ...photoChecklist,
+            items: photoChecklist.items.map((i) => (kinds.includes(i.kind) ? { ...i, done: flip ? !i.done : true } : i)),
+        });
+    };
 
     // Shop price = the barcode tag the storefront actually charges (derived from
     // the saved sale price, server-side), falling back to the office effective
@@ -307,6 +326,7 @@ export default function ProductForm({
         barcodePricePaise: initial?.barcodePricePaise ?? null,
         // Preview card is display-only; codes exist purely for list search.
         codes: initial?.codes ?? [],
+        photoChecklist,
         // availability is display-only on the storefront; the admin preview card
         // doesn't need a resolved value.
         stockStatus: "in_stock",
@@ -435,6 +455,12 @@ export default function ProductForm({
                     onDescription={setDescription}
                     onSubheading={(v) => { subheadingTouched.current = true; setSubheading(v); }}
                     onSpecs={setSpecPairs}
+                    photoChecklist={photoChecklist}
+                    onPhotoChecklist={savePhotoChecklist}
+                    onAddPhotos={(urls, kinds) => {
+                        setGalleryUrls((g) => [...g, ...urls]);
+                        tickPhotoKinds(kinds);
+                    }}
                 />
                 <div className="grid gap-2">
                     <Label>Description</Label>
@@ -674,13 +700,18 @@ export default function ProductForm({
                     </div>
                     <ul className="space-y-1">
                         {qualification.checks.map((c) => (
-                            <li key={c.key} className="flex items-center gap-2 text-sm">
-                                {c.ok ? (
-                                    <Check className="size-4 text-emerald-600" />
-                                ) : (
-                                    <X className="size-4 text-muted-foreground" />
+                            <li key={c.key} className="space-y-1">
+                                <div className="flex items-center gap-2 text-sm">
+                                    {c.ok ? (
+                                        <Check className="size-4 text-emerald-600" />
+                                    ) : (
+                                        <X className="size-4 text-muted-foreground" />
+                                    )}
+                                    <span className={c.ok ? "" : "text-muted-foreground"}>{c.label}</span>
+                                </div>
+                                {c.key === "image" && photoChecklist && photoChecklist.items.length > 0 && (
+                                    <PhotoChecklistRows checklist={photoChecklist} onToggle={(k) => tickPhotoKinds([k], true)} />
                                 )}
-                                <span className={c.ok ? "" : "text-muted-foreground"}>{c.label}</span>
                             </li>
                         ))}
                     </ul>

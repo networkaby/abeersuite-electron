@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { extractApiError } from "@/shared/lib/api";
 import { fetchAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
 import { FlowButtons, PremiumSwitch, useCopyFlow, usePremiumAi } from "@/modules/ecommerce/components/AiCopyControls";
+import { AiPhotoPicker } from "@/modules/ecommerce/components/AiPhotoPicker";
+import type { PhotoChecklist, PhotoKind } from "@/modules/ecommerce/lib/photoChecklist";
 
 type SpecRow = { k: string; v: string };
 
@@ -70,6 +72,9 @@ export default function AiCopyPanel({
     onDescription,
     onSubheading,
     onSpecs,
+    photoChecklist,
+    onPhotoChecklist,
+    onAddPhotos,
 }: {
     productId?: number;
     name: string;
@@ -81,6 +86,11 @@ export default function AiCopyPanel({
     onDescription: (v: string) => void;
     onSubheading: (v: string) => void;
     onSpecs: (rows: SpecRow[]) => void;
+    /** Saved checklist under Product image — the AI's newer one replaces it. */
+    photoChecklist: PhotoChecklist | null;
+    onPhotoChecklist: (c: PhotoChecklist) => void;
+    /** Picked web photos, already copied to our storage, with the kinds they fill. */
+    onAddPhotos: (urls: string[], kinds: PhotoKind[]) => void;
 }) {
     const [flow, setFlow] = useCopyFlow();
     const [premium, setPremium] = usePremiumAi();
@@ -97,6 +107,8 @@ export default function AiCopyPanel({
         try {
             const copy = await fetchAiCopy({ productId, name: name.trim(), imageUrls, flow, premium }, { fresh });
             setDraft(copy);
+            // A cached draft carries the advice of its own run — the saved ticks since then win.
+            if (copy.photoChecklist && !copy.fromCache) onPhotoChecklist(copy.photoChecklist);
             const filled: string[] = [];
             if (!description.trim()) { onDescription(copy.shopDescription); filled.push("description"); }
             if (!subheading.trim() || subheading.trim() === name.trim()) { onSubheading(copy.title); filled.push("online name"); }
@@ -143,6 +155,9 @@ export default function AiCopyPanel({
                             Ask AI fresh (new charge)
                         </Button>
                     </div>
+                    {draft.photoSuggestions && (
+                        <AiPhotoPicker suggestions={draft.photoSuggestions} checklist={photoChecklist} onAdd={onAddPhotos} />
+                    )}
                     {draft.sources.length > 0 && (
                         <div>
                             <p className="text-muted-foreground text-xs">Sources — check specs before saving:</p>

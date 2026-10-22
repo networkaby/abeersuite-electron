@@ -1,6 +1,7 @@
 import type { InvProduct } from "@/generated/prisma/client";
 import { invProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
+import { readPhotoChecklist, type PhotoChecklist } from "@/modules/ecommerce/lib/photoChecklist";
 
 /** Admin shape — storefront fields + inventory + stock management. */
 export type ShopProductAdmin = ShopProductPublic & {
@@ -34,6 +35,8 @@ export type ShopProductAdmin = ShopProductPublic & {
     barcodePricePaise: number | null;
     /** Every scannable code on the product (barcode + EAN + UPC) — search only. */
     codes: { kind: string; value: string }[];
+    /** Photo checklist under Product image (null = never checked). */
+    photoChecklist: PhotoChecklist | null;
 };
 
 export function invProductToAdmin(
@@ -76,5 +79,6 @@ export function invProductToAdmin(
         savedSalePricePaise: p.savedSalePricePaise,
         barcodePricePaise: bands ? barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands) : null,
         codes: p.codes ?? [],
+        photoChecklist: readPhotoChecklist(p.photoChecklistJson),
     };
 }

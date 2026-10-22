@@ -1,13 +1,14 @@
 import "server-only";
 import { z } from "zod";
 import { stepHasKey } from "@/shared/lib/ai/aiKeys";
-import type { AiStep } from "@/shared/lib/constants/ai";
+import { AI_PHOTO_LIMITS, type AiStep } from "@/shared/lib/constants/ai";
 import { checkFact, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
 import { findProductPages, type PageRead } from "@/modules/ecommerce/lib/aiPageReader";
 import {
     AiDataCheckError, OUTPUT_KEYS, assembleDescription, callParsed, callStep, cleanSpecs, copySchema, photoLines, photoParts,
     productLines, text, textList, type ProductCopy, type ProductCopyInput,
 } from "@/modules/ecommerce/lib/aiProductCopy";
+import { PHOTO_KINDS, checklistFrom, isPhotoKind, type PhotoKind, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 
 // Verified product copy (owner, 2026-10-21): "no information is better than
 // false information". Tested on 6 real products before it was built.
@@ -23,6 +24,9 @@ import {
 // Warranty: our support period (the product's warranty term) is not the
 // maker's — shorter is normal; only longer is flagged. The copy shows the
 // maker's term only (see aiProductCopy.ts).
+//  5. Photos (AI, photos, beside step 3) — what kinds of photo our gallery has
+//     and misses, and what each web photo from the kept pages shows. Its own
+//     call so the copy prompt stays as tested; a failure only drops the advice.
 
 export type VerifiedCopyInput = ProductCopyInput & {
     modelNo?: string | null;
@@ -120,6 +124,63 @@ function writePrompt(p: VerifiedCopyInput, c: Check, pages: PageRead[]): string 
     ].filter(Boolean).join("\n");
 }
 
+const kindList = z.preprocess((v) => (Array.isArray(v) ? v.filter(isPhotoKind) : []), z.array(z.string())).default([]);
+const photoSchema = z.object({
+    have: kindList,
+    missing: kindList,
+    enough: z.boolean().default(false),
+    web: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.object({ n: z.coerce.number(), kind: z.unknown(), same: z.boolean().default(true) }))).default([]),
+});
+
+function photoPrompt(p: VerifiedCopyInput, ours: number, web: number): string {
+    return [
+        "You check the photo gallery of one product in an Indian online shop.",
+        ...productLines(p),
+        ours ? `The first ${ours} photo${ours > 1 ? "s are" : " is"} OUR gallery.` : "We have NO photo yet.",
+        web ? `The next ${web} photo${web > 1 ? "s are" : " is"} from the maker's or sellers' pages, numbered 1 to ${web}.` : "",
+        `Photo kinds: ${Object.entries(PHOTO_KINDS).map(([k, v]) => `${k} (${v})`).join(", ")}.`,
+        "have: the kinds our gallery already shows.",
+        "missing: the kinds a buyer of THIS product would want to see that our gallery lacks, most useful first. Only kinds that make sense for this product (a cable needs no in_use photo; a box_back only if it carries specs).",
+        "enough: true when our gallery already lets a buyer judge the product well — then missing may still list nice-to-haves.",
+        web ? "web: for every web photo, its number, its kind, and same=false if it shows a different product, a different model or colour, or only a logo." : "",
+        'Return ONLY JSON: {"have":[kind],"missing":[kind],"enough":boolean,"web":[{"n":number,"kind":kind,"same":boolean}]}',
+    ].filter(Boolean).join("\n");
+}
+
+/** Photo advice and the web photos to suggest; null when the AI could not answer (the copy is unaffected). */
+async function photoAdvice(p: VerifiedCopyInput, ours: ReturnType<typeof photoParts>, pages: PageRead[], premium: boolean) {
+    // Maker's and code-matched pages first, one URL once.
+    const ranked = [...pages].sort((a, b) => Number(b.codeMatch) - Number(a.codeMatch) || Number(b.maker) - Number(a.maker));
+    const seen = new Set<string>(p.imageUrls);
+    const web = ranked.flatMap((pg) => pg.photos.map((url) => ({ url, site: pg.site })))
+        .filter((x) => !seen.has(x.url) && seen.add(x.url))
+        .slice(0, AI_PHOTO_LIMITS.total);
+    const [use, step] = await chainFor("check", premium);
+    const ask = (withWeb: boolean) => callParsed(
+        () => callStep(use, step, [
+            { type: "text", text: photoPrompt(p, ours.length, withWeb ? web.length : 0) },
+            ...ours,
+            ...(withWeb ? photoParts(web.map((x) => x.url)) : []),
+        ], { wait: p.bulk, premium }),
+        (raw) => photoSchema.parse(raw),
+    );
+    let answer;
+    try {
+        answer = (await ask(web.length > 0)).value;
+    } catch (e) {
+        // A seller site refusing the model's download fails the whole call — ask again about ours only.
+        if (!web.length) { console.warn("[aiVerifiedCopy] photo advice failed", e); return null; }
+        try { answer = (await ask(false)).value; } catch (e2) { console.warn("[aiVerifiedCopy] photo advice failed", e2); return null; }
+    }
+    const verdict = new Map(answer.web.map((x) => [x.n, x]));
+    const suggestions: PhotoSuggestion[] = web.flatMap((x, i) => {
+        const v = verdict.get(i + 1);
+        if (v && !v.same) return [];
+        return [{ ...x, kind: v && isPhotoKind(v.kind) ? v.kind : null }];
+    });
+    return { checklist: checklistFrom(answer.have as PhotoKind[], answer.missing as PhotoKind[], answer.enough), suggestions };
+}
+
 const letter = (i: number) => String.fromCharCode(65 + i);
 const numbersIn = (s: string) => normForCheck(s).match(/\d+(?:\.\d+)?/g) ?? [];
 
@@ -145,12 +206,16 @@ export async function generateVerifiedCopy(p: VerifiedCopyInput): Promise<Produc
         ? await findProductPages({ query, brand: p.brand ?? query.split(/\s+/)[0], labelSite: check.labelWebsite, codes: [...p.codes, ...(p.modelNo ? [p.modelNo] : []), ...check.labelCodes] })
         : { pages: [] as PageRead[], dropped: [] as string[], searchNote: "No brand with a model code, barcode or website on the box — no page search" };
 
-    // ── 3. Write
+    // ── 3. Write, with 5. Photos beside it
     const [writeUse, writeStep] = await chainFor("write", premium);
-    const { value: w, key: writeKey } = await callParsed(
-        () => callStep(writeUse, writeStep, [{ type: "text", text: writePrompt(p, check, found.pages) }], { wait: p.bulk, premium }),
-        (raw) => writeSchema.parse(raw),
-    );
+    const [{ value: w, key: writeKey }, photos5] = await Promise.all([
+        callParsed(
+            () => callStep(writeUse, writeStep, [{ type: "text", text: writePrompt(p, check, found.pages) }], { wait: p.bulk, premium }),
+            (raw) => writeSchema.parse(raw),
+        ),
+        // Bulk writes descriptions only — no one is there to pick photos.
+        p.bulk ? Promise.resolve(null) : photoAdvice(p, photos, found.pages, premium),
+    ]);
 
     // ── 4. Server check: a code match is final whatever the AI said; every fact must be on its source.
     const accepted = new Map<string, PageRead>();
@@ -222,5 +287,10 @@ export async function generateVerifiedCopy(p: VerifiedCopyInput): Promise<Produc
         note,
         specSources,
         shopDescription: assembleDescription(final),
+        // Only photos from pages the copy kept: a rejected page may be another version.
+        ...(photos5 && {
+            photoChecklist: photos5.checklist,
+            photoSuggestions: photos5.suggestions.filter((s) => trusted.some((pg) => pg.site === s.site)),
+        }),
     };
 }

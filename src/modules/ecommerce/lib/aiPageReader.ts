@@ -1,5 +1,5 @@
 import "server-only";
-import { AI_SELLER_SITES, AI_VERIFIED_LIMITS } from "@/shared/lib/constants/ai";
+import { AI_PHOTO_LIMITS, AI_SELLER_SITES, AI_VERIFIED_LIMITS } from "@/shared/lib/constants/ai";
 import { AiKeysExhaustedError, AiNoKeyError, AiRegularKeysOutError } from "@/shared/lib/ai/aiKeys";
 import { readPage, webSearch, type WebPage } from "@/shared/lib/ai/aiWeb";
 import { isPublicHttps, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
@@ -24,6 +24,8 @@ export type PageRead = {
     text: string;
     /** The same page through normForCheck, for the fact check. */
     norm: string;
+    /** Product photos the page names in its share preview and built-in data (none when read through a key). */
+    photos: string[];
 };
 
 export type PageSearch = {
@@ -49,18 +51,37 @@ const codeKey = (c: string) => {
 const isBarcode = (c: string) => /^\d{8,14}$/.test(c.replace(/[\s-]/g, ""));
 
 /** Visible text and the codes in its built-in data (JSON-LD, shop JSON). */
-function readHtml(html: string): { visible: string; codes: string[] } {
+function readHtml(html: string): { visible: string; codes: string[]; photos: string[] } {
     const codes = [...html.matchAll(/"(?:barcode|gtin(?:8|12|13|14)?|ean|upc|mpn|sku)"\s*:\s*"([^"]{4,40})"/gi)].map((m) => m[1].trim());
     const visible = html
         .replace(/<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi, " ")
         .replace(/<[^>]+>/g, "\n")
         .replace(/&nbsp;|&#160;/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, "\"").replace(/&#39;/g, "'")
         .split("\n").map((l) => l.trim()).filter(Boolean).join(" | ");
-    return { visible, codes: [...new Set(codes)] };
+    return { visible, codes: [...new Set(codes)], photos: photosIn(html) };
+}
+
+/** Logos, icons and placeholders are not product photos. */
+const NOT_A_PHOTO = /logo|icon|sprite|placeholder|favicon|banner-?ad|blank\.|\.svg(\?|$)|\.gif(\?|$)/i;
+
+/**
+ * Photo URLs a page states itself: the share preview (og:image) and the
+ * product data's "image" (JSON-LD, shop JSON). Costs nothing — the HTML is
+ * already downloaded for the text.
+ */
+function photosIn(html: string): string[] {
+    const og = [...html.matchAll(/<meta[^>]+(?:property|name)=["']og:image(?::secure_url|:url)?["'][^>]*>/gi)]
+        .map((m) => /content=["']([^"']+)["']/i.exec(m[0])?.[1] ?? "");
+    const data = [...html.matchAll(/"image"\s*:\s*(\[[^\]]{0,4000}\]|"[^"]{8,1000}")/gi)]
+        .flatMap((m) => m[1].match(/https?:\\?\/\\?\/[^"\s,\]\\]+(?:\\\/[^"\s,\]\\]+)*/g) ?? []);
+    const urls = [...og, ...data]
+        .map((u) => u.replace(/\\\//g, "/").replace(/&amp;/g, "&").trim())
+        .filter((u) => isPublicHttps(u) && !NOT_A_PHOTO.test(u));
+    return [...new Set(urls)].slice(0, AI_PHOTO_LIMITS.perPage);
 }
 
 /** Our own download; null when the page is blocked, empty or not public. */
-async function download(url: string): Promise<{ visible: string; codes: string[] } | null> {
+async function download(url: string): Promise<{ visible: string; codes: string[]; photos: string[] } | null> {
     try {
         const res = await fetch(url, {
             headers: { "user-agent": UA, "accept-language": "en-IN,en" },
@@ -76,10 +97,10 @@ async function download(url: string): Promise<{ visible: string; codes: string[]
 }
 
 /** Through the Read page keys (renders JavaScript, passes bot checks); null when none is set or all fail. */
-async function readThroughKey(url: string): Promise<{ visible: string; codes: string[] } | null> {
+async function readThroughKey(url: string): Promise<{ visible: string; codes: string[]; photos: string[] } | null> {
     try {
         const p = await readPage(url);
-        return p.text.length >= MIN_PAGE_CHARS ? { visible: p.text, codes: [] } : null;
+        return p.text.length >= MIN_PAGE_CHARS ? { visible: p.text, codes: [], photos: [] } : null;
     } catch {
         return null;
     }
@@ -170,7 +191,7 @@ export async function findProductPages(o: { query: string; brand: string; labelS
         }
         const codeLine = page.codes.length ? `Codes in the page data: ${page.codes.join(", ")}\n` : "";
         const textPart = productPart(page.visible, hints);
-        return { url: u, site: host, maker: rank === 0, codeMatch, text: codeLine + textPart, norm: normForCheck(codeLine + page.visible) };
+        return { url: u, site: host, maker: rank === 0, codeMatch, text: codeLine + textPart, norm: normForCheck(codeLine + page.visible), photos: page.photos };
     }));
     const pages = reads.filter((p): p is PageRead => p !== null);
     return { pages, dropped, ...(pages.length ? {} : { searchNote: "No page could be read" }) };

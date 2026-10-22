@@ -2518,6 +2518,7 @@ CREATE TABLE IF NOT EXISTS "InvProduct" (
     "imageUrl" TEXT,
     "galleryJson" JSONB,
     "specsJson" JSONB,
+    "photoChecklistJson" JSONB,
     "attrsJson" JSONB,
     "stock" INTEGER,
     "reserved" INTEGER NOT NULL DEFAULT 0,
@@ -2590,6 +2591,8 @@ ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "galleryJson" JSONB;
 ALTER TABLE "InvProduct" ALTER COLUMN "galleryJson" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "specsJson" JSONB;
 ALTER TABLE "InvProduct" ALTER COLUMN "specsJson" DROP NOT NULL;
+ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "photoChecklistJson" JSONB;
+ALTER TABLE "InvProduct" ALTER COLUMN "photoChecklistJson" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "attrsJson" JSONB;
 ALTER TABLE "InvProduct" ALTER COLUMN "attrsJson" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "stock" INTEGER;
