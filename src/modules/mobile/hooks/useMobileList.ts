@@ -59,7 +59,7 @@ export function useMobileList<T>(
                 setMore(page.more ?? null);
             });
         } catch (e) {
-            if (latest.current === asked) setError(offlineNote(extractApiError(e, "Could not reach the server."), shownAt.current));
+            if (latest.current === asked) setError(offlineNote(extractApiError(e, "Could not load"), shownAt.current));
         } finally {
             if (latest.current === asked) setLoading(false);
         }

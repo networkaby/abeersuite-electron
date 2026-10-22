@@ -46,8 +46,8 @@ export function mobileKey(name: string, userId: string | number): string {
     return userScopedKey(`${PREFIX}${name}`, userId);
 }
 
-/** "Could not reach the server. Showing figures from 10:42." — what a screen says
- *  when the saved answer is all it has. */
+/** "Could not load (no answer from the server). Showing figures from 10:42." — what a
+ *  screen says when the saved answer is all it has. */
 export function offlineNote(message: string, savedAt: number | null): string {
     if (savedAt == null) return message;
     const at = new Date(savedAt);
@@ -55,7 +55,7 @@ export function offlineNote(message: string, savedAt: number | null): string {
     const when = at.toLocaleString("en-IN", sameDay
         ? { hour: "numeric", minute: "2-digit" }
         : { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
-    return `${message} Showing figures from ${when}.`;
+    return `${/[.!?]$/.test(message) ? message : `${message}.`} Showing figures from ${when}.`;
 }
 
 /** What a since-aware endpoint answers when nothing moved. */
