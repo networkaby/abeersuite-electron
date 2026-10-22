@@ -106,7 +106,7 @@ export default function ImageAdjustDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl">
+            <DialogContent className="sm:max-w-5xl">
                 <DialogHeader>
                     <DialogTitle>Adjust image</DialogTitle>
                     <DialogDescription>
@@ -129,7 +129,7 @@ export default function ImageAdjustDialog({
                                     })
                                 }
                                 onClick={pickFocal}
-                                className="max-h-64 w-full cursor-crosshair object-contain"
+                                className="max-h-96 w-full cursor-crosshair object-contain"
                             />
                             {marker ? (
                                 <span
