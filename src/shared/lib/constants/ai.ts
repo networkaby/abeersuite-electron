@@ -114,6 +114,7 @@ export const AI_STEPS = [
     { value: "read", label: "Read page" },
     { value: "check", label: "Check" },
     { value: "write", label: "Write" },
+    { value: "photos", label: "Photos" },
 ] as const;
 export type AiStep = (typeof AI_STEPS)[number]["value"];
 
@@ -147,12 +148,13 @@ export const AI_USES: readonly {
         label: "Product description (verified)",
         tab: "product_copy",
         section: "Verified",
-        description: "E-Commerce → Products, Verified, in run order: Check reads the photo and our data and picks the search words; Search finds the maker's and sellers' pages; our server opens each page itself and Read page tools are only the backup for a site that blocks it; Write uses only proven facts. An empty Check or Write borrows the Direct AI keys.",
+        description: "E-Commerce → Products, Verified, in run order: Check reads the photo and our data and picks the search words; Search finds the maker's and sellers' pages; our server opens each page itself and Read page tools are only the backup for a site that blocks it; Write uses only proven facts. An empty Check or Write borrows the Direct AI keys. Photos is optional (an extra AI call): the photo checklist, which photos to remove, and labels for the suggested photos — leave it empty to skip; the suggested photos still show, unlabelled, at no AI cost.",
         steps: [
             { step: "check", needs: "photo" },
             { step: "search", needs: "webSearch", chain: "web" },
             { step: "read", needs: "webRead", chain: "web" },
             { step: "write" },
+            { step: "photos", needs: "photo" },
         ],
     },
     {

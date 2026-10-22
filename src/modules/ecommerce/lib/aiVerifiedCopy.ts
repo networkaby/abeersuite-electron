@@ -24,9 +24,12 @@ import { PHOTO_GROUPS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, checklistFrom, isPhoto
 // Warranty: our support period (the product's warranty term) is not the
 // maker's — shorter is normal; only longer is flagged. The copy shows the
 // maker's term only (see aiProductCopy.ts).
-//  5. Photos (AI, photos, beside step 3) — what kinds of photo our gallery has
-//     and misses, and what each web photo from the kept pages shows. Its own
-//     call so the copy prompt stays as tested; a failure only drops the advice.
+//  5. Photos (AI, photos, beside step 3) — OPTIONAL: runs only when the
+//     Photos step on AI Setup has a key (owner, 2026-10-22: "save the AI cost,
+//     only do the free part"). What kinds of photo our gallery has and misses,
+//     which to remove, and what each web photo shows. Its own call so the copy
+//     prompt stays as tested; a failure only drops the advice. Without it the
+//     web photos are still suggested, unlabelled — they cost nothing.
 
 export type VerifiedCopyInput = ProductCopyInput & {
     modelNo?: string | null;
@@ -157,14 +160,19 @@ function photoPrompt(p: VerifiedCopyInput, ours: number, web: number): string {
 }
 
 /** Photo advice and the web photos to suggest; null when the AI could not answer (the copy is unaffected). */
-async function photoAdvice(p: VerifiedCopyInput, ours: ReturnType<typeof photoParts>, pages: PageRead[], premium: boolean) {
-    // Maker's and code-matched pages first, one URL once.
+/** Photos the read pages name — free. Maker's and code-matched pages first, one URL once, none already in our gallery. */
+function webPhotos(p: VerifiedCopyInput, pages: PageRead[]): { url: string; site: string }[] {
     const ranked = [...pages].sort((a, b) => Number(b.codeMatch) - Number(a.codeMatch) || Number(b.maker) - Number(a.maker));
     const seen = new Set<string>(p.imageUrls);
-    const web = ranked.flatMap((pg) => pg.photos.map((url) => ({ url, site: pg.site })))
+    return ranked.flatMap((pg) => pg.photos.map((url) => ({ url, site: pg.site })))
         .filter((x) => !seen.has(x.url) && seen.add(x.url))
         .slice(0, AI_PHOTO_LIMITS.total);
-    const [use, step] = await chainFor("check", premium);
+}
+
+/** Step 5; null when the Photos step has no key (never borrowed) or the AI could not answer. */
+async function photoAdvice(p: VerifiedCopyInput, ours: ReturnType<typeof photoParts>, web: { url: string; site: string }[], premium: boolean) {
+    if (!(await stepHasKey({ use: USE, step: "photos", premium }))) return null;
+    const [use, step] = [USE, "photos" as const];
     const ask = (withWeb: boolean) => callParsed(
         () => callStep(use, step, [
             { type: "text", text: photoPrompt(p, ours.length, withWeb ? web.length : 0) },
@@ -223,6 +231,7 @@ export async function generateVerifiedCopy(p: VerifiedCopyInput): Promise<Produc
         : { pages: [] as PageRead[], dropped: [] as string[], searchNote: "No brand with a model code, barcode or website on the box — no page search" };
 
     // ── 3. Write, with 5. Photos beside it
+    const web = webPhotos(p, found.pages);
     const [writeUse, writeStep] = await chainFor("write", premium);
     const [{ value: w, key: writeKey }, photos5] = await Promise.all([
         callParsed(
@@ -230,7 +239,7 @@ export async function generateVerifiedCopy(p: VerifiedCopyInput): Promise<Produc
             (raw) => writeSchema.parse(raw),
         ),
         // Bulk writes descriptions only — no one is there to pick photos.
-        p.bulk ? Promise.resolve(null) : photoAdvice(p, photos, found.pages, premium),
+        p.bulk ? Promise.resolve(null) : photoAdvice(p, photos, web, premium),
     ]);
 
     // ── 4. Server check: a code match is final whatever the AI said; every fact must be on its source.
@@ -304,9 +313,11 @@ export async function generateVerifiedCopy(p: VerifiedCopyInput): Promise<Produc
         specSources,
         shopDescription: assembleDescription(final),
         // Only photos from pages the copy kept: a rejected page may be another version.
-        ...(photos5 && {
-            photoChecklist: photos5.checklist,
-            photoSuggestions: photos5.suggestions.filter((s) => trusted.some((pg) => pg.site === s.site)),
+        // A run without step 5 leaves the saved checklist alone (no photoChecklist sent).
+        ...(photos5 && { photoChecklist: photos5.checklist }),
+        ...(!p.bulk && {
+            photoSuggestions: (photos5?.suggestions ?? web.map((x) => ({ ...x, kind: null })))
+                .filter((s) => trusted.some((pg) => pg.site === s.site)),
         }),
     };
 }
