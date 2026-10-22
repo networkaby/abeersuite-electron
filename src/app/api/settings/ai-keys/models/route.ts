@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
-import { AI_PROVIDERS, aiProviderInfo } from "@/shared/lib/constants/ai";
+import { AI_KEY_SOURCES, AI_PROVIDERS, aiProviderInfo } from "@/shared/lib/constants/ai";
 import { keyValue, loadAiSetup } from "@/shared/lib/ai/aiKeys";
 
 // POST /api/settings/ai-keys/models — asks the provider which models this key
@@ -15,7 +15,7 @@ const LIST_TIMEOUT_MS = 15_000;
 const bodySchema = z.object({
     provider: z.enum(AI_PROVIDERS.map((p) => p.value) as [string, ...string[]]),
     apiKey: z.string().trim().optional(),
-    source: z.enum(["db", "env", "ini"]),
+    source: z.enum(AI_KEY_SOURCES.map((s) => s.value) as [string, ...string[]]),
     envName: z.string().trim().optional(),
     keyId: z.number().int().positive().optional(),
 });

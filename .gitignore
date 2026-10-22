@@ -237,5 +237,5 @@ resources/7za.exe
 certificates
 /phone-app/android/app/google-services.json
 
-# AI keys saved "on this PC only" in dev (src/shared/lib/ai/aiLocalKeys.ts)
+# Retired "this PC only" AI keys file (2026-10-22) — kept ignored so an old dev copy is never committed
 .ai-keys.local.json

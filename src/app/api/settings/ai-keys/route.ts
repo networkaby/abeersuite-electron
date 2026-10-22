@@ -5,14 +5,12 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { invalidateAiSetup, loadAiSetup } from "@/shared/lib/ai/aiKeys";
 import { hasSharedSecret } from "@/shared/lib/ai/secretBox";
-import { localKeyStoreAvailable } from "@/shared/lib/ai/aiLocalKeys";
 import { aiKeyBodySchema, aiKeyRowData, aiKeyView } from "@/modules/settings/lib/aiKeysServer";
 
 // Settings → AI Setup. GET = keys + chains + what this server can do;
-// POST = add a key. A "this PC only" (ini) key's value goes to
-// ./[id]/local afterwards, never here — this write may be relayed to the office.
+// POST = add a key.
 // GET  /api/settings/ai-keys
-// POST /api/settings/ai-keys { name, provider, model, source, envName?, secret?, keyHint?, ...settings }
+// POST /api/settings/ai-keys { name, provider, model, source, envName?, secret?, ...settings }
 
 export async function GET() {
     const { response } = await requirePermission(PERMISSIONS.SETTINGS_AI_MANAGE);
@@ -25,7 +23,7 @@ export async function GET() {
             chains,
             copyFlow,
             photoCheck,
-            here: { sharedSecret: hasSharedSecret(), localStore: localKeyStoreAvailable() },
+            here: { sharedSecret: hasSharedSecret() },
         });
     } catch (e) {
         return handleApiError(e, "Failed to load AI setup");

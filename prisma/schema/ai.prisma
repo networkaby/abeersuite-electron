@@ -8,9 +8,8 @@
 ///   db  — pasted on the page; `secretEnc` holds it locked (AES-GCM, AI_KEY_SECRET).
 ///         Usable wherever AI_KEY_SECRET is set: the website and office tills.
 ///   env — `envName` names a .env variable; usable where that .env carries it.
-///   ini — pasted on one PC and saved in that PC's own file (aiLocalKeys.ts);
-///         nothing secret is in this row. Only that PC can use it.
-/// `keyHint` = last 4 characters (db / ini) or the variable name (env), for the list.
+/// (A third kind, "ini" — this PC only, was retired 2026-10-22; its rows were deleted.)
+/// `keyHint` = last 4 characters (db) or the variable name (env), for the list.
 /// Rest, gap and daily-limit counters are kept in memory per server, not here.
 model AiKey {
   id               Int       @id @default(autoincrement())

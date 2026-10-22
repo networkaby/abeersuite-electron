@@ -7,7 +7,6 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { aiProviderInfo, AI_COPY_FLOWS, AI_DEFAULT_COPY_FLOW, AI_SETUP_CACHE_MS, type AiCopyFlow, type AiKeySource, type AiProvider, type AiStep } from "@/shared/lib/constants/ai";
 import { hasSharedSecret, unlockSecret } from "@/shared/lib/ai/secretBox";
-import { hasLocalKey, readLocalKey } from "@/shared/lib/ai/aiLocalKeys";
 
 /**
  * AI Setup at run time: the keys and chains saved on Settings → AI Setup, which
@@ -92,8 +91,7 @@ const providerReady = (p: AiProvider) => aiProviderInfo(p)?.ready ?? false;
 /** The actual key on this server, or null. */
 export function keyValue(k: AiKeyConfig): string | null {
     if (k.source === "env") return (k.envName && process.env[k.envName]?.trim()) || null;
-    if (k.source === "db") return k.secretEnc && hasSharedSecret() ? unlockSecret(k.secretEnc, "shared") : null;
-    return readLocalKey(k.id);
+    return k.secretEnc && hasSharedSecret() ? unlockSecret(k.secretEnc, "shared") : null;
 }
 
 /** Why this key cannot be used on this server (settings, not rest) — null = usable. */
@@ -101,13 +99,10 @@ export function whyNotUsable(k: AiKeyConfig): string | null {
     if (!k.active) return "Turned off";
     if (k.validTill && k.validTill < localDay()) return "Offer ended";
     if (!providerReady(k.provider)) return "Provider not built in yet";
-    if (k.source === "env" && !(k.envName && process.env[k.envName]?.trim())) return `${k.envName ?? "Variable"} is not set here`;
-    if (k.source === "db") {
-        if (!hasSharedSecret()) return "AI_KEY_SECRET is not set here";
-        if (!keyValue(k)) return "Saved with another AI_KEY_SECRET";
-    }
-    if (k.source === "ini" && !hasLocalKey(k.id)) return "Saved on another PC";
-    if (k.source === "ini" && !keyValue(k)) return "Could not unlock on this PC";
+    if (k.source === "env") return k.envName && process.env[k.envName]?.trim() ? null : `${k.envName ?? "Variable"} is not set here`;
+    if (!k.secretEnc) return "No key saved";
+    if (!hasSharedSecret()) return "AI_KEY_SECRET is not set here";
+    if (!keyValue(k)) return "Saved with another AI_KEY_SECRET";
     return null;
 }
 

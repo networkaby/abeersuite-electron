@@ -11,7 +11,6 @@
  * See writeRelay.ts for the why of every rule.
  */
 
-import fs from "fs";
 import { IS_COUNTER_PC, WRITE_API_URL, relaysWrites } from "@/shared/lib/prisma/counterMode";
 
 /** Stamped on every relayed request. The office ignores it today; it is what stops a
@@ -50,9 +49,8 @@ const NEVER_RELAY: readonly RegExp[] = [
     // stays on the replica, which is what lets a PIN work with the line down.
     /^\/api\/counter-pin(\/|$)/,                 // "is there a PIN on this counter?"
     /^\/api\/me\/counter-pin(\/|$)/,             // set or remove one FOR this counter
-    // AI Setup: a "this PC only" key is saved in THIS machine's file, and Test asks
-    // whether a key works HERE. Neither writes a database row.
-    /^\/api\/settings\/ai-keys\/\d+\/(local|test)$/,
+    // AI Setup: Test asks whether a key works HERE. It writes no database row.
+    /^\/api\/settings\/ai-keys\/\d+\/test$/,
 ];
 
 /**
@@ -61,15 +59,14 @@ const NEVER_RELAY: readonly RegExp[] = [
  * keys (office builds, `scripts/counterEnv.ts`); a till without them relays, and the
  * office answers. Never list a route that saves a row: that write belongs to the office.
  */
-const LOCAL_WHEN_KEYED: readonly { path: RegExp; keys: readonly string[]; any?: boolean; localFile?: string }[] = [
+const LOCAL_WHEN_KEYED: readonly { path: RegExp; keys: readonly string[]; any?: boolean }[] = [
     // AI product copy: reads one product and the AI Setup from the replica, calls
-    // the AI. Runs here when this till can open some key: pasted keys (AI_KEY_SECRET),
-    // a .env key the setup names, or a key saved on this PC (AI_LOCAL_KEYS_FILE).
+    // the AI. Runs here when this till can open some key: pasted keys (AI_KEY_SECRET)
+    // or a .env key the setup names.
     {
         path: /^\/api\/ecommerce\/products\/ai-copy$/,
         keys: ["AI_KEY_SECRET", "GOOGLE_GENERATIVE_AI_API_KEY", "GOOGLE_AI_SEARCH_API_KEY"],
         any: true,
-        localFile: "AI_LOCAL_KEYS_FILE",
     },
     // WhatsApp attachment: signs an R2 upload URL; the browser uploads straight to R2.
     { path: /^\/api\/messages\/upload-url$/, keys: ["CLOUDFLARE_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"] },
@@ -77,10 +74,7 @@ const LOCAL_WHEN_KEYED: readonly { path: RegExp; keys: readonly string[]; any?: 
 
 const hasEnv = (k: string) => !!process.env[k]?.trim();
 const runsHereWithKeys = (pathname: string): boolean =>
-    LOCAL_WHEN_KEYED.some((r) => r.path.test(pathname) && (
-        (r.any ? r.keys.some(hasEnv) : r.keys.every(hasEnv))
-        || (!!r.localFile && hasEnv(r.localFile) && fs.existsSync(process.env[r.localFile]!))
-    ));
+    LOCAL_WHEN_KEYED.some((r) => r.path.test(pathname) && (r.any ? r.keys.some(hasEnv) : r.keys.every(hasEnv)));
 
 export type RelaySkipReason =
     | "read" | "not-api" | "already-relayed" | "excluded"

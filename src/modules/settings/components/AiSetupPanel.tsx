@@ -5,7 +5,6 @@
 // src/shared/lib/ai/aiKeys.ts. Where a key lives:
 //   db  — pasted here, saved locked in the database (every counter + website)
 //   env — only the .env variable NAME; the key is already in that .env
-//   ini — pasted here, saved locked on THIS PC only (PUT …/[id]/local, never relayed)
 // "Usable here" and the counts are this server's — on a counter, that counter's.
 
 import { useEffect, useMemo, useState } from "react";
@@ -48,7 +47,7 @@ type AiKeyRow = {
     model: string;
     source: AiKeySource;
     envName: string | null;
-    /** db / ini: last 4 of the key. env: the variable name. */
+    /** db: last 4 of the key. env: the variable name. */
     keyHint: string;
     canPhoto: boolean;
     canSearch: boolean;
@@ -64,8 +63,6 @@ type AiKeyRow = {
     retries: number;
     /** Why it cannot run on this server (null = it can). */
     notUsableHere: string | null;
-    /** ini: saved on this PC. */
-    onThisPc: boolean | null;
     usage: {
         callsToday: number;
         callsMonth: number;
@@ -79,7 +76,7 @@ type AiKeyRow = {
 
 /** chains[useKey][step] = ordered key ids. */
 type Chains = Record<string, Partial<Record<AiStep, number[]>>>;
-type Setup = { keys: AiKeyRow[]; chains: Chains; copyFlow: AiCopyFlow; photoCheck: boolean; here: { sharedSecret: boolean; localStore: boolean } };
+type Setup = { keys: AiKeyRow[]; chains: Chains; copyFlow: AiCopyFlow; photoCheck: boolean; here: { sharedSecret: boolean } };
 
 /** The dialog's fields — numbers as typed text (NumericInput). */
 type Form = {
@@ -107,13 +104,12 @@ const formOf = (k: AiKeyRow): Form => ({
 
 const num = (s: string, fallback: number) => (s.trim() === "" ? fallback : Number(s));
 
-/** The API body for this form; `secret` only for db, `keyHint` only for ini. */
+/** The API body for this form; `secret` only for db. */
 function bodyOf(f: Form, secret: string) {
     return {
         name: f.name.trim(), provider: f.provider, model: f.model.trim(), source: f.source,
         envName: f.source === "env" ? f.envName.trim() : null,
         ...(f.source === "db" && secret.trim() ? { secret: secret.trim() } : {}),
-        ...(f.source === "ini" && secret.trim() ? { keyHint: secret.trim().slice(-4) } : {}),
         canPhoto: f.canPhoto, canSearch: f.canSearch, paid: f.paid, active: f.active,
         validTill: f.validTill || null,
         gapSeconds: num(f.gapSeconds, 0),
@@ -136,7 +132,7 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 const isExpired = (k: AiKeyRow) => !!k.validTill && k.validTill < todayIso();
 const providerLabel = (p: AiProvider) => aiProviderInfo(p)?.label ?? p;
 const NEED_LABEL: Record<AiNeed, string> = { search: "search tick", photo: "photo tick", webSearch: "a web search tool", webRead: "a page-reading tool" };
-const sourceShort: Record<AiKeySource, string> = { db: "Saved here", env: ".env", ini: "This PC only" };
+const sourceShort: Record<AiKeySource, string> = { db: "Saved here", env: ".env" };
 const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 const secs = (n: number) => (n >= 3600 && n % 3600 === 0 ? `${n / 3600} h` : n >= 60 && n % 60 === 0 ? `${n / 60} min` : `${n} s`);
 
@@ -172,7 +168,7 @@ export function AiSetupPanel() {
     }, [data]);
 
     const byId = useMemo(() => new Map(keys.map((k) => [k.id, k])), [keys]);
-    const here = data?.here ?? { sharedSecret: false, localStore: false };
+    const here = data?.here ?? { sharedSecret: false };
 
     const toggleActive = async (k: AiKeyRow, active: boolean) => {
         setKeys((prev) => prev.map((x) => (x.id === k.id ? { ...x, active } : x)));
@@ -192,8 +188,6 @@ export function AiSetupPanel() {
             use, Object.fromEntries(Object.entries(steps).map(([s, ids]) => [s, (ids ?? []).filter((x) => x !== k.id)])),
         ])));
         try {
-            // The PC's copy first: once the row is gone nothing points at it.
-            if (k.source === "ini" && k.onThisPc) await axios.delete(`${API}/${k.id}/local`);
             await axios.delete(`${API}/${k.id}`);
         } catch (e) {
             setKeys(before.keys);
@@ -267,7 +261,7 @@ export function AiSetupPanel() {
                     <div>
                         <h2 className="text-base font-semibold">AI keys</h2>
                         <p className="text-sm text-muted-foreground">
-                            Every key has the same settings; only where the actual key is kept differs. &quot;Usable&quot; and the counts are for this {here.localStore ? "PC" : "server"}.
+                            Every key has the same settings; only where the actual key is kept differs. &quot;Usable&quot; and the counts are for this machine.
                         </p>
                     </div>
                     <Button size="sm" onClick={() => setEditing("new")}><Plus className="mr-1 h-4 w-4" />Add key</Button>
@@ -523,10 +517,8 @@ function KeyDialog({ initial, here, onClose, onSaved }: {
     }));
 
     const sameSource = initial?.source === form.source;
-    const hasSaved = sameSource && (form.source === "db" || (form.source === "ini" && !!initial?.onThisPc));
-    const sourceOff = (s: AiKeySource) =>
-        s === "db" && !here.sharedSecret ? "AI_KEY_SECRET is not set here"
-            : s === "ini" && !here.localStore ? "only in the counter app" : null;
+    const hasSaved = sameSource && form.source === "db";
+    const sourceOff = (s: AiKeySource) => (s === "db" && !here.sharedSecret ? "AI_KEY_SECRET is not set here" : null);
 
     const web = isWebProvider(form.provider);
     const submit = async () => {
@@ -536,20 +528,8 @@ function KeyDialog({ initial, here, onClose, onSaved }: {
         setSaving(true);
         try {
             const body = bodyOf(form, secret);
-            const id = initial
-                ? (await axios.patch<{ id: number }>(`${API}/${initial.id}`, body), initial.id)
-                : (await axios.post<{ id: number }>(API, body)).data.id;
-            if (form.source === "ini" && secret.trim()) {
-                try {
-                    await axios.put(`${API}/${id}/local`, { key: secret.trim() });
-                } catch (e) {
-                    toast.error(`Key details saved, but not the key on this PC: ${extractApiError(e, "failed")} — edit it and paste again.`);
-                    onSaved();
-                    return;
-                }
-            } else if (initial?.source === "ini" && form.source !== "ini" && initial.onThisPc) {
-                await axios.delete(`${API}/${id}/local`).catch(() => undefined);
-            }
+            if (initial) await axios.patch(`${API}/${initial.id}`, body);
+            else await axios.post(API, body);
             toast.success("Saved");
             onSaved();
         } catch (e) {
@@ -632,10 +612,7 @@ function KeyDialog({ initial, here, onClose, onSaved }: {
                                 placeholder={hasSaved && initial?.keyHint ? `•••• ${initial.keyHint} — leave empty to keep` : "Paste the key"}
                             />
                             <p className="text-xs text-muted-foreground">
-                                {form.source === "db"
-                                    ? "Saved locked in the database — every counter and the website can use it. Never shown again, only the last 4 characters."
-                                    : "Saved locked on this PC only — never in the database; other counters and the website cannot use it."}
-                                {form.source === "ini" && initial?.source === "ini" && !initial.onThisPc && " This key was saved on another PC — paste it to keep a copy here too."}
+                                Saved locked in the database — every counter and the website can use it. Never shown again, only the last 4 characters.
                             </p>
                         </div>
                     )}

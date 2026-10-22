@@ -95,15 +95,14 @@ export const AI_PROVIDER_MODELS: Partial<Record<AiProvider, readonly string[]>> 
 /** Highlights per page a web search hands to the model, and how much of a read page it keeps. */
 export const AI_WEB_LIMITS = { results: 6, pageChars: 12_000 } as const;
 
-/** Where the actual key lives. Every other setting is the same for all three
+/** Where the actual key lives. Every other setting is the same for both
  *  (owner, 2026-10-21): db = pasted on the page, saved locked in the database,
  *  every counter and the website; env = only the .env variable NAME (the key is
- *  already in that .env — a release or Vercel); ini = pasted on the page, saved
- *  locked on this PC only (aiLocalKeys.ts), never in the database. */
+ *  already in that .env — a release or Vercel). A third "this PC only" kind was
+ *  retired 2026-10-22 (migration 20261022200000_ai_retire_pc_keys). */
 export const AI_KEY_SOURCES = [
     { value: "db", label: "Saved here (all counters + website)" },
     { value: "env", label: ".env variable (release / Vercel)" },
-    { value: "ini", label: "Counter .ini (this counter only)" },
 ] as const;
 export type AiKeySource = (typeof AI_KEY_SOURCES)[number]["value"];
 
