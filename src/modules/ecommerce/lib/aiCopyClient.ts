@@ -7,13 +7,14 @@ import type { AiCopyFlow } from "@/shared/lib/constants/ai";
 /** fromCache = this machine's saved answer, no new AI call. */
 export type ProductCopy = ServerCopy & { fromCache?: boolean };
 
-export type AiCopyRequest = { productId: number; name?: string; imageUrls?: string[]; flow: AiCopyFlow; bulk?: boolean; premium?: boolean };
+/** photoAi = AI Setup's Photo AI as this page read it — only keeps an off-run draft from answering an on-run (the server decides). */
+export type AiCopyRequest = { productId: number; name?: string; imageUrls?: string[]; flow: AiCopyFlow; bulk?: boolean; premium?: boolean; photoAi?: boolean };
 
 // Every AI call costs money, so a draft is kept on this machine for the session:
 // pressing Generate again for the same name + photo + flow is free.
 // Not in the DB on purpose — a draft is only kept once staff save it.
 function cacheKey(r: AiCopyRequest): string {
-    return `aiCopy12:${r.productId}:${r.premium ? "p" : "r"}:${r.flow}:${r.name ?? ""}:${(r.imageUrls ?? []).join("|")}`;
+    return `aiCopy13:${r.productId}:${r.premium ? "p" : "r"}:${r.photoAi ? "ph" : ""}:${r.flow}:${r.name ?? ""}:${(r.imageUrls ?? []).join("|")}`;
 }
 
 function readCache(key: string): ProductCopy | null {

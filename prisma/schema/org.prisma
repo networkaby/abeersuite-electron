@@ -217,6 +217,10 @@ model OrgDefaults {
   // Setup): "direct" | "verified" (AI_COPY_FLOWS). Staff may switch for one
   // write. Admin-chosen, so bootstrap-seed leaves it untouched.
   aiCopyFlow String @default("verified")
+  // Verified's Photo AI (Settings → AI Setup): off = the read pages' photos are
+  // suggested free, unlabelled; on = one extra AI call for the photo checklist,
+  // remove advice and labels. Owner, 2026-10-22: default off to save AI cost.
+  aiPhotoCheck Boolean @default(false)
 
   // POS Estimate print — which discount lines are SHOWN on the customer-facing
   // estimate printout/display. Price-privacy: the cashier's screen always shows

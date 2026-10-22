@@ -7,7 +7,7 @@ import { ExternalLink, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { extractApiError } from "@/shared/lib/api";
 import { fetchAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
-import { FlowButtons, PremiumSwitch, useCopyFlow, usePremiumAi } from "@/modules/ecommerce/components/AiCopyControls";
+import { FlowButtons, PremiumSwitch, useCopyFlow, usePhotoAiOn, usePremiumAi } from "@/modules/ecommerce/components/AiCopyControls";
 import { AiPhotoPicker } from "@/modules/ecommerce/components/AiPhotoPicker";
 import type { PhotoChecklist, PhotoKind } from "@/modules/ecommerce/lib/photoChecklist";
 
@@ -94,6 +94,7 @@ export default function AiCopyPanel({
 }) {
     const [flow, setFlow] = useCopyFlow();
     const [premium, setPremium] = usePremiumAi();
+    const photoAi = usePhotoAiOn();
     const [busy, setBusy] = useState(false);
     const [draft, setDraft] = useState<ProductCopy | null>(null);
     // Verified stopped at the photo check: our own data disagrees with itself.
@@ -105,7 +106,7 @@ export default function AiCopyPanel({
         setBusy(true);
         setCheckFlags(null);
         try {
-            const copy = await fetchAiCopy({ productId, name: name.trim(), imageUrls, flow, premium }, { fresh });
+            const copy = await fetchAiCopy({ productId, name: name.trim(), imageUrls, flow, premium, photoAi }, { fresh });
             setDraft(copy);
             // A cached draft carries the advice of its own run — the saved ticks since then win.
             if (copy.photoChecklist && !copy.fromCache) onPhotoChecklist(copy.photoChecklist);
@@ -140,6 +141,11 @@ export default function AiCopyPanel({
                 <PremiumSwitch value={premium} onChange={setPremium} disabled={busy} />
                 <FlowButtons value={flow} onChange={setFlow} disabled={busy} />
             </div>
+            {flow === "verified" && (
+                <p className="text-muted-foreground text-xs">
+                    Photo AI: {photoAi ? "on — photo checklist and labelled suggestions" : "off — photos suggested without labels (AI Setup → Verified)"}
+                </p>
+            )}
             {checkFlags && <DataFlags flags={checkFlags} title="Not written — fix this product's data first:" />}
             {draft && (
                 <div className="space-y-2 text-sm">

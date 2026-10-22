@@ -49,8 +49,8 @@ export type AiChains = Record<string, Partial<Record<AiStep, number[]>>>;
 
 // ── Saved setup, cached (one DB read per AI_SETUP_CACHE_MS per server) ─────────
 
-/** copyFlow = the option every product page opens on (OrgDefaults.aiCopyFlow). */
-export type AiSetup = { keys: AiKeyConfig[]; chains: AiChains; copyFlow: AiCopyFlow };
+/** copyFlow = the option every product page opens on (OrgDefaults.aiCopyFlow); photoCheck = Verified's Photo AI (aiPhotoCheck). */
+export type AiSetup = { keys: AiKeyConfig[]; chains: AiChains; copyFlow: AiCopyFlow; photoCheck: boolean };
 let setupCache: (AiSetup & { at: number }) | null = null;
 
 export function invalidateAiSetup() {
@@ -62,7 +62,7 @@ export async function loadAiSetup(): Promise<AiSetup> {
     const [rows, steps, org] = await Promise.all([
         prisma.aiKey.findMany({ orderBy: { id: "asc" } }),
         prisma.aiChainStep.findMany({ orderBy: [{ use: "asc" }, { step: "asc" }, { position: "asc" }], select: { use: true, step: true, keyId: true } }),
-        prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { aiCopyFlow: true } }),
+        prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { aiCopyFlow: true, aiPhotoCheck: true } }),
     ]);
     const keys: AiKeyConfig[] = rows.map((r) => ({
         id: r.id, name: r.name, provider: r.provider as AiProvider, model: r.model, source: r.source as AiKeySource,
@@ -75,7 +75,7 @@ export async function loadAiSetup(): Promise<AiSetup> {
     const chains: AiChains = {};
     for (const s of steps) ((chains[s.use] ??= {})[s.step as AiStep] ??= []).push(s.keyId);
     const copyFlow = AI_COPY_FLOWS.find((f) => f.value === org?.aiCopyFlow)?.value ?? AI_DEFAULT_COPY_FLOW;
-    setupCache = { at: Date.now(), keys, chains, copyFlow };
+    setupCache = { at: Date.now(), keys, chains, copyFlow, photoCheck: org?.aiPhotoCheck ?? false };
     return setupCache;
 }
 

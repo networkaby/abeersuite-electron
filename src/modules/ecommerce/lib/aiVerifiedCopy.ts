@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { stepHasKey } from "@/shared/lib/ai/aiKeys";
+import { loadAiSetup, stepHasKey } from "@/shared/lib/ai/aiKeys";
 import { AI_PHOTO_LIMITS, type AiStep } from "@/shared/lib/constants/ai";
 import { checkFact, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
 import { findProductPages, type PageRead } from "@/modules/ecommerce/lib/aiPageReader";
@@ -24,9 +24,9 @@ import { PHOTO_GROUPS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, checklistFrom, isPhoto
 // Warranty: our support period (the product's warranty term) is not the
 // maker's — shorter is normal; only longer is flagged. The copy shows the
 // maker's term only (see aiProductCopy.ts).
-//  5. Photos (AI, photos, beside step 3) — OPTIONAL: runs only when the
-//     Photos step on AI Setup has a key (owner, 2026-10-22: "save the AI cost,
-//     only do the free part"). What kinds of photo our gallery has and misses,
+//  5. Photos (AI, photos, beside step 3) — OPTIONAL: runs only when Photo AI
+//     is switched on in AI Setup (owner, 2026-10-22: "if off just free part,
+//     if on do full", default off). Its own keys, else the Check keys. What kinds of photo our gallery has and misses,
 //     which to remove, and what each web photo shows. Its own call so the copy
 //     prompt stays as tested; a failure only drops the advice. Without it the
 //     web photos are still suggested, unlabelled — they cost nothing.
@@ -169,10 +169,10 @@ function webPhotos(p: VerifiedCopyInput, pages: PageRead[]): { url: string; site
         .slice(0, AI_PHOTO_LIMITS.total);
 }
 
-/** Step 5; null when the Photos step has no key (never borrowed) or the AI could not answer. */
+/** Step 5; null when Photo AI is off on AI Setup or the AI could not answer. On, an empty Photos step borrows the Check keys. */
 async function photoAdvice(p: VerifiedCopyInput, ours: ReturnType<typeof photoParts>, web: { url: string; site: string }[], premium: boolean) {
-    if (!(await stepHasKey({ use: USE, step: "photos", premium }))) return null;
-    const [use, step] = [USE, "photos" as const];
+    if (!(await loadAiSetup()).photoCheck) return null;
+    const [use, step] = (await stepHasKey({ use: USE, step: "photos", premium })) ? [USE, "photos" as AiStep] : await chainFor("check", premium);
     const ask = (withWeb: boolean) => callParsed(
         () => callStep(use, step, [
             { type: "text", text: photoPrompt(p, ours.length, withWeb ? web.length : 0) },

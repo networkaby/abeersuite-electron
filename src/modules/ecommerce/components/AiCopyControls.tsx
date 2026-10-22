@@ -34,6 +34,7 @@ export function usePremiumAi(): [boolean, (on: boolean) => void] {
 }
 
 let adminFlow: AiCopyFlow = AI_DEFAULT_COPY_FLOW;
+let adminPhotoCheck = false;
 let adminFlowAsked = false;
 /** One read per page load; a failure keeps the built-in fallback. */
 function askAdminFlow() {
@@ -41,14 +42,19 @@ function askAdminFlow() {
     adminFlowAsked = true;
     void fetch("/api/ecommerce/products/ai-copy")
         .then((r) => (r.ok ? r.json() : null))
-        .then((d: { defaultFlow?: string } | null) => {
+        .then((d: { defaultFlow?: string; photoCheck?: boolean } | null) => {
             const f = AI_COPY_FLOWS.find((x) => x.value === d?.defaultFlow);
-            if (f) {
-                adminFlow = f.value;
-                listeners.forEach((fn) => fn());
-            }
+            if (f) adminFlow = f.value;
+            adminPhotoCheck = d?.photoCheck === true;
+            listeners.forEach((fn) => fn());
         })
         .catch(() => undefined);
+}
+
+/** Verified's Photo AI switch on AI Setup (read with the admin's flow, same request). */
+export function usePhotoAiOn(): boolean {
+    useEffect(askAdminFlow, []);
+    return useSyncExternalStore(subscribe, () => adminPhotoCheck, () => false);
 }
 
 /** Direct AI or Verified: opens on the admin's pick; another pick lasts only while this screen is open. */

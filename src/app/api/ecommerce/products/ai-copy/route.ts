@@ -43,12 +43,13 @@ const postSchema = z.object({
     premium: z.boolean().default(false),
 });
 
-// GET → the option the product page opens on (the admin's pick on AI Setup; cached server-side).
+// GET → the option the product page opens on and the Photo AI switch (the admin's picks on AI Setup; cached server-side).
 export async function GET() {
     const { response } = await requireModuleAccess("e-commerce");
     if (response) return response;
     try {
-        return NextResponse.json({ defaultFlow: (await loadAiSetup()).copyFlow });
+        const { copyFlow, photoCheck } = await loadAiSetup();
+        return NextResponse.json({ defaultFlow: copyFlow, photoCheck });
     } catch (e) {
         return handleApiError(e, "Failed to load the default option");
     }

@@ -7,10 +7,14 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { invalidateAiSetup } from "@/shared/lib/ai/aiKeys";
 import { AI_COPY_FLOWS, type AiCopyFlow } from "@/shared/lib/constants/ai";
 
-// Settings → AI Setup → Product description: the option every product page opens on.
-// PUT /api/settings/ai-keys/copy-flow { copyFlow: direct|verified }
+// Settings → AI Setup → Product description: the option every product page opens on,
+// and Verified's Photo AI switch.
+// PUT /api/settings/ai-keys/copy-flow { copyFlow?: direct|verified, photoCheck?: boolean }
 
-const putSchema = z.object({ copyFlow: z.enum(AI_COPY_FLOWS.map((f) => f.value) as [AiCopyFlow, ...AiCopyFlow[]]) });
+const putSchema = z.object({
+    copyFlow: z.enum(AI_COPY_FLOWS.map((f) => f.value) as [AiCopyFlow, ...AiCopyFlow[]]).optional(),
+    photoCheck: z.boolean().optional(),
+});
 
 export async function PUT(req: Request) {
     const { response } = await requirePermission(PERMISSIONS.SETTINGS_AI_MANAGE);
@@ -18,9 +22,9 @@ export async function PUT(req: Request) {
     const { data, error } = await validateRequest(req, putSchema);
     if (error) return error;
     try {
-        await prisma.orgDefaults.update({ where: { id: 1 }, data: { aiCopyFlow: data.copyFlow } });
+        await prisma.orgDefaults.update({ where: { id: 1 }, data: { aiCopyFlow: data.copyFlow, aiPhotoCheck: data.photoCheck } });
         invalidateAiSetup();
-        return NextResponse.json({ copyFlow: data.copyFlow });
+        return NextResponse.json(data);
     } catch (e) {
         return handleApiError(e, "Failed to save the default option");
     }

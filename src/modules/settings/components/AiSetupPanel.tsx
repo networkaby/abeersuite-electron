@@ -79,7 +79,7 @@ type AiKeyRow = {
 
 /** chains[useKey][step] = ordered key ids. */
 type Chains = Record<string, Partial<Record<AiStep, number[]>>>;
-type Setup = { keys: AiKeyRow[]; chains: Chains; copyFlow: AiCopyFlow; here: { sharedSecret: boolean; localStore: boolean } };
+type Setup = { keys: AiKeyRow[]; chains: Chains; copyFlow: AiCopyFlow; photoCheck: boolean; here: { sharedSecret: boolean; localStore: boolean } };
 
 /** The dialog's fields — numbers as typed text (NumericInput). */
 type Form = {
@@ -146,6 +146,7 @@ export function AiSetupPanel() {
     const [keys, setKeys] = useState<AiKeyRow[]>([]);
     const [chains, setChains] = useState<Chains>({});
     const [copyFlow, setCopyFlow] = useState<AiCopyFlow>(AI_DEFAULT_COPY_FLOW);
+    const [photoCheck, setPhotoCheck] = useState(false);
     const [editing, setEditing] = useState<AiKeyRow | "new" | null>(null);
     const [testing, setTesting] = useState<number | null>(null);
     // ?tab= keeps a link or reload on the same tab.
@@ -167,6 +168,7 @@ export function AiSetupPanel() {
         setKeys(data.keys);
         setChains(data.chains);
         setCopyFlow(data.copyFlow);
+        setPhotoCheck(data.photoCheck);
     }, [data]);
 
     const byId = useMemo(() => new Map(keys.map((k) => [k.id, k])), [keys]);
@@ -231,6 +233,16 @@ export function AiSetupPanel() {
         } catch (e) {
             setCopyFlow(before);
             toast.error(extractApiError(e, "Could not save the default"));
+        }
+    };
+
+    const savePhotoCheck = async (on: boolean) => {
+        setPhotoCheck(on);
+        try {
+            await axios.put(`${API}/copy-flow`, { photoCheck: on });
+        } catch (e) {
+            setPhotoCheck(!on);
+            toast.error(extractApiError(e, "Could not save Photo AI"));
         }
     };
 
@@ -367,6 +379,17 @@ export function AiSetupPanel() {
                                     {sections.length > 1 && <h3 className="text-sm font-semibold">{use.section ?? use.label}</h3>}
                                     <p className="text-sm text-muted-foreground">{use.description}</p>
                                 </div>
+                                {use.key === "product_copy_verified" && (
+                                    <div className="flex flex-wrap items-center gap-2 rounded-md border p-3">
+                                        <Switch id="ai-photo-check" checked={photoCheck} onCheckedChange={(on) => void savePhotoCheck(on)} />
+                                        <Label htmlFor="ai-photo-check" className="text-sm font-medium">Photo AI: {photoCheck ? "On" : "Off"}</Label>
+                                        <span className="text-xs text-muted-foreground">
+                                            {photoCheck
+                                                ? "One extra AI call per Verified run: photo checklist, which photos to remove, labelled suggestions."
+                                                : "No photo AI cost — staff still get the web photos as suggestions, unlabelled."}
+                                        </span>
+                                    </div>
+                                )}
                                 <div className="rounded-md border p-4">
                                     <div className={`grid gap-4 ${use.steps.length > 3 ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-3"}`}>
                                         {use.steps.map(({ step, needs, chain }, i) => {

@@ -3621,6 +3621,7 @@ CREATE TABLE IF NOT EXISTS "OrgDefaults" (
     "shopPublishRulesJson" JSONB,
     "shopOutOfStockPolicy" "ShopOutOfStockPolicy" NOT NULL DEFAULT 'NOTIFY',
     "aiCopyFlow" TEXT NOT NULL DEFAULT 'verified',
+    "aiPhotoCheck" BOOLEAN NOT NULL DEFAULT false,
     "posEstimateShowDiscountsJson" JSONB,
     "storefrontHomeJson" JSONB,
     "storefrontAdsJson" JSONB,
@@ -3663,6 +3664,7 @@ ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "shopPublishRulesJson" JSONB;
 ALTER TABLE "OrgDefaults" ALTER COLUMN "shopPublishRulesJson" DROP NOT NULL;
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "shopOutOfStockPolicy" "ShopOutOfStockPolicy" NOT NULL DEFAULT 'NOTIFY';
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "aiCopyFlow" TEXT NOT NULL DEFAULT 'verified';
+ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "aiPhotoCheck" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "posEstimateShowDiscountsJson" JSONB;
 ALTER TABLE "OrgDefaults" ALTER COLUMN "posEstimateShowDiscountsJson" DROP NOT NULL;
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "storefrontHomeJson" JSONB;
