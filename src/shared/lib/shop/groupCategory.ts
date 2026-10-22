@@ -34,8 +34,8 @@ const MAX_GROUP_DEPTH = 10;
 // Shapes + pure helpers live in groupTree.ts (no prisma) so client-reachable
 // modules can use them without pulling this file's prisma import into the
 // browser bundle. Re-exported here for server callers' convenience.
-export { rootOf, type ShopGroup, type ShopGroupIndex } from "@/shared/lib/shop/groupTree";
-import type { ShopGroupIndex } from "@/shared/lib/shop/groupTree";
+export { rootOf, groupSubtreeIds, groupHref, type ShopGroup, type ShopGroupIndex } from "@/shared/lib/shop/groupTree";
+import type { ShopGroup, ShopGroupIndex } from "@/shared/lib/shop/groupTree";
 
 /**
  * Build the groupId → group+ancestors index for the whole catalog in one query.
@@ -43,14 +43,14 @@ import type { ShopGroupIndex } from "@/shared/lib/shop/groupTree";
  */
 export async function loadShopGroupIndex(): Promise<ShopGroupIndex> {
     const rows = await prisma.invProductGroup.findMany({
-        select: { id: true, name: true, parentId: true },
+        select: { id: true, name: true, slug: true, parentId: true },
     });
 
     const byId = new Map(rows.map((g) => [g.id, g]));
     const index: ShopGroupIndex = new Map();
 
     for (const g of rows) {
-        const ancestors: { id: number; name: string }[] = [];
+        const ancestors: ShopGroup["ancestors"] = [];
         const seen = new Set<number>([g.id]);
         let cur = g;
         for (let i = 0; i < MAX_GROUP_DEPTH && cur.parentId != null; i++) {
@@ -58,10 +58,10 @@ export async function loadShopGroupIndex(): Promise<ShopGroupIndex> {
             const parent = byId.get(cur.parentId);
             if (!parent) break; // orphan → stop here
             seen.add(parent.id);
-            ancestors.push({ id: parent.id, name: parent.name });
+            ancestors.push({ id: parent.id, name: parent.name, slug: parent.slug });
             cur = parent;
         }
-        index.set(g.id, { id: g.id, name: g.name, ancestors });
+        index.set(g.id, { id: g.id, name: g.name, slug: g.slug, ancestors });
     }
 
     return index;

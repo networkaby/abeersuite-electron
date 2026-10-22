@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
+import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invCategoryUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { validateRequest } from "@/shared/lib/api";
@@ -24,8 +25,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (!p) return NextResponse.json({ error: "Parent category not found" }, { status: 400 });
         }
         if (b.slug !== undefined && b.slug !== null) {
-            const clash = await prisma.invCategory.findFirst({ where: { slug: b.slug, NOT: { id } } });
-            if (clash) return NextResponse.json({ error: "Slug already in use" }, { status: 409 });
+            const clash = await shopSlugClash(b.slug, { kind: "category", id });
+            if (clash) return NextResponse.json({ error: clash }, { status: 409 });
         }
         const row = await prisma.invCategory.update({
             where: { id },

@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
+import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductGroupCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { prismaUniqueError } from "@/shared/lib/api";
@@ -42,8 +43,8 @@ export async function POST(req: Request) {
             if (!gr) return NextResponse.json({ error: "GST rate not found" }, { status: 400 });
         }
         if (b.slug) {
-            const clash = await prisma.invProductGroup.findUnique({ where: { slug: b.slug } });
-            if (clash) return NextResponse.json({ error: "Slug already in use" }, { status: 409 });
+            const clash = await shopSlugClash(b.slug, { kind: "group" });
+            if (clash) return NextResponse.json({ error: clash }, { status: 409 });
         }
         const row = await prisma.invProductGroup.create({
             data: {

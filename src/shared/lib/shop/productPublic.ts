@@ -61,7 +61,8 @@ export type ShopProductPublic = {
 };
 
 export function productPath(p: Pick<ShopProductPublic, "id" | "slug">): string {
-    return `/shop/product/${p.slug ?? p.id}`;
+    // Root-level, like a brand or category page — `src/app/(external)/(shop)/[slug]`.
+    return `/${p.slug ?? p.id}`;
 }
 
 /**

@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
@@ -83,6 +84,10 @@ export async function POST(req: Request) {
         // slug collision by skipping that one product.
         for (const it of readyNeedSlug) {
             try {
+                if (it.slug && (await shopSlugClash(it.slug, { kind: "product", id: it.id }))) {
+                    skipped++;
+                    continue;
+                }
                 await prisma.invProduct.update({
                     where: { id: it.id },
                     data: { isListedInShop: true, ...(it.slug ? { slug: it.slug } : {}) },

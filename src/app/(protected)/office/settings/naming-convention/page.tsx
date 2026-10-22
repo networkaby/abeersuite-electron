@@ -376,7 +376,7 @@ export default function NamingConventionPage() {
                 <div className="flex flex-wrap items-end gap-4">
                     <div>
                         <p className="text-sm font-semibold">Online slug</p>
-                        <p className="text-xs text-muted-foreground">URL handle for /shop/product/&lt;slug&gt;.</p>
+                        <p className="text-xs text-muted-foreground">The product&apos;s shop link: shop.networkservice.in/&lt;slug&gt;.</p>
                     </div>
                     <label className="flex items-center gap-2 pb-2 text-sm">
                         <input type="checkbox" checked={cfg.slugEnabled} onChange={(e) => setCfg({ ...cfg, slugEnabled: e.target.checked })} />

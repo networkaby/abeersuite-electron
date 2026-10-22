@@ -43,3 +43,32 @@ export function isStorefrontSlugPath(pathname: string): boolean {
     if (segments.length !== 1) return false;
     return !RESERVED_SEGMENTS.has(segments[0].toLowerCase());
 }
+
+/**
+ * Other root-level names a slug may not take — real pages and public files the
+ * proxy has its own rules for (so they stay out of RESERVED_SEGMENTS, which
+ * changes auth gating), but which would shadow or be shadowed by a slug page.
+ */
+const SAVE_ONLY_RESERVED = new Set([
+    "app",
+    "m-shop-app",
+    "m-staff-app",
+    "setup",
+    "privacy",
+    "refunds",
+    "shipping",
+    "terms",
+    "ads",
+    "sitemap.xml",
+    "robots.txt",
+]);
+
+/**
+ * True when a product / category / collection / brand may NOT use this slug
+ * because the app owns the URL. All-digit slugs are refused too: `/123` is a
+ * product's id-form link (see `productPath`).
+ */
+export function isReservedShopSlug(slug: string): boolean {
+    const s = slug.trim().toLowerCase();
+    return RESERVED_SEGMENTS.has(s) || SAVE_ONLY_RESERVED.has(s) || /^\d+$/.test(s);
+}

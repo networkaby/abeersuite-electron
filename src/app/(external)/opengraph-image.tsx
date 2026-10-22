@@ -9,7 +9,7 @@ import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
  *
  * Drawn in code rather than committed as a PNG, so the wording follows
  * COMPANY_DETAILS instead of drifting from it. Product pages override this with
- * their own photo — see shop/product/[handle].
+ * their own photo — see ShopProductPage.tsx.
  */
 
 export const alt = `${COMPANY_DETAILS.brandName} — ${COMPANY_DETAILS.tagline}`;

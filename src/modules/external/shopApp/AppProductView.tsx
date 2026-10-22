@@ -12,7 +12,7 @@ import { APP } from "@/modules/external/shopApp/appPaths";
 import { noteViewed, savePincode, useSavedPincode } from "@/modules/external/shopApp/appDevicePrefs";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { parseDigitsInput } from "@/shared/lib/format";
-import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { productPath, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { useShopCartStore } from "@/store/external/shopCartStore";
 import { useShopWishlistStore } from "@/store/external/shopWishlistStore";
 
@@ -41,7 +41,7 @@ export default function AppProductView({ product: p, similar }: { product: ShopP
     const specs = Object.entries(p.specs);
 
     const share = async () => {
-        const url = window.location.href.replace(`${APP}/product/`, "/shop/product/");
+        const url = `${window.location.origin}${productPath(p)}`;
         try {
             if (navigator.share) await navigator.share({ title: p.displayName, url });
             else {

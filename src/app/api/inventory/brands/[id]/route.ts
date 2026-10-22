@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
+import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { invBrandUpdateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { prismaUniqueError } from "@/shared/lib/api";
@@ -20,8 +21,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (error) return error;
         const b = data;
         if (b.slug !== undefined && b.slug !== null) {
-            const clash = await prisma.invBrand.findFirst({ where: { slug: b.slug, NOT: { id } } });
-            if (clash) return NextResponse.json({ error: "Slug already in use" }, { status: 409 });
+            const clash = await shopSlugClash(b.slug, { kind: "brand", id });
+            if (clash) return NextResponse.json({ error: clash }, { status: 409 });
         }
         const row = await prisma.invBrand.update({
             where: { id },

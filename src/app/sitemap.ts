@@ -2,6 +2,9 @@ import type { MetadataRoute } from "next";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { LEGAL_SLUGS } from "@/shared/lib/legal/legalPaths";
 import { INDEXABLE } from "@/shared/lib/appMode";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { loadStorefrontProducts } from "@/shared/lib/shop/storefrontProducts";
+import { productPath } from "@/shared/lib/shop/productPublic";
 
 /**
  * One sitemap for the whole business.
@@ -21,10 +24,24 @@ import { INDEXABLE } from "@/shared/lib/appMode";
 
 const { company, shop } = COMPANY_DETAILS.sites;
 
-export default function sitemap(): MetadataRoute.Sitemap {
+// Rebuilt at most hourly — it reads the catalogue.
+export const revalidate = 3600;
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // The internal build disallows all crawling (see robots.ts), so offering it
     // a list of pages to crawl would contradict itself.
     if (!INDEXABLE) return [];
+
+    // Root-level shop pages (`/hp-15-laptop`, `/laptops`, `/hp`) — only what a
+    // customer can actually open: visible products, active masters with a slug.
+    const withSlug = { where: { isActive: true, slug: { not: null } }, select: { slug: true } } as const;
+    const [products, groups, categories, brands] = await Promise.all([
+        loadStorefrontProducts(),
+        prisma.invProductGroup.findMany(withSlug),
+        prisma.invCategory.findMany(withSlug),
+        prisma.invBrand.findMany(withSlug),
+    ]);
+    const listingSlugs = [...groups, ...categories, ...brands].map((r) => r.slug!);
 
     const now = new Date();
 
@@ -56,6 +73,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
             changeFrequency: "yearly",
             priority: 0.3,
         },
+
+        ...listingSlugs.map((slug) => ({
+            url: `${shop}/${slug}`,
+            lastModified: now,
+            changeFrequency: "daily" as const,
+            priority: 0.7,
+        })),
+        ...products.map((p) => ({
+            url: `${shop}${productPath(p)}`,
+            lastModified: now,
+            changeFrequency: "weekly" as const,
+            priority: 0.6,
+        })),
 
         // ── Policies — one set, covering both hostnames ──
         ...LEGAL_SLUGS.map((slug) => ({

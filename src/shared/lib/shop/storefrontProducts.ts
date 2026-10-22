@@ -10,20 +10,29 @@ import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
 
 /**
  * Every product a customer may see — the one list behind the home page, /shop,
- * a brand page, /api/shop/products and the customer app. Listed + active, then
+ * a brand / category / collection page, /api/shop/products and the customer app. Listed + active, then
  * the stock policy (HIDE drops out-of-stock rows), then the publish rules
  * (never a half-built product, even if the listed flag is stale).
  */
-export async function loadStorefrontProducts(opts: { brandId?: number } = {}): Promise<ShopProductPublic[]> {
+export async function loadStorefrontProducts(
+    opts: { brandId?: number; categoryId?: number; groupIds?: number[] } = {}
+): Promise<ShopProductPublic[]> {
+    const narrowed = opts.brandId != null || opts.categoryId != null || opts.groupIds != null;
     const [bands, rules, policy, groupIndex, rows] = await Promise.all([
         loadBarcodeBands(),
         loadShopPublishRules(),
         loadShopStockPolicy(),
         loadShopGroupIndex(),
         prisma.invProduct.findMany({
-            where: { isListedInShop: true, isActive: true, ...(opts.brandId != null ? { brandId: opts.brandId } : {}) },
+            where: {
+                isListedInShop: true,
+                isActive: true,
+                ...(opts.brandId != null ? { brandId: opts.brandId } : {}),
+                ...(opts.categoryId != null ? { categoryId: opts.categoryId } : {}),
+                ...(opts.groupIds != null ? { groupId: { in: opts.groupIds } } : {}),
+            },
             include: { category: { select: { name: true } } },
-            orderBy: opts.brandId != null ? { id: "asc" } : [{ shopCategory: "asc" }, { id: "asc" }],
+            orderBy: narrowed ? { id: "asc" } : [{ shopCategory: "asc" }, { id: "asc" }],
         }),
     ]);
     return rows

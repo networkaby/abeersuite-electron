@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { NextResponse } from "next/server";
 import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { invProductToAdmin } from "@/modules/ecommerce/lib/productAdmin";
@@ -124,6 +125,10 @@ export async function POST(req: Request) {
             );
         }
 
+        if (listing.slug) {
+            const clash = await shopSlugClash(listing.slug, { kind: "product" });
+            if (clash) return NextResponse.json({ error: clash }, { status: 409 });
+        }
         const p = await prisma.invProduct.create({
             data: {
                 sku,

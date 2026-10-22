@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
@@ -163,6 +164,10 @@ export async function updateShopProduct(
         }
         data.isListedInShop = listing.isListedInShop;
         data.slug = listing.slug;
+        if (listing.slug) {
+            const clash = await shopSlugClash(listing.slug, { kind: "product", id: pid });
+            if (clash) return { response: NextResponse.json({ error: clash }, { status: 409 }) };
+        }
 
         const p = await prisma.invProduct.update({
             where: { id: pid },

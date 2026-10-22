@@ -2,48 +2,55 @@ import type { Metadata } from "next";
 import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { loadShopProduct } from "@/shared/lib/shop/loadShopProduct";
 import { loadStorefrontProducts } from "@/shared/lib/shop/storefrontProducts";
+import { groupSubtreeIds, loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
+import { resolveShopSlugTarget, type ShopSlugTarget } from "@/shared/lib/shop/shopSlug";
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import ShopCatalogClient from "@/modules/external/shop/ShopCatalogClient";
+import ShopProductPage, { shopProductMetadata } from "@/modules/external/shop/ShopProductPage";
 import { loadShopAdContext } from "@/shared/lib/shop/adContext";
 import { ChevronRight } from "lucide-react";
 
 /**
- * Root-level brand page ("/hp") — the first slug-registry-style page, ahead
- * of the full `ShopSlug` catch-all in PROJECT_BRAIN's Plan 1. Only brands
- * claim this level today; a category/group catch-all at the same URL depth
- * would need to resolve slug collisions before it can share this route.
+ * Every root-level shop page, Flipkart-style — one flat URL space:
+ *
+ *   /hp-15-laptop     product     (InvProduct.slug, or /123 by id)
+ *   /laptops          category    (office Group — and every group under it)
+ *   /kids-collection  collection  (office Category)
+ *   /hp               brand
+ *
+ * Tried in that order. `shopSlugClash` stops two rows sharing a slug when
+ * they are saved, and app routes (`/shop`, `/portal`, …) always win over this
+ * dynamic segment in Next's own routing.
  */
-const loadBrandWithProducts = cache(async (slug: string) => {
-    const brand = await prisma.invBrand.findFirst({
-        where: { slug, isActive: true },
-        select: { id: true, name: true, slug: true, imageUrl: true, description: true },
-    });
-    if (!brand) return null;
 
-    const products = await loadStorefrontProducts({ brandId: brand.id });
-
-    return { brand, products };
+const loadListing = cache(async (target: ShopSlugTarget) => {
+    switch (target.kind) {
+        case "brand":
+            return loadStorefrontProducts({ brandId: target.id });
+        case "category":
+            return loadStorefrontProducts({ categoryId: target.id });
+        case "group":
+            return loadStorefrontProducts({ groupIds: groupSubtreeIds(await loadShopGroupIndex(), target.id) });
+    }
 });
 
-export async function generateMetadata({
-    params,
-}: {
-    params: Promise<{ slug: string }>;
-}): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
     const { slug } = await params;
-    const data = await loadBrandWithProducts(slug);
-    if (!data) return { title: "Brand" };
-    const { brand } = data;
+    const product = (await loadShopProduct(slug, false))?.product;
+    if (product) return shopProductMetadata(product);
+
+    const target = await resolveShopSlugTarget(slug);
+    if (!target) return { title: "Not found" };
     return {
-        title: `${brand.name} products`,
-        description: brand.description ?? `Shop ${brand.name} products.`,
-        alternates: { canonical: `/${brand.slug}` },
+        title: target.kind === "brand" ? `${target.name} products` : target.name,
+        description: target.description ?? `Shop ${target.name}.`,
+        alternates: { canonical: `/${target.slug}` },
     };
 }
 
-export default async function BrandPage({
+export default async function ShopSlugPage({
     params,
     searchParams,
 }: {
@@ -51,9 +58,14 @@ export default async function BrandPage({
     searchParams: Promise<{ adPreview?: string }>;
 }) {
     const { slug } = await params;
-    const [data, adContext] = await Promise.all([loadBrandWithProducts(slug), loadShopAdContext(await searchParams)]);
-    if (!data) notFound();
-    const { brand, products } = data;
+    const sp = await searchParams;
+
+    const product = (await loadShopProduct(slug, false))?.product;
+    if (product) return <ShopProductPage product={product} handle={slug} searchParams={sp} />;
+
+    const target = await resolveShopSlugTarget(slug);
+    if (!target) notFound();
+    const [products, adContext] = await Promise.all([loadListing(target), loadShopAdContext(sp)]);
 
     const allCategories = [...new Set(products.map((p) => p.category))];
 
@@ -64,15 +76,15 @@ export default async function BrandPage({
                     Shop
                 </Link>
                 <ChevronRight className="size-4 opacity-60" />
-                <span className="text-foreground font-medium">{brand.name}</span>
+                <span className="text-foreground font-medium">{target.name}</span>
             </nav>
 
             <div className="mb-8 flex items-center gap-4">
-                {brand.imageUrl ? (
+                {target.imageUrl ? (
                     <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border/60 bg-card p-2">
                         <ShopRemoteImage
-                            src={brand.imageUrl}
-                            alt={brand.name}
+                            src={target.imageUrl}
+                            alt={target.name}
                             width={56}
                             height={56}
                             unoptimized
@@ -81,17 +93,17 @@ export default async function BrandPage({
                     </div>
                 ) : null}
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{brand.name}</h1>
+                    <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{target.name}</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
                         {products.length} product{products.length === 1 ? "" : "s"}
-                        {brand.description ? ` · ${brand.description}` : ""}
+                        {target.description ? ` · ${target.description}` : ""}
                     </p>
                 </div>
             </div>
 
             {products.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-border/80 bg-muted/30 px-4 py-10 text-center text-sm text-muted-foreground">
-                    No {brand.name} products are listed right now.
+                    No {target.name} products are listed right now.
                 </p>
             ) : (
                 <ShopCatalogClient

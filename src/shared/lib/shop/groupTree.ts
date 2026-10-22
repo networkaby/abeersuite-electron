@@ -16,12 +16,24 @@ export type ShopGroup = {
     id: number;
     /** The group's own name — this is the customer-facing category. */
     name: string;
+    /** Root-level page slug (`/laptops`); null when the group has no page yet. */
+    slug: string | null;
     /** Ancestors nearest-first: [parent, grandparent, …, root]. Empty for a root. */
-    ancestors: { id: number; name: string }[];
+    ancestors: { id: number; name: string; slug: string | null }[];
 };
 
 /** groupId → the group and its ancestor chain. */
 export type ShopGroupIndex = Map<number, ShopGroup>;
+
+/** A group and every group under it — what a category page lists. */
+export function groupSubtreeIds(index: ShopGroupIndex, id: number): number[] {
+    return [...index.values()].filter((g) => g.id === id || g.ancestors.some((a) => a.id === id)).map((g) => g.id);
+}
+
+/** Where a category name links: its own page when it has a slug, else the /shop filter. */
+export function groupHref(g: { name: string; slug: string | null }): string {
+    return g.slug ? `/${g.slug}` : `/shop?category=${encodeURIComponent(g.name)}`;
+}
 
 /** The department a group belongs to — the last ancestor, or the group itself. */
 export function rootOf(g: ShopGroup): { id: number; name: string } {

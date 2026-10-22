@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { Prisma } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { requireAuth, requireAnyPermission, requirePermission } from "@/shared/lib/auth/permissions";
@@ -119,6 +120,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         });
         if (collision) return NextResponse.json({ error: skuCodeCollisionMessage(collision) }, { status: 409 });
 
+        if (b.slug) {
+            const clash = await shopSlugClash(b.slug, { kind: "product", id });
+            if (clash) return NextResponse.json({ error: clash }, { status: 409 });
+        }
         const row = await prisma.invProduct.update({
             where: { id },
             data: {

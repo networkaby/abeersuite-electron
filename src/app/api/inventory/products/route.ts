@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { Prisma } from "@/generated/prisma/client";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
@@ -137,6 +138,10 @@ export async function POST(req: Request) {
             warrantyTermId: b.warrantyTermId ?? null,
             gstRateId: b.gstRateId ?? null,
         });
+        if (b.slug) {
+            const clash = await shopSlugClash(b.slug, { kind: "product" });
+            if (clash) return NextResponse.json({ error: clash }, { status: 409 });
+        }
         const row = await prisma.invProduct.create({
             data: {
                 sku,
