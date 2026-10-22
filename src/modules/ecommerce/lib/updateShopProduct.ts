@@ -31,7 +31,7 @@ export const shopProductPatchSchema = z.object({
     specs: z.record(z.string(), z.string()).optional(),
     // Photo checklist under Product image (photoChecklist.ts); null clears it.
     photoChecklist: z.object({
-        items: z.array(z.object({ kind: z.enum(PHOTO_KIND_KEYS as [string, ...string[]]), done: z.boolean() })).max(PHOTO_KIND_KEYS.length),
+        items: z.array(z.object({ kind: z.enum(PHOTO_KIND_KEYS as [string, ...string[]]), done: z.boolean(), must: z.boolean().default(false) })).max(PHOTO_KIND_KEYS.length),
         enough: z.boolean(),
         at: z.string().max(40),
     }).nullable().optional(),

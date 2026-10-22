@@ -8,7 +8,7 @@ import {
     AiDataCheckError, OUTPUT_KEYS, assembleDescription, callParsed, callStep, cleanSpecs, copySchema, photoLines, photoParts,
     productLines, text, textList, type ProductCopy, type ProductCopyInput,
 } from "@/modules/ecommerce/lib/aiProductCopy";
-import { PHOTO_KINDS, checklistFrom, isPhotoKind, type PhotoKind, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
+import { PHOTO_GROUPS, PHOTO_KINDS, checklistFrom, isPhotoKind, type PhotoKind, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 
 // Verified product copy (owner, 2026-10-21): "no information is better than
 // false information". Tested on 6 real products before it was built.
@@ -127,8 +127,8 @@ function writePrompt(p: VerifiedCopyInput, c: Check, pages: PageRead[]): string 
 const kindList = z.preprocess((v) => (Array.isArray(v) ? v.filter(isPhotoKind) : []), z.array(z.string())).default([]);
 const photoSchema = z.object({
     have: kindList,
-    missing: kindList,
-    enough: z.boolean().default(false),
+    must: kindList,
+    nice: kindList,
     web: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.object({ n: z.coerce.number(), kind: z.unknown(), same: z.boolean().default(true) }))).default([]),
 });
 
@@ -138,12 +138,19 @@ function photoPrompt(p: VerifiedCopyInput, ours: number, web: number): string {
         ...productLines(p),
         ours ? `The first ${ours} photo${ours > 1 ? "s are" : " is"} OUR gallery.` : "We have NO photo yet.",
         web ? `The next ${web} photo${web > 1 ? "s are" : " is"} from the maker's or sellers' pages, numbered 1 to ${web}.` : "",
-        `Photo kinds: ${Object.entries(PHOTO_KINDS).map(([k, v]) => `${k} (${v})`).join(", ")}.`,
+        "Photo kinds:",
+        ...Object.entries(PHOTO_GROUPS).map(([g, name]) => `- ${name}: ${Object.entries(PHOTO_KINDS).filter(([, v]) => v.group === g).map(([k, v]) => `${k} (${v.label})`).join(", ")}`),
+        "Goal: the buyer should almost hold and use the product through the photos, and want it at once.",
         "have: the kinds our gallery already shows.",
-        "missing: the kinds a buyer of THIS product would want to see that our gallery lacks, most useful first. Only kinds that make sense for this product (a cable needs no in_use photo; a box_back only if it carries specs).",
-        "enough: true when our gallery already lets a buyer judge the product well — then missing may still list nice-to-haves.",
+        "must: kinds our gallery lacks that a buyer NEEDS to judge THIS product, most important first (usually front, then size).",
+        "nice: kinds our gallery lacks that add feel and impulse, most useful first.",
+        "Rules:",
+        "- Product sides: list a side only if it shows something a buyer checks (ports, buttons, label, mount, cable exit). Skip plain sides and sides that look like another side (a pen drive's bottom; a router's back has the ports, so ask for it).",
+        "- Box sides: list a side only if this product's box would carry something useful there (specs, feature list, compatibility list, barcode, contents). Never a blank side or one that repeats another.",
+        "- Feel photos: always consider them, fitted to the product (a cable: size, working; a speaker: in_use, cinematic). size = any photo that lets the buyer gauge the size.",
+        "- Never list a kind that makes no sense for this product.",
         web ? "web: for every web photo, its number, its kind, and same=false if it shows a different product, a different model or colour, or only a logo." : "",
-        'Return ONLY JSON: {"have":[kind],"missing":[kind],"enough":boolean,"web":[{"n":number,"kind":kind,"same":boolean}]}',
+        'Return ONLY JSON: {"have":[kind],"must":[kind],"nice":[kind],"web":[{"n":number,"kind":kind,"same":boolean}]}',
     ].filter(Boolean).join("\n");
 }
 
@@ -178,7 +185,7 @@ async function photoAdvice(p: VerifiedCopyInput, ours: ReturnType<typeof photoPa
         if (v && !v.same) return [];
         return [{ ...x, kind: v && isPhotoKind(v.kind) ? v.kind : null }];
     });
-    return { checklist: checklistFrom(answer.have as PhotoKind[], answer.missing as PhotoKind[], answer.enough), suggestions };
+    return { checklist: checklistFrom(answer.have as PhotoKind[], answer.must as PhotoKind[], answer.nice as PhotoKind[]), suggestions };
 }
 
 const letter = (i: number) => String.fromCharCode(65 + i);

@@ -15,7 +15,7 @@ import { productShopUrl, type ShopProductPublic } from "@/shared/lib/shop/produc
 import ProductGalleryUploader from "@/modules/ecommerce/components/ProductGalleryUploader";
 import AiCopyPanel from "@/modules/ecommerce/components/AiCopyPanel";
 import { PhotoChecklistRows } from "@/modules/ecommerce/components/AiPhotoPicker";
-import type { PhotoChecklist, PhotoKind } from "@/modules/ecommerce/lib/photoChecklist";
+import { isEnough, type PhotoChecklist, type PhotoKind } from "@/modules/ecommerce/lib/photoChecklist";
 import ProductCard from "@/modules/external/shop/ProductCard";
 import {
     shopQualification,
@@ -243,10 +243,8 @@ export default function ProductForm({
     };
     const tickPhotoKinds = (kinds: PhotoKind[], flip = false) => {
         if (!photoChecklist) return;
-        savePhotoChecklist({
-            ...photoChecklist,
-            items: photoChecklist.items.map((i) => (kinds.includes(i.kind) ? { ...i, done: flip ? !i.done : true } : i)),
-        });
+        const items = photoChecklist.items.map((i) => (kinds.includes(i.kind) ? { ...i, done: flip ? !i.done : true } : i));
+        savePhotoChecklist({ ...photoChecklist, items, enough: isEnough(items) });
     };
 
     // Shop price = the barcode tag the storefront actually charges (derived from

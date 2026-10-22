@@ -6,7 +6,7 @@ import { Check, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { uploadImageToCloudinary } from "@/shared/lib/uploadToCloudinary";
-import { PHOTO_KINDS, type PhotoChecklist, type PhotoKind, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
+import { PHOTO_GROUPS, PHOTO_KINDS, photoKindLabel, type PhotoChecklist, type PhotoGroup, type PhotoKind, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 
 // Verified's photo suggestions (owner, 2026-10-22): shown while the draft is
 // open, never added on their own. A gallery the AI calls enough keeps them
@@ -83,10 +83,10 @@ export function AiPhotoPicker({
                                     className={`relative overflow-hidden rounded-md border text-left ${on ? "border-primary ring-2 ring-primary" : "border-border"}`}
                                 >
                                     {/* eslint-disable-next-line @next/next/no-img-element -- a foreign site's photo, shown as is for picking */}
-                                    <img src={s.url} alt={s.kind ? PHOTO_KINDS[s.kind] : s.site} loading="lazy" referrerPolicy="no-referrer" className="aspect-square w-full bg-muted object-contain" />
+                                    <img src={s.url} alt={s.kind ? photoKindLabel(s.kind) : s.site} loading="lazy" referrerPolicy="no-referrer" className="aspect-square w-full bg-muted object-contain" />
                                     {on && <Check className="absolute top-1 right-1 size-4 rounded-full bg-primary p-0.5 text-primary-foreground" />}
                                     <span className="block truncate px-1 text-[10px] text-muted-foreground">
-                                        {s.kind ? <span className={fills ? "font-medium text-amber-700 dark:text-amber-400" : ""}>{PHOTO_KINDS[s.kind]} · </span> : null}
+                                        {s.kind ? <span className={fills ? "font-medium text-amber-700 dark:text-amber-400" : ""}>{photoKindLabel(s.kind)} · </span> : null}
                                         {s.site}
                                     </span>
                                 </button>
@@ -104,19 +104,32 @@ export function AiPhotoPicker({
     );
 }
 
-/** The rows under Product image in Shop readiness. Staff tick a kind once the gallery has it. */
+/** The rows under Product image in Shop readiness, by group; must rows in bold. Staff tick a kind once the gallery has it. */
 export function PhotoChecklistRows({ checklist, onToggle }: { checklist: PhotoChecklist; onToggle: (kind: PhotoKind) => void }) {
+    const groups = (Object.keys(PHOTO_GROUPS) as PhotoGroup[])
+        .map((g) => ({ g, items: checklist.items.filter((i) => PHOTO_KINDS[i.kind].group === g) }))
+        .filter((x) => x.items.length);
     return (
-        <ul className="ml-6 space-y-1">
-            {checklist.items.map((i) => (
-                <li key={i.kind} className="flex items-center gap-2 text-xs">
-                    <Checkbox id={`photo-${i.kind}`} checked={i.done} onCheckedChange={() => onToggle(i.kind)} />
-                    <label htmlFor={`photo-${i.kind}`} className={i.done ? "" : "text-muted-foreground"}>{PHOTO_KINDS[i.kind]}</label>
-                </li>
+        <div className="ml-6 space-y-2">
+            {groups.map(({ g, items }) => (
+                <div key={g}>
+                    <p className="text-muted-foreground text-[11px] font-medium uppercase">{PHOTO_GROUPS[g]}</p>
+                    <ul className="space-y-1">
+                        {items.map((i) => (
+                            <li key={i.kind} className="flex items-center gap-2 text-xs">
+                                <Checkbox id={`photo-${i.kind}`} checked={i.done} onCheckedChange={() => onToggle(i.kind)} />
+                                <label htmlFor={`photo-${i.kind}`} className={`${i.must ? "font-medium" : ""} ${i.done ? "" : "text-muted-foreground"}`}>
+                                    {photoKindLabel(i.kind)}
+                                    {i.must && !i.done ? <span className="ml-1 text-amber-700 dark:text-amber-400">· must</span> : null}
+                                </label>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
             ))}
-            <li className="text-muted-foreground text-[11px]">
-                {checklist.enough ? "AI: the gallery is enough; the open rows are nice to have." : "AI: add the open rows for buyers and search."}
-            </li>
-        </ul>
+            <p className="text-muted-foreground text-[11px]">
+                {checklist.enough ? "AI: the must photos are there; the open rows add feel." : "AI: add the must rows first, then the rest for feel and impulse."}
+            </p>
+        </div>
     );
 }
