@@ -455,6 +455,7 @@ export default function ProductForm({
                     onSpecs={setSpecPairs}
                     photoChecklist={photoChecklist}
                     onPhotoChecklist={savePhotoChecklist}
+                    onGallery={setGalleryUrls}
                     onAddPhotos={(urls, kinds) => {
                         setGalleryUrls((g) => [...g, ...urls]);
                         tickPhotoKinds(kinds);

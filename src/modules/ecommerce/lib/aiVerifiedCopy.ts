@@ -8,7 +8,8 @@ import {
     AiDataCheckError, OUTPUT_KEYS, assembleDescription, callParsed, callStep, cleanSpecs, copySchema, photoLines, photoParts,
     productLines, text, textList, type ProductCopy, type ProductCopyInput,
 } from "@/modules/ecommerce/lib/aiProductCopy";
-import { PHOTO_GROUPS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, checklistFrom, isPhotoKind, type PhotoKind, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
+import { PHOTO_GROUPS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, checklistFrom, isPhotoKind, type PhotoArrange, type PhotoKind, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
+import { CROP_MODES, GRAVITY_MODES, IMAGE_FIX_KEYS, isCloudinaryUrl, readAdjust, withAdjust, type CropMode, type GravityMode, type ImageFix } from "@/shared/lib/cloudinaryImage";
 
 // Verified product copy (owner, 2026-10-21): "no information is better than
 // false information". Tested on 6 real products before it was built.
@@ -136,6 +137,14 @@ const photoSchema = z.object({
     nice: kindList,
     remove: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.object({ photo: z.coerce.number(), why: z.unknown(), note: z.preprocess(text, z.string()).default("") }))).default([]),
     web: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.object({ n: z.coerce.number(), kind: z.unknown(), same: z.boolean().default(true) }))).default([]),
+    order: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.coerce.number())).default([]),
+    look: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.object({
+        photo: z.coerce.number(),
+        crop: z.unknown(),
+        focus: z.unknown(),
+        fixes: z.preprocess((v) => (Array.isArray(v) ? v.map(String) : []), z.array(z.string())).default([]),
+        why: z.preprocess(text, z.string()).default(""),
+    }))).default([]),
 });
 
 function photoPrompt(p: VerifiedCopyInput, ours: number, web: number): string {
@@ -157,7 +166,15 @@ function photoPrompt(p: VerifiedCopyInput, ours: number, web: number): string {
         "- Never list a kind that makes no sense for this product.",
         ours ? `remove: our photos (numbered 1 to ${ours} in the order given) that should go — why "duplicate" (almost the same picture as another of ours: keep the better one, list only the weaker; a box shot and a product shot are never duplicates), "irrelevant" (not this product, only a logo, a poster unrelated to it), or "quality" (blurry, dark, tiny, cut off, heavy watermark). note: a few words for staff. Empty when every photo is fine.` : "",
         web ? "web: for every web photo, its number, its kind, and same=false if it shows a different product, a different model or colour, only a logo, or is almost the same picture as one of ours." : "",
-        'Return ONLY JSON: {"have":[kind],"must":[kind],"nice":[kind],"remove":[{"photo":number,"why":string,"note":string}],"web":[{"n":number,"kind":kind,"same":boolean}]}',
+        ours > 1 ? "order: our photo numbers in the best order, leaving out any in remove — first a clear, sharp product front (it is the shop card and the search-result photo), then the other product sides and close-ups, then the box, then the feel photos." : "",
+        ours ? [
+            "look: only for our photos that would show better in the shop's frames (4:3 card, square product page) — never for one that already looks good:",
+            `  crop: ${CROP_MODES.join(" | ")} — pad keeps the whole picture and fills the gaps with a matching background (the safe choice); fill cuts the edges to fill the frame, only when the product sits small in empty space and nothing of it would be cut; fit and thumb rarely.`,
+            `  focus (for fill / thumb): ${GRAVITY_MODES.join(" | ")} — usually auto:subject.`,
+            `  fixes, any of: ${IMAGE_FIX_KEYS.join(" | ")} — trim a wide empty or white border; improve a dull or dark photo; auto_contrast a flat, washed-out one; sharpen a slightly soft one.`,
+            "  why: a few words for staff.",
+        ].join("\n") : "",
+        'Return ONLY JSON: {"have":[kind],"must":[kind],"nice":[kind],"remove":[{"photo":number,"why":string,"note":string}],"web":[{"n":number,"kind":kind,"same":boolean}],"order":[number],"look":[{"photo":number,"crop":string,"focus":string,"fixes":[string],"why":string}]}',
     ].filter(Boolean).join("\n");
 }
 
@@ -204,7 +221,32 @@ async function photoAdvice(p: VerifiedCopyInput, ours: ReturnType<typeof photoPa
         if (v && !v.same) return [];
         return [{ ...x, kind: v && isPhotoKind(v.kind) ? v.kind : null }];
     });
-    return { checklist: checklistFrom(answer.have as PhotoKind[], answer.must as PhotoKind[], answer.nice as PhotoKind[], removals), suggestions };
+    return {
+        checklist: checklistFrom(answer.have as PhotoKind[], answer.must as PhotoKind[], answer.nice as PhotoKind[], removals),
+        suggestions,
+        arrange: arrangeFrom(answer, ourUrls, new Set(removals.map((x) => x.url))),
+    };
+}
+
+/** The AI's order and looks as URLs. A photo staff framed by hand (a focus point) keeps its framing. */
+function arrangeFrom(answer: z.infer<typeof photoSchema>, ourUrls: string[], removed: Set<string>): PhotoArrange | null {
+    const picked = answer.order.map((n) => ourUrls[n - 1]).filter((u): u is string => !!u && !removed.has(u));
+    const order = [...new Set(picked)];
+    // A changed order only; the AI naming every photo in the same order is no suggestion.
+    const kept = ourUrls.filter((u) => !removed.has(u));
+    const reordered = order.length > 1 && order.some((u, i) => kept[i] !== u);
+    const looks = answer.look.flatMap((x) => {
+        const url = ourUrls[x.photo - 1];
+        if (!url || removed.has(url) || !isCloudinaryUrl(url)) return [];
+        const now = readAdjust(url);
+        if (now.focal) return [];
+        const crop = (CROP_MODES as readonly string[]).includes(String(x.crop)) ? (x.crop as CropMode) : now.crop;
+        const gravity = (GRAVITY_MODES as readonly string[]).includes(String(x.focus)) ? (x.focus as GravityMode) : now.gravity;
+        const fixes = x.fixes.filter((f): f is ImageFix => (IMAGE_FIX_KEYS as string[]).includes(f));
+        const next = withAdjust(url, { crop, gravity, focal: null, fixes });
+        return next === url ? [] : [{ url, next, why: x.why.slice(0, 120) }];
+    }).filter((x, i, all) => all.findIndex((y) => y.url === x.url) === i);
+    return reordered || looks.length ? { order: reordered ? order : [], looks } : null;
 }
 
 const letter = (i: number) => String.fromCharCode(65 + i);
@@ -317,6 +359,7 @@ export async function generateVerifiedCopy(p: VerifiedCopyInput): Promise<Produc
         // Only photos from pages the copy kept: a rejected page may be another version.
         // A run without step 5 leaves the saved checklist alone (no photoChecklist sent).
         ...(photos5 && { photoChecklist: photos5.checklist }),
+        ...(photos5?.arrange && { photoArrange: photos5.arrange }),
         ...(!p.bulk && {
             photoSuggestions: (photos5?.suggestions ?? web.map((x) => ({ ...x, kind: null })))
                 .filter((s) => trusted.some((pg) => pg.site === s.site)),

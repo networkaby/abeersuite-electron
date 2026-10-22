@@ -6,7 +6,8 @@ import { Check, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { uploadImageToCloudinary } from "@/shared/lib/uploadToCloudinary";
-import { PHOTO_GROUPS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, photoKindLabel, type PhotoChecklist, type PhotoGroup, type PhotoKind, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
+import { IMAGE_FIXES, cloudinaryThumb, readAdjust } from "@/shared/lib/cloudinaryImage";
+import { PHOTO_GROUPS, PHOTO_KINDS, PHOTO_REMOVE_REASONS, photoKindLabel, type PhotoArrange, type PhotoChecklist, type PhotoGroup, type PhotoKind, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 
 // Verified's photo suggestions (owner, 2026-10-22): shown while the draft is
 // open, never added on their own. A gallery the AI calls enough keeps them
@@ -157,4 +158,82 @@ export function PhotoChecklistRows({ checklist, gallery, onToggle, onRemove }: {
             </p>
         </div>
     );
+}
+
+/**
+ * Photo AI's arrangement (owner, 2026-10-22): a better order and look for our
+ * gallery. Staff apply it or not; a look is a normal Adjust edit, undone in the
+ * Adjust dialog. Applying changes the gallery, which autosaves as usual.
+ */
+export function AiPhotoArrange({
+    arrange,
+    gallery,
+    onGallery,
+}: {
+    arrange: PhotoArrange;
+    gallery: string[];
+    onGallery: (next: (g: string[]) => string[]) => void;
+}) {
+    // A look already applied changes that photo's URL — follow it, so the order still finds it.
+    const now = (u: string) => {
+        const look = arrange.looks.find((l) => l.url === u);
+        return look && gallery.includes(look.next) ? look.next : u;
+    };
+    const order = arrange.order.map(now).filter((u) => gallery.includes(u));
+    const orderDone = order.length < 2 || order.every((u, i) => gallery[i] === u);
+    const looks = arrange.looks.filter((l) => gallery.includes(l.url));
+    if (orderDone && !looks.length) return null;
+
+    const applyOrder = () => onGallery((g) => [...order.filter((u) => g.includes(u)), ...g.filter((u) => !order.includes(u))]);
+    const applyLook = (url: string, next: string) => onGallery((g) => g.map((u) => (u === url ? next : u)));
+
+    return (
+        <div className="space-y-2 rounded-md bg-muted/40 p-2">
+            <p className="text-xs font-medium">AI suggests for your photos</p>
+            {!orderDone && (
+                <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="text-muted-foreground text-xs">Better order (first = shop card and search photo):</span>
+                        <Button type="button" size="sm" variant="outline" onClick={applyOrder}>Apply order</Button>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                        {order.map((u, i) => (
+                            <figure key={u} className="relative">
+                                {/* eslint-disable-next-line @next/next/no-img-element -- small Cloudinary thumb */}
+                                <img src={cloudinaryThumb(u, 96, "square")} alt="" className="size-12 rounded border object-cover" />
+                                <span className="absolute top-0 left-0 rounded-br bg-primary px-1 text-[10px] text-primary-foreground">{i + 1}</span>
+                            </figure>
+                        ))}
+                    </div>
+                </div>
+            )}
+            {looks.length > 0 && (
+                <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="text-muted-foreground text-xs">Better look — before → after:</span>
+                        {looks.length > 1 && (
+                            <Button type="button" size="sm" variant="outline" onClick={() => looks.forEach((l) => applyLook(l.url, l.next))}>Apply all</Button>
+                        )}
+                    </div>
+                    {looks.map((l) => (
+                        <div key={l.url} className="flex items-center gap-2">
+                            {/* eslint-disable-next-line @next/next/no-img-element -- small Cloudinary thumb */}
+                            <img src={cloudinaryThumb(l.url, 160, "card")} alt="Before" className="h-15 w-20 rounded border object-cover" />
+                            <span className="text-muted-foreground text-xs">→</span>
+                            {/* eslint-disable-next-line @next/next/no-img-element -- small Cloudinary thumb */}
+                            <img src={cloudinaryThumb(l.next, 160, "card")} alt="After" className="h-15 w-20 rounded border object-cover" />
+                            <span className="text-muted-foreground min-w-0 flex-1 text-xs">{l.why || describeLook(l.next)}</span>
+                            <Button type="button" size="sm" variant="outline" onClick={() => applyLook(l.url, l.next)}>Apply</Button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+/** "Fill · Sharpen" — when the AI gave no reason. */
+function describeLook(url: string): string {
+    const a = readAdjust(url);
+    return [a.crop[0].toUpperCase() + a.crop.slice(1), ...(a.fixes ?? []).map((f) => IMAGE_FIXES[f])].join(" · ");
 }

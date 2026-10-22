@@ -11,12 +11,15 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Crosshair, RotateCcw } from "lucide-react";
 import {
     CROP_MODES,
     DEFAULT_ADJUST,
     GRAVITY_MODES,
+    IMAGE_FIXES,
+    IMAGE_FIX_KEYS,
     buildUrl,
     readAdjust,
     withAdjust,
@@ -216,6 +219,25 @@ export default function ImageAdjustDialog({
                                     automatic subject focus.
                                 </p>
                             ) : null}
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label>Fix the look (free)</Label>
+                            {IMAGE_FIX_KEYS.map((f) => (
+                                <div key={f} className="flex items-center gap-2 text-sm">
+                                    <Checkbox
+                                        id={`fix-${f}`}
+                                        checked={!!adjust.fixes?.includes(f)}
+                                        onCheckedChange={(on) =>
+                                            setAdjust((a) => {
+                                                const rest = (a.fixes ?? []).filter((x) => x !== f);
+                                                return { ...a, fixes: on === true ? [...rest, f] : rest };
+                                            })
+                                        }
+                                    />
+                                    <label htmlFor={`fix-${f}`}>{IMAGE_FIXES[f]}</label>
+                                </div>
+                            ))}
                         </div>
 
                         <div className="space-y-1.5">

@@ -56,6 +56,13 @@ export type PhotoRemoval = { url: string; why: PhotoRemoveReason; note: string }
 /** `enough` = every must row is done (worked out, not the AI's word). */
 export type PhotoChecklist = { items: PhotoChecklistItem[]; enough: boolean; at: string; remove: PhotoRemoval[] };
 
+/**
+ * Photo AI's arrangement of our gallery — staff apply it or not, nothing is
+ * saved here. `order`: our photo URLs, best first (removals left out). `looks`:
+ * a photo's URL with a new framing / fix baked in (cloudinaryImage withAdjust).
+ */
+export type PhotoArrange = { order: string[]; looks: { url: string; next: string; why: string }[] };
+
 /** A web photo from a page Verified kept, with the kind the AI says it shows. */
 export type PhotoSuggestion = { url: string; site: string; kind: PhotoKind | null };
 
