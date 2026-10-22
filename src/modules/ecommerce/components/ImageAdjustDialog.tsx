@@ -195,7 +195,8 @@ export default function ImageAdjustDialog({
                         <div className="space-y-1.5">
                             <Label>Focus</Label>
                             <Select
-                                value={adjust.gravity}
+                                // An untouched photo is pad + auto; pad sends no focus then, so it sits in the centre.
+                                value={gravityChoices(adjust.crop).includes(adjust.gravity) ? adjust.gravity : "center"}
                                 onValueChange={(v) =>
                                     setAdjust((a) => ({ ...a, gravity: v as GravityMode, focal: null }))
                                 }
