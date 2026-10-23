@@ -4,7 +4,7 @@ import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, parseIdParam, validateRequest } from "@/shared/lib/api";
 import { forgetKeyUsage, invalidateAiSetup } from "@/shared/lib/ai/aiKeys";
-import { aiKeyBodySchema, aiKeyRowData } from "@/modules/settings/lib/aiKeysServer";
+import { aiKeyBodySchema, aiKeyRowData, savedAiKeyView } from "@/modules/settings/lib/aiKeysServer";
 
 // PATCH  /api/settings/ai-keys/[id] — edit a key (empty secret keeps the saved one).
 // DELETE /api/settings/ai-keys/[id] — remove it from every chain too (cascade), and its usage row.
@@ -24,8 +24,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
         const built = aiKeyRowData(data, prev);
         if ("error" in built) return NextResponse.json({ error: built.error }, { status: 422 });
         await prisma.aiKey.update({ where: { id }, data: built.row });
-        invalidateAiSetup();
-        return NextResponse.json({ id });
+        return NextResponse.json(await savedAiKeyView(id));
     } catch (e) {
         return handleApiError(e, "Failed to save the AI key");
     }

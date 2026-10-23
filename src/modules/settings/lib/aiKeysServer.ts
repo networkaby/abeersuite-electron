@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { AI_KEY_SOURCES, AI_PROVIDERS, isWebProvider } from "@/shared/lib/constants/ai";
-import { whyNotUsable, type AiKeyConfig, type KeyUsage } from "@/shared/lib/ai/aiKeys";
+import { invalidateAiSetup, keyUsages, loadAiSetup, whyNotUsable, type AiKeyConfig, type KeyUsage } from "@/shared/lib/ai/aiKeys";
 import { hasSharedSecret, lockSecret } from "@/shared/lib/ai/secretBox";
 
 // Settings → AI Setup API helpers (routes under /api/settings/ai-keys). A key
@@ -42,6 +42,14 @@ export function aiKeyView(k: AiKeyConfig, usage: KeyUsage) {
         notUsableHere: whyNotUsable(k),
         usage,
     };
+}
+
+/** One key's view after a save, so the page patches that row instead of re-reading everything. */
+export async function savedAiKeyView(id: number) {
+    invalidateAiSetup();
+    const k = (await loadAiSetup()).keys.find((x) => x.id === id);
+    if (!k) return null;
+    return aiKeyView(k, (await keyUsages([id])).get(id)!);
 }
 
 /** Row columns from the form. `prev` = the saved row on edit. */

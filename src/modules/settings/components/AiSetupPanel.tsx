@@ -7,7 +7,7 @@
 //   env — only the .env variable NAME; the key is already in that .env
 // "Usable here" and the counts are this server's — on a counter, that counter's.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import axios from "axios";
 import { ArrowDown, ArrowUp, FlaskConical, Loader2, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
@@ -159,8 +159,25 @@ export function AiSetupPanel() {
         window.history.replaceState(null, "", url);
     };
 
+    // Saves still on the wire. A refresh that lands meanwhile may predate them, so
+    // it is held back and read again once they settle — the screen never jumps back.
+    const inFlight = useRef(0);
+    const heldRefresh = useRef(false);
+    const write = async <T,>(run: () => Promise<T>) => {
+        inFlight.current++;
+        try {
+            return await run();
+        } finally {
+            if (--inFlight.current === 0 && heldRefresh.current) {
+                heldRefresh.current = false;
+                void reload();
+            }
+        }
+    };
+
     useEffect(() => {
         if (!data) return;
+        if (inFlight.current > 0) { heldRefresh.current = true; return; }
         setKeys(data.keys);
         setChains(data.chains);
         setCopyFlow(data.copyFlow);
@@ -172,12 +189,20 @@ export function AiSetupPanel() {
 
     const toggleActive = async (k: AiKeyRow, active: boolean) => {
         setKeys((prev) => prev.map((x) => (x.id === k.id ? { ...x, active } : x)));
-        try {
-            await axios.patch(`${API}/${k.id}`, bodyOf({ ...formOf(k), active }, ""));
-        } catch (e) {
-            setKeys((prev) => prev.map((x) => (x.id === k.id ? { ...x, active: k.active } : x)));
-            toast.error(extractApiError(e, "Could not save"));
-        }
+        await write(async () => {
+            try {
+                await axios.patch(`${API}/${k.id}`, bodyOf({ ...formOf(k), active }, ""));
+            } catch (e) {
+                setKeys((prev) => prev.map((x) => (x.id === k.id ? { ...x, active: k.active } : x)));
+                toast.error(extractApiError(e, "Could not save"));
+            }
+        });
+    };
+
+    /** The dialog's saved row, put in place without re-reading the page. */
+    const keySaved = (row: AiKeyRow) => {
+        setKeys((prev) => (prev.some((x) => x.id === row.id) ? prev.map((x) => (x.id === row.id ? row : x)) : [...prev, row]));
+        setEditing(null);
     };
 
     const deleteKey = async (k: AiKeyRow) => {
@@ -187,13 +212,15 @@ export function AiSetupPanel() {
         setChains((prev) => Object.fromEntries(Object.entries(prev).map(([use, steps]) => [
             use, Object.fromEntries(Object.entries(steps).map(([s, ids]) => [s, (ids ?? []).filter((x) => x !== k.id)])),
         ])));
-        try {
-            await axios.delete(`${API}/${k.id}`);
-        } catch (e) {
-            setKeys(before.keys);
-            setChains(before.chains);
-            toast.error(extractApiError(e, "Could not delete"));
-        }
+        await write(async () => {
+            try {
+                await axios.delete(`${API}/${k.id}`);
+            } catch (e) {
+                setKeys(before.keys);
+                setChains(before.chains);
+                toast.error(extractApiError(e, "Could not delete"));
+            }
+        });
     };
 
     const testKey = async (k: AiKeyRow) => {
@@ -208,36 +235,59 @@ export function AiSetupPanel() {
         }
     };
 
-    const setChain = async (use: string, step: AiStep, ids: number[]) => {
-        const before = chains;
+    // One save at a time per step, always the latest order: quick up/down clicks can
+    // never land out of turn. A failure goes back to the last order the server took.
+    const chainQueue = useRef(new Map<string, { saved: number[]; next: number[] | null; sending: boolean }>());
+    const putChain = (use: string, step: AiStep, ids: number[]) =>
         setChains((prev) => ({ ...prev, [use]: { ...prev[use], [step]: ids } }));
-        try {
-            await axios.put(`${API}/chains`, { use, step, keyIds: ids });
-        } catch (e) {
-            setChains(before);
-            toast.error(extractApiError(e, "Could not save the order"));
-        }
+    const setChain = (use: string, step: AiStep, ids: number[]) => {
+        const id = `${use}:${step}`;
+        let q = chainQueue.current.get(id);
+        if (!q) chainQueue.current.set(id, (q = { saved: chains[use]?.[step] ?? [], next: null, sending: false }));
+        putChain(use, step, ids);
+        q.next = ids;
+        if (q.sending) return;
+        q.sending = true;
+        const entry = q;
+        void write(async () => {
+            while (entry.next) {
+                const send = entry.next;
+                entry.next = null;
+                try {
+                    await axios.put(`${API}/chains`, { use, step, keyIds: send });
+                    entry.saved = send;
+                } catch (e) {
+                    if (!entry.next) putChain(use, step, entry.saved);
+                    toast.error(extractApiError(e, "Could not save the order"));
+                }
+            }
+            entry.sending = false;
+        });
     };
 
     const saveCopyFlow = async (f: AiCopyFlow) => {
         const before = copyFlow;
         setCopyFlow(f);
-        try {
-            await axios.put(`${API}/copy-flow`, { copyFlow: f });
-        } catch (e) {
-            setCopyFlow(before);
-            toast.error(extractApiError(e, "Could not save the default"));
-        }
+        await write(async () => {
+            try {
+                await axios.put(`${API}/copy-flow`, { copyFlow: f });
+            } catch (e) {
+                setCopyFlow(before);
+                toast.error(extractApiError(e, "Could not save the default"));
+            }
+        });
     };
 
     const savePhotoCheck = async (on: boolean) => {
         setPhotoCheck(on);
-        try {
-            await axios.put(`${API}/copy-flow`, { photoCheck: on });
-        } catch (e) {
-            setPhotoCheck(!on);
-            toast.error(extractApiError(e, "Could not save Photo AI"));
-        }
+        await write(async () => {
+            try {
+                await axios.put(`${API}/copy-flow`, { photoCheck: on });
+            } catch (e) {
+                setPhotoCheck(!on);
+                toast.error(extractApiError(e, "Could not save Photo AI"));
+            }
+        });
     };
 
     if (loading && !data) return <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading…</div>;
@@ -414,7 +464,8 @@ export function AiSetupPanel() {
                     initial={editing === "new" ? null : editing}
                     here={here}
                     onClose={() => setEditing(null)}
-                    onSaved={() => { setEditing(null); void reload(); }}
+                    onSaved={keySaved}
+                    write={write}
                 />
             )}
         </Tabs>
@@ -479,11 +530,12 @@ function StepChain({ label, needs, ids, keys, byId, onChange }: {
     );
 }
 
-function KeyDialog({ initial, here, onClose, onSaved }: {
+function KeyDialog({ initial, here, onClose, onSaved, write }: {
     initial: AiKeyRow | null;
     here: Setup["here"];
     onClose: () => void;
-    onSaved: () => void;
+    onSaved: (row: AiKeyRow) => void;
+    write: <T>(run: () => Promise<T>) => Promise<T>;
 }) {
     const [form, setForm] = useState<Form>(initial ? formOf(initial) : EMPTY_FORM);
     // A pasted key is write-only: the box starts empty, and empty on edit keeps the old key.
@@ -526,23 +578,27 @@ function KeyDialog({ initial, here, onClose, onSaved }: {
         if (form.source === "env" && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(form.envName.trim())) return toast.error("Variable name: letters, digits and _ only.");
         if (form.source !== "env" && !secret.trim() && !hasSaved) return toast.error("Paste the key.");
         setSaving(true);
-        try {
-            const body = bodyOf(form, secret);
-            if (initial) await axios.patch(`${API}/${initial.id}`, body);
-            else await axios.post(API, body);
-            toast.success("Saved");
-            onSaved();
-        } catch (e) {
-            toast.error(extractApiError(e, "Could not save"));
-        } finally {
-            setSaving(false);
-        }
+        await write(async () => {
+            try {
+                const body = bodyOf(form, secret);
+                const { data: row } = initial
+                    ? await axios.patch<AiKeyRow>(`${API}/${initial.id}`, body)
+                    : await axios.post<AiKeyRow>(API, body);
+                toast.success("Saved");
+                onSaved(row);
+            } catch (e) {
+                toast.error(extractApiError(e, "Could not save"));
+                setSaving(false);
+            }
+        });
     };
 
     return (
         <Dialog open onOpenChange={(o) => !o && onClose()}>
             <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto md:max-w-4xl">
                 <DialogHeader><DialogTitle>{initial ? "Edit AI key" : "Add AI key"}</DialogTitle></DialogHeader>
+                {/* A real form: Enter in any box saves. */}
+                <form onSubmit={(e) => { e.preventDefault(); if (!saving) void submit(); }} className="contents">
                 <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
                 <div className="grid content-start gap-3">
                     <div className="grid gap-1">
@@ -669,9 +725,10 @@ function KeyDialog({ initial, here, onClose, onSaved }: {
                 </div>
                 </div>
                 <DialogFooter>
-                    <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-                    <Button onClick={submit} disabled={saving}>{saving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}Save</Button>
+                    <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+                    <Button type="submit" disabled={saving}>{saving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}Save</Button>
                 </DialogFooter>
+                </form>
             </DialogContent>
         </Dialog>
     );

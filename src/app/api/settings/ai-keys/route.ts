@@ -5,7 +5,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { invalidateAiSetup, keyUsages, loadAiSetup } from "@/shared/lib/ai/aiKeys";
 import { hasSharedSecret } from "@/shared/lib/ai/secretBox";
-import { aiKeyBodySchema, aiKeyRowData, aiKeyView } from "@/modules/settings/lib/aiKeysServer";
+import { aiKeyBodySchema, aiKeyRowData, savedAiKeyView, aiKeyView } from "@/modules/settings/lib/aiKeysServer";
 
 // Settings → AI Setup. GET = keys + chains + what this server can do;
 // POST = add a key.
@@ -40,8 +40,7 @@ export async function POST(req: Request) {
         const built = aiKeyRowData(data);
         if ("error" in built) return NextResponse.json({ error: built.error }, { status: 422 });
         const row = await prisma.aiKey.create({ data: built.row, select: { id: true } });
-        invalidateAiSetup();
-        return NextResponse.json(row, { status: 201 });
+        return NextResponse.json(await savedAiKeyView(row.id), { status: 201 });
     } catch (e) {
         return handleApiError(e, "Failed to add the AI key");
     }
