@@ -44,19 +44,13 @@ export const IS_PUBLIC = APP_MODE === "public";
  * `NEXT_PUBLIC_SITE_URL ?? NEXTAUTH_URL`, and a stray localhost value copied
  * into Vercel made production publish `http://localhost:3000/...` canonicals —
  * every public page quietly telling Google its original lived at an address
- * nobody can reach.
- *
- * NEXT_PUBLIC_SITE_URL still wins OUTSIDE production, so `pnpm dev` renders
- * localhost canonicals instead of production ones. In production it is ignored
- * entirely, which is the point: no environment mistake can move the canonical
- * host again.
+ * nobody can reach. `pnpm dev` therefore renders production canonicals too, which
+ * is harmless: nothing indexes a dev server.
  */
 export const CANONICAL_SITE_URL: string =
-    process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_SITE_URL
-        ? process.env.NEXT_PUBLIC_SITE_URL
-        // "public" is the only mode whose primary content is the storefront — full,
-        // office and counter are all staff-facing, even though "full" also happens to
-        // contain the public routes (nothing strips them out of a full build).
-        : APP_MODE === "public"
-          ? COMPANY_DETAILS.sites.shop
-          : COMPANY_DETAILS.sites.office;
+    // "public" is the only mode whose primary content is the storefront — full,
+    // office and counter are all staff-facing, even though "full" also happens to
+    // contain the public routes (nothing strips them out of a full build).
+    APP_MODE === "public"
+        ? COMPANY_DETAILS.sites.shop
+        : COMPANY_DETAILS.sites.office;
