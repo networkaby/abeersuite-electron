@@ -17,6 +17,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(NsPushPlugin.class);
+        registerPlugin(NsSharePlugin.class);
         super.onCreate(savedInstanceState);
         NsMessagingService.ensureChannel(this);
         askForNotifications();

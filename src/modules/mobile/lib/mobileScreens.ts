@@ -1,4 +1,4 @@
-import { BookOpen, Boxes, Camera, HandCoins, MessageSquare, Users, Wallet, type LucideIcon } from "lucide-react";
+import { BookOpen, Boxes, Camera, HandCoins, MessageSquare, Send, Users, Wallet, type LucideIcon } from "lucide-react";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
@@ -103,6 +103,17 @@ export const MOBILE_SCREENS: MobileScreen[] = [
         hint: "Shop photos from camera",
         icon: Camera,
         permission: PERMISSIONS.MOBILE_PHOTOS_EDIT,
+    },
+    // After Photos, for the same reason: sharing posts is a few staff's job, not a
+    // reason to move a money screen off the bottom bar.
+    {
+        href: `${PHONE_APP_HOME}/posts`,
+        group: "Messages",
+        tab: "Posts",
+        label: "Posts",
+        hint: "Share to WhatsApp Channel / Status",
+        icon: Send,
+        permission: PERMISSIONS.MOBILE_POSTS_SHARE,
     },
 ];
 

@@ -10849,6 +10849,10 @@
     {
       "roleId": "R1",
       "permissionId": "campaigns:send"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "mobile:posts:share"
     }
   ],
   "departmentPermissions": [

@@ -53,4 +53,11 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Posts share straight into WhatsApp (NsSharePlugin): Android 11+ hides other
+         apps unless they are named here. -->
+    <queries>
+        <package android:name="com.whatsapp.w4b" />
+        <package android:name="com.whatsapp" />
+    </queries>
 </manifest>

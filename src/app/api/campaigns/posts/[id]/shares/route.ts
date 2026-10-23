@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, parseIdParam, validateRequest } from "@/shared/lib/api";
 import { POST_CHANNELS } from "@/modules/campaigns/lib/post";
-import { loadPost, staffName } from "@/modules/campaigns/lib/postServer";
+import { recordShare } from "@/modules/campaigns/lib/postServer";
 import { requirePostsPage } from "@/modules/campaigns/lib/campaignAccess";
 
 /**
@@ -26,15 +25,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (error) return error;
 
     try {
-        const post = await prisma.post.findUnique({ where: { id }, select: { channels: true, shares: { select: { channel: true } } } });
-        if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 });
-
-        const shared = new Set([...post.shares.map((s) => s.channel), data.channel]);
-        await prisma.$transaction([
-            prisma.postShare.create({ data: { postId: id, channel: data.channel, sharedById: user.id, sharedByName: await staffName(user.id) } }),
-            ...(post.channels.every((c) => shared.has(c)) ? [prisma.post.update({ where: { id }, data: { status: "DONE" } })] : []),
-        ]);
-        return NextResponse.json(await loadPost(id));
+        const row = await recordShare(id, data.channel, user.id);
+        return row ? NextResponse.json(row) : NextResponse.json({ error: "Post not found" }, { status: 404 });
     } catch (e) {
         return handleApiError(e, "Failed to save");
     }

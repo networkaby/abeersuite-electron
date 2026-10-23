@@ -159,5 +159,5 @@ export type PostRow = {
 };
 
 /** Channels of a post still waiting to be shared. */
-export const pendingChannels = (p: Pick<PostRow, "channels" | "shares">) =>
+export const pendingChannels = (p: { channels: string[]; shares: { channel: string }[] }) =>
     p.channels.filter((c) => !p.shares.some((s) => s.channel === c));

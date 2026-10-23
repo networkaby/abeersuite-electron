@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { ArrowDownLeft, ArrowUpRight, ChevronRight, Receipt } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ChevronRight, Receipt, Send } from "lucide-react";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { whatsappWaiting } from "@/modules/campaigns/lib/postServer";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { BUSINESS_TIME_ZONE } from "@/shared/lib/constants/business";
 import { loginGreeting } from "@/shared/lib/constants/loginShowcase";
@@ -23,6 +25,9 @@ export default async function MobileHome() {
     const user = await mobileUser();
     const tiles = screensFor(user.permissions);
     const quick = quickEntryFor(user.permissions);
+    // What is waiting for WhatsApp shows the moment the app opens (no timer — owner, 2026-10-23).
+    const sharesPosts = tiles.some((t) => t.permission === PERMISSIONS.MOBILE_POSTS_SHARE);
+    const { posts: waiting, due } = sharesPosts ? await whatsappWaiting() : { posts: [], due: 0 };
 
     return (
         <>
@@ -32,6 +37,24 @@ export default async function MobileHome() {
                     <p className="text-sm opacity-80">{loginGreeting(shopHour())}</p>
                     <p className="truncate text-xl font-semibold">{user.name}</p>
                 </section>
+
+                {waiting.length > 0 && (
+                    <Link
+                        href={`${PHONE_APP_HOME}/posts`}
+                        className={`flex items-center gap-4 rounded-2xl border px-4 py-3.5 shadow-sm active:bg-muted ${due > 0 ? "border-amber-400 bg-amber-50" : "bg-card"}`}
+                    >
+                        <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+                            <Send className="size-5" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                            <span className="block font-medium">
+                                {waiting.length} {waiting.length === 1 ? "post" : "posts"} to share on WhatsApp
+                            </span>
+                            <span className="block text-sm text-muted-foreground">{due > 0 ? `${due} due now` : "Channel / Status"}</span>
+                        </span>
+                        <ChevronRight className="size-5 text-muted-foreground" />
+                    </Link>
+                )}
 
                 {(quick.receive || quick.pay) && (
                     <div className="grid grid-cols-3 gap-3">

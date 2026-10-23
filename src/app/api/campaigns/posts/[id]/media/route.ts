@@ -3,9 +3,8 @@ import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, parseIdParam, validateRequest } from "@/shared/lib/api";
 import { checkPostMedia } from "@/modules/campaigns/lib/post";
-import { loadPost, postMediaPrefix } from "@/modules/campaigns/lib/postServer";
+import { loadPost, postMediaPrefix, postMediaResponse } from "@/modules/campaigns/lib/postServer";
 import { requirePostsPage } from "@/modules/campaigns/lib/campaignAccess";
-import { mediaLink } from "@/modules/message/lib/customerMessages";
 
 /**
  * GET    /api/campaigns/posts/:id/media — the file itself, from our own site. A
@@ -31,16 +30,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const { id, error: idError } = await parseIdParam(params);
     if (idError) return idError;
 
-    const p = await prisma.post.findUnique({ where: { id }, select: { mediaKey: true, mediaType: true } });
-    if (!p?.mediaKey) return NextResponse.json({ error: "This post has no photo or video." }, { status: 404 });
-    const link = mediaLink(p.mediaKey);
-    if (!link) return NextResponse.json({ error: "File storage (R2) is not set up on this server." }, { status: 503 });
-
-    const file = await fetch(link);
-    if (!file.ok || !file.body) return NextResponse.json({ error: `Could not read the file (${file.status})` }, { status: 502 });
-    return new NextResponse(file.body, {
-        headers: { "Content-Type": p.mediaType ?? "application/octet-stream", "Cache-Control": "private, max-age=300" },
-    });
+    return postMediaResponse(id);
 }
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
