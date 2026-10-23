@@ -2,7 +2,11 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { mediaLink } from "@/modules/message/lib/customerMessages";
-import { POST_SELECT, pendingChannels } from "@/modules/campaigns/lib/post";
+import { R2_MESSAGES_BUCKET } from "@/shared/lib/constants/whatsapp";
+import { isR2Configured, putR2 } from "@/shared/lib/storage/r2";
+import { buildUrl, isCloudinaryUrl } from "@/shared/lib/cloudinaryImage";
+import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
+import { POST_SELECT, checkPostMedia, pendingChannels } from "@/modules/campaigns/lib/post";
 import { PHONE_POST_CHANNELS } from "@/modules/mobile/lib/mobilePosts";
 
 /**
@@ -20,6 +24,42 @@ export function postMediaKey(postId: number, fileName: string): string {
 /** Adds the view and download links a post's file needs on screen. */
 export function withMediaLinks<T extends { mediaKey: string | null; mediaName: string | null }>(row: T) {
     return { ...row, mediaUrl: mediaLink(row.mediaKey), mediaDownloadUrl: mediaLink(row.mediaKey, row.mediaName, true) };
+}
+
+/**
+ * Give a new post the main photo of the product it was made from: read it once
+ * (from Cloudinary as a square, the staff crop kept, at most PHOTO_PX wide) and
+ * store our own copy under the post, so later edits to the product never change
+ * a post already shared. Returns why it was skipped, or null when attached — a
+ * skipped photo never fails the save; staff add one by hand.
+ */
+const PHOTO_PX = 1200;
+
+export async function copyProductPhoto(postId: number, productId: number): Promise<string | null> {
+    const p = await prisma.invProduct.findUnique({ where: { id: productId }, select: { imageUrl: true, galleryJson: true } });
+    const src = p && productGalleryUrls(p.galleryJson, p.imageUrl)[0];
+    if (!src || !/^https?:\/\//.test(src)) return "The product has no photo — add one below.";
+    if (!isR2Configured()) return "File storage (R2) is not set up on this server — add the photo below.";
+    try {
+        // JPEG / PNG only: Cloudinary's f_auto would otherwise send WebP or AVIF, and
+        // WhatsApp can take a shared WebP for a sticker.
+        const res = await fetch(isCloudinaryUrl(src) ? buildUrl(src, { width: PHOTO_PX, frame: "square" }) : src, {
+            headers: { Accept: "image/jpeg,image/png" },
+        });
+        if (!res.ok) return `Could not read the product photo (${res.status}) — add one below.`;
+        const type = (res.headers.get("content-type") ?? "").split(";")[0].trim();
+        const body = await res.arrayBuffer();
+        const bad = checkPostMedia(type, body.byteLength);
+        if (bad) return `Product photo skipped: ${bad}`;
+        const name = `product-${productId}.${type.split("/")[1]}`;
+        const key = postMediaKey(postId, name);
+        await putR2(R2_MESSAGES_BUCKET, key, body, type);
+        await prisma.post.update({ where: { id: postId }, data: { mediaKey: key, mediaType: type, mediaName: name, mediaSize: body.byteLength } });
+        return null;
+    } catch (e) {
+        console.error("[posts] product photo copy failed", e);
+        return "Could not copy the product photo — add one below.";
+    }
 }
 
 /** One post as the screens want it, or null. */

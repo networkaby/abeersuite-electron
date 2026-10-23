@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { SquarePen, Trash2 } from "lucide-react";
+import { Package, SquarePen, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,11 +18,14 @@ import {
     GOOGLE_POST_TYPES,
     POST_CAPTION_MAX,
     POST_CHANNELS,
+    productPostCaption,
     type PostInput,
+    type PostProduct,
     type PostRow,
 } from "@/modules/campaigns/lib/post";
 import CampaignsHeader from "./CampaignsHeader";
 import PostSharePanel from "./PostSharePanel";
+import PostProductPicker, { loadPostProducts } from "./PostProductPicker";
 
 type Form = Omit<PostInput, "link" | "scheduledAt"> & { link: string; scheduledAt: string };
 
@@ -52,15 +55,27 @@ const pill = (on: boolean) =>
 /**
  * Write one post for several channels. Save first; then the photo and the
  * per-channel Share / Done appear below. A time puts it on the calendar as
- * Scheduled; no time keeps it a draft to share whenever.
+ * Scheduled; no time keeps it a draft to share whenever. A new post can start
+ * from a shop product (`startProductId`, or "From a product"): its text and link
+ * fill in, and saving copies its photo in.
  */
-export default function PostComposer({ postId, startAt = null }: { postId: number | null; startAt?: string | null }) {
+export default function PostComposer({
+    postId,
+    startAt = null,
+    startProductId = null,
+}: {
+    postId: number | null;
+    startAt?: string | null;
+    startProductId?: number | null;
+}) {
     const router = useRouter();
     const [post, setPost] = useState<PostRow | null>(null);
     const [form, setForm] = useState<Form>(() => ({ ...blank, scheduledAt: toLocalInput(startAt) }));
     const [campaigns, setCampaigns] = useState<{ value: number; label: string }[]>([]);
     const [loading, setLoading] = useState(postId !== null);
     const [saving, setSaving] = useState(false);
+    const [picking, setPicking] = useState(false);
+    const [fromProduct, setFromProduct] = useState<PostProduct | null>(null);
 
     useEffect(() => {
         if (postId === null) return;
@@ -82,6 +97,24 @@ export default function PostComposer({ postId, startAt = null }: { postId: numbe
             .catch(() => setCampaigns([]));
     }, []);
 
+    useEffect(() => {
+        // "Make a post" on a shop product opens here with it already picked.
+        if (startProductId === null) return;
+        loadPostProducts()
+            .then((list) => {
+                const p = list.find((x) => x.id === startProductId);
+                if (p) pickProduct(p);
+                else toast.error("That product is not on the shop now — pick another or write the post.");
+            })
+            .catch((e) => toast.error(extractApiError(e, "Failed to load the shop products")));
+    }, [startProductId]);
+
+    function pickProduct(p: PostProduct) {
+        setFromProduct(p);
+        setForm((f) => ({ ...f, caption: productPostCaption(p), link: p.path }));
+        setPicking(false);
+    }
+
     const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((f) => ({ ...f, [key]: value }));
     const toggle = (v: Form["channels"][number]) =>
         set("channels", form.channels.includes(v) ? form.channels.filter((c) => c !== v) : [...form.channels, v]);
@@ -100,8 +133,12 @@ export default function PostComposer({ postId, startAt = null }: { postId: numbe
                 setPost(r.data);
                 toast.success("Post saved");
             } else {
-                const r = await axios.post<PostRow>("/api/campaigns/posts", body);
-                toast.success("Post saved — add the photo and share it below");
+                const r = await axios.post<PostRow & { photoNote?: string | null }>("/api/campaigns/posts", {
+                    ...body,
+                    fromProductId: fromProduct?.id ?? null,
+                });
+                if (r.data.photoNote) toast.warning(`Post saved. ${r.data.photoNote}`);
+                else toast.success(fromProduct ? "Post saved with the product photo — share it below" : "Post saved — add the photo and share it below");
                 router.replace(`/office/campaigns/posts/${r.data.id}`);
             }
         } catch (e) {
@@ -137,6 +174,35 @@ export default function PostComposer({ postId, startAt = null }: { postId: numbe
                 ) : (
                     <>
                         <section className="space-y-4 rounded-xl border p-4">
+                            {!post && (
+                                <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/40 p-2 text-sm">
+                                    {fromProduct ? (
+                                        <>
+                                            <Package className="h-4 w-4 text-muted-foreground" />
+                                            <span className="min-w-0 flex-1 truncate">
+                                                From <span className="font-medium">{fromProduct.name}</span>
+                                                <span className="text-muted-foreground">
+                                                    {fromProduct.imageUrl ? " — its photo is added when you save" : " — it has no photo; add one after saving"}
+                                                </span>
+                                            </span>
+                                            <Button variant="ghost" size="sm" onClick={() => setPicking(true)}>
+                                                Change
+                                            </Button>
+                                            <Button variant="ghost" size="icon" aria-label="Not from a product" onClick={() => setFromProduct(null)}>
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="flex-1 text-muted-foreground">Selling something on the shop? Start from it — text, link and photo fill in.</span>
+                                            <Button variant="outline" size="sm" onClick={() => setPicking(true)}>
+                                                <Package className="mr-1.5 h-4 w-4" /> From a product
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="space-y-1.5">
                                 <Label>Post to</Label>
                                 <div className="flex flex-wrap gap-2">
@@ -251,6 +317,7 @@ export default function PostComposer({ postId, startAt = null }: { postId: numbe
                     </>
                 )}
             </div>
+            <PostProductPicker open={picking} onOpenChange={setPicking} onPick={pickProduct} />
         </ScrollArea>
     );
 }

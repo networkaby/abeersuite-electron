@@ -108,6 +108,37 @@ export const postSchema = z.object({
 
 export type PostInput = z.input<typeof postSchema>;
 
+/** A new post may start from a shop product: on save its main photo is copied in. */
+export const newPostSchema = postSchema.extend({ fromProductId: z.number().int().positive().nullish() });
+
+/** A shop product as the "From a product" picker lists it (GET /api/campaigns/posts/products). */
+export type PostProduct = {
+    id: number;
+    name: string;
+    category: string;
+    /** Its shop page, like "/hp-15s" — the post's link. */
+    path: string;
+    pricePaise: number;
+    mrpPaise: number | null;
+    imageUrl: string | null;
+    /** The opening of the shop description, plain text. */
+    blurb: string | null;
+    inStock: boolean;
+};
+
+const rupees = (paise: number) => `₹${Math.round(paise / 100).toLocaleString("en-IN")}`;
+
+/**
+ * The starting text of a post made from a product: name, a line about it, the
+ * price (MRP alongside when the shop sells below it) and "In stock". Staff edit
+ * it freely before saving; the link goes under it on its own.
+ */
+export function productPostCaption(p: PostProduct): string {
+    const price =
+        p.mrpPaise && p.mrpPaise > p.pricePaise ? `${rupees(p.pricePaise)} (MRP ${rupees(p.mrpPaise)})` : rupees(p.pricePaise);
+    return [p.name, p.blurb, `Price: ${price}${p.inStock ? " · In stock" : ""}`].filter(Boolean).join("\n\n").slice(0, POST_CAPTION_MAX);
+}
+
 /** The text staff paste: the post, then the shop link it points to. */
 export function postCaption(p: { caption: string; link: string | null }, shopSite: string): string {
     return p.link ? `${p.caption}\n\n${shopSite}${p.link}` : p.caption;

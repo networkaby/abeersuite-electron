@@ -649,15 +649,20 @@ export default function ProductForm({
                         the app, draft or live. A published product also has its real
                         shop page, which opens in the computer's own browser. */}
                     {initial?.id && published ? (
-                        <a
-                            href={productShopUrl({ id: initial.id, slug: initial.slug ?? null })}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-primary underline"
-                        >
-                            Open in shop
-                            <ExternalLink className="size-3" />
-                        </a>
+                        <span className="flex items-center gap-3">
+                            <GatedLink href={`/office/campaigns/posts/new?product=${initial.id}`} className="text-xs text-primary underline">
+                                Make a post
+                            </GatedLink>
+                            <a
+                                href={productShopUrl({ id: initial.id, slug: initial.slug ?? null })}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-primary underline"
+                            >
+                                Open in shop
+                                <ExternalLink className="size-3" />
+                            </a>
+                        </span>
                     ) : null}
                 </div>
                 <div className="rounded-lg border border-dashed border-border p-4">

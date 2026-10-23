@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
-import { POST_SELECT, postSchema } from "@/modules/campaigns/lib/post";
-import { staffName, withMediaLinks } from "@/modules/campaigns/lib/postServer";
+import { POST_SELECT, newPostSchema } from "@/modules/campaigns/lib/post";
+import { copyProductPhoto, loadPost, staffName, withMediaLinks } from "@/modules/campaigns/lib/postServer";
 import { requirePostsPage } from "@/modules/campaigns/lib/campaignAccess";
 
 /**
  * GET  /api/campaigns/posts — the queue: drafts and scheduled posts (soonest
  *      first, undated last), then the last 60 done ones. A small shop's posts
  *      are a short list, so no paging yet.
- * POST /api/campaigns/posts — save a new post.
+ * POST /api/campaigns/posts — save a new post. `fromProductId` (made from a
+ *      shop product) copies that product's photo in; `photoNote` says why not.
  */
 
 export async function GET() {
@@ -31,15 +32,18 @@ export async function POST(req: Request) {
     const { user, response } = await requirePostsPage();
     if (response) return response;
 
-    const { data, error } = await validateRequest(req, postSchema);
+    const { data, error } = await validateRequest(req, newPostSchema);
     if (error) return error;
+    const { fromProductId, ...fields } = data;
 
     try {
         const row = await prisma.post.create({
-            data: { ...data, createdById: user.id, createdByName: await staffName(user.id) },
+            data: { ...fields, createdById: user.id, createdByName: await staffName(user.id) },
             select: POST_SELECT,
         });
-        return NextResponse.json(withMediaLinks(row));
+        if (!fromProductId) return NextResponse.json(withMediaLinks(row));
+        const photoNote = await copyProductPhoto(row.id, fromProductId);
+        return NextResponse.json({ ...(photoNote ? withMediaLinks(row) : await loadPost(row.id)), photoNote });
     } catch (e) {
         return handleApiError(e, "Failed to save the post");
     }

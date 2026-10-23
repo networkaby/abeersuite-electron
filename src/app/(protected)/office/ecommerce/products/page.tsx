@@ -5,6 +5,7 @@ import axios from "axios";
 import Image from "next/image";
 import { imageLoaderFor, isCloudinaryUrl } from "@/shared/lib/cloudinaryImage";
 import Link from "next/link";
+import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { toast } from "sonner";
 import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
@@ -108,6 +109,7 @@ export default function EcommerceProductsPage() {
     // hydration mismatch. The saved view is restored client-side in an effect
     // below, after mount.
     // Last loaded list (shared with the AI screen) paints at once; load() refreshes it.
+    const canOpen = useCanOpenPage();
     const [products, setProducts] = useState<ShopProductAdmin[]>(() => cachedAdminProducts() ?? []);
     const [open, setOpen] = useState(false);
     const [tab, setTab] = useState<TabKey>("all");
@@ -588,6 +590,11 @@ export default function EcommerceProductsPage() {
                                                                 <ExternalLink className="size-3.5" />
                                                             </a>
                                                         </Button>
+                                                        {status.kind === "live" && canOpen(`/office/campaigns/posts/new`) ? (
+                                                            <Button variant="outline" size="sm" asChild>
+                                                                <Link href={`/office/campaigns/posts/new?product=${p.id}`}>Make a post</Link>
+                                                            </Button>
+                                                        ) : null}
                                                         {status.kind === "live" ? (
                                                             <Button variant="outline" size="sm" asChild>
                                                                 <a
