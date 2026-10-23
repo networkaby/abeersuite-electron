@@ -11,6 +11,6 @@
  */
 export type AppRelease = { code: number; name: string; urgent: boolean };
 
-export const STAFF_APP_RELEASE: AppRelease = { code: 4, name: "2.1.1", urgent: false };
+export const STAFF_APP_RELEASE: AppRelease = { code: 5, name: "2.2.0", urgent: false };
 
 export const SHOP_APP_RELEASE: AppRelease = { code: 5, name: "2.1.1", urgent: false };
