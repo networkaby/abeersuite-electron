@@ -10,7 +10,7 @@
 ///   env — `envName` names a .env variable; usable where that .env carries it.
 /// (A third kind, "ini" — this PC only, was retired 2026-10-22; its rows were deleted.)
 /// `keyHint` = last 4 characters (db) or the variable name (env), for the list.
-/// Rest, gap and daily-limit counters are kept in memory per server, not here.
+/// What each key has used (counts, last call, rest) is in AiKeyUsage, shared by every server.
 model AiKey {
   id               Int       @id @default(autoincrement())
   name             String
@@ -28,10 +28,9 @@ model AiKey {
   validTill        DateTime? @db.Date
   /// Safety gap between two calls on this key (paid keys: 0).
   gapSeconds       Int       @default(10)
-  /// Calls per day (server's local day); null = no limit.
+  /// Calls per business day (BUSINESS_TIME_ZONE); null = no limit.
   dailyLimit       Int?
-  /// Calls per calendar month (server's local month); null = no limit.
-  /// Counted in memory like the daily one, so a restart starts the count again.
+  /// Calls per calendar month (BUSINESS_TIME_ZONE); null = no limit.
   monthlyLimit     Int?
   /// Left out this long after the provider answers "too many requests" (429).
   limitRestSeconds Int       @default(120)
@@ -63,4 +62,31 @@ model AiChainStep {
   @@unique([use, step, keyId])
   @@index([keyId])
   @@map("ai_chain_steps")
+}
+
+/// What one key has used, shared by every server (owner, 2026-10-23: "vercel is
+/// stateless, and counter restarts every day" — a count in memory limited nothing).
+/// Always read and written on the cloud database (`prismaLive`), so the website and
+/// every till share one count; the till's synced copy is only a mirror.
+/// `keyId` is deliberately not a relation: a cascade link would make this a sync
+/// "child" of ai_keys, and every AI call would have to touch the key row. The key's
+/// DELETE route removes the usage row instead.
+model AiKeyUsage {
+  keyId       Int       @id
+  /// Business day (yyyy-mm-dd) `callsToday` counts; another day = 0.
+  day         String
+  callsToday  Int       @default(0)
+  /// Business month (yyyy-mm) `callsMonth` counts.
+  month       String
+  callsMonth  Int       @default(0)
+  /// Last call started — the gap runs from here.
+  lastUsedAt  DateTime?
+  /// Left out until then after a limit hit (429) or a failure.
+  restUntil   DateTime?
+  lastOkAt    DateTime?
+  lastError   String?
+  lastErrorAt DateTime?
+  updatedAt   DateTime  @default(now()) @updatedAt
+
+  @@map("ai_key_usage")
 }

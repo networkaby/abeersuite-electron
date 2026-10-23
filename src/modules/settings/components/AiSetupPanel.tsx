@@ -261,7 +261,7 @@ export function AiSetupPanel() {
                     <div>
                         <h2 className="text-base font-semibold">AI keys</h2>
                         <p className="text-sm text-muted-foreground">
-                            Every key has the same settings; only where the actual key is kept differs. &quot;Usable&quot; and the counts are for this machine.
+                            Every key has the same settings; only where the actual key is kept differs. &quot;Usable&quot; is for this machine; the counts are every counter and the website together.
                         </p>
                     </div>
                     <Button size="sm" onClick={() => setEditing("new")}><Plus className="mr-1 h-4 w-4" />Add key</Button>
@@ -275,7 +275,7 @@ export function AiSetupPanel() {
                                 <th className="px-3 py-2">Key kept in</th>
                                 <th className="px-3 py-2">Can do</th>
                                 <th className="px-3 py-2">Plan · gap</th>
-                                <th className="px-3 py-2">Today here</th>
+                                <th className="px-3 py-2">Today</th>
                                 <th className="px-3 py-2">Active</th>
                                 <th className="px-3 py-2" />
                             </tr>
@@ -665,7 +665,7 @@ function KeyDialog({ initial, here, onClose, onSaved }: {
                     <label className="flex items-center gap-2 text-sm">
                         <Switch checked={form.active} onCheckedChange={(v) => set("active", v)} />Active
                     </label>
-                    <p className="text-xs text-muted-foreground">Day and month counts are kept by each server in memory — a restart starts them again.</p>
+                    <p className="text-xs text-muted-foreground">Day and month counts, the gap and the rest are shared by every counter and the website, and survive a restart. Days and months run on shop time (India).</p>
                 </div>
                 </div>
                 <DialogFooter>

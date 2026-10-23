@@ -4,16 +4,19 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { aiProviderInfo, AI_COPY_FLOWS, AI_DEFAULT_COPY_FLOW, AI_SETUP_CACHE_MS, type AiCopyFlow, type AiKeySource, type AiProvider, type AiStep } from "@/shared/lib/constants/ai";
+import { Prisma } from "@/generated/prisma/client";
+import { prisma, prismaLive } from "@/shared/lib/prisma/prismaClient";
+import { businessTodayIso } from "@/shared/lib/format/formatDate";
+import { aiProviderInfo, AI_COPY_FLOWS, AI_DEFAULT_COPY_FLOW, AI_SETUP_CACHE_MS, AI_USAGE_RETRY_MS, type AiCopyFlow, type AiKeySource, type AiProvider, type AiStep } from "@/shared/lib/constants/ai";
 import { hasSharedSecret, unlockSecret } from "@/shared/lib/ai/secretBox";
 
 /**
  * AI Setup at run time: the keys and chains saved on Settings → AI Setup, which
  * key is usable on THIS server, and the chain runner every AI call goes through.
  *
- * Rest, gap and daily counts live in memory per server (owner, 2026-10-21): no DB
- * write per call; a restart forgets them. Free keys take turns (least recently
+ * Rest, gap and day / month counts are shared by every server in ai_key_usage on
+ * the cloud DB (owner, 2026-10-23 — memory limited nothing on Vercel or on a till
+ * that restarts daily): one read per pick, one atomic claim per call. Free keys take turns (least recently
  * used first, each after its own gap); a paid key is used only with Premium on
  * and no free key ready. A failing key rests — limitRestSeconds after a 429,
  * failRestSeconds after anything else — and the next key is tried.
@@ -80,12 +83,6 @@ export async function loadAiSetup(): Promise<AiSetup> {
 
 // ── Is this key usable here? ──────────────────────────────────────────────────
 
-const localDay = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
-const localMonth = () => localDay().slice(0, 7);
-
 const providerReady = (p: AiProvider) => aiProviderInfo(p)?.ready ?? false;
 
 /** The actual key on this server, or null. */
@@ -97,7 +94,7 @@ export function keyValue(k: AiKeyConfig): string | null {
 /** Why this key cannot be used on this server (settings, not rest) — null = usable. */
 export function whyNotUsable(k: AiKeyConfig): string | null {
     if (!k.active) return "Turned off";
-    if (k.validTill && k.validTill < localDay()) return "Offer ended";
+    if (k.validTill && k.validTill < businessTodayIso()) return "Offer ended";
     if (!providerReady(k.provider)) return "Provider not built in yet";
     if (k.source === "env") return k.envName && process.env[k.envName]?.trim() ? null : `${k.envName ?? "Variable"} is not set here`;
     if (!k.secretEnc) return "No key saved";
@@ -106,81 +103,161 @@ export function whyNotUsable(k: AiKeyConfig): string | null {
     return null;
 }
 
-// ── Run-time state, in memory ─────────────────────────────────────────────────
+// ── Run-time state, shared on the cloud database ──────────────────────────────
 
-type KeyState = { lastUsed: number; restUntil: number; day: string; callsToday: number; month: string; callsMonth: number; lastOkAt: number; lastError: string; lastErrorAt: number };
-const state = new Map<number, KeyState>();
+/** One key's use, as every server sees it (ai_key_usage). Times in ms; 0 = never. */
+type KeyState = { callsToday: number; callsMonth: number; lastUsed: number; restUntil: number; lastOkAt: number; lastError: string; lastErrorAt: number };
+const NO_USE: KeyState = { callsToday: 0, callsMonth: 0, lastUsed: 0, restUntil: 0, lastOkAt: 0, lastError: "", lastErrorAt: 0 };
 
-function stateOf(id: number): KeyState {
-    let s = state.get(id);
-    if (!s) state.set(id, (s = { lastUsed: 0, restUntil: 0, day: localDay(), callsToday: 0, month: localMonth(), callsMonth: 0, lastOkAt: 0, lastError: "", lastErrorAt: 0 }));
-    if (s.day !== localDay()) Object.assign(s, { day: localDay(), callsToday: 0 });
-    if (s.month !== localMonth()) Object.assign(s, { month: localMonth(), callsMonth: 0 });
-    return s;
+const ms = (d: Date | null) => d?.getTime() ?? 0;
+
+/** A usage-table hiccup must not stop AI: the call goes ahead uncounted, said once per minute. */
+let warnedAt = 0;
+function usageDown(e: unknown) {
+    if (Date.now() - warnedAt < 60_000) return;
+    warnedAt = Date.now();
+    console.warn(`[aiKeys] ai_key_usage unreachable — calls go ahead uncounted: ${e instanceof Error ? e.message : String(e)}`);
 }
 
-/** What the setup page shows per key: this server's counts since it started. */
-export function keyUsage(id: number) {
-    const s = stateOf(id);
-    return {
-        callsToday: s.callsToday,
-        callsMonth: s.callsMonth,
-        lastUsedAt: s.lastUsed || null,
-        restingUntil: s.restUntil > Date.now() ? s.restUntil : null,
-        lastOkAt: s.lastOkAt || null,
-        lastError: s.lastError || null,
-        lastErrorAt: s.lastErrorAt || null,
-    };
+/** The keys' shared use — one read for the whole list. */
+async function statesOf(ids: number[]): Promise<Map<number, KeyState>> {
+    const out = new Map<number, KeyState>();
+    if (ids.length === 0) return out;
+    const day = businessTodayIso();
+    try {
+        const rows = await prismaLive.aiKeyUsage.findMany({ where: { keyId: { in: ids } } });
+        for (const r of rows) {
+            out.set(r.keyId, {
+                callsToday: r.day === day ? r.callsToday : 0,
+                callsMonth: r.month === day.slice(0, 7) ? r.callsMonth : 0,
+                lastUsed: ms(r.lastUsedAt), restUntil: ms(r.restUntil),
+                lastOkAt: ms(r.lastOkAt), lastError: r.lastError ?? "", lastErrorAt: ms(r.lastErrorAt),
+            });
+        }
+    } catch (e) {
+        usageDown(e);
+    }
+    return out;
 }
 
-const resting = (k: AiKeyConfig) => stateOf(k.id).restUntil > Date.now();
-// Both counts live in memory: a restart starts them again (owner's pick, 2026-10-21).
-const overLimit = (k: AiKeyConfig) =>
-    (k.dailyLimit != null && stateOf(k.id).callsToday >= k.dailyLimit)
-    || (k.monthlyLimit != null && stateOf(k.id).callsMonth >= k.monthlyLimit);
+/** What the setup page shows per key: the shared counts, every server together. Times in ms. */
+export type KeyUsage = {
+    callsToday: number;
+    callsMonth: number;
+    lastUsedAt: number | null;
+    restingUntil: number | null;
+    lastOkAt: number | null;
+    lastError: string | null;
+    lastErrorAt: number | null;
+};
+
+export async function keyUsages(ids: number[]): Promise<Map<number, KeyUsage>> {
+    const states = await statesOf(ids);
+    return new Map(ids.map((id): [number, KeyUsage] => {
+        const s = states.get(id) ?? NO_USE;
+        return [id, {
+            callsToday: s.callsToday,
+            callsMonth: s.callsMonth,
+            lastUsedAt: s.lastUsed || null,
+            restingUntil: s.restUntil > Date.now() ? s.restUntil : null,
+            lastOkAt: s.lastOkAt || null,
+            lastError: s.lastError || null,
+            lastErrorAt: s.lastErrorAt || null,
+        }];
+    }));
+}
+
+const resting = (s: KeyState) => s.restUntil > Date.now();
+const overLimit = (k: AiKeyConfig, s: KeyState) =>
+    (k.dailyLimit != null && s.callsToday >= k.dailyLimit)
+    || (k.monthlyLimit != null && s.callsMonth >= k.monthlyLimit);
 /** ms until this key's gap has passed (0 = ready). */
-const gapLeft = (k: AiKeyConfig) => Math.max(0, stateOf(k.id).lastUsed + k.gapSeconds * 1000 - Date.now());
+const gapLeft = (k: AiKeyConfig, s: KeyState) => Math.max(0, s.lastUsed + k.gapSeconds * 1000 - Date.now());
 
-function noteUse(k: AiKeyConfig) {
-    const s = stateOf(k.id);
-    s.lastUsed = Date.now();
-    s.callsToday += 1;
-    s.callsMonth += 1;
+/**
+ * Take this key for one call, or not: in ONE statement, only if it is not resting,
+ * its gap has passed and its day / month limit is not used up — and the call is
+ * counted there and then. Two servers asking at once cannot both get it.
+ */
+async function claimKey(k: AiKeyConfig): Promise<boolean> {
+    const day = businessTodayIso();
+    const month = day.slice(0, 7);
+    const now = Prisma.sql`(now() AT TIME ZONE 'UTC')`;
+    try {
+        const rows = await prismaLive.$queryRaw<{ keyId: number }[]>`
+            INSERT INTO "ai_key_usage" AS u ("keyId", "day", "callsToday", "month", "callsMonth", "lastUsedAt", "updatedAt")
+            VALUES (${k.id}, ${day}, 1, ${month}, 1, ${now}, ${now})
+            ON CONFLICT ("keyId") DO UPDATE SET
+                "callsToday" = CASE WHEN u."day" = EXCLUDED."day" THEN u."callsToday" + 1 ELSE 1 END,
+                "day" = EXCLUDED."day",
+                "callsMonth" = CASE WHEN u."month" = EXCLUDED."month" THEN u."callsMonth" + 1 ELSE 1 END,
+                "month" = EXCLUDED."month",
+                "lastUsedAt" = EXCLUDED."lastUsedAt",
+                "updatedAt" = EXCLUDED."updatedAt"
+            WHERE (u."restUntil" IS NULL OR u."restUntil" <= ${now})
+              AND (${k.gapSeconds}::int = 0 OR u."lastUsedAt" IS NULL OR u."lastUsedAt" <= ${now} - make_interval(secs => ${k.gapSeconds}::int))
+              AND (${k.dailyLimit}::int IS NULL OR u."day" <> EXCLUDED."day" OR u."callsToday" < ${k.dailyLimit}::int)
+              AND (${k.monthlyLimit}::int IS NULL OR u."month" <> EXCLUDED."month" OR u."callsMonth" < ${k.monthlyLimit}::int)
+            RETURNING "keyId"`;
+        return rows.length > 0;
+    } catch (e) {
+        usageDown(e);
+        return true;
+    }
 }
 
-function noteFailure(k: AiKeyConfig, e: unknown) {
-    const s = stateOf(k.id);
+async function noteFailure(k: AiKeyConfig, e: unknown) {
     const status = aiStatus(e);
-    s.restUntil = Date.now() + (status === 429 ? k.limitRestSeconds : k.failRestSeconds) * 1000;
-    s.lastError = aiErrorMessage(e) ?? (e instanceof Error ? e.message : String(e)).slice(0, 200);
-    s.lastErrorAt = Date.now();
+    try {
+        await prismaLive.aiKeyUsage.updateMany({
+            where: { keyId: k.id },
+            data: {
+                restUntil: new Date(Date.now() + (status === 429 ? k.limitRestSeconds : k.failRestSeconds) * 1000),
+                lastError: aiErrorMessage(e) ?? (e instanceof Error ? e.message : String(e)).slice(0, 200),
+                lastErrorAt: new Date(),
+            },
+        });
+    } catch (err) {
+        usageDown(err);
+    }
 }
 
-function noteSuccess(k: AiKeyConfig) {
-    const s = stateOf(k.id);
-    s.restUntil = 0; // a parallel call may have marked it
-    s.lastOkAt = Date.now();
+async function noteSuccess(k: AiKeyConfig) {
+    try {
+        // restUntil cleared: a parallel call may have marked it
+        await prismaLive.aiKeyUsage.updateMany({ where: { keyId: k.id }, data: { restUntil: null, lastOkAt: new Date() } });
+    } catch (e) {
+        usageDown(e);
+    }
+}
+
+/** The key's usage row goes with the key (no relation — see AiKeyUsage). */
+export async function forgetKeyUsage(id: number) {
+    try {
+        await prismaLive.aiKeyUsage.deleteMany({ where: { keyId: id } });
+    } catch (e) {
+        usageDown(e);
+    }
 }
 
 /**
  * The Test button's call, under the same gates as a real one: null = it may go
  * (and is counted now, so the next call waits its gap); otherwise why not yet.
  */
-export function claimTestCall(k: AiKeyConfig): string | null {
-    const s = stateOf(k.id);
-    const secs = (ms: number) => `${Math.ceil(ms / 1000)} s`;
-    if (resting(k)) return `Resting after a failure or limit hit — ${secs(s.restUntil - Date.now())} more`;
+export async function claimTestCall(k: AiKeyConfig): Promise<string | null> {
+    const s = (await statesOf([k.id])).get(k.id) ?? NO_USE;
+    const secs = (n: number) => `${Math.ceil(n / 1000)} s`;
+    if (resting(s)) return `Resting after a failure or limit hit — ${secs(s.restUntil - Date.now())} more`;
     if (k.dailyLimit != null && s.callsToday >= k.dailyLimit) return `Today's ${k.dailyLimit} calls are used up`;
     if (k.monthlyLimit != null && s.callsMonth >= k.monthlyLimit) return `This month's ${k.monthlyLimit} calls are used up`;
-    if (gapLeft(k) > 0) return `Wait ${secs(gapLeft(k))} — last call was ${secs(Date.now() - s.lastUsed)} ago`;
-    noteUse(k);
-    return null;
+    if (gapLeft(k, s) > 0) return `Wait ${secs(gapLeft(k, s))} — last call was ${secs(Date.now() - s.lastUsed)} ago`;
+    return (await claimKey(k)) ? null : "Another counter or the website just used this key — try again in a moment";
 }
 
 /** After the Test call: success clears a rest, a key failure starts one — as in runChain. */
-export function noteTestResult(k: AiKeyConfig, e?: unknown) {
-    if (e === undefined) noteSuccess(k);
-    else if (isKeyFailure(e)) noteFailure(k, e);
+export async function noteTestResult(k: AiKeyConfig, e?: unknown) {
+    if (e === undefined) await noteSuccess(k);
+    else if (isKeyFailure(e)) await noteFailure(k, e);
 }
 
 // ── Errors ────────────────────────────────────────────────────────────────────
@@ -245,7 +322,7 @@ export type ChainOpts = {
     wait?: boolean;
 };
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (n: number) => new Promise((r) => setTimeout(r, n));
 
 /** Keys of this step usable here (settings only — rest and gap aside), in chain order. */
 async function chainKeys({ use, step, premium }: ChainOpts): Promise<AiKeyConfig[]> {
@@ -281,38 +358,50 @@ export async function runChain<T>(
     const mayWait = opts.wait || !opts.premium;
 
     for (;;) {
-        const live = all.filter((k) => !resting(k) && !overLimit(k));
+        const states = await statesOf(all.map((k) => k.id));
+        const st = (k: AiKeyConfig) => states.get(k.id) ?? NO_USE;
+        const left = (k: AiKeyConfig) => gapLeft(k, st(k));
+        const live = all.filter((k) => !resting(st(k)) && !overLimit(k, st(k)));
         const free = live.filter((k) => !k.paid);
-        const readyFree = free.filter((k) => gapLeft(k) === 0)
-            .sort((a, b) => stateOf(a.id).lastUsed - stateOf(b.id).lastUsed || all.indexOf(a) - all.indexOf(b));
-        const readyPaid = live.filter((k) => k.paid && gapLeft(k) === 0);
+        const readyFree = free.filter((k) => left(k) === 0)
+            .sort((a, b) => st(a).lastUsed - st(b).lastUsed || all.indexOf(a) - all.indexOf(b));
+        const readyPaid = live.filter((k) => k.paid && left(k) === 0);
         // Wait for a free key rather than pay, when allowed; wait for anything rather than fail.
         const waitOn = mayWait && readyFree.length === 0 && free.length ? free
             : readyFree.length + readyPaid.length === 0 ? live : [];
         if (waitOn.length) {
-            await sleep(Math.max(50, Math.min(...waitOn.map(gapLeft))));
+            // Each wait re-reads the shared rows, so not less than half a second.
+            await sleep(Math.max(AI_USAGE_RETRY_MS, Math.min(...waitOn.map(left))));
             continue;
         }
         const order = [...readyFree, ...readyPaid];
         if (order.length === 0) break;
 
+        let claimedAny = false;
         for (const key of order) {
             const apiKey = keyValue(key);
             if (!apiKey) continue;
-            noteUse(key);
+            // Another server may have taken it since the read: try the next one.
+            if (!(await claimKey(key))) continue;
+            claimedAny = true;
             for (let attempt = 0; ; attempt++) {
                 try {
                     const result = await fn(key, apiKey, AbortSignal.timeout(key.timeoutSeconds * 1000));
-                    noteSuccess(key);
+                    await noteSuccess(key);
                     return { result, key };
                 } catch (e) {
                     if (!isKeyFailure(e)) throw e; // about this request, not the key
                     if (attempt < key.retries && aiStatus(e) !== 429) continue;
                     console.warn(`[aiKeys] ${opts.use}/${opts.step}: "${key.name}" failed (${aiStatus(e) ?? "timeout"}), trying the next key`);
-                    noteFailure(key, e);
+                    await noteFailure(key, e);
                     break;
                 }
             }
+        }
+        // Every ready key was taken by another server in between: read again and queue.
+        if (!claimedAny) {
+            await sleep(AI_USAGE_RETRY_MS);
+            continue;
         }
         break;
     }

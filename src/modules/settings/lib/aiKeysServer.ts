@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { AI_KEY_SOURCES, AI_PROVIDERS, isWebProvider } from "@/shared/lib/constants/ai";
-import { keyUsage, whyNotUsable, type AiKeyConfig } from "@/shared/lib/ai/aiKeys";
+import { whyNotUsable, type AiKeyConfig, type KeyUsage } from "@/shared/lib/ai/aiKeys";
 import { hasSharedSecret, lockSecret } from "@/shared/lib/ai/secretBox";
 
 // Settings → AI Setup API helpers (routes under /api/settings/ai-keys). A key
@@ -34,13 +34,13 @@ export const aiKeyBodySchema = z.object({
 }).refine((b) => isWebProvider(b.provider) || b.model.length > 0, { message: "Model is required", path: ["model"] });
 export type AiKeyBody = z.infer<typeof aiKeyBodySchema>;
 
-/** What the setup page gets for one key — usable/why on THIS server, and its counts here. */
-export function aiKeyView(k: AiKeyConfig) {
+/** What the setup page gets for one key — usable/why on THIS server, and its shared counts. */
+export function aiKeyView(k: AiKeyConfig, usage: KeyUsage) {
     const { secretEnc: _secret, ...rest } = k;
     return {
         ...rest,
         notUsableHere: whyNotUsable(k),
-        usage: keyUsage(k.id),
+        usage,
     };
 }
 

@@ -688,6 +688,39 @@ ALTER TABLE "ai_chain_steps" ADD COLUMN IF NOT EXISTS "position" INTEGER NOT NUL
 ALTER TABLE "ai_chain_steps" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "ai_key_usage" (
+    "keyId" INTEGER NOT NULL,
+    "day" TEXT NOT NULL,
+    "callsToday" INTEGER NOT NULL DEFAULT 0,
+    "month" TEXT NOT NULL,
+    "callsMonth" INTEGER NOT NULL DEFAULT 0,
+    "lastUsedAt" TIMESTAMP(3),
+    "restUntil" TIMESTAMP(3),
+    "lastOkAt" TIMESTAMP(3),
+    "lastError" TEXT,
+    "lastErrorAt" TIMESTAMP(3),
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ai_key_usage_pkey" PRIMARY KEY ("keyId")
+);
+ALTER TABLE "ai_key_usage" ADD COLUMN IF NOT EXISTS "keyId" INTEGER NOT NULL;
+ALTER TABLE "ai_key_usage" ADD COLUMN IF NOT EXISTS "day" TEXT NOT NULL;
+ALTER TABLE "ai_key_usage" ADD COLUMN IF NOT EXISTS "callsToday" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "ai_key_usage" ADD COLUMN IF NOT EXISTS "month" TEXT NOT NULL;
+ALTER TABLE "ai_key_usage" ADD COLUMN IF NOT EXISTS "callsMonth" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "ai_key_usage" ADD COLUMN IF NOT EXISTS "lastUsedAt" TIMESTAMP(3);
+ALTER TABLE "ai_key_usage" ALTER COLUMN "lastUsedAt" DROP NOT NULL;
+ALTER TABLE "ai_key_usage" ADD COLUMN IF NOT EXISTS "restUntil" TIMESTAMP(3);
+ALTER TABLE "ai_key_usage" ALTER COLUMN "restUntil" DROP NOT NULL;
+ALTER TABLE "ai_key_usage" ADD COLUMN IF NOT EXISTS "lastOkAt" TIMESTAMP(3);
+ALTER TABLE "ai_key_usage" ALTER COLUMN "lastOkAt" DROP NOT NULL;
+ALTER TABLE "ai_key_usage" ADD COLUMN IF NOT EXISTS "lastError" TEXT;
+ALTER TABLE "ai_key_usage" ALTER COLUMN "lastError" DROP NOT NULL;
+ALTER TABLE "ai_key_usage" ADD COLUMN IF NOT EXISTS "lastErrorAt" TIMESTAMP(3);
+ALTER TABLE "ai_key_usage" ALTER COLUMN "lastErrorAt" DROP NOT NULL;
+ALTER TABLE "ai_key_usage" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "Person" (
     "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
@@ -7854,6 +7887,13 @@ DO $$ BEGIN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "ai_keys";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "ai_keys"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."ai_key_usage"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "ai_key_usage";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "ai_key_usage"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('keyId');
     END IF;
 END $$;
 DO $$ BEGIN

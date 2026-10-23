@@ -36,6 +36,9 @@ export const AI_COPY_TEST_ENTITY = "AI_COPY_TEST";
 /** How long a server keeps the saved AI Setup before reading it again (aiKeys.ts). */
 export const AI_SETUP_CACHE_MS = 60_000;
 
+/** Least wait between two reads of the shared key usage (ai_key_usage) while a call queues for a key. */
+export const AI_USAGE_RETRY_MS = 500;
+
 /** Settings a new key starts with (seconds). Paid keys need no safety gap. */
 export const AI_KEY_DEFAULTS = {
     gapSeconds: { free: 10, paid: 0 },

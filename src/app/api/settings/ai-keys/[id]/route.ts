@@ -3,11 +3,11 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, parseIdParam, validateRequest } from "@/shared/lib/api";
-import { invalidateAiSetup } from "@/shared/lib/ai/aiKeys";
+import { forgetKeyUsage, invalidateAiSetup } from "@/shared/lib/ai/aiKeys";
 import { aiKeyBodySchema, aiKeyRowData } from "@/modules/settings/lib/aiKeysServer";
 
 // PATCH  /api/settings/ai-keys/[id] — edit a key (empty secret keeps the saved one).
-// DELETE /api/settings/ai-keys/[id] — remove it from every chain too (cascade).
+// DELETE /api/settings/ai-keys/[id] — remove it from every chain too (cascade), and its usage row.
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -38,6 +38,7 @@ export async function DELETE(_req: Request, { params }: Ctx) {
     if (idError) return idError;
     try {
         await prisma.aiKey.deleteMany({ where: { id } });
+        await forgetKeyUsage(id);
         invalidateAiSetup();
         return NextResponse.json({ ok: true });
     } catch (e) {

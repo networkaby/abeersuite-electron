@@ -3,7 +3,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
-import { invalidateAiSetup, loadAiSetup } from "@/shared/lib/ai/aiKeys";
+import { invalidateAiSetup, keyUsages, loadAiSetup } from "@/shared/lib/ai/aiKeys";
 import { hasSharedSecret } from "@/shared/lib/ai/secretBox";
 import { aiKeyBodySchema, aiKeyRowData, aiKeyView } from "@/modules/settings/lib/aiKeysServer";
 
@@ -18,8 +18,9 @@ export async function GET() {
     try {
         invalidateAiSetup(); // the page always sees the saved rows
         const { keys, chains, copyFlow, photoCheck } = await loadAiSetup();
+        const usage = await keyUsages(keys.map((k) => k.id));
         return NextResponse.json({
-            keys: keys.map(aiKeyView),
+            keys: keys.map((k) => aiKeyView(k, usage.get(k.id)!)),
             chains,
             copyFlow,
             photoCheck,
