@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Megaphone, Plus, Ticket } from "lucide-react";
+import { Check, Megaphone, Plus, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
-import { CAMPAIGN_CHANNELS, CAMPAIGN_STATUSES, type CampaignRow } from "@/modules/campaigns/lib/campaign";
+import { CAMPAIGN_CHANNELS, CAMPAIGN_POST_PLACES, CAMPAIGN_STATUSES, type CampaignRow } from "@/modules/campaigns/lib/campaign";
 import CampaignEditor from "./CampaignEditor";
 
 const STATUS_TONE: Record<string, string> = {
@@ -56,7 +56,7 @@ export default function CampaignsClient() {
                         <div>
                             <h1 className="text-xl font-semibold leading-tight">Campaigns</h1>
                             <p className="text-sm text-muted-foreground">
-                                A greeting or an offer for many customers at once, as an app notification. A campaign can carry a coupon from Retention.
+                                A greeting or an offer for many customers at once, as an app notification, and a photo to share on WhatsApp Status and Channel. A campaign can carry a coupon from Retention.
                             </p>
                         </div>
                     </div>
@@ -90,6 +90,11 @@ export default function CampaignsClient() {
                                             {labelOf(CAMPAIGN_STATUSES, c.status)}
                                         </Badge>
                                         <span className="text-xs text-muted-foreground">{labelOf(CAMPAIGN_CHANNELS, c.channel)}</span>
+                                        {CAMPAIGN_POST_PLACES.filter((p) => c.posts.some((x) => x.place === p.value)).map((p) => (
+                                            <span key={p.value} className="inline-flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-400">
+                                                <Check size={12} /> {p.label}
+                                            </span>
+                                        ))}
                                         {c.coupon && (
                                             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                                                 <Ticket size={12} /> {c.coupon.code ?? c.coupon.name}
@@ -124,6 +129,7 @@ export default function CampaignsClient() {
                         setEditing(null);
                         load();
                     }}
+                    onChanged={load}
                 />
             )}
         </ScrollArea>

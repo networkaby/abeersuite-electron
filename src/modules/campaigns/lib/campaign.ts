@@ -52,6 +52,36 @@ export function campaignBody(body: string, couponCode: string | null): string {
     return `${body}\nCode: ${couponCode}`;
 }
 
+/**
+ * Where staff put a campaign up by hand. Meta's API cannot post a Status or a
+ * Channel update, so the office prepares the photo and caption and a phone
+ * shares them. Status goes from the company number (needs WhatsApp coexistence);
+ * a Channel from any of its admins' phones.
+ */
+export const CAMPAIGN_POST_PLACES = [
+    { value: "WA_STATUS", label: "WhatsApp Status", hint: "Share from the company phone, in the WhatsApp Business app → My status." },
+    { value: "WA_CHANNEL", label: "WhatsApp Channel", hint: "Share from any channel admin's phone and pick our channel." },
+] as const;
+
+export type CampaignPostPlace = (typeof CAMPAIGN_POST_PLACES)[number]["value"];
+
+/** What WhatsApp Status and Channels take: a photo, or an MP4 video up to 16 MB. */
+export const CAMPAIGN_MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp", "video/mp4"] as const;
+export const CAMPAIGN_MEDIA_MAX_BYTES = 16 * 1024 * 1024;
+
+export function checkCampaignMedia(type: string, size: number): string | null {
+    if (!(CAMPAIGN_MEDIA_TYPES as readonly string[]).includes(type)) return "Use a JPG, PNG or WebP photo, or an MP4 video.";
+    if (size <= 0) return "Empty file.";
+    if (size > CAMPAIGN_MEDIA_MAX_BYTES) return "Too large for WhatsApp Status — keep it under 16 MB.";
+    return null;
+}
+
+/** The Status / Channel caption: title, message (with the coupon code) and the shop link. */
+export function campaignCaption(c: { title: string; body: string; url: string | null }, couponCode: string | null, shopSite: string): string {
+    const link = `${shopSite}${c.url ?? ""}`;
+    return [c.title, campaignBody(c.body, couponCode), link].filter(Boolean).join("\n\n");
+}
+
 export const CAMPAIGN_SELECT = {
     id: true,
     name: true,
@@ -67,6 +97,11 @@ export const CAMPAIGN_SELECT = {
     createdAt: true,
     updatedAt: true,
     createdBy: { select: { name: true } },
+    mediaKey: true,
+    mediaType: true,
+    mediaName: true,
+    mediaSize: true,
+    posts: { select: { id: true, place: true, postedAt: true, postedByName: true }, orderBy: { postedAt: "desc" } },
 } as const;
 
 export type CampaignRow = {
@@ -86,4 +121,12 @@ export type CampaignRow = {
     createdBy: { name: string } | null;
     /** Sent campaigns only: customers messaged, reached, shown on the phone, tapped. */
     stats?: { customers: number; reached: number; shown: number; tapped: number } | null;
+    mediaKey: string | null;
+    mediaType: string | null;
+    mediaName: string | null;
+    mediaSize: number | null;
+    /** Signed links to the Status / Channel file: to show it, and to download it. */
+    mediaUrl?: string | null;
+    mediaDownloadUrl?: string | null;
+    posts: { id: number; place: string; postedAt: string; postedByName: string | null }[];
 };

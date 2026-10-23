@@ -28,7 +28,30 @@ model Campaign {
   createdBy   User?     @relation("CampaignCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  /// The photo / video staff share to WhatsApp Status or Channel (private R2,
+  /// same bucket as chat attachments, key "campaigns/<id>/..."). Meta has no API
+  /// for Status or Channel, so the share is by hand from a phone; see CampaignPost.
+  mediaKey    String?
+  mediaType   String?
+  mediaName   String?
+  mediaSize   Int?
+  posts       CampaignPost[]
 
   @@index([status, createdAt])
   @@index([couponId])
+}
+
+/// A staff note that this campaign was put up by hand on WhatsApp Status or a
+/// WhatsApp Channel (owner, 2026-10-23). `place` "WA_STATUS" | "WA_CHANNEL".
+/// Who posted is a name snapshot, not a User relation — a log line, nothing hangs on it.
+model CampaignPost {
+  id           Int      @id @default(autoincrement())
+  campaignId   Int
+  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  place        String
+  postedById   Int?
+  postedByName String?
+  postedAt     DateTime @default(now())
+
+  @@index([campaignId, postedAt])
 }

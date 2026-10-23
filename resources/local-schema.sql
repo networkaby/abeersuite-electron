@@ -1041,6 +1041,10 @@ CREATE TABLE IF NOT EXISTS "Campaign" (
     "createdById" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "mediaKey" TEXT,
+    "mediaType" TEXT,
+    "mediaName" TEXT,
+    "mediaSize" INTEGER,
 
     CONSTRAINT "Campaign_pkey" PRIMARY KEY ("id")
 );
@@ -1061,6 +1065,34 @@ ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "createdById" INTEGER;
 ALTER TABLE "Campaign" ALTER COLUMN "createdById" DROP NOT NULL;
 ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "mediaKey" TEXT;
+ALTER TABLE "Campaign" ALTER COLUMN "mediaKey" DROP NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "mediaType" TEXT;
+ALTER TABLE "Campaign" ALTER COLUMN "mediaType" DROP NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "mediaName" TEXT;
+ALTER TABLE "Campaign" ALTER COLUMN "mediaName" DROP NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "mediaSize" INTEGER;
+ALTER TABLE "Campaign" ALTER COLUMN "mediaSize" DROP NOT NULL;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "CampaignPost" (
+    "id" SERIAL NOT NULL,
+    "campaignId" INTEGER NOT NULL,
+    "place" TEXT NOT NULL,
+    "postedById" INTEGER,
+    "postedByName" TEXT,
+    "postedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "CampaignPost_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "CampaignPost" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "CampaignPost" ADD COLUMN IF NOT EXISTS "campaignId" INTEGER NOT NULL;
+ALTER TABLE "CampaignPost" ADD COLUMN IF NOT EXISTS "place" TEXT NOT NULL;
+ALTER TABLE "CampaignPost" ADD COLUMN IF NOT EXISTS "postedById" INTEGER;
+ALTER TABLE "CampaignPost" ALTER COLUMN "postedById" DROP NOT NULL;
+ALTER TABLE "CampaignPost" ADD COLUMN IF NOT EXISTS "postedByName" TEXT;
+ALTER TABLE "CampaignPost" ALTER COLUMN "postedByName" DROP NOT NULL;
+ALTER TABLE "CampaignPost" ADD COLUMN IF NOT EXISTS "postedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "Coupon" (
@@ -5317,6 +5349,9 @@ CREATE INDEX IF NOT EXISTS "Campaign_status_createdAt_idx" ON "Campaign"("status
 CREATE INDEX IF NOT EXISTS "Campaign_couponId_idx" ON "Campaign"("couponId");
 
 -- CreateIndex
+CREATE INDEX IF NOT EXISTS "CampaignPost_campaignId_postedAt_idx" ON "CampaignPost"("campaignId", "postedAt");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "Coupon_code_key" ON "Coupon"("code");
 
 -- CreateIndex
@@ -6226,6 +6261,13 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "Campaign" ADD CONSTRAINT "Campaign_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "CampaignPost" ADD CONSTRAINT "CampaignPost_campaignId_fkey" FOREIGN KEY ("campaignId") REFERENCES "Campaign"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -7998,6 +8040,13 @@ DO $$ BEGIN
     IF to_regclass('public."Campaign"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "Campaign";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Campaign"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."CampaignPost"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "CampaignPost";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "CampaignPost"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;

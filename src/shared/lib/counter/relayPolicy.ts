@@ -70,6 +70,8 @@ const LOCAL_WHEN_KEYED: readonly { path: RegExp; keys: readonly string[]; any?: 
     },
     // WhatsApp attachment: signs an R2 upload URL; the browser uploads straight to R2.
     { path: /^\/api\/messages\/upload-url$/, keys: ["CLOUDFLARE_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"] },
+    // Campaign Status / Channel photo: same — signs only; attaching it (…/media) relays.
+    { path: /^\/api\/campaigns\/\d+\/media\/upload-url$/, keys: ["CLOUDFLARE_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"] },
 ];
 
 const hasEnv = (k: string) => !!process.env[k]?.trim();
