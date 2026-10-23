@@ -203,7 +203,7 @@ export const COMPANY_DETAILS: CompanyDetails = {
 
     tax: {
         gstin: "18AXEPJ4673R1ZO",
-        pan: "AXEPJR673R",
+        pan: "AXEPJ4673R",
     },
 
     logoUrl: "/logo.svg",
