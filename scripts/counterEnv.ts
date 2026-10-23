@@ -162,18 +162,6 @@ export function counterEnvCopiedFor(mode: AppMode): readonly string[] {
 }
 
 /**
- * Fixed values, identical on every counter, so they are written rather than copied.
- *
- * Keeping them out of the build machine's `.env` means a counter cannot inherit a value
- * that only made sense for the hosted deployment.
- */
-export const COUNTER_ENV_CONSTANTS: Readonly<Record<string, string>> = {
-    // next-auth v5 refuses to trust a host it cannot verify unless this is set, and the
-    // counter serves itself on http://127.0.0.1:3000 rather than on Vercel.
-    AUTH_TRUST_HOST: "true",
-};
-
-/**
  * Keys whose absence produces a working-looking app that fails later, in a way that
  * points at something else entirely. Missing either one fails the build.
  */
@@ -185,7 +173,7 @@ export const COUNTER_ENV_REQUIRED: readonly string[] = [
 /** Every key the packaged file is allowed to contain, for the given variant. Used by
  *  `verify-package.ts`'s packaging gate. */
 export function counterEnvAllowedFor(mode: AppMode): ReadonlySet<string> {
-    return new Set([...counterEnvCopiedFor(mode), ...Object.keys(COUNTER_ENV_CONSTANTS)]);
+    return new Set(counterEnvCopiedFor(mode));
 }
 
 /**

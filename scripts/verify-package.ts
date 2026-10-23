@@ -85,7 +85,6 @@ const NON_SECRET_KEYS = new Set([
     // bundle as COMPANY_DETAILS.sites.office, so the scanner would otherwise flag it.
     "WRITE_API_URL",
     "COUNTER_PC",
-    "AUTH_TRUST_HOST",
     "AUTH_URL",
     "NEXTAUTH_URL",
     "PORT",

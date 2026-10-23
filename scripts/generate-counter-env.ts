@@ -16,7 +16,6 @@
 import * as fs from "fs";
 import * as path from "path";
 import {
-    COUNTER_ENV_CONSTANTS,
     COUNTER_ENV_FILE,
     COUNTER_ENV_REQUIRED,
     counterEnvCopiedFor,
@@ -90,9 +89,6 @@ function main(): void {
         const value = (source.get(key) ?? process.env[key] ?? "").trim();
         if (value) written.set(key, value);
         else skipped.push(key);
-    }
-    for (const [key, value] of Object.entries(COUNTER_ENV_CONSTANTS)) {
-        written.set(key, value);
     }
 
     // The office's session secret never ships. Every machine generates its own
