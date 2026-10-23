@@ -54,10 +54,10 @@ const pill = (on: boolean) =>
  * per-channel Share / Done appear below. A time puts it on the calendar as
  * Scheduled; no time keeps it a draft to share whenever.
  */
-export default function PostComposer({ postId }: { postId: number | null }) {
+export default function PostComposer({ postId, startAt = null }: { postId: number | null; startAt?: string | null }) {
     const router = useRouter();
     const [post, setPost] = useState<PostRow | null>(null);
-    const [form, setForm] = useState<Form>(blank);
+    const [form, setForm] = useState<Form>(() => ({ ...blank, scheduledAt: toLocalInput(startAt) }));
     const [campaigns, setCampaigns] = useState<{ value: number; label: string }[]>([]);
     const [loading, setLoading] = useState(postId !== null);
     const [saving, setSaving] = useState(false);
