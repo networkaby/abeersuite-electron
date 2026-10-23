@@ -70,6 +70,8 @@ function saveAll(full) {
 /** One accessor pair per top-level key, matching what the modules expect. */
 function makeAccessors(key) {
     return {
+        // Writable folder beside the config, for what a module keeps on disk.
+        dataDir: path.dirname(configPath()),
         getConfig: () => loadAll()[key] || {},
         setConfig: (partial) => {
             const full = loadAll();

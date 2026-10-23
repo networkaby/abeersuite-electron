@@ -23,6 +23,7 @@ import { fetchCurrentShift } from "@/modules/pos/lib/currentShift";
 import { type TenderSplit } from "@/modules/pos/components/TenderSplitInput";
 import { usePosAccess } from "@/modules/pos/hooks/usePosAccess";
 import { usePosCustomerDisplay } from "@/modules/pos/hooks/usePosCustomerDisplay";
+import { usePosDisplaySlides } from "@/modules/pos/hooks/usePosDisplaySlides";
 import { qrDisplay } from "@/modules/pos/lib/qrDisplay";
 import { DEFAULT_PAYEE_NAME } from "@/modules/pos/lib/paymentLink";
 import { formatInr, parseDigitsInput, round2 } from "@/shared/lib/format";
@@ -453,6 +454,9 @@ export function usePosBilling(opts: {
     useEffect(() => {
         return () => { void qrDisplay.idle(); };
     }, []);
+
+    // Offer-product slides for that slideshow, refreshed every few hours.
+    usePosDisplaySlides();
 
     // ── Computed ────────────────────────────────────────────────────────────
 

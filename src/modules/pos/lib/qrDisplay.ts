@@ -9,6 +9,7 @@
 // `bridgeRequest`, which throws so a failed receipt can be reported.
 
 import { bridgeSend, bridgeRequest } from "@/shared/lib/bridge/hardwareBridge";
+import type { QrSlideProduct } from "@/modules/pos/lib/qrSlides";
 
 /**
  * Display command that needs an answer — the settings page (config, COM ports, test
@@ -103,5 +104,7 @@ export const qrDisplay = {
     product:  (data: QrProduct)  => send("pos/product",  data),
     thankyou: (data: QrThankyou) => send("pos/thankyou", data),
     idle:     ()                 => send("idle/start",   {}),
+    /// Offer products for the idle slideshow — the bridge draws and keeps them.
+    products: (products: QrSlideProduct[]) => send("idle/products", { products }),
     clear:    ()                 => send("clear",        {}),
 };

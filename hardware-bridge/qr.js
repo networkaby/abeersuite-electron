@@ -27,6 +27,10 @@ const IDLE_RETRY_MS = 60_000;
 const fmt = (n) =>
     Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** Whole rupees without ".00" — for prices on a card, where every pixel counts. */
+const fmtPrice = (n) =>
+    Number.isInteger(Number(n)) ? Number(n).toLocaleString("en-IN") : fmt(n);
+
 const escapeXml = (s) =>
     String(s).replace(/[<>&"']/g, (c) => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;", '"':"&quot;", "'":"&apos;" }[c]));
 
@@ -318,20 +322,67 @@ async function fetchImageBuffer(url) {
     }
 }
 
-async function renderProduct({ name, price = 0, mrp, image }) {
-    const photoH = 300;
-    const cardH  = HEIGHT - photoH;
+/** Word-wrap into at most `maxLines` lines of `width` characters; "…" when it runs over. */
+function wrapLines(text, width, maxLines) {
+    const words = String(text || "").trim().split(/\s+/).filter(Boolean);
+    const lines = [];
+    let cur = "";
+    for (let i = 0; i < words.length; i++) {
+        const w = words[i].length > width ? words[i].slice(0, width - 1) + "…" : words[i];
+        const next = cur ? `${cur} ${w}` : w;
+        if (next.length <= width) { cur = next; continue; }
+        lines.push(cur);
+        cur = w;
+        if (lines.length === maxLines) {
+            const last = lines[maxLines - 1];
+            lines[maxLines - 1] = (last.length > width - 1 ? last.slice(0, width - 1) : last) + "…";
+            return lines;
+        }
+    }
+    if (cur) lines.push(cur);
+    return lines.length ? lines : [""];
+}
+
+async function renderProduct(payload) {
+    const { png } = await renderProductPng(payload);
+    return canvasToRgb(png);
+}
+
+/**
+ * The product card as a full-screen PNG, plus whether the photo made it in. The
+ * hover preview sends it straight away; the idle slideshow keeps it on disk
+ * (`tagline` there is the saving or the shop badge, not "Ask us to add it!").
+ */
+async function renderProductPng({ name, price = 0, mrp, image, tagline = "Ask us to add it!", offer = "" }) {
     const showMrp = mrp != null && mrp > price;
+
+    // Text rows top-down; the card is as tall as they need and the photo takes the rest.
+    const rows = [];
+    let y = 8;
+    for (const line of wrapLines(name, 28, 2)) {
+        y += 22;
+        rows.push(`<text x="10" y="${y}" font-family="sans-serif" font-size="17" font-weight="bold" fill="#000">${escapeXml(line)}</text>`);
+    }
+    if (showMrp) {
+        y += 24;
+        rows.push(`<text x="10" y="${y}" font-family="sans-serif" font-size="13" fill="#999" text-decoration="line-through">MRP ₹${fmtPrice(mrp)}</text>`);
+    }
+    if (offer) {
+        y += 26;
+        rows.push(`<text x="10" y="${y}" font-family="sans-serif" font-size="16" font-weight="bold" fill="#0a7e3d">${escapeXml(String(offer).slice(0, 34))}</text>`);
+    }
+    const barH   = 60;
+    const cardH  = y + 14 + barH;
+    const photoH = HEIGHT - cardH;
 
     const cardSvg = `
       <svg width="${WIDTH}" height="${cardH}" xmlns="http://www.w3.org/2000/svg">
         <rect width="100%" height="100%" fill="#fff"/>
         <line x1="0" y1="0" x2="${WIDTH}" y2="0" stroke="#eee"/>
-        <text x="10" y="34" font-family="sans-serif" font-size="18" font-weight="bold" fill="#000">${escapeXml(String(name || "").slice(0, 26))}</text>
-        ${showMrp ? `<text x="10" y="62" font-family="sans-serif" font-size="13" fill="#999" text-decoration="line-through">MRP ₹${fmt(mrp)}</text>` : ""}
-        <rect x="0" y="${cardH - 66}" width="${WIDTH}" height="66" fill="#7c3aed"/>
-        <text x="10" y="${cardH - 24}" font-family="sans-serif" font-size="26" font-weight="bold" fill="#fff">₹${fmt(price)}</text>
-        <text x="${WIDTH - 10}" y="${cardH - 24}" font-family="sans-serif" font-size="12" fill="#e9d5ff" text-anchor="end">Ask us to add it!</text>
+        ${rows.join("\n        ")}
+        <rect x="0" y="${cardH - barH}" width="${WIDTH}" height="${barH}" fill="#7c3aed"/>
+        <text x="10" y="${cardH - 20}" font-family="sans-serif" font-size="26" font-weight="bold" fill="#fff">₹${fmtPrice(price)}</text>
+        <text x="${WIDTH - 10}" y="${cardH - 22}" font-family="sans-serif" font-size="12" fill="#e9d5ff" text-anchor="end">${escapeXml(String(tagline || "").slice(0, 24))}</text>
       </svg>`;
     const cardPng = await sharp(Buffer.from(cardSvg)).png().toBuffer();
 
@@ -360,7 +411,7 @@ async function renderProduct({ name, price = 0, mrp, image }) {
         .png()
         .toBuffer();
 
-    return canvasToRgb(composed);
+    return { png: composed, hasPhoto: !!photoPng };
 }
 
 async function renderThankyou({ amount, message }) {
@@ -446,7 +497,7 @@ function listComPorts() {
 
 // ── start() — boots the QR display Express app ───────────────────────────────
 
-function start({ getConfig, setConfig }) {
+function start({ getConfig, setConfig, dataDir = __dirname }) {
     // ── Display pipeline ──────────────────────────────────────────────────────
     //
     // One picture takes ~3.3 s to go out (307,200 bytes at 921,600 baud), so a cashier
@@ -465,7 +516,7 @@ function start({ getConfig, setConfig }) {
     /** Resolves true once the picture has gone out, false if a newer one replaced it. */
     async function display(rgbBuffer, { repeat = false } = {}) {
         const cfg = getConfig();
-        if (!cfg.comPort) throw new Error("comPort not configured. Edit config.json or POST /config.");
+        if (!cfg.comPort) throw new Error("No COM port set — choose one in Settings → QR Display.");
         const bytes = rgb888BufferToDq11Bytes(rgbBuffer);
         return new Promise((resolve, reject) => {
             if (waiting) waiting.resolve(false);
@@ -532,9 +583,11 @@ function start({ getConfig, setConfig }) {
     // schedule the next advert — that painted the slideshow over a cart or UPI QR.
     let idleRun     = 0;
 
-    function loadIdleFiles() {
-        const cfg = getConfig();
-        const folder = resolveIdleFolder(cfg);
+    // True from startIdle until a POS screen (or Clear) takes the display.
+    let idleActive  = false;
+
+    function loadFolderPhotos() {
+        const folder = resolveIdleFolder(getConfig());
         if (!fs.existsSync(folder)) return [];
         try {
             return fs.readdirSync(folder)
@@ -546,7 +599,146 @@ function start({ getConfig, setConfig }) {
         }
     }
 
+    /** Folder photos and product slides, taking turns: photo, product, photo, … */
+    function loadIdleFiles() {
+        const photos   = loadFolderPhotos();
+        const products = productSlideFiles();
+        const out = [];
+        for (let i = 0; i < Math.max(photos.length, products.length); i++) {
+            if (i < photos.length)   out.push(photos[i]);
+            if (i < products.length) out.push(products[i]);
+        }
+        return out;
+    }
+
+    /** New slides reach a running slideshow without interrupting it. */
+    function refreshIdleFiles() {
+        if (!idleActive) return;
+        const wasEmpty = idleFiles.length === 0;
+        // A slide redrawn at the same path deserves a fresh try.
+        badFiles.clear();
+        idleFiles = loadIdleFiles();
+        // An empty slideshow showed the welcome card once and stopped — start it again.
+        if (wasEmpty && idleFiles.length > 0) startIdle();
+    }
+
+    // ── Product slides ───────────────────────────────────────────────────────
+    //
+    // The counter app hands over the shop's offer products (`idle/products`, from
+    // /api/pos/display-slides) a few times a day. Each is drawn once into
+    // <dataDir>/qr-slides/p-<id>.png and redrawn only when its name, price, MRP,
+    // badge or photo link changes — or when its photo could not be fetched last
+    // time. The list is kept in manifest.json, so the slides keep playing after a
+    // restart with the internet down or the POS screen closed. Settings:
+    // idleProducts (on unless false) and idleProductsMax (default 20).
+
+    const slidesDir    = path.join(dataDir, "qr-slides");
+    const manifestPath = path.join(slidesDir, "manifest.json");
+
+    function readManifest() {
+        try {
+            const m = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+            return { products: Array.isArray(m.products) ? m.products : [], drawn: m.drawn || {} };
+        } catch {
+            return { products: [], drawn: {} };
+        }
+    }
+
+    function writeManifest(m) {
+        fs.mkdirSync(slidesDir, { recursive: true });
+        fs.writeFileSync(manifestPath, JSON.stringify(m), "utf8");
+    }
+
+    function wantedProducts(products) {
+        const cfg = getConfig();
+        if (cfg.idleProducts === false) return [];
+        const max = Math.max(0, Math.min(50, Number(cfg.idleProductsMax) || 20));
+        return products.slice(0, max);
+    }
+
+    /** The drawn slide files for the products the settings allow, in list order. */
+    function productSlideFiles() {
+        const m = readManifest();
+        return wantedProducts(m.products)
+            .map((p) => m.drawn[p.id] && path.join(slidesDir, m.drawn[p.id].file))
+            .filter((f) => f && fs.existsSync(f));
+    }
+
+    const slideSig = (p) => JSON.stringify([p.name, p.price, p.mrp, p.badge, p.image]);
+
+    function slideTagline(p) {
+        if (p.mrp != null && p.mrp > p.price) {
+            const pct = Math.round(((p.mrp - p.price) / p.mrp) * 100);
+            return pct >= 1 ? `Save ₹${fmtPrice(p.mrp - p.price)} (${pct}% off)` : `Save ₹${fmtPrice(p.mrp - p.price)}`;
+        }
+        return p.badge || "Available here";
+    }
+
+    let slidesSyncing = null;
+    let slidesAgain   = false;
+
+    /** Draw what is missing or changed, delete what is no longer wanted. One run at a time. */
+    function syncProductSlides() {
+        if (slidesSyncing) { slidesAgain = true; return slidesSyncing; }
+        slidesSyncing = (async () => {
+            do {
+                slidesAgain = false;
+                const m = readManifest();
+                const wanted = wantedProducts(m.products);
+                let drawn = 0;
+                for (const p of wanted) {
+                    const sig  = slideSig(p);
+                    const prev = m.drawn[p.id];
+                    if (prev && prev.sig === sig && prev.hasPhoto && fs.existsSync(path.join(slidesDir, prev.file))) continue;
+                    try {
+                        const { png, hasPhoto } = await renderProductPng({ ...p, offer: slideTagline(p), tagline: "Ask at the counter" });
+                        const file = `p-${p.id}.png`;
+                        fs.mkdirSync(slidesDir, { recursive: true });
+                        fs.writeFileSync(path.join(slidesDir, file), png);
+                        m.drawn[p.id] = { sig, file, hasPhoto };
+                        drawn++;
+                    } catch (e) {
+                        console.error(`[qr:slides] could not draw product ${p.id}:`, e.message);
+                    }
+                }
+                // Products that dropped off the list (or past the max) lose their file.
+                const keep = new Set(wanted.map((p) => String(p.id)));
+                for (const id of Object.keys(m.drawn)) {
+                    if (keep.has(id)) continue;
+                    try { fs.rmSync(path.join(slidesDir, m.drawn[id].file), { force: true }); } catch { /* next run */ }
+                    delete m.drawn[id];
+                }
+                // Re-read the list: a newer one may have landed while this run drew.
+                writeManifest({ products: readManifest().products, drawn: m.drawn });
+                if (drawn > 0) console.log(`[qr:slides] drew ${drawn} product slide(s); ${wanted.length} in the slideshow`);
+                refreshIdleFiles();
+            } while (slidesAgain);
+        })()
+            .catch((e) => console.error("[qr:slides]", e.message))
+            .finally(() => { slidesSyncing = null; });
+        return slidesSyncing;
+    }
+
+    function setProducts(products) {
+        const clean = (Array.isArray(products) ? products : [])
+            .filter((p) => p && Number.isInteger(p.id) && p.name && Number(p.price) > 0)
+            .slice(0, 50)
+            .map((p) => ({
+                id:    p.id,
+                name:  String(p.name),
+                price: Number(p.price),
+                mrp:   p.mrp != null ? Number(p.mrp) : null,
+                badge: p.badge ? String(p.badge) : null,
+                image: typeof p.image === "string" ? p.image : null,
+            }));
+        const m = readManifest();
+        m.products = clean;
+        writeManifest(m);
+        return syncProductSlides();
+    }
+
     function stopIdle() {
+        idleActive = false;
         idleRun++;
         if (idleTimer)   { clearTimeout(idleTimer);   idleTimer   = null; }
         if (resumeTimer) { clearTimeout(resumeTimer); resumeTimer = null; }
@@ -597,6 +789,7 @@ function start({ getConfig, setConfig }) {
             console.log("[qr:idle] no COM port set — slideshow off");
             return;
         }
+        idleActive = true;
         idleFiles = loadIdleFiles();
         idleIndex = 0;
         badFiles.clear();
@@ -632,7 +825,7 @@ function start({ getConfig, setConfig }) {
                 ok:       true,
                 comPort:  cfg.comPort,
                 baudRate: cfg.baudRate || 921600,
-                idle:     { running: !!idleTimer, files: idleFiles.length },
+                idle:     { running: !!idleTimer, files: idleFiles.length, products: productSlideFiles().length },
             };
         },
 
@@ -648,6 +841,7 @@ function start({ getConfig, setConfig }) {
                 displayDown = null;
                 startIdle();
             }
+            if (["idleProducts", "idleProductsMax"].some((k) => updated[k] !== before[k])) void syncProductSlides();
             return { ok: true, config: updated };
         },
 
@@ -710,6 +904,13 @@ function start({ getConfig, setConfig }) {
             const cfg = getConfig();
             await showActive(await renderThankyou(payload || {}),
                 { resumeIdleInMs: Number(cfg.thankyouDurationMs) || 4000 });
+            return { ok: true };
+        },
+
+        // The shop's offer products, from the counter app. Answers at once; drawing
+        // happens in the background and joins the slideshow when each run finishes.
+        "idle/products": async (payload) => {
+            void setProducts(payload?.products);
             return { ok: true };
         },
 
@@ -777,6 +978,8 @@ function start({ getConfig, setConfig }) {
     }
     console.log(`[qr] idle folder: ${resolveIdleFolder(getConfig())}`);
     startIdle();
+    // Slides from the last list: missing ones redrawn, the rest need no network.
+    void syncProductSlides();
 }
 
 /**

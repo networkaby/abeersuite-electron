@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { BridgeNotRunningNotice } from "@/modules/settings/components/BridgeNotRunningNotice";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { NumericInput } from "@/shared/components/NumericInput";
+import { QR_SLIDE_PRODUCTS_DEFAULT, QR_SLIDE_PRODUCTS_MAX } from "@/modules/pos/lib/qrSlides";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { qrRequest } from "@/modules/pos/lib/qrDisplay";
@@ -21,6 +24,9 @@ interface RelayConfig {
     idleFolder:         string;
     idleIntervalMs:     number;
     thankyouDurationMs: number;
+    /** Offer products in the slideshow — on unless false. */
+    idleProducts:       boolean;
+    idleProductsMax:    number;
 }
 
 interface PortInfo {
@@ -36,7 +42,12 @@ const DEFAULT: RelayConfig = {
     idleFolder:         "",
     idleIntervalMs:     5000,
     thankyouDurationMs: 4000,
+    idleProducts:       true,
+    idleProductsMax:    QR_SLIDE_PRODUCTS_DEFAULT,
 };
+
+/** A NumericInput string → the number to save; blank goes back to the default. */
+const num = (v: string, fallback: number) => (v === "" ? fallback : Number(v));
 
 export default function QrDisplaySettingsPage() {
     const [relayUp,      setRelayUp]      = useState<boolean | null>(null);
@@ -251,9 +262,11 @@ export default function QrDisplaySettingsPage() {
 
                     <div className="space-y-1.5">
                         <Label>Baud Rate</Label>
-                        <Input
-                            value={config.baudRate}
-                            onChange={(e) => setConfig((c) => ({ ...c, baudRate: Number(e.target.value) || 921600 }))}
+                        <NumericInput
+                            value={String(config.baudRate)}
+                            min={1200}
+                            max={4000000}
+                            onValueChange={(v) => setConfig((c) => ({ ...c, baudRate: num(v, DEFAULT.baudRate) }))}
                         />
                         <p className="text-xs text-muted-foreground">DQ11 expects 921600. Don&apos;t change unless you have a different display.</p>
                     </div>
@@ -283,19 +296,51 @@ export default function QrDisplaySettingsPage() {
                             just put the advert photos in it. Use Browse to pick a different folder anywhere on the PC.
                         </p>
                     </div>
+                    <div className="flex items-start justify-between gap-3 rounded-md border border-border p-3">
+                        <div className="space-y-0.5">
+                            <Label htmlFor="qr-idle-products">Show offer products</Label>
+                            <p className="text-xs text-muted-foreground">
+                                Shop products priced below MRP or with a shop badge, biggest saving first — photo, price
+                                and saving, taking turns with the photos above. Refreshed from the shop every few hours
+                                while the POS is open.
+                            </p>
+                        </div>
+                        <Switch
+                            id="qr-idle-products"
+                            checked={config.idleProducts !== false}
+                            onCheckedChange={(on) => setConfig((c) => ({ ...c, idleProducts: on }))}
+                        />
+                    </div>
+                    {config.idleProducts !== false && (
+                        <div className="space-y-1.5">
+                            <Label>Most products to show</Label>
+                            <NumericInput
+                                value={String(config.idleProductsMax ?? QR_SLIDE_PRODUCTS_DEFAULT)}
+                                min={1}
+                                max={QR_SLIDE_PRODUCTS_MAX}
+                                onValueChange={(v) => setConfig((c) => ({ ...c, idleProductsMax: num(v, QR_SLIDE_PRODUCTS_DEFAULT) }))}
+                            />
+                        </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                            <Label>Slide Interval (ms)</Label>
-                            <Input
-                                value={config.idleIntervalMs}
-                                onChange={(e) => setConfig((c) => ({ ...c, idleIntervalMs: Number(e.target.value) || 5000 }))}
+                            <Label>Each slide (seconds)</Label>
+                            <NumericInput
+                                mode="decimal"
+                                value={String(config.idleIntervalMs / 1000)}
+                                min={1}
+                                max={120}
+                                onValueChange={(v) => setConfig((c) => ({ ...c, idleIntervalMs: Math.round(num(v, DEFAULT.idleIntervalMs / 1000) * 1000) }))}
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Thank-You Hold (ms)</Label>
-                            <Input
-                                value={config.thankyouDurationMs}
-                                onChange={(e) => setConfig((c) => ({ ...c, thankyouDurationMs: Number(e.target.value) || 4000 }))}
+                            <Label>Thank-you stays (seconds)</Label>
+                            <NumericInput
+                                mode="decimal"
+                                value={String(config.thankyouDurationMs / 1000)}
+                                min={1}
+                                max={60}
+                                onValueChange={(v) => setConfig((c) => ({ ...c, thankyouDurationMs: Math.round(num(v, DEFAULT.thankyouDurationMs / 1000) * 1000) }))}
                             />
                         </div>
                     </div>
