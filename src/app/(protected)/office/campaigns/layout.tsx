@@ -1,5 +1,6 @@
 import { makePermissionLayout } from "@/shared/lib/auth/makePermissionLayout";
-import { sidebarChildPermissionId } from "@/shared/lib/auth/sidebarModules";
+import { SIDEBAR_MODULES } from "@/shared/lib/auth/sidebarModules";
 
-// Opens on the Campaigns sidebar link; writing campaigns rides the same tick.
-export default makePermissionLayout([sidebarChildPermissionId("campaigns", "campaigns")]);
+// Any one Campaigns sidebar tick opens the folder; each page is then locked by its
+// own tick in proxy.ts (pageAccess.ts), so Compose alone does not open Broadcast.
+export default makePermissionLayout(SIDEBAR_MODULES.find((m) => m.key === "campaigns")?.childPermissionIds ?? []);

@@ -3,9 +3,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { CAMPAIGN_SELECT, campaignSchema } from "@/modules/campaigns/lib/campaign";
 import { requireCampaignsPage } from "@/modules/campaigns/lib/campaignAccess";
-import { campaignStats } from "@/modules/campaigns/lib/sendCampaign";
-import { withMediaLinks } from "@/modules/campaigns/lib/campaignMedia";
-import { hasPermission } from "@/shared/lib/auth/permissions";
+import { campaignStats } from "@/modules/campaigns/lib/sendCampaign";import { hasPermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 /**
@@ -24,7 +22,7 @@ export async function GET() {
     const stats = await campaignStats(rows.filter((r) => r.status === "SENT").map((r) => r.id));
     return NextResponse.json({
         // A sent campaign that reached nobody still shows its (zero) results.
-        campaigns: rows.map((r) => withMediaLinks({ ...r, stats: stats[r.id] ?? (r.status === "SENT" ? { customers: 0, reached: 0, shown: 0, tapped: 0 } : null) })),
+        campaigns: rows.map((r) => ({ ...r, stats: stats[r.id] ?? (r.status === "SENT" ? { customers: 0, reached: 0, shown: 0, tapped: 0 } : null) })),
         canSend: hasPermission(user, PERMISSIONS.CAMPAIGNS_SEND),
     });
 }

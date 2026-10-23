@@ -28,30 +28,59 @@ model Campaign {
   createdBy   User?     @relation("CampaignCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-  /// The photo / video staff share to WhatsApp Status or Channel (private R2,
-  /// same bucket as chat attachments, key "campaigns/<id>/..."). Meta has no API
-  /// for Status or Channel, so the share is by hand from a phone; see CampaignPost.
-  mediaKey    String?
-  mediaType   String?
-  mediaName   String?
-  mediaSize   Int?
-  posts       CampaignPost[]
+  posts       Post[]
 
   @@index([status, createdAt])
   @@index([couponId])
 }
 
-/// A staff note that this campaign was put up by hand on WhatsApp Status or a
-/// WhatsApp Channel (owner, 2026-10-23). `place` "WA_STATUS" | "WA_CHANNEL".
-/// Who posted is a name snapshot, not a User relation — a log line, nothing hangs on it.
-model CampaignPost {
-  id           Int      @id @default(autoincrement())
-  campaignId   Int
-  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  place        String
-  postedById   Int?
-  postedByName String?
-  postedAt     DateTime @default(now())
+/// A regular post for everyone (owner, 2026-10-23: "separate … regular post"):
+/// written once, put up on several channels — WhatsApp Channel / Status, Google
+/// Business Profile, later Facebook / Instagram. A channel with no posting API
+/// (WhatsApp always; Google until its API access is approved) is shared by hand
+/// from a phone or browser and logged in PostShare. May belong to a campaign.
+///
+/// `channels` the places it is meant for ("WA_CHANNEL", "WA_STATUS",
+/// "GOOGLE_BUSINESS"); `status` "DRAFT" | "SCHEDULED" | "DONE"; Google's own
+/// `googleType` "UPDATE" | "OFFER" | "EVENT" and `googleButton` ("SHOP", "CALL",
+/// "LEARN_MORE", "ORDER", "BOOK") ride along for when the API posts it.
+/// Media: one photo / MP4 in private R2 (chat bucket), key "posts/<id>/...".
+model Post {
+  id            Int         @id @default(autoincrement())
+  caption       String
+  /// A shop page the post links to ("/shop/hp-15s"), never another site.
+  link          String?
+  channels      String[]
+  status        String      @default("DRAFT")
+  scheduledAt   DateTime?
+  googleType    String      @default("UPDATE")
+  googleButton  String?
+  mediaKey      String?
+  mediaType     String?
+  mediaName     String?
+  mediaSize     Int?
+  campaignId    Int?
+  campaign      Campaign?   @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  createdById   Int?
+  createdByName String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  shares        PostShare[]
 
-  @@index([campaignId, postedAt])
+  @@index([status, scheduledAt])
+  @@index([campaignId])
+}
+
+/// One channel a post was put up on, and by whom. A log line (name snapshot,
+/// not a User relation); the same channel can be shared again another day.
+model PostShare {
+  id           Int      @id @default(autoincrement())
+  postId       Int
+  post         Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  channel      String
+  sharedById   Int?
+  sharedByName String?
+  sharedAt     DateTime @default(now())
+
+  @@index([postId, sharedAt])
 }

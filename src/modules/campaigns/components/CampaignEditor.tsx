@@ -10,9 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { SearchableSelect } from "@/shared/components/SearchableSelect";
-import CampaignSharePanel from "./CampaignSharePanel";
-import { extractApiError } from "@/shared/lib/api/extractApiError";
+import { SearchableSelect } from "@/shared/components/SearchableSelect";import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import {
     CAMPAIGN_AUDIENCES,
@@ -50,14 +48,11 @@ export default function CampaignEditor({
     canSend,
     onClose,
     onSaved,
-    onChanged,
 }: {
     campaign: CampaignRow | null;
     canSend: boolean;
     onClose: () => void;
     onSaved: () => void;
-    /** The Status / Channel part saved something — refresh the list, keep the editor open. */
-    onChanged: () => void;
 }) {
     const [form, setForm] = useState<Form>(campaign ? fromRow(campaign) : blank);
     const [options, setOptions] = useState<Options | null>(null);
@@ -245,12 +240,6 @@ export default function CampaignEditor({
                         </div>
                     </div>
                 </div>
-
-                {campaign ? (
-                    <CampaignSharePanel campaign={campaign} couponCode={couponCode} onChanged={onChanged} />
-                ) : (
-                    <p className="text-xs text-muted-foreground">Save the campaign first to add a photo for WhatsApp Status and Channel.</p>
-                )}
 
                 <DialogFooter className="gap-2 sm:justify-between">
                     <div>

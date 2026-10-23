@@ -1041,10 +1041,6 @@ CREATE TABLE IF NOT EXISTS "Campaign" (
     "createdById" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
-    "mediaKey" TEXT,
-    "mediaType" TEXT,
-    "mediaName" TEXT,
-    "mediaSize" INTEGER,
 
     CONSTRAINT "Campaign_pkey" PRIMARY KEY ("id")
 );
@@ -1065,34 +1061,77 @@ ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "createdById" INTEGER;
 ALTER TABLE "Campaign" ALTER COLUMN "createdById" DROP NOT NULL;
 ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
-ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "mediaKey" TEXT;
-ALTER TABLE "Campaign" ALTER COLUMN "mediaKey" DROP NOT NULL;
-ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "mediaType" TEXT;
-ALTER TABLE "Campaign" ALTER COLUMN "mediaType" DROP NOT NULL;
-ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "mediaName" TEXT;
-ALTER TABLE "Campaign" ALTER COLUMN "mediaName" DROP NOT NULL;
-ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "mediaSize" INTEGER;
-ALTER TABLE "Campaign" ALTER COLUMN "mediaSize" DROP NOT NULL;
 
 -- CreateTable
-CREATE TABLE IF NOT EXISTS "CampaignPost" (
+CREATE TABLE IF NOT EXISTS "Post" (
     "id" SERIAL NOT NULL,
-    "campaignId" INTEGER NOT NULL,
-    "place" TEXT NOT NULL,
-    "postedById" INTEGER,
-    "postedByName" TEXT,
-    "postedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "caption" TEXT NOT NULL,
+    "link" TEXT,
+    "channels" TEXT[],
+    "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "scheduledAt" TIMESTAMP(3),
+    "googleType" TEXT NOT NULL DEFAULT 'UPDATE',
+    "googleButton" TEXT,
+    "mediaKey" TEXT,
+    "mediaType" TEXT,
+    "mediaName" TEXT,
+    "mediaSize" INTEGER,
+    "campaignId" INTEGER,
+    "createdById" INTEGER,
+    "createdByName" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "CampaignPost_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Post_pkey" PRIMARY KEY ("id")
 );
-ALTER TABLE "CampaignPost" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
-ALTER TABLE "CampaignPost" ADD COLUMN IF NOT EXISTS "campaignId" INTEGER NOT NULL;
-ALTER TABLE "CampaignPost" ADD COLUMN IF NOT EXISTS "place" TEXT NOT NULL;
-ALTER TABLE "CampaignPost" ADD COLUMN IF NOT EXISTS "postedById" INTEGER;
-ALTER TABLE "CampaignPost" ALTER COLUMN "postedById" DROP NOT NULL;
-ALTER TABLE "CampaignPost" ADD COLUMN IF NOT EXISTS "postedByName" TEXT;
-ALTER TABLE "CampaignPost" ALTER COLUMN "postedByName" DROP NOT NULL;
-ALTER TABLE "CampaignPost" ADD COLUMN IF NOT EXISTS "postedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "caption" TEXT NOT NULL;
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "link" TEXT;
+ALTER TABLE "Post" ALTER COLUMN "link" DROP NOT NULL;
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "channels" TEXT[];
+ALTER TABLE "Post" ALTER COLUMN "channels" DROP NOT NULL;
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'DRAFT';
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "scheduledAt" TIMESTAMP(3);
+ALTER TABLE "Post" ALTER COLUMN "scheduledAt" DROP NOT NULL;
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "googleType" TEXT NOT NULL DEFAULT 'UPDATE';
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "googleButton" TEXT;
+ALTER TABLE "Post" ALTER COLUMN "googleButton" DROP NOT NULL;
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "mediaKey" TEXT;
+ALTER TABLE "Post" ALTER COLUMN "mediaKey" DROP NOT NULL;
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "mediaType" TEXT;
+ALTER TABLE "Post" ALTER COLUMN "mediaType" DROP NOT NULL;
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "mediaName" TEXT;
+ALTER TABLE "Post" ALTER COLUMN "mediaName" DROP NOT NULL;
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "mediaSize" INTEGER;
+ALTER TABLE "Post" ALTER COLUMN "mediaSize" DROP NOT NULL;
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "campaignId" INTEGER;
+ALTER TABLE "Post" ALTER COLUMN "campaignId" DROP NOT NULL;
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "createdById" INTEGER;
+ALTER TABLE "Post" ALTER COLUMN "createdById" DROP NOT NULL;
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "createdByName" TEXT;
+ALTER TABLE "Post" ALTER COLUMN "createdByName" DROP NOT NULL;
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "PostShare" (
+    "id" SERIAL NOT NULL,
+    "postId" INTEGER NOT NULL,
+    "channel" TEXT NOT NULL,
+    "sharedById" INTEGER,
+    "sharedByName" TEXT,
+    "sharedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PostShare_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "PostShare" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "PostShare" ADD COLUMN IF NOT EXISTS "postId" INTEGER NOT NULL;
+ALTER TABLE "PostShare" ADD COLUMN IF NOT EXISTS "channel" TEXT NOT NULL;
+ALTER TABLE "PostShare" ADD COLUMN IF NOT EXISTS "sharedById" INTEGER;
+ALTER TABLE "PostShare" ALTER COLUMN "sharedById" DROP NOT NULL;
+ALTER TABLE "PostShare" ADD COLUMN IF NOT EXISTS "sharedByName" TEXT;
+ALTER TABLE "PostShare" ALTER COLUMN "sharedByName" DROP NOT NULL;
+ALTER TABLE "PostShare" ADD COLUMN IF NOT EXISTS "sharedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "Coupon" (
@@ -5349,7 +5388,13 @@ CREATE INDEX IF NOT EXISTS "Campaign_status_createdAt_idx" ON "Campaign"("status
 CREATE INDEX IF NOT EXISTS "Campaign_couponId_idx" ON "Campaign"("couponId");
 
 -- CreateIndex
-CREATE INDEX IF NOT EXISTS "CampaignPost_campaignId_postedAt_idx" ON "CampaignPost"("campaignId", "postedAt");
+CREATE INDEX IF NOT EXISTS "Post_status_scheduledAt_idx" ON "Post"("status", "scheduledAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "Post_campaignId_idx" ON "Post"("campaignId");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "PostShare_postId_sharedAt_idx" ON "PostShare"("postId", "sharedAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "Coupon_code_key" ON "Coupon"("code");
@@ -6267,7 +6312,14 @@ END $$;
 
 -- AddForeignKey
 DO $$ BEGIN
-    ALTER TABLE "CampaignPost" ADD CONSTRAINT "CampaignPost_campaignId_fkey" FOREIGN KEY ("campaignId") REFERENCES "Campaign"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    ALTER TABLE "Post" ADD CONSTRAINT "Post_campaignId_fkey" FOREIGN KEY ("campaignId") REFERENCES "Campaign"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "PostShare" ADD CONSTRAINT "PostShare_postId_fkey" FOREIGN KEY ("postId") REFERENCES "Post"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -8044,13 +8096,6 @@ DO $$ BEGIN
     END IF;
 END $$;
 DO $$ BEGIN
-    IF to_regclass('public."CampaignPost"') IS NOT NULL THEN
-        DROP TRIGGER IF EXISTS "_outbox_capture" ON "CampaignPost";
-        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "CampaignPost"
-            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
-    END IF;
-END $$;
-DO $$ BEGIN
     IF to_regclass('public."ChatMessage"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "ChatMessage";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "ChatMessage"
@@ -8554,6 +8599,20 @@ DO $$ BEGIN
     IF to_regclass('public."pos_shifts"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "pos_shifts";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "pos_shifts"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Post"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Post";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Post"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."PostShare"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "PostShare";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "PostShare"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;

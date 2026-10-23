@@ -95,6 +95,17 @@ import {
     ListTree,
     MapPin,
     Megaphone,
+    Radar,
+    SquarePen,
+    CalendarFold,
+    GalleryVerticalEnd,
+    RadioTower,
+    Newspaper,
+    Zap,
+    Blend,
+    BellOff,
+    ChartNoAxesCombined,
+    Cable,
     Presentation,
     Milestone,
     MonitorCog,
@@ -706,16 +717,31 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         ],
     },
 
-    // Campaigns — messages to many customers at once (greetings, offers). Uses the
-    // Retention tools (picks a coupon) but never changes them; replies land in CRM.
+    // Campaigns — every mass communication from one place (owner, 2026-10-23):
+    // regular posts (WhatsApp Channel / Status, Google Business Profile, later
+    // Facebook / Instagram), marketing campaigns (an offer with its pieces),
+    // broadcasts and newsletters to customers, and the audience they go to.
+    // Uses the Retention tools (picks a coupon) but never changes them; replies
+    // land in CRM. Pages marked "planned" show sample data until they are wired.
     {
         label: "Campaigns",
         icon: Megaphone,
         key: "campaigns",
-        dashboardHref: "/office/campaigns",
+        dashboardHref: "/office/campaigns/overview",
         pathPrefixes: ["/office/campaigns"],
         children: [
+            { label: "Overview", icon: Radar, href: "/office/campaigns/overview" },
+            { label: "Compose", icon: SquarePen, href: "/office/campaigns/posts/new" },
+            { label: "Queue & Calendar", icon: CalendarFold, href: "/office/campaigns/posts" },
+            { label: "Media Library", icon: GalleryVerticalEnd, href: "/office/campaigns/media" },
             { label: "Campaigns", icon: Megaphone, href: "/office/campaigns" },
+            { label: "Broadcast", icon: RadioTower, href: "/office/campaigns/broadcast" },
+            { label: "Newsletter", icon: Newspaper, href: "/office/campaigns/newsletter" },
+            { label: "Automations", icon: Zap, href: "/office/campaigns/automations" },
+            { label: "Segments", icon: Blend, href: "/office/campaigns/segments" },
+            { label: "Consent", icon: BellOff, href: "/office/campaigns/consent" },
+            { label: "Reports", icon: ChartNoAxesCombined, href: "/office/campaigns/reports" },
+            { label: "Channels", icon: Cable, href: "/office/campaigns/channels" },
         ],
     },
 
