@@ -10797,6 +10797,58 @@
     {
       "roleId": "R3",
       "permissionId": "mobile:inbox:view"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:campaigns:overview"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:campaigns:compose"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:campaigns:queue-calendar"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:campaigns:media-library"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:campaigns:campaigns"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:campaigns:broadcast"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:campaigns:newsletter"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:campaigns:automations"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:campaigns:segments"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:campaigns:consent"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:campaigns:reports"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:campaigns:channels"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "campaigns:send"
     }
   ],
   "departmentPermissions": [
@@ -12015,6 +12067,54 @@
     {
       "departmentId": "DEP-OP",
       "permissionId": "mobile:app:access"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:campaigns:overview"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:campaigns:compose"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:campaigns:queue-calendar"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:campaigns:media-library"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:campaigns:campaigns"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:campaigns:broadcast"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:campaigns:newsletter"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:campaigns:automations"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:campaigns:segments"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:campaigns:consent"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:campaigns:reports"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:campaigns:channels"
     }
   ],
   "positions": [
