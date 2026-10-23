@@ -10853,6 +10853,10 @@
     {
       "roleId": "R1",
       "permissionId": "mobile:posts:share"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "ui:sidebar:campaigns:product-feeds"
     }
   ],
   "departmentPermissions": [
@@ -12119,6 +12123,10 @@
     {
       "departmentId": "DEP-OP",
       "permissionId": "ui:sidebar:campaigns:channels"
+    },
+    {
+      "departmentId": "DEP-OP",
+      "permissionId": "ui:sidebar:campaigns:product-feeds"
     }
   ],
   "positions": [
