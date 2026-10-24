@@ -13,6 +13,15 @@ const { hasOfficeRoutes, indexable } = modeFlags(parseAppMode(process.env.APP_MO
 // is byte-identical to what it has always produced.
 const COUNTER_BUILD = process.env.COUNTER_BUILD === "1";
 
+// The image optimizer fetches only from OUR Cloudinary cloud and OUR Supabase project.
+// A bare `res.cloudinary.com` / `*.supabase.co` admits every tenant of those services:
+// anyone can host a file there and push it through our optimizer. Hostname-only is
+// kept as the fallback when the env is missing (a dev checkout without keys).
+const CLOUDINARY_CLOUD = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME?.trim();
+const SUPABASE_HOST = (() => {
+  try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname; } catch { return ""; }
+})();
+
 const nextConfig: NextConfig = {
   // The desktop shell loads http://127.0.0.1:<port> while `next dev` treats only
   // `localhost` as its own origin, so under `pnpm electron:dev` the HMR socket was
@@ -73,12 +82,18 @@ const nextConfig: NextConfig = {
     // stock hero/category art (storeContent.ts) and the login backdrop are
     // hardcoded Pexels URLs with no loader, so Pexels stays on the list too.
     remotePatterns: [
-      { protocol: "https", hostname: "res.cloudinary.com" },
-      { protocol: "https", hostname: "*.supabase.co" },
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+        ...(CLOUDINARY_CLOUD ? { pathname: `/${CLOUDINARY_CLOUD}/**` } : {}),
+      },
+      { protocol: "https", hostname: SUPABASE_HOST || "*.supabase.co" },
       { protocol: "https", hostname: "images.pexels.com" },
       { protocol: "https", hostname: "images.unsplash.com" },
     ],
-    dangerouslyAllowSVG: true,
+    // SVG stays OFF: the optimizer has had code-execution bugs on SVG input. Off, an
+    // `<Image>` whose src ends in .svg is served as-is (next/image sets `unoptimized`
+    // itself), so the logo and the ad placeholders still show.
     contentDispositionType: "attachment",
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
