@@ -181,7 +181,10 @@ killed after a ledger page committed — the app closed mid-sync, a Windows shut
 cycle timeout, a relay pre-empting it — had already moved that table's cursor, so no
 later cycle saw those rows again and the totals stayed wrong until something else
 touched the same ids. Now the next cycle finishes the job (and announces it, so a
-balance screen re-reads even when that cycle pulled nothing).
+balance screen re-reads even when that cycle pulled nothing). A product's stock follows
+the office's `recomputeProductStock` exactly (`PRODUCT_WANT`, 2026-10-24): opening +
+ledger, and a product with neither keeps NULL ("not tracked") rather than being given a
+0 — the drift check (`verify-replica.js --totals`) reads it the same way.
 
 ### The engine's own tables
 

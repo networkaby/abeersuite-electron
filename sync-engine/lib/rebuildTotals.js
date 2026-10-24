@@ -114,6 +114,22 @@ UPDATE "Account" a
  WHERE a.id = ids.id
    AND a.balance IS DISTINCT FROM COALESCE(s.total, 0)`;
 
+/**
+ * The saved total a product should hold — the office's rule, recomputeProductStock
+ * (src/modules/inventory/lib/stockMovement.ts): opening + ledger, rounded to the Int
+ * column. "Not tracked" (NULL — no opening, no ledger row) is kept, never invented:
+ * a NULL stays NULL and a number goes to 0, because the shop reads NULL as "always in
+ * stock". Needs `p` = "InvProduct" and `led.qty` = that product's ledger sum.
+ * Unlike the office it does not move "updatedAt": a total changing alone must not
+ * ship a row (see the top of this file).
+ */
+const PRODUCT_WANT = `
+    CASE WHEN p."openingStock" IS NOT NULL OR led.qty IS NOT NULL
+             THEN ROUND(COALESCE(p."openingStock", 0) + COALESCE(led.qty, 0))::int
+         WHEN p.stock IS NULL THEN NULL
+         ELSE 0
+    END`;
+
 const PRODUCT_SQL = `
 WITH ids AS (SELECT unnest($1::int[]) AS id),
 led AS (
@@ -121,11 +137,11 @@ led AS (
       FROM "InvStockLedger" WHERE "productId" = ANY($1::int[]) GROUP BY 1
 )
 UPDATE "InvProduct" p
-   SET stock = ROUND(COALESCE(p."openingStock", 0) + COALESCE(led.qty, 0))::int
+   SET stock = ${PRODUCT_WANT}
   FROM ids
   LEFT JOIN led ON led.id = ids.id
  WHERE p.id = ids.id
-   AND p.stock IS DISTINCT FROM ROUND(COALESCE(p."openingStock", 0) + COALESCE(led.qty, 0))::int`;
+   AND p.stock IS DISTINCT FROM ${PRODUCT_WANT}`;
 
 const BRANCH_UPSERT_SQL = `
 INSERT INTO "inv_product_branches" ("productId", "branchId", stock, "updatedAt")
@@ -238,7 +254,7 @@ async function driftReport(client) {
     const products = await client.query(`
         WITH led AS (SELECT "productId" AS id, SUM("inQty" - "outQty") AS qty FROM "InvStockLedger" GROUP BY 1)
         SELECT count(*)::int AS n FROM "InvProduct" p LEFT JOIN led ON led.id = p.id
-         WHERE p.stock IS DISTINCT FROM ROUND(COALESCE(p."openingStock", 0) + COALESCE(led.qty, 0))::int`);
+         WHERE p.stock IS DISTINCT FROM ${PRODUCT_WANT}`);
     const branches = await client.query(`
         WITH led AS (SELECT "productId", "branchId", ROUND(SUM("inQty" - "outQty"))::int AS qty FROM "InvStockLedger" GROUP BY 1, 2)
         SELECT count(*)::int AS n FROM "inv_product_branches" b

@@ -356,6 +356,36 @@ async function main() {
         check("the next cycle re-sums what the killed one left", resummed, 1);
         check("...the balance is right", Number((await local.query(`SELECT balance FROM "Account" WHERE id = 50`)).rows[0].balance), 100);
         check("...and the list is cleared", (await local.query(`SELECT count(*)::int AS c FROM "_sync_dirty"`)).rows[0].c, 0);
+
+        console.log("\n8. A product never tracked stays untracked; the drift check agrees with the office");
+
+        // The office (recomputeProductStock) keeps NULL for a product with no opening and
+        // no ledger row. The replica used to write 0, and its drift check counted every
+        // such product as drift — NULL is not 0.
+        await local.query(`
+            DROP TABLE IF EXISTS "InvProduct", "InvStockLedger", "inv_product_branches", "GiftCard", "GiftCardTxn";
+            CREATE TABLE "InvProduct" (id int PRIMARY KEY, "openingStock" numeric, stock int);
+            CREATE TABLE "InvStockLedger" (id serial PRIMARY KEY, "productId" int, "branchId" text, "inQty" numeric, "outQty" numeric);
+            CREATE TABLE "inv_product_branches" ("productId" int, "branchId" text, stock int, "updatedAt" timestamp,
+                                                 PRIMARY KEY ("productId", "branchId"));
+            CREATE TABLE "GiftCard" (id int PRIMARY KEY, balance numeric);
+            CREATE TABLE "GiftCardTxn" ("giftCardId" int, amount numeric);
+            INSERT INTO "InvProduct" VALUES
+                (101, NULL, NULL),   -- never tracked
+                (102, NULL, 7),      -- a stale number, nothing behind it
+                (103, 10,   10),     -- opening 10, sold 3
+                (104, NULL, NULL);   -- no opening, bought 5
+            INSERT INTO "InvStockLedger" ("productId", "branchId", "inQty", "outQty") VALUES
+                (103, 'BR-HQ', 0, 3), (104, 'BR-HQ', 5, 0);
+        `);
+        const productDrift = async () => (await totals.driftReport(local)).products;
+        check("before: three products drift, the never-tracked one does not", await productDrift(), 3);
+        await totals.noteRows(local, "InvStockLedger", [101, 102, 103, 104].map((productId) => ({ productId })));
+        await totals.rebuildTouched(local);
+        check("after: stock is NULL / 0 / 7 / 5",
+            (await local.query(`SELECT stock FROM "InvProduct" ORDER BY id`)).rows.map((r) => r.stock),
+            [null, 0, 7, 5]);
+        check("...and nothing drifts", await productDrift(), 0);
     } finally {
         local.release();
         source.release();
