@@ -881,8 +881,18 @@ function QuickCreateProductDialog({
         sku: "", name: "", unitId: "",
         priceRupees: "",
         openingQty: "", openingRate: "",
+        /** Stock location of the opening; "" until the default is filled in. */
+        openingBranchId: "",
     });
     const [saving, setSaving] = useState(false);
+    const { branches } = useBranchOptions();
+    const activeBranchId = useActiveBranchStore((st) => st.activeBranchId);
+
+    // Working branch, else Head Office — shown so it can be changed, and sent.
+    useEffect(() => {
+        if (!open || form.openingBranchId || branches.length === 0) return;
+        setForm((f) => (f.openingBranchId ? f : { ...f, openingBranchId: defaultOpeningBranchId(branches, activeBranchId) }));
+    }, [open, form.openingBranchId, branches, activeBranchId]);
 
     useEffect(() => {
         if (!open) return;
@@ -893,7 +903,7 @@ function QuickCreateProductDialog({
 
     const reset = () => setForm({
         sku: "", name: "", unitId: "", priceRupees: "",
-        openingQty: "", openingRate: "",
+        openingQty: "", openingRate: "", openingBranchId: "",
     });
 
     const save = async () => {
@@ -911,6 +921,7 @@ function QuickCreateProductDialog({
                 savedSalePricePaise: parseRupeesToPaise(form.priceRupees),
                 openingStock: hasOpening ? openingQty : null,
                 openingRate: hasOpening ? (Number.isFinite(openingRate) ? openingRate : null) : null,
+                openingBranchId: hasOpening ? (form.openingBranchId || null) : null,
             });
             toast.success(`Product "${form.name}" created`);
             reset();
@@ -979,6 +990,17 @@ function QuickCreateProductDialog({
                                     placeholder="0.00"
                                 />
                             </div>
+                        </div>
+                        <div className="space-y-1">
+                            <Label className="text-xs">Stock location</Label>
+                            <Select value={form.openingBranchId}
+                                onValueChange={(v) => setForm((f) => ({ ...f, openingBranchId: v }))}
+                                disabled={branches.length === 0}>
+                                <SelectTrigger><SelectValue placeholder="Working branch" /></SelectTrigger>
+                                <SelectContent>
+                                    {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
                         </div>
                         <p className="text-[11px] text-muted-foreground">
                             Value = qty × rate ={" "}
