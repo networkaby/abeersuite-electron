@@ -1537,6 +1537,25 @@ function attachWindowOpenPolicy(win: BrowserWindow): void {
     // construction the instant any of them loads. Pin it here instead.
     win.on("page-title-updated", (event) => event.preventDefault());
 
+    // The same split for a page that navigates ITSELF away — a plain link, a
+    // `location.assign` (a workflow "navigate" action may hold any URL), a server
+    // redirect. Without this the foreign page loads in this window with the preload
+    // attached: restore, counter release, the parked sign-in. Main's own
+    // loadURL/loadFile (the shell, the boot-error page) does not raise these events.
+    const keepNavigationHome = (event: Electron.Event, url: string, isMainFrame: boolean) => {
+        if (!isMainFrame) return;
+        const target = classifyTarget(url);
+        if (target?.internal) return;
+        event.preventDefault();
+        // http(s) to the real browser, and the two harmless handlers the app links to
+        // (call a customer, mail one). Nothing else is handed to the OS shell.
+        if (target && ["http:", "https:", "mailto:", "tel:"].includes(target.protocol)) {
+            shell.openExternal(target.href);
+        }
+    };
+    win.webContents.on("will-navigate", (details) => keepNavigationHome(details, details.url, details.isMainFrame));
+    win.webContents.on("will-redirect", (details) => keepNavigationHome(details, details.url, details.isMainFrame));
+
     win.webContents.setWindowOpenHandler(({ url }) => {
         const target = classifyTarget(url);
         if (!target) return { action: "deny" };
