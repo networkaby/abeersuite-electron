@@ -177,7 +177,17 @@ an update.
   `public/.well-known/assetlinks.json`; the app vouches back (`asset_statements`), so the
   install page's `getInstalledRelatedApps()` still sees it as installed. Both files carry
   an extension, so `proxy.ts` never asks for a sign-in.
-- **Update download:** the "New version available" bar links to the install page,
+- **In-app update (from 2.3.0, versionCode 6):** the bar's **Update now** downloads
+  `ns-staff.apk?v=<code>` inside the app and opens Android's own Install screen —
+  [`NsUpdatePlugin`](../phone-app/android/app/src/main/java/in/networkservice/staff/NsUpdatePlugin.java)
+  (`REQUEST_INSTALL_PACKAGES`), called by
+  [`AppUpdateBar`](../src/shared/components/AppUpdateBar.tsx). Only a `.apk` on the office
+  site; refused before the Install screen unless it is this app and newer (so an APK
+  not deployed yet cannot loop). First time, Android must allow the app to install
+  apps: the plugin opens that switch and the person taps again. A failed download
+  offers the Chrome page below. Builds before 2.3.0 and the customer app have no
+  updater and use the Chrome page.
+- **Update download (Chrome):** the "New version available" bar links to the install page,
   `https://office.networkservice.in./m-staff-app/install` — office only, never shop. The
   trailing dot makes Capacitor treat it as another host, so Chrome opens it (the app's
   WebView cannot download); the customer app does the same with
