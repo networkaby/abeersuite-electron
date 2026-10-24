@@ -19,6 +19,9 @@
  *
  * `params` is everything except the page — empty values are left out of the
  * URL. Pass `path: null` to hold the read (nothing to ask yet).
+ *
+ * `keepPrevious` keeps the old page on screen while the next page (or a new
+ * search / filter of the SAME list) loads — see useApiResource.
  */
 
 import { useCallback, useState } from "react";
@@ -30,7 +33,7 @@ type Params = Record<string, string | number | null | undefined>;
 export function usePagedQuery<T>(
     path: string | null,
     params: Params,
-    opts: { topics?: readonly Topic[] } = {},
+    opts: { topics?: readonly Topic[]; keepPrevious?: boolean } = {},
 ) {
     const key = toQuery(params);
 
@@ -44,7 +47,7 @@ export function usePagedQuery<T>(
     }, [key]);
 
     const url = path === null ? null : `${path}?${key}${key ? "&" : ""}page=${page}`;
-    const resource = useApiResource<T>(url, { topics: opts.topics });
+    const resource = useApiResource<T>(url, { topics: opts.topics, keepPrevious: opts.keepPrevious });
     return { ...resource, page, setPage };
 }
 

@@ -8,7 +8,11 @@
 // Pricing, opening stock, GST, naming-config etc. are still edited via the
 // per-row dialog (pencil button → InvProductDialog).
 //
-// Save model (edit mode): per dirty row, parallel PATCH /api/inventory/products/{id}.
+// Save model (edit mode): per dirty row, PATCH /api/inventory/products/{id},
+// at most SAVE_CONCURRENCY at once.
+//
+// Search, column filters, sort and paging run on the SERVER over every product
+// (modules/inventory/lib/productList.ts) — the page holds one page of rows.
 // The existing PATCH already accepts every classification field this grid touches —
 // no batch endpoint needed.
 
@@ -34,7 +38,6 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { InventoryMasterDropdownQuickDialog, type MasterKind, flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 import {
     buildOfflineName,
@@ -48,15 +51,21 @@ import {
 } from "@/components/ui/breadcrumb";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { useEscape, useEscapeLayer, useActiveRow } from "@/shared/hooks";
+import { usePagedQuery } from "@/shared/hooks/usePagedQuery";
+import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { gridRowClass, GRID_FROZEN_CELL, GRID_FROZEN_HEAD, GRID_FROZEN_EDGE } from "@/shared/lib/format";
 import { type ProductCode, primaryBarcode, withPrimaryBarcode } from "@/shared/lib/inventory";
-import { productMatchesSearch, searchableText } from "@/shared/lib/inventory";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { runPool } from "@/shared/lib/runPool";
+import type { Topic } from "@/shared/lib/realtime/topics";
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
 type GstRateOpt = { id: number; rate: string | number; label: string; isActive?: boolean };
 
-type Row = {
+/// The fields the edit grid reads and writes. A row on another page (reached
+/// through "select all filtered") arrives as just this, so bulk-apply can
+/// still rebuild its name.
+type EditRow = {
     id: number;
     sku: string;
     name: string;
@@ -64,14 +73,7 @@ type Row = {
     isActive: boolean;
     /** Cashier must fill the POS line note before selling this item. */
     requireSaleNote: boolean;
-    stock: number | null;
-    lowStockThreshold: number;
-    /** Movement class (Reorder/Stock Health engine) — decision-help badge. */
-    movementClass: "NEW" | "REGULAR" | "SLOW" | "NON_MOVING" | "DEAD" | null;
-    daysSinceLastSale: number | null;
     modelNo: string | null;
-    /** Derived primary barcode (first BARCODE code) — for display/search/sort. */
-    barcode1: string | null;
     /** Full scannable code set — the source of truth for inline barcode edits. */
     codes: ProductCode[];
     unitId: number;
@@ -79,6 +81,16 @@ type Row = {
     groupId: number | null;
     brandId: number | null;
     warrantyTermId: number | null;
+};
+
+type Row = EditRow & {
+    stock: number | null;
+    lowStockThreshold: number;
+    /** Movement class (Reorder/Stock Health engine) — decision-help badge. */
+    movementClass: "NEW" | "REGULAR" | "SLOW" | "NON_MOVING" | "DEAD" | null;
+    daysSinceLastSale: number | null;
+    /** Derived primary barcode (first BARCODE code) — for display/search/sort. */
+    barcode1: string | null;
     unit: { code: string; label?: string };
     category: { name: string } | null;
     brand: { name: string } | null;
@@ -133,14 +145,36 @@ const COLUMNS: { id: ColId; label: string }[] = [
 const ALL_COL_IDS = COLUMNS.map((c) => c.id);
 const COLS_STORAGE_KEY = "inv-products-visible-cols";
 
-/// Bucket key for the Stock column filter — numeric stock folded into four
-/// coarse states the operator actually filters by ("what's out of stock?").
-function stockBucket(v: number | null): string {
-    if (v == null) return "__none__";
-    if (v === 0) return "zero";
-    return v > 0 ? "pos" : "neg";
+/// One page of the list. Search, filters, sort and the counts are all worked
+/// out on the server over every product (modules/inventory/lib/productList.ts);
+/// the server also picks the page size (50 office, 500 counter).
+type ProductPage = {
+    rows: Row[];
+    matched: number;
+    total: number;
+    page: number;
+    pageSize: number;
+    pageCount: number;
+};
+
+const NO_ROWS: Row[] = [];
+const LIVE_TOPICS: readonly Topic[] = ["stock", "catalogue"];
+const NO_TOPICS: readonly Topic[] = [];
+/// Bulk save sends one PATCH per row — at most this many at once, so "select
+/// all filtered" over a big list cannot open hundreds of requests together.
+const SAVE_CONCURRENCY = 6;
+
+/// Same value, compared by content — a barcode typed back to what it was is
+/// not a pending change.
+function sameValue(a: unknown, b: unknown): boolean {
+    if (Array.isArray(a) && Array.isArray(b)) {
+        const codes = (x: unknown[]) => (x as ProductCode[]).map((c) => `${c.kind}\u0000${c.value}`).join("\u0001");
+        return codes(a) === codes(b);
+    }
+    return a === b;
 }
 
+/// Stock column filter — the server folds live stock into these buckets.
 const STOCK_FILTER_ITEMS: { key: string; label: string }[] = [
     { key: "pos", label: "In stock (> 0)" },
     { key: "zero", label: "Out of stock (0)" },
@@ -166,7 +200,6 @@ export default function InventoryProductsPage() {
     const editParam = searchParams.get("edit");
 
     const [mode, setMode] = useState<Mode>("view");
-    const [rows, setRows] = useState<Row[]>([]);
     const [units, setUnits] = useState<Opt[]>([]);
     const [categories, setCategories] = useState<Opt[]>([]);
     const [brands, setBrands] = useState<Opt[]>([]);
@@ -174,14 +207,12 @@ export default function InventoryProductsPage() {
     const [gstRates, setGstRates] = useState<GstRateOpt[]>([]);
     const [warrantyTerms, setWarrantyTerms] = useState<Opt[]>([]);
     const [namingConfig, setNamingConfig] = useState<NamingConfigShape | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [mastersLoading, setMastersLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
     const [search, setSearch] = useState("");
     const [dirty, setDirty] = useState<Map<number, Patch>>(new Map());
     const [selected, setSelected] = useState<Set<number>>(new Set());
-    const [pageSize, setPageSize] = useState<number>(100);
-    const [pageIndex, setPageIndex] = useState<number>(0);
 
     /// The row the operator is currently on — drives the active-line highlight.
     const { rowProps, isActive: isActiveRow } = useActiveRow<number>();
@@ -238,14 +269,40 @@ export default function InventoryProductsPage() {
         });
     }, []);
 
-    const loadProducts = useCallback(() =>
-        axios
-            // SKU master is org-level: show the ALL-branch total (opening +
-            // every branch's movements), not the session's active branch.
-            .get<Row[]>("/api/inventory/products?branchId=all")
-            .then((r) => setRows(r.data))
-            .catch(() => toast.error("Failed to load products"))
-        , []);
+    /// What the list asks the server for — everything except the page number,
+    /// which usePagedQuery keeps and resets to 1 whenever this changes.
+    const debouncedSearch = useDebouncedValue(search.trim(), 250);
+    const listParams = useMemo(() => {
+        // SKU master is org-level: show the ALL-branch total (opening +
+        // every branch's movements), not the session's active branch.
+        const p: Record<string, string> = { branchId: "all", q: debouncedSearch };
+        if (sort) { p.sort = sort.field; p.dir = sort.dir; }
+        for (const [field, allowed] of colFilters) {
+            if (allowed.size > 0) p[field] = [...allowed].join(",");
+        }
+        return p;
+    }, [debouncedSearch, sort, colFilters]);
+
+    // Live in browse mode only: a re-read while cells are being edited would
+    // throw away unsaved rows. Edit mode reloads itself on save. The old page
+    // stays on screen while the next one (or a new search) loads.
+    const list = usePagedQuery<ProductPage>("/api/inventory/products", listParams, {
+        topics: mode === "view" ? LIVE_TOPICS : NO_TOPICS,
+        keepPrevious: true,
+    });
+    const rows = list.data?.rows ?? NO_ROWS;
+    const reloadProducts = list.reload;
+    useEffect(() => {
+        if (list.error) toast.error("Failed to load products");
+    }, [list.error]);
+
+    /// Every row the grid has seen — the current page plus rows reached by
+    /// "select all filtered" — so patch / bulk-apply can read a row that is not
+    /// on this page.
+    const seenRef = useRef(new Map<number, EditRow>());
+    useEffect(() => {
+        for (const r of rows) seenRef.current.set(r.id, r);
+    }, [rows]);
 
     const loadMasters = useCallback(async () => {
         try {
@@ -271,11 +328,9 @@ export default function InventoryProductsPage() {
     }, []);
 
     useEffect(() => {
-        Promise.all([loadProducts(), loadMasters()]).finally(() => setLoading(false));
-    }, [loadProducts, loadMasters]);
-    // Live in browse mode only: a re-read while cells are being edited would throw
-    // away unsaved rows. Edit mode reloads itself on save.
-    useRealtimeTopics(["stock", "catalogue"], () => { void loadProducts(); }, mode === "view");
+        void loadMasters().finally(() => setMastersLoading(false));
+    }, [loadMasters]);
+    const loading = list.loading || mastersLoading;
 
     // Deep-link: /office/inventory/products?edit=<id> auto-opens the dialog.
     const handledEditRef = useRef<number | null>(null);
@@ -293,25 +348,25 @@ export default function InventoryProductsPage() {
         router.replace(qs ? `${pathname}?${qs}` : pathname);
     }, [editParam, pathname, router, searchParams]);
 
-    function val<K extends keyof Row>(row: Row, key: K): Row[K] {
+    function val<K extends keyof EditRow>(row: EditRow, key: K): EditRow[K] {
         const p = dirty.get(row.id);
         if (p && key in p) {
-            return (p as Record<string, unknown>)[key as string] as Row[K];
+            return (p as Record<string, unknown>)[key as string] as EditRow[K];
         }
         return row[key];
     }
 
     function patch(id: number, change: Patch) {
+        const row = seenRef.current.get(id);
         setDirty((prev) => {
             const next = new Map(prev);
             const cur = next.get(id) ?? {};
             const merged: Patch = { ...cur, ...change };
             // Drop the entry if every patched key matches the underlying row.
-            const row = rows.find((r) => r.id === id);
             if (row) {
                 let allMatch = true;
                 for (const k of Object.keys(merged) as (keyof Patch)[]) {
-                    if ((merged as Record<string, unknown>)[k] !== (row as Record<string, unknown>)[k]) {
+                    if (!sameValue((merged as Record<string, unknown>)[k], (row as Record<string, unknown>)[k])) {
                         allMatch = false;
                         break;
                     }
@@ -340,54 +395,6 @@ export default function InventoryProductsPage() {
         [groups],
     );
 
-    const filtered = useMemo(() => {
-        const q = search.trim().toLowerCase();
-        // 1. free-text search across SKU/name/namePart/model/every scannable code
-        //    (barcode, EAN, UPC — not just the primary barcode1).
-        let out = !q ? rows : rows.filter((r) => productMatchesSearch(r, q, {
-            // namePart and modelNo are this screen's own searchable columns,
-            // beyond the name/sku/codes every product carries.
-            text: (x) => searchableText(x.sku, x.name, x.namePart, x.modelNo, ...x.codes.map((c) => c.value)),
-        }));
-        // 2. per-column multi-select filters
-        for (const [field, allowed] of colFilters) {
-            if (allowed.size === 0) continue;
-            out = out.filter((r) => {
-                // Stock filters by coarse bucket (in/zero/negative/untracked),
-                // not by the raw number.
-                const key = field === "stock" ? stockBucket(r.stock) : r[field] == null ? "__none__" : String(r[field]);
-                return allowed.has(key);
-            });
-        }
-        // 3. sort
-        if (sort) {
-            const dirMul = sort.dir === "asc" ? 1 : -1;
-            const key = (r: Row): string | number => {
-                switch (sort.field) {
-                    case "sku": return r.sku;
-                    case "name": return r.name.toLowerCase();
-                    case "namePart": return (r.namePart ?? "").toLowerCase();
-                    case "categoryName": return r.category?.name?.toLowerCase() ?? "";
-                    case "brandName": return r.brand?.name?.toLowerCase() ?? "";
-                    case "groupName": return r.group?.name?.toLowerCase() ?? "";
-                    case "warrantyName": return r.warrantyTerm?.name?.toLowerCase() ?? "";
-                    case "unitCode": return r.unit.code;
-                    case "modelNo": return (r.modelNo ?? "").toLowerCase();
-                    case "barcode1": return r.barcode1 ?? "";
-                    case "stock": return r.stock ?? -1;
-                    case "isActive": return r.isActive ? 1 : 0;
-                }
-            };
-            out = [...out].sort((a, b) => {
-                const ka = key(a), kb = key(b);
-                if (ka < kb) return -1 * dirMul;
-                if (ka > kb) return 1 * dirMul;
-                return 0;
-            });
-        }
-        return out;
-    }, [rows, search, colFilters, sort]);
-
     function cycleSort(field: SortField) {
         setSort((cur) => {
             if (!cur || cur.field !== field) return { field, dir: "asc" };
@@ -413,12 +420,15 @@ export default function InventoryProductsPage() {
         });
     }
 
-    useEffect(() => { setPageIndex(0); }, [search, pageSize, mode, colFilters, sort]);
-
-    const totalPages = pageSize === 0 ? 1 : Math.max(1, Math.ceil(filtered.length / pageSize));
-    const safePage = Math.min(pageIndex, totalPages - 1);
-    const pageStart = pageSize === 0 ? 0 : safePage * pageSize;
-    const pageRows = pageSize === 0 ? filtered : filtered.slice(pageStart, pageStart + pageSize);
+    // The server may pull an out-of-range page back to the last one (e.g. after
+    // a delete), so the footer reads its answer rather than our own counter.
+    const page = list.data?.page ?? list.page;
+    const pageSize = list.data?.pageSize ?? 0;
+    const pageCount = list.data?.pageCount ?? 1;
+    const matched = list.data?.matched ?? 0;
+    const total = list.data?.total ?? 0;
+    const pageStart = (page - 1) * pageSize;
+    const pageRows = rows;
 
     const allPageSelected = pageRows.length > 0 && pageRows.every((r) => selected.has(r.id));
 
@@ -437,12 +447,19 @@ export default function InventoryProductsPage() {
             return next;
         });
     }
-    function selectAllFiltered() {
-        setSelected((prev) => {
-            const next = new Set(prev);
-            filtered.forEach((r) => next.add(r.id));
-            return next;
-        });
+    /// Tick every match, including rows on other pages. The server sends each
+    /// one as the small edit row so bulk-apply can still rebuild its name.
+    async function selectAllFiltered() {
+        try {
+            const qs = new URLSearchParams({ ...listParams, idsOnly: "1" });
+            const { data } = await axios.get<{ rows: EditRow[] }>(`/api/inventory/products?${qs}`);
+            for (const r of data.rows) {
+                if (!seenRef.current.has(r.id)) seenRef.current.set(r.id, r);
+            }
+            setSelected((prev) => new Set([...prev, ...data.rows.map((r) => r.id)]));
+        } catch {
+            toast.error("Failed to select all filtered products");
+        }
     }
 
     function applyToSelected(field: keyof Patch, raw: string) {
@@ -462,7 +479,7 @@ export default function InventoryProductsPage() {
                 // for rows that have a Custom part to anchor the rebuild (same
                 // rule as patchWithRegen). Rows without one keep their existing
                 // descriptive name.
-                const row = rows.find((r) => r.id === id);
+                const row = seenRef.current.get(id);
                 const namePart = (cur.namePart !== undefined ? cur.namePart : row?.namePart) ?? "";
                 if (row && namePart.trim()) {
                     const nm = computeName(row, merged);
@@ -496,24 +513,21 @@ export default function InventoryProductsPage() {
     async function save() {
         if (dirty.size === 0) return;
         setSaving(true);
-        const entries = [...dirty.entries()];
         let ok = 0;
         let fail = 0;
-        await Promise.all(
-            entries.map(async ([id, p]) => {
-                try {
-                    await axios.patch(`/api/inventory/products/${id}`, p);
-                    ok++;
-                } catch {
-                    fail++;
-                }
-            }),
-        );
+        await runPool([...dirty.entries()], SAVE_CONCURRENCY, async ([id, p]) => {
+            try {
+                await axios.patch(`/api/inventory/products/${id}`, p);
+                ok++;
+            } catch {
+                fail++;
+            }
+        });
         setSaving(false);
         if (fail === 0) toast.success(`Saved ${ok} product${ok === 1 ? "" : "s"}`);
         else toast.error(`Saved ${ok}, failed ${fail}`);
         setDirty(new Map());
-        await loadProducts();
+        await reloadProducts();
     }
 
     async function discard() {
@@ -535,7 +549,7 @@ export default function InventoryProductsPage() {
         try {
             await axios.delete(`/api/inventory/products/${id}`);
             toast.success("Deleted");
-            loadProducts();
+            void reloadProducts();
         } catch (e: unknown) {
             toast.error(axios.isAxiosError(e) ? e.response?.data?.error : "Delete failed");
         }
@@ -556,10 +570,10 @@ export default function InventoryProductsPage() {
     /// the NEW value in the same tick (setDirty is async, so val() would still
     /// read the pre-change value). Returns "" if config isn't loaded or the
     /// template resolves to nothing.
-    function computeName(r: Row, override: Patch): string {
+    function computeName(r: EditRow, override: Patch): string {
         if (!namingConfig) return "";
-        const pick = <K extends keyof Row>(key: K): Row[K] =>
-            (key in override ? (override as Record<string, unknown>)[key as string] as Row[K] : val(r, key));
+        const pick = <K extends keyof EditRow>(key: K): EditRow[K] =>
+            (key in override ? (override as Record<string, unknown>)[key as string] as EditRow[K] : val(r, key));
         const findOpt = (list: Opt[], id: number | null | undefined) =>
             id == null ? null : list.find((o) => o.id === id) ?? null;
         const cat = findOpt(categories, pick("categoryId") as number | null);
@@ -648,7 +662,7 @@ export default function InventoryProductsPage() {
                     open={dialogOpen}
                     onOpenChange={setDialogOpen}
                     editId={dialogEditId}
-                    onSaved={loadProducts}
+                    onSaved={reloadProducts}
                 />
 
                 <InventoryMasterDropdownQuickDialog
@@ -753,7 +767,7 @@ export default function InventoryProductsPage() {
                                         <TableHead className="min-w-44">
                                             <div className="flex items-center gap-1">
                                                 <SortHead field="categoryName" sort={sort} onSort={cycleSort}>Category</SortHead>
-                                                <ColFilter field="categoryId" options={categories} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("category")} createLabel="category" />
+                                                <ColFilter field="categoryId" options={categories} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("category")} createLabel="category" />
                                             </div>
                                         </TableHead>
                                     ) : null}
@@ -761,7 +775,7 @@ export default function InventoryProductsPage() {
                                         <TableHead className="min-w-36">
                                             <div className="flex items-center gap-1">
                                                 <SortHead field="brandName" sort={sort} onSort={cycleSort}>Brand</SortHead>
-                                                <ColFilter field="brandId" options={brands} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("brand")} createLabel="brand" />
+                                                <ColFilter field="brandId" options={brands} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("brand")} createLabel="brand" />
                                             </div>
                                         </TableHead>
                                     ) : null}
@@ -769,7 +783,7 @@ export default function InventoryProductsPage() {
                                         <TableHead className="min-w-36">
                                             <div className="flex items-center gap-1">
                                                 <SortHead field="groupName" sort={sort} onSort={cycleSort}>Group</SortHead>
-                                                <ColFilter field="groupId" options={groups} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("group")} createLabel="group" />
+                                                <ColFilter field="groupId" options={groups} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("group")} createLabel="group" />
                                             </div>
                                         </TableHead>
                                     ) : null}
@@ -777,7 +791,7 @@ export default function InventoryProductsPage() {
                                         <TableHead className="min-w-36">
                                             <div className="flex items-center gap-1">
                                                 <SortHead field="warrantyName" sort={sort} onSort={cycleSort}>Warranty</SortHead>
-                                                <ColFilter field="warrantyTermId" options={warrantyTerms} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("warranty")} createLabel="warranty term" />
+                                                <ColFilter field="warrantyTermId" options={warrantyTerms} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("warranty")} createLabel="warranty term" />
                                             </div>
                                         </TableHead>
                                     ) : null}
@@ -785,7 +799,7 @@ export default function InventoryProductsPage() {
                                         <TableHead className="w-24">
                                             <div className="flex items-center gap-1">
                                                 <SortHead field="unitCode" sort={sort} onSort={cycleSort}>Unit</SortHead>
-                                                <ColFilter field="unitId" options={units} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("unit")} createLabel="unit" />
+                                                <ColFilter field="unitId" options={units} noneOption={false} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("unit")} createLabel="unit" />
                                             </div>
                                         </TableHead>
                                     ) : null}
@@ -795,7 +809,7 @@ export default function InventoryProductsPage() {
                                         <TableHead className="w-24 text-right">
                                             <div className="flex items-center justify-end gap-1">
                                                 <SortHead field="stock" sort={sort} onSort={cycleSort} align="right">Stock</SortHead>
-                                                <ColFilter field="stock" options={[]} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} fixedItems={STOCK_FILTER_ITEMS} align="right" />
+                                                <ColFilter field="stock" options={[]} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} fixedItems={STOCK_FILTER_ITEMS} align="right" />
                                             </div>
                                         </TableHead>
                                     ) : null}
@@ -803,7 +817,7 @@ export default function InventoryProductsPage() {
                                         <TableHead className="w-20 text-center">
                                             <div className="flex items-center justify-center gap-1">
                                                 <SortHead field="isActive" sort={sort} onSort={cycleSort}>Active</SortHead>
-                                                <ColFilter field="isActive" options={[]} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} booleanField align="right" />
+                                                <ColFilter field="isActive" options={[]} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} booleanField align="right" />
                                             </div>
                                         </TableHead>
                                     ) : null}
@@ -811,7 +825,7 @@ export default function InventoryProductsPage() {
                                         <TableHead className="w-24 text-center" title="Cashier must fill the POS line note before selling">
                                             <div className="flex items-center justify-center gap-1">
                                                 <span>Req. note</span>
-                                                <ColFilter field="requireSaleNote" options={[]} rows={rows} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} booleanField boolLabels={{ trueLabel: "Required", falseLabel: "Not required" }} align="right" />
+                                                <ColFilter field="requireSaleNote" options={[]} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} booleanField boolLabels={{ trueLabel: "Required", falseLabel: "Not required" }} align="right" />
                                             </div>
                                         </TableHead>
                                     ) : null}
@@ -826,7 +840,7 @@ export default function InventoryProductsPage() {
                                 ) : pageRows.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={visibleColCount + 2} className="text-muted-foreground">
-                                            {rows.length === 0 ? "No products yet. Create a unit first, then add a product." : "No products match the search."}
+                                            {total === 0 ? "No products yet. Create a unit first, then add a product." : "No products match the search."}
                                         </TableCell>
                                     </TableRow>
                                 ) : (
@@ -1121,7 +1135,8 @@ export default function InventoryProductsPage() {
 
                 <div className={`${isEdit && selected.size > 0 ? "" : "-mt-4 "}flex flex-none flex-wrap items-center justify-between gap-2 border-t border-border bg-background py-1 text-sm`}>
                     <div className="flex items-center gap-3 text-muted-foreground">
-                        <span>{filtered.length} match / {rows.length} total</span>
+                        <span>{matched} match / {total} total</span>
+                        {list.refreshing ? <span className="text-xs">Loading…</span> : null}
                         {isEdit && dirty.size > 0 ? <Badge variant="secondary">{dirty.size} pending</Badge> : null}
                         {isEdit && selected.size > 0 ? (
                             <>
@@ -1135,37 +1150,24 @@ export default function InventoryProductsPage() {
                                 </button>
                             </>
                         ) : null}
-                        {isEdit && filtered.length > pageRows.length && pageSize !== 0 ? (
+                        {isEdit && matched > pageRows.length ? (
                             <button
                                 type="button"
                                 className="text-xs underline-offset-2 hover:underline"
                                 onClick={selectAllFiltered}
                             >
-                                select all {filtered.length} filtered
+                                select all {matched} filtered
                             </button>
                         ) : null}
                     </div>
                     <div className="flex items-center gap-2">
-                        <label className="flex items-center gap-1 text-xs text-muted-foreground">
-                            Page size
-                            <select
-                                value={pageSize}
-                                onChange={(e) => setPageSize(Number(e.target.value))}
-                                className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
-                            >
-                                <option value={50}>50</option>
-                                <option value={100}>100</option>
-                                <option value={250}>250</option>
-                                <option value={0}>All</option>
-                            </select>
-                        </label>
-                        {pageSize !== 0 && totalPages > 1 ? (
+                        {pageCount > 1 ? (
                             <div className="flex items-center gap-1">
-                                <Button type="button" variant="outline" size="sm" disabled={safePage === 0} onClick={() => setPageIndex(0)}>«</Button>
-                                <Button type="button" variant="outline" size="sm" disabled={safePage === 0} onClick={() => setPageIndex(safePage - 1)}>‹</Button>
-                                <span className="px-2 text-xs text-muted-foreground">{safePage + 1} / {totalPages}</span>
-                                <Button type="button" variant="outline" size="sm" disabled={safePage >= totalPages - 1} onClick={() => setPageIndex(safePage + 1)}>›</Button>
-                                <Button type="button" variant="outline" size="sm" disabled={safePage >= totalPages - 1} onClick={() => setPageIndex(totalPages - 1)}>»</Button>
+                                <Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => list.setPage(1)}>«</Button>
+                                <Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => list.setPage(page - 1)}>‹</Button>
+                                <span className="px-2 text-xs text-muted-foreground">{page} / {pageCount}</span>
+                                <Button type="button" variant="outline" size="sm" disabled={page >= pageCount} onClick={() => list.setPage(page + 1)}>›</Button>
+                                <Button type="button" variant="outline" size="sm" disabled={page >= pageCount} onClick={() => list.setPage(pageCount)}>»</Button>
                             </div>
                         ) : null}
                     </div>
@@ -1263,15 +1265,14 @@ function ColumnChooser({
 }
 
 /// Per-column multi-select filter. Renders a funnel button that opens a
-/// checklist of unique values from the master list (plus "(none)" if any row
-/// has a null relation). For booleanField (isActive), shows ✓ / inactive.
+/// checklist of unique values from the master list (plus "(none)" for a
+/// relation that may be empty). The server applies it over every product. For booleanField (isActive), shows ✓ / inactive.
 function ColFilter({
-    field, options, rows, colFilters, onToggle, onClear, booleanField = false,
-    boolLabels, fixedItems, align = "left", onCreate, createLabel,
+    field, options, colFilters, onToggle, onClear, booleanField = false,
+    boolLabels, fixedItems, align = "left", onCreate, createLabel, noneOption = true,
 }: {
     field: FilterField;
     options: Opt[];
-    rows: Row[];
     colFilters: Map<FilterField, Set<string>>;
     onToggle: (f: FilterField, key: string) => void;
     onClear: (f: FilterField) => void;
@@ -1285,6 +1286,9 @@ function ColFilter({
     align?: "left" | "right";
     onCreate?: () => Promise<number | null>;
     createLabel?: string;
+    /** Offer "(none)" — off for a required relation (unit). The page holds one
+     *  page of rows, so it cannot ask "does any product lack this?" itself. */
+    noneOption?: boolean;
 }) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
@@ -1319,9 +1323,7 @@ function ColFilter({
             ? [{ key: "true", label: boolLabels?.trueLabel ?? "Active" }, { key: "false", label: boolLabels?.falseLabel ?? "Inactive" }]
             : (() => {
                 const list = options.map((o) => ({ key: String(o.id), label: optLabel(o) }));
-                // "(none)" only if any row has null for this field
-                const anyNull = rows.some((r) => (r as unknown as Record<string, unknown>)[field] == null);
-                if (anyNull) list.unshift({ key: "__none__", label: "(none)" });
+                if (noneOption) list.unshift({ key: "__none__", label: "(none)" });
                 return list;
             })();
 
