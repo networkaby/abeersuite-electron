@@ -8,7 +8,7 @@
 // taking over read one drawer.
 
 import { Calculator, TrendingUp, CreditCard, Receipt } from "lucide-react";
-import { fmt } from "@/shared/lib/format/moneyInr";
+import { fmt, paiseToRupees } from "@/shared/lib/format/moneyInr";
 
 type TenderRow = { method: string; label: string; amountPaise: string };
 
@@ -39,7 +39,7 @@ export type ShiftSummary = {
     };
 };
 
-const rupees = (paise: string | number | undefined) => Number(paise || 0) / 100;
+const rupees = (paise: string | number | undefined) => paiseToRupees(Number(paise || 0));
 
 // "+ ₹1,234.00" / "− ₹1,234.00" — the till movement carries a sign of its own.
 export function signed(n: number): string {

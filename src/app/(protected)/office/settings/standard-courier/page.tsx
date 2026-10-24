@@ -22,7 +22,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import NeighbourhoodEditor from "@/modules/delivery/components/NeighbourhoodEditor";
-import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
+import { formatRupeesFromPaise, paiseToRupees } from "@/shared/lib/format/moneyInr";
 import {
     computeCustomRatePaise,
     INDIA_STATE_NAMES,
@@ -76,7 +76,7 @@ type ServiceForm = {
     zones: ZoneForm[]; // ZONE matrix
 };
 
-const rupees = (paise: unknown) => ((Number(paise) || 0) / 100).toString();
+const rupees = (paise: unknown) => String(paiseToRupees(Number(paise) || 0));
 const toPaise = (r: string) => Math.max(0, Math.round((parseFloat(r) || 0) * 100));
 
 // The 5 standard Indian courier zones, pre-filled with example rates (₹, per 0.5 kg).

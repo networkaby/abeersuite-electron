@@ -282,6 +282,8 @@ Rewrite `RELEASE_NOTES.md` for this version. The first line decides how counters
 
 `.env` decides `APP_MODE` and `LANDING_PAGE` — and, for a `WRITE_MODE=v_live` build, `WRITE_API_URL` and the office's `AUTH_SECRET`, which `generate-counter-env.ts` refuses to build without. Set them there before building — the file is read at the top of `electron:build` and nowhere later.
 
+`DATABASE_URL` is **not** baked in. The build carries `COUNTER_INSTALL_SECRET` (same value as on the Vercel office) and the till fetches `DATABASE_URL` from the office (`COUNTER_CONFIG_URL`, else `WRITE_API_URL`) at start, keeping a copy locked to that PC for offline starts. `generate-counter-env.ts` asks the office the same way before building and stops if it is refused — so the office deploy carrying the secret and `/api/counter/config` goes out **before** the first such build.
+
 `.env.local` is deliberately **not** loaded, and that is a safety property rather than an oversight: every build step is spawned with a copy of this environment, and `generate-counter-env.ts` falls back to `process.env` for any key `.env` does not supply, so anything loaded here can be baked into the installer. `.env.local` holds web-version dev overrides — a `READ_MODE` or `DATABASE_URL` uncommented for an afternoon's web work would otherwise decide what ships to every counter. See the comment at the top of `scripts/electron-build.ts`.
 
 **Step 8 — build and gate**

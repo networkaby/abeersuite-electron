@@ -22,6 +22,7 @@ import { QrSvg } from "@/shared/components/print/QrSvg";
 import SetDocumentTitle from "@/shared/components/print/SetDocumentTitle";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 import { rupeesInWords } from "@/shared/lib/format/numberToWords";
+import { formatAmount } from "@/shared/lib/format/moneyInr";
 
 export interface ThermalReceiptLine {
     description: string;
@@ -184,11 +185,6 @@ export interface ThermalReceiptSample {
     /// print as item + qty only — no rate, amount or totals.
     hidePrices?: boolean;
 }
-
-// Plain figures, no "Rs." — the ESC/POS slip prints amounts bare (the column
-// header says Amount), and the paper is the reference for this preview.
-const fmtINR = (n: number) =>
-    n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // Class used to scope the inline <style> block when rendered inline in the
 // host page (previewMode=true). MUST stay in sync with the wrapper div below.
@@ -363,14 +359,14 @@ function MoneyThermalMiddle({ template, sample }: { template: VoucherTemplateDef
             {modes.length > 1 && modes.map((l, i) => (
                 <div key={i} className="row">
                     <span>{i === 0 ? "By:" : ""} {l.description}</span>
-                    <span>{fmtINR(l.amount)}</span>
+                    <span>{formatAmount(l.amount)}</span>
                 </div>
             ))}
             {sample.notes && <div className="small" style={{ marginTop: 2 }}>Towards: {sample.notes}</div>}
             <div className="hr" />
             <div className="row total">
                 <span>{isPayment ? "PAID" : "RECEIVED"}</span>
-                <span>{fmtINR(total)}</span>
+                <span>{formatAmount(total)}</span>
             </div>
             <div className="center small" style={{ marginTop: 2 }}>{rupeesInWords(total)}</div>
             {template.showPartyBalance && (sample.balanceBefore || sample.balanceAfter) && (
@@ -402,10 +398,10 @@ function ThermalReceiptsBlock({ template, sample }: { template: VoucherTemplateD
         <>
             <div className="hr" />
             {receipts.map((r, i) => (
-                <div key={i} className="row"><span>{r.label}</span><span>{fmtINR(r.amount)}</span></div>
+                <div key={i} className="row"><span>{r.label}</span><span>{formatAmount(r.amount)}</span></div>
             ))}
             {due > 0.005 && (
-                <div className="row total"><span>Balance due</span><span>{fmtINR(due)}</span></div>
+                <div className="row total"><span>Balance due</span><span>{formatAmount(due)}</span></div>
             )}
             {/* The party's running account — opt-in, as on the A4 settlement. */}
             {template.showPartyBalance && sample.balanceBefore && (
@@ -459,11 +455,11 @@ function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateD
                                 {l.description}
                                 {template.showLineNote && l.note && <div className="small">{l.note}</div>}
                                 {template.showMrp && sample.discounts && l.mrp != null && l.mrp > l.amount + 0.005 && (
-                                    <div className="small">MRP <s>{fmtINR(l.mrp)}</s></div>
+                                    <div className="small">MRP <s>{formatAmount(l.mrp)}</s></div>
                                 )}
                             </td>
                             <td className="qty">{l.quantity}</td>
-                            {!sample.hidePrices && <td className="amt">{fmtINR(l.amount)}</td>}
+                            {!sample.hidePrices && <td className="amt">{formatAmount(l.amount)}</td>}
                         </tr>
                     ))}
                 </tbody>
@@ -475,15 +471,15 @@ function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateD
                    "You saved". The per-item real price is never shown. */
                 <>
                     <div className="hr" />
-                    <div className="row"><span>Gross</span><span>{fmtINR(sample.discounts.grossAtTag)}</span></div>
+                    <div className="row"><span>Gross</span><span>{formatAmount(sample.discounts.grossAtTag)}</span></div>
                     {sample.discounts.rows.map((d, i) => (
-                        <div key={i} className="row"><span>{d.label}</span><span>&minus; {fmtINR(d.amount)}</span></div>
+                        <div key={i} className="row"><span>{d.label}</span><span>&minus; {formatAmount(d.amount)}</span></div>
                     ))}
                     {(sample.discounts.charges ?? []).map((c, i) => (
-                        <div key={`c${i}`} className="row"><span>{c.label}</span><span>{c.amount < 0 ? "−" : "+"} {fmtINR(Math.abs(c.amount))}</span></div>
+                        <div key={`c${i}`} className="row"><span>{c.label}</span><span>{c.amount < 0 ? "−" : "+"} {formatAmount(Math.abs(c.amount))}</span></div>
                     ))}
                     <div className="hr" />
-                    <div className="row total"><span>Total</span><span>{fmtINR(sample.total ?? sample.discounts.grossAtTag - sample.discounts.total)}</span></div>
+                    <div className="row total"><span>Total</span><span>{formatAmount(sample.total ?? sample.discounts.grossAtTag - sample.discounts.total)}</span></div>
                     {/* GST is INCLUDED in the inclusive line amounts above — shown as a
                         note on the total, not a column row (so the math reads correctly).
                         Part of the total block, so it always prints. */}
@@ -495,13 +491,13 @@ function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateD
                         const tax = sample.discounts?.taxTotal
                             ?? sample.hsnSummary.reduce((s, h) => s + h.cgst + h.sgst, 0);
                         return tax > 0.005 ? (
-                            <div className="row small"><span>incl. {inter ? "GST (IGST)" : "GST (CGST+SGST)"}</span><span>{fmtINR(tax)}</span></div>
+                            <div className="row small"><span>incl. {inter ? "GST (IGST)" : "GST (CGST+SGST)"}</span><span>{formatAmount(tax)}</span></div>
                         ) : null;
                     })()}
                     {sample.discounts.savingsTotal > 0 && (
                         <div className="row total" style={{ marginTop: 2 }}>
                             <span>You saved</span>
-                            <span>{fmtINR(sample.discounts.savingsTotal)} ({sample.discounts.savingsPct}%)</span>
+                            <span>{formatAmount(sample.discounts.savingsTotal)} ({sample.discounts.savingsPct}%)</span>
                         </div>
                     )}
                 </>
@@ -511,18 +507,18 @@ function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateD
                     {sample.subtotal !== null && (
                         <>
                             <div className="hr" />
-                            <div className="row"><span>Subtotal</span><span>{fmtINR(sample.subtotal)}</span></div>
+                            <div className="row"><span>Subtotal</span><span>{formatAmount(sample.subtotal)}</span></div>
                             {sample.taxBreakdown ? (
                                 sample.taxBreakdown.kind === "INTRA" ? (
                                     <>
-                                        <div className="row"><span>CGST</span><span>{fmtINR(sample.taxBreakdown.cgst)}</span></div>
-                                        <div className="row"><span>SGST</span><span>{fmtINR(sample.taxBreakdown.sgst)}</span></div>
+                                        <div className="row"><span>CGST</span><span>{formatAmount(sample.taxBreakdown.cgst)}</span></div>
+                                        <div className="row"><span>SGST</span><span>{formatAmount(sample.taxBreakdown.sgst)}</span></div>
                                     </>
                                 ) : (
-                                    <div className="row"><span>IGST</span><span>{fmtINR(sample.taxBreakdown.igst)}</span></div>
+                                    <div className="row"><span>IGST</span><span>{formatAmount(sample.taxBreakdown.igst)}</span></div>
                                 )
                             ) : sample.taxAmount !== null && sample.taxAmount > 0 && (
-                                <div className="row"><span>Tax</span><span>{fmtINR(sample.taxAmount)}</span></div>
+                                <div className="row"><span>Tax</span><span>{formatAmount(sample.taxAmount)}</span></div>
                             )}
                         </>
                     )}
@@ -530,7 +526,7 @@ function DefaultThermalMiddle({ template, sample }: { template: VoucherTemplateD
                     {sample.total !== null && (
                         <>
                             <div className="hr" />
-                            <div className="row total"><span>Total</span><span>{fmtINR(sample.total)}</span></div>
+                            <div className="row total"><span>Total</span><span>{formatAmount(sample.total)}</span></div>
                         </>
                     )}
                 </>
@@ -618,7 +614,6 @@ function DepositThermalMiddle({ sample }: { sample: ThermalReceiptSample }) {
     // Denomination amounts print WITHOUT the "Rs." prefix — on an 80mm roll the
     // prefix pushes the number onto a second line. Currency is clear from the
     // "Rs." total below. nowrap keeps each amount on one right-aligned line.
-    const fmtNum = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const cashTotal   = counted ? counted.notes.reduce((s, n) => s + n.denom * n.count, 0) : 0;
     const chequeTotal = counted ? counted.cheques.reduce((s, c) => s + c.amount, 0) : 0;
     // Slip = physical deposit (cash + cheques); pen-fill mode → voucher total.
@@ -659,14 +654,14 @@ function DepositThermalMiddle({ sample }: { sample: ThermalReceiptSample }) {
                                 <tr key={n.denom}>
                                     <td>{n.denom} &times;</td>
                                     <td className="qty">{n.count}</td>
-                                    <td className="amt" style={{ whiteSpace: "nowrap" }}>{fmtNum(n.denom * n.count)}</td>
+                                    <td className="amt" style={{ whiteSpace: "nowrap" }}>{formatAmount(n.denom * n.count)}</td>
                                 </tr>
                             ))}
                             {counted.notes.length > 0 && (
                                 <tr>
                                     <td style={{ borderTop: "1px solid #000" }}><b>Cash</b></td>
                                     <td className="qty" style={{ borderTop: "1px solid #000" }}><b>{counted.notes.reduce((s, n) => s + n.count, 0)}</b></td>
-                                    <td className="amt" style={{ borderTop: "1px solid #000", whiteSpace: "nowrap" }}><b>{fmtNum(cashTotal)}</b></td>
+                                    <td className="amt" style={{ borderTop: "1px solid #000", whiteSpace: "nowrap" }}><b>{formatAmount(cashTotal)}</b></td>
                                 </tr>
                             )}
                         </tbody>
@@ -677,7 +672,7 @@ function DepositThermalMiddle({ sample }: { sample: ThermalReceiptSample }) {
                             {counted.cheques.map((c, i) => (
                                 <div className="row" key={i}>
                                     <span>{c.account ? `${c.account} · ${c.no}` : c.no}</span>
-                                    <span>{fmtINR(c.amount)}</span>
+                                    <span>{formatAmount(c.amount)}</span>
                                 </div>
                             ))}
                         </>
@@ -697,7 +692,7 @@ function DepositThermalMiddle({ sample }: { sample: ThermalReceiptSample }) {
             <div className="hr" />
             <div className="row total">
                 <span>{isHandover ? "HANDED OVER" : "DEPOSIT"}</span>
-                <span>{fmtINR(total)}</span>
+                <span>{formatAmount(total)}</span>
             </div>
             <div className="center small" style={{ marginTop: 2 }}>{rupeesInWords(total)}</div>
             {isHandover ? (
@@ -730,12 +725,12 @@ function JournalThermalMiddle({ sample }: { sample: ThermalReceiptSample }) {
                 return (
                     <div className="row" key={i}>
                         <span>{isCr ? "  " : ""}{l.description} <b>{isCr ? "Cr" : "Dr"}</b></span>
-                        <span>{fmtINR(l.amount)}</span>
+                        <span>{formatAmount(l.amount)}</span>
                     </div>
                 );
             })}
             <div className="hr" />
-            <div className="row total"><span>Total</span><span>{fmtINR(totalDr)}</span></div>
+            <div className="row total"><span>Total</span><span>{formatAmount(totalDr)}</span></div>
             <div className="center small" style={{ marginTop: 2 }}>{rupeesInWords(grand)}</div>
             {sample.notes && <div className="small" style={{ marginTop: 4 }}>Narration: {sample.notes}</div>}
         </>

@@ -31,6 +31,7 @@ import {
     INDIA_STATE_NAMES,
     type DeliveryKind,
 } from "@/modules/delivery/lib/deliveryMethodConfig";
+import { paiseToRupees } from "@/shared/lib/format/moneyInr";
 
 type Method = {
     id: number;
@@ -63,7 +64,7 @@ type FormState = {
     excludePincodes: string; // prefixes, one per line / comma-separated
 };
 
-const rupees = (paise: unknown) => ((Number(paise) || 0) / 100).toString();
+const rupees = (paise: unknown) => String(paiseToRupees(Number(paise) || 0));
 const toPaise = (r: string) => Math.max(0, Math.round((parseFloat(r) || 0) * 100));
 
 function emptyForm(kind: DeliveryKind = "OWN_BOY"): FormState {

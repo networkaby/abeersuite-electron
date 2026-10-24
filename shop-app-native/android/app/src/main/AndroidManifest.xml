@@ -63,4 +63,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 13+: show bill and order notifications. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- In-app update (NsUpdatePlugin): open Android's Install screen for the new APK. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>

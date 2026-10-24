@@ -7,6 +7,7 @@
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { toNumber } from "@/modules/accountancy/lib/balance";
+import { round2 as r2 } from "@/shared/lib/format/moneyInr";
 import {
     loadUnitCostMap,
     resolveCostMethod,
@@ -146,8 +147,9 @@ export async function loadMarginLines(q: MarginQuery): Promise<MarginResult> {
     return { lines, costMethod };
 }
 
-/** Round to 2dp for JSON payloads (floats stay unrounded through the math). */
-export const r2 = (n: number) => Math.round(n * 100) / 100;
+/** Round to 2dp for JSON payloads (floats stay unrounded through the math) — the
+ *  shared money rounding, re-exported under the name every BI route imports. */
+export { r2 };
 
 export const marginPct = (revenue: number, profit: number) =>
     revenue !== 0 ? r2((profit / revenue) * 100) : 0;

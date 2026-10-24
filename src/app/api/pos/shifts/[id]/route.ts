@@ -15,7 +15,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { sumPaise, listShiftMovements } from "@/modules/pos/lib/shiftMath";
 import { buildShiftSummary } from "@/modules/pos/lib/shiftSummary";
 import { parseHandoverDenominations } from "@/modules/pos/lib/handoverDenominations";
-import { shiftDeleteBlockers } from "@/modules/pos/lib/shiftManage";
+import { shiftDeleteBlockers, shiftManageBlock } from "@/modules/pos/lib/shiftManage";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     // Any signed-in staff may ASK; access is decided per-shift below. The shift's
@@ -83,9 +83,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         // vouchers (digital receipts never touch the till, so cash sales can read
         // ₹0 while the shift still carries them). Alongside, the delete guard the
         // delete route runs, so the detail page shows exactly what blocks it.
-        const [movements, deleteBlockers] = await Promise.all([
+        // Same for reopen: only a closed shift with no later one on its counter.
+        const [movements, deleteBlockers, reopenBlock] = await Promise.all([
             listShiftMovements(prisma, shift.id),
             shiftDeleteBlockers(prisma, { ...shift, dropCount: shift.drops.length }),
+            shift.status === "CLOSED" ? shiftManageBlock(prisma, shift) : null,
         ]);
         const expendituresPaise = sumPaise(movements.expenditures);
 
@@ -125,6 +127,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
             _count: { receipts: movements.receipts.length },
             // Why the shift cannot be deleted — empty when it can.
             deleteBlockers,
+            // Why the shift cannot be reopened — null when it can (or is not closed).
+            reopenBlock,
             handover: shift.handover ? {
                 ...shift.handover,
                 declaredByAPaise:  shift.handover.declaredByAPaise?.toString() ?? null,

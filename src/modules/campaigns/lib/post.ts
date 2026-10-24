@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { formatRupees } from "@/shared/lib/format/moneyInr";
 
 /**
  * Posts — one message for everyone, put up on several channels
@@ -126,8 +127,6 @@ export type PostProduct = {
     inStock: boolean;
 };
 
-const rupees = (paise: number) => `₹${Math.round(paise / 100).toLocaleString("en-IN")}`;
-
 /**
  * The starting text of a post made from a product: name, a line about it, the
  * price (MRP alongside when the shop sells below it) and "In stock". Staff edit
@@ -135,7 +134,7 @@ const rupees = (paise: number) => `₹${Math.round(paise / 100).toLocaleString("
  */
 export function productPostCaption(p: PostProduct): string {
     const price =
-        p.mrpPaise && p.mrpPaise > p.pricePaise ? `${rupees(p.pricePaise)} (MRP ${rupees(p.mrpPaise)})` : rupees(p.pricePaise);
+        p.mrpPaise && p.mrpPaise > p.pricePaise ? `${formatRupees(p.pricePaise / 100)} (MRP ${formatRupees(p.mrpPaise / 100)})` : formatRupees(p.pricePaise / 100);
     return [p.name, p.blurb, `Price: ${price}${p.inStock ? " · In stock" : ""}`].filter(Boolean).join("\n\n").slice(0, POST_CAPTION_MAX);
 }
 

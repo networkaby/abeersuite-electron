@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
+import { formatRupeesFromPaise, paiseToRupees } from "@/shared/lib/format/moneyInr";
 import {
     ownBoyRatePaise,
     ownBoyVehicleFits,
@@ -47,7 +47,7 @@ type VehicleForm = {
 
 const rupees = (paise: unknown) => {
     const n = Number(paise) || 0;
-    return n > 0 ? (n / 100).toString() : "";
+    return n > 0 ? String(paiseToRupees(n)) : "";
 };
 const toPaise = (r: string) => Math.max(0, Math.round((parseFloat(r) || 0) * 100));
 const toPaiseOpt = (r: string): number | undefined => {

@@ -15,6 +15,7 @@ import { TableScrollArea } from "@/shared/components/TableScrollArea";
 import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
 import { ScrollBar } from "@/components/ui/scroll-area";
+import { formatInr } from "@/shared/lib/format";
 
 const ROW_GRID = "grid gap-2 items-center grid-cols-[minmax(180px,1fr)_84px_84px_84px_72px]";
 
@@ -35,7 +36,7 @@ function groupKey(item: PricingItem, view: View): string {
 function fmt(paise: number | null, gstRatePct = 0): string {
     if (paise == null) return "—";
     const v = gstRatePct > 0 ? (paise / 100) * (1 + gstRatePct / 100) : paise / 100;
-    return `₹${v.toFixed(2)}`;
+    return formatInr(v);
 }
 
 // ── linked-input helpers ───────────────────────────────────────────────────────

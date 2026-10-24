@@ -5,6 +5,7 @@ import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { normalizeMobile10 } from "@/shared/lib/auth/portalIdentifier";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { partyBalanceAroundVoucher } from "@/shared/lib/accountancy/partyLedgerBalance";
+import { formatAmount } from "@/shared/lib/format/moneyInr";
 import { sendPushToPerson } from "@/shared/lib/push/sendPush";
 import {
     WA_APP_LINK,
@@ -113,8 +114,6 @@ export async function sendManually(source: "inv" | "uv", id: number): Promise<No
     if (!kind) return { status: "skipped", reason: "not a customer document" };
     return notifyBill(kind, uvId, { manual: true });
 }
-
-const money = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const day = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
 
 export type PhoneRow = { phone: string; isPrimary: boolean; verifiedAt: Date | null };
@@ -164,11 +163,11 @@ async function notifyVoucher(kind: WaTemplateKind, uvId: number): Promise<Notify
     const balanceText = (n: number) => {
         const rounded = Math.round(n * 100) / 100;
         if (rounded === 0) return "Nil";
-        return `Rs ${money.format(Math.abs(rounded))} ${rounded > 0 ? "due" : "advance"}`;
+        return `Rs ${formatAmount(Math.abs(rounded))} ${rounded > 0 ? "due" : "advance"}`;
     };
 
     const docNo = uv.voucherNo ?? `#${uvId}`;
-    const amountText = money.format(amount);
+    const amountText = formatAmount(amount);
     const dateText = day.format(uv.date);
     return deliver({
         kind,

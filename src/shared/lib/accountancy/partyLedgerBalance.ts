@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
+import { formatAmount } from "@/shared/lib/format/moneyInr";
 
 /**
  * Party ledger balance around one voucher — what the party owed BEFORE it and
@@ -78,8 +79,7 @@ export async function partyBalanceAroundVoucher(
         const side = n >= 0
             ? (nb === "DEBIT" ? "Dr" : "Cr")
             : (nb === "DEBIT" ? "Cr" : "Dr");
-        const amt = Math.abs(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        return `Rs. ${amt} ${side}`;
+        return `Rs. ${formatAmount(Math.abs(n))} ${side}`;
     };
 
     return { before, after, format };

@@ -36,7 +36,7 @@ import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
-import { gridRowClass } from "@/shared/lib/format";
+import { formatInr, gridRowClass } from "@/shared/lib/format";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { barcodePrice as barcodePriceCore, normalizeBarcodeBands, DEFAULT_BARCODE_BANDS, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 import { productMatchesSearch } from "@/shared/lib/inventory";
@@ -247,7 +247,7 @@ function profitOf(
     return { amt, pct };
 }
 
-const rupee = (n: number | null) => (n == null ? "—" : `₹${n.toFixed(2)}`);
+const rupee = (n: number | null) => (n == null ? "—" : formatInr(n));
 
 // ── Barcode price (the headroom price printed on the label) ───────────────────
 //

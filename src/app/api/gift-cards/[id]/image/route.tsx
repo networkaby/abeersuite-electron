@@ -3,6 +3,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import QRCode from "qrcode";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
+import { formatAmount } from "@/shared/lib/format/moneyInr";
 
 // GET /api/gift-cards/[id]/image — a shareable PNG of the gift-card design (used
 // by the "Share with image" Web Share action + downloads). Rendered with Satori
@@ -16,8 +17,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     if (!card) return new Response("Not found", { status: 404 });
 
     const org = getOrganisation();
-    const balance = Number(card.balance).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const initial = Number(card.initialValue).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const balance = formatAmount(Number(card.balance));
+    const initial = formatAmount(Number(card.initialValue));
     const qr = await QRCode.toDataURL(card.code, { width: 240, margin: 1, errorCorrectionLevel: "M" });
     const meta = `${card.ownerAccount ? card.ownerAccount.name : "Bearer card"}${card.expiresAt ? ` · valid until ${card.expiresAt.toISOString().slice(0, 10)}` : ""}`;
 

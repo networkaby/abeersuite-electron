@@ -9,7 +9,7 @@
 //   and Total Collections Breakdown (sales/receipts/refunds)
 // - Cash drops to safe table
 // - Linked vouchers (Opening Contra, Closing Contra, Variance JE)
-// - Handover chain and manager corrections ("Reopen & re-close", "Delete")
+// - Handover chain and manager corrections ("Correct count", "Reopen & re-close", "Delete")
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import {
     Loader2, ArrowLeft, ArrowDownUp, Lock, ExternalLink, Monitor, Users,
     RotateCcw, Trash2, Clock, Calendar, TrendingUp, CreditCard, Receipt,
-    Calculator, ArrowRightLeft, CheckCircle2, User, Printer,
+    Calculator, ArrowRightLeft, CheckCircle2, User, Printer, PencilLine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -34,6 +34,7 @@ import { fmt } from "@/shared/lib/format/moneyInr";
 import { formatDate } from "@/shared/lib/format/formatDate";
 import { extractApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { NumericInput } from "@/shared/components/NumericInput";
 import { ShiftCloseDialog } from "@/modules/pos/components/ShiftCloseDialog";
 
 type MovementBreakdown = {
@@ -103,6 +104,8 @@ type ShiftDetail = {
     expenditures: { id: number }[];
     _count: { receipts: number };
     deleteBlockers?: string[];
+    reopenBlock?: string | null;
+    handoverToShiftId: number | null;
     movementBreakdown?: MovementBreakdown;
     collectionsBreakdown?: CollectionsBreakdown;
     tenderBreakdown?: TenderRow[];
@@ -145,6 +148,9 @@ export default function ShiftDetailPage() {
     // The close moment the shift had BEFORE reopen — the re-close dialog offers
     // it back as the default "Closed on", so the correction stays on that day.
     const [originalClosedAt, setOriginalClosedAt] = useState<string | null>(null);
+    // Correct count — any closed shift, in one step, no reopen.
+    const [counting, setCounting] = useState(false);
+    const [newCount, setNewCount] = useState("");
 
     const load = useCallback(() => {
         axios.get<ShiftDetail>(`/api/pos/shifts/${id}`)
@@ -175,6 +181,24 @@ export default function ShiftDetailPage() {
             setReclosing(true);
         } catch (e: unknown) {
             toast.error(extractApiError(e, `Failed to ${asking} shift`));
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const submitCount = async () => {
+        if (!reason.trim()) { toast.error("Please give a reason"); return; }
+        const rupees = Number(newCount);
+        if (newCount.trim() === "" || !Number.isFinite(rupees) || rupees < 0) { toast.error("Enter the correct cash count"); return; }
+        setBusy(true);
+        try {
+            await axios.post(`/api/pos/shifts/${id}/correct-count`, { declaredCashPaise: Math.round(rupees * 100), reason: reason.trim() });
+            toast.success("Count corrected — variance and vault sweep updated");
+            setCounting(false);
+            setReason("");
+            load();
+        } catch (e: unknown) {
+            toast.error(extractApiError(e, "Failed to correct the count"));
         } finally {
             setBusy(false);
         }
@@ -239,7 +263,16 @@ export default function ShiftDetailPage() {
 
                     {canManage && (
                         <>
-                            {isClosed && (
+                            {isClosed && shift.handoverToShiftId == null && (
+                                <Button variant="outline" size="sm" onClick={() => {
+                                    setReason("");
+                                    setNewCount(shift.declaredCashPaise != null ? String(Number(shift.declaredCashPaise) / 100) : "");
+                                    setCounting(true);
+                                }}>
+                                    <PencilLine size={13} className="mr-1" /> Correct count
+                                </Button>
+                            )}
+                            {isClosed && !shift.reopenBlock && (
                                 <Button variant="outline" size="sm" onClick={() => { setReason(""); setAsking("reopen"); }}>
                                     <RotateCcw size={13} className="mr-1" /> Reopen &amp; re-close
                                 </Button>
@@ -283,6 +316,55 @@ export default function ShiftDetailPage() {
                         <Button variant={asking === "delete" ? "destructive" : "default"} onClick={submitCorrection} disabled={busy || !reason.trim()}>
                             {busy && <Loader2 size={14} className="animate-spin mr-1" />}
                             {asking === "delete" ? "Delete shift" : "Reopen"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Correct count — any closed shift */}
+            <Dialog open={counting} onOpenChange={(v) => { if (!v && !busy) setCounting(false); }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Correct the cash count?</DialogTitle>
+                        <DialogDescription>
+                            The shift stays closed. Its variance and vault sweep are worked out again from the new count,
+                            and the same Variance Journal and Closing Contra are rewritten under their own numbers.
+                            Expected in drawer and the cash kept in counter do not change, so later shifts are not touched.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {(() => {
+                        const expected = Number(shift.expectedCashPaise ?? 0) / 100;
+                        const carry    = Number(shift.carryOverNextPaise ?? 0) / 100;
+                        const drops    = Number(shift.dropsPaise ?? 0) / 100;
+                        const count    = newCount.trim() === "" ? null : Number(newCount);
+                        return (
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <span className="text-muted-foreground">Expected in drawer</span><span className="text-right font-mono">₹{fmt(expected)}</span>
+                                    <span className="text-muted-foreground">Kept in counter (locked)</span><span className="text-right font-mono">₹{fmt(carry)}</span>
+                                    {count != null && Number.isFinite(count) && (
+                                        <>
+                                            <span className="text-muted-foreground">New variance</span><span className="text-right font-mono">{signed(count - expected)}</span>
+                                            <span className="text-muted-foreground">New sweep to vault</span><span className="text-right font-mono">₹{fmt(Math.max(0, count + drops - carry))}</span>
+                                        </>
+                                    )}
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="shift-count">Correct physical count (₹)</Label>
+                                    <NumericInput id="shift-count" mode="decimal" min={0} value={newCount} onValueChange={setNewCount} autoFocus />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="shift-count-reason">Reason</Label>
+                                    <Textarea id="shift-count-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Counted ₹50 short by mistake" />
+                                </div>
+                            </div>
+                        );
+                    })()}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setCounting(false)} disabled={busy}>Cancel</Button>
+                        <Button onClick={submitCount} disabled={busy || !reason.trim() || newCount.trim() === ""}>
+                            {busy && <Loader2 size={14} className="animate-spin mr-1" />}
+                            Save count
                         </Button>
                     </DialogFooter>
                 </DialogContent>

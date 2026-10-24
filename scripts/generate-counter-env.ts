@@ -18,6 +18,7 @@ import * as path from "path";
 import {
     COUNTER_ENV_FILE,
     COUNTER_ENV_REQUIRED,
+    counterConfigOrigin,
     counterEnvCopiedFor,
     parseEnvFile,
 } from "./counterEnv";
@@ -49,7 +50,31 @@ function relayTargetIsSafe(raw: string): boolean {
     }
 }
 
-function main(): void {
+/**
+ * Asks the office for the database settings exactly as a till will on its first start.
+ *
+ * The installer no longer carries `DATABASE_URL`, so a till that cannot get it from the
+ * office has no database at all. Without this check, a build made before Vercel has
+ * the secret (or the route) would install fine and break every counter it updates.
+ */
+async function officeAnswers(origin: string, secret: string): Promise<string | null> {
+    try {
+        const res = await fetch(new URL("/api/counter/config", origin), {
+            method: "POST",
+            headers: { Authorization: `Install ${secret}` },
+            signal: AbortSignal.timeout(20_000),
+        });
+        if (!res.ok) return `the office answered HTTP ${res.status}`;
+        const body = (await res.json()) as Record<string, unknown>;
+        return typeof body.DATABASE_URL === "string" && body.DATABASE_URL
+            ? null
+            : "the office answered without DATABASE_URL";
+    } catch (err) {
+        return `the office could not be reached (${err instanceof Error ? err.message : String(err)})`;
+    }
+}
+
+async function main(): Promise<void> {
     const rootDir = process.cwd();
     const outFile = path.join(rootDir, "resources", COUNTER_ENV_FILE);
 
@@ -105,12 +130,30 @@ function main(): void {
             missingRequired.map((key) => `    ${key} is not set on this machine`).join("\n") +
             "\n\n  Installation is unattended, so there is no later step where an operator\n" +
             "  supplies these. Set them in .env and build again.\n" +
-            "  DATABASE_URL absent → every page fails.\n" +
+            "  COUNTER_INSTALL_SECRET absent → the till cannot fetch its database settings.\n" +
             "  INTERNAL_STAFF_EMAIL_DOMAINS absent → every staff login is refused with\n" +
             "  \"Invalid email or password\", before the password is checked.\n"
         );
         process.exit(1);
     }
+
+    // The till fetches DATABASE_URL from the office with the install secret.
+    const configOrigin = counterConfigOrigin(written);
+    const configProblem = !configOrigin
+        ? "COUNTER_CONFIG_URL (or WRITE_API_URL) is not set — the till would not know where to fetch its database settings"
+        : !relayTargetIsSafe(configOrigin)
+            ? "COUNTER_CONFIG_URL must be https:// (http:// only for localhost) — the request carries the install secret"
+            : await officeAnswers(configOrigin, written.get("COUNTER_INSTALL_SECRET")!);
+    if (configProblem) {
+        console.error(
+            "[generate-counter-env] FATAL: a till built now could not get its database settings.\n" +
+            `    ${configProblem}\n\n` +
+            "  Set COUNTER_INSTALL_SECRET on Vercel (same value as .env), deploy the office,\n" +
+            "  and build again. Every till updated by this build fetches DATABASE_URL there.\n"
+        );
+        process.exit(1);
+    }
+    console.log(`[generate-counter-env] ${configOrigin} hands out the database settings — OK.`);
 
     // A v_live till relays its writes to the office, so it needs somewhere safe to send them.
     if (written.get("WRITE_MODE") === "v_live") {
@@ -163,4 +206,4 @@ function main(): void {
     }
 }
 
-main();
+void main();

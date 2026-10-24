@@ -1,5 +1,8 @@
 import { triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
+import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
+import { libpqUrl, projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability } from "@/shared/lib/backup/availability";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,7 +11,8 @@ export const dynamic = "force-dynamic";
  * GET /api/cron/backup — Invoked by Vercel Cron on a daily schedule.
  *
  * Secured by Vercel's automatic Authorization header (Bearer <CRON_SECRET>).
- * Triggers the GitHub Actions backup runner, which dumps the database and uploads it to Dropbox.
+ * Reads the active deployment's database URL and triggers the GitHub Actions
+ * backup runner, which dumps the database and uploads it to Dropbox.
  */
 export async function GET(req: Request) {
     // CRON_SECRET is OPTIONAL. Unset, empty, or whitespace means the check is
@@ -20,6 +24,18 @@ export async function GET(req: Request) {
     const cronSecret = process.env.CRON_SECRET?.trim();
     if (cronSecret && req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
         return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Only the deployment holding the office domain takes the nightly dump. Two Vercel
+    // projects run this code, and whichever holds office.networkservice.in is the real
+    // production — the other may point at the same database (a duplicate dump) or at
+    // one nobody uses. Vercel sets VERCEL_PROJECT_PRODUCTION_URL per deployment, so
+    // after moving the domain, redeploy both. Unknown (unset) still backs up: a
+    // duplicate is cheaper than a missed night.
+    const productionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim().toLowerCase();
+    const officeHost = new URL(COMPANY_DETAILS.sites.office).host;
+    if (productionHost && productionHost !== officeHost) {
+        return Response.json({ skipped: true, reason: `Not the office site (${productionHost}); ${officeHost} takes the nightly backup.` });
     }
 
     const { canBackup, missing } = backupAvailability();
@@ -34,9 +50,24 @@ export async function GET(req: Request) {
     const domain = process.env.VERCEL_URL?.trim() ?? "";
     const inputs: Record<string, string> = { source: "cron", domain };
 
-    // No database URL is sent: the workflow dumps whatever its DIRECT_DATABASE_URL
-    // repo secret points at and names the file there — same as the settings route,
-    // and for the same reason (a workflow input is printed in full in the run log).
+    // ── The app supplies the database URL ───────────────────────────────────────
+    // KEEP THIS BLOCK. Each Vercel project may use a different database, and this is
+    // how the runner learns which one: without it the runner dumps whatever the
+    // DIRECT_DATABASE_URL repo secret points at. Cost, accepted: the password appears
+    // in the (private) run log, because workflow inputs are not masked.
+    //
+    // DIRECT_URL first; without it, the live DATABASE_URL cleaned of Prisma's
+    // `pgbouncer=true` by libpqUrl — the same fallback as the settings route.
+    const dbUrl = libpqUrl(process.env.DIRECT_URL) ?? libpqUrl(process.env.DATABASE_URL);
+    if (!dbUrl) {
+        return Response.json(
+            { error: "Active database URL is missing or invalid in server environment." },
+            { status: 500 },
+        );
+    }
+    inputs.source_db_url = dbUrl;
+    inputs.file_name = makeBackupFileName({ domain, projectRef: projectRefFromDbUrl(dbUrl), source: "cron" });
+    // ── end of database URL block ───────────────────────────────────────────────
 
     try {
         await triggerWorkflow(process.env.GITHUB_BACKUP_WORKFLOW?.trim() || "backup.yml", inputs);
@@ -44,6 +75,6 @@ export async function GET(req: Request) {
         return Response.json({ error: (err as Error).message }, { status: 500 });
     }
 
-    // The workflow names the file, so this side cannot know it.
-    return Response.json({ ok: true, fileName: null, triggeredAt: new Date().toISOString() });
+    // null once the block above is commented out — this side cannot know the name then.
+    return Response.json({ ok: true, fileName: inputs.file_name ?? null, triggeredAt: new Date().toISOString() });
 }

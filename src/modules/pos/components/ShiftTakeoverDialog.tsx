@@ -22,7 +22,7 @@ import {
     Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { fmt } from "@/shared/lib/format/moneyInr";
+import { fmt, paiseToRupees } from "@/shared/lib/format/moneyInr";
 import { extractApiError } from "@/shared/lib/api";
 import { resolveMachineIdentity } from "@/shared/lib/counter/identity";
 import { applyCounterIdRanges } from "@/modules/pos/lib/counterIdRanges";
@@ -54,7 +54,7 @@ export type CounterTakeover = {
 type TakeoverResult = { id: number; idRangeStart: number | null; openingFloatPaise: string };
 
 const clock = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-const rupees = (paise: string | number) => Number(paise) / 100;
+const rupees = (paise: string | number) => paiseToRupees(Number(paise));
 
 export function ShiftTakeoverDialog({
     takeover, rejectLabel, onAccepted, onReject,
