@@ -148,3 +148,67 @@ export function contentLengthOf(headers: Headers): number | null {
     const n = Number(raw);
     return Number.isFinite(n) && n >= 0 ? n : null;
 }
+
+// ── Bill keys whose save is uncertain ────────────────────────────────────────
+//
+// The duplicate-bill rule (writeRelay.ts) stops ONE attempt running here after it
+// may have reached the office. It cannot see the NEXT attempt: try 1 reached the
+// office and committed, its reply was lost; the cashier presses Save again, the
+// office is now unreachable, try 2 runs here — and the replica does not have the
+// office's row yet, so its own bill-key check finds nothing and bills a second
+// time. The later outbox push of that copy then hits the office's unique key and
+// stops the queue. So a bill key whose answer was uncertain is remembered, and while
+// it is, that bill never runs here: it waits for the office, whose key check is the
+// truth (UniversalVoucher.requestKey).
+
+/** Writes whose JSON body may carry a bill key (`requestKey`). */
+const BILL_KEY_PATHS: readonly string[] = ["/api/pos/sale"];
+
+/** The bill key in a relayable write's body, or null when the path carries none or
+ *  the body is not the JSON the route expects. */
+export function billKeyOf(pathname: string, body: string | null): string | null {
+    const path = canonicalPath(pathname);
+    if (!body || path === null || !BILL_KEY_PATHS.includes(path)) return null;
+    try {
+        const key = (JSON.parse(body) as { requestKey?: unknown } | null)?.requestKey;
+        return typeof key === "string" && key.trim() ? key.trim() : null;
+    } catch {
+        return null;
+    }
+}
+
+/** How long an uncertain key blocks the local fallback. Long enough for any outage
+ *  a cashier would wait out; a till restarts daily, which forgets them anyway. */
+export const UNCERTAIN_KEY_TTL_MS = 24 * 60 * 60 * 1000;
+/** Oldest first out past this — a day of uncertain saves is a handful, not hundreds. */
+export const UNCERTAIN_KEY_CAP = 500;
+
+/** Bill keys whose save reached the office with no confirmed answer. In memory,
+ *  keyed by `now` from the caller so the check script can drive the clock. */
+export class UncertainBillKeys {
+    private readonly at = new Map<string, number>();
+
+    remember(key: string | null, now: number): void {
+        if (key === null) return;
+        this.at.delete(key);   // re-insert: Map order is the eviction order
+        this.at.set(key, now);
+        while (this.at.size > UNCERTAIN_KEY_CAP) this.at.delete(this.at.keys().next().value!);
+    }
+
+    /** True while `key` may already be saved at the office — never run it here. */
+    has(key: string | null, now: number): boolean {
+        if (key === null) return false;
+        const at = this.at.get(key);
+        if (at === undefined) return false;
+        if (now - at > UNCERTAIN_KEY_TTL_MS) {
+            this.at.delete(key);
+            return false;
+        }
+        return true;
+    }
+
+    /** The office answered for this key — the outcome is known now. */
+    forget(key: string | null): void {
+        if (key !== null) this.at.delete(key);
+    }
+}

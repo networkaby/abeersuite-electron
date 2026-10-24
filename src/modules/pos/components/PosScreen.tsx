@@ -36,6 +36,7 @@ import { extractApiError } from "@/shared/lib/api";
 import { formatInr, round2, todayIso, toDateOnly } from "@/shared/lib/format";
 import { cleanLineNote, composeLineDescription, readLineText } from "@/shared/lib/print/lineDescription";
 import type { PartySearchAndCreateHandle } from "@/shared/components/PartySearchAndCreate";
+import { usePosDraftStore } from "@/store/posDraftStore";
 
 // The saved charge rows an edit sends back as they were — manual charges and the
 // coupon. Service rows stay on the server (the PATCH keeps the stored ones when no
@@ -45,6 +46,10 @@ type EditMeta = { charges: { accountId: number; description?: string; amount: nu
 // The "Payments: …" part of a POS sale's description — rewritten when an edit
 // re-takes the payment, so the register and the receipt name the real method.
 const PAYMENTS_TAG = /\| Payments: [^|]*/;
+
+// The sale route's answer when this bill's key is already on a saved voucher —
+// an earlier Save committed and its reply was lost. Only what identifies it.
+type AlreadySavedReply = { alreadySaved: true; voucherId: number; voucherRef: string };
 
 export default function PosScreen({ editId, fromId }: { editId?: number; fromId?: number }) {
     const router = useRouter();
@@ -394,7 +399,9 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             // leftover = customer advance) so the bank/UPI statement matches 1:1.
 
             const validCharges = b.charges.filter((c) => c.accountId !== null && Math.abs(parseAmt(c.amount)) >= 0.005);
-            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; freeCouponId: number | null; freeCouponCode: string | null; freeItems: { productId: number; freeQty: number; productName: string }[]; posTemplate: VoucherTemplateDefaults; receiptPrint: VoucherBridgePayload | null; surplusCollected: number; arrearCleared: number; advanceCredited: number; receiptVoucherId: number | null; receiptVoucherRef: string | null; partyBalance: { before: string; after: string } | null }>("/api/pos/sale", {
+            const { data } = await axios.post<{ voucherId: number; voucherRef: string; pointsEarned: number; pointsRedeemed: number; milestoneBonus: number; milestoneCoupons: string[]; loyaltyBalance: number; couponDiscount: number; couponCode: string | null; freeCouponId: number | null; freeCouponCode: string | null; freeItems: { productId: number; freeQty: number; productName: string }[]; posTemplate: VoucherTemplateDefaults; receiptPrint: VoucherBridgePayload | null; surplusCollected: number; arrearCleared: number; advanceCredited: number; receiptVoucherId: number | null; receiptVoucherRef: string | null; partyBalance: { before: string; after: string } | null } | AlreadySavedReply>("/api/pos/sale", {
+                // Same key on every Save of this bill (posDraftStore `billKey`).
+                requestKey: usePosDraftStore.getState().takeBillKey(),
                 accountId: snapshot.account.id,
                 issueDate: today,
                 dueDate: toDateOnly(due),   // local day, same reason as `today`
@@ -449,6 +456,17 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     amount: parseAmt(c.amount),
                 })),
             });
+            if ("alreadySaved" in data) {
+                // Not a second bill: the earlier Save went through. Clear the cart
+                // like any save and offer the slip — this reply carries no print data.
+                toast.success(`Already saved as ${data.voucherRef}`, {
+                    description: "The earlier Save went through. Nothing was billed twice.",
+                    duration: 15_000,
+                    action: { label: "Reprint", onClick: () => void printVoucherThermal("inv", data.voucherId, "POS") },
+                });
+                b.resetAfterSubmit();
+                return;
+            }
             const ptsMsg = data.pointsEarned > 0 ? ` · +${data.pointsEarned} pts (bal ${data.loyaltyBalance})`
                 : data.pointsRedeemed > 0 ? ` · ${data.pointsRedeemed} pts redeemed (bal ${data.loyaltyBalance})`
                     : "";

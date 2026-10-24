@@ -113,6 +113,16 @@ Opens the checkout dialog (Sale) or saves the order / estimate directly.
 - No required sale-note is missing on any line (Sale mode only)
 - No save is already in progress
 
+**Saving twice is safe (the bill key).** Each bill carries one random id
+(`billKey` in `src/store/posDraftStore.ts`), made on its first Save and sent as
+`requestKey` on every Save of that bill. If a Save reached the office but its
+reply was lost, pressing Save again is answered *"Already saved as POS-…"*
+(with a Reprint button) instead of a second bill. The key goes when the cart
+empties — saved or cleared — so the next bill gets a new one. On a relaying
+counter, a bill whose save was uncertain will not be billed on the till while
+the office is unreachable: the cashier is asked to wait for the connection and
+press Save again. Sales only; returns do not carry a key yet.
+
 ### `Esc` — Clear product search
 
 **When the search box has text:**
