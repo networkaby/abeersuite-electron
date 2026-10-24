@@ -27,6 +27,7 @@ import {
     type EffectiveTax,
     type GstRateOpt,
     type InvProductFormState,
+    type BranchOpt,
     type InvProductFormTab,
     withDefaultCodeRows,
 } from "@/modules/inventory/components/InvProductFormFields";
@@ -39,6 +40,8 @@ import {
 import type { ProductCode, Masters } from "@/shared/lib/inventory";
 import { syncMasters, invalidateMasters } from "@/shared/lib/inventory";
 import { parseRupeesToPaise } from "@/shared/lib/format";
+import { isCombined, useActiveBranchStore } from "@/store/activeBranchStore";
+import { HEAD_OFFICE_BRANCH_ID } from "@/shared/lib/org/systemBranch";
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
 
@@ -70,6 +73,7 @@ export type InvProductRow = {
     openingStock: number | string | null;
     openingRate: number | string | null;
     openingStockDate: string | null;
+    openingBranchId: string | null;
     attrsJson: Record<string, string> | null;
     gstRateId: number | null;
     hsnCode: string | null;
@@ -115,6 +119,7 @@ function rowToForm(p: InvProductRow): InvProductFormState {
         mrpRupees:   paiseToRupees(p.mrpPaise),
         openingQty:  p.openingStock != null ? String(p.openingStock) : "",
         openingRate: p.openingRate  != null ? String(p.openingRate)  : "",
+        openingBranchId: p.openingBranchId ?? "",
         attrs: p.attrsJson
             ? Object.entries(p.attrsJson).map(([key, value]) => ({ key, value: String(value) }))
             : [],
@@ -163,6 +168,8 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     const [gstRates, setGstRates] = useState<GstRateOpt[]>([]);
     const [namingConfig, setNamingConfig] = useState<NamingConfigShape>(DEFAULT_NAMING_CONFIG);
     const [attrMasters, setAttrMasters] = useState<AttrMasterRow[]>([]);
+    const [branches, setBranches] = useState<BranchOpt[]>([]);
+    const activeBranchId = useActiveBranchStore((st) => st.activeBranchId);
     const [effectiveTax, setEffectiveTax] = useState<EffectiveTax | null | undefined>(undefined);
     const [saving, setSaving] = useState(false);
     const [refsLoaded, setRefsLoaded] = useState(false);
@@ -211,6 +218,10 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             axios.get<GstRateOpt[]>("/api/inventory/gst-rates").then((r) => setGstRates(r.data)),
             axios.get<NamingConfigShape>("/api/inventory/naming-config").then((r) => setNamingConfig({ ...DEFAULT_NAMING_CONFIG, ...r.data })),
             axios.get<AttrMasterRow[]>("/api/inventory/attribute-masters").then((r) => setAttrMasters(r.data)),
+            axios.get<(BranchOpt & { isActive?: boolean })[]>("/api/branches")
+                .then((r) => setBranches(r.data.filter((b) => b.isActive !== false).map(({ id, name }) => ({ id, name }))))
+                // Not fatal: the picker stays disabled and the server picks the branch.
+                .catch(() => {}),
         ])
             .then(() => setRefsLoaded(true))
             .catch(() => toast.error("Failed to load reference data"));
@@ -269,6 +280,17 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed the form when the dialog opens, not on every defaultValues change
     }, [open, editId, onOpenChange]);
 
+    // Stock location default, once the branches and the product are in: the saved
+    // branch (rowToForm), else the working branch from the top bar, else Head
+    // Office — the branch the server would pick anyway, shown so it can be changed.
+    useEffect(() => {
+        if (!open || branches.length === 0 || form.openingBranchId) return;
+        const has = (id: string | null) => id != null && !isCombined(id) && branches.some((b) => b.id === id);
+        const fallback = has(activeBranchId) ? activeBranchId!
+            : has(HEAD_OFFICE_BRANCH_ID) ? HEAD_OFFICE_BRANCH_ID : branches[0]!.id;
+        setForm((f) => (f.openingBranchId ? f : { ...f, openingBranchId: fallback }));
+    }, [open, branches, activeBranchId, form.openingBranchId]);
+
     const save = useCallback(async () => {
         if (!form.name.trim()) { toast.error("Name is required"); return; }
         const unitId = optionalId(form.unitId);
@@ -307,6 +329,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             mrpPaise:   parseRupeesToPaise(form.mrpRupees),
             openingStock:     form.openingQty.trim()  === "" ? null : Number(form.openingQty),
             openingRate:      form.openingRate.trim() === "" ? null : Number(form.openingRate),
+            openingBranchId:  form.openingBranchId || null,
             attrsJson: form.attrs.filter((a) => a.key.trim()).length > 0
                 ? Object.fromEntries(form.attrs.filter((a) => a.key.trim()).map((a) => [a.key.trim(), a.value.trim()]))
                 : null,
@@ -355,6 +378,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                         skuDisabled={false}
                         namingConfig={namingConfig}
                         attrMasters={attrMasters}
+                        branches={branches}
                         isEditMode={editId != null}
                         defaultTab={defaultTab}
                         onCreateMaster={createMaster}

@@ -13,7 +13,7 @@ import {
     productOpeningValue, syncProductCacheFromOpening,
 } from "@/modules/inventory/lib/stockValue";
 import { requireWritableBranchId, resolveActiveBranchId } from "@/shared/lib/auth/activeBranch";
-import { openingBranchOnSave } from "@/modules/inventory/lib/liveStock";
+import { openingBranchOnSave, requireOpeningBranch } from "@/modules/inventory/lib/liveStock";
 import {
     loadProductPage, loadProductSelection, parseProductListQuery, productInclude,
 } from "@/modules/inventory/lib/productList";
@@ -87,11 +87,15 @@ export async function POST(req: Request) {
         if (error) return error;
         const b = data;
         const sku = b.sku.trim().toUpperCase();
-        // An opening quantity is counted at the branch it is entered from.
-        // Resolved before any lookup so "My branches" mode is refused at once.
+        // An opening quantity sits at the branch picked on the form, else the one
+        // it is entered from. Resolved before any lookup so a bad pick, or "My
+        // branches" mode, is refused at once.
         const session = await auth();
+        const picked = b.openingStock != null && b.openingBranchId
+            ? await requireOpeningBranch(session, b.openingBranchId)
+            : null;
         const openingBranchId = openingBranchOnSave(
-            b.openingStock, null, () => requireWritableBranchId(req, session),
+            b.openingStock, picked, () => requireWritableBranchId(req, session),
         );
         // Every pre-save check at once — one round trip instead of up to ten
         // in a row. The answers are then read in the old order, so the user

@@ -47,7 +47,8 @@
 
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { isCombined } from "@/shared/lib/auth/activeBranch";
+import type { Session } from "next-auth";
+import { BranchAccessError, isCombined, requireBranchAccess } from "@/shared/lib/auth/activeBranch";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { HEAD_OFFICE_BRANCH_ID } from "@/shared/lib/org/systemBranch";
 
@@ -254,6 +255,9 @@ export function openingAppliesTo(
  *                                    does not move stock that is lying elsewhere)
  *   quantity, no branch yet        → the writer's working branch
  *
+ * A branch the user picks (`requireOpeningBranch`) is passed as
+ * `currentBranchId`, so it is the one kept.
+ *
  * `workingBranch` is called only in the last case, so a caller can pass
  * `() => requireWritableBranchId(req, session)` and an edit in "My branches"
  * mode is refused only when it really has to pick a branch.
@@ -265,6 +269,19 @@ export function openingBranchOnSave(
 ): string | null {
     if (openingStock == null) return null;
     return currentBranchId ?? workingBranch();
+}
+
+/**
+ * A Stock location the user PICKED for an opening (the product form's picker):
+ * it must be a branch, and one this user may work at. Passed to
+ * `openingBranchOnSave` as the branch to keep, so a picked branch wins over the
+ * saved one and over the working branch.
+ */
+export async function requireOpeningBranch(session: Session | null, branchId: string): Promise<string> {
+    requireBranchAccess(session, branchId);
+    const branch = await prisma.branch.findUnique({ where: { id: branchId }, select: { id: true } });
+    if (!branch) throw new BranchAccessError("forbidden_branch", `Stock location "${branchId}" is not a branch.`);
+    return branch.id;
 }
 
 /**

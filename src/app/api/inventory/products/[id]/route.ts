@@ -14,8 +14,8 @@ import { productOpeningValue } from "@/modules/inventory/lib/stockValue";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { loadLastInwardCostMap } from "@/modules/inventory/lib/valuation";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
-import { openingBranchOnSave } from "@/modules/inventory/lib/liveStock";
-import { requireWritableBranchId } from "@/shared/lib/auth/activeBranch";
+import { openingBranchOnSave, requireOpeningBranch } from "@/modules/inventory/lib/liveStock";
+import { requireBranchAccess, requireWritableBranchId } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import * as Sentry from "@sentry/nextjs";
 
@@ -129,7 +129,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         // Editing the opening moves the saved total by the change in the opening —
         // NOT to the opening itself (opening 10, +50, −30 = 30; opening → 12 must
         // read 32, not 12). Same transaction, rebuilt from the ledger.
-        const openingTouched = b.openingStock !== undefined || b.openingRate !== undefined;
+        const openingTouched = b.openingStock !== undefined || b.openingRate !== undefined
+            || b.openingBranchId !== undefined;
         // A field the body leaves out keeps its saved value — a rate-only edit
         // must not wipe the quantity (or a quantity-only edit the rate).
         const opening = {
@@ -139,8 +140,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 : current.openingRate == null ? null : Number(current.openingRate),
         };
         const session = openingTouched ? await auth() : null;
+        // A branch picked on the form wins; otherwise the saved one is kept. The
+        // form sends the saved branch back on every save, so only a CHANGE is
+        // checked — a Branch 2 user renaming a product whose opening is at Head
+        // Office must not be refused for not working at Head Office. A change
+        // moves stock OUT of the saved branch too, so it needs both.
+        const moving = opening.openingStock != null && b.openingBranchId
+            && b.openingBranchId !== current.openingBranchId;
+        if (moving && current.openingBranchId) requireBranchAccess(session, current.openingBranchId);
+        const picked = moving ? await requireOpeningBranch(session, b.openingBranchId!) : null;
         const openingBranchId = openingBranchOnSave(
-            opening.openingStock, current.openingBranchId, () => requireWritableBranchId(req, session),
+            opening.openingStock, picked ?? current.openingBranchId, () => requireWritableBranchId(req, session),
         );
         const row = await prisma.$transaction(async (tx) => {
             const saved = await tx.invProduct.update({

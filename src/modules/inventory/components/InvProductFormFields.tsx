@@ -60,6 +60,9 @@ export type InvProductFormState = {
     // books-beginning, NOT a transactional movement — universal, no date.
     openingQty:    string;
     openingRate:   string;
+    /** Stock location of the opening quantity — a Branch id; "" until the
+     *  dialog fills in the default (saved branch, else working branch, else HO). */
+    openingBranchId: string;
     /** Custom attribute pairs — stored as attrsJson in DB. */
     attrs: Array<{ key: string; value: string }>;
     // GST classification — all optional; empty = "inherit from group/org-default".
@@ -106,6 +109,7 @@ export const emptyInvProductForm: InvProductFormState = {
     mrpRupees:   "",
     openingQty:  "",
     openingRate: "",
+    openingBranchId: "",
     attrs: [],
     // GST fields — always empty on create; never prefilled.
     gstRateId:  "",
@@ -114,6 +118,8 @@ export const emptyInvProductForm: InvProductFormState = {
 };
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
+
+export type BranchOpt = { id: string; name: string };
 
 export type GstRateOpt = { id: number; rate: string | number; label: string; isActive: boolean };
 
@@ -163,6 +169,7 @@ export function InvProductFormFields({
     skuDisabled,
     namingConfig,
     attrMasters = [],
+    branches = [],
     /** true = edit mode; all dirty flags start true so existing values aren't clobbered. */
     isEditMode = false,
     defaultTab = "basics",
@@ -181,6 +188,8 @@ export function InvProductFormFields({
     skuDisabled?: boolean;
     namingConfig?: NamingConfigShape | null;
     attrMasters?: AttrMasterRow[];
+    /** Active branches for the opening's Stock location picker. */
+    branches?: BranchOpt[];
     isEditMode?: boolean;
     /** Initial tab. Callers that deep-link into a specific concern (e.g. Tax
      * Classification report → pencil) pass "tax" so the dialog opens on it. */
@@ -756,6 +765,25 @@ export function InvProductFormFields({
                             placeholder="0.00"
                         />
                         <p className="text-[11px] text-muted-foreground">Cost per unit at books-beginning.</p>
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                        <Label>Stock location</Label>
+                        <Select
+                            value={form.openingBranchId}
+                            onValueChange={(v) => setForm((f) => ({ ...f, openingBranchId: v }))}
+                            disabled={branches.length === 0}
+                        >
+                            <SelectTrigger className="sm:max-w-xs"><SelectValue placeholder="Working branch" /></SelectTrigger>
+                            <SelectContent>
+                                {branches.map((b) => (
+                                    <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <p className="text-[11px] text-muted-foreground">
+                            The branch where the opening quantity is lying. It counts in that branch&apos;s stock and
+                            nowhere else; the product itself is still shared by every branch, and the value is not changed.
+                        </p>
                     </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-3">

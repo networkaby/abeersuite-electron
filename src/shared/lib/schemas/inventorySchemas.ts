@@ -146,6 +146,10 @@ const productPricing = {
 const productOpening = {
     openingStock:     z.number().nonnegative().nullish(),         // qty (Decimal in DB)
     openingRate:      z.number().nonnegative().nullish(),         // rupees (Decimal in DB)
+    // Where the opening quantity is lying (the form's Stock location). Left out,
+    // the server keeps the saved branch or takes the working one — see
+    // openingBranchOnSave in liveStock.ts.
+    openingBranchId:  z.string().trim().min(1).nullish(),
 };
 
 export const invProductCreateSchema = z.object({
