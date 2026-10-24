@@ -404,6 +404,13 @@ office means the request runs here with `live`'s existing outage fallback. Three
    passes through and signs the cashier out — after a targeted pull of `User` (rule 2's
    mechanism, [`replicaPull.ts`](../src/shared/lib/counter/replicaPull.ts)), so the
    replica agrees the session is dead and the login page does not send them back in.
+   That covers one attempt; the cashier's **next** Save of the same bill is covered by
+   its bill key (`requestKey`, 2026-10-24). A key whose answer was uncertain is
+   remembered (in memory, 24 h), and while it is, every local fallback for it — connect
+   failure, the breaker, a refused sign-in — answers `503 relay_uncertain_offline`
+   instead of billing on the replica, which does not hold the office's row yet. An
+   office 2xx (saved, or `alreadySaved`) forgets it. Rules in
+   [`relayPolicy.ts`](../src/shared/lib/counter/relayPolicy.ts).
 2. **Hold the response until the replica has the rows.** On an office 2xx the relay asks
    the worker for a targeted pull over Postgres NOTIFY (`sync-engine/lib/localSignal.js`)
    and waits, bounded at 3 s, for `sync_relay_done`. Screens then refetch from a replica
