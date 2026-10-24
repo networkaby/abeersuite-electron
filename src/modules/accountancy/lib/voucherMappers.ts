@@ -71,7 +71,6 @@ export function buildTradingStockMoves(args: {
             outQty,
             rate:                line.rate,
             amount:              line.amount,
-            productCurrentStock: line.product?.stock ?? null,
             newMrpPaise:         isPurchase && line.mrpPaise != null ? line.mrpPaise : undefined,
         });
     }
