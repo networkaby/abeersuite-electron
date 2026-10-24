@@ -370,11 +370,12 @@ model InvProduct {
   /// the master and never the money — `openingValue` and every valuation stay
   /// org-level.
   ///
-  /// null = the opening carries no branch, and folds into EVERY branch's
-  /// on-hand figure. That was the only behaviour before 2026-09-17, so a
-  /// product left unassigned reads exactly as it always did — nothing
-  /// disappears from a screen. Existing rows were backfilled to BR-HQ by
-  /// migration 20260917090000_product_opening_branch.
+  /// Every opening sits at a branch (it is counted at a counter, and a counter
+  /// belongs to a branch): writers stamp the working branch, and migrations
+  /// 20260917090000_product_opening_branch and 20261024120000_opening_branch_ho
+  /// put BR-HQ on every older row. null (a deleted branch, a script) counts at
+  /// Head Office only. Until 2026-10-24 null folded into EVERY branch, so the
+  /// branch figures added up to more than the company figure.
   ///
   /// liveStock.ts owns what this means on read. Do not interpret it elsewhere.
   openingBranchId  String?

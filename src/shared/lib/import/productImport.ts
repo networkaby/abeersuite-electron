@@ -2,6 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { productOpeningValue, syncProductCacheFromOpening } from "@/modules/inventory/lib/stockValue";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
+import { systemBranchId } from "@/shared/lib/org/systemBranch";
 import * as Sentry from "@sentry/nextjs";
 import { PRODUCT_IMPORT_FIELDS, type ProductImportField } from "./productImportFields";
 
@@ -62,8 +63,8 @@ export interface ProductImportRequest {
      *
      * Only meaningful when `openingStock` is mapped, and only written when an
      * opening field is actually being written (see buildPatchPayload — opening
-     * fields move as a group). null / undefined leaves the column NULL, which
-     * means "folds into every branch" — see liveStock.ts.
+     * fields move as a group). null / undefined means Head Office — an opening
+     * is never saved without a branch (see liveStock.ts).
      */
     openingBranchId?: string | null;
 }
@@ -185,6 +186,11 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         });
         if (!branch) throw new Error(`Stock location "${req.openingBranchId}" is not a branch.`);
     }
+    // Every opening sits at a branch. A caller that names none (an old client, a
+    // script) gets Head Office — the same answer liveStock.ts gives an old row
+    // that has none. Looked up only when the file carries an opening quantity.
+    const openingBranchId = req.openingBranchId
+        ?? (req.rows.some((r) => r.values.openingStock?.trim()) ? await systemBranchId(prisma) : null);
 
     let masters = await loadMasters();
 
@@ -593,7 +599,7 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             // Stock location of that opening quantity. Only stamped when there
             // IS an opening quantity — a branch on a product that opened with
             // nothing would be a lie the branch screens then have to explain.
-            openingBranchId: v.data.openingStock != null ? (req.openingBranchId ?? null) : null,
+            openingBranchId: v.data.openingStock != null ? openingBranchId : null,
             // `cachePatch` is the saved stock total = the opening — right for a NEW
             // row only (no movement yet). An existing row drops it and is rebuilt
             // from the ledger after the write (buildUpdatePayload).
@@ -657,7 +663,7 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             // where those counts are. A rate-only patch leaves the existing
             // location alone — it is not restating where anything is lying.
             if (p.has("openingStock") && v.data.openingStock != null) {
-                out.openingBranchId = req.openingBranchId ?? null;
+                out.openingBranchId = openingBranchId;
             }
             // Recompute openingValue only when we have BOTH opening stock and
             // opening rate in this row. The saved stock total is rebuilt from

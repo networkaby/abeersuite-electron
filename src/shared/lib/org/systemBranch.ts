@@ -19,7 +19,7 @@ import type { Prisma } from "@/generated/prisma/client";
  * the lowest-numbered branch so a database seeded under another id still posts
  * rather than failing the foreign key.
  */
-const HEAD_OFFICE_BRANCH_ID = "BR-HQ";
+export const HEAD_OFFICE_BRANCH_ID = "BR-HQ";
 
 export async function systemBranchId(tx: Prisma.TransactionClient): Promise<string> {
     const hq = await tx.branch.findUnique({

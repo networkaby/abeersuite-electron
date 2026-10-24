@@ -18,8 +18,8 @@ const previewSchema = z.object({
     autoCreateMasters: z.boolean().optional().default(true),
     // STOCK LOCATION for the opening quantity — one branch for the whole file,
     // picked in the UI beside the column mapping. Not a CSV column on purpose:
-    // a file is one stock-take at one place. Null = unassigned, which folds
-    // into every branch (liveStock.ts).
+    // a file is one stock-take at one place. Null = Head Office
+    // (runProductImport) — an opening is never saved without a branch.
     openingBranchId: z.string().min(1).nullable().optional(),
 });
 
