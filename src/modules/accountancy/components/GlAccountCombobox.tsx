@@ -16,11 +16,11 @@
  *               through to the form's own Save shortcut, untouched.
  */
 
-import { useEffect, useState, useCallback, useLayoutEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { Plus } from "lucide-react";
-import { useComboboxNav } from "@/shared/hooks";
+import { useComboboxNav, useDebouncedValue, useDropdownPortal, useValueChange, type DropdownPlacement } from "@/shared/hooks";
 import { invalidateGlAccounts } from "@/shared/hooks/useGlAccounts";
 import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
 import type { EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
@@ -106,6 +106,12 @@ const DEBOUNCE_MS = 150;
  *  froze the input for ~2s on focus (measured 2026-09-08). */
 const MAX_ROWS = 50;
 
+const PLACEMENT: DropdownPlacement = {
+    maxHeight: 288,   // hard cap (~9 rows of two-line items)
+    flipBelow: 140, minHeight: 80,
+    size: (rect) => ({ width: Math.max(360, rect.width), left: rect.left }),
+};
+
 export function GlAccountCombobox({
     value, onChange, accounts,
     placeholder = "Select account",
@@ -116,7 +122,6 @@ export function GlAccountCombobox({
     allowEdit = true,
     onMastersChanged,
 }: Props) {
-    const [query, setQuery] = useState("");
     const [createOpen, setCreateOpen] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
     const [editTarget, setEditTarget] = useState<EditableLedger | null>(null);
@@ -133,21 +138,16 @@ export function GlAccountCombobox({
     );
     // The list filters on this, which trails `query` by DEBOUNCE_MS while the
     // user is still typing; the input itself always shows `query` at once.
-    const [debounced, setDebounced] = useState("");
-    useEffect(() => {
-        const t = setTimeout(() => setDebounced(query), DEBOUNCE_MS);
-        return () => clearTimeout(t);
-    }, [query]);
-
-    // Sync display text when external value changes.
     const selectedAccount = pool.find((a) => a.id === value);
     const selectedLabel = selectedAccount ? selectedAccount.name : "";
 
-    const syncQuery = useCallback(() => {
-        if (selectedAccount) setQuery(selectedLabel);
-        else if (!value)    setQuery("");
-    }, [selectedAccount, selectedLabel, value]);
-    useEffect(syncQuery, [syncQuery]);
+    // Sync display text when the external value changes — while rendering. Null
+    // while the picked ledger is not in the list yet: whatever is typed stays.
+    // Keyed on the label, so a re-read of the list leaves typing alone.
+    const syncTo = selectedAccount ? selectedLabel : !value ? "" : null;
+    const [query, setQuery] = useState(syncTo ?? "");
+    if (useValueChange(syncTo) && syncTo !== null) setQuery(syncTo);
+    const debounced = useDebouncedValue(query, DEBOUNCE_MS);
 
     const q = debounced.trim().toLowerCase();
     // Below the minimum the list is empty — and stays closed (see `open`).
@@ -184,74 +184,17 @@ export function GlAccountCombobox({
         onClear: () => { setQuery(""); onChange(null); },
     });
     // No dropdown without focus, and none before the minimum characters.
-    const cb = { ...nav, open: nav.open && focused && !belowMin };
+    const open = nav.open && focused && !belowMin;
+    const { wrapperRef, inputRef, listRef } = nav;
 
-    // Prefer an ancestor dialog content (if any) over document.body so the
-    // dropdown lives inside Radix Dialog's react-remove-scroll allow-list;
-    // otherwise wheel / touch scrolling on the dropdown is silently blocked.
-    // The dialog content has a transform (translate -50%, -50%) which makes
-    // it the containing block for any `position: fixed` descendant, so coords
-    // below are stored *relative to the portal target* — viewport when body,
-    // or transformed-origin when dialog content.
-    const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
-    useEffect(() => {
-        const w = cb.wrapperRef.current;
-        if (!w) return;
-        const inDialog = w.closest('[data-slot="dialog-content"]') as HTMLElement | null;
-        setPortalTarget(inDialog ?? document.body);
-    }, [cb.wrapperRef]);
-
-    // Portal positioning: anchor to wrapper's viewport rect. Flips up when
-    // there's no room below. `maxHeight` is computed from actually-available
-    // space, capped at DROPDOWN_MAX_H — few options shrinks, many options
-    // scroll inside the cap and never spill past the viewport.
-    const DROPDOWN_MAX_H = 288;        // hard cap (~9 rows of two-line items)
-    const VIEWPORT_MARGIN = 12;        // breathing room from viewport edges
+    // Portalled into the surrounding dialog (or body) and positioned from the page (useDropdownPortal) and anchored to the input's
+    // box. Flips up when there's no room below; `maxHeight` is computed from
+    // actually-available space, capped — few options shrink, many scroll inside
+    // the cap and never spill past the viewport.
+    const { target: portalTarget, pos } = useDropdownPortal(open, wrapperRef, PLACEMENT);
     // The CTA row and the shortcut hint sit outside the scroller, so the list
     // inside it gets that much less room — otherwise the box overflows its cap.
     const chromeH = (allowCreate ? 33 : 0) + (allowEdit ? 20 : 0);
-    const [pos, setPos] = useState<{
-        top: number; left: number; width: number; maxHeight: number; flipUp: boolean;
-    } | null>(null);
-    useLayoutEffect(() => {
-        if (!cb.open || !portalTarget) { setPos(null); return; }
-        const wrapper = cb.wrapperRef.current;
-        if (!wrapper) return;
-        const measure = () => {
-            const rect = wrapper.getBoundingClientRect();
-            // Offset of the portal target in viewport coords. body's rect is
-            // typically (0, 0) but can drift on RTL/scrolled layouts; the dialog
-            // content's rect tracks its transformed top-left so we always
-            // express coords relative to its origin.
-            const target = portalTarget.getBoundingClientRect();
-            const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_MARGIN;
-            const spaceAbove = rect.top - VIEWPORT_MARGIN;
-            // Flip up only when below is genuinely cramped AND above has more room.
-            const flipUp = spaceBelow < 140 && spaceAbove > spaceBelow;
-            const available = Math.max(80, flipUp ? spaceAbove : spaceBelow);
-            const maxHeight = Math.min(DROPDOWN_MAX_H, available);
-            const width = Math.max(360, rect.width);
-            const anchorY = flipUp ? rect.top : rect.bottom;
-            setPos({
-                top: anchorY - target.top,
-                left: rect.left - target.left,
-                width,
-                maxHeight,
-                flipUp,
-            });
-            cb.setDropdownWidth(width);
-        };
-        measure();
-        window.addEventListener("resize", measure);
-        window.addEventListener("scroll", measure, true);  // capture: catch scroll on any ancestor
-        return () => {
-            window.removeEventListener("resize", measure);
-            window.removeEventListener("scroll", measure, true);
-        };
-        // The specific `cb` members used here are the stable deps; depending on the
-        // whole `cb` object (new each render from the combobox hook) would re-run every render.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [cb.open, cb.wrapperRef, cb.setDropdownWidth, portalTarget]);
 
     // A master was made or changed: every list on the page that could show it
     // re-reads — the caller's own, and the shared chart when a screen holds it.
@@ -260,7 +203,7 @@ export function GlAccountCombobox({
         void invalidateGlAccounts();
     };
 
-    const startCreate = () => { cb.setOpen(false); setCreateOpen(true); };
+    const startCreate = () => { nav.setOpen(false); setCreateOpen(true); };
     // What the new ledger gets called. Blank when the box is only showing the
     // ledger already picked — otherwise Alt+C on a filled row would offer to
     // make a second ledger with that same name.
@@ -271,9 +214,9 @@ export function GlAccountCombobox({
     // ledger already sitting in this box. The full Account row is handed over
     // — a partial one would post the untouched particulars back as null.
     const editCandidate: GlAccount | undefined =
-        (cb.open ? filtered[cb.highlighted] : undefined) ?? selectedAccount;
+        (open ? filtered[nav.highlighted] : undefined) ?? selectedAccount;
     const startEdit = (a: GlAccount) => {
-        cb.setOpen(false);
+        nav.setOpen(false);
         setEditTarget({
             id: a.id,
             name: a.name,
@@ -312,37 +255,37 @@ export function GlAccountCombobox({
             startEdit(editCandidate);
             return;
         }
-        if (cb.open && e.key === "Tab") {
+        if (open && e.key === "Tab") {
             const normalizedQuery = query.trim().toLowerCase();
             const normalizedSelected = selectedLabel.trim().toLowerCase();
             const hasTypedInput = normalizedQuery.length > 0;
             const shouldCommit = hasTypedInput && normalizedQuery !== normalizedSelected;
-            if (shouldCommit && filtered[cb.highlighted]) {
-                const a = filtered[cb.highlighted];
+            if (shouldCommit && filtered[nav.highlighted]) {
+                const a = filtered[nav.highlighted];
                 setQuery(a.name);
-                cb.setOpen(false);
+                nav.setOpen(false);
                 onChange(a);
             } else {
-                cb.setOpen(false);
+                nav.setOpen(false);
             }
             return;
         }
         // Nothing matched what was typed → Enter makes it, same as Alt+C.
         // Mirrors InvProductCombobox so a no-result is never a dead end.
-        if (cb.open && e.key === "Enter" && !e.ctrlKey && !e.metaKey
+        if (open && e.key === "Enter" && !e.ctrlKey && !e.metaKey
             && allowCreate && filtered.length === 0 && query.trim().length > 0) {
             e.preventDefault();
             e.stopPropagation();   // don't let the form's Enter walk focus away
             startCreate();
             return;
         }
-        cb.handleKeyDown(e);
+        nav.handleKeyDown(e);
     };
 
     return (
-        <div ref={cb.wrapperRef} className={`relative ${className}`}>
+        <div ref={wrapperRef} className={`relative ${className}`}>
             <input
-                ref={cb.inputRef}
+                ref={inputRef}
                 type="text"
                 value={query}
                 autoFocus={autoFocus}
@@ -350,20 +293,20 @@ export function GlAccountCombobox({
                 className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 placeholder:text-muted-foreground"
                 onChange={(e) => {
                     setQuery(e.target.value);
-                    cb.setHighlighted(0);
-                    cb.setOpen(true);
+                    nav.setHighlighted(0);
+                    nav.setOpen(true);
                     if (!e.target.value) onChange(null);
                 }}
                 onFocus={(e) => {
                     setFocused(true);
-                    cb.setOpen(true);
+                    nav.setOpen(true);
                     e.target.select();    // immediate typing replaces the label
                 }}
-                onBlur={(e) => { setFocused(false); cb.handleBlur(e); }}
+                onBlur={(e) => { setFocused(false); nav.handleBlur(e); }}
                 onKeyDown={onKeyDown}
             />
 
-            {cb.open && portalTarget && pos && createPortal(
+            {open && portalTarget && pos && createPortal(
                 <div
                     // z-[60] sits above shadcn Dialog's z-50 backdrop + footer.
                     // `overflow-hidden` clips the inner list to the wrapper's
@@ -383,7 +326,7 @@ export function GlAccountCombobox({
                         transform: pos.flipUp ? "translateY(calc(-100% - 0.25rem))" : undefined,
                     }}
                     // Prevent the click landing on the underlying dialog backdrop
-                    onMouseDown={cb.dropdownMouseDown}
+                    onMouseDown={nav.dropdownMouseDown}
                 >
                     {/* New-ledger CTA at the TOP — closest to the cursor, and
                         the only thing on screen when nothing matched. Acts
@@ -411,13 +354,13 @@ export function GlAccountCombobox({
                         // viewport doesn't honour a max-height parent reliably,
                         // so its scrollbar wouldn't appear with long lists.
                         <div className="overflow-y-auto" style={{ maxHeight: pos.maxHeight - chromeH }}>
-                            <ul ref={cb.listRef} className="divide-y divide-border">
+                            <ul ref={listRef} className="divide-y divide-border">
                                 {filtered.map((a, i) => (
                                     <li
                                         key={a.id}
                                         onMouseDown={() => {
                                             setQuery(a.name);
-                                            cb.setOpen(false);
+                                            nav.setOpen(false);
                                             onChange(a);
                                         }}
                                         // No onMouseEnter setHighlighted — it would trigger the
@@ -425,7 +368,7 @@ export function GlAccountCombobox({
                                         // the list back to whichever row the cursor was over.
                                         // Mouse users still get a :hover style from `hover:bg-accent/60`.
                                         className={`cursor-pointer px-3 py-1.5 transition-colors ${
-                                            i === cb.highlighted ? "bg-accent" : "hover:bg-accent/60"
+                                            i === nav.highlighted ? "bg-accent" : "hover:bg-accent/60"
                                         }`}
                                     >
                                         <div className="flex items-baseline gap-2 min-w-0">
@@ -465,7 +408,7 @@ export function GlAccountCombobox({
             {value != null && (
                 <button
                     type="button"
-                    onMouseDown={cb.clear}
+                    onMouseDown={nav.clear}
                     className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground/65 hover:text-muted-foreground text-sm leading-none"
                     tabIndex={-1}
                     aria-label="Clear account"

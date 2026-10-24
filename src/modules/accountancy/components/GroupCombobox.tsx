@@ -9,9 +9,9 @@
 // Pass `depth` on each option to render a "-" / "--" hierarchy marker (parent
 // groups at depth 0 get no marker).
 
-import { useEffect, useState, useCallback, useLayoutEffect } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
-import { useComboboxNav } from "@/shared/hooks";
+import { useComboboxNav, useDropdownPortal, useValueChange, type DropdownPlacement } from "@/shared/hooks";
 
 export interface GroupOption {
     id: number;
@@ -22,8 +22,10 @@ export interface GroupOption {
 }
 
 const NO_GROUP_LABEL = "No group";
-const DROPDOWN_MAX_H = 288;
-const VIEWPORT_MARGIN = 12;
+const PLACEMENT: DropdownPlacement = {
+    maxHeight: 288, flipBelow: 140, minHeight: 80,
+    size: (rect) => ({ width: Math.max(rect.width, 220), left: rect.left }),
+};
 
 type Props = {
     value: number | null;
@@ -43,15 +45,13 @@ export function GroupCombobox({
     autoFocus = false,
     allowNone = true,
 }: Props) {
-    const [query, setQuery] = useState("");
-
     const selected = groups.find((g) => g.id === value);
     const selectedLabel = selected ? selected.name : (value === null && allowNone ? NO_GROUP_LABEL : "");
 
-    const syncQuery = useCallback(() => {
-        setQuery(selectedLabel);
-    }, [selectedLabel]);
-    useEffect(syncQuery, [syncQuery]);
+    // The box shows the picked group's name; a new pick (or a renamed group)
+    // replaces whatever was typed — while rendering, not after a paint.
+    const [query, setQuery] = useState(selectedLabel);
+    if (useValueChange(selectedLabel)) setQuery(selectedLabel);
 
     const q = query.trim().toLowerCase();
     const showAll = !q || q === selectedLabel.toLowerCase();
@@ -84,49 +84,7 @@ export function GroupCombobox({
         },
     });
 
-    // Portal target — prefer an ancestor Radix dialog so the dropdown lives
-    // inside its scroll-allow-list; otherwise body.
-    const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
-    useEffect(() => {
-        const w = cb.wrapperRef.current;
-        if (!w) return;
-        const inDialog = w.closest('[data-slot="dialog-content"]') as HTMLElement | null;
-        setPortalTarget(inDialog ?? document.body);
-    }, [cb.wrapperRef]);
-
-    const [pos, setPos] = useState<{
-        top: number; left: number; width: number; maxHeight: number; flipUp: boolean;
-    } | null>(null);
-    useLayoutEffect(() => {
-        if (!cb.open || !portalTarget) { setPos(null); return; }
-        const wrapper = cb.wrapperRef.current;
-        if (!wrapper) return;
-        const measure = () => {
-            const rect = wrapper.getBoundingClientRect();
-            const target = portalTarget.getBoundingClientRect();
-            const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_MARGIN;
-            const spaceAbove = rect.top - VIEWPORT_MARGIN;
-            const flipUp = spaceBelow < 140 && spaceAbove > spaceBelow;
-            const available = Math.max(80, flipUp ? spaceAbove : spaceBelow);
-            const maxHeight = Math.min(DROPDOWN_MAX_H, available);
-            const width = Math.max(rect.width, 220);
-            const anchorY = flipUp ? rect.top : rect.bottom;
-            setPos({
-                top: anchorY - target.top,
-                left: rect.left - target.left,
-                width,
-                maxHeight,
-                flipUp,
-            });
-        };
-        measure();
-        window.addEventListener("resize", measure);
-        window.addEventListener("scroll", measure, true);
-        return () => {
-            window.removeEventListener("resize", measure);
-            window.removeEventListener("scroll", measure, true);
-        };
-    }, [cb.open, cb.wrapperRef, portalTarget]);
+    const { target: portalTarget, pos } = useDropdownPortal(cb.open, cb.wrapperRef, PLACEMENT);
 
     return (
         <div ref={cb.wrapperRef} className={`relative ${className}`}>

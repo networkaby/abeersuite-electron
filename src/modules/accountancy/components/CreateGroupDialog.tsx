@@ -4,7 +4,7 @@
 // Runs in a dialog rather than inline so opening it doesn't push the group
 // tree table down the page (was the inline form on Masters -> Account Groups).
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 type GroupType = "ASSET" | "LIABILITY" | "INCOME" | "EXPENSE";
 
@@ -58,10 +59,10 @@ export function CreateGroupDialog({
     const [parent, setParent] = useState<string>("none");
     const [sortOrder, setSortOrder] = useState("0");
 
-    useEffect(() => {
-        if (!open) return;
+    // Each open starts blank — reset while rendering, so the last entry never paints.
+    if (useValueChange(open, false) && open) {
         setName(""); setType("ASSET"); setParent("none"); setSortOrder("0");
-    }, [open]);
+    }
 
     const parentGroup = parent !== "none" ? groups.find((g) => g.id === Number(parent)) : null;
     const effectiveType = parentGroup ? parentGroup.type : type;

@@ -1,4 +1,5 @@
 export { useComboboxNav } from "./useComboboxNav";
+export { useDropdownPortal, type DropdownPos, type DropdownPlacement } from "./useDropdownPortal";
 export { useResizable } from "./useResizable";
 export { usePartySearch, usePartyList, toPartyHit, type PartyHit } from "./usePartySearch";
 export { useDeleteWithConfirm } from "./useDeleteWithConfirm";

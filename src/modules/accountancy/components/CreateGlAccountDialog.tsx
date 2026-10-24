@@ -5,7 +5,7 @@
 // opening it doesn't push the account sections down the page (was the
 // inline form on Masters -> Chart of Accounts).
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
@@ -20,6 +20,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "@/modules/accountancy/lib/groupNature";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 type NormalBalance = "DEBIT" | "CREDIT";
 
@@ -47,10 +48,10 @@ export function CreateGlAccountDialog({
         normalBalance: "DEBIT" as NormalBalance, description: "",
     });
 
-    useEffect(() => {
-        if (!open) return;
+    // Each open starts blank — reset while rendering, so the last entry never paints.
+    if (useValueChange(open, false) && open) {
         setForm({ name: "", groupId: 0, normalBalance: "DEBIT", description: "" });
-    }, [open]);
+    }
 
     const save = async () => {
         if (!form.name || !form.groupId) {
