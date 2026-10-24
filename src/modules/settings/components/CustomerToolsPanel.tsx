@@ -15,6 +15,7 @@ import type {
     MergePreview,
     MergeKind,
 } from "@/modules/customer/lib/convertParty";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 type Direction = "personToCompany" | "companyToPerson";
 
@@ -45,18 +46,18 @@ function ConvertSection() {
     const sourceLabel = direction === "personToCompany" ? "Person" : "Company";
     const targetLabel = direction === "personToCompany" ? "Company" : "Person";
 
-    useEffect(() => {
+    // Another direction starts clean — while rendering.
+    if (useValueChange(direction)) {
         setSelected(null);
         setPreview(null);
         setHits([]);
         setQuery("");
-    }, [direction]);
+    }
 
+    const tooShort = query.trim().length < 2;
+    if (useValueChange(tooShort) && tooShort) setHits([]);
     useEffect(() => {
-        if (query.trim().length < 2) {
-            setHits([]);
-            return;
-        }
+        if (tooShort) return;
         let cancelled = false;
         const handle = setTimeout(async () => {
             setSearching(true);
@@ -79,7 +80,7 @@ function ConvertSection() {
             }
         }, 250);
         return () => { cancelled = true; clearTimeout(handle); };
-    }, [query, direction]);
+    }, [query, direction, tooShort]);
 
     async function pick(hit: SearchHit) {
         setSelected(hit);
@@ -294,16 +295,22 @@ function MergeSection() {
     const [loadingPreview, setLoadingPreview] = useState(false);
     const [merging, setMerging] = useState(false);
 
-    useEffect(() => {
+    // Another kind starts clean — while rendering.
+    if (useValueChange(kind)) {
         setWinner(null);
         setLoser(null);
         setPreview(null);
-    }, [kind]);
+    }
 
+    // A pair to compare (or none): clear / show loading while rendering.
+    const pairKey = winner && loser && winner.id !== loser.id ? `${kind}:${winner.id}:${loser.id}` : null;
+    if (useValueChange(pairKey)) {
+        if (pairKey === null) setPreview(null);
+        else setLoadingPreview(true);
+    }
     useEffect(() => {
-        if (!winner || !loser || winner.id === loser.id) { setPreview(null); return; }
+        if (!winner || !loser || winner.id === loser.id) return;
         let cancelled = false;
-        setLoadingPreview(true);
         (async () => {
             try {
                 const { data } = await axios.get<MergePreview>(
@@ -495,9 +502,11 @@ function PartyPicker({
     const [hits, setHits] = useState<SearchHit[]>([]);
     const [searching, setSearching] = useState(false);
 
+    // Nothing to search for (already picked, or too short): no hits.
+    const idle = !!selected || query.trim().length < 2;
+    if (useValueChange(idle) && idle) setHits([]);
     useEffect(() => {
-        if (selected) { setHits([]); return; }
-        if (query.trim().length < 2) { setHits([]); return; }
+        if (idle) return;
         let cancelled = false;
         const handle = setTimeout(async () => {
             setSearching(true);
@@ -520,7 +529,7 @@ function PartyPicker({
             }
         }, 250);
         return () => { cancelled = true; clearTimeout(handle); };
-    }, [query, kind, excludeId, selected]);
+    }, [query, kind, excludeId, selected, idle]);
 
     return (
         <div className="relative">

@@ -75,11 +75,10 @@ export default function WorkGroupsPage() {
 
     // No `setLoading(true)` here — the spinner is for the first load only.
     // Re-showing it after every save blanked the list (blink).
-    const load = async () => {
-        try { setGroups((await axios.get("/api/work-groups")).data); }
-        catch { toast.error("Failed to load groups"); }
-        finally { setLoading(false); }
-    };
+    const load = () => axios.get("/api/work-groups")
+        .then((res) => setGroups(res.data))
+        .catch(() => { toast.error("Failed to load groups"); })
+        .finally(() => setLoading(false));
     useEffect(() => { load(); }, []);
 
     // Workflow config is shared — a status, work or worker changed on another

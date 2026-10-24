@@ -54,34 +54,30 @@ export default function EcommerceSettingsPage() {
     const [savingPolicy, setSavingPolicy] = useState(false);
     const [savedPolicy, setSavedPolicy] = useState<ShopOutOfStockPolicy | null>(null);
 
-    const loadRules = useCallback(async () => {
+    const fetchRules = useCallback(() => getWithRetry<{ rules: ShopPublishRules }>("/api/ecommerce/publish-rules").then(
+        (data) => { setRules(data.rules); setSavedRules(data.rules); setRulesLoaded(true); },
+        () => { setRulesError(true); },
+    ), []);
+    /** Retry / refresh: clears the error first. */
+    const loadRules = useCallback(() => {
         setRulesError(false);
-        try {
-            const data = await getWithRetry<{ rules: ShopPublishRules }>("/api/ecommerce/publish-rules");
-            setRules(data.rules);
-            setSavedRules(data.rules);
-            setRulesLoaded(true);
-        } catch {
-            setRulesError(true);
-        }
-    }, []);
+        return fetchRules();
+    }, [fetchRules]);
 
-    const loadPolicy = useCallback(async () => {
+    const fetchPolicy = useCallback(() => getWithRetry<{ policy: ShopOutOfStockPolicy }>("/api/ecommerce/stock-policy").then(
+        (data) => { setPolicy(data.policy); setSavedPolicy(data.policy); setPolicyLoaded(true); },
+        () => { setPolicyError(true); },
+    ), []);
+    const loadPolicy = useCallback(() => {
         setPolicyError(false);
-        try {
-            const data = await getWithRetry<{ policy: ShopOutOfStockPolicy }>("/api/ecommerce/stock-policy");
-            setPolicy(data.policy);
-            setSavedPolicy(data.policy);
-            setPolicyLoaded(true);
-        } catch {
-            setPolicyError(true);
-        }
-    }, []);
+        return fetchPolicy();
+    }, [fetchPolicy]);
 
+    // First read: both error flags already start false.
     useEffect(() => {
-        void loadRules();
-        void loadPolicy();
-    }, [loadRules, loadPolicy]);
+        void fetchRules();
+        void fetchPolicy();
+    }, [fetchRules, fetchPolicy]);
 
     const rulesDirty = savedRules !== null && JSON.stringify(rules) !== JSON.stringify(savedRules);
     const policyDirty = savedPolicy !== null && policy !== savedPolicy;

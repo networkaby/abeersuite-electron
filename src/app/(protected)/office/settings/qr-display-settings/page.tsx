@@ -61,17 +61,12 @@ export default function QrDisplaySettingsPage() {
     // can be up or down, so its status line says nothing there — see the card below.
     const isElectron = useIsDesktopApp();
 
-    const checkRelay = useCallback(async () => {
-        try {
-            const data = await qrRequest<RelayConfig>("config:get");
-            setConfig({ ...DEFAULT, ...data });
-            setRelayUp(true);
-        } catch {
-            setRelayUp(false);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+    const checkRelay = useCallback(() => qrRequest<RelayConfig>("config:get")
+        .then(
+            (data) => { setConfig({ ...DEFAULT, ...data }); setRelayUp(true); },
+            () => { setRelayUp(false); },
+        )
+        .finally(() => setLoading(false)), []);
 
     /** Native folder picker — opens at the current folder, or Pictures\shop-ads. */
     const browseFolder = async () => {

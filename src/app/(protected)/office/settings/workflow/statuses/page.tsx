@@ -39,6 +39,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 interface Pipeline {
     id: string;
@@ -139,27 +140,29 @@ export default function StatusesPage() {
     // `silent` refetches keep the current list on screen — used after a save,
     // where blanking the list to a spinner reads as a page blink. The spinner
     // still shows on first load and when switching pipeline.
-    const fetchData = async (pipelineId: string, opts?: { silent?: boolean }) => {
-        if (!opts?.silent) setLoading(true);
-        try {
-            const [statusesResponse, worksResponse, pipelinesResponse, groupsResponse] = await Promise.all([
-                axios.get(`/api/ticket-statuses?pipelineId=${pipelineId}`),
-                axios.get("/api/works"),
-                axios.get("/api/pipelines"),
-                axios.get("/api/work-groups"),
-            ]);
+    const readData = (pipelineId: string) => Promise.all([
+        axios.get(`/api/ticket-statuses?pipelineId=${pipelineId}`),
+        axios.get("/api/works"),
+        axios.get("/api/pipelines"),
+        axios.get("/api/work-groups"),
+    ])
+        .then(([statusesResponse, worksResponse, pipelinesResponse, groupsResponse]) => {
             setStatuses(statusesResponse.data);
             setWorks(worksResponse.data);
             setPipelines(pipelinesResponse.data);
             setGroups(groupsResponse.data);
-        } catch {
-            toast.error("Failed to load data");
-        } finally {
-            setLoading(false);
-        }
+        })
+        .catch(() => { toast.error("Failed to load data"); })
+        .finally(() => setLoading(false));
+    const fetchData = (pipelineId: string, opts?: { silent?: boolean }) => {
+        if (!opts?.silent) setLoading(true);
+        return readData(pipelineId);
     };
 
-    useEffect(() => { fetchData(activePipelineId); }, [activePipelineId]);
+    // First load / another pipeline: the spinner is on from the first render
+    // (it starts true), so the effect only reads.
+    if (useValueChange(activePipelineId)) setLoading(true);
+    useEffect(() => { void readData(activePipelineId); }, [activePipelineId]);
 
     // Silent so the list does not blink: a status edited elsewhere announces
     // `tickets` and this pipeline's rows are re-read in place.

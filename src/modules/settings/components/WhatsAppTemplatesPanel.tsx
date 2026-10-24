@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
@@ -25,6 +25,7 @@ import {
     type WaTemplateKind,
 } from "@/shared/lib/whatsapp/billTemplates";
 import type { WaTemplateView } from "@/shared/lib/whatsapp/waTemplateStore";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 const STATUS_LABEL: Record<string, { text: string; className: string }> = {
     DRAFT: { text: "Draft — not sent", className: "bg-muted text-muted-foreground" },
@@ -51,12 +52,13 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
     const [testMobile, setTestMobile] = useState("");
     const bodyRef = useRef<HTMLTextAreaElement>(null);
 
-    // Switching kind (or a server answer) resets the editor to the saved copy.
-    useEffect(() => {
+    // Switching kind (or a server answer) resets the editor to the saved copy —
+    // while rendering, so the other kind's draft never paints.
+    if (useValueChange(current)) {
         setEnabled(current.enabled);
         setAutoSend(current.autoSend);
         setDraft(current.draft);
-    }, [current]);
+    }
 
     const viewBtn = draft.viewButton?.trim() || null;
     const appBtn = draft.appButton?.trim() || null;

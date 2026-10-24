@@ -18,7 +18,7 @@ import { mergeTemplateWithOrg } from "@/shared/lib/print/mergeTemplateWithOrg";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { resolveTemplateForFormat, rowToVoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 import { buildSampleForKind } from "@/modules/settings/lib/voucherTemplateSamples";
-import { isElectronEnvironment } from "@/shared/lib/bridge";
+import { isElectronEnvironment, useIsDesktopApp } from "@/shared/lib/bridge";
 import { HardwareStatusCard, useHardwareProbe, type HardwareProbe } from "@/modules/settings/components/HardwareStatusCard";
 
 // Latest shipped bridge version is read from this static manifest in /public.
@@ -73,7 +73,10 @@ export default function PrinterSettingsPage() {
     // Desktop app: the bridge is bundled and updates with the app, so the standalone
     // bridge update prompt must never show here. Resolved once on mount rather than
     // during render, so server and first client render agree.
-    const [isElectron, setIsElectron] = useState(false);
+    // Electron reaches the bundled bridge over IPC, so the config read below works
+    // there exactly as it does in a browser — only the version prompt differs, since
+    // the desktop app updates itself and has no standalone bridge to update.
+    const isElectron = useIsDesktopApp();
     const [latestVersion, setLatestVersion] = useState<string | null>(null);
     const [config, setConfig] = useState<RelayConfig>(DEFAULT);
     // The counter this PC is bound to (server-side, keyed by this PC's identity).
@@ -92,29 +95,22 @@ export default function PrinterSettingsPage() {
     const [comPorts, setComPorts] = useState<string[]>([]);
     const [portsLoading, setPortsLoading] = useState(false);
 
-    const checkRelay = useCallback(async () => {
-        // Electron reaches the bundled bridge over IPC, so the config read below works
-        // here exactly as it does in a browser — only the version prompt differs, since
-        // the desktop app updates itself and has no standalone bridge to update.
-        const onElectron = isElectronEnvironment();
-        setIsElectron(onElectron);
-        try {
-            const data = await bridgeRequest<RelayConfig>("thermal", "config:get", undefined, 3000);
-            setConfig({ ...DEFAULT, ...data });
-            setRelayUp(true);
-            if (onElectron) return;
-            // Bridge version drives the "update available" prompt. Best-effort —
-            // an older bridge with no version in health just reports null.
-            try {
-                const h = await bridgeRequest<{ version?: string }>("thermal", "health", undefined, 3000);
-                setBridgeVersion(h.version ?? null);
-            } catch { /* version optional */ }
-        } catch {
-            setRelayUp(false);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+    const checkRelay = useCallback(() => bridgeRequest<RelayConfig>("thermal", "config:get", undefined, 3000)
+        .then(
+            (data) => {
+                setConfig({ ...DEFAULT, ...data });
+                setRelayUp(true);
+                if (isElectronEnvironment()) return;
+                // Bridge version drives the "update available" prompt. Best-effort —
+                // an older bridge with no version in health just reports null.
+                return bridgeRequest<{ version?: string }>("thermal", "health", undefined, 3000).then(
+                    (h) => setBridgeVersion(h.version ?? null),
+                    () => { /* version optional */ },
+                );
+            },
+            () => { setRelayUp(false); },
+        )
+        .finally(() => setLoading(false)), []);
 
     // Is the configured printer actually reachable? Answered by the bridge's
     // "printer:probe", which never prints — see hardware-bridge/thermal.js.
@@ -142,7 +138,8 @@ export default function PrinterSettingsPage() {
     // Which counter is this PC bound to? Match this PC's identity against the
     // server's counter locks so the Forget card knows what it's releasing.
     const loadBoundCounter = useCallback(() => {
-        if (!identity?.machineId) { setBoundCounter(null); return () => {}; }
+        // No identity yet → nothing bound (boundCounter starts null).
+        if (!identity?.machineId) return () => {};
         let cancelled = false;
         fetch(`/api/pos/counters`)
             .then((r) => r.ok ? r.json() : [])

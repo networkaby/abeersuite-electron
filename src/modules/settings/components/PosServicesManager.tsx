@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { extractApiError } from "@/shared/lib/api";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 type GstRateOpt = { id: number; rate: string | number; label: string; isActive: boolean };
 
@@ -58,10 +59,8 @@ export function PosServicesManager() {
         () => gstRates.find((r) => Number(r.rate) === 18) ?? null,
         [gstRates],
     );
-    useEffect(() => {
-        if (default18 && draftGstRateId === null) setDraftGstRateId(default18.id);
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- default the draft once, when the rates arrive
-    }, [default18]);
+    // Once, when the rates arrive (while rendering).
+    if (useValueChange(default18) && default18 && draftGstRateId === null) setDraftGstRateId(default18.id);
 
     const load = useCallback((silent = false) => {
         Promise.all([

@@ -240,14 +240,10 @@ export default function ActionsPage() {
 
     // No `setLoading(true)` here — the spinner is for the first load only.
     // Re-showing it after every save blanked the list (blink).
-    const load = async () => {
-        try {
-            const res = await axios.get("/api/works");
-            setActions((res.data as ActionRow[]).filter((w) => w.kind === "auto"));
-        } catch {
-            toast.error("Failed to load actions");
-        } finally { setLoading(false); }
-    };
+    const load = () => axios.get("/api/works")
+        .then((res) => setActions((res.data as ActionRow[]).filter((w) => w.kind === "auto")))
+        .catch(() => { toast.error("Failed to load actions"); })
+        .finally(() => setLoading(false));
     useEffect(() => { load(); }, []);
 
     // Workflow config is shared — a status, work or worker changed on another

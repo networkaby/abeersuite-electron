@@ -398,22 +398,18 @@ export default function WorksPage() {
 
     // No `setLoading(true)` here — the spinner is for the first load only.
     // Re-showing it after every save blanked the list (blink).
-    const load = async () => {
-        try {
-            const [worksRes, pipelinesRes, groupsRes] = await Promise.all([
-                axios.get("/api/works"),
-                axios.get("/api/pipelines"),
-                axios.get("/api/work-groups"),
-            ]);
+    const load = () => Promise.all([
+        axios.get("/api/works"),
+        axios.get("/api/pipelines"),
+        axios.get("/api/work-groups"),
+    ])
+        .then(([worksRes, pipelinesRes, groupsRes]) => {
             setWorks(worksRes.data);
             setPipelines(pipelinesRes.data);
             setGroups(groupsRes.data);
-        } catch {
-            toast.error("Failed to load works");
-        } finally {
-            setLoading(false);
-        }
-    };
+        })
+        .catch(() => { toast.error("Failed to load works"); })
+        .finally(() => setLoading(false));
 
     useEffect(() => { load(); }, []);
 

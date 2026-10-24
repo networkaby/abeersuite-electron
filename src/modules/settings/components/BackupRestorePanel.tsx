@@ -49,6 +49,29 @@ function formatWhen(iso: string) {
     return d.toLocaleString();
 }
 
+
+type BackupList = { backups?: DropboxBackup[]; canBackup?: boolean; canRestore?: boolean; missing?: string[]; error?: string };
+
+/** The Dropbox backup list; throws with the server's own message on a failure. */
+async function fetchBackupList(): Promise<BackupList | null> {
+    const res = await fetch("/api/settings/restore/list");
+    const json = (await res.json().catch(() => null)) as BackupList | null;
+    if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+    return json;
+}
+
+/** The automatic-backup switch, or null when it cannot be trusted (counter build,
+ *  GitHub unreachable) — then it is not shown at all. */
+async function fetchSchedule(): Promise<{ enabled: boolean; state: string } | null> {
+    try {
+        const res = await fetch("/api/settings/backup/workflow");
+        if (!res.ok) return null;
+        return (await res.json()) as { enabled: boolean; state: string };
+    } catch {
+        return null;
+    }
+}
+
 export function BackupRestorePanel() {
     const [backingUp, setBackingUp] = useState(false);
 
@@ -59,7 +82,7 @@ export function BackupRestorePanel() {
     const [savingSchedule, setSavingSchedule] = useState(false);
 
     const [backups, setBackups] = useState<DropboxBackup[]>([]);
-    const [loadingList, setLoadingList] = useState(false);
+    const [loadingList, setLoadingList] = useState(true);
     const [selectedPath, setSelectedPath] = useState("");
     const [targetDbUrl, setTargetDbUrl] = useState("");
     const [confirmText, setConfirmText] = useState("");
@@ -69,17 +92,11 @@ export function BackupRestorePanel() {
     // Desktop only.
     const isElectron = useIsDesktopApp();
 
-    const loadSchedule = useCallback(async () => {
-        try {
-            const res = await fetch("/api/settings/backup/workflow");
-            if (!res.ok) return; // counter build, or GitHub unreachable — leave it hidden
-            const json = (await res.json()) as { enabled: boolean; state: string };
-            setScheduleOn(json.enabled);
-            setScheduleState(json.state);
-        } catch {
-            // Same: a switch we cannot trust is not shown at all.
-        }
-    }, []);
+    const loadSchedule = useCallback(() => fetchSchedule().then((json) => {
+        if (!json) return;
+        setScheduleOn(json.enabled);
+        setScheduleState(json.state);
+    }), []);
 
     async function toggleSchedule(next: boolean) {
         setSavingSchedule(true);
@@ -107,14 +124,8 @@ export function BackupRestorePanel() {
         }
     }
 
-    const loadBackups = useCallback(async () => {
-        setLoadingList(true);
-        try {
-            const res = await fetch("/api/settings/restore/list");
-            const json = (await res.json().catch(() => null)) as
-                | { backups?: DropboxBackup[]; canBackup?: boolean; canRestore?: boolean; missing?: string[]; error?: string }
-                | null;
-            if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
+    const readBackups = useCallback(() => fetchBackupList()
+        .then((json) => {
             setBackups(json?.backups ?? []);
             if (typeof json?.canBackup === "boolean" && typeof json?.canRestore === "boolean") {
                 setAvailability({
@@ -123,17 +134,21 @@ export function BackupRestorePanel() {
                     missing: json.missing ?? [],
                 });
             }
-        } catch (err) {
+        })
+        .catch((err) => {
             toast.error(err instanceof Error ? `Couldn't load Dropbox backups: ${err.message}` : "Couldn't load backups");
-        } finally {
-            setLoadingList(false);
-        }
-    }, []);
+        })
+        .finally(() => setLoadingList(false)), []);
+    const loadBackups = useCallback(() => {
+        setLoadingList(true);
+        return readBackups();
+    }, [readBackups]);
 
+    // First read: `loadingList` starts true.
     useEffect(() => {
-        void loadBackups();
+        void readBackups();
         void loadSchedule();
-    }, [loadBackups, loadSchedule]);
+    }, [readBackups, loadSchedule]);
 
     // A backup taken from another machine lands in the same Dropbox folder, and
     // the workflow switch is one shared setting — both belong on this list

@@ -95,17 +95,17 @@ export default function CouriersSettingsPage() {
     const [form, setForm] = useState<FormState>(emptyForm());
     const [saving, setSaving] = useState(false);
 
-    const load = useCallback(async () => {
+    const fetchMethods = useCallback(() => axios.get<{ methods: Method[] }>("/api/settings/couriers").then(
+        ({ data }) => { setMethods(data.methods); setLoaded(true); },
+        () => { setLoadError(true); },
+    ), []);
+    /** Retry / refresh: clears the error first. */
+    const load = useCallback(() => {
         setLoadError(false);
-        try {
-            const { data } = await axios.get<{ methods: Method[] }>("/api/settings/couriers");
-            setMethods(data.methods);
-            setLoaded(true);
-        } catch {
-            setLoadError(true);
-        }
-    }, []);
-    useEffect(() => { void load(); }, [load]);
+        return fetchMethods();
+    }, [fetchMethods]);
+    // First read: `loadError` already starts false.
+    useEffect(() => { void fetchMethods(); }, [fetchMethods]);
 
     // Courier setup is shared config — a rate or a service added elsewhere
     // announces `settings`.

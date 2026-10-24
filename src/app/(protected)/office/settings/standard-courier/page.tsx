@@ -178,10 +178,8 @@ export default function StandardCourierPage() {
     const [testSubtotal, setTestSubtotal] = useState("2000");
     const [testCod, setTestCod] = useState(false);
 
-    const load = useCallback(async () => {
-        setLoadError(false);
-        try {
-            const { data } = await axios.get<{ methods: Method[] }>("/api/settings/couriers");
+    const fetchMethod = useCallback(() => axios.get<{ methods: Method[] }>("/api/settings/couriers").then(
+        ({ data }) => {
             const row = data.methods.find((m) => m.kind === "CUSTOM") ?? null;
             if (row) {
                 setMethod(row);
@@ -190,11 +188,16 @@ export default function StandardCourierPage() {
                 setServices(Array.isArray(cfg.services) ? cfg.services.map(serviceFromCfg) : []);
             }
             setLoaded(true);
-        } catch {
-            setLoadError(true);
-        }
-    }, []);
-    useEffect(() => { void load(); }, [load]);
+        },
+        () => { setLoadError(true); },
+    ), []);
+    /** Retry / refresh: clears the error first. */
+    const load = useCallback(() => {
+        setLoadError(false);
+        return fetchMethod();
+    }, [fetchMethod]);
+    // First read: `loadError` already starts false.
+    useEffect(() => { void fetchMethod(); }, [fetchMethod]);
 
     // Courier setup is shared config — a rate or a service added elsewhere
     // announces `settings`.

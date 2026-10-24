@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
@@ -49,6 +49,7 @@ import {
     SAMPLE_PAYSLIP,
 } from "@/modules/settings/lib/voucherTemplateSamples";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 interface Props {
     initialTemplates: VoucherTemplateDefaults[];
@@ -64,7 +65,7 @@ function NumberField({
 }: { value: number; min: number; max: number; onCommit: (n: number) => void }) {
     const [text, setText] = useState(String(value));
     // Resync when the row's value changes externally (kind switch / reset / save).
-    useEffect(() => { setText(String(value)); }, [value]);
+    if (useValueChange(value)) setText(String(value));
     return (
         <Input
             inputMode="numeric"

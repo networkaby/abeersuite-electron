@@ -54,16 +54,10 @@ export default function PipelinesPage() {
     const [editForm, setEditForm] = useState({ label: "", description: "", color: "", isActive: true });
     const [editing, setEditing] = useState(false);
 
-    const load = async () => {
-        try {
-            const res = await axios.get("/api/pipelines");
-            setPipelines(res.data);
-        } catch {
-            toast.error("Failed to load pipelines");
-        } finally {
-            setLoading(false);
-        }
-    };
+    const load = () => axios.get("/api/pipelines")
+        .then((res) => setPipelines(res.data))
+        .catch(() => { toast.error("Failed to load pipelines"); })
+        .finally(() => setLoading(false));
 
     useEffect(() => { load(); }, []);
 
