@@ -5,11 +5,12 @@ import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Crop, EyeOff, Link2, Sparkles, Star, Trash2, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, Crop, EyeOff, Images, Link2, Sparkles, Star, Trash2, Upload } from "lucide-react";
 import { isAiSkipped, setAiSkipped } from "@/shared/lib/shop/photoMark";
 import { uploadImageToCloudinary } from "@/shared/lib/uploadToCloudinary";
 import { cloudinaryThumb, isCloudinaryUrl } from "@/shared/lib/cloudinaryImage";
 import ImageAdjustDialog from "@/modules/ecommerce/components/ImageAdjustDialog";
+import PhotoLibraryDialog from "@/modules/ecommerce/components/PhotoLibraryDialog";
 
 export default function ProductGalleryUploader({
     urls,
@@ -31,6 +32,7 @@ export default function ProductGalleryUploader({
     const [showUrlInput, setShowUrlInput] = useState(false);
     const [urlValue, setUrlValue] = useState("");
     const [adjustIdx, setAdjustIdx] = useState<number | null>(null);
+    const [libraryOpen, setLibraryOpen] = useState(false);
     const [selectedState, setSelectedState] = useState(0);
     const selected = selectedProp ?? selectedState;
     const setSelected = useCallback(
@@ -164,6 +166,10 @@ export default function ProductGalleryUploader({
                         <Link2 className="mr-2 size-4" />
                         From URL
                     </Button>
+                    <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => setLibraryOpen(true)}>
+                        <Images className="mr-2 size-4" />
+                        From library
+                    </Button>
 
                     {hasSelection ? (
                         <>
@@ -260,6 +266,15 @@ export default function ProductGalleryUploader({
                     </div>
                 )}
             </div>
+            <PhotoLibraryDialog
+                open={libraryOpen}
+                onOpenChange={setLibraryOpen}
+                exclude={urls}
+                onAdd={(picked) => {
+                    onChange([...urls, ...picked.filter((u) => !urls.includes(u))]);
+                    setSelected(urls.length);
+                }}
+            />
             {adjustIdx !== null && urls[adjustIdx] ? (
                 <ImageAdjustDialog
                     key={adjustIdx}

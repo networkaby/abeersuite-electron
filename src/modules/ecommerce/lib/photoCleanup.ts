@@ -100,8 +100,37 @@ async function databaseText(): Promise<string> {
     return parts.join("\n");
 }
 
-export async function planCleanup(): Promise<CleanupPlan> {
+/** Cloudinary's files and the database text, read together. */
+async function scan(): Promise<{ files: CloudFile[]; text: string }> {
     const [files, text] = await Promise.all([listCloudFiles(), databaseText()]);
+    return { files, text };
+}
+
+export type LibraryPhoto = { url: string; publicId: string; createdAt: string; used: boolean };
+
+// The photo library is read on every picker open; Cloudinary's Admin API allows
+// ~500 calls an hour on the free plan, so one scan serves everyone for a while.
+const LIBRARY_TTL_MS = 3 * 60_000;
+let libraryCache: { at: number; photos: LibraryPhoto[] } | null = null;
+
+/**
+ * Every shop photo in Cloudinary, newest first, marked used / unused — for the
+ * product page's "From library" picker, so a removed or never-saved photo can be
+ * put on a product again without uploading it twice. Cached briefly; the
+ * cleanup never reads this cache.
+ */
+export async function photoLibrary(): Promise<LibraryPhoto[]> {
+    if (libraryCache && Date.now() - libraryCache.at < LIBRARY_TTL_MS) return libraryCache.photos;
+    const { files, text } = await scan();
+    const photos = files
+        .map((f) => ({ url: f.url, publicId: f.publicId, createdAt: f.createdAt, used: text.includes(f.publicId) }))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    libraryCache = { at: Date.now(), photos };
+    return photos;
+}
+
+export async function planCleanup(): Promise<CleanupPlan> {
+    const { files, text } = await scan();
     const cutoff = Date.now() - PHOTO_CLEANUP_MIN_AGE_DAYS * 86_400_000;
     const unused = files.filter((f) => !text.includes(f.publicId));
     const garbage = unused.filter((f) => Date.parse(f.createdAt) < cutoff);
@@ -127,5 +156,6 @@ export async function deleteCloudFiles(publicIds: string[]): Promise<number> {
         const body = (await res.json()) as { deleted: Record<string, string> };
         deleted += Object.values(body.deleted).filter((v) => v === "deleted").length;
     }
+    libraryCache = null;
     return deleted;
 }
