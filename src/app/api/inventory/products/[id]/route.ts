@@ -130,10 +130,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         // NOT to the opening itself (opening 10, +50, −30 = 30; opening → 12 must
         // read 32, not 12). Same transaction, rebuilt from the ledger.
         const openingTouched = b.openingStock !== undefined || b.openingRate !== undefined;
-        // Follows the quantity the block below actually writes (`?? null`).
+        // A field the body leaves out keeps its saved value — a rate-only edit
+        // must not wipe the quantity (or a quantity-only edit the rate).
+        const opening = {
+            openingStock: b.openingStock !== undefined ? b.openingStock
+                : current.openingStock == null ? null : Number(current.openingStock),
+            openingRate: b.openingRate !== undefined ? b.openingRate
+                : current.openingRate == null ? null : Number(current.openingRate),
+        };
         const session = openingTouched ? await auth() : null;
         const openingBranchId = openingBranchOnSave(
-            b.openingStock ?? null, current.openingBranchId, () => requireWritableBranchId(req, session),
+            opening.openingStock, current.openingBranchId, () => requireWritableBranchId(req, session),
         );
         const row = await prisma.$transaction(async (tx) => {
             const saved = await tx.invProduct.update({
@@ -169,9 +176,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     ...(b.mrpPaise   !== undefined ? { mrpPaise:   b.mrpPaise   } : {}),
                     // Opening fields are written together so openingValue stays consistent.
                     ...(openingTouched ? {
-                        openingStock: b.openingStock ?? null,
-                        openingRate:  b.openingRate  ?? null,
-                        openingValue: productOpeningValue(b),
+                        ...opening,
+                        openingValue: productOpeningValue(opening),
                         // Universal opening — no date; always from the start of the books.
                         openingStockDate: null,
                         // Where the quantity is lying — see openingBranchOnSave.
