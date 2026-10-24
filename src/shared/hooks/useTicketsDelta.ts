@@ -49,6 +49,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import axios from "axios";
 import { localDb, type LocalTicketRow } from "@/shared/lib/browser/localDb";
+import { useValueChange } from "./useValueChange";
 import { useDebouncedValue } from "./useDebouncedValue";
 import { useRealtimeTopics } from "./useRealtimeTopics";
 import { getReadsGoLocal, getWritesHeldUntilApplied } from "@/shared/lib/realtime/appChannel";
@@ -201,10 +202,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
     // A new read (another view, search, or a reload/refresh tick) starts from
     // "loading" with no error — set here, while rendering, rather than at the top
     // of the fetch effect, so the screen never paints the old flags first.
-    const readId = JSON.stringify([key, search, tick]);
-    const [startedRead, setStartedRead] = useState(readId);
-    if (startedRead !== readId) {
-        setStartedRead(readId);
+    if (useValueChange(JSON.stringify([key, search, tick]))) {
         setLoading(true);
         setError(null);
         setStale(false);

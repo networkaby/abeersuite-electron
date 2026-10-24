@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 import axios from "axios";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -57,14 +58,10 @@ export default function CreatePersonDialog({ open, onOpenChange, onCreated, init
     // Clear when the dialog (re-)opens; seed the phone if one was passed in.
     // Done while rendering, against the last-seen value, so the old form never paints.
     const openedFor = open ? (initialPhone ?? "") : null;
-    const [seenOpenedFor, setSeenOpenedFor] = useState<string | null>(null);
-    if (openedFor !== seenOpenedFor) {
-        setSeenOpenedFor(openedFor);
-        if (openedFor !== null) {
-            setServerError(null);
-            setShowGstSection(false);
-            setForm({ ...INITIAL_FORM, phone: openedFor });
-        }
+    if (useValueChange(openedFor, null) && openedFor !== null) {
+        setServerError(null);
+        setShowGstSection(false);
+        setForm({ ...INITIAL_FORM, phone: openedFor });
     }
 
     function setField<K extends keyof PersonForm>(field: K, value: PersonForm[K]) {

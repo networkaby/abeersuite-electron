@@ -115,6 +115,7 @@ import {
 } from "@/components/ui/dialog";
 import { usePolling } from "@/shared/hooks/usePolling";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 import { useMyCounterExtension } from "@/modules/pos/hooks/useMyCounterExtension";
 import { CALL_POPUP_POLL_MS, CALL_POPUP_MAX_AGE_MS, CALL_POPUP_REMIND_MS, CALL_POPUP_HANDLED_TTL_MS } from "@/shared/lib/constants/polling";
 import { formatCallerNumber, formatDateTime, isCallableNumber } from "@/shared/lib/format";
@@ -241,8 +242,8 @@ export default function CallFollowUpPopup() {
     const [queue, setQueue] = useState<PendingCall[]>([]);
     const [noteDraft, setNoteDraft] = useState("");
     const [busy, setBusy] = useState(false);
-    const [linkCandidates, setLinkCandidates] = useState<LinkCandidate[]>([]);
-    const [linkLoading, setLinkLoading] = useState(false);
+    // Open tickets for a caller, held against the lookup they answer (see linkKey).
+    const [linkResult, setLinkResult] = useState<{ key: string; candidates: LinkCandidate[] } | null>(null);
 
     // Mutually exclusive: linking an existing ticket, creating a new help
     // ticket, creating a new deal, or (all three null) just a plain call note.
@@ -274,7 +275,8 @@ export default function CallFollowUpPopup() {
     useEffect(() => { handledIdsRef.current = loadHandled(); }, []);
     // Ids the guard has held longer than it should: staff logged them, the server
     // still disagrees. These are NOT hidden — they come back with a warning line.
-    const [staleHandled, setStaleHandled] = useState<Set<number>>(new Set());
+    // Each one keeps when staff logged it, for the warning line.
+    const [staleHandled, setStaleHandled] = useState<Map<number, number>>(new Map());
     /** More pending than one page — the icon says "50+" rather than lying. */
     const [morePending, setMorePending] = useState(false);
     // Refresh responses can come back out of order (poll tick vs realtime tick).
@@ -347,12 +349,12 @@ export default function CallFollowUpPopup() {
             // flagged, so staff can check the Call Log instead of raising a
             // second ticket for the same call.
             const staleAfter = Date.now() - CALL_POPUP_HANDLED_TTL_MS;
-            const stale = new Set<number>();
+            const stale = new Map<number, number>();
             const visible = fresh.filter((c) => {
                 const at = handledIdsRef.current.get(c.id);
                 if (at === undefined) return true;
                 if (at >= staleAfter) return false;
-                stale.add(c.id);
+                stale.set(c.id, at);
                 return true;
             });
             setStaleHandled(stale);
@@ -397,45 +399,49 @@ export default function CallFollowUpPopup() {
     // These are the tables GET /api/calls reads (route, followUp.ts, customerMessages.ts).
     useRealtimeTopics(["tickets", "messages"], () => void refresh(), pollEnabled, CALL_POPUP_MODELS);
 
-    // Fresh call, fresh form state.
-    useEffect(() => {
-        setNoteDraft(""); setLinkCandidates([]); setSelectedTicketId(null); setCreateAs(null);
-    }, [call?.id]);
+    // Fresh call, fresh form state — reset while rendering, so the last call's
+    // note never paints under the new caller.
+    if (useValueChange(call?.id ?? null)) {
+        setNoteDraft(""); setSelectedTicketId(null); setCreateAs(null);
+    }
 
     // Open tickets that could plausibly BE this caller — fetched eagerly so
     // the list can simply be empty instead of the staff opening onto a dead
     // end. Matches on the linked person/company AND on the ticket's own
-    // phone field — see the module doc.
-    useEffect(() => {
-        // A missed call is locked (no ticket to link) — skip the read.
-        if (!call || call.missed) { setLinkCandidates([]); return; }
+    // phone field — see the module doc. Keyed on what the lookup asks, not on
+    // the call object: every poll rebuilds the queue, and keying on the object
+    // re-read /api/help + /api/deals on each tick for the same caller.
+    // A missed call is locked (no ticket to link) — no read at all.
+    const linkKey = (() => {
+        if (!call || call.missed) return null;
         const customer = call.customer;
         const phone = call.rawNumber;
-        if (!customer && !phone) { setLinkCandidates([]); return; }
-        let cancelled = false;
-        setLinkLoading(true);
+        if (!customer && !phone) return null;
         const params: Record<string, string> = { open: "1" };
         if (customer?.kind === "person") params.personId = String(customer.id);
         if (customer?.kind === "company") params.companyId = String(customer.id);
         if (phone) params.phone = phone;
-        (async () => {
-            try {
-                const [helpRes, dealRes] = await Promise.all([
-                    axios.get<TicketLite[]>("/api/help", { params }),
-                    axios.get<TicketLite[]>("/api/deals", { params }),
-                ]);
-                if (cancelled) return;
-                const helps: LinkCandidate[] = helpRes.data.map((h) => ({ id: h.id, kind: "help", label: h.subject || "Help ticket", statusLabel: h.ticketStatus?.label ?? null }));
-                const deals: LinkCandidate[] = dealRes.data.map((d) => ({ id: d.id, kind: "deal", label: d.title || "Deal", statusLabel: d.ticketStatus?.label ?? null }));
-                setLinkCandidates([...helps, ...deals].slice(0, 6));
-            } catch {
-                if (!cancelled) setLinkCandidates([]);
-            } finally {
-                if (!cancelled) setLinkLoading(false);
-            }
-        })();
+        return JSON.stringify(params);
+    })();
+    const linkCandidates = linkKey !== null && linkResult?.key === linkKey ? linkResult.candidates : [];
+    const linkLoading = linkKey !== null && linkResult?.key !== linkKey;
+    useEffect(() => {
+        if (linkKey === null) return;
+        let cancelled = false;
+        const params = JSON.parse(linkKey) as Record<string, string>;
+        Promise.all([
+            axios.get<TicketLite[]>("/api/help", { params }),
+            axios.get<TicketLite[]>("/api/deals", { params }),
+        ]).then(([helpRes, dealRes]) => {
+            if (cancelled) return;
+            const helps: LinkCandidate[] = helpRes.data.map((h) => ({ id: h.id, kind: "help", label: h.subject || "Help ticket", statusLabel: h.ticketStatus?.label ?? null }));
+            const deals: LinkCandidate[] = dealRes.data.map((d) => ({ id: d.id, kind: "deal", label: d.title || "Deal", statusLabel: d.ticketStatus?.label ?? null }));
+            setLinkResult({ key: linkKey, candidates: [...helps, ...deals].slice(0, 6) });
+        }, () => {
+            if (!cancelled) setLinkResult({ key: linkKey, candidates: [] });
+        });
         return () => { cancelled = true; };
-    }, [call]);
+    }, [linkKey]);
 
     /**
      * Take the whole caller off the queue — one save answers every call they made,
@@ -511,8 +517,8 @@ export default function CallFollowUpPopup() {
     };
 
     const phoneDisplay = call ? formatCallerNumber(call.rawNumber, call.direction) : "";
-    /** When staff saved this call — only read for ids the TTL has flagged stale. */
-    const handledAt = (id: number) => handledIdsRef.current.get(id) ?? Date.now();
+    /** When staff logged this caller, if the counter still has not been told (see staleHandled). */
+    const staleLoggedAt = current?.calls.map((c) => staleHandled.get(c.id)).find((at) => at !== undefined);
 
     const save = async () => {
         if (!current || !call) return;
@@ -628,9 +634,9 @@ export default function CallFollowUpPopup() {
                                 for ever would bury a save that never landed, and
                                 showing it plainly invites a second ticket for the same
                                 call. See the module doc's HOW A SAVE STAYS SAVED. */}
-                            {current.calls.some((c) => staleHandled.has(c.id)) && (
+                            {staleLoggedAt !== undefined && (
                                 <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-900 dark:text-amber-200">
-                                    You logged this {relativeLabel(new Date(handledAt(call.id)).toISOString())} and this counter
+                                    You logged this {relativeLabel(new Date(staleLoggedAt).toISOString())} and this counter
                                     has not received it yet. Check the Call Log before raising another ticket.
                                 </p>
                             )}

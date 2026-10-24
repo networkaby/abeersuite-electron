@@ -20,6 +20,7 @@
 
 import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, PackageSearch, X, Plus } from "lucide-react";
+import { useValueChange } from "@/shared/hooks";
 import { Input } from "@/components/ui/input";
 import { formatInr } from "@/shared/lib/format";
 import { productMatchesSearch, readCachedMasters, syncMasters } from "@/shared/lib/inventory";
@@ -251,11 +252,7 @@ export const PosProductExplorer = memo(function PosProductExplorer({
 
     // Reset the visible window whenever the filtered count changes (new query,
     // facet selection, or products array update).
-    const prevFilteredLen = useRef(filtered.length);
-    if (filtered.length !== prevFilteredLen.current) {
-        prevFilteredLen.current = filtered.length;
-        setVisibleCount(PAGE_SIZE);
-    }
+    if (useValueChange(filtered.length)) setVisibleCount(PAGE_SIZE);
 
     const visibleProducts = filtered.slice(0, visibleCount);
     const hasMore = visibleCount < filtered.length;

@@ -34,6 +34,7 @@ import { openCashDrawer } from "@/shared/lib/print/silentThermalPrint";
 import { parseDigitsInput, parseDecimalInput } from "@/shared/lib/format";
 import { toDateTimeLocalInput } from "@/shared/lib/format/dateInput";
 import { TallyDateTimeInput } from "@/shared/components/TallyDateTimeInput";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 import { FooterToggle } from "@/modules/accountancy/components/FooterToggle";
 import { SavePrintButtons, savePrintKey } from "@/modules/pos/components/SavePrintButtons";
 import { captureMyDay } from "@/shared/lib/hr/myDay";
@@ -108,16 +109,14 @@ export function ShiftCloseDialog({
         const next = { ...denoms, [d]: v };
         setDenoms(next);
         const dTot = denomList.reduce((s, dd) => s + dd * (parseInt(next[dd] || "0", 10) || 0), 0);
-        const total = +(dTot + (parseFloat(otherCash) || 0)).toFixed(2);
-        setDeclared(total.toFixed(2));
+        applyCount(+(dTot + (parseFloat(otherCash) || 0)).toFixed(2));
     };
 
     const handleOtherCashChange = (raw: string) => {
         const sanitized = parseDecimalInput(raw);
         setOtherCash(sanitized);
         const oTot = parseFloat(sanitized) || 0;
-        const total = +(denomTotal + oTot).toFixed(2);
-        setDeclared(total.toFixed(2));
+        applyCount(+(denomTotal + oTot).toFixed(2));
     };
 
     // Vault mode — the counted cash splits in two: what goes to the vault now
@@ -147,13 +146,17 @@ export function ShiftCloseDialog({
         try { window.localStorage.setItem(THERMAL_KEY, String(val)); } catch { /* ignore */ }
     };
 
-    useEffect(() => {
-        if (!open) return;
+    // Each open starts a fresh count — reset while rendering, so the last
+    // shift's notes never paint.
+    if (useValueChange(open ? JSON.stringify([shiftId, initialClosedAt]) : null, null) && open) {
         setLoading(true);
         setDenoms({});
         setOtherCash("");
         // null = open shift closed from the detail page: default to now, still editable.
         setClosedAt(initialClosedAt !== undefined ? toDateTimeLocalInput(initialClosedAt ?? new Date().toISOString()) : "");
+    }
+    useEffect(() => {
+        if (!open) return;
         // Load the org's configured cash denominations (country-specific). Falls
         // back to DEFAULT_DENOMS if unset or the call fails.
         getOrgDefaults()
@@ -209,13 +212,14 @@ export function ShiftCloseDialog({
     };
 
     // Counting more notes moves the physical total: the box the cashier last
-    // typed holds its figure, the other one follows.
-    useEffect(() => {
+    // typed holds its figure, the other one follows. Only a new counted total
+    // re-splits; typing in a box already moves the other (editKeep / editSweep).
+    function applyCount(total: number) {
+        setDeclared(total.toFixed(2));
         if (mode !== "vault") return;
-        if (anchor === "keep") setToVaultInput(splitFmt(declaredNum - carryOverNum));
-        else                   setCarryOver(splitFmt(declaredNum - sweepNum));
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new counted total re-splits; typing in a box already moves the other (editKeep / editSweep)
-    }, [declaredNum, mode]);
+        if (anchor === "keep") setToVaultInput(splitFmt(total - carryOverNum));
+        else                   setCarryOver(splitFmt(total - sweepNum));
+    }
 
     const submitVault = async (print: boolean) => {
         if (!detail) return;

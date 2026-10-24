@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2, Monitor, Banknote } from "lucide-react";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 import {
     Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -64,7 +65,7 @@ export function ShiftOpenDialog({
 }) {
     const [counters, setCounters]         = useState<Counter[]>([]);
     const [loadingCounters, setLoadingCounters] = useState(false);
-    const [selectedCounterId, setSelectedCounterId] = useState<number | null>(null);
+    const [pickedCounterId, setPickedCounterId] = useState<number | null>(null);
     // This PC's identity — Electron's installation id on the desktop app, the local
     // bridge's id on the web version. The counter this device is bound to server-side
     // forces + disables the picker.
@@ -75,15 +76,15 @@ export function ShiftOpenDialog({
     const [submitting, setSubmitting]     = useState(false);
 
     // Fetch counters each time the dialog opens.
+    if (useValueChange(open, false) && open) setLoadingCounters(true);
     useEffect(() => {
         if (!open) return;
-        setLoadingCounters(true);
         axios.get<Counter[]>("/api/pos/counters")
             .then((r) => {
                 setCounters(r.data);
                 // Auto-select if only one available counter.
                 const available = r.data.filter((c) => !c.activeShift);
-                if (available.length === 1) setSelectedCounterId(available[0].id);
+                if (available.length === 1) setPickedCounterId(available[0].id);
             })
             .catch(() => toast.error("Failed to load counters"))
             .finally(() => setLoadingCounters(false));
@@ -102,9 +103,7 @@ export function ShiftOpenDialog({
     const lockedCounter = deviceId
         ? counters.find((c) => matchesThisMachine(c.boundDeviceId, { machineId: deviceId })) ?? null
         : null;
-    useEffect(() => {
-        if (lockedCounter) setSelectedCounterId(lockedCounter.id);
-    }, [lockedCounter]);
+    const selectedCounterId = lockedCounter?.id ?? pickedCounterId;
 
     const selectedCounter = counters.find((c) => c.id === selectedCounterId) ?? null;
     // Somebody else's drawer is on the picked counter — it is taken over, not opened.
@@ -165,7 +164,7 @@ export function ShiftOpenDialog({
                             <Label>Counter</Label>
                             <Select
                                 value={selectedCounterId?.toString() ?? ""}
-                                onValueChange={(v) => setSelectedCounterId(Number(v))}
+                                onValueChange={(v) => setPickedCounterId(Number(v))}
                                 disabled={lockedCounter != null}
                             >
                                 <SelectTrigger>
