@@ -389,6 +389,9 @@ export async function engineCreateSpine(
          * with no number is not a thing.
          */
         status?:         "DRAFT" | "POSTED";
+        /** The POS bill key (UniversalVoucher.requestKey) — unique, so a second
+         *  spine with the same key fails the insert. Omit everywhere else. */
+        requestKey?:     string | null;
     },
 ): Promise<number> {
     // A date before the books begin here belongs to the old register, not to a
@@ -404,6 +407,7 @@ export async function engineCreateSpine(
             type:           args.type,
             binding:        bindingForType(args.type),   // 5D-9
             voucherNo:    args.voucherNo?.trim() || null,
+            requestKey:     args.requestKey ?? null,
             date:           args.date,
             description:    args.description,
             narration:      args.narration ?? null,

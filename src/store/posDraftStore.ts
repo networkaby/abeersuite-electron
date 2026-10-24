@@ -44,6 +44,14 @@ type PosDraftState = {
     // next Sale (or Order, from an estimate) saves with a link back to it, so
     // the source shows "Converted". Cleared by reset() and after every save.
     convertFrom: ConvertFrom | null;
+    // Bill key — one random id per bill, sent on every Save of it, so a Save
+    // retried after a lost reply is answered "already saved" by the server
+    // instead of billing twice (UniversalVoucher.requestKey). Made on the first
+    // Save, kept through failed Saves and cart edits, and dropped when the cart
+    // empties (saved, cleared) or the draft resets — that is a new bill.
+    billKey: string | null;
+    /// This bill's key, made now if it has none yet.
+    takeBillKey: () => string;
     setConvertFrom: (v: SetStateAction<ConvertFrom | null>) => void;
     setSnapshot: (v: SetStateAction<Snapshot | null>) => void;
     setTicketId: (v: SetStateAction<number | null>) => void;
@@ -60,7 +68,7 @@ type PosDraftState = {
 
 const initialDraft: Pick<
     PosDraftState,
-    "snapshot" | "cart" | "shippingAmtStr" | "roundOffStr" | "roundOffManuallyEdited" | "charges" | "ticketId" | "convertFrom"
+    "snapshot" | "cart" | "shippingAmtStr" | "roundOffStr" | "roundOffManuallyEdited" | "charges" | "ticketId" | "convertFrom" | "billKey"
 > = {
     snapshot: null,
     cart: [],
@@ -70,14 +78,23 @@ const initialDraft: Pick<
     charges: [],
     ticketId: null,
     convertFrom: null,
+    billKey: null,
 };
 
-export const usePosDraftStore = create<PosDraftState>((set) => ({
+export const usePosDraftStore = create<PosDraftState>((set, get) => ({
     ...initialDraft,
+    takeBillKey: () => {
+        const key = get().billKey ?? crypto.randomUUID();
+        set({ billKey: key });
+        return key;
+    },
     setSnapshot: (v) => set((s) => ({ snapshot: applyAction(s.snapshot, v) })),
     setTicketId: (v) => set((s) => ({ ticketId: applyAction(s.ticketId, v) })),
     setConvertFrom: (v) => set((s) => ({ convertFrom: applyAction(s.convertFrom, v) })),
-    setCart: (v) => set((s) => ({ cart: applyAction(s.cart, v) })),
+    setCart: (v) => set((s) => {
+        const cart = applyAction(s.cart, v);
+        return cart.length ? { cart } : { cart, billKey: null };
+    }),
     setShippingAmtStr: (v) => set((s) => ({ shippingAmtStr: applyAction(s.shippingAmtStr, v) })),
     setRoundOffStr: (v) => set((s) => ({ roundOffStr: applyAction(s.roundOffStr, v) })),
     setRoundOffManuallyEdited: (v) => set((s) => ({ roundOffManuallyEdited: applyAction(s.roundOffManuallyEdited, v) })),

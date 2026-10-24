@@ -200,6 +200,11 @@ const createSchema = z.object({
     // voucher is linked to it (VoucherLink kind=TICKET) so it shows in the
     // ticket's Invoices panel, and a timeline entry is written on the ticket.
     ticketId: z.number().int().positive().optional().nullable(),
+    // Bill key — one random id per bill, the SAME on every Save of that bill
+    // (PosScreen makes it). A key already on a voucher means an earlier try
+    // committed and its reply was lost: answered "already saved", never billed
+    // again. Optional so a counter older than the key still bills.
+    requestKey: z.string().trim().min(8).max(100).optional(),
 }).refine((d) => d.lines.length + d.services.length >= 1, {
     message: "At least one line item or service required",
     path: ["lines"],
@@ -207,6 +212,34 @@ const createSchema = z.object({
 
 class GlPostFailedError extends Error {
     constructor(message: string, public notes: string[]) { super(message); }
+}
+
+/**
+ * The answer for a Save whose bill key is already on a voucher, or null when it
+ * is not (or there is no key). 200, not 409: it IS the success the cashier was
+ * waiting for, so the screen takes its success path, and a counter relay treats
+ * it like any saved bill — it pulls the office's rows into the replica. The
+ * reply carries only what identifies the bill; the screen offers a reprint.
+ */
+async function alreadySavedReply(requestKey: string | undefined): Promise<NextResponse | null> {
+    if (!requestKey) return null;
+    const uv = await prisma.universalVoucher.findUnique({
+        where: { requestKey },
+        select: { id: true, type: true, voucherNo: true, voucherDetail: { select: { id: true } } },
+    });
+    if (!uv) return null;
+    if (uv.type !== "POS" || !uv.voucherDetail) {
+        return NextResponse.json(
+            { error: "This bill key belongs to another voucher. Start a new bill and save again.", code: "REQUEST_KEY_REUSED" },
+            { status: 409 },
+        );
+    }
+    return NextResponse.json({
+        alreadySaved: true,
+        voucherId: uv.voucherDetail.id,
+        voucherRef: uv.voucherNo,
+        universalVoucherId: uv.id,
+    });
 }
 
 export async function POST(req: Request) {
@@ -217,6 +250,10 @@ export async function POST(req: Request) {
     if (error) return error;
     const body = data;
     const _t0 = performance.now(); // perf timing — see [pos-timing] log before the response
+
+    // A retried Save of a bill that already committed — answered before any work.
+    const saved = await alreadySavedReply(body.requestKey);
+    if (saved) return saved;
 
     // ── Active shift requirement ──────────────────────────────────────────
     // Branch context comes from the shift, not the session cookie.
@@ -1019,6 +1056,7 @@ export async function POST(req: Request) {
                 // got NO shift — missing from that shift's close report, and its
                 // payment could not be re-taken on edit.
                 shiftId: shift.id,
+                requestKey: body.requestKey,
             });
             // Link the bill to the repair ticket it was raised from (if any), so it
             // surfaces in the ticket's Invoices panel (VoucherLink kind=TICKET).
@@ -1431,6 +1469,14 @@ export async function POST(req: Request) {
         }
         if (err instanceof RedemptionHoldChangedError) {
             return NextResponse.json({ error: err.message, code: "REDEMPTION_HOLD_CHANGED" }, { status: 409 });
+        }
+        // Two Saves of one bill at the same moment: both missed the look-up above,
+        // the first committed, and this one's spine hit the unique bill key. Any
+        // P2002 is re-checked against the key rather than parsed — the look-up is
+        // the truth, and a P2002 from anything else falls through as before.
+        if ((err as { code?: string } | null)?.code === "P2002") {
+            const saved = await alreadySavedReply(body.requestKey);
+            if (saved) return saved;
         }
         console.error("[pos sale]", err);
         const msg = err instanceof Error ? err.message : "Failed to create POS sale";
