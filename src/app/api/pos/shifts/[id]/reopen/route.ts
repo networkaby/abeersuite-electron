@@ -52,7 +52,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const db = prismaAuthoritative;
         const shift = await db.posShift.findUnique({
             where:  { id: shiftId },
-            select: { id: true, status: true, counterId: true, closedAt: true, handoverToShiftId: true, closingContraVoucherId: true, varianceJournalEntryId: true, notes: true },
+            select: { id: true, status: true, counterId: true, openedAt: true, handoverToShiftId: true, closingContraVoucherId: true, varianceJournalEntryId: true, notes: true },
         });
         if (!shift) return NextResponse.json({ error: "Shift not found" }, { status: 404 });
         if (shift.status !== "CLOSED") return NextResponse.json({ error: "Only a closed shift can be reopened" }, { status: 409 });

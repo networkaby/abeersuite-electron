@@ -177,10 +177,26 @@ an update.
   `public/.well-known/assetlinks.json`; the app vouches back (`asset_statements`), so the
   install page's `getInstalledRelatedApps()` still sees it as installed. Both files carry
   an extension, so `proxy.ts` never asks for a sign-in.
-- **Update download:** the "New version available" bar links to
-  `https://office.networkservice.in./ns-staff.apk` — office only, never shop. The trailing
-  dot makes Capacitor treat it as another host, so Chrome opens it (the app's WebView
-  cannot download); the customer app does the same with `shop.networkservice.in.`.
+- **In-app update (from 2.3.0, versionCode 6):** the bar's **Update now** downloads
+  `ns-staff.apk?v=<code>` inside the app and opens Android's own Install screen —
+  [`NsUpdatePlugin`](../phone-app/android/app/src/main/java/in/networkservice/staff/NsUpdatePlugin.java)
+  (`REQUEST_INSTALL_PACKAGES`), called by
+  [`AppUpdateBar`](../src/shared/components/AppUpdateBar.tsx). Only a `.apk` on the office
+  site; refused before the Install screen unless it is this app and newer (so an APK
+  not deployed yet cannot loop). First time, Android must allow the app to install
+  apps: the plugin opens that switch and the person taps again. A failed download
+  offers the Chrome page below. Builds before 2.3.0 have no updater and use the
+  Chrome page. The customer app has the same plugin from 2.2.0 (versionCode 6,
+  [`shop-app-native/…/NsUpdatePlugin.java`](../shop-app-native/android/app/src/main/java/in/networkservice/shop/NsUpdatePlugin.java),
+  `ns-shop.apk` from the shop site) — keep the two files alike.
+- **Update download (Chrome):** the "New version available" bar links to the install page,
+  `https://office.networkservice.in./m-staff-app/install` — office only, never shop. The
+  trailing dot makes Capacitor treat it as another host, so Chrome opens it (the app's
+  WebView cannot download); the customer app does the same with
+  `shop.networkservice.in./app`. Staff then tap **Download** there. It used to link the
+  bare `.apk`, and Chrome left that download stuck (2026-10-24) while the install page's
+  own button — the fresh-install path — always worked. The install page's download link
+  carries `?v=<versionCode>`, so each release is a new address to Chrome.
   Deploy `d_office` with every new staff APK, or phones reinstall the old one in a loop.
 - **Build:** `pwsh -File phone-app/build-apk.ps1` — `cap sync`, asks the key's passwords
   (owner types them; environment only, never written), Gradle `assembleRelease`, copies

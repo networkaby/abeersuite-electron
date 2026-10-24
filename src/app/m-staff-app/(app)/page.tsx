@@ -8,7 +8,7 @@ import { loginGreeting } from "@/shared/lib/constants/loginShowcase";
 import { mobileUser } from "@/modules/mobile/lib/mobileAccess";
 import { quickEntryFor, screensFor } from "@/modules/mobile/lib/mobileScreens";
 import MobileHeader from "@/modules/mobile/components/MobileHeader";
-import { PHONE_APP_APK, PHONE_APP_HOME, PHONE_APP_UA } from "@/shared/lib/device/phone";
+import { PHONE_APP_APK, PHONE_APP_HOME, PHONE_APP_INSTALL, PHONE_APP_UA } from "@/shared/lib/device/phone";
 import { AppVersionLine } from "@/shared/components/AppUpdateBar";
 import { STAFF_APP_RELEASE } from "@/shared/lib/constants/appVersions";
 
@@ -102,7 +102,7 @@ export default async function MobileHome() {
                         </ul>
                     </section>
                 )}
-                <AppVersionLine uaTag={PHONE_APP_UA} release={STAFF_APP_RELEASE} apkUrl={`${COMPANY_DETAILS.sites.office}.${PHONE_APP_APK}`} />
+                <AppVersionLine uaTag={PHONE_APP_UA} release={STAFF_APP_RELEASE} installUrl={`${COMPANY_DETAILS.sites.office}.${PHONE_APP_INSTALL}`} apk={PHONE_APP_APK} />
             </main>
         </>
     );
