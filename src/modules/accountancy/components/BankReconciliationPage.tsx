@@ -34,6 +34,7 @@ import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { useApiResource } from "@/shared/hooks/useApiResource";
 import { useClientPagination } from "@/shared/hooks/useClientPagination";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useLocalState } from "@/shared/hooks/useSessionState";
 import { QueryStateBlock } from "@/shared/components/QueryStateBlock";
 import { PaginationBar } from "@/shared/components/PaginationBar";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
@@ -110,41 +111,20 @@ export function BankReconciliationPage() {
     const search = useSearchParams();
     const { menu: linkMenu, close: closeLinkMenu, onContainerContextMenu } = useLinkContextMenu();
     const today = formatDateInput(new Date());
-    const [selectedId, setSelectedId] = useState<number | null>(() => {
+    const [pickedId, setPickedId] = useState<number | null>(() => {
         let q = Number(search.get("account"));
         if (!(Number.isInteger(q) && q > 0)) { try { q = Number(sessionStorage.getItem(POS_KEY)); } catch { /* private mode */ } }
         return Number.isInteger(q) && q > 0 ? q : null;
     });
-    // The picked bank rides in the URL (and this tab's session), so a reload or a
-    // remount after booking a voucher comes back to the same bank, not the first.
-    useEffect(() => {
-        if (selectedId == null) return;
-        try { sessionStorage.setItem(POS_KEY, String(selectedId)); } catch { /* private mode */ }
-        const u = new URL(window.location.href);
-        if (u.searchParams.get("account") !== String(selectedId)) {
-            u.searchParams.set("account", String(selectedId));
-            window.history.replaceState(window.history.state, "", u);
-        }
-    }, [selectedId]);
     const [from, setFrom] = useState(formatDateInput(indianFiscalYearStart()));
     const [to, setTo] = useState(today);
     const [filter, setFilter] = useState<Filter>("all");
-    const [view, setView] = useState<ViewMode>("merged");
-    useEffect(() => {
-        try { const v = localStorage.getItem("recon.view"); if (v === "split" || v === "merged") setView(v); } catch { /* private mode */ }
-    }, []);
-    const changeView = (v: ViewMode) => { setView(v); try { localStorage.setItem("recon.view", v); } catch { /* private mode */ } };
-    const [showStats, setShowStats] = useState(true);
-    useEffect(() => {
-        try { if (localStorage.getItem("recon.stats") === "off") setShowStats(false); } catch { /* private mode */ }
-    }, []);
-    // Plain handler, not a state updater — an updater must stay pure, and React
-    // runs it twice in development.
-    const toggleStats = () => {
-        const next = !showStats;
-        setShowStats(next);
-        try { localStorage.setItem("recon.stats", next ? "on" : "off"); } catch { /* private mode */ }
-    };
+    // Both remembered in this browser (useLocalState restores them after mount).
+    const [savedView, changeView] = useLocalState<ViewMode>("recon.view", "merged");
+    const view: ViewMode = savedView === "split" ? "split" : "merged";
+    const [statsPref, setStatsPref] = useLocalState<"on" | "off">("recon.stats", "on");
+    const showStats = statsPref !== "off";
+    const toggleStats = () => setStatsPref(showStats ? "off" : "on");
     const [selSt, setSelSt] = useState<Set<number>>(new Set());
     const [selGl, setSelGl] = useState<Set<number>>(new Set());
     const [busy, setBusy] = useState<string | null>(null);
@@ -163,9 +143,19 @@ export function BankReconciliationPage() {
         }
         return out.sort((a, b) => a.name.localeCompare(b.name));
     }, [ledgersQ.data]);
+    // Nothing picked yet (no URL, nothing this session) → the first bank.
+    const selectedId = pickedId ?? ledgers?.[0]?.id ?? null;
+    // The picked bank rides in the URL (and this tab's session), so a reload or a
+    // remount after booking a voucher comes back to the same bank, not the first.
     useEffect(() => {
-        if (selectedId == null && ledgers && ledgers.length > 0) setSelectedId(ledgers[0].id);
-    }, [ledgers, selectedId]);
+        if (selectedId == null) return;
+        try { sessionStorage.setItem(POS_KEY, String(selectedId)); } catch { /* private mode */ }
+        const u = new URL(window.location.href);
+        if (u.searchParams.get("account") !== String(selectedId)) {
+            u.searchParams.set("account", String(selectedId));
+            window.history.replaceState(window.history.state, "", u);
+        }
+    }, [selectedId]);
 
     const url = selectedId ? `/api/accountancy/bank-reconciliation/${selectedId}?from=${from}&to=${to}` : null;
     const { data, loading, refreshing, error, reload } = useApiResource<ReconPayload>(url);
@@ -173,13 +163,13 @@ export function BankReconciliationPage() {
 
     // Start the period at the lock the first time a ledger loads — that is
     // where the work is. The user can widen it afterwards.
+    // Applied while rendering, so the first paint of a ledger is already at its lock.
     const [lockAppliedFor, setLockAppliedFor] = useState<number | null>(null);
-    useEffect(() => {
-        if (!data || lockAppliedFor === data.account.id) return;
+    if (data && lockAppliedFor !== data.account.id) {
         setLockAppliedFor(data.account.id);
         if (data.account.lock && data.account.lock > from) setFrom(data.account.lock);
         setSelSt(new Set()); setSelGl(new Set());
-    }, [data, lockAppliedFor, from]);
+    }
 
     // ── Rows ───────────────────────────────────────────────────────────────
     const stRows = useMemo(() => {
@@ -597,7 +587,7 @@ export function BankReconciliationPage() {
                         <select
                             id="recon-ledger"
                             value={selectedId ?? ""}
-                            onChange={(e) => { setSelectedId(Number(e.target.value) || null); setSelSt(new Set()); setSelGl(new Set()); }}
+                            onChange={(e) => { setPickedId(Number(e.target.value) || null); setSelSt(new Set()); setSelGl(new Set()); }}
                             className="h-9 min-w-[16rem] rounded-md border bg-background px-2 text-sm"
                         >
                             {!ledgers && <option value="">Loading…</option>}

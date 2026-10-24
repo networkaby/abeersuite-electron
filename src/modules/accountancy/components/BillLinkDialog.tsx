@@ -20,7 +20,7 @@
 // post in two steps, so anything held in the form would be a promise the books
 // cannot keep. The forms open this popup straight after posting instead.
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
@@ -34,6 +34,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { extractApiError } from "@/shared/lib/api";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import { fmt } from "@/shared/lib/format/moneyInr";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 import { planLinks, reconcilePicks, sumPicks, EPS, type LinkableDoc } from "@/modules/accountancy/lib/billLinkPlan";
 
 /** Money that already moved cannot be settled by creating more money — it needs
@@ -96,51 +97,62 @@ export function BillLinkDialog({
     // caller never has to reason about debit and credit.
     const key = `${accountId}|${voucherId}`;
 
-    const load = useCallback(async () => {
-        const hit = cache.get(key);
-        if (hit) { setDocs(hit.docs); setSelf(hit.self); }
-        if (hit && Date.now() - hit.at < TTL_MS) return;
-        setLoading(!hit);
-        try {
-            const params = new URLSearchParams({
-                accountId: String(accountId),
-                excludeId: String(voucherId),
-            });
-            const { data } = await axios.get<{ docs: LinkableDoc[]; self: LinkableDoc | null }>(
-                `/api/accountancy/allocations/open?${params.toString()}`,
-            );
-            cache.set(key, { at: Date.now(), docs: data.docs, self: data.self });
-            setDocs(data.docs);
-            setSelf(data.self);
-        } catch (e) {
-            toast.error(extractApiError(e, "Could not load this party's open bills"));
-        } finally {
-            setLoading(false);
-        }
-    }, [accountId, voucherId, key]);
-
-    useEffect(() => {
-        if (!open || !accountId) return;
-        setPicked(initialPlan ?? {});
-        void load();
-    }, [open, accountId, load, initialPlan]);
-
     // Ticks carried in from the Receipt/Payment form were made against the list
     // as it looked BEFORE the voucher was posted. Measure them against the list
     // that just arrived: a bill that is gone, or that someone else has settled in
     // the meantime, is dropped or trimmed here and said out loud — rather than
     // being counted in the total on screen and quietly left out of the save.
+    // Done while rendering, when a new list lands; the toast follows in an effect.
+    const [clampNotice, setClampNotice] = useState<{ count: number } | null>(null);
+    const reconcile = (list: LinkableDoc[], picks: Record<number, number>) => {
+        const { picks: kept, clamped } = reconcilePicks(list, picks);
+        if (clamped.length === 0) return picks;
+        setClampNotice({ count: clamped.length });
+        return kept;
+    };
     useEffect(() => {
-        if (!open || docs.length === 0) return;
-        setPicked((prev) => {
-            const { picks, clamped } = reconcilePicks(docs, prev);
-            if (clamped.length === 0) return prev;
-            toast.info(clamped.length === 1
-                ? "One bill you ticked has changed — its amount was adjusted."
-                : `${clamped.length} bills you ticked have changed — their amounts were adjusted.`);
-            return picks;
+        if (!clampNotice) return;
+        toast.info(clampNotice.count === 1
+            ? "One bill you ticked has changed — its amount was adjusted."
+            : `${clampNotice.count} bills you ticked have changed — their amounts were adjusted.`);
+    }, [clampNotice]);
+
+    // Each open starts from the form's ticks, over this browser's copy of the
+    // list when it has one (the effect below re-reads it once it is stale).
+    const openFor = open && accountId ? `${key}|${JSON.stringify(initialPlan ?? {})}` : null;
+    const docsChanged = useValueChange(docs);
+    if (useValueChange(openFor, null) && openFor !== null) {
+        const hit = cache.get(key);
+        if (hit) { setDocs(hit.docs); setSelf(hit.self); }
+        setLoading(!hit);
+        setPicked(hit && hit.docs.length > 0 ? reconcile(hit.docs, initialPlan ?? {}) : initialPlan ?? {});
+    } else if (docsChanged && open && docs.length > 0) {
+        const next = reconcile(docs, picked);
+        if (next !== picked) setPicked(next);
+    }
+
+    useEffect(() => {
+        if (!open || !accountId) return;
+        const hit = cache.get(key);
+        if (hit && Date.now() - hit.at < TTL_MS) return;
+        let cancelled = false;
+        const params = new URLSearchParams({
+            accountId: String(accountId),
+            excludeId: String(voucherId),
         });
-    }, [open, docs]);
+        axios.get<{ docs: LinkableDoc[]; self: LinkableDoc | null }>(
+            `/api/accountancy/allocations/open?${params.toString()}`,
+        )
+            .then(({ data }) => {
+                cache.set(key, { at: Date.now(), docs: data.docs, self: data.self });
+                if (cancelled) return;
+                setDocs(data.docs);
+                setSelf(data.self);
+            })
+            .catch((e) => { if (!cancelled) toast.error(extractApiError(e, "Could not load this party's open bills")); })
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+    }, [open, accountId, voucherId, key]);
 
     // The server reports the true open amount — it already knows what earlier links
     // took, and what the bill's own up-front tenders covered.

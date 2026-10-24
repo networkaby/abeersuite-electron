@@ -25,10 +25,12 @@
  *    machines reach this code.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { localDb } from "@/shared/lib/browser/localDb";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 import type { SettlementState } from "@/modules/accountancy/lib/billLink";
 
 const API = "/api/accountancy/reports/day-book";
@@ -304,15 +306,6 @@ async function writeCachedView(key: string, store: Store): Promise<void> {
     });
 }
 
-function useDebounced<T>(value: T, ms: number): T {
-    const [settled, setSettled] = useState(value);
-    useEffect(() => {
-        const t = setTimeout(() => setSettled(value), ms);
-        return () => clearTimeout(t);
-    }, [value, ms]);
-    return settled;
-}
-
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useDayBook(query: DayBookQuery) {
@@ -324,7 +317,7 @@ export function useDayBook(query: DayBookQuery) {
     const [stale,       setStale]       = useState(false);
     const [tick,        setTick]        = useState(0);
 
-    const search = useDebounced(query.search?.trim() ?? "", SEARCH_DEBOUNCE_MS);
+    const search = useDebouncedValue(query.search?.trim() ?? "", SEARCH_DEBOUNCE_MS);
     const key = viewKey(query);
     // A searched view is transient — never read from or written to the cache.
     const cacheable = search === "";
@@ -333,7 +326,8 @@ export function useDayBook(query: DayBookQuery) {
     const forceNext = useRef(false);
     // loadMore reads these without wanting to re-subscribe to every change.
     const storeRef  = useRef(store);
-    storeRef.current = store;
+    // Layout effect: current before any effect or handler below reads it.
+    useLayoutEffect(() => { storeRef.current = store; });
     // The in-flight guard for loadMore lives in a ref, not in the state value.
     // Reading the state there would make `loadMore` a new function every time a
     // page finished, and the page's IntersectionObserver — which depends on it —
@@ -349,15 +343,19 @@ export function useDayBook(query: DayBookQuery) {
         setTick((t) => t + 1);
     }, []);
 
+    // A new read (another view, search, or a reload) starts from "loading" with
+    // no error — set while rendering, so the old flags never paint first.
+    if (useValueChange(JSON.stringify([key, search, tick])) && query.from && query.to) {
+        setLoading(true);
+        setError(null);
+        setStale(false);
+    }
+
     useEffect(() => {
         if (!query.from || !query.to) return;
         let cancelled = false;
         const force = forceNext.current;
         forceNext.current = false;
-
-        setLoading(true);
-        setError(null);
-        setStale(false);
 
         void (async () => {
             let cached: Store | null = null;

@@ -64,6 +64,7 @@ import { useFormChanges } from "@/shared/hooks/useFormChanges";
 import { getOrgDefaults } from "@/shared/lib/orgDefaults";
 import { parseDenomJson, type DenomJson } from "@/shared/lib/accountancy/denomJson";
 import { focusWhenReady } from "@/shared/lib/ui/focusWhenReady";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 // ── Loaded voucher shape (used in edit mode) ────────────────────────────────
 
@@ -474,7 +475,12 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     // Top side — either a Cash/Bank ledger (Payment/Receipt/Contra) or a Party
     // ledger picked via the shared customer-supplier picker (CN/DN).
     const [topLedgerId, setTopLedgerId] = useState<number | null>(null);
-    const [topParty, setTopParty] = useState<PickedParty | null>(null);
+    // A party handed in (Quick Actions from an open customer profile) is a
+    // starting value, not a binding: it seeds the first state and nothing more.
+    const preloadParty = !isEditing && initialParty ? initialParty : null;
+    const [topParty, setTopParty] = useState<PickedParty | null>(
+        () => (preloadParty && copy.topPickerKind === "party" ? preloadParty : null),
+    );
     const partyPickerRef = useRef<PartySearchAndCreateHandle>(null);
     // In edit mode we always read from topLedgerId so the prefilled party
     // account flows through without us needing a fully-built PickedParty.
@@ -482,7 +488,10 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
         ? topLedgerId
         : copy.topPickerKind === "party" ? (topParty?.accountId ?? null) : topLedgerId;
 
-    const [rows, setRows] = useState<Row[]>([newRow()]);
+    const [rows, setRows] = useState<Row[]>(() =>
+        preloadParty && copy.topPickerKind !== "party" && (kind === "PAYMENT" || kind === "RECEIPT") && preloadParty.accountId != null
+            ? [{ ...newRow(), accountId: preloadParty.accountId }, newRow()]
+            : [newRow()]);
 
     // Payment / Receipt: the note box shows only for the row being worked on
     // (or one that already has a note) to keep the list short.
@@ -512,7 +521,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     const [payDenom, setPayDenom] = useState<RowDenom>(emptyRowDenom);
     // Edit mode: the tick follows what was saved, so reopening an old cash
     // payment saved without a count doesn't suddenly block its Save.
-    const payDenomSavedRef = useRef(false);
+    const [payDenomSaved, setPayDenomSaved] = useState(false);
 
     // Payment/Receipt only: "Income/Expenditure" toggle narrows the particulars
     // dropdown to just the relevant P&L ledgers (EXPENSE for Payment, INCOME for
@@ -528,12 +537,11 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     // Blank rows are ignored for totals, validation and save.
     const isBlankRow = (r: Row) => r.accountId == null && !r.amount.trim() && !r.note.trim() && !r.method && !(r.reference ?? "").trim();
     const activeRows = isPayRec ? rows.filter((r) => !isBlankRow(r)) : rows;
-    useEffect(() => {
-        if (!isPayRec) return;
-        if (rows.length === 0 || !isBlankRow(rows[rows.length - 1])) {
-            setRows((rs) => [...rs, newRow()]);
-        }
-    }, [isPayRec, rows]);
+    // Added while rendering: the next render already has it, so no frame paints
+    // the form without its entry row.
+    if (isPayRec && (rows.length === 0 || !isBlankRow(rows[rows.length - 1]))) {
+        setRows((rs) => [...rs, newRow()]);
+    }
 
     // Was this form opened from ⋮ Duplicate / the reconciliation's "Book it"?
     // Answered DURING RENDER, before any of the start-up effects below run, and
@@ -551,16 +559,15 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     // Never over a prefill: Book it puts the statement's own bank here, and
     // this used to write the last-used cash ledger straight over it.
     const lastTopKey = `glvoucher:lastTop:${kind}`;
-    useEffect(() => {
-        if (!isPayRec || isEditing || openedFromStash) return;
-        if (topLedgerId != null || accounts.length === 0) return;
+    // Only on the first accounts load (the list arrives after mount, so the
+    // server never renders this); a cleared picker must stay cleared.
+    if (useValueChange(accounts.length > 0) && accounts.length > 0
+        && isPayRec && !isEditing && !openedFromStash && topLedgerId == null) {
         try {
             const saved = Number(window.localStorage.getItem(lastTopKey));
-            if (saved && accounts.some((a) => a.id === saved && copy.topFilter(a) && !(isPayRec && a.isTill)))setTopLedgerId(saved);
+            if (saved && accounts.some((a) => a.id === saved && copy.topFilter(a) && !(isPayRec && a.isTill))) setTopLedgerId(saved);
         } catch { /* storage unavailable — start blank */ }
-        // Only on first accounts load; a cleared picker must stay cleared.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [accounts.length]);
+    }
     const rememberTop = (id: number | null) => {
         if (!isPayRec || id == null) return;
         try { window.localStorage.setItem(lastTopKey, String(id)); } catch { /* ignore */ }
@@ -714,12 +721,12 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     // Transfer-to is a bank → denomination capture auto-ticks (user can untick);
     // switching the destination off a bank unticks it again. A Payment the same
     // way, the moment it becomes a cash deposit into the party's bank.
-    useEffect(() => {
-        if (isContra) setDenomOn(topIsBank);
-    }, [isContra, topIsBank]);
-    useEffect(() => {
-        if (isPayment) setDenomOn(partyDeposit && (!isEditing || payDenomSavedRef.current));
-    }, [isPayment, partyDeposit, isEditing]);
+    // Set while rendering, only when what it follows changes — a hand untick in
+    // between is left alone.
+    if (useValueChange(JSON.stringify([isContra, topIsBank]), "") && isContra) setDenomOn(topIsBank);
+    if (useValueChange(JSON.stringify([isPayment, partyDeposit, isEditing]), "") && isPayment) {
+        setDenomOn(partyDeposit && (!isEditing || payDenomSaved));
+    }
 
     useEffect(() => {
         // Skip the next-ref fetch in edit mode — we'll show the loaded reference.
@@ -731,14 +738,9 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     }, [kind, isEditing]);
 
     // ── Party preload (Quick Actions from an open customer profile) ─────────
+    // Seeded in the first state (topParty / rows above); only the focus is left.
     useEffect(() => {
-        if (isEditing || !initialParty) return;
-        if (copy.topPickerKind === "party") {
-            setTopParty(initialParty);
-        } else if (isPayRec && initialParty.accountId != null) {
-            setRows([{ ...newRow(), accountId: initialParty.accountId }, newRow()]);
-            focusRowAmount(0);
-        }
+        if (preloadParty && copy.topPickerKind !== "party" && isPayRec && preloadParty.accountId != null) focusRowAmount(0);
         // Once, on mount — the party is a starting value, not a binding.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -816,10 +818,12 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     }, []);
 
     // ── Prefill in edit mode ────────────────────────────────────────────────
+    // A (re-)read shows "loading" from its first render.
+    if (useValueChange(isEditing && voucherId != null ? JSON.stringify([voucherId, kind, reloadCounter]) : null)
+        && isEditing && voucherId != null) setLoading(true);
     useEffect(() => {
         if (!isEditing || voucherId == null) return;
         let cancelled = false;
-        setLoading(true);
         axios.get<LoadedVoucher>(`/api/accountancy/vouchers/${voucherId}`)
             .then((r) => {
                 if (cancelled) return;
@@ -874,7 +878,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                 } else if (kind === "PAYMENT") {
                     // Payment into a party's bank: the one count comes back as is.
                     const saved = parseDenomJson(v.denomJson);
-                    payDenomSavedRef.current = saved != null;
+                    setPayDenomSaved(saved != null);
                     if (saved) {
                         setDenomOn(true);
                         setPayDenom({ counts: Object.fromEntries(Object.entries(saved.notes).map(([k, c]) => [k, String(c)])) });
@@ -904,8 +908,8 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     // Re-mark cheque rows once BOTH the saved cheques and the accounts list are
     // available (they load independently). Match each cheque to a row by drawer
     // account (when stored) and amount, then clear the pending list.
-    useEffect(() => {
-        if (pendingCheques == null || pendingCheques.length === 0 || accounts.length === 0) return;
+    // Done while rendering; clearing the pending list ends it.
+    if (pendingCheques != null && pendingCheques.length > 0 && accounts.length > 0) {
         const byId = new Map(accounts.map((a) => [a.id, a]));
         setRows((rs) => {
             const used = new Set<number>();
@@ -924,7 +928,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
             });
         });
         setPendingCheques(null);
-    }, [pendingCheques, accounts]);
+    }
 
     const updateRow = (id: number, patch: Partial<Row>) =>
         setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));

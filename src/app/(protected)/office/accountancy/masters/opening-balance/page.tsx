@@ -31,6 +31,7 @@ import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { productMatchesSearch } from "@/shared/lib/inventory";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { parseRupeesToPaise } from "@/shared/lib/format";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 type AccountRow = {
     id: number; name: string;
@@ -84,6 +85,16 @@ export default function OpeningBalancePage() {
     const [convert, setConvert] = useState<{ accounts: number; total: number; skipped: number } | null>(null);
     const [converting, setConverting] = useState(false);
 
+    // Refetch without flipping `loading` — the full-page spinner is for the
+    // first load only. `onChanged={load}` fires after every edit, and
+    // re-showing it unmounted the whole summary (page blink).
+    const load = useCallback(() => {
+        axios.get<Summary>("/api/accountancy/opening-balance")
+            .then((r) => setData(r.data))
+            .catch(() => toast.error("Failed to load summary"))
+            .finally(() => setLoading(false));
+    }, []);
+
     const previewConvert = async () => {
         setConverting(true);
         try {
@@ -114,15 +125,6 @@ export default function OpeningBalancePage() {
         } finally { setConverting(false); }
     };
 
-    // Refetch without flipping `loading` — the full-page spinner is for the
-    // first load only. `onChanged={load}` fires after every edit, and
-    // re-showing it unmounted the whole summary (page blink).
-    const load = useCallback(() => {
-        axios.get<Summary>("/api/accountancy/opening-balance")
-            .then((r) => setData(r.data))
-            .catch(() => toast.error("Failed to load summary"))
-            .finally(() => setLoading(false));
-    }, []);
 
     // includeParties — a migrating shop's opening balances are mostly Sundry
     // Debtors / Creditors, and the default (pure GL) list hides every one of
@@ -325,8 +327,9 @@ function AccountOpeningSection({
     };
 
     // Pre-fill the form when an existing account is selected so editing is in-place.
-    useEffect(() => {
-        if (!form.accountId) return;
+    // Only when another ledger is picked (while rendering) — a list refresh must
+    // not overwrite what is typed.
+    if (useValueChange(form.accountId, null) && form.accountId) {
         const existing = accounts.find((a) => a.id === form.accountId);
         setForm((f) => ({
             ...f,
@@ -335,8 +338,7 @@ function AccountOpeningSection({
             amount: existing?.openingBalanceType ? String(existing.openingBalance ?? "") : "",
             type: existing?.openingBalanceType ?? f.type,
         }));
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- prefill only when another ledger is picked; a list refresh must not overwrite what is typed
-    }, [form.accountId]);
+    }
 
     const save = async () => {
         if (!form.accountId) { toast.error("Select an account"); return; }
@@ -553,8 +555,9 @@ function ProductOpeningSection({
         setForm((f) => ({ ...f, productId: newId }));
     };
 
-    useEffect(() => {
-        if (!form.productId) return;
+    // Prefill only when another product is picked (while rendering) — a list
+    // refresh must not overwrite what is typed.
+    if (useValueChange(form.productId, null) && form.productId) {
         const existing = products.find((p) => p.id === form.productId);
         setForm((f) => ({
             ...f,
@@ -564,16 +567,15 @@ function ProductOpeningSection({
             rate: existing ? String(existing.openingRate ?? "") : "",
             branchId: existing?.openingBranchId ?? "",
         }));
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- prefill only when another product is picked; a list refresh must not overwrite what is typed
-    }, [form.productId]);
+    }
 
     // Before a product is picked, and for one with no saved location, the box
     // shows (and saves) the working branch, else Head Office — never a blank
     // "Working branch" placeholder — so what is on screen is what lands.
-    useEffect(() => {
-        if (form.branchId || branches.length === 0) return;
+    // Set while rendering; a filled box is what ends it.
+    if (!form.branchId && branches.length > 0) {
         setForm((f) => (f.branchId ? f : { ...f, branchId: defaultOpeningBranchId(branches, activeBranchId) }));
-    }, [form.branchId, branches, activeBranchId]);
+    }
 
     const save = async () => {
         if (!form.productId) { toast.error("Select a product"); return; }
@@ -891,10 +893,10 @@ function QuickCreateProductDialog({
     const activeBranchId = useActiveBranchStore((st) => st.activeBranchId);
 
     // Working branch, else Head Office — shown so it can be changed, and sent.
-    useEffect(() => {
-        if (!open || form.openingBranchId || branches.length === 0) return;
+    // Set while rendering; a filled box is what ends it.
+    if (open && !form.openingBranchId && branches.length > 0) {
         setForm((f) => (f.openingBranchId ? f : { ...f, openingBranchId: defaultOpeningBranchId(branches, activeBranchId) }));
-    }, [open, form.openingBranchId, branches, activeBranchId]);
+    }
 
     useEffect(() => {
         if (!open) return;
