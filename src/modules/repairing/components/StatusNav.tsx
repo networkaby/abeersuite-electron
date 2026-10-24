@@ -62,13 +62,12 @@ export default function StatusNav({
     const [busy, setBusy] = useState(false);
     const router = useRouter();
 
-    const load = useCallback(async () => {
+    const load = useCallback(() => {
         const fwd = new URLSearchParams({ statusId, isWarranty: String(isWarranty) });
         if (workerId) fwd.set("fromWorkerId", workerId); else fwd.set("entryOnly", "true");
-        try {
-            const r = await axios.get(`/api/workers/next?${fwd}`);
+        return axios.get(`/api/workers/next?${fwd}`).then((r) => {
             setNextSubs((r.data as SubTarget[]).map((s) => ({ id: s.id, label: s.label, work: s.work ?? null, skipNoteOnEntry: !!s.skipNoteOnEntry, requireNoteOnEntry: !!s.requireNoteOnEntry, entryQuestion: s.entryQuestion ?? null, entryArgs: s.entryArgs ?? [] })));
-        } catch { setNextSubs([]); }
+        }, () => { setNextSubs([]); });
     }, [statusId, workerId, isWarranty]);
 
     useEffect(() => { load(); }, [load]);

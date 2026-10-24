@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
@@ -18,6 +18,7 @@ import {
 import { usePartySearch } from "@/shared/hooks/usePartySearch";
 import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import { INQUIRY_TYPES, type HelpDetailDto, type HelpInquiryType, type HelpPriority, type HelpPositionOption } from "../lib/types";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 const PRIORITIES: HelpPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 const UNASSIGNED = "__none__";
@@ -54,8 +55,8 @@ export default function HelpFormDialog({
     const [linkFocused, setLinkFocused] = useState(false);
     const { hits, loading: linkLoading } = usePartySearch(linkQuery, { enabled: linkFocused && !linked });
 
-    useEffect(() => {
-        if (!open) return;
+    // Each open (or another ticket) seeds the form — while rendering.
+    if (useValueChange<unknown>(open ? ticket ?? "new" : null, null) && open) {
         setSubject(ticket?.subject ?? "");
         setInquiryType((ticket?.inquiryType as HelpInquiryType) ?? "OTHER");
         setContactName(ticket?.contactName ?? "");
@@ -72,7 +73,7 @@ export default function HelpFormDialog({
                     : null,
         );
         setLinkQuery("");
-    }, [open, ticket]);
+    }
 
     const hasCustomer = Boolean(linked) || contactName.trim().length > 0;
 

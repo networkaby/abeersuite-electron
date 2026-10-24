@@ -16,6 +16,7 @@ import { parseDecimalInput } from "@/shared/lib/format";
 import { DEFAULT_TIER_FROM_DAY, DEFAULT_TIER_TO_DAY } from "@/shared/lib/schemas/customerTierSchemas";
 import { type TierCurrentSaleScope } from "@/shared/lib/pricing";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 // A level inside a period — "Gold" of "Best of the month".
 interface Level {
@@ -219,8 +220,9 @@ function PeriodCard({ period, onChanged }: { period: Period; onChanged: () => vo
     const [discountPct, setDiscountPct] = useState("");
     const [adding, setAdding] = useState(false);
 
-    useEffect(() => { setFromInput(String(period.fromDay)); }, [period.fromDay]);
-    useEffect(() => { setToInput(String(period.toDay)); }, [period.toDay]);
+    // A saved (or rolled-back) window flows back into the boxes — while rendering.
+    if (useValueChange(period.fromDay)) setFromInput(String(period.fromDay));
+    if (useValueChange(period.toDay)) setToInput(String(period.toDay));
 
     async function patchPeriod(patch: Partial<Pick<Period, "name" | "enabled" | "fromDay" | "toDay" | "currentSaleScope" | "currentSaleOnly">>) {
         try {

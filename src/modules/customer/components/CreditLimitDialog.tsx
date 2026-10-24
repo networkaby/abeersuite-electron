@@ -35,6 +35,15 @@ function suggestLimit(required: number): number {
     return Math.max(100, Math.ceil(required / 100) * 100);
 }
 
+
+function Row({ label, value: v, strong }: { label: string; value: string; strong?: boolean }) {
+    return (
+        <div className="flex items-center justify-between py-1">
+            <span className="text-muted-foreground">{label}</span>
+            <span className={`tabular-nums ${strong ? "font-semibold" : ""}`}>{v}</span>
+        </div>
+    );
+}
 export default function CreditLimitDialog({
     open, onOpenChange, detail, partyName, canEdit, onSaved,
 }: {
@@ -67,13 +76,6 @@ export default function CreditLimitDialog({
             setSaving(false);
         }
     };
-
-    const Row = ({ label, value: v, strong }: { label: string; value: string; strong?: boolean }) => (
-        <div className="flex items-center justify-between py-1">
-            <span className="text-muted-foreground">{label}</span>
-            <span className={`tabular-nums ${strong ? "font-semibold" : ""}`}>{v}</span>
-        </div>
-    );
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>

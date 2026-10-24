@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Truck } from "lucide-react";
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { PartySearchAndCreate, type PickedParty } from "@/shared/components/PartySearchAndCreate";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 // The shop is code-owned config, not a settings row — no fetch needed.
 const SHOP_CONTACT = { name: COMPANY_DETAILS.brandName, phone: COMPANY_DETAILS.contact.phone };
@@ -90,11 +91,12 @@ export default function ShippingSlipModal({ ticketId, device, owner, existing, o
 
     // Seed the default (shop) contact if the user hasn't typed anything yet.
     // On edit we keep exactly what the slip stored (even if blank).
-    useEffect(() => {
+    // While rendering, on mount and when the mode changes.
+    if (useValueChange<unknown>(isEdit, null)) {
         setForm((f) => isEdit || f.showOwner || f.contactName || f.contactPhone
             ? f
             : { ...f, contactName: SHOP_CONTACT.name, contactPhone: SHOP_CONTACT.phone });
-    }, [isEdit]);
+    }
 
     // Toggle swaps the prefill: owner ↔ shop. Always editable after.
     const toggleShowOwner = (checked: boolean) => {

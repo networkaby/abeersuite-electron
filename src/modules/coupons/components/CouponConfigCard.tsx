@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
@@ -27,13 +27,13 @@ export function CouponConfigCard() {
     // What the server last told us, so the card can tell "the user has typed
     // something" from "this is still exactly what was loaded". Without it there
     // is no way to refresh in the background without risking an unsaved edit.
-    const serverMaxPct = useRef<string>("");
+    const [serverMaxPct, setServerMaxPct] = useState("");
 
     const load = useCallback((silent = false) => {
         axios.get<Config>("/api/coupons/config")
             .then((r) => {
                 const next = r.data.maxTotalDiscountPct == null ? "" : String(Number(r.data.maxTotalDiscountPct));
-                serverMaxPct.current = next;
+                setServerMaxPct(next);
                 setMaxPct(next);
                 setLedgers({ coupon: r.data.couponExpenseAccountId, gift: r.data.giftCardLiabilityAccountId });
             })
@@ -49,7 +49,7 @@ export function CouponConfigCard() {
     useRealtimeTopics(
         ["catalogue", "ledger"],
         () => { load(true); },
-        !saving && maxPct === serverMaxPct.current,
+        !saving && maxPct === serverMaxPct,
     );
 
     async function save() {

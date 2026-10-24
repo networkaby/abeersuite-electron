@@ -20,6 +20,7 @@ import { extractApiError } from "@/shared/lib/api";
 import { parseDecimalInput, formatInr } from "@/shared/lib/format";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { useNow } from "@/shared/hooks/useNow";
 
 interface GiftCard {
     id: number;
@@ -76,10 +77,10 @@ export function GiftCards({ brandName }: { brandName: string }) {
     useRealtimeTopics(["ledger"], load);
 
     // ACTIVE cards already past expiry with a balance — eligible for breakage.
+    const now = useNow(60_000);
     const breakageCount = useMemo(() => {
-        const now = Date.now();
         return cards.filter((c) => c.status === "ACTIVE" && c.expiresAt && new Date(c.expiresAt).getTime() < now && Number(c.balance) > 0).length;
-    }, [cards]);
+    }, [cards, now]);
 
     const matchesFilter = (c: GiftCard): boolean => {
         switch (statusFilter) {

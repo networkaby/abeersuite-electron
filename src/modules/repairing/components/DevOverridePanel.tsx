@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 interface Opt { id: string; label: string }
 interface WorkerOpt extends Opt { statusId: string | null }
@@ -38,18 +39,17 @@ export default function DevOverridePanel({ ticketId, pipelineId, currentStatusId
     const [workerId, setWorkerId] = useState(currentWorkerId ?? NONE);
     const [busy, setBusy] = useState(false);
 
-    const load = useCallback(async () => {
+    const load = useCallback(() => {
         const q = pipelineId ? `?pipelineId=${encodeURIComponent(pipelineId)}` : "";
-        try {
-            const [st, wk] = await Promise.all([
-                axios.get(`/api/ticket-statuses${q}`),
-                axios.get(`/api/workers${q}`),
-            ]);
-            setStatuses((st.data as Opt[]).map((s) => ({ id: s.id, label: s.label })));
-            setWorkers((wk.data as WorkerOpt[]).map((w) => ({ id: w.id, label: w.label, statusId: w.statusId ?? null })));
-        } catch {
-            toast.error("Failed to load pipeline statuses / workers");
-        }
+        return Promise.all([
+            axios.get(`/api/ticket-statuses${q}`),
+            axios.get(`/api/workers${q}`),
+        ])
+            .then(([st, wk]) => {
+                setStatuses((st.data as Opt[]).map((s) => ({ id: s.id, label: s.label })));
+                setWorkers((wk.data as WorkerOpt[]).map((w) => ({ id: w.id, label: w.label, statusId: w.statusId ?? null })));
+            })
+            .catch(() => { toast.error("Failed to load pipeline statuses / workers"); });
     }, [pipelineId]);
 
     useEffect(() => { load(); }, [load]);
@@ -58,17 +58,17 @@ export default function DevOverridePanel({ ticketId, pipelineId, currentStatusId
     // elsewhere should be selectable here without a reload. The two selects
     // below hold the user's pick and are left alone.
     useRealtimeTopics(["tickets"], () => { load(); });
-    // Re-sync the selects when the ticket reloads after an apply.
-    useEffect(() => { setStatusId(currentStatusId); }, [currentStatusId]);
-    useEffect(() => { setWorkerId(currentWorkerId ?? NONE); }, [currentWorkerId]);
+    // Re-sync the selects when the ticket reloads after an apply (while rendering).
+    if (useValueChange(currentStatusId)) setStatusId(currentStatusId);
+    if (useValueChange(currentWorkerId)) setWorkerId(currentWorkerId ?? NONE);
 
     // Only the workers that belong to the selected status — a worker lives in one
     // status, so showing the whole pipeline is noise (and lets you pick an invalid pair).
     const visibleWorkers = workers.filter((w) => w.statusId === statusId);
     // If the selected worker isn't valid for the chosen status, drop back to "no worker".
-    useEffect(() => {
-        if (workerId !== NONE && !visibleWorkers.some((w) => w.id === workerId)) setWorkerId(NONE);
-    }, [statusId, workers]); // eslint-disable-line react-hooks/exhaustive-deps -- re-check the worker only when the status or worker list changes
+    // Re-checked only when the status or the worker list changes — while rendering.
+    const recheckWorker = [useValueChange(statusId), useValueChange(workers)].some(Boolean);
+    if (recheckWorker && workerId !== NONE && !visibleWorkers.some((w) => w.id === workerId)) setWorkerId(NONE);
 
     const dirty = statusId !== currentStatusId || (workerId === NONE ? null : workerId) !== currentWorkerId;
 

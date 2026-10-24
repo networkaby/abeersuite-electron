@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
@@ -18,6 +18,7 @@ import {
 import { usePartySearch } from "@/shared/hooks/usePartySearch";
 import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import type { HelpPriority, HelpPositionOption } from "../lib/types";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 const PRIORITIES: HelpPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 const UNASSIGNED = "__none__";
@@ -58,15 +59,15 @@ export default function HelpQuickForm({
     // Look the contact up while it isn't already linked.
     const { hits } = usePartySearch(contact, { enabled: contact.trim().length >= 4 && !linked });
 
-    useEffect(() => {
-        if (!open) return;
+    // Each open starts clean — while rendering.
+    if (useValueChange(open ? initialContact ?? "" : null, null) && open) {
         setContact(initialContact ?? ""); setName(""); setLinked(null); setNotes("");
         setPriority("MEDIUM"); setAssignedPositionId(UNASSIGNED);
-    }, [open, initialContact]);
+    }
 
     // Autofill on a strong match: exact phone digits, or a single email hit.
-    useEffect(() => {
-        if (linked || !contact.trim()) return;
+    // While rendering; linking it is what ends it.
+    if (!linked && contact.trim()) {
         const d = digits(contact);
         const match = looksEmail(contact)
             ? (hits.length === 1 ? hits[0] : null)
@@ -75,7 +76,7 @@ export default function HelpQuickForm({
             setLinked({ kind: match.type === "company" ? "company" : "person", id: match.id, name: match.name });
             setName(match.name);
         }
-    }, [hits, contact, linked]);
+    }
 
     // Editing the contact after a match breaks the link — back to free entry.
     const onContactChange = (v: string) => {
