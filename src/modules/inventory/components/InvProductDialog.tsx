@@ -41,6 +41,7 @@ import { syncMasters, invalidateMasters } from "@/shared/lib/inventory";
 import { parseRupeesToPaise } from "@/shared/lib/format";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { useBranchOptions, defaultOpeningBranchId } from "@/shared/hooks";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
 
@@ -238,13 +239,13 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     }, []);
 
     // Initialise form whenever the dialog opens (different mode or same mode
-    // with a different editId).
+    // with a different editId). The tax preview clears while rendering.
+    if (useValueChange(open ? String(editId) : null, null) && open) setEffectiveTax(undefined);
     useEffect(() => {
         if (!open) return;
         if (editId == null) {
             // Fetch org defaults to pre-fill unit; explicit defaultValues always win.
             // GST fields are intentionally NOT prefilled — user must explicitly set them.
-            setEffectiveTax(undefined);
             getOrgDefaults()
                 .then((d) => {
                     setForm({
@@ -259,7 +260,6 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
                 });
             return;
         }
-        setEffectiveTax(undefined);
         axios
             .get<InvProductRow>(`/api/inventory/products/${editId}`)
             .then((r) => {
@@ -278,11 +278,11 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     // Stock location default, once the branches and the product are in: the saved
     // branch (rowToForm), else the working branch from the top bar, else Head
     // Office — the branch the server would pick anyway, shown so it can be changed.
-    useEffect(() => {
-        if (!open || branches.length === 0 || form.openingBranchId) return;
+    // Set while rendering; a filled box is what ends it.
+    if (open && branches.length > 0 && !form.openingBranchId) {
         const fallback = defaultOpeningBranchId(branches, activeBranchId);
         setForm((f) => (f.openingBranchId ? f : { ...f, openingBranchId: fallback }));
-    }, [open, branches, activeBranchId, form.openingBranchId]);
+    }
 
     const save = useCallback(async () => {
         if (!form.name.trim()) { toast.error("Name is required"); return; }

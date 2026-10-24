@@ -66,6 +66,7 @@ import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { productMatchesSearch } from "@/shared/lib/inventory";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 type MovementClass = "NEW" | "REGULAR" | "SLOW" | "NON_MOVING" | "DEAD";
 type Signal = "buy" | "review" | "ok" | "untouched" | "skipped";
@@ -264,23 +265,24 @@ export default function ReorderPage() {
     /// narrows the target (filter → select all → untick the exceptions).
     const [selected, setSelected] = useState<Set<number>>(new Set());
 
-    const load = useCallback(async () => {
-        setLoading(true);
-        try {
-            const params = new URLSearchParams();
-            if (branchId) params.set("branchId", branchId);
-            if (tab === "smart") { params.set("grouped", "1"); params.set("tolerance", String(tolerance)); }
-            const qs = params.toString();
-            const res = await axios.get<Report>(`/api/inventory/reports/reorder${qs ? `?${qs}` : ""}`);
-            setData(res.data);
-        } catch (err) {
-            toast.error(extractApiError(err, "Failed to load reorder report"));
-        } finally {
-            setLoading(false);
-        }
+    const fetchReport = useCallback(() => {
+        const params = new URLSearchParams();
+        if (branchId) params.set("branchId", branchId);
+        if (tab === "smart") { params.set("grouped", "1"); params.set("tolerance", String(tolerance)); }
+        const qs = params.toString();
+        return axios.get<Report>(`/api/inventory/reports/reorder${qs ? `?${qs}` : ""}`)
+            .then((res) => setData(res.data))
+            .catch((err) => { toast.error(extractApiError(err, "Failed to load reorder report")); })
+            .finally(() => setLoading(false));
     }, [branchId, tab, tolerance]);
+    const load = useCallback(() => {
+        setLoading(true);
+        return fetchReport();
+    }, [fetchReport]);
 
-    useEffect(() => { void load(); }, [load]);
+    // A new branch / tab / tolerance shows the spinner from its first render.
+    if (useValueChange(fetchReport)) setLoading(true);
+    useEffect(() => { void fetchReport(); }, [fetchReport]);
     // Sales and inward move `stock`; floors and lead times move `catalogue`.
     useRealtimeTopics(["stock", "catalogue"], () => { void load(); });
 
@@ -316,50 +318,6 @@ export default function ReorderPage() {
         }
     }
 
-    // Bulk-apply lead time / floor (POST /api/inventory/products/bulk-reorder).
-    // Target = the ticked rows among those shown; nothing ticked = all shown.
-    // clearLead=true resets the targets' lead override back to the org default.
-    async function bulkApply(clearLead = false) {
-        const shown = itemRows.map((r) => r.id);
-        const ids = selected.size > 0 ? shown.filter((id) => selected.has(id)) : shown;
-        if (ids.length === 0) { toast.error("No items to apply to"); return; }
-        const lead = clearLead ? null
-            : bulkLead.trim() === "" ? undefined
-                : Math.max(0, parseInt(bulkLead, 10) || 0);
-        const num = (raw: string) => (clearLead || raw.trim() === "" ? undefined : Math.max(0, parseInt(raw, 10) || 0));
-        const floor = num(bulkFloor);
-        const moq = num(bulkMoq);
-        if (lead === undefined && floor === undefined && moq === undefined) {
-            toast.error("Type a lead time, min floor or MOQ first");
-            return;
-        }
-        const what = clearLead
-            ? "reset lead time to org default"
-            : [
-                lead !== undefined ? `lead time ${lead}d` : null,
-                floor !== undefined ? `min floor ${floor}` : null,
-                moq !== undefined ? `MOQ ${moq}` : null,
-            ].filter(Boolean).join(" + ");
-        const scope = selected.size > 0 ? "selected" : "shown";
-        if (!(await confirmAction({ title: `Apply ${what} to ${ids.length} ${scope} item(s)?`, confirmLabel: "Apply", destructive: false }))) return;
-        setBulkApplying(true);
-        try {
-            const res = await axios.post<{ updated: number }>("/api/inventory/products/bulk-reorder", {
-                productIds: ids,
-                ...(lead !== undefined ? { leadTimeDays: lead } : {}),
-                ...(floor !== undefined ? { lowStockThreshold: floor } : {}),
-                ...(moq !== undefined ? { minOrderQty: moq } : {}),
-            });
-            toast.success(`Updated ${res.data.updated} item(s)`);
-            setBulkLead(""); setBulkFloor(""); setBulkMoq("");
-            setSelected(new Set());
-            await load();
-        } catch (err) {
-            toast.error(extractApiError(err, "Bulk apply failed"));
-        } finally {
-            setBulkApplying(false);
-        }
-    }
 
     // ── Filters ───────────────────────────────────────────────────────────────
     const toggleFilter = (field: FilterField, key: string) =>
@@ -446,6 +404,52 @@ export default function ReorderPage() {
             .sort(compareRows),
         [data, lowOnly, passesFilters, compareRows],
     );
+
+    // Bulk-apply lead time / floor (POST /api/inventory/products/bulk-reorder).
+    // Target = the ticked rows among those shown; nothing ticked = all shown.
+    // clearLead=true resets the targets' lead override back to the org default.
+    async function bulkApply(clearLead = false) {
+        const shown = itemRows.map((r) => r.id);
+        const ids = selected.size > 0 ? shown.filter((id) => selected.has(id)) : shown;
+        if (ids.length === 0) { toast.error("No items to apply to"); return; }
+        const lead = clearLead ? null
+            : bulkLead.trim() === "" ? undefined
+                : Math.max(0, parseInt(bulkLead, 10) || 0);
+        const num = (raw: string) => (clearLead || raw.trim() === "" ? undefined : Math.max(0, parseInt(raw, 10) || 0));
+        const floor = num(bulkFloor);
+        const moq = num(bulkMoq);
+        if (lead === undefined && floor === undefined && moq === undefined) {
+            toast.error("Type a lead time, min floor or MOQ first");
+            return;
+        }
+        const what = clearLead
+            ? "reset lead time to org default"
+            : [
+                lead !== undefined ? `lead time ${lead}d` : null,
+                floor !== undefined ? `min floor ${floor}` : null,
+                moq !== undefined ? `MOQ ${moq}` : null,
+            ].filter(Boolean).join(" + ");
+        const scope = selected.size > 0 ? "selected" : "shown";
+        if (!(await confirmAction({ title: `Apply ${what} to ${ids.length} ${scope} item(s)?`, confirmLabel: "Apply", destructive: false }))) return;
+        setBulkApplying(true);
+        try {
+            const res = await axios.post<{ updated: number }>("/api/inventory/products/bulk-reorder", {
+                productIds: ids,
+                ...(lead !== undefined ? { leadTimeDays: lead } : {}),
+                ...(floor !== undefined ? { lowStockThreshold: floor } : {}),
+                ...(moq !== undefined ? { minOrderQty: moq } : {}),
+            });
+            toast.success(`Updated ${res.data.updated} item(s)`);
+            setBulkLead(""); setBulkFloor(""); setBulkMoq("");
+            setSelected(new Set());
+            await load();
+        } catch (err) {
+            toast.error(extractApiError(err, "Bulk apply failed"));
+        } finally {
+            setBulkApplying(false);
+        }
+    }
+
     // Untouched — created but never used. Its own section, NOT merged into
     // Skipped: "Dead" would misname them (dead sold once and stopped).
     const untouchedRows = useMemo(
@@ -549,10 +553,11 @@ export default function ReorderPage() {
         () => (tab === "items" ? grouped.map((g) => g.name) : bandSections.map((s) => s.name)),
         [tab, grouped, bandSections],
     );
-    useEffect(() => {
-        if (activeSectionNames.length === 0) return;
+    // Keyed on the names themselves, not the array: a recomputed list with the
+    // same sections must not re-expand what the user just collapsed.
+    if (useValueChange(activeSectionNames.join("\u0000"), "") && activeSectionNames.length > 0) {
         setSections(new Set(activeSectionNames));
-    }, [activeSectionNames]);
+    }
 
     const toggleSection = (name: string) =>
         setSections((prev) => {

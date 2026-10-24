@@ -15,7 +15,7 @@
 //   • InvProductDialog → InvProductFormFields — `+ New` next to each
 //     master picker in the create/edit product form.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
@@ -39,6 +39,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 export type MasterKind = "category" | "brand" | "group" | "warranty" | "unit";
 
@@ -143,8 +144,8 @@ export function InventoryMasterDropdownQuickDialog({
     const [isActive, setIsActive] = useState(true);
     const [saving, setSaving] = useState(false);
 
-    useEffect(() => {
-        if (!open) return;
+    // Each open (or kind) starts blank — reset while rendering.
+    if (useValueChange(open ? kind : null, null) && open) {
         setName("");
         setCode("");
         setDecimals("0");
@@ -156,7 +157,7 @@ export function InventoryMasterDropdownQuickDialog({
         setTaxability("");
         setIsActive(true);
         setSaving(false);
-    }, [open, kind]);
+    }
 
     async function submit() {
         const trimmedName = name.trim();

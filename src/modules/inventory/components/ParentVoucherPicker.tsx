@@ -13,6 +13,7 @@ import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { Loader2, X, Link2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 export type ParentVoucherLine = {
     id:          number;
@@ -80,9 +81,9 @@ export function ParentVoucherPicker({
     // Load candidates (POSTED only — drafts can't be fulfilled against). One
     // fetch on focus, then filtered client-side as the user types — the
     // candidate list per parent type is small enough.
+    if (useValueChange(open ? parentType : null, null) && open && !rows.length) setLoading(true);
     useEffect(() => {
-        if (!open || rows.length || loading) return;
-        setLoading(true);
+        if (!open || rows.length) return;
         axios.get<ListRow[]>(`/api/inventory/vouchers?type=${parentType}&status=POSTED`)
             .then((r) => setRows(r.data))
             .catch(() => setRows([]))
