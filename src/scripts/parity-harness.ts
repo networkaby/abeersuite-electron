@@ -35,6 +35,7 @@ import { sumLinked, assertLinkable, createLink } from "@/modules/accountancy/lib
 import { tillBalancePaise, sumShiftTendersByAccount } from "@/modules/pos/lib/shiftMath";
 import { buildSettlementJson } from "@/shared/lib/accountancy/settlement";
 import { syncVoucherLink, syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
+import { HEAD_OFFICE_BRANCH_ID } from "@/shared/lib/org/systemBranch";
 
 // Self-built client (the app singleton reads env at import-time; tsx doesn't load
 // .env.local for us). Mirror prismaClient.ts's local-vs-remote SSL detection.
@@ -85,7 +86,7 @@ function sameLines(je: GlLine[], spine: ArmLine[]): boolean {
 
 /** Every voucher carries a branch, so the harness posts everything at Head
  *  Office — the same id the stock checks below already used inline. */
-const PARITY_BRANCH = "BR-HQ";
+const PARITY_BRANCH = HEAD_OFFICE_BRANCH_ID;
 
 /** Pure check of the stock arm: direction + free-qty + MRP stamp. */
 function stockCheck(): boolean {

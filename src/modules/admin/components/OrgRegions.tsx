@@ -42,8 +42,7 @@ import OrgTransferDialog from "./OrgTransferDialog";
 import { initials } from "@/shared/lib/format/initials";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { useEscapeLayer } from "@/shared/hooks/useEscape";
-
-const HQ_BRANCH_ID = "BR-HQ";
+import { HEAD_OFFICE_BRANCH_ID } from "@/shared/lib/org/systemBranch";
 
 // ── Avatar / helpers ─────────────────────────────────────────────────────────
 
@@ -384,7 +383,7 @@ function HQContainer({
         <div className="flex justify-center -mt-9 mb-2">
             <div
                 className="rounded-lg border border-amber-500 bg-card px-4 py-1 shadow-md"
-                onContextMenu={(e) => { e.stopPropagation(); if (canManage && hqBranchExists) onBranchContext(e, HQ_BRANCH_ID, hqBranchName); }}
+                onContextMenu={(e) => { e.stopPropagation(); if (canManage && hqBranchExists) onBranchContext(e, HEAD_OFFICE_BRANCH_ID, hqBranchName); }}
             >
                 <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300">
                     <Landmark size={12} /> {hqBranchName}
@@ -611,8 +610,8 @@ export default function OrgRegions({
         positionId: string; positionTitle: string; holderId: number; holderName: string;
     } | null>(null);
 
-    const hqBranch = structure.branches.find(b => b.branch.id === HQ_BRANCH_ID);
-    const regionalBranches = structure.branches.filter(b => b.branch.id !== HQ_BRANCH_ID);
+    const hqBranch = structure.branches.find(b => b.branch.id === HEAD_OFFICE_BRANCH_ID);
+    const regionalBranches = structure.branches.filter(b => b.branch.id !== HEAD_OFFICE_BRANCH_ID);
 
     const hqBranchPosts = hqBranch
         ? hqBranch.deptGroups.flatMap(g => g.positions)
@@ -775,7 +774,7 @@ export default function OrgRegions({
         if (!canManage) return;
         e.preventDefault();
         e.stopPropagation();
-        const isHq = branchId === HQ_BRANCH_ID;
+        const isHq = branchId === HEAD_OFFICE_BRANCH_ID;
         openMenu(e.clientX, e.clientY, [
             {
                 label: "Add department to this branch",
@@ -839,7 +838,7 @@ export default function OrgRegions({
                     hqBranchName={hqBranchName}
                     hqBranchExists={!!hqBranch}
                     canManage={canManage}
-                    onCreateHQ={() => setIntent({ mode: "branch", forceId: HQ_BRANCH_ID, isHq: true })}
+                    onCreateHQ={() => setIntent({ mode: "branch", forceId: HEAD_OFFICE_BRANCH_ID, isHq: true })}
                     onPosContext={onPosContext}
                     onBranchContext={onBranchContext}
                 />

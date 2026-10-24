@@ -21,8 +21,7 @@ import {
 } from "lucide-react";
 import type { OrgStructure } from "@/shared/types/orgChart";
 import { Button } from "@/components/ui/button";
-
-const HQ_BRANCH_ID = "BR-HQ";
+import { HEAD_OFFICE_BRANCH_ID } from "@/shared/lib/org/systemBranch";
 
 // Card dimensions are needed to draw edges from card centers.
 const HQ_W = 280, HQ_H = 72;
@@ -64,8 +63,8 @@ function buildLayout(structure: OrgStructure): { nodes: CanvasNode[]; edges: Can
     const nodes: CanvasNode[] = [];
     const edges: CanvasEdge[] = [];
 
-    const hqGroup = structure.branches.find(b => b.branch.id === HQ_BRANCH_ID);
-    const regional = structure.branches.filter(b => b.branch.id !== HQ_BRANCH_ID);
+    const hqGroup = structure.branches.find(b => b.branch.id === HEAD_OFFICE_BRANCH_ID);
+    const regional = structure.branches.filter(b => b.branch.id !== HEAD_OFFICE_BRANCH_ID);
     const hqBranchPositions = hqGroup ? hqGroup.deptGroups.flatMap(g => g.positions) : [];
     const allHqPositions = [...structure.orgWidePositions, ...hqBranchPositions];
     const hqName = hqGroup?.branch.name ?? "Headquarters";

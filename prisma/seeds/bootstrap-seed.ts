@@ -63,6 +63,7 @@ import {
     buildVoucherTemplateDefaults,
 } from "../../src/shared/lib/print/voucherTemplateDefaults";
 import { COMPANY_DETAILS } from "../../src/shared/lib/constants/companyDetails";
+import { HEAD_OFFICE_BRANCH_ID } from "../../src/shared/lib/org/systemBranch";
 import { PERMISSION_CATALOG, ensureXorCheck as ensureXorCheckShared, ensurePortalProfileColumns } from "./lib/codeOwnedCatalog";
 import { upsertPositionWithRoles } from "./lib/positionSeedSync";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -377,7 +378,7 @@ const STATUS_TRANSITIONS = [
 const HQ_GSTIN = COMPANY_DETAILS.tax.gstin ?? "";
 const BRANCHES = [
     {
-        id: "BR-HQ",
+        id: HEAD_OFFICE_BRANCH_ID,
         // 9 is the live branch number — it prefixes voucher numbers, so seeding 1
         // on a reseed would renumber the whole shop's documents.
         number: 9,

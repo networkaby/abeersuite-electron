@@ -18,6 +18,10 @@ import type { Prisma } from "@/generated/prisma/client";
  * Resolves `BR-HQ` (Head Office, seeded in bootstrap-seed.ts) and falls back to
  * the lowest-numbered branch so a database seeded under another id still posts
  * rather than failing the foreign key.
+ *
+ * `HEAD_OFFICE_BRANCH_ID` is the ONE copy of that id — the seed, the org chart,
+ * the opening-stock rule (liveStock.ts) and the sync push all import it. Safe in
+ * a client component: this file imports only a type.
  */
 export const HEAD_OFFICE_BRANCH_ID = "BR-HQ";
 
