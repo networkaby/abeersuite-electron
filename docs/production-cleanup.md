@@ -18,24 +18,13 @@ runs (`gh run delete <id>`) or accept that the old password is burned.
 
 Do item 2 at the same time, or the new password lands in the logs too.
 
-## 2. Stop sending the database URL from the app
+## 2. ~~Stop sending the database URL from the app~~ — dropped (2026-10-24)
 
-**Why:** it is what puts the password in the logs. Sending it is correct only while
-credentials rotate often, because the app always holds the current one.
-
-**Do:** comment out one block in each of
-
-- `src/app/api/settings/backup/route.ts`
-- `src/app/api/cron/backup/route.ts`
-
-marked `IN PRODUCTION, COMMENT OUT THIS BLOCK`. The workflow already prefers the
-input and falls back to the `DIRECT_DATABASE_URL` secret, so removing the input is
-the whole switch. Verified: the commented state compiles, and the runner builds a
-byte-identical file name.
-
-**Check after:** `DIRECT_DATABASE_URL` must be the **direct** URL — port 5432, no
-`pgbouncer=true` — or every backup writes a 0-byte dump. This is the single most
-likely thing to be wrong on the day.
+**Do not do this.** Two Vercel projects share one backup repo and may each use a
+different database; the URL the app sends is how the runner knows which one to dump.
+Both backup routes now mark the block `KEEP THIS BLOCK`. The password-in-log cost is
+accepted — keep the backup repo private. See
+[backup-schedule-activation.md](backup-schedule-activation.md#keep-sending-the-database-url).
 
 ## 3. Lock down the LAN bind
 

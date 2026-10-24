@@ -2,6 +2,7 @@ import { triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
 import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
 import { libpqUrl, projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability } from "@/shared/lib/backup/availability";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +26,18 @@ export async function GET(req: Request) {
         return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Only the deployment holding the office domain takes the nightly dump. Two Vercel
+    // projects run this code, and whichever holds office.networkservice.in is the real
+    // production — the other may point at the same database (a duplicate dump) or at
+    // one nobody uses. Vercel sets VERCEL_PROJECT_PRODUCTION_URL per deployment, so
+    // after moving the domain, redeploy both. Unknown (unset) still backs up: a
+    // duplicate is cheaper than a missed night.
+    const productionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim().toLowerCase();
+    const officeHost = new URL(COMPANY_DETAILS.sites.office).host;
+    if (productionHost && productionHost !== officeHost) {
+        return Response.json({ skipped: true, reason: `Not the office site (${productionHost}); ${officeHost} takes the nightly backup.` });
+    }
+
     const { canBackup, missing } = backupAvailability();
     if (!canBackup) {
         return Response.json(
@@ -38,9 +51,10 @@ export async function GET(req: Request) {
     const inputs: Record<string, string> = { source: "cron", domain };
 
     // ── The app supplies the database URL ───────────────────────────────────────
-    // IN PRODUCTION, COMMENT OUT THIS BLOCK — same as the settings route. The runner
-    // then dumps whatever the DIRECT_DATABASE_URL repo secret points at and names the
-    // file there, and the password stops appearing in the run log.
+    // KEEP THIS BLOCK. Each Vercel project may use a different database, and this is
+    // how the runner learns which one: without it the runner dumps whatever the
+    // DIRECT_DATABASE_URL repo secret points at. Cost, accepted: the password appears
+    // in the (private) run log, because workflow inputs are not masked.
     //
     // DIRECT_URL first; without it, the live DATABASE_URL cleaned of Prisma's
     // `pgbouncer=true` by libpqUrl — the same fallback as the settings route.
@@ -53,7 +67,7 @@ export async function GET(req: Request) {
     }
     inputs.source_db_url = dbUrl;
     inputs.file_name = makeBackupFileName({ domain, projectRef: projectRefFromDbUrl(dbUrl), source: "cron" });
-    // ── end of block to comment out ─────────────────────────────────────────────
+    // ── end of database URL block ───────────────────────────────────────────────
 
     try {
         await triggerWorkflow(process.env.GITHUB_BACKUP_WORKFLOW?.trim() || "backup.yml", inputs);

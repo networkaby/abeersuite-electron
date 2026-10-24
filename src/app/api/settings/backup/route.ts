@@ -37,13 +37,12 @@ export async function POST(req: Request) {
     const inputs: Record<string, string> = { source: "manual", domain };
 
     // ── The app supplies the database URL ───────────────────────────────────────
-    // IN PRODUCTION, COMMENT OUT THIS BLOCK. The runner then dumps whatever the
-    // DIRECT_DATABASE_URL repo secret points at and names the file there — which it
-    // must, because that database may not be the one this app uses and only the side
-    // holding the URL can read its project ref.
+    // KEEP THIS BLOCK. Without it the runner dumps whatever the DIRECT_DATABASE_URL
+    // repo secret points at — not necessarily the database this app uses. Two Vercel
+    // projects share one backup repo and may each use a different database, so the
+    // URL has to come from here; a rotation then needs no repo change either.
     //
-    // Sending it is right while credentials rotate: the app always holds the current
-    // one, so a rotation needs no repo change. It costs one thing — source_db_url is
+    // It costs one thing — source_db_url is
     // a workflow INPUT, and GitHub echoes inputs in full in the job's env group.
     // Secrets are masked; inputs are not. So every run below prints the password.
     //
@@ -59,7 +58,7 @@ export async function POST(req: Request) {
     }
     inputs.source_db_url = dbUrl;
     inputs.file_name = makeBackupFileName({ domain, projectRef: projectRefFromDbUrl(dbUrl), source: "manual" });
-    // ── end of block to comment out ─────────────────────────────────────────────
+    // ── end of database URL block ───────────────────────────────────────────────
 
     try {
         await triggerWorkflow(process.env.GITHUB_BACKUP_WORKFLOW?.trim() || "backup.yml", inputs);

@@ -26,6 +26,18 @@ on Hobby anywhere in 9:30–10:30 PM IST. It takes no gate and no vote:
 - It needs a **production deploy** to change. Unlike the GitHub hours, this schedule
   lives in the repo, so editing it means a commit and a `d_office` push.
 
+- It runs **only on the deployment holding the office domain.** Two Vercel projects
+  (two accounts, two remotes of this repo) run this code; whichever holds
+  `office.networkservice.in` — `COMPANY_DETAILS.sites.office` — is production. The
+  route compares `VERCEL_PROJECT_PRODUCTION_URL` with it and answers `skipped` on any
+  other host, shop included, whether that project uses the same database or another.
+  Unset (local, desktop) still backs up. Vercel fixes that variable per deployment,
+  so **after moving the domain, redeploy both projects.**
+- **One backup repo for both.** Set the same `GITHUB_REPO` and a token for it on both
+  Vercel projects; the Dropbox secrets live in that repo only. The database comes
+  from the app (`source_db_url`), so either repo would dump the right one — one repo
+  just keeps one Dropbox log and one queue.
+
 Read the whole thing as three layers: Vercel guarantees one dump a night, GitHub
 adds the hours the shop asked for when its tick shows up, and the Sunday safety net
 below covers the app being dead.
@@ -120,45 +132,25 @@ comparing in UTC would put a Monday backup on Sunday.
 - **GitHub disables schedules after 60 days without a push.** The settings page
   surfaces this as its own reason; turning the switch back on fixes it.
 
-## Production: stop sending the database URL
+- **The GitHub hours and the Sunday net dump one database only** — the
+  `DIRECT_DATABASE_URL` repo secret, never the app's URL. With two Vercel projects on
+  different databases they cover only that one. Kept as they are, pending the
+  owner's decision to use or remove them (2026-10-24).
 
-While database credentials rotate often, the app sends its own `DIRECT_URL` with
-every manual and Vercel-cron backup. That keeps rotations free — the app always
-holds the current one and no repo secret has to be updated.
+## Keep sending the database URL
 
-It costs one thing: `source_db_url` is a workflow **input**, and GitHub echoes
-inputs in full in the job's env group. Secrets are masked; inputs are not. So every
-app-triggered run prints the password in its log.
+The app sends its own `DIRECT_URL` (else the cleaned `DATABASE_URL`) with every
+manual and Vercel-cron backup, in the block both backup routes mark `KEEP THIS
+BLOCK`. This used to be a temporary measure to comment out in production; it is now
+the design. Two Vercel projects share one backup repo and may each use a different
+database, and only the app knows which one it uses — without the block the runner
+dumps whatever `DIRECT_DATABASE_URL` points at. A credential rotation also needs no
+repo change.
 
-Once the credentials settle, comment out one block in each of:
+The cost, accepted: `source_db_url` is a workflow **input**, and GitHub echoes inputs
+in full in the job's env group. Secrets are masked; inputs are not, so every
+app-triggered run prints the password in its log. Keep the backup repo private.
 
-- `src/app/api/settings/backup/route.ts`
-- `src/app/api/cron/backup/route.ts`
-
-Each is marked `IN PRODUCTION, COMMENT OUT THIS BLOCK` and ends with
-`end of block to comment out`. Nothing else changes — the workflow already prefers
-the input and falls back to the secret, so removing the input is the whole switch.
-
-No flag and no env var on purpose: a boolean would mean two live code paths forever,
-and a deployment toggle for a one-time decision is a setting nobody remembers exists.
-The app then sends **no URL and no file name**; the runner dumps whatever
-`DIRECT_DATABASE_URL` points at and builds the name itself.
-
-The name has to move to the runner because the secret may point at a **different
-database** than the app uses. The app cannot read that database's project ref, so a
-name built app-side would be wrong. The app sends only `source` (manual or cron) and
-`domain`; the runner supplies the ref. Both generators produce byte-identical names —
-verified — so dumps from before and after the switch sort and read the same.
-
-Two consequences to expect:
-
-- **The toast stops naming the file.** It says the backup started and the file will
-  appear shortly, because this side genuinely cannot know the name. That is correct,
-  not a regression.
-- **`DIRECT_URL` stops being required for backups**, but is still needed by Prisma
-  and by the seed scripts. Do not remove it.
-
-When both databases are the same, the switch changes nothing visible except that the
-password leaves the logs. When they differ, the project ref in the file name is what
-tells you which one a dump holds.
-
+The workflow still falls back to the secret and builds the file name itself when no
+input arrives (the GitHub-scheduled runs); both name generators produce
+byte-identical names, and the project ref in the name says which database a dump holds.
