@@ -185,8 +185,10 @@ an update.
   site; refused before the Install screen unless it is this app and newer (so an APK
   not deployed yet cannot loop). First time, Android must allow the app to install
   apps: the plugin opens that switch and the person taps again. A failed download
-  offers the Chrome page below. Builds before 2.3.0 and the customer app have no
-  updater and use the Chrome page.
+  offers the Chrome page below. Builds before 2.3.0 have no updater and use the
+  Chrome page. The customer app has the same plugin from 2.2.0 (versionCode 6,
+  [`shop-app-native/…/NsUpdatePlugin.java`](../shop-app-native/android/app/src/main/java/in/networkservice/shop/NsUpdatePlugin.java),
+  `ns-shop.apk` from the shop site) — keep the two files alike.
 - **Update download (Chrome):** the "New version available" bar links to the install page,
   `https://office.networkservice.in./m-staff-app/install` — office only, never shop. The
   trailing dot makes Capacitor treat it as another host, so Chrome opens it (the app's

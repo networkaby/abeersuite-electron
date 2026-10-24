@@ -25,7 +25,9 @@ import java.net.URL;
 
 /**
  * Downloads the new app and opens Android's own Install screen — no trip through
- * Chrome (the bar's "Update now", src/shared/components/AppUpdateBar.tsx):
+ * Chrome (the bar's "Update now", src/shared/components/AppUpdateBar.tsx). The
+ * customer app has the same file (shop-app-native/…/NsUpdatePlugin.java) — keep
+ * the two alike:
  *
  *   window.Capacitor.Plugins.NsUpdate.install({ path: "/ns-staff.apk?v=6" })
  *   addListener("progress", ({ percent }) => …)

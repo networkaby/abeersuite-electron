@@ -18,8 +18,8 @@ function installedAppCode(uaTag: string): number | null {
     return m[1] ? Number(m[1]) : UNSTAMPED_CODE;
 }
 
-/** The staff app's in-app updater (phone-app, NsUpdatePlugin.java) — absent in older
- *  builds, the customer app and a browser. */
+/** The apps' in-app updater (NsUpdatePlugin.java in phone-app and shop-app-native) —
+ *  absent in older builds and a browser. */
 type NativeUpdate = {
     install: (o: { path: string }) => Promise<void>;
     addListener: (event: "progress", cb: (e: { percent: number }) => void) => Promise<{ remove: () => Promise<void> }>;
@@ -74,9 +74,9 @@ function useAppUpdate(release: AppRelease, apk: string) {
  * full-screen notice when `release.urgent`. Outside the app (no tag) → nothing.
  * No server call: the page compares against the constant it was built with.
  *
- * Staff app from 2.3.0 (versionCode 6): "Update now" downloads `apk` inside the app
- * and opens Android's Install screen (NsUpdatePlugin) — no Chrome. Older builds and
- * the customer app have no updater, so they fall back to `installUrl`.
+ * From versionCode 6 (staff 2.3.0, customer 2.2.0): "Update now" downloads `apk`
+ * inside the app and opens Android's Install screen (NsUpdatePlugin) — no Chrome.
+ * Older builds have no updater, so they fall back to `installUrl`.
  *
  * `installUrl` is the app's install page on its own site written with a trailing dot
  * (`office.networkservice.in./m-staff-app/install`): the app's WebView cannot
