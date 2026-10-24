@@ -24,7 +24,7 @@
 | Electron shell, single-instance lock, sandboxed renderer | **Built** | [`electron/main.ts`](../electron/main.ts) |
 | Standalone Next server on loopback | **Built** | [`electron/serverManager.ts`](../electron/serverManager.ts) |
 | Windows installer, symlink hoisting, packaging gate | **Built** | [`scripts/prepare-standalone.ts`](../scripts/prepare-standalone.ts), [`scripts/verify-package.ts`](../scripts/verify-package.ts) |
-| Unattended install, baked env allowlist, per-machine `AUTH_SECRET` (shared with the office only on a `v_live` build — §4.6) | **Built** | [`scripts/counterEnv.ts`](../scripts/counterEnv.ts) |
+| Unattended install, baked env allowlist, per-machine `AUTH_SECRET` (shared with the office only on a `v_live` build — §4.6); `DATABASE_URL` fetched from the office at start with `COUNTER_INSTALL_SECRET` ([`remoteConfig.ts`](../electron/remoteConfig.ts)), not baked | **Built** | [`scripts/counterEnv.ts`](../scripts/counterEnv.ts) |
 | Dexie UI hot cache | **Built and in real use — web/office only; off on a replica-served counter** | [`src/shared/lib/browser/localDb.ts`](../src/shared/lib/browser/localDb.ts) |
 | Supabase realtime broadcast channel | **Built** — one channel, `app:changes` | [`src/shared/lib/realtime/appChannel.ts`](../src/shared/lib/realtime/appChannel.ts) |
 | Sync table registry (113 tables) | **Built, generated, precommit-checked** | [`prisma/sync-tables.json`](../prisma/sync-tables.json) |
