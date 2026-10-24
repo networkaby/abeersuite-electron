@@ -86,6 +86,7 @@ export default function AiBulkCopyPage() {
     useEffect(() => {
         const ids = takeAiPick();
         if (ids?.length) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- the AI pick is a one-shot stash consumed (removed) here, once after mount (a render-time read would consume it twice in StrictMode)
             setPick(new Set(ids));
             setSelected(new Set(ids));
             setFilters(EMPTY_PRODUCT_FILTERS);

@@ -236,6 +236,7 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
         startDrag(e, card, from, (sp) => setCards((c) => ({ ...c, [phone]: sp })), (sp) => changeCard(phone, sp));
     };
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- restores the dismissed list and the popup / card positions from localStorage once after mount (the server render has none)
     useEffect(() => { setDismissed(loadDismissed()); setPlace(loadPlace()); setCards(loadCards()); }, []);
 
     // A smaller window must not strand the popup off screen.

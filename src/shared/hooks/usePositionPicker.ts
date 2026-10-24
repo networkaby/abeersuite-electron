@@ -109,6 +109,7 @@ export function usePositionPicker(): PositionPickerData & {
         [userId],
     );
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- adopts this browser's saved copy after hydration (see `data` above); reading it during render would mismatch the server's empty pass
     useEffect(() => { void load(false); }, [load]);
 
     // Another tab just fetched: adopt its copy rather than fetching again here.

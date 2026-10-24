@@ -156,6 +156,7 @@ export default function EcommerceProductsPage() {
         if (viewRestored.current) return;
         viewRestored.current = true;
         const saved = loadSavedView();
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- restores the saved list view from sessionStorage once after mount; reading it during render would desync from the server HTML
         if (saved.tab) setTab(saved.tab);
         if (saved.page) setPage(saved.page);
         if (saved.pageSize) setPageSize(saved.pageSize);

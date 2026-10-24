@@ -166,6 +166,7 @@ export default function FinanceTopBar({
         // then let the poll below refresh them.
         const cachedCash = readCache<CashPosition>(CASH_CACHE_KEY);
         const cachedFund = readCache<FundPayload>(FUND_CACHE_KEY);
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- paints this browser's saved copy after hydration; reading localStorage during render would mismatch the server's empty pass
         if (cachedCash) setData(cachedCash.data);
         if (cachedFund) setInstantFund(cachedFund.data.instantTotal);
         cashSince.current = cachedCash?.computedAt ?? null;
