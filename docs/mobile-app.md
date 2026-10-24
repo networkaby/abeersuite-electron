@@ -193,7 +193,10 @@ an update.
 - **Camera** (the Photos screen, §4) needs no plugin: a plain `<input type="file"
   capture="environment">` reaches the back camera through Capacitor's own
   `BridgeWebChromeClient.onShowFileChooser`, which writes the shot through the
-  generated **FileProvider** — keep it in the manifest. **`CAMERA` is declared** for the
+  generated **FileProvider** — keep it in the manifest. Keep the
+  `android.media.action.IMAGE_CAPTURE` entry in the manifest's `<queries>` too: Android
+  11+ hides the camera app without it, and Capacitor then falls back to the gallery
+  (seen on a Moto G45). **`CAMERA` is declared** for the
   barcode scan (Stock & price, Photos): Capacitor asks once at run time and one Allow
   covers both. A "Deny" blocks **both** scanning and Take photo until the permission is
   turned on in Android's app settings. The scan itself is web code — the browser's
