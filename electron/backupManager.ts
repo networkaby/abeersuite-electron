@@ -98,7 +98,7 @@ const LIBPQ_PARAMS = new Set([
     "options",
 ]);
 
-/** Twin of `libpqUrl` in `src/shared/lib/backup/dbUrl.ts` (the Dropbox backup) — keep in step. */
+/** The URL as libpq (pg_dump / pg_restore) accepts it: Prisma's own parameters dropped. */
 function stripPrismaParams(url: string): string {
     // The query starts after the LAST "@": a password may itself contain "?" or "@".
     const q = url.indexOf("?", url.lastIndexOf("@") + 1);
@@ -167,10 +167,10 @@ function decode(value: string): string {
 /**
  * "postgresql://postgres.gphtzbejvpijcfmvqpqo:…@…" → "gphtzbejvpijcfmvqpqo".
  *
- * A copy of `projectRefFromDbUrl` from `src/shared/lib/backup/dbUrl.ts`, not an import:
- * `electron/tsconfig.json` is rooted at `electron/`, and an import reaching outside that
- * root would change the emitted output path — the same constraint `postgresManager.ts`
- * documents for `appModeCore.ts`. Six lines, kept identical on purpose.
+ * Supabase pooler roles are "postgres.<ref>"; a direct connection's plain "postgres"
+ * carries no ref, so "" — the caller drops the segment. Regex rather than `new URL()`:
+ * Supabase passwords routinely contain characters the URL parser mangles. Same rule as
+ * the Dropbox workflow's name step (.github/workflows/backup.yml).
  */
 export function projectRefFromUrl(url: string | null): string {
     const match = /^[a-z][a-z0-9+.-]*:\/\/(.*)@/i.exec(url?.trim() ?? "");
@@ -359,11 +359,12 @@ export async function runRestore(srcPath: string, onProgress: (line: string) => 
 /**
  * `smx-backup-<ref>-local-2026-09-02-000045-IST.dump`.
  *
- * Deliberately the same shape as `makeBackupFileName` in `src/shared/lib/backup/dropbox.ts`
- * — the two kinds of dump end up in one folder often enough that they must sort and read
- * alike. "local" takes the place of its manual/cron/git source marker, so the name still
- * says where the dump came from. IST for the reason that file documents: a backup taken at
- * midnight IST is named 18:30 the previous day in UTC — correct, and reliably misread.
+ * Deliberately the same shape as the names the Dropbox workflow builds
+ * (.github/workflows/backup.yml, "Resolve dump file name") — the two kinds of dump end up in
+ * one folder often enough that they must sort and read alike. "local" takes the place of its
+ * manual/cron/git source marker, so the name still says where the dump came from. IST
+ * because a backup taken at midnight IST is named 18:30 the previous day in UTC — correct,
+ * and reliably misread.
  */
 export function makeLocalBackupFileName(projectRef: string): string {
     const ist = new Date(Date.now() + 5.5 * 60 * 60 * 1000);

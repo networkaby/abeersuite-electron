@@ -120,45 +120,26 @@ comparing in UTC would put a Monday backup on Sunday.
 - **GitHub disables schedules after 60 days without a push.** The settings page
   surfaces this as its own reason; turning the switch back on fixes it.
 
-## Production: stop sending the database URL
+## The database URL lives only in the repo secret
 
-While database credentials rotate often, the app sends its own `DIRECT_URL` with
-every manual and Vercel-cron backup. That keeps rotations free — the app always
-holds the current one and no repo secret has to be updated.
+Done 24 Oct 2026. The app sends **no URL and no file name** with a manual or
+Vercel-cron backup; the runner dumps whatever the `DIRECT_DATABASE_URL` repo secret
+points at and builds the name itself (`source` and `domain` are all the app sends).
 
-It costs one thing: `source_db_url` is a workflow **input**, and GitHub echoes
-inputs in full in the job's env group. Secrets are masked; inputs are not. So every
-app-triggered run prints the password in its log.
+Why: a workflow **input** is echoed in full in the job's env group — secrets are
+masked, inputs are not — so sending the URL printed the password in every run's log.
+The workflow no longer has a URL input at all.
 
-Once the credentials settle, comment out one block in each of:
+What it means day to day:
 
-- `src/app/api/settings/backup/route.ts`
-- `src/app/api/cron/backup/route.ts`
+- **A password rotation updates the repo secret too**, or every backup fails.
+- **The toast does not name the file** — this side cannot know it. Not a regression.
+- **The secret may point at a different database than the app uses**; the project
+  ref in the file name tells you which one a dump holds.
+- **`DIRECT_URL` is no longer needed for backups**, but Prisma and the seed scripts
+  still need it. Do not remove it.
 
-Each is marked `IN PRODUCTION, COMMENT OUT THIS BLOCK` and ends with
-`end of block to comment out`. Nothing else changes — the workflow already prefers
-the input and falls back to the secret, so removing the input is the whole switch.
-
-No flag and no env var on purpose: a boolean would mean two live code paths forever,
-and a deployment toggle for a one-time decision is a setting nobody remembers exists.
-The app then sends **no URL and no file name**; the runner dumps whatever
-`DIRECT_DATABASE_URL` points at and builds the name itself.
-
-The name has to move to the runner because the secret may point at a **different
-database** than the app uses. The app cannot read that database's project ref, so a
-name built app-side would be wrong. The app sends only `source` (manual or cron) and
-`domain`; the runner supplies the ref. Both generators produce byte-identical names —
-verified — so dumps from before and after the switch sort and read the same.
-
-Two consequences to expect:
-
-- **The toast stops naming the file.** It says the backup started and the file will
-  appear shortly, because this side genuinely cannot know the name. That is correct,
-  not a regression.
-- **`DIRECT_URL` stops being required for backups**, but is still needed by Prisma
-  and by the seed scripts. Do not remove it.
-
-When both databases are the same, the switch changes nothing visible except that the
-password leaves the logs. When they differ, the project ref in the file name is what
-tells you which one a dump holds.
+Restore is different by design: the operator types the target database, so its URL
+still travels as an input. The workflow's first step masks it (and its password)
+before anything else runs, so it shows as `***` in every log line.
 

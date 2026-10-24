@@ -23,9 +23,6 @@ on:
       file_name:
         description: Dump file name to create in Dropbox. Blank = generate one here.
         required: false
-      source_db_url:
-        description: Direct Postgres URL to dump from. Blank = use the DIRECT_DATABASE_URL secret.
-        required: false
       source:
         description: What started this — manual, cron or git. Only used when generating a name.
         required: false
@@ -43,10 +40,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      # Scheduled runs have no inputs, so fall back to the repo secret. The secret
-      # is also the safer path: GitHub masks secrets in logs, but a workflow INPUT
-      # is echoed in full in the job's env group — password included.
-      DIRECT_DATABASE_URL: ${{ github.event.inputs.source_db_url || secrets.DIRECT_DATABASE_URL }}
+      # Only ever the repo secret. There is deliberately no URL input: GitHub masks
+      # secrets in logs, but a workflow INPUT is echoed in full in the job's env
+      # group — password included. A password rotation updates this secret too.
+      DIRECT_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
       DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
       DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
       DROPBOX_REFRESH_TOKEN: ${{ secrets.DROPBOX_REFRESH_TOKEN }}
@@ -61,24 +58,21 @@ jobs:
           set -euo pipefail
           if [ -n "${FILE_NAME:-}" ]; then echo "using supplied name: $FILE_NAME"; exit 0; fi
 
-          # No name supplied, so build one here. This is the path that matters when
-          # the app stops sending source_db_url: the dump is then of whatever
-          # DIRECT_DATABASE_URL points at, and the app cannot know that database's
-          # project ref — so the name has to be built where the URL actually is.
+          # No name supplied, so build one here — the usual path: the dump is of
+          # whatever DIRECT_DATABASE_URL points at, and the app cannot know that
+          # database's project ref, so the name is built where the URL actually is.
           RAW="${DIRECT_DATABASE_URL:-}"
-          if [ -z "$RAW" ]; then echo "No source_db_url input and no DIRECT_DATABASE_URL secret."; exit 1; fi
+          if [ -z "$RAW" ]; then echo "The DIRECT_DATABASE_URL repo secret is not set."; exit 1; fi
           NOPROTO="${RAW#*://}"
           case "$NOPROTO" in *@*) USERINFO="${NOPROTO%%@*}" ;; *) USERINFO="" ;; esac
           DB_USER="${USERINFO%%:*}"
           # Supabase pooler users look like "postgres.<project-ref>".
           case "$DB_USER" in *.*) REF="${DB_USER#*.}" ;; *) REF="" ;; esac
 
-          # Same shape as istStamp()/makeBackupFileName() in
-          # src/shared/lib/backup/dropbox.ts — segments dropped when unknown, and
-          # only [a-z0-9.-] kept, so the two generators cannot drift apart.
-          # Mirrors segment() in dropbox.ts exactly, INCLUDING the 40-character cap —
-          # without it a long domain would name the same backup differently depending
-          # on which side generated it.
+          # The one generator of Dropbox dump names (the app sends none). Segments are
+          # dropped when unknown and only [a-z0-9.-] kept, each capped at 40 characters.
+          # makeLocalBackupFileName() in electron/backupManager.ts builds "Back up to
+          # this PC" names in the same shape, so both kinds sort and read alike.
           clean() {
             printf '%s' "$1" | tr 'A-Z' 'a-z' | tr -cs 'a-z0-9.-' '-'               | sed 's/^[-.]*//; s/[-.]*$//' | cut -c1-40
           }

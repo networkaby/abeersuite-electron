@@ -1,6 +1,4 @@
 import { triggerWorkflow } from "@/shared/lib/backup/githubDispatch";
-import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
-import { libpqUrl, projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability } from "@/shared/lib/backup/availability";
 
 export const runtime = "nodejs";
@@ -10,8 +8,7 @@ export const dynamic = "force-dynamic";
  * GET /api/cron/backup — Invoked by Vercel Cron on a daily schedule.
  *
  * Secured by Vercel's automatic Authorization header (Bearer <CRON_SECRET>).
- * Reads the active deployment's database URL and triggers the GitHub Actions
- * backup runner, which dumps the database and uploads it to Dropbox.
+ * Triggers the GitHub Actions backup runner, which dumps the database and uploads it to Dropbox.
  */
 export async function GET(req: Request) {
     // CRON_SECRET is OPTIONAL. Unset, empty, or whitespace means the check is
@@ -37,23 +34,9 @@ export async function GET(req: Request) {
     const domain = process.env.VERCEL_URL?.trim() ?? "";
     const inputs: Record<string, string> = { source: "cron", domain };
 
-    // ── The app supplies the database URL ───────────────────────────────────────
-    // IN PRODUCTION, COMMENT OUT THIS BLOCK — same as the settings route. The runner
-    // then dumps whatever the DIRECT_DATABASE_URL repo secret points at and names the
-    // file there, and the password stops appearing in the run log.
-    //
-    // DIRECT_URL first; without it, the live DATABASE_URL cleaned of Prisma's
-    // `pgbouncer=true` by libpqUrl — the same fallback as the settings route.
-    const dbUrl = libpqUrl(process.env.DIRECT_URL) ?? libpqUrl(process.env.DATABASE_URL);
-    if (!dbUrl) {
-        return Response.json(
-            { error: "Active database URL is missing or invalid in server environment." },
-            { status: 500 },
-        );
-    }
-    inputs.source_db_url = dbUrl;
-    inputs.file_name = makeBackupFileName({ domain, projectRef: projectRefFromDbUrl(dbUrl), source: "cron" });
-    // ── end of block to comment out ─────────────────────────────────────────────
+    // No database URL is sent: the workflow dumps whatever its DIRECT_DATABASE_URL
+    // repo secret points at and names the file there — same as the settings route,
+    // and for the same reason (a workflow input is printed in full in the run log).
 
     try {
         await triggerWorkflow(process.env.GITHUB_BACKUP_WORKFLOW?.trim() || "backup.yml", inputs);
@@ -61,6 +44,6 @@ export async function GET(req: Request) {
         return Response.json({ error: (err as Error).message }, { status: 500 });
     }
 
-    // null once the block above is commented out — this side cannot know the name then.
-    return Response.json({ ok: true, fileName: inputs.file_name ?? null, triggeredAt: new Date().toISOString() });
+    // The workflow names the file, so this side cannot know it.
+    return Response.json({ ok: true, fileName: null, triggeredAt: new Date().toISOString() });
 }
