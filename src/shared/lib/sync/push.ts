@@ -33,6 +33,7 @@ import { NEVER_PUSH_MODELS } from "./neverPush";
 import { emptyTouches, noteTouches, rebuildTotalsAfterPush } from "./rebuildTotals";
 import { CLOUD_RANGE_END } from "@/shared/lib/counter/idRange";
 import { isConnectionFailure } from "./connectionError";
+import { systemBranchId } from "@/shared/lib/org/systemBranch";
 
 /**
  * Tables a counter has no business pushing. The list lives in `neverPush.ts` because
@@ -188,6 +189,26 @@ async function reconcileCounterBinding(
  * recovery is to start a FRESH shift (see CounterReconciler), not to re-litigate this
  * one, so the replay is dropped as superseded and the counter converges on the pull.
  */
+/**
+ * An opening quantity always sits at a branch (liveStock.ts, openingBranchOnSave).
+ * A till pushes its product row WHOLE, so one still holding the image from before
+ * the office stamped a branch — or running a build that saved openings without
+ * one — would win last-write-wins with the branch empty and wipe the office's.
+ * A pushed row with a quantity and no branch keeps the office's branch, else
+ * Head Office. A row that names a branch, or has no quantity, goes up as it is.
+ */
+async function keepOpeningBranch(
+    payload: Record<string, unknown>,
+    where: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+    if (payload.openingStock == null || payload.openingBranchId != null) return payload;
+    const server = await prismaLive.invProduct.findUnique({
+        where: where as Prisma.InvProductWhereUniqueInput,
+        select: { openingBranchId: true },
+    });
+    return { ...payload, openingBranchId: server?.openingBranchId ?? await systemBranchId(prismaLive) };
+}
+
 async function shiftIsAlreadyClosed(where: Record<string, unknown>): Promise<boolean> {
     const server = await (prismaLive as unknown as {
         posShift: { findUnique: (a: unknown) => Promise<{ status: string } | null> };
@@ -501,6 +522,10 @@ export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcom
 
             if (rec.table_name === "pos_counters") {
                 payload = await reconcileCounterBinding(payload, where);
+            }
+
+            if (entry.model === "InvProduct") {
+                payload = await keepOpeningBranch(payload, where);
             }
 
             if (rec.table_name === "VoucherSeriesCounter") {
