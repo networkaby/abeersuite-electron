@@ -169,6 +169,8 @@ export const PERMISSIONS = {
     // Permanent fallback sections (priority -1) stay locked; this key shows the
     // Unlock button that opens them all for editing at once.
     ECOMMERCE_FALLBACK_UNLOCK: "ecommerce:fallback:unlock",
+    // Settings → E-Commerce → Photo cleanup: deletes Cloudinary files for good.
+    ECOMMERCE_PHOTO_CLEANUP: "ecommerce:photos:cleanup",
 
     // POS — shift / till / handover lifecycle
     POS_SHIFT_OPEN: "pos:shift:open",

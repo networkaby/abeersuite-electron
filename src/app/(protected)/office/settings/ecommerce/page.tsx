@@ -28,11 +28,18 @@ import {
 } from "@/modules/ecommerce/lib/shopStock";
 import { getWithRetry } from "@/shared/lib/http/getWithRetry";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useSession } from "next-auth/react";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import PhotoCleanupCard from "@/modules/ecommerce/components/PhotoCleanupCard";
 
 // Retry transient GET failures (dev-compile hiccups) a couple of times so the
 // page reflects the real saved state instead of silently falling back to a
 // default — which could otherwise be saved over the owner's real config.
 export default function EcommerceSettingsPage() {
+    const { data: session } = useSession();
+    const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
+    const canCleanPhotos = hasPermissionWithScope(permissions, PERMISSIONS.ECOMMERCE_PHOTO_CLEANUP);
     const [rules, setRules] = useState<ShopPublishRules>(DEFAULT_SHOP_PUBLISH_RULES);
     const [rulesLoaded, setRulesLoaded] = useState(false);
     const [rulesError, setRulesError] = useState(false);
@@ -225,6 +232,8 @@ export default function EcommerceSettingsPage() {
                         )}
                     </CardContent>
                 </Card>
+
+                {canCleanPhotos && <PhotoCleanupCard />}
             </div>
         </ScrollArea>
     );

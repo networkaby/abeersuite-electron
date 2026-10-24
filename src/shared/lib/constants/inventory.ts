@@ -26,3 +26,8 @@ export const FAST_MIN_TURNOVER = 3;
 /** Most shop photos the phone app lets one product hold. The office gallery has no
  *  cap; this stops a phone "pick many" from sending a hundred over mobile data. */
 export const MAX_PRODUCT_PHOTOS = 12;
+
+/** Photo cleanup (Settings → E-Commerce): an unused Cloudinary photo is deleted only
+ *  once it is this old — room for a photo still being saved, and for undoing a
+ *  Remove tapped by mistake (the link can be put back while the file exists). */
+export const PHOTO_CLEANUP_MIN_AGE_DAYS = 30;
