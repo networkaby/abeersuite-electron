@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import axios from "axios";
-import { ArrowDown, ArrowUp, FlaskConical, Loader2, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, FlaskConical, Loader2, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -143,7 +143,8 @@ export function AiSetupPanel() {
     const [chains, setChains] = useState<Chains>({});
     const [copyFlow, setCopyFlow] = useState<AiCopyFlow>(AI_DEFAULT_COPY_FLOW);
     const [photoCheck, setPhotoCheck] = useState(false);
-    const [editing, setEditing] = useState<AiKeyRow | "new" | null>(null);
+    // copyOf = Duplicate: a new key starting from that row's settings (never its key).
+    const [editing, setEditing] = useState<AiKeyRow | "new" | { copyOf: AiKeyRow } | null>(null);
     const [testing, setTesting] = useState<number | null>(null);
     // ?tab= keeps a link or reload on the same tab.
     const searchParams = useSearchParams();
@@ -374,6 +375,7 @@ export function AiSetupPanel() {
                                             {testing === k.id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FlaskConical className="mr-1 h-4 w-4" />}Test
                                         </Button>
                                         <Button variant="ghost" size="icon" aria-label="Edit" onClick={() => setEditing(k)}><Pencil className="h-4 w-4" /></Button>
+                                        <Button variant="ghost" size="icon" aria-label="Duplicate" title="New key with these settings" onClick={() => setEditing({ copyOf: k })}><Copy className="h-4 w-4" /></Button>
                                         <Button variant="ghost" size="icon" aria-label="Delete" onClick={() => deleteKey(k)}><Trash2 className="h-4 w-4" /></Button>
                                     </td>
                                 </tr>
@@ -461,7 +463,8 @@ export function AiSetupPanel() {
 
             {editing && (
                 <KeyDialog
-                    initial={editing === "new" ? null : editing}
+                    initial={editing === "new" || "copyOf" in editing ? null : editing}
+                    copyOf={editing !== "new" && "copyOf" in editing ? editing.copyOf : undefined}
                     here={here}
                     onClose={() => setEditing(null)}
                     onSaved={keySaved}
@@ -530,14 +533,17 @@ function StepChain({ label, needs, ids, keys, byId, onChange }: {
     );
 }
 
-function KeyDialog({ initial, here, onClose, onSaved, write }: {
+function KeyDialog({ initial, copyOf, here, onClose, onSaved, write }: {
     initial: AiKeyRow | null;
+    copyOf?: AiKeyRow;
     here: Setup["here"];
     onClose: () => void;
     onSaved: (row: AiKeyRow) => void;
     write: <T>(run: () => Promise<T>) => Promise<T>;
 }) {
-    const [form, setForm] = useState<Form>(initial ? formOf(initial) : EMPTY_FORM);
+    const [form, setForm] = useState<Form>(
+        initial ? formOf(initial) : copyOf ? { ...formOf(copyOf), name: `${copyOf.name} (copy)` } : EMPTY_FORM,
+    );
     // A pasted key is write-only: the box starts empty, and empty on edit keeps the old key.
     const [secret, setSecret] = useState("");
     const [saving, setSaving] = useState(false);

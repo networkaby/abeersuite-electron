@@ -56,7 +56,7 @@ export const AI_KEY_DEFAULTS = {
  *  "Can search online" ticked searches through the Web search keys (aiWeb.ts).
  *  `baseURL` = OpenAI-compatible endpoint. `hint` = model placeholder. */
 export const AI_PROVIDERS = [
-    { value: "gemini", label: "Google Gemini", kind: "model", ready: true, nativeSearch: true, hint: "gemini-2.5-flash" },
+    { value: "gemini", label: "Google Gemini", kind: "model", ready: true, nativeSearch: true, hint: "gemini-3.8-flash" },
     { value: "openai", label: "OpenAI", kind: "model", ready: true, nativeSearch: true, hint: "gpt-5-mini" },
     { value: "claude", label: "Anthropic Claude", kind: "model", ready: true, nativeSearch: true, hint: "claude-sonnet-5-5" },
     { value: "groq", label: "Groq", kind: "model", ready: true, nativeSearch: false, hint: "llama-3.3-70b-versatile", baseURL: "https://api.groq.com/openai/v1" },
@@ -83,11 +83,11 @@ export const isWebProvider = (p: string) => aiProviderInfo(p)?.kind === "web";
 /** Common models offered in the Model box's list. Only suggestions — staff can
  *  still type any model name; refresh when a provider ships new ones. */
 export const AI_PROVIDER_MODELS: Partial<Record<AiProvider, readonly string[]>> = {
-    gemini: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"],
+    gemini: ["gemini-3.8-flash", "gemini-3-pro-preview", "gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"],
     openai: ["gpt-5-mini", "gpt-5-nano", "gpt-5", "gpt-4.1-mini"],
     claude: ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"],
     groq: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-120b"],
-    openrouter: ["google/gemini-2.5-flash", "openai/gpt-5-mini", "anthropic/claude-sonnet-5-5", "deepseek/deepseek-chat"],
+    openrouter: ["google/gemini-3.8-flash", "google/gemini-2.5-flash", "openai/gpt-5-mini", "anthropic/claude-sonnet-5-5", "deepseek/deepseek-chat"],
     deepseek: ["deepseek-chat", "deepseek-reasoner"],
     mistral: ["mistral-small-latest", "mistral-medium-latest", "mistral-large-latest", "pixtral-large-latest"],
     xai: ["grok-4", "grok-3-mini"],
