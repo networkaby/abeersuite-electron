@@ -241,6 +241,30 @@ export function openingAppliesTo(
 }
 
 /**
+ * The WRITE side of the same column: what `openingBranchId` becomes when a writer
+ * saves an opening quantity. Every opening sits at a branch — it is counted at a
+ * counter, and a counter belongs to a branch — so a quantity is never saved
+ * without one.
+ *
+ *   quantity cleared               → null (a location for no stock is no location)
+ *   quantity, branch already set   → kept (an edit, even from another branch,
+ *                                    does not move stock that is lying elsewhere)
+ *   quantity, no branch yet        → the writer's working branch
+ *
+ * `workingBranch` is called only in the last case, so a caller can pass
+ * `() => requireWritableBranchId(req, session)` and an edit in "My branches"
+ * mode is refused only when it really has to pick a branch.
+ */
+export function openingBranchOnSave(
+    openingStock: unknown,
+    currentBranchId: string | null,
+    workingBranch: () => string,
+): string | null {
+    if (openingStock == null) return null;
+    return currentBranchId ?? workingBranch();
+}
+
+/**
  * The rule itself, in one place.
  *
  * `null` movement means the ledger has never mentioned this product in this

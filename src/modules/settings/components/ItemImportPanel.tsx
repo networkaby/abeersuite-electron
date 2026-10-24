@@ -11,6 +11,7 @@ import { type ProductImportField } from "@/shared/lib/import/productImportFields
 import { toCsv } from "@/shared/lib/import/csvSerialize";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
+import { HEAD_OFFICE_BRANCH_ID } from "@/shared/lib/org/systemBranch";
 
 type BranchOption = { id: string; name: string; isActive?: boolean };
 
@@ -190,8 +191,8 @@ export function ItemImportPanel() {
 
     // Branch master drives the step-3 stock-location dropdown. Same shape as the
     // units fetch above: small list, open to any signed-in user, fetched once.
-    // A failure here is NOT fatal — the import still runs, the opening just goes
-    // in unassigned (which folds into every branch, the pre-2026-09-17 meaning).
+    // A failure here is NOT fatal — the import still runs, and the server puts
+    // the opening at Head Office (runProductImport).
     useEffect(() => {
         let cancelled = false;
         void (async () => {
@@ -203,16 +204,15 @@ export function ItemImportPanel() {
                 const live = json.filter((b) => b.isActive !== false);
                 setBranches(live);
                 // Default to the working branch from the top bar when it is one
-                // of these, else the only branch when there is only one. Never
-                // guess between several — an unassigned opening is recoverable,
-                // a confidently wrong location is not.
+                // of these, else Head Office — what the server picks anyway when
+                // none is sent. There is no "no branch": every opening sits at one.
                 setOpeningBranchId((cur) => {
                     if (cur) return cur;
                     if (activeBranchId && live.some((b) => b.id === activeBranchId)) return activeBranchId;
-                    return live.length === 1 ? live[0]!.id : "";
+                    return (live.find((b) => b.id === HEAD_OFFICE_BRANCH_ID) ?? live[0])?.id ?? "";
                 });
             } catch {
-                if (!cancelled) toast.error("Could not load branches — opening stock will be imported without a location");
+                if (!cancelled) toast.error("Could not load branches — opening stock will be imported at Head Office");
             }
         })();
         return () => {
@@ -623,15 +623,12 @@ export function ItemImportPanel() {
                                 value={openingBranchId}
                                 onChange={(e) => setOpeningBranchId(e.target.value)}
                             >
-                                <option value="">Not specified — counts at every branch</option>
                                 {branches.map((b) => (
                                     <option key={b.id} value={b.id}>{b.name}</option>
                                 ))}
                             </select>
                             <p className="text-[10px] text-muted-foreground">
-                                {openingBranchId
-                                    ? "The opening quantity in this file is treated as lying at this branch, so it shows up there and nowhere else. It does not make the products themselves belong to that branch — one product is still shared by every branch — and it does not change any value, only the count."
-                                    : "Leave this as-is and the opening quantity counts at every branch, which is the old behaviour. Fine for a single-branch shop; with more than one branch, adding the branch reports together will then count this stock twice."}
+                                The opening quantity in this file is treated as lying at this branch, so it shows up there and nowhere else. It does not make the products themselves belong to that branch — one product is still shared by every branch — and it does not change any value, only the count.
                             </p>
                         </div>
                     )}

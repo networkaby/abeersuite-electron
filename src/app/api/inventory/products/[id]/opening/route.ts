@@ -7,6 +7,9 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { productOpeningValue } from "@/modules/inventory/lib/stockValue";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
+import { openingBranchOnSave } from "@/modules/inventory/lib/liveStock";
+import { requireWritableBranchId } from "@/shared/lib/auth/activeBranch";
+import { auth } from "@/auth";
 
 // PUT /api/inventory/products/[id]/opening
 // Sets opening stock qty, rate, and value on a product master. Universal
@@ -32,7 +35,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     try {
         // Editing the opening moves the saved total by the change in the opening,
         // not to the opening itself — rebuilt from the ledger, same transaction.
+        const session = await auth();
         const product = await prisma.$transaction(async (tx) => {
+            const current = await tx.invProduct.findUniqueOrThrow({
+                where: { id: Number(id) }, select: { openingBranchId: true },
+            });
             await tx.invProduct.update({
                 where: { id: Number(id) },
                 data: {
@@ -40,12 +47,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
                     openingRate:      data.rate,
                     openingValue:     productOpeningValue(opening),
                     openingStockDate: null,
-                    // Clearing the quantity clears where it was lying. This route
-                    // does not otherwise touch openingBranchId, so a location set
-                    // by the importer survives an edit to the rate — but a location
-                    // left behind on a product that now opens with nothing would be
-                    // a stock location for no stock.
-                    ...(data.qty == null ? { openingBranchId: null } : {}),
+                    // Where the quantity is lying — see openingBranchOnSave.
+                    openingBranchId: openingBranchOnSave(
+                        data.qty, current.openingBranchId, () => requireWritableBranchId(req, session),
+                    ),
                 },
             });
             await recomputeProductStock(tx, [Number(id)]);

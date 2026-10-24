@@ -14,6 +14,9 @@ import { productOpeningValue } from "@/modules/inventory/lib/stockValue";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { loadLastInwardCostMap } from "@/modules/inventory/lib/valuation";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
+import { openingBranchOnSave } from "@/modules/inventory/lib/liveStock";
+import { requireWritableBranchId } from "@/shared/lib/auth/activeBranch";
+import { auth } from "@/auth";
 import * as Sentry from "@sentry/nextjs";
 
 const productInclude = {
@@ -127,6 +130,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         // NOT to the opening itself (opening 10, +50, −30 = 30; opening → 12 must
         // read 32, not 12). Same transaction, rebuilt from the ledger.
         const openingTouched = b.openingStock !== undefined || b.openingRate !== undefined;
+        // Follows the quantity the block below actually writes (`?? null`).
+        const session = openingTouched ? await auth() : null;
+        const openingBranchId = openingBranchOnSave(
+            b.openingStock ?? null, current.openingBranchId, () => requireWritableBranchId(req, session),
+        );
         const row = await prisma.$transaction(async (tx) => {
             const saved = await tx.invProduct.update({
                 where: { id },
@@ -166,10 +174,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         openingValue: productOpeningValue(b),
                         // Universal opening — no date; always from the start of the books.
                         openingStockDate: null,
-                        // A location for no stock is not a location. Setting a
-                        // quantity here leaves openingBranchId as it stands — the
-                        // importer owns it, and this form has no picker for it yet.
-                        ...(b.openingStock == null ? { openingBranchId: null } : {}),
+                        // Where the quantity is lying — see openingBranchOnSave.
+                        openingBranchId,
                     } : {}),
                     // GST classification — null clears the override and re-enables cascade.
                     ...(b.gstRateId  !== undefined ? { gstRateId:  b.gstRateId  } : {}),

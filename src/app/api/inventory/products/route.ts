@@ -12,7 +12,8 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import {
     productOpeningValue, syncProductCacheFromOpening,
 } from "@/modules/inventory/lib/stockValue";
-import { resolveActiveBranchId } from "@/shared/lib/auth/activeBranch";
+import { requireWritableBranchId, resolveActiveBranchId } from "@/shared/lib/auth/activeBranch";
+import { openingBranchOnSave } from "@/modules/inventory/lib/liveStock";
 import {
     loadProductPage, loadProductSelection, parseProductListQuery, productInclude,
 } from "@/modules/inventory/lib/productList";
@@ -86,6 +87,12 @@ export async function POST(req: Request) {
         if (error) return error;
         const b = data;
         const sku = b.sku.trim().toUpperCase();
+        // An opening quantity is counted at the branch it is entered from.
+        // Resolved before any lookup so "My branches" mode is refused at once.
+        const session = await auth();
+        const openingBranchId = openingBranchOnSave(
+            b.openingStock, null, () => requireWritableBranchId(req, session),
+        );
         // Every pre-save check at once — one round trip instead of up to ten
         // in a row. The answers are then read in the old order, so the user
         // sees the same error first as before.
@@ -136,6 +143,7 @@ export async function POST(req: Request) {
                 openingRate:      b.openingRate  ?? null,
                 openingValue:     productOpeningValue(b),
                 openingStockDate: null,
+                openingBranchId,
                 // GST classification — all null by default (resolver cascades at read time).
                 gstRateId:  b.gstRateId  ?? null,
                 hsnCode:    b.hsnCode    ?? null,
