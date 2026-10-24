@@ -4,7 +4,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
-import { normalizeProductCodes, primaryBarcode } from "@/shared/lib/inventory";
+import { normalizeProductCodes } from "@/shared/lib/inventory";
 import { findSkuCodeCollision, skuCodeCollisionMessage } from "@/shared/lib/inventory/codeCollision";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -13,21 +13,12 @@ import {
     productOpeningValue, syncProductCacheFromOpening,
 } from "@/modules/inventory/lib/stockValue";
 import { resolveActiveBranchId } from "@/shared/lib/auth/activeBranch";
-import { classifyProducts } from "@/modules/inventory/lib/movementClass";
-import { loadLiveStockMap } from "@/modules/inventory/lib/liveStock";
+import {
+    loadProductPage, loadProductSelection, parseProductListQuery, productInclude,
+} from "@/modules/inventory/lib/productList";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import * as Sentry from "@sentry/nextjs";
 import { auth } from "@/auth";
-
-const productInclude = {
-    unit: { select: { id: true, code: true, label: true } },
-    category: { select: { id: true, name: true } },
-    group: { select: { id: true, name: true } },
-    brand: { select: { id: true, name: true } },
-    warrantyTerm: { select: { id: true, name: true } },
-    gstRate: { select: { id: true, rate: true, label: true } },
-    codes: { select: { id: true, kind: true, value: true, sortOrder: true }, orderBy: { sortOrder: "asc" } },
-} as const;
 
 async function assertProductFks(data: {
     unitId: number;
@@ -79,38 +70,14 @@ export async function GET(req: NextRequest) {
             catch { activeBranchId = null; }
         }
 
-        const rows = await prisma.invProduct.findMany({
-            orderBy: { sku: "asc" },
-            include: productInclude,
-        });
-
-        // Live stock from the source of truth — NOT the InvProduct.stock /
-        // InvProductBranch caches (they drift; e.g. imported opening stock never
-        // reached the branch cache and every row showed 0). liveStock.ts owns the
-        // formula and every stock-reading route now shares it.
-        const liveStock = await loadLiveStockMap(rows, activeBranchId);
-
-        // Movement class badge (Regular/New/Slow/Non-moving/Dead) — decision
-        // support on the list; same engine as the Reorder page.
-        const movement = await classifyProducts(
-            rows.map((r) => ({ id: r.id, groupId: r.groupId, categoryId: r.categoryId, createdAt: r.createdAt })),
-            { branchId: activeBranchId },
-        );
-
-        const enriched = rows.map((r) => {
-            // null = "stock not tracked" (no opening AND no movements), shown as —.
-            const stock = liveStock.get(r.id) ?? null;
-            const m = movement.get(r.id);
-            // Derived primary barcode for list display/search/sort (the full set
-            // is `codes`, included above).
-            return {
-                ...r, stock, barcode1: primaryBarcode(r.codes),
-                movementClass: m?.movementClass ?? null,
-                daysSinceLastSale: m?.daysSinceLastSale ?? null,
-            };
-        });
-
-        return NextResponse.json(enriched);
+        // One page, searched / filtered / sorted over ALL products on the
+        // server (productList.ts). `idsOnly=1` is the edit grid's "select all
+        // filtered": every match, as the small row bulk-apply needs.
+        const query = parseProductListQuery(searchParams, activeBranchId);
+        if (searchParams.get("idsOnly") === "1") {
+            return NextResponse.json({ rows: await loadProductSelection(query) });
+        }
+        return NextResponse.json(await loadProductPage(query));
     } catch (e) {
         return handleApiError(e, "Failed to fetch products");
     }

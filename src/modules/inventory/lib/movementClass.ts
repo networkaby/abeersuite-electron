@@ -184,12 +184,17 @@ export async function classifyProducts(
 ): Promise<Map<number, MovementInfo>> {
     const from = new Date(Date.now() - REORDER_HISTORY_DAYS * DAY_MS);
     from.setHours(0, 0, 0, 0);
+    // Read only the asked products' history. Rows for any other product were
+    // read and then never looked at — so a 50-row products page paid for the
+    // whole catalogue's year of ledger and sale lines. Same answer, less read.
+    const productIds = { in: products.map((p) => p.id) };
 
     const [{ bandsByProduct, newItemDays, clearanceCutoffPct }, dayRows, saleLines, valuations] = await Promise.all([
         resolveBandsForProducts(products),
         prisma.invStockLedger.groupBy({
             by: ["productId", "date"],
             where: {
+                productId: productIds,
                 ...(opts.branchId ? { branchId: opts.branchId } : {}),
                 universalVoucher: { status: "POSTED" },
                 date: { gte: from },
@@ -199,6 +204,7 @@ export async function classifyProducts(
         }),
         prisma.voucherInventoryLine.findMany({
             where: {
+                productId: productIds,
                 universalVoucher: {
                     type: { in: [...SALE_TYPES] },
                     status: "POSTED",
