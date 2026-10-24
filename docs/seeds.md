@@ -295,6 +295,15 @@ back only that one permission from only those roles:
 pnpm seed:sync-permissions --grant ui:sidebar:settings:screen-size --revoke-from R2,R3 --apply
 ```
 
+The R1 top-up on its own, without a full seed — every non-`systemOnly` catalog permission
+the role lacks (lower CRUD rungs implied by a held higher one are skipped). It adds only,
+so anything deliberately taken away comes back: read the dry-run list first.
+
+```bash
+pnpm seed:sync-permissions --grant-missing --roles R1                       # preview
+pnpm seed:sync-permissions --grant-missing --roles R1 --apply --no-revoke   # write
+```
+
 It creates only the rows the catalog has and the DB lacks, grants them, and bumps
 `tokensValidFrom` for the affected staff (permissions ride the JWT, so a grant is invisible
 until the holder signs in again). Pass `--no-revoke` during trading hours — the grant still

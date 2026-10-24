@@ -40,6 +40,7 @@
 //   pnpm seed:sync-permissions --grant <id> --roles R1,R2,R3    # dry run, with grants
 //   pnpm seed:sync-permissions --grant <id> --roles R1,R2,R3 --apply
 //   pnpm seed:sync-permissions --grant <id> --revoke-from R2,R3 --apply   # take it back
+//   pnpm seed:sync-permissions --grant-missing --roles R1 [--apply]   # every non-systemOnly id R1 lacks
 //
 //   --no-revoke   leave sessions alone (see below)
 //
@@ -56,6 +57,7 @@ import { Pool } from "pg";
 import * as dotenv from "dotenv";
 import { PERMISSION_CATALOG } from "./lib/codeOwnedCatalog";
 import { assertNotCounterReplica } from "./lib/assertNotCounter";
+import { crudSatisfied } from "../../src/shared/lib/auth/crudLadder";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
@@ -68,6 +70,7 @@ const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 const apply = process.argv.includes("--apply");
 const noRevoke = process.argv.includes("--no-revoke");
+const grantMissing = process.argv.includes("--grant-missing");
 
 /** `--flag value` — returns undefined when the flag is absent or has no value. */
 function flag(name: string): string | undefined {
@@ -198,6 +201,48 @@ async function main(): Promise<void> {
             });
             changed += res.count;
             console.log(`  → ${res.count} grant(s) removed.`);
+        }
+    }
+
+    // ── 2b. Every catalog permission the roles lack ─────────────────────────
+    // The full seed's R1 top-up (personal-bootstrap Step 3), without the rest of
+    // the seed. Adds only — and resurrects anything deliberately taken away, so
+    // read the dry-run list first.
+    if (grantMissing) {
+        if (grantId) {
+            console.error(`\n✖ --grant-missing and --grant are separate runs. Nothing changed.\n`);
+            process.exit(1);
+        }
+        if (roleIds.length === 0) {
+            console.error(`\n✖ --grant-missing needs --roles (e.g. --roles R1).\n`);
+            process.exit(1);
+        }
+        const roles = await prisma.role.findMany({ where: { id: { in: roleIds } }, select: { id: true } });
+        const unknown = roleIds.filter((r) => !roles.some((x) => x.id === r));
+        if (unknown.length) {
+            console.error(`\n✖ Unknown role(s): ${unknown.join(", ")}. Nothing changed.\n`);
+            process.exit(1);
+        }
+        const grantable = PERMISSION_CATALOG.filter((p) => !p.systemOnly);
+        const held = await prisma.rolePermission.findMany({
+            where: { roleId: { in: roleIds } },
+            select: { roleId: true, permissionId: true },
+        });
+        for (const roleId of roleIds) {
+            const has = new Set(held.filter((h) => h.roleId === roleId).map((h) => h.permissionId));
+            // A lower CRUD rung (create / edit) is implied by a held higher one and is
+            // never stored (crudLadder.ts) — granting it would only be noise.
+            const toGrant = grantable.filter((p) => !has.has(p.id) && !crudSatisfied(has, p.id));
+            console.log(`\n  ${roleId}: ${toGrant.length} missing of ${grantable.length} grantable (lower CRUD rungs implied, skipped)`);
+            for (const p of toGrant) console.log(`      + ${p.id}  "${p.label}"`);
+            if (apply && toGrant.length) {
+                const res = await prisma.rolePermission.createMany({
+                    data: toGrant.map((p) => ({ roleId, permissionId: p.id })),
+                    skipDuplicates: true,
+                });
+                changed += res.count;
+                console.log(`  → ${res.count} grant(s) added to ${roleId}.`);
+            }
         }
     }
 
