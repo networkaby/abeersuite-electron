@@ -16,7 +16,8 @@ secrets are masked, inputs are not. Anyone with read access to Actions can read 
 in `.env.local`, update the `DIRECT_DATABASE_URL` repo secret, then delete the old
 runs (`gh run delete <id>`) or accept that the old password is burned.
 
-Do item 2 at the same time, or the new password lands in the logs too.
+The app still sends the URL (item 2 was dropped), so the new password will show in
+new backup run logs as well — keep the backup repo private.
 
 ## 2. ~~Stop sending the database URL from the app~~ — dropped (2026-10-24)
 

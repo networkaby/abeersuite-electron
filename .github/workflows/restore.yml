@@ -24,13 +24,27 @@ jobs:
   restore:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # target_db_url is NOT put in env here: a job-level env value is printed in every
+    # step's log header, and an input is not masked the way a secret is. The first
+    # step reads it straight from the event file, masks it, and only then exports it.
     env:
-      DIRECT_DATABASE_URL: ${{ github.event.inputs.target_db_url }}
       DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
       DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
       DROPBOX_REFRESH_TOKEN: ${{ secrets.DROPBOX_REFRESH_TOKEN }}
       FILE_PATH: ${{ github.event.inputs.file_path }}
     steps:
+      - name: Hide the target database URL in the logs
+        run: |
+          set -euo pipefail
+          URL=$(jq -r '.inputs.target_db_url // empty' "$GITHUB_EVENT_PATH")
+          if [ -z "$URL" ]; then echo "target_db_url input is empty."; exit 1; fi
+          # Masks the whole URL and the password on its own, in every later line.
+          echo "::add-mask::$URL"
+          NOPROTO="${URL#*://}"
+          USERINFO="${NOPROTO%@*}"
+          case "$USERINFO" in *:*) echo "::add-mask::${USERINFO#*:}" ;; esac
+          echo "DIRECT_DATABASE_URL=$URL" >> "$GITHUB_ENV"
+
       - name: Checkout repo
         uses: actions/checkout@v4
 
@@ -101,8 +115,8 @@ jobs:
       # here instead of silently dropping data.
       - name: Sync schema to current code (additive only)
         env:
-          DIRECT_URL: ${{ github.event.inputs.target_db_url }}
-          DATABASE_URL: ${{ github.event.inputs.target_db_url }}
+          DIRECT_URL: ${{ env.DIRECT_DATABASE_URL }}
+          DATABASE_URL: ${{ env.DIRECT_DATABASE_URL }}
         run: pnpm prisma db push
 
       - name: Append run to Dropbox log
