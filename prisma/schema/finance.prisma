@@ -81,6 +81,13 @@ model UniversalVoucher {
   // hand — Prisma cannot declare it, and a replica does not carry it. Keep it
   // out of any generated migration's DROP list.
   voucherNo                 String?
+  // Bill key — a one-time id the POS screen makes when a new bill starts and
+  // sends on every Save of that bill. Unique, so a retried Save whose first try
+  // committed but lost its reply finds this row and answers "already saved"
+  // instead of writing a second bill (src/app/api/pos/sale/route.ts). Null for
+  // every other voucher and every older sale; Postgres lets NULLs repeat under a
+  // unique index. Never shown and never edited.
+  requestKey                String?                    @unique
   date                      DateTime                   @db.Date
   description               String
   narration                 String?

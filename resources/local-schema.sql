@@ -1392,6 +1392,7 @@ CREATE TABLE IF NOT EXISTS "UniversalVoucher" (
     "id" SERIAL NOT NULL,
     "type" TEXT NOT NULL,
     "voucherNo" TEXT,
+    "requestKey" TEXT,
     "date" DATE NOT NULL,
     "description" TEXT NOT NULL,
     "narration" TEXT,
@@ -1417,6 +1418,8 @@ ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "type" TEXT NOT NULL;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "voucherNo" TEXT;
 ALTER TABLE "UniversalVoucher" ALTER COLUMN "voucherNo" DROP NOT NULL;
+ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "requestKey" TEXT;
+ALTER TABLE "UniversalVoucher" ALTER COLUMN "requestKey" DROP NOT NULL;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "date" DATE NOT NULL;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "description" TEXT NOT NULL;
 ALTER TABLE "UniversalVoucher" ADD COLUMN IF NOT EXISTS "narration" TEXT;
@@ -5452,6 +5455,9 @@ CREATE INDEX IF NOT EXISTS "AuditLog_createdAt_idx" ON "AuditLog"("createdAt");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "AuditLog_restoredAt_idx" ON "AuditLog"("restoredAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "UniversalVoucher_requestKey_key" ON "UniversalVoucher"("requestKey");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "UniversalVoucher_status_date_idx" ON "UniversalVoucher"("status", "date");
