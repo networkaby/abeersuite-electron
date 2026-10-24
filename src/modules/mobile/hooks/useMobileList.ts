@@ -6,6 +6,7 @@ import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { MOBILE_FRESH_MS } from "@/shared/lib/constants/polling";
 import { loadAnswer, mobileKey, offlineNote } from "../lib/mobileCache";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 /** A server-paged list API's reply. `more` is the query to send for the next page
  *  (a cursor, and whatever else must carry over — a running balance). */
@@ -46,24 +47,28 @@ export function useMobileList<T>(
     const latest = useRef(key);
     const shownAt = useRef<number | null>(null);
 
-    const loadFirst = useCallback(async (force: boolean) => {
+    const readFirst = useCallback((force: boolean) => {
         const asked = key;
+        return loadAnswer<Page<T>>(key, firstUrl, { freshMs, since: true, force }, (page, at) => {
+            if (latest.current !== asked) return;
+            shownAt.current = at;
+            setItems(page.items);
+            setHasMore(page.hasMore);
+            setMore(page.more ?? null);
+        })
+            .catch((e) => {
+                if (latest.current === asked) setError(offlineNote(extractApiError(e, "Could not load"), shownAt.current));
+            })
+            .finally(() => {
+                if (latest.current === asked) setLoading(false);
+            });
+    }, [key, firstUrl, freshMs]);
+    /** Refresh: the spinner and a clean error first, then the read. */
+    const loadFirst = useCallback(async (force: boolean) => {
         setLoading(true);
         setError(null);
-        try {
-            await loadAnswer<Page<T>>(key, firstUrl, { freshMs, since: true, force }, (page, at) => {
-                if (latest.current !== asked) return;
-                shownAt.current = at;
-                setItems(page.items);
-                setHasMore(page.hasMore);
-                setMore(page.more ?? null);
-            });
-        } catch (e) {
-            if (latest.current === asked) setError(offlineNote(extractApiError(e, "Could not load"), shownAt.current));
-        } finally {
-            if (latest.current === asked) setLoading(false);
-        }
-    }, [key, firstUrl, freshMs]);
+        await readFirst(force);
+    }, [readFirst]);
 
     const loadMore = useCallback(async () => {
         if (!more) return;
@@ -83,16 +88,21 @@ export function useMobileList<T>(
         }
     }, [key, firstUrl, more]);
 
-    useEffect(() => {
-        latest.current = key;
-        // Another day's rows must not sit under this day's date while it loads;
-        // a saved answer for this one comes back from the device in milliseconds.
+    // Another day's rows must not sit under this day's date while it loads;
+    // a saved answer for this one comes back from the device in milliseconds.
+    // Cleared while rendering, so the old rows never paint under the new key.
+    if (useValueChange(key)) {
         setItems([]);
         setHasMore(false);
         setMore(null);
+        setLoading(true);
+        setError(null);
+    }
+    useEffect(() => {
+        latest.current = key;
         shownAt.current = null;
-        void loadFirst(false);
-    }, [key, loadFirst]);
+        void readFirst(false);
+    }, [key, readFirst]);
 
     return {
         items,

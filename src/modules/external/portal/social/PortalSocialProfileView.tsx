@@ -39,17 +39,15 @@ export default function PortalSocialProfileView() {
     const [posting, setPosting] = useState(false);
     const [friendBusy, setFriendBusy] = useState(false);
 
-    const load = useCallback(async () => {
-        try {
-            const res = await axios.get<ProfileResponse>(`/api/portal/social/actor/${kind}/${id}`);
+    const load = useCallback(() => axios.get<ProfileResponse>(`/api/portal/social/actor/${kind}/${id}`)
+        .then((res) => {
             setData(res.data);
-        } catch (e) {
+        })
+        .catch((e) => {
             if (axios.isAxiosError(e) && e.response?.status === 404) setNotFound(true);
             else toast.error("Failed to load profile");
-        } finally {
-            setLoading(false);
-        }
-    }, [kind, id]);
+        })
+        .finally(() => setLoading(false)), [kind, id]);
 
     useEffect(() => { void load(); }, [load]);
 

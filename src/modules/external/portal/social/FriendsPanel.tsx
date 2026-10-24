@@ -12,6 +12,7 @@ import UserAvatar from "@/shared/components/UserAvatar";
 import { extractApiError } from "@/shared/lib/api";
 import { Search, UserPlus, Check, X, Clock } from "lucide-react";
 import { type Actor, portalActorHref } from "./shared";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 type SearchStatus = "friend" | "pending_out" | "pending_in" | "none";
 interface SearchResult { actor: Actor; status: SearchStatus; requestId?: number }
@@ -26,19 +27,24 @@ export function FriendsPanel({ friends, onChanged }: { friends: Actor[]; onChang
     const [searching, setSearching] = useState(false);
     const [busyId, setBusyId] = useState<string | null>(null);
 
-    const loadRequests = useCallback(async () => {
-        try {
-            const r = await axios.get<FriendRequest[]>("/api/portal/social/requests");
+    const loadRequests = useCallback(() => axios.get<FriendRequest[]>("/api/portal/social/requests")
+        .then((r) => {
             setRequests(r.data);
-        } catch { /* requests panel is non-critical */ }
-    }, []);
+        })
+        .catch(() => {
+            /* requests panel is non-critical */
+        }), []);
     useEffect(() => { void loadRequests(); }, [loadRequests]);
 
-    // Debounced search.
+    // Debounced search. Each keystroke clears / shows "searching" while rendering;
+    // the effect only waits and reads.
+    if (useValueChange(q)) {
+        if (!q.trim()) { setResults([]); setSearching(false); }
+        else setSearching(true);
+    }
     useEffect(() => {
         const term = q.trim();
-        if (!term) { setResults([]); setSearching(false); return; }
-        setSearching(true);
+        if (!term) return;
         const t = setTimeout(async () => {
             try {
                 const r = await axios.get<SearchResult[]>(`/api/portal/social/search?q=${encodeURIComponent(term)}`);
