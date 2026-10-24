@@ -22,10 +22,14 @@ import { useState } from "react";
  *
  * Only set THIS component's state under it. A form library's reset(), a store
  * write or a request still belongs in an effect.
+ *
+ * A function is a fine value to watch (a useCallback that changes with its
+ * inputs). It is kept in a box: handed to useState / setState bare, React would
+ * CALL it — as a lazy initialiser or an updater — and store what it returned.
  */
 export function useValueChange<T>(value: T, ...initial: [T] | []): boolean {
-    const [seen, setSeen] = useState<T>(initial.length ? initial[0] as T : value);
-    if (Object.is(seen, value)) return false;
-    setSeen(value);
+    const [seen, setSeen] = useState<{ value: T }>(() => ({ value: initial.length ? initial[0] as T : value }));
+    if (Object.is(seen.value, value)) return false;
+    setSeen({ value });
     return true;
 }
