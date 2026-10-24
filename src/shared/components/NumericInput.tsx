@@ -54,9 +54,7 @@ export function NumericInput({ value, onValueChange, mode = "digits", min, max, 
 
     // While the field has focus the draft is the truth, so a half-typed "1."
     // survives. Once focus leaves, the caller's value wins again.
-    React.useEffect(() => {
-        if (!focused) setDraft(bound);
-    }, [bound, focused]);
+    const shown = focused ? draft : bound;
 
     const commit = React.useCallback(
         (raw: string) => {
@@ -78,10 +76,11 @@ export function NumericInput({ value, onValueChange, mode = "digits", min, max, 
         <Input
             {...rest}
             type="text"
-            value={draft}
+            value={shown}
             inputMode={inputMode ?? (mode === "digits" ? "numeric" : "decimal")}
             autoComplete="off"
             onFocus={(e) => {
+                setDraft(bound);
                 setFocused(true);
                 rest.onFocus?.(e);
             }}

@@ -46,7 +46,7 @@
  *    `MAX_AGE_MS` instead. Hard-deletes are rare and gated.
  */
 
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import axios from "axios";
 import { localDb, type LocalTicketRow } from "@/shared/lib/browser/localDb";
 import { useDebouncedValue } from "./useDebouncedValue";
@@ -198,13 +198,28 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
     const key = viewKey(apiPath, query);
     const cacheable = search === "";
 
+    // A new read (another view, search, or a reload/refresh tick) starts from
+    // "loading" with no error — set here, while rendering, rather than at the top
+    // of the fetch effect, so the screen never paints the old flags first.
+    const readId = JSON.stringify([key, search, tick]);
+    const [startedRead, setStartedRead] = useState(readId);
+    if (startedRead !== readId) {
+        setStartedRead(readId);
+        setLoading(true);
+        setError(null);
+        setStale(false);
+    }
+
     const checkedAtRef = useRef<string | null>(null);
     const rowsRef       = useRef<T[]>([]);
-    rowsRef.current = rows;
     // The caller rebuilds `sort` every render; afterOwnWrite reads the latest through
     // this rather than carrying it in a dependency list.
     const sortRef = useRef(sort);
-    sortRef.current = sort;
+    // Layout effect: both refs are current before any effect or handler below reads them.
+    useLayoutEffect(() => {
+        rowsRef.current = rows;
+        sortRef.current = sort;
+    });
     const forceNext  = useRef(false);
 
     /** Rows this board has just written itself, each held against any copy that comes
@@ -288,10 +303,6 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
         let cancelled = false;
         const force = forceNext.current;
         forceNext.current = false;
-
-        setLoading(true);
-        setError(null);
-        setStale(false);
 
         void (async () => {
             let cached: CachedView<T> | null = null;

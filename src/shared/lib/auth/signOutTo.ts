@@ -74,10 +74,15 @@ if (typeof window !== "undefined" && typeof BroadcastChannel !== "undefined") {
  * is exactly the "stay on your own subdomain" rule we want.
  *
  * `assign` rather than `replace`: signing out is a real navigation, and Back
- * should return you to a signed-out page, not silently re-enter the app.
+ * should return you to a signed-out page, not silently re-enter the app. And a
+ * full load rather than `router.push`: the session cookie is gone, and every page
+ * held in memory was rendered for the session that just ended.
+ *
+ * `notice` — the reason already on screen here (idle, counter released); see
+ * markDeliberateSignOut. A plain Sign out click passes none.
  */
-export async function signOutTo(path: string): Promise<void> {
-    markDeliberateSignOut();
+export async function signOutTo(path: string, notice: string | null = null): Promise<void> {
+    markDeliberateSignOut(notice);
     await signOut({ redirect: false });
     window.location.assign(path);
 }

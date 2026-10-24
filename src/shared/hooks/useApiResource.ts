@@ -64,67 +64,57 @@ export function useApiResource<T>(
     error: string | null;
     reload: () => Promise<T | undefined>;
 } {
-    const [data, setData] = useState<T | undefined>(opts.initial);
-    const [loading, setLoading] = useState(url !== null);
-    const [refreshing, setRefreshing] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [initial] = useState(opts.initial);
     const [tick, setTick] = useState(0);
+    // The last read that finished: which URL + tick it answered, and the data in
+    // hand with the URL that data belongs to. A failed read moves `url`/`tick`
+    // and sets `error` but leaves `data`/`dataUrl` alone. `loading`, `refreshing`,
+    // `error` and what `data` shows are all worked out from this during render —
+    // a read in flight is simply "this URL + tick has not settled yet".
+    const [settled, setSettled] = useState<{
+        url: string | null; tick: number; data: T | undefined; dataUrl: string | null; error: string | null;
+    }>({ url: null, tick: -1, data: initial, dataUrl: null, error: null });
 
-    // Which URL the data in state belongs to, so a URL change can be told from a
-    // reload of the same one.
-    const loadedUrl = useRef<string | null>(null);
     // reload() callers waiting for the read their call started.
     const waiting = useRef<((value: T | undefined) => void)[]>([]);
 
     useEffect(() => {
-        if (url === null) {
-            setLoading(false);
-            setRefreshing(false);
-            return;
-        }
+        if (url === null) return;
 
         let cancelled = false;
         const mine = waiting.current;
         waiting.current = [];
         const settle = (value: T | undefined) => { for (const resolve of mine) resolve(value); };
-        const sameUrl = loadedUrl.current === url;
-        const keepVisible = (sameUrl || opts.keepPrevious === true) && data !== undefined;
-
-        if (keepVisible) setRefreshing(true);
-        else {
-            setLoading(true);
-            // Data from a different URL must not sit under the new heading.
-            if (!sameUrl && loadedUrl.current !== null) setData(opts.initial);
-        }
-        setError(null);
 
         axios
             .get<T>(url)
             .then((res) => {
                 if (cancelled) return;
-                setData(res.data);
-                loadedUrl.current = url;
+                setSettled({ url, tick, data: res.data, dataUrl: url, error: null });
                 settle(res.data);
             })
             .catch((e) => {
                 if (cancelled) return;
-                setError(extractApiError(e, "Failed to load"));
+                setSettled((s) => ({ ...s, url, tick, error: extractApiError(e, "Failed to load") }));
                 settle(undefined);
-            })
-            .finally(() => {
-                if (cancelled) return;
-                setLoading(false);
-                setRefreshing(false);
             });
 
         return () => {
             cancelled = true;
             settle(undefined);
         };
-        // `data` is read only to decide whether anything is worth keeping on
-        // screen; re-running on every payload would loop.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [url, tick]);
+
+    const pending = url !== null && (settled.url !== url || settled.tick !== tick);
+    // Data from a different URL must not sit under the new heading — unless the
+    // caller asked for it (`keepPrevious`), or there is no URL to head it at all.
+    const data = url === null || settled.dataUrl === url || opts.keepPrevious === true
+        ? settled.data
+        : initial;
+    const keepVisible = data !== undefined && (settled.dataUrl === url || opts.keepPrevious === true);
+    const loading = pending && !keepVisible;
+    const refreshing = pending && keepVisible;
+    const error = pending ? null : settled.error;
 
     const reload = useCallback(() => new Promise<T | undefined>((resolve) => {
         waiting.current.push(resolve);

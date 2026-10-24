@@ -5,7 +5,7 @@ import { UserPlus, ArrowRight, ShieldCheck, Wrench, Building2, User } from "luci
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
-import { useForm, type Resolver } from "react-hook-form";
+import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
 import { useRouter } from "next/navigation";
@@ -83,39 +83,47 @@ export default function QuickTicketButton() {
     const {
         open, step, identity, billingAccountId,
         setStep, setIdentity, setBillingAccountId,
-        setInitialPipelineId, reset,
+        initialPipelineId, setInitialPipelineId, reset,
     } = useQuickTicketStore();
     const [priorities, setPriorities] = useState<Priority[]>([]);
     const [pipelines, setPipelines] = useState<PipelineOption[]>([]);
     const [selectedPipelineId, setSelectedPipelineId] = useState<string>("P1");
     const [isWarranty, setIsWarranty] = useState(false);
     const [dataLoaded, setDataLoaded] = useState(false);
-    const [linkedCompanies, setLinkedCompanies] = useState<LinkedCompany[]>([]);
+    const linkedCompanies: LinkedCompany[] =
+        identity?.type === "customer" ? identity.linkedCompanies ?? [] : [];
 
     const ticketForm = useForm<TicketFormData>({
         resolver: zodResolver(ticketSchema) as Resolver<TicketFormData>,
         defaultValues: { priority: "MEDIUM" },
     });
-    const selectedPriority = ticketForm.watch("priority") ?? "MEDIUM";
+    const selectedPriority = useWatch({ control: ticketForm.control, name: "priority" }) ?? "MEDIUM";
+    const purchaseDate = useWatch({ control: ticketForm.control, name: "purchaseDate" });
+
+    // Each open starts clean. The dialog's own fields reset while rendering, so the
+    // last ticket's choices never paint; the form and the store are reset below.
+    const [seenOpen, setSeenOpen] = useState(false);
+    if (open !== seenOpen) {
+        setSeenOpen(open);
+        if (open) {
+            setIsWarranty(false);
+            if (initialPipelineId) setSelectedPipelineId(initialPipelineId);
+        }
+    }
 
     useEffect(() => {
         if (!open) return;
-        setIsWarranty(false);
         ticketForm.reset({ priority: "MEDIUM" });
-        setLinkedCompanies([]);
         setBillingAccountId(null);
 
         const pendingPipelineId = useQuickTicketStore.getState().initialPipelineId;
-        if (pendingPipelineId) {
-            setSelectedPipelineId(pendingPipelineId);
-            setInitialPipelineId(null);
-        }
+        if (pendingPipelineId) setInitialPipelineId(null);
 
-        const load = async () => {
-            const [prioRes, pipeRes] = await Promise.all([
-                !dataLoaded ? axios.get<Priority[]>("/api/priorities") : Promise.resolve(null),
-                !dataLoaded ? axios.get<PipelineOption[]>("/api/pipelines") : Promise.resolve(null),
-            ]);
+        // Load the pickers each time the dialog opens (only the first time per latch).
+        void Promise.all([
+            !dataLoaded ? axios.get<Priority[]>("/api/priorities") : Promise.resolve(null),
+            !dataLoaded ? axios.get<PipelineOption[]>("/api/pipelines") : Promise.resolve(null),
+        ]).then(([prioRes, pipeRes]) => {
             if (prioRes) setPriorities(prioRes.data);
             if (pipeRes) {
                 const fetched = pipeRes.data as PipelineOption[];
@@ -129,8 +137,7 @@ export default function QuickTicketButton() {
                 const def = pipelines.find((p) => p.isDefault) ?? pipelines[0];
                 if (def) setSelectedPipelineId(def.id);
             }
-        };
-        load();
+        });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load the pickers each time the dialog opens
     }, [open]);
 
@@ -139,17 +146,6 @@ export default function QuickTicketButton() {
     // the signal makes the NEXT open refetch — deliberately not a refetch now,
     // which would swap the option lists under a ticket being filled in.
     useRealtimeTopics(["tickets"], () => { setDataLoaded(false); }, !open);
-
-    useEffect(() => {
-        if (!identity) return;
-        setBillingAccountId(identity.accountId);
-        if (identity.type === "customer") {
-            setLinkedCompanies(identity.linkedCompanies ?? []);
-        } else {
-            setLinkedCompanies([]);
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply the identity once per identity change
-    }, [identity]);
 
     const closeModal = () => reset();
 
@@ -163,6 +159,7 @@ export default function QuickTicketButton() {
             linkedCompanies: p.linkedCompanies,
         };
         setIdentity(picked);
+        setBillingAccountId(picked.accountId);
         setStep("ticket");
         toast.success(`Picked: ${picked.name}`);
     };
@@ -374,7 +371,7 @@ export default function QuickTicketButton() {
                                             <div className="space-y-2">
                                                 <FieldLabel>Purchase Date</FieldLabel>
                                                 <TallyDateInput
-                                                    value={ticketForm.watch("purchaseDate") ?? ""}
+                                                    value={purchaseDate ?? ""}
                                                     onValueChange={(iso) => ticketForm.setValue("purchaseDate", iso, { shouldValidate: true })}
                                                 />
                                             </div>

@@ -4,8 +4,7 @@ import { useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
-import { signOut } from "next-auth/react";
-import { markDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
+import { signOutTo } from "@/shared/lib/auth/signOutTo";
 import { captureMyDay } from "@/shared/lib/hr/myDay";
 import { idleLimitMsFor } from "@/shared/lib/hr/dutyTime";
 import { IDLE_WARNING_MS } from "@/shared/lib/constants/session";
@@ -154,8 +153,7 @@ export default function ActivityPulse() {
 
             // ── Idle: warn, then end it ─────────────────────────────────────────
             if (!inPhoneApp && idleFor >= idleLimitMs) {
-                markDeliberateSignOut(IDLE_SIGNED_OUT_MESSAGE);   // explained here, and in the other windows
-                toast.error(IDLE_SIGNED_OUT_MESSAGE);
+                toast.error(IDLE_SIGNED_OUT_MESSAGE);   // explained here, and (signOutTo's notice) in the other windows
                 // The day's figures, read while the session is still good, so the
                 // login screen can show him what the day came to when he returns.
                 // `lastInputAt` is the whole point on this path: the gap from the last
@@ -163,8 +161,7 @@ export default function ActivityPulse() {
                 // the stretch from that pulse to his last real keypress was work, and
                 // only this ref knows when that was.
                 void captureMyDay({ lastInputAt: lastInputAt.current })
-                    .then(() => signOut({ redirect: false }))
-                    .finally(() => window.location.assign("/staff/login"));
+                    .finally(() => signOutTo("/staff/login", IDLE_SIGNED_OUT_MESSAGE));
                 return;
             }
             if (!inPhoneApp && !warned.current && idleFor >= idleLimitMs - IDLE_WARNING_MS) {
