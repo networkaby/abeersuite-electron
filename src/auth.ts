@@ -23,9 +23,12 @@ import { localSignOutAt, markLocalSignOut } from "@/shared/lib/auth/localSignOut
  * Auth.js would otherwise call it `__Secure-authjs.session-token` on https and
  * `authjs.session-token` on http — and it derives the token's encryption key from the
  * secret AND that name (`salt = cookieName` in @auth/core/jwt). A `WRITE_MODE=v_live`
- * till relays its writes to the office with its own cookie, so the office must be able
- * to decrypt a token minted on http://127.0.0.1: same secret (shipped in counter.env),
- * same name (this). Only the `secure` flag differs: on for Vercel (https), off elsewhere.
+ * till used to relay its writes to the office with its own cookie, so the office had to
+ * decrypt a token minted on http://127.0.0.1 — hence one name. Since 2026-10-13 each
+ * machine has its own secret and a till signs in at the office with its counter key
+ * (`counter/relayKey.ts`), so the cookie never leaves the till; the single name stays so
+ * nobody is signed out again. Only the `secure` flag differs: on for Vercel (https), off
+ * elsewhere.
  *
  * Pinning the name changed it on the web deployment, so every office user signed in
  * once more after that deploy; old `__Secure-` cookies linger harmlessly until expiry.
