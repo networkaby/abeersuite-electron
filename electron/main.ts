@@ -38,7 +38,8 @@ try {
 //
 // (2) is what makes installation unattended. This variant is internal only, so the
 // company's own credentials travel inside the installer rather than being copied onto
-// each counter by hand. `scripts/counterEnv.ts` fixes exactly which keys go in and
+// each counter by hand — all but the database password, which the till fetches from the
+// office at start with the baked COUNTER_INSTALL_SECRET (electron/remoteConfig.ts). `scripts/counterEnv.ts` fixes exactly which keys go in and
 // `scripts/verify-package.ts` fails the build if anything else does — the 0.1.0 build
 // shipped the build machine's whole ~60-key `.env`, payment salts included, by accident.
 //
@@ -74,10 +75,8 @@ try {
  * AUTH_SECRET is absent from this list on purpose — `ensureAuthSecret` guarantees it.
  */
 const REQUIRED_ENV: Array<{ keys: string[]; why: string }> = [
-    {
-        keys: ["DATABASE_URL"],
-        why: "no database connection — every page fails",
-    },
+    // DATABASE_URL is not checked here: it is fetched from the office once the app is
+    // ready (electron/remoteConfig.ts), which reports its own failure.
     {
         keys: ["INTERNAL_STAFF_EMAIL_DOMAINS", "COMPANY_DOMAIN"],
         why: "staff login refuses every address — the domain allowlist fails closed",
@@ -1074,6 +1073,7 @@ import {
     type RunResult,
 } from "./backupManager";
 import { provisionLocalDatabase } from "./localDbProvisioner";
+import { loadRemoteConfig } from "./remoteConfig";
 import { startSyncWorker, stopSyncWorker } from "./syncManager";
 import { wipeReplica, replicaBindsThisPc, countPendingOutbox, counterBoundToThisPc, replicaHasSyncedData } from "./replicaWipe";
 import { waitForReplicaReady } from "./waitForReplica";
@@ -1771,6 +1771,20 @@ app.whenReady().then(async () => {
     onNextServerRestarted(() => {
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.reload();
     });
+
+    if (app.isPackaged) {
+        sendBootProgress("Fetching settings from the office…");
+        const problem = await loadRemoteConfig(sendBootProgress);
+        if (problem) {
+            dialog.showErrorBox(
+                "AbeerSuite — could not get database settings",
+                `AbeerSuite gets its database settings from the office, but ${problem}.\n\n` +
+                "After the first successful start, the PC keeps a locked copy and starts offline too."
+            );
+            app.exit(1);
+            return;
+        }
+    }
 
     sendBootProgress("Starting database…");
     try {
