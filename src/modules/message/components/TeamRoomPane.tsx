@@ -11,7 +11,7 @@
  * not notify for it twice — see that file for the cross-tab mirror.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Send, MessageSquare, Loader2, Hash, AtSign, Bell, ChevronLeft } from "lucide-react";
@@ -24,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { INBOX_MESSAGES_POLL_MS } from "@/shared/lib/constants/polling";
 import { writeCache } from "@/shared/lib/browser/pollCache";
 import { initials } from "@/shared/lib/format/initials";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 /** Cross-tab mirror of "which room is open" — see `GlobalInboxListener.tsx`'s reader. */
 const ACTIVE_ROOM_KEY = "inbox-active-room:v1";
@@ -134,25 +135,27 @@ export default function TeamRoomPane({
     const [sending, setSending] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const onReadRef = useRef(onRead);
-    onReadRef.current = onRead;
+    useLayoutEffect(() => { onReadRef.current = onRead; });
 
-    const loadMessages = useCallback(async (id: string) => {
+    // Another room: the old messages go and the spinner shows while rendering.
+    if (useValueChange(roomId, null)) {
         setMessages([]);
         setLoadingMsgs(true);
-        try {
-            const res = await axios.get<Message[]>(`/api/inbox/rooms/${id}/messages`);
-            setMessages(res.data);
-            onReadRef.current?.(id);
-            // GET /messages marks the room read server-side — tell the Sidebar badge to drop
-            window.dispatchEvent(new CustomEvent("inbox:read"));
-        } catch {
-            toast.error("Failed to load messages");
-        } finally {
-            setLoadingMsgs(false);
-        }
-    }, []);
-
-    useEffect(() => { void loadMessages(roomId); }, [roomId, loadMessages]);
+    }
+    useEffect(() => {
+        let cancelled = false;
+        axios.get<Message[]>(`/api/inbox/rooms/${roomId}/messages`)
+            .then((res) => {
+                if (cancelled) return;
+                setMessages(res.data);
+                onReadRef.current?.(roomId);
+                // GET /messages marks the room read server-side — tell the Sidebar badge to drop
+                window.dispatchEvent(new CustomEvent("inbox:read"));
+            })
+            .catch(() => { if (!cancelled) toast.error("Failed to load messages"); })
+            .finally(() => { if (!cancelled) setLoadingMsgs(false); });
+        return () => { cancelled = true; };
+    }, [roomId]);
 
     // Tell GlobalInboxListener which room is open so it skips it (no double-notify).
     // The CustomEvent covers a listener in THIS tab; the localStorage mirror covers

@@ -250,14 +250,13 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
         return () => window.removeEventListener("resize", fit);
     }, []);
 
-    const load = useCallback(async () => {
-        try {
-            const { data } = await axios.get<{ items: Alert[] }>("/api/messages/alerts");
+    const load = useCallback(() => axios.get<{ items: Alert[] }>("/api/messages/alerts")
+        .then(({ data }) => {
             setItems(data.items);
             setLoaded(true);
             setNow(Date.now());
-        } catch { /* the next signal tries again */ }
-    }, []);
+        })
+        .catch(() => { /* the next signal tries again */ }), []);
     useEffect(() => { if (allowed) void load(); }, [allowed, load]);
     // A call logged, a ticket or a Reconnect activity answers a chat too.
     useRealtimeTopics(["messages", "tickets"], () => void load(), allowed, ["Message", "MessageClaim", "Call", "Ticket", "TicketLog"]);
@@ -288,15 +287,19 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
     }, [items, dismissed, me, now]);
     const hasCards = visible.length > 0;
 
-    // A moved card's spot lasts only while its chat is waiting.
-    useEffect(() => {
-        if (!loaded) return; // nothing fetched yet — keep every saved spot
+    // A moved card's spot lasts only while its chat is waiting. Dropped while
+    // rendering (nothing fetched yet → every saved spot is kept); the copy in
+    // localStorage follows in an effect.
+    const [prunedCards, setPrunedCards] = useState<Record<string, Spot> | null>(null);
+    if (loaded) {
         const live = new Set(visible.map((a) => a.phone));
-        if (Object.keys(cards).every((ph) => live.has(ph))) return;
-        const next = Object.fromEntries(Object.entries(cards).filter(([ph]) => live.has(ph)));
-        setCards(next);
-        saveCards(next);
-    }, [visible, cards, loaded]);
+        if (!Object.keys(cards).every((ph) => live.has(ph))) {
+            const next = Object.fromEntries(Object.entries(cards).filter(([ph]) => live.has(ph)));
+            setCards(next);
+            setPrunedCards(next);
+        }
+    }
+    useEffect(() => { if (prunedCards) saveCards(prunedCards); }, [prunedCards]);
 
     // The stack grows upward from its spot; when it is taller than the room
     // above, it slides down so its top never leaves the screen.

@@ -40,7 +40,8 @@
  * "one room's claim happened to be the one left dangling."
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import axios from "axios";
 import { supabase } from "@/shared/lib/supabase/supabaseClient";
 import { usePolling } from "@/shared/hooks/usePolling";
@@ -85,6 +86,9 @@ function playSound() {
 }
 
 export default function GlobalInboxListener({ currentUserId }: { currentUserId?: number }) {
+    const router = useRouter();
+    // A click on the desktop notification opens the Inbox in-app (no full reload).
+    const openInbox = useEffectEvent(() => router.push("/office/message/inbox"));
     // True once THIS tab has won leadership — the gate for everything below.
     const [isLeader, setIsLeader] = useState(false);
     // Tracks which room InboxModule currently has open — same-tab via the
@@ -158,7 +162,7 @@ export default function GlobalInboxListener({ currentUserId }: { currentUserId?:
                 );
                 notif.onclick = () => {
                     window.focus();
-                    window.location.href = "/office/message/inbox";
+                    openInbox();
                     notif.close();
                 };
             }

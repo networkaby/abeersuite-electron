@@ -23,6 +23,7 @@ import { formatDate, formatDateTime } from "@/shared/lib/format";
 import type { MissedMode } from "@/shared/lib/calls";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { LIFECYCLE_META, LIFECYCLES, type ContactLifecycle } from "@/modules/customer/lib/contactTypes";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 // ── Wire types (mirror the reconnect APIs) ──────────────────────────────────────
 type Kind = "person" | "company" | "caller";
@@ -411,25 +412,11 @@ export default function ReconnectWorkspace({
         setSort((p.sort as typeof sort) ?? "quietest");
     };
 
-    const loadSaved = useCallback(async () => {
-        try {
-            const res = await axios.get<SavedFilterDto[]>("/api/crm/reconnect/filters");
-            setSavedFilters(res.data);
-        } catch { /* non-fatal — the bar just shows empty */ }
-    }, []);
+    const loadSaved = useCallback(() => axios.get<SavedFilterDto[]>("/api/crm/reconnect/filters")
+        .then((res) => setSavedFilters(res.data))
+        .catch(() => { /* non-fatal — the bar just shows empty */ }), []);
     useEffect(() => { loadSaved(); }, [loadSaved]);
 
-    // A call logged or a customer contacted from another desk changes who is
-    // still worth reconnecting with — and the saved lists this works from.
-    // The open customer's timeline / items reload quietly too, so a note logged
-    // on another machine appears here without a blank flash.
-    useRealtimeTopics(["parties", "tickets"], () => {
-        loadSaved(); loadList();
-        if (!selected) return;
-        if (selected.kind === "caller") { if (selected.phone) void loadCallerCalls(selected.phone, true); return; }
-        void loadTimeline(selected, true);
-        if (items !== null) void loadItems(selected, true);
-    });
 
     const saveNew = async () => {
         if (!newName.trim()) return;
@@ -502,18 +489,14 @@ export default function ReconnectWorkspace({
         }
     }, []);
 
-    const loadItems = useCallback(async (c: Candidate, quiet = false) => {
-        if (!quiet) setLoadingItems(true);
-        try {
-            const res = await axios.get<{ items: PurchasedItem[] }>(`/api/crm/reconnect/items?kind=${c.kind}&id=${c.id}`);
+    const readItems = useCallback((c: Candidate, quiet = false) => axios
+        .get<{ items: PurchasedItem[] }>(`/api/crm/reconnect/items?kind=${c.kind}&id=${c.id}`)
+        .then((res) => {
             if (quiet && selectedRef.current !== c) return;
             setItems(res.data.items);
-        } catch {
-            if (!quiet) toast.error("Failed to load items");
-        } finally {
-            if (!quiet) setLoadingItems(false);
-        }
-    }, []);
+        })
+        .catch(() => { if (!quiet) toast.error("Failed to load items"); })
+        .finally(() => { if (!quiet) setLoadingItems(false); }), []);
 
     const loadCallerCalls = useCallback(async (phone: string, quiet = false) => {
         if (!quiet) {
@@ -552,10 +535,27 @@ export default function ReconnectWorkspace({
         }
     };
 
-    // Lazily load the Items tab the first time it's opened for a customer.
+    // Lazily load the Items tab the first time it's opened for a customer. The
+    // spinner is set while rendering; the read runs once per customer (a failed
+    // read used to retry at once, forever — the spinner flag was its trigger).
+    const itemsWanted = rightTab === "items" && selected != null && items === null;
+    if (useValueChange(itemsWanted ? selected : null) && itemsWanted) setLoadingItems(true);
     useEffect(() => {
-        if (rightTab === "items" && selected && items === null && !loadingItems) loadItems(selected);
-    }, [rightTab, selected, items, loadingItems, loadItems]);
+        if (itemsWanted && selected) void readItems(selected);
+    }, [itemsWanted, selected, readItems]);
+
+    // A call logged or a customer contacted from another desk changes who is
+    // still worth reconnecting with — and the saved lists this works from.
+    // The open customer's timeline / items reload quietly too, so a note logged
+    // on another machine appears here without a blank flash.
+    useRealtimeTopics(["parties", "tickets"], () => {
+        loadSaved(); loadList();
+        if (!selected) return;
+        if (selected.kind === "caller") { if (selected.phone) void loadCallerCalls(selected.phone, true); return; }
+        void loadTimeline(selected, true);
+        if (items !== null) void readItems(selected, true);
+    });
+
 
     const targetBody = useMemo(
         () => (selected ? (selected.kind === "person" ? { personId: selected.id } : { companyId: selected.id }) : null),
