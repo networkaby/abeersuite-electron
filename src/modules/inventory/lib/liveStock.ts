@@ -42,6 +42,7 @@
 // So: never read InvProduct.stock or InvProductBranch.stock to answer that
 // question. Come through here.
 
+import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { isCombined } from "@/shared/lib/auth/activeBranch";
 import { toNumber } from "@/modules/accountancy/lib/balance";
@@ -166,6 +167,53 @@ export async function loadLiveStockByBranch(
     // where it sits — this is NOT the sum of the branch figures above, and with
     // an unassigned opening it deliberately is not.
     return { total: foldOpening(product.openingStock, movedTotal, true) ?? 0, byBranch };
+}
+
+/**
+ * On-hand quantity in ONE branch at the START of `date` — what a stock count
+ * (Physical Stock) dated that day replaces. Same rule as the rest of this file;
+ * only the ledger half is capped at the date.
+ *
+ * Two readers, and they must agree or the count screen shows one figure while the
+ * server posts against another: `postVoucherInTx` (the PHYSICAL_STOCK delta) and
+ * the count screen's "In system" column (`/api/inventory/products/stock-before`).
+ * Before this existed the post path summed the branch's ledger alone and left the
+ * opening out, so counting an untouched opening of 10 as 10 posted +10 → 20.
+ *
+ * Unlike the live map, the ledger half IS filtered on POSTED: a cancel's
+ * counter-row is dated the day of the cancel, so a dated window can hold the
+ * original and not its reversal. Filtering on the voucher status drops both.
+ *
+ * `db` is the caller's transaction when there is one — the post path reads inside
+ * its own `tx`. A product never tracked anywhere still answers 0: a count needs a
+ * number to subtract from.
+ */
+export async function loadStockBeforeDate(
+    db: Pick<Prisma.TransactionClient, "invStockLedger" | "invProduct">,
+    productIds: number[],
+    branchId: string,
+    date: Date,
+): Promise<Map<number, number>> {
+    const out = new Map<number, number>();
+    const ids = [...new Set(productIds)];
+    if (ids.length === 0) return out;
+
+    // One after another: inside a transaction (one connection) pg refuses parallel queries.
+    const products = await db.invProduct.findMany({
+        where:  { id: { in: ids } },
+        select: { id: true, openingStock: true, openingBranchId: true },
+    });
+    const sums = await db.invStockLedger.groupBy({
+        by:    ["productId"],
+        where: { productId: { in: ids }, branchId, date: { lt: date }, universalVoucher: { status: "POSTED" } },
+        _sum:  { inQty: true, outQty: true },
+    });
+    const moved = new Map(sums.map((s) => [s.productId, toNumber(s._sum.inQty ?? 0) - toNumber(s._sum.outQty ?? 0)]));
+
+    for (const p of products) {
+        out.set(p.id, foldOpening(p.openingStock, moved.get(p.id) ?? null, openingAppliesTo(p, branchId)) ?? 0);
+    }
+    return out;
 }
 
 /**
