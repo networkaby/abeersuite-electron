@@ -299,7 +299,7 @@ export async function deleteCancelCounterRows(
 // products straight from the source of truth, so callers (e.g. the in-place
 // voucher edit) never hand-maintain the cache with fragile delta math — they
 // mutate the ledger, then call this. Formula (validated catalogue-wide, zero
-// drift — see src/scripts/recompute-stock.ts):
+// drift — see src/scripts/recompute-caches.ts):
 //   InvProduct.stock       = openingStock (Tally master column) + Σ(inQty − outQty)
 //   InvProductBranch.stock = Σ(inQty − outQty) per branch
 // `openingStock` is folded in exactly as GL folds Account.openingBalance into
