@@ -37,25 +37,23 @@ export function parseRupeesToPaise(s: string): number | null {
     return rupeesToPaise(n);
 }
 
+// Each formatter is built once and reused: building an Intl.NumberFormat is
+// far slower than calling one, and a register can format thousands of cells.
+// Every figure uses Indian grouping (1,23,456.50), on screen and on paper.
+const INR_2DP = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const INR_0DP = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const NUM_2DP = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const NUM_0DP = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const NUM_LOOSE = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 });
+
 /** Format integer paise as ₹ string with two decimals (e.g. 19900 → ₹199.00). */
 export function formatRupeesFromPaise(paise: number): string {
-    const rupees = paise / 100;
-    return new Intl.NumberFormat("en-IN", {
-        style: "currency",
-        currency: "INR",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    }).format(rupees);
+    return INR_2DP.format(paise / 100);
 }
 
 /** Format rupees (already a float) as ₹ string with no decimals (e.g. 1234 → ₹1,234). */
 export function formatRupees(rupees: number): string {
-    return new Intl.NumberFormat("en-IN", {
-        style: "currency",
-        currency: "INR",
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-    }).format(rupees);
+    return INR_0DP.format(rupees);
 }
 
 /**
@@ -63,34 +61,24 @@ export function formatRupees(rupees: number): string {
  * legacy inline `₹${n.toLocaleString("en-IN", …)}` format used across modules.
  */
 export function formatInr(rupees: number, decimals: 0 | 2 = 2): string {
-    return `₹${rupees.toLocaleString("en-IN", {
-        minimumFractionDigits: decimals,
-        maximumFractionDigits: decimals,
-    })}`;
+    return `₹${(decimals === 2 ? NUM_2DP : NUM_0DP).format(rupees)}`;
 }
 
-const AMOUNT_FORMAT = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
 /**
- * Plain 2dp amount with Indian grouping, no ₹ sign (e.g. 123456.5 → "1,23,456.50").
- * The figure style of printed slips, invoices and WhatsApp messages, where the
- * column header or the sentence already says it is rupees.
+ * Plain 2dp amount, no ₹ sign (e.g. 123456.5 → "1,23,456.50"). The figure style
+ * of the accountancy, BI and POS screens, printed slips, invoices and WhatsApp
+ * messages, where the column header or the sentence already says it is rupees.
  */
 export function formatAmount(n: number): string {
-    return AMOUNT_FORMAT.format(n);
+    return NUM_2DP.format(n);
 }
 
-/**
- * Plain 2dp amount with en-US grouping, no ₹ sign (e.g. 1234567.5 → "1,234,567.50").
- * The figure style of the accountancy, BI and POS screens.
- */
-export function fmt(n: number) {
-    return new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
+/** Short name for `formatAmount` — the one most screens already import. */
+export const fmt = formatAmount;
 
 /**
  * A signed ledger `closing` (positive = balance sits on the account's own
- * "normal" side, per `aggregateClosingAsOf`) → tally-style "1,234.00 Dr/Cr".
+ * "normal" side, per `aggregateClosingAsOf`) → tally-style "1,23,456.00 Dr/Cr".
  * Same grouping as `fmt()` above, so figures line up identically on the
  * account-ledger screens.
  */
@@ -105,5 +93,5 @@ export function formatDrCr(balance: number, normalBalance: "DEBIT" | "CREDIT" | 
 
 /** Float rupees → "₹1,234.5" — up to 2dp, no padding zeros (chips, tooltips, share text). */
 export function formatInrLoose(rupees: number): string {
-    return `₹${rupees.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+    return `₹${NUM_LOOSE.format(rupees)}`;
 }
