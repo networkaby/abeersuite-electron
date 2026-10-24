@@ -57,6 +57,7 @@ import { gridRowClass, GRID_FROZEN_CELL, GRID_FROZEN_HEAD, GRID_FROZEN_EDGE } fr
 import { type ProductCode, primaryBarcode, withPrimaryBarcode } from "@/shared/lib/inventory";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { runPool } from "@/shared/lib/runPool";
+import { extractApiError } from "@/shared/lib/api/extractApiError";
 import type { Topic } from "@/shared/lib/realtime/topics";
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
@@ -236,6 +237,7 @@ export default function InventoryProductsPage() {
             const saved = JSON.parse(raw) as string[];
             // Start from all-visible, then hide anything the user has hidden — so
             // a newly added column is shown until they hide it themselves.
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time restore after mount; the server render has no localStorage
             setVisibleCols(new Set(ALL_COL_IDS.filter((id) => saved.includes(id))));
         } catch { /* ignore malformed storage */ }
     }, []);
@@ -328,6 +330,7 @@ export default function InventoryProductsPage() {
     }, []);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch the masters once on mount
         void loadMasters().finally(() => setMastersLoading(false));
     }, [loadMasters]);
     const loading = list.loading || mastersLoading;
@@ -340,6 +343,7 @@ export default function InventoryProductsPage() {
         if (!Number.isFinite(id)) return;
         if (handledEditRef.current === id) return;
         handledEditRef.current = id;
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- a ?edit=<id> link opens the dialog once, then leaves the URL
         setDialogEditId(id);
         setDialogOpen(true);
         const next = new URLSearchParams(searchParams.toString());
@@ -513,20 +517,34 @@ export default function InventoryProductsPage() {
     async function save() {
         if (dirty.size === 0) return;
         setSaving(true);
-        let ok = 0;
-        let fail = 0;
+        const saved = new Map<number, Patch>();
+        const failed: { id: number; reason: string }[] = [];
         await runPool([...dirty.entries()], SAVE_CONCURRENCY, async ([id, p]) => {
             try {
                 await axios.patch(`/api/inventory/products/${id}`, p);
-                ok++;
-            } catch {
-                fail++;
+                saved.set(id, p);
+            } catch (e) {
+                failed.push({ id, reason: extractApiError(e, "Save failed") });
             }
         });
         setSaving(false);
-        if (fail === 0) toast.success(`Saved ${ok} product${ok === 1 ? "" : "s"}`);
-        else toast.error(`Saved ${ok}, failed ${fail}`);
-        setDirty(new Map());
+        // Clear only what reached the server. A failed row keeps its pending
+        // edit (and its highlight) so the operator can fix it and save again;
+        // a row edited again while the save ran keeps the newer edit.
+        setDirty((prev) => {
+            const next = new Map(prev);
+            for (const [id, p] of saved) if (next.get(id) === p) next.delete(id);
+            return next;
+        });
+        if (failed.length === 0) {
+            toast.success(`Saved ${saved.size} product${saved.size === 1 ? "" : "s"}`);
+        } else {
+            const skus = failed.slice(0, 3).map((f) => seenRef.current.get(f.id)?.sku ?? `#${f.id}`).join(", ");
+            const more = failed.length > 3 ? ` +${failed.length - 3} more` : "";
+            toast.error(`Saved ${saved.size}, failed ${failed.length} (${skus}${more}): ${failed[0].reason}`, {
+                description: "The failed rows are still pending — fix them and press Save again.",
+            });
+        }
         await reloadProducts();
     }
 

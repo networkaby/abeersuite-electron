@@ -20,6 +20,9 @@ import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recom
 import * as Sentry from "@sentry/nextjs";
 import { auth } from "@/auth";
 
+/** Throws "<Master> not found" for the first referenced master that does not
+ *  exist. All lookups run at once (id only) — one round trip, not six in a row;
+ *  the first missing one in this order is the one reported, as before. */
 async function assertProductFks(data: {
     unitId: number;
     categoryId: number | null;
@@ -28,27 +31,19 @@ async function assertProductFks(data: {
     warrantyTermId: number | null;
     gstRateId: number | null;
 }) {
-    const u = await prisma.invUnit.findUnique({ where: { id: data.unitId } });
-    if (!u) throw new Error("Unit not found");
-    if (data.categoryId != null) {
-        const c = await prisma.invCategory.findUnique({ where: { id: data.categoryId } });
-        if (!c) throw new Error("Category not found");
-    }
-    if (data.groupId != null) {
-        const g = await prisma.invProductGroup.findUnique({ where: { id: data.groupId } });
-        if (!g) throw new Error("Product group not found");
-    }
-    if (data.brandId != null) {
-        const b = await prisma.invBrand.findUnique({ where: { id: data.brandId } });
-        if (!b) throw new Error("Brand not found");
-    }
-    if (data.warrantyTermId != null) {
-        const w = await prisma.invWarrantyTerm.findUnique({ where: { id: data.warrantyTermId } });
-        if (!w) throw new Error("Warranty term not found");
-    }
-    if (data.gstRateId != null) {
-        const gr = await prisma.gstRate.findUnique({ where: { id: data.gstRateId } });
-        if (!gr) throw new Error("GST rate not found");
+    const id = { id: true } as const;
+    const exists = (row: Promise<unknown>) => row.then(Boolean);
+    const found = await Promise.all([
+        exists(prisma.invUnit.findUnique({ where: { id: data.unitId }, select: id })),
+        data.categoryId == null || exists(prisma.invCategory.findUnique({ where: { id: data.categoryId }, select: id })),
+        data.groupId == null || exists(prisma.invProductGroup.findUnique({ where: { id: data.groupId }, select: id })),
+        data.brandId == null || exists(prisma.invBrand.findUnique({ where: { id: data.brandId }, select: id })),
+        data.warrantyTermId == null || exists(prisma.invWarrantyTerm.findUnique({ where: { id: data.warrantyTermId }, select: id })),
+        data.gstRateId == null || exists(prisma.gstRate.findUnique({ where: { id: data.gstRateId }, select: id })),
+    ]);
+    const missing = found.indexOf(false);
+    if (missing >= 0) {
+        throw new Error(`${["Unit", "Category", "Product group", "Brand", "Warranty term", "GST rate"][missing]} not found`);
     }
 }
 
@@ -91,24 +86,28 @@ export async function POST(req: Request) {
         if (error) return error;
         const b = data;
         const sku = b.sku.trim().toUpperCase();
-        const existing = await prisma.invProduct.findUnique({ where: { sku } });
+        // Every pre-save check at once — one round trip instead of up to ten
+        // in a row. The answers are then read in the old order, so the user
+        // sees the same error first as before.
+        const [existing, collision, fkError, clash] = await Promise.all([
+            prisma.invProduct.findUnique({ where: { sku }, select: { id: true } }),
+            // Keep the scannable space (SKUs ∪ code values) disjoint so a scan
+            // resolves to exactly one product.
+            findSkuCodeCollision({ sku, codeValues: (b.codes ?? []).map((c) => c.value) }),
+            assertProductFks({
+                unitId: b.unitId,
+                categoryId: b.categoryId ?? null,
+                groupId: b.groupId ?? null,
+                brandId: b.brandId ?? null,
+                warrantyTermId: b.warrantyTermId ?? null,
+                gstRateId: b.gstRateId ?? null,
+            }).then(() => null, (e: unknown) => e),
+            b.slug ? shopSlugClash(b.slug, { kind: "product" }) : null,
+        ]);
         if (existing) return NextResponse.json({ error: "SKU already exists" }, { status: 409 });
-        // Keep the scannable space (SKUs ∪ code values) disjoint so a scan resolves
-        // to exactly one product.
-        const collision = await findSkuCodeCollision({ sku, codeValues: (b.codes ?? []).map((c) => c.value) });
         if (collision) return NextResponse.json({ error: skuCodeCollisionMessage(collision) }, { status: 409 });
-        await assertProductFks({
-            unitId: b.unitId,
-            categoryId: b.categoryId ?? null,
-            groupId: b.groupId ?? null,
-            brandId: b.brandId ?? null,
-            warrantyTermId: b.warrantyTermId ?? null,
-            gstRateId: b.gstRateId ?? null,
-        });
-        if (b.slug) {
-            const clash = await shopSlugClash(b.slug, { kind: "product" });
-            if (clash) return NextResponse.json({ error: clash }, { status: 409 });
-        }
+        if (fkError) throw fkError;
+        if (clash) return NextResponse.json({ error: clash }, { status: 409 });
         const row = await prisma.invProduct.create({
             data: {
                 sku,
@@ -150,8 +149,9 @@ export async function POST(req: Request) {
             include: productInclude,
         });
         // Materialize effectiveSalePricePaise so the new product is sellable in
-        // POS immediately (mirrors voucher posters). Fire-and-forget — a recompute
-        // failure must never fail the create.
+        // POS immediately (mirrors voucher posters). Awaited on purpose — that is
+        // what makes it sellable at once — but a recompute failure must never
+        // fail the create, so it is caught and reported.
         await recomputePricesForProducts([row.id]).catch((err: unknown) => {
             Sentry.captureException(err, { tags: { source: "price-recompute", productId: String(row.id) } });
             console.error("[price-recompute] failed for new product", row.id, err);
