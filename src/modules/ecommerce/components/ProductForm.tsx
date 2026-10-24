@@ -65,6 +65,20 @@ export default function ProductForm({
     const galleryFirstRun = useRef(true);
     const galleryDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
     const gallerySeq = useRef(0);
+    // The gallery as last saved on the server. Sent with every photo save so the
+    // server merges this page's change onto the latest list (mergeGallery.ts) —
+    // a photo added from the phone meanwhile is kept, not overwritten.
+    const galleryBase = useRef<string[]>(initial?.galleryUrls ?? []);
+    /** Show the server's gallery without it counting as an edit (no autosave). */
+    const showServerGallery = useCallback((urls: string[]) => {
+        galleryBase.current = urls;
+        setGalleryUrls((cur) => {
+            if (cur.length === urls.length && cur.every((u, i) => u === urls[i])) return cur;
+            galleryFirstRun.current = true;
+            return urls;
+        });
+        setSelectedImage((i) => (i < urls.length ? i : 0));
+    }, []);
     const [specPairs, setSpecPairs] = useState<{ k: string; v: string }[]>(() => {
         const s = initial?.specs ?? {};
         const keys = Object.keys(s);
@@ -107,6 +121,20 @@ export default function ProductForm({
     useEffect(loadRules, [loadRules]);
     // The publish rules are reference data — the form fields themselves never refresh under the editor.
     useRealtimeTopics(["catalogue"], loadRules);
+
+    // Photos follow changes made elsewhere (the phone app, another office screen)
+    // — only the photo block; the fields being typed in are never touched. Paused
+    // while this page's own photo save is in flight, so it cannot undo it.
+    const reloadGallery = useCallback(() => {
+        const productId = initial?.id;
+        if (!productId) return;
+        const seq = gallerySeq.current;
+        axios
+            .get<ShopProductAdmin>(`/api/ecommerce/products/${productId}`)
+            .then((r) => { if (gallerySeq.current === seq) showServerGallery(r.data.galleryUrls ?? []); })
+            .catch(() => { /* the next signal or a reopen catches up */ });
+    }, [initial?.id, showServerGallery]);
+    useRealtimeTopics(["catalogue"], reloadGallery, !!initial?.id && galleryStatus !== "saving", ["InvProduct"]);
 
     // ── Naming convention (Settings → Naming Convention) ──────────────────
     // Slug is built from the product's masters (brand / group / model / …),
@@ -180,6 +208,7 @@ export default function ProductForm({
         setDescription(initial.description ?? "");
         setBadge(initial.badge ?? "");
         setGalleryUrls(initial.galleryUrls ?? []);
+        galleryBase.current = initial.galleryUrls ?? [];
         setPhotoChecklist(initial.photoChecklist ?? null);
         setSelectedImage(0);
         // Loading a product's own saved gallery is not a user edit — skip the
@@ -213,12 +242,15 @@ export default function ProductForm({
         const seq = ++gallerySeq.current;
         galleryDebounce.current = setTimeout(() => {
             axios
-                .patch(`/api/ecommerce/products/${productId}`, {
+                .patch<ShopProductAdmin>(`/api/ecommerce/products/${productId}`, {
                     galleryUrls,
-                    imageUrl: galleryUrls[0] ?? null,
+                    galleryBase: galleryBase.current,
                 })
-                .then(() => {
-                    if (gallerySeq.current === seq) setGalleryStatus("saved");
+                .then((r) => {
+                    if (gallerySeq.current !== seq) return;
+                    setGalleryStatus("saved");
+                    // The merged result — may hold photos added elsewhere meanwhile.
+                    showServerGallery(r.data.galleryUrls ?? []);
                 })
                 .catch((e: unknown) => {
                     if (gallerySeq.current === seq) {
@@ -348,7 +380,9 @@ export default function ProductForm({
             // engine keeps price/MRP, the stock ledger keeps stock, and the
             // Reorder page keeps the threshold.
             shopBadge: badge.trim() || null,
-            galleryUrls,
+            // An existing product's photos autosave on their own (above); sending
+            // the list again here could only put back a stale one.
+            ...(initial?.id ? {} : { galleryUrls, imageUrl: galleryUrls[0] ?? null }),
             specs,
             weightGrams: weightGrams.trim() === "" ? null : parseInt(weightGrams, 10),
             lengthCm: lengthCm.trim() === "" ? null : parseInt(lengthCm, 10),
@@ -358,7 +392,6 @@ export default function ProductForm({
             isListedInShop: listedEffective,
             allowBackorder,
             isActive,
-            imageUrl: galleryUrls[0] ?? null,
         };
 
         setBusy(true);

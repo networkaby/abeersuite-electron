@@ -9,6 +9,8 @@ import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { invProductToAdmin, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
 import { PHOTO_KIND_KEYS } from "@/modules/ecommerce/lib/photoChecklist";
+import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
+import { mergeGallery } from "@/modules/ecommerce/lib/mergeGallery";
 
 export const shopProductPatchSchema = z.object({
     // inventory fields
@@ -29,6 +31,10 @@ export const shopProductPatchSchema = z.object({
     shopBadge: z.string().trim().optional().nullable(),
     imageUrl: z.string().url().optional().nullable().or(z.literal("")),
     galleryUrls: z.array(z.string().url()).optional(),
+    // The saved list the editor started from. When sent, galleryUrls is merged
+    // onto the gallery as saved now (mergeGallery.ts), so a photo added elsewhere
+    // meanwhile — the phone app — is never dropped.
+    galleryBase: z.array(z.string().url()).optional(),
     specs: z.record(z.string(), z.string()).optional(),
     // Photo checklist under Product image (photoChecklist.ts); null clears it.
     photoChecklist: z.object({
@@ -81,6 +87,11 @@ export async function updateShopProduct(
             },
         });
         if (!existing) return { response: NextResponse.json({ error: "Not found" }, { status: 404 }) };
+
+        if (b.galleryUrls !== undefined && b.galleryBase !== undefined) {
+            const merged = mergeGallery(b.galleryBase, b.galleryUrls, productGalleryUrls(existing.galleryJson, existing.imageUrl));
+            b = { ...b, galleryUrls: merged, imageUrl: merged[0] ?? null };
+        }
 
         // An empty list CLEARS the column. It used to mean "leave it", so the last
         // photo (or the last spec) could not be removed: the row kept it and the
