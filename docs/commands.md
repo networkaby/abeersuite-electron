@@ -166,6 +166,8 @@ Read `docs/seeds.md` first. Current DB is **demo**.
 | `pnpm test:e2e:report` | Opens the last report |
 | `pnpm reconcile:shop-orders` | Reconciles shop order accounts |
 | `pnpm validate:account-linked-flow` | Validates the account-linked flow |
+| `pnpm recompute:caches` | Reports drift in the saved totals (`Account.balance`, `InvProduct.stock`, `InvProductBranch.stock`, gift-card balances) against their ledgers; `--fix` writes the ledger figure. Run `--fix` only on a build that has the 2026-10-24 stock-writer fixes, or the totals drift again |
+| `pnpm report:ps-double-count` | **Report only** (read-only transaction): posted Physical Stock counts that probably added the opening twice, checked against the old and the fixed formula. `--csv <file>` also writes a CSV. A person decides each line |
 
 ---
 
