@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -54,19 +54,22 @@ export default function CreatePersonDialog({ open, onOpenChange, onCreated, init
 
     const hasContact = !!(form.phone.trim() || form.email.trim());
 
-    // Clear stale error the moment the user edits a field.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(() => { if (serverError) setServerError(null); }, [form]);
-    // Clear when the dialog re-opens; seed the phone if one was passed in.
-    useEffect(() => {
-        if (open) {
+    // Clear when the dialog (re-)opens; seed the phone if one was passed in.
+    // Done while rendering, against the last-seen value, so the old form never paints.
+    const openedFor = open ? (initialPhone ?? "") : null;
+    const [seenOpenedFor, setSeenOpenedFor] = useState<string | null>(null);
+    if (openedFor !== seenOpenedFor) {
+        setSeenOpenedFor(openedFor);
+        if (openedFor !== null) {
             setServerError(null);
             setShowGstSection(false);
-            setForm({ ...INITIAL_FORM, phone: initialPhone ?? "" });
+            setForm({ ...INITIAL_FORM, phone: openedFor });
         }
-    }, [open, initialPhone]);
+    }
 
     function setField<K extends keyof PersonForm>(field: K, value: PersonForm[K]) {
+        // Clear stale error the moment the user edits a field.
+        setServerError(null);
         setForm((prev) => {
             const next = { ...prev, [field]: value };
             if (field === "gstin" && typeof value === "string") {

@@ -20,18 +20,27 @@ export function useForwardEmail(userId: number, reloadKey?: string) {
     const [handle, setHandle] = useState("");
     const [busy, setBusy] = useState(false);
 
-    const load = async () => {
-        try {
-            const { data } = await axios.get<Forwarding>(`/api/users/${userId}/forward-email`);
-            setState(data); setUnavailable("");
-            setForwardTo(f => f || data.forwardTo || "");
-            setHandle(h => h || data.address.split("@")[0]);
-        } catch (e) {
-            setUnavailable(axios.isAxiosError(e) ? e.response?.data?.error ?? "Could not reach the office" : "Could not read the forwarding");
-        }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the person or their login changes
-    useEffect(() => { void load(); }, [userId, reloadKey]);
+    const read = (isCurrent: () => boolean) =>
+        axios.get<Forwarding>(`/api/users/${userId}/forward-email`).then(
+            ({ data }) => {
+                if (!isCurrent()) return;
+                setState(data); setUnavailable("");
+                setForwardTo(f => f || data.forwardTo || "");
+                setHandle(h => h || data.address.split("@")[0]);
+            },
+            (e) => {
+                if (!isCurrent()) return;
+                setUnavailable(axios.isAxiosError(e) ? e.response?.data?.error ?? "Could not reach the office" : "Could not read the forwarding");
+            },
+        );
+    const load = () => read(() => true);
+    // A reply for the previous person (or login) must not land on this one.
+    useEffect(() => {
+        let current = true;
+        void read(() => current);
+        return () => { current = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the person or their login changes
+    }, [userId, reloadKey]);
 
     /** `withHandle` — the caller shows a handle box, so a changed one renames the login. */
     const save = async (withHandle = false) => {

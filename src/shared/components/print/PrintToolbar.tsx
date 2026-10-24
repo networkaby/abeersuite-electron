@@ -79,7 +79,7 @@ export interface PrintToolbarProps {
     currentWidth?: string;
 }
 
-type Status = "idle" | "trying" | "thermal" | "browser";
+type Status = "trying" | "thermal" | "browser";
 
 export default function PrintToolbar({
     bridge,
@@ -90,7 +90,7 @@ export default function PrintToolbar({
 }: PrintToolbarProps) {
     // Bridge mode starts by trying the relay; plain browser mode starts on the
     // browser path straight away (so the picker is available immediately).
-    const [status, setStatus] = useState<Status>(bridge ? "idle" : "browser");
+    const [status, setStatus] = useState<Status>(bridge ? "trying" : "browser");   // the thermal way tries on mount
     const ranRef = useRef(false);
 
     const router = useRouter();
@@ -119,20 +119,18 @@ export default function PrintToolbar({
     // failed) leaves this page as the format-selection page — no automatic
     // dialog, no Electron silent print (that went to whatever Windows default
     // printer was set, which is how an 80mm slip could land on an A4 sheet).
-    const runThermal = async () => {
+    const tryThermal = () =>
+        sendToRelay().then((sent) => setStatus(sent ? "thermal" : "browser"));
+    const runThermal = () => {
         setStatus("trying");
-        if (await sendToRelay()) {
-            setStatus("thermal");
-            return;
-        }
-        setStatus("browser");
+        void tryThermal();
     };
 
     useEffect(() => {
         if (ranRef.current) return;
         ranRef.current = true;
         if (bridge) {
-            void runThermal();
+            void tryThermal();   // status already starts at "trying"
         } else if (autoPrint) {
             window.print();
         }
@@ -162,7 +160,7 @@ export default function PrintToolbar({
             {bridge && (
                 <button
                     type="button"
-                    onClick={() => void runThermal()}
+                    onClick={runThermal}
                     disabled={status === "trying"}
                     style={{ ...BTN_PRIMARY, opacity: status === "trying" ? 0.6 : 1 }}
                 >

@@ -1,4 +1,17 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useSyncExternalStore } from "react";
+
+// The saved width is only written by this hook's own mouse-up, which also moves the
+// state, so nothing ever needs to be told it changed.
+const subscribeNothing = () => () => {};
+
+function readSavedWidth(storageKey: string, minWidth: number, maxWidth: number): number | null {
+    try {
+        const n = parseInt(localStorage.getItem(storageKey) ?? "", 10);
+        return !isNaN(n) && n >= minWidth && n <= maxWidth ? n : null;
+    } catch {
+        return null;   // localStorage unavailable (private mode)
+    }
+}
 
 /**
  * Drag-to-resize hook for panel sidebars.
@@ -26,7 +39,15 @@ export function useResizable({
     /** ms to hover before the drag handle becomes active (shows cursor + highlight) */
     hoverDelay?: number;
 }) {
-    const [width, setWidth] = useState(defaultWidth);
+    // The server (and the hydrating first pass) has no localStorage, so it renders
+    // the default; the browser then switches to the saved width — no mismatch.
+    const saved = useSyncExternalStore(
+        subscribeNothing,
+        () => readSavedWidth(storageKey, minWidth, maxWidth),
+        () => null,
+    );
+    const [dragWidth, setWidth] = useState<number | null>(null);
+    const width = dragWidth ?? saved ?? defaultWidth;
     const [isDragging, setIsDragging] = useState(false);
     const [dragReady, setDragReady] = useState(false);
     const draggingRef = useRef(false);
@@ -43,26 +64,13 @@ export function useResizable({
         if (!draggingRef.current) setDragReady(false);
     }, []);
 
-    // Load persisted width once on mount
-    useEffect(() => {
-        try {
-            const stored = localStorage.getItem(storageKey);
-            if (stored) {
-                const n = parseInt(stored, 10);
-                if (!isNaN(n) && n >= minWidth && n <= maxWidth) setWidth(n);
-            }
-        } catch {
-            // localStorage unavailable (SSR / private mode)
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- read the saved width once on mount
-    }, []);
-
     const onMouseDown = useCallback(
         (e: React.MouseEvent) => {
             e.preventDefault();
             draggingRef.current = true;
             startXRef.current = e.clientX;
             startWidthRef.current = width;
+            let latestWidth = width;
             setIsDragging(true);
 
             document.body.style.userSelect = "none";
@@ -75,6 +83,7 @@ export function useResizable({
                         ? ev.clientX - startXRef.current   // drag right → wider
                         : startXRef.current - ev.clientX;  // drag left  → wider
                 const next = Math.max(minWidth, Math.min(maxWidth, startWidthRef.current + delta));
+                latestWidth = next;
                 setWidth(next);
             };
 
@@ -86,10 +95,7 @@ export function useResizable({
                 document.removeEventListener("mousemove", onMove);
                 document.removeEventListener("mouseup", onUp);
                 // Persist current width
-                setWidth((prev) => {
-                    try { localStorage.setItem(storageKey, String(prev)); } catch { /* ignore */ }
-                    return prev;
-                });
+                try { localStorage.setItem(storageKey, String(latestWidth)); } catch { /* ignore */ }
             };
 
             document.addEventListener("mousemove", onMove);
@@ -99,7 +105,7 @@ export function useResizable({
     );
 
     return {
-        width, setWidth,
+        width,
         isDragging, dragReady,
         onMouseDown,
         onHandleMouseEnter,
