@@ -163,11 +163,10 @@ function loadCounterEnv(): void {
  * from .env.example counts as absent — it would sign real cookies with a published string.
  *
  * Stored beside counter-installation-id.json, which survives upgrades, so an update does
- * not sign everybody out. Both names are set because next-auth v5 reads AUTH_SECRET while
- * older call sites still look for NEXTAUTH_SECRET.
+ * not sign everybody out.
  */
 function ensureAuthSecret(): void {
-    const configured = process.env.AUTH_SECRET?.trim() || process.env.NEXTAUTH_SECRET?.trim();
+    const configured = process.env.AUTH_SECRET?.trim();
     if (configured && !PLACEHOLDER_ENV_VALUES.has(configured)) return;
 
     const file = path.join(app.getPath("userData"), "auth-secret.json");
@@ -199,7 +198,6 @@ function ensureAuthSecret(): void {
     }
 
     process.env.AUTH_SECRET = secret;
-    process.env.NEXTAUTH_SECRET = secret;
 }
 
 if (app.isPackaged) {

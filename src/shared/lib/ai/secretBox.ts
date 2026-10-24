@@ -13,7 +13,7 @@ import crypto from "crypto";
 export type SecretLock = "shared" | "machine";
 
 const secretFor = (lock: SecretLock) =>
-    (lock === "shared" ? process.env.AI_KEY_SECRET : process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET)?.trim() || "";
+    (lock === "shared" ? process.env.AI_KEY_SECRET : process.env.AUTH_SECRET)?.trim() || "";
 
 /** The shared lock is set here — without it a pasted (db) key can be neither saved nor read. */
 export const hasSharedSecret = () => secretFor("shared").length >= 16;

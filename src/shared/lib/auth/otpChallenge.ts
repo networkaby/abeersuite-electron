@@ -44,7 +44,7 @@ export type OtpChannel = "mobile" | "email";
 export type OtpIdentity = { channel: OtpChannel; identity: string };
 
 function secret(): string {
-    const s = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
+    const s = process.env.AUTH_SECRET;
     if (!s) throw new Error("AUTH_SECRET is not set — OTP cannot be signed.");
     return s;
 }

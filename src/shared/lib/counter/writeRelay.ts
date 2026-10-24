@@ -214,7 +214,7 @@ type OfficeSignIn = { authorization: string; userId: string };
 async function officeSignIn(req: NextRequest): Promise<OfficeSignIn | null> {
     const token = await getToken({
         req,
-        secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+        secret: process.env.AUTH_SECRET,
         cookieName: SESSION_COOKIE_NAME,
         salt: SESSION_COOKIE_NAME,
     }).catch(() => null);

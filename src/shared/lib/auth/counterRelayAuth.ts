@@ -106,7 +106,7 @@ export async function authenticateCounterRequest(headers: Headers): Promise<Coun
     token.counterId = counterId;
     const jwt = await encode({
         token,
-        secret: (process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET)!,
+        secret: (process.env.AUTH_SECRET)!,
         salt: SESSION_COOKIE_NAME,
         maxAge: LOGIN_IDLE_MAX_AGE_MS / 1000,
     });

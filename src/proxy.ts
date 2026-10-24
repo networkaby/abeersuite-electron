@@ -175,7 +175,7 @@ async function phoneOnlyCaller(req: NextRequest): Promise<{ permissions: string[
     if (!req.cookies.getAll().some((c) => c.name.startsWith(SESSION_COOKIE_NAME))) return null;
     const token = await getToken({
         req,
-        secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+        secret: process.env.AUTH_SECRET,
         cookieName: SESSION_COOKIE_NAME,
         salt: SESSION_COOKIE_NAME,
     }).catch(() => null);

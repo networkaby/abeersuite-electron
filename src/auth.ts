@@ -35,7 +35,7 @@ const SECURE_COOKIES =
     !!process.env.VERCEL || /^https:/i.test(process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "");
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-    secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+    secret: process.env.AUTH_SECRET,
     trustHost: true,
     /**
      * A login lasts until one of two clocks runs out (owner, 2026-10-13): 3 days with
