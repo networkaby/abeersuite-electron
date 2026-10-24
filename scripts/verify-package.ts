@@ -85,8 +85,6 @@ const NON_SECRET_KEYS = new Set([
     // bundle as COMPANY_DETAILS.sites.office, so the scanner would otherwise flag it.
     "WRITE_API_URL",
     "COUNTER_PC",
-    "AUTH_URL",
-    "NEXTAUTH_URL",
     "PORT",
     // A path, not a credential — see resolveLandingPage() in appModeCore.ts.
     "LANDING_PAGE",

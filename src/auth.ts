@@ -25,14 +25,14 @@ import { localSignOutAt, markLocalSignOut } from "@/shared/lib/auth/localSignOut
  * secret AND that name (`salt = cookieName` in @auth/core/jwt). A `WRITE_MODE=v_live`
  * till relays its writes to the office with its own cookie, so the office must be able
  * to decrypt a token minted on http://127.0.0.1: same secret (shipped in counter.env),
- * same name (this). Only the `secure` flag still follows the protocol.
+ * same name (this). Only the `secure` flag differs: on for Vercel (https), off elsewhere.
  *
  * Pinning the name changed it on the web deployment, so every office user signed in
  * once more after that deploy; old `__Secure-` cookies linger harmlessly until expiry.
  */
 export const SESSION_COOKIE_NAME = "authjs.session-token";
-const SECURE_COOKIES =
-    !!process.env.VERCEL || /^https:/i.test(process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "");
+// Vercel is the only https host; the dev server and counters serve plain http.
+const SECURE_COOKIES = !!process.env.VERCEL;
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
     secret: process.env.AUTH_SECRET,

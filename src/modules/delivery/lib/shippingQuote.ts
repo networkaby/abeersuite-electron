@@ -461,10 +461,10 @@ export async function quoteShipping(params: {
     // longer dictates on-screen order.
     const shown = [...ownLocal, ...ownStandard, ...aggOpts].sort((a, b) => a.amountPaise - b.amountPaise);
 
-    // Dev aid: running locally (NEXTAUTH_URL → localhost) also return the couriers
-    // that were dropped, flagged `hidden`, so checkout can list them in a dev-only
-    // panel. Production returns only the clean `shown` list.
-    const devPreview = (process.env.NEXTAUTH_URL ?? "").includes("localhost");
+    // Dev aid: on the dev server also return the couriers that were dropped, flagged
+    // `hidden`, so checkout can list them in a dev-only panel. Production returns
+    // only the clean `shown` list.
+    const devPreview = process.env.NODE_ENV !== "production";
     if (!devPreview) return shown;
     const shownIds = new Set(shown.map((o) => o.optionId));
     const hidden = out
