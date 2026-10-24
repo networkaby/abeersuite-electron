@@ -41,23 +41,21 @@ export function useShopMasters(): { masters: ShopMasters | null; loading: boolea
     const [masters, setMasters] = useState<ShopMasters | null>(null);
     const [loading, setLoading] = useState(true);
 
+    const sync = useCallback(() => syncMasters()
+        .then((synced) => { if (synced) setMasters(toShopMasters(synced)); })
+        .finally(() => setLoading(false)), []);
     const refresh = useCallback(async () => {
         setLoading(true);
-        try {
-            const synced = await syncMasters();
-            if (synced) setMasters(toShopMasters(synced));
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+        await sync();
+    }, [sync]);
 
     useEffect(() => {
         let live = true;
         // The saved copy only paints an empty screen — never over a fresher sync.
         void readCachedMasters().then((held) => { if (live && held) setMasters((was) => was ?? toShopMasters(held)); });
-        void refresh();
+        void sync();   // `loading` already starts true
         return () => { live = false; };
-    }, [refresh]);
+    }, [sync]);
 
     useRealtimeTopics(["catalogue"], () => { void refresh(); });
 

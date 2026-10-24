@@ -14,6 +14,7 @@ import type { ProductPhotos } from "../lib/types";
 import MobileHeader from "./MobileHeader";
 import PhotoPickButtons from "./PhotoPickButtons";
 import { photosHref } from "./MobilePhotos";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 /** A photo on its way: shown at once from the phone, then uploaded, then saved. */
 type Pending = { key: number; file: File; preview: string; url?: string; error?: string; aiSkip: boolean };
@@ -60,37 +61,43 @@ export default function MobileProductPhotos({ id }: { id: number }) {
     const nextKey = useRef(1);
     const previews = useRef(new Set<string>());
 
-    const load = useCallback(async () => {
-        setLoading(true);
-        setLoadError(null);
-        try {
-            const loaded = (await axios.get<ProductPhotos>(api(id))).data;
+    const read = useCallback(() => axios.get<ProductPhotos>(api(id))
+        .then(({ data: loaded }) => {
             setData(loaded);
             // Photos uploaded earlier whose attach never got an answer — finish the job.
             forgetUnsaved(id, loaded.galleryUrls);
             const left = readUnsaved(id);
-            if (left.length) {
-                setNote({ text: `Attaching ${left.length} photo${left.length > 1 ? "s" : ""} uploaded earlier…`, tone: "warn" });
-                try {
-                    const saved = await attach(id, left);
+            if (!left.length) return;
+            setNote({ text: `Attaching ${left.length} photo${left.length > 1 ? "s" : ""} uploaded earlier…`, tone: "warn" });
+            return attach(id, left).then(
+                (saved) => {
                     forgetUnsaved(id, left);
                     setData(saved);
                     setNote({ text: "Earlier photos attached.", tone: "good" });
                     void invalidateProductCatalog();
-                } catch (e) {
+                },
+                (e) => {
                     // A refusal (photo limit, not ours) will not change on retry — let it go.
                     if (!isNoAnswer(e)) forgetUnsaved(id, left);
                     setNote({ text: saveFailureText(e), tone: "bad" });
-                }
-            }
-        } catch (e) {
-            setLoadError(extractApiError(e, "Could not load the photos."));
-        } finally {
-            setLoading(false);
-        }
-    }, [id]);
+                },
+            );
+        })
+        .catch((e) => { setLoadError(extractApiError(e, "Could not load the photos.")); })
+        .finally(() => setLoading(false)), [id]);
+    /** Refresh: the spinner and a clean error first, then the read. */
+    const load = useCallback(async () => {
+        setLoading(true);
+        setLoadError(null);
+        await read();
+    }, [read]);
 
-    useEffect(() => { void load(); }, [load]);
+    // Another product: spinner on, error cleared — while rendering (both start that way).
+    if (useValueChange(id)) {
+        setLoading(true);
+        setLoadError(null);
+    }
+    useEffect(() => { void read(); }, [read]);
     useEffect(() => () => { previews.current.forEach((u) => URL.revokeObjectURL(u)); }, []);
 
     /** The server's answer after any change — plus a line when the shop listing moved. */

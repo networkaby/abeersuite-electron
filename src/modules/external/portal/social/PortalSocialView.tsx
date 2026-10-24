@@ -233,16 +233,14 @@ export default function PortalSocialView() {
     const [body, setBody] = useState("");
     const [posting, setPosting] = useState(false);
 
-    const load = useCallback(async () => {
-        try {
-            const res = await axios.get<Overview>("/api/portal/social");
+    const load = useCallback(() => axios.get<Overview>("/api/portal/social")
+        .then((res) => {
             setData(res.data);
-        } catch {
+        })
+        .catch(() => {
             toast.error("Failed to load social");
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+        })
+        .finally(() => setLoading(false)), []);
 
     useEffect(() => { void load(); }, [load]);
 

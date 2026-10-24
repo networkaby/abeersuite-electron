@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { MOBILE_FRESH_MS } from "@/shared/lib/constants/polling";
 import { loadAnswer, mobileKey, offlineNote } from "../lib/mobileCache";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 /**
  * One GET for a phone screen, through the saved-answer step (`loadAnswer`): the
@@ -32,29 +33,39 @@ export function useMobileResource<T>(
     const latest = useRef(key);
     const shownAt = useRef<number | null>(null);
 
+    const read = useCallback((force: boolean) => {
+        if (!url) return Promise.resolve();
+        const asked = key;
+        return loadAnswer<T>(key, url, { freshMs, since, force }, (d, at) => {
+            if (latest.current !== asked) return;
+            setData(d);
+            shownAt.current = at;
+        })
+            .catch((e) => {
+                if (latest.current === asked) setError(offlineNote(extractApiError(e, "Could not load"), shownAt.current));
+            })
+            .finally(() => {
+                if (latest.current === asked) setLoading(false);
+            });
+    }, [url, key, freshMs, since]);
+    /** Refresh: the spinner and a clean error first, then the read. */
     const load = useCallback(async (force: boolean) => {
         if (!url) return;
-        const asked = key;
         setLoading(true);
         setError(null);
-        try {
-            await loadAnswer<T>(key, url, { freshMs, since, force }, (d, at) => {
-                if (latest.current !== asked) return;
-                setData(d);
-                shownAt.current = at;
-            });
-        } catch (e) {
-            if (latest.current === asked) setError(offlineNote(extractApiError(e, "Could not load"), shownAt.current));
-        } finally {
-            if (latest.current === asked) setLoading(false);
-        }
-    }, [url, key, freshMs, since]);
+        await read(force);
+    }, [url, read]);
 
+    // Another key: spinner on, error cleared — while rendering.
+    if (useValueChange(key) && url) {
+        setLoading(true);
+        setError(null);
+    }
     useEffect(() => {
         latest.current = key;
         shownAt.current = null;
-        void load(false);
-    }, [key, load]);
+        void read(false);
+    }, [key, read]);
 
     return { data, loading, error, refresh: () => void load(true) };
 }

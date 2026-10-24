@@ -5,6 +5,7 @@ import axios from "axios";
 import { useShopCartStore } from "@/store/external/shopCartStore";
 import { usePortalAccountStore } from "@/store/external/portalAccountStore";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 /**
  * Everything a checkout knows and does — the address with its pincode lookups
@@ -94,13 +95,18 @@ export function useShopCheckout({ onPlaced }: { onPlaced: (orderId: number) => v
     // Our local delivery boy's coverage for this pincode: locality → [neighbourhoods].
     const [coverage, setCoverage] = useState<Record<string, string[]>>({});
 
+    // A pincode that stops being valid clears what was looked up for it — while
+    // rendering (the effects below only read for a valid one).
+    if (useValueChange(pincodeValid) && !pincodeValid) {
+        setCoverage({});
+        setPincodeInfo("");
+        setLocalities([]);
+    }
+
     // Load local-delivery neighbourhood coverage for the pincode (enables the
     // linked Locality ↔ Neighbourhood pickers + the Local delivery courier).
     useEffect(() => {
-        if (!pincodeValid) {
-            setCoverage({});
-            return;
-        }
+        if (!pincodeValid) return;
         let cancelled = false;
         axios
             .get<{ localities: Record<string, string[]> }>(`/api/shop/local-coverage/${address.pincode}`)
@@ -125,14 +131,10 @@ export function useShopCheckout({ onPlaced }: { onPlaced: (orderId: number) => v
     // Auto-fill City + State + locality options from the pincode (India Post
     // lookup). Runs whenever a valid 6-digit pincode is entered; the resolved
     // state also drives zone matching.
+    if (useValueChange(pincodeValid ? address.pincode : null) && pincodeValid) setPincodeInfo("Detecting location…");
     useEffect(() => {
-        if (!pincodeValid) {
-            setPincodeInfo("");
-            setLocalities([]);
-            return;
-        }
+        if (!pincodeValid) return;
         let cancelled = false;
-        setPincodeInfo("Detecting location…");
         axios
             .get<{ ok: boolean; city?: string; state?: string; localities?: string[] }>(`/api/shop/pincode/${address.pincode}`)
             .then((r) => {
@@ -191,15 +193,22 @@ export function useShopCheckout({ onPlaced }: { onPlaced: (orderId: number) => v
     }, [address.pincode, address.state, pincodeValid]);
 
     // Fetch courier options whenever the pincode becomes valid (or the cart changes).
-    useEffect(() => {
-        if (!pincodeValid || lines.length === 0) {
+    // A new quote (or none to make) is set up while rendering; the effect reads.
+    const quoteKey = pincodeValid && lines.length > 0
+        ? JSON.stringify([address.pincode, address.state, address.neighbourhood, lines, payChoice])
+        : null;
+    if (useValueChange(quoteKey)) {
+        if (quoteKey === null) {
             setOptions([]);
             setSelectedOptionId(null);
-            return;
+        } else {
+            setQuoting(true);
+            setQuoteError("");
         }
+    }
+    useEffect(() => {
+        if (!pincodeValid || lines.length === 0) return;
         let cancelled = false;
-        setQuoting(true);
-        setQuoteError("");
         axios
             .post<{ options: ShippingOption[] }>("/api/shop/shipping/quote", {
                 pincode: address.pincode,
@@ -315,14 +324,14 @@ export function useShopCheckout({ onPlaced }: { onPlaced: (orderId: number) => v
 
     // Keep the selected rail valid: if it disappears (POD blocked here, or a gateway
     // gets disabled), fall back to the first still-available rail.
-    useEffect(() => {
-        const valid =
-            (payChoice === "cod" && podShown) ||
-            onlineGateways.some((g) => g.provider === payChoice);
-        if (valid) return;
+    // While rendering; picking a valid rail is what ends it.
+    const railValid =
+        (payChoice === "cod" && podShown) ||
+        onlineGateways.some((g) => g.provider === payChoice);
+    if (!railValid) {
         if (podShown) setPayChoice("cod");
         else if (onlineGateways[0]) setPayChoice(onlineGateways[0].provider);
-    }, [payChoice, podShown, onlineGateways]);
+    }
 
     const addressComplete =
         address.name.trim() &&
