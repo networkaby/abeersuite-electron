@@ -25,14 +25,18 @@ function installedAppCode(uaTag: string): number | null {
  * full-screen notice when `release.urgent`. Outside the app (no tag) → nothing.
  * No server call: the page compares against the constant it was built with.
  *
- * `apkUrl` is the app's own site written with a trailing dot (`office.networkservice.in.`):
- * the app's WebView cannot download a file, and Capacitor keeps a link to its own
- * host inside it — the dotted host reads as another host, so it opens in Chrome,
- * which can, while still being served by the app's own site (owner: staff app from
- * office, customer app from shop, no cross-site fallback). That site must be
- * deployed whenever its APK changes, or phones reinstall the old file in a loop.
+ * `installUrl` is the app's install page on its own site written with a trailing dot
+ * (`office.networkservice.in./m-staff-app/install`): the app's WebView cannot
+ * download a file, and Capacitor keeps a link to its own host inside it — the dotted
+ * host reads as another host, so it opens in Chrome, while still being served by the
+ * app's own site (owner: staff app from office, customer app from shop, no cross-site
+ * fallback). The page, not the raw APK: Chrome handed a bare .apk from another app
+ * left the download stuck (owner, 2026-10-24) — no open page for its "keep this
+ * file?" question — while the same tap on the install page, the fresh-install path,
+ * always worked. That site must be deployed whenever its APK changes, or phones
+ * reinstall the old file in a loop.
  */
-export default function AppUpdateBar({ uaTag, release, apkUrl }: { uaTag: string; release: AppRelease; apkUrl: string }) {
+export default function AppUpdateBar({ uaTag, release, installUrl }: { uaTag: string; release: AppRelease; installUrl: string }) {
     const [dismissed, setDismissed] = useState(false);
     const laterKey = `app-update-later:${uaTag}:${release.code}`;
     // Read once per visit, never on the server — the user agent and a "Later" tap
@@ -54,12 +58,12 @@ export default function AppUpdateBar({ uaTag, release, apkUrl }: { uaTag: string
     };
     const download = (
         <Button asChild size="sm" className="gap-1.5">
-            <a href={apkUrl} target="_blank" rel="noopener">
+            <a href={installUrl} target="_blank" rel="noopener">
                 <Download className="size-4" /> Download update
             </a>
         </Button>
     );
-    const help = "When it finishes, open the downloaded file and tap Install. You stay signed in.";
+    const help = "Chrome opens the download page: tap Download, open the file and tap Install. You stay signed in.";
 
     if (release.urgent) {
         return (
@@ -95,7 +99,7 @@ export default function AppUpdateBar({ uaTag, release, apkUrl }: { uaTag: string
  * whether this phone is up to date, with the download always on hand when it is
  * not (even after "Later" hid the bar). Shown only inside the app.
  */
-export function AppVersionLine({ uaTag, release, apkUrl }: { uaTag: string; release: AppRelease; apkUrl: string }) {
+export function AppVersionLine({ uaTag, release, installUrl }: { uaTag: string; release: AppRelease; installUrl: string }) {
     const installed = useSyncExternalStore(noSubscribe, () => installedAppCode(uaTag), () => null);
     if (installed === null) return null;
     const old = installed < release.code;
@@ -103,7 +107,7 @@ export function AppVersionLine({ uaTag, release, apkUrl }: { uaTag: string; rele
         <p className="py-3 text-center text-xs text-muted-foreground">
             App build {installed} · latest {release.name} (build {release.code})
             {old ? (
-                <> · <a href={apkUrl} target="_blank" rel="noopener" className="font-medium text-primary underline">Download update</a></>
+                <> · <a href={installUrl} target="_blank" rel="noopener" className="font-medium text-primary underline">Download update</a></>
             ) : " · up to date"}
         </p>
     );
