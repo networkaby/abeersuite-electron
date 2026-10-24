@@ -42,6 +42,7 @@ import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { todayIso } from "@/shared/lib/format/formatDate";
 
 // Per-type placeholder text for "heading" kind instances — the text a blank
 // field falls back to, i.e. what the component's own hardcoded default says.
@@ -157,8 +158,6 @@ function InstanceSummary({ inst }: { inst: HomeSectionInstance }) {
  * `zoom` shrinks the real component to fit the narrower preview column
  * without re-styling anything.
  */
-const todayIso = new Date().toISOString().slice(0, 10);
-
 function formatDateShort(iso: string): string {
     const d = new Date(`${iso}T00:00:00`);
     return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
@@ -190,7 +189,7 @@ function ScheduleInfo({ inst, renders }: { inst: HomeSectionInstance; renders: b
     const range = startAt || endAt
         ? `${startAt ? formatDateShort(startAt) : "Always"} → ${endAt ? formatDateShort(endAt) : "Always"}`
         : null;
-    const active = inst.enabled && isInstanceActive(inst, todayIso);
+    const active = inst.enabled && isInstanceActive(inst, todayIso());
     return (
         <span className="flex flex-wrap items-center gap-1.5">
             {range ? (
@@ -656,7 +655,7 @@ export default function CustomizeHomePage() {
     // Which instance actually wins each sectionNo slot right now — only one
     // renders per slot, so every row's "Active now" badge must be measured
     // against this, not its own schedule in isolation.
-    const winnerIds = new Set(resolveHomeSections(instances, todayIso).map((i) => i.id));
+    const winnerIds = new Set(resolveHomeSections(instances, todayIso()).map((i) => i.id));
 
     // Card header toolbar — the page itself never scrolls (only the section
     // list does), so one bar at the top stays reachable at all times.
