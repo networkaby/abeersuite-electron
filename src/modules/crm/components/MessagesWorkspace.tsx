@@ -220,13 +220,10 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
     const [users, setUsers] = useState<StaffUser[]>([]);
     const [roomId, setRoomId] = useState<string | null>(null);
     const meName = (useSession().data?.user as { name?: string } | undefined)?.name ?? undefined;
-    const loadRooms = useCallback(async () => {
-        try {
-            const { data } = await axios.get<Room[]>("/api/inbox/rooms");
-            // System / personal notification rooms stay with the bell.
-            setRooms(data.filter((r) => r.type === "ORG_GROUP" || r.type === "DIRECT_MESSAGE"));
-        } catch { /* customers still work without it */ }
-    }, []);
+    const loadRooms = useCallback(() => axios.get<Room[]>("/api/inbox/rooms")
+        // System / personal notification rooms stay with the bell.
+        .then(({ data }) => setRooms(data.filter((r) => r.type === "ORG_GROUP" || r.type === "DIRECT_MESSAGE")))
+        .catch(() => { /* customers still work without it */ }), []);
     useEffect(() => { void loadRooms(); loadUsers().then(setUsers).catch(() => {}); }, [loadRooms]);
     // A new room / being added announces "chat"; a message in a background room
     // reaches GlobalInboxListener, which fires "inbox:unread".

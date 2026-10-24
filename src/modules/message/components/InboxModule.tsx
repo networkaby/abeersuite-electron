@@ -27,6 +27,56 @@ function dmPartnerName(room: Room, currentUserId: number, teamUsers: TeamUser[])
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
+function SectionLabel({
+    icon: Icon,
+    label,
+    unread,
+}: { icon: React.ElementType; label: string; unread: number }) {
+    return (
+        <div className="flex items-center gap-2 px-3 pt-4 pb-1">
+            <Icon size={11} className="text-muted-foreground/60" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                {label}
+            </span>
+            {unread > 0 && (
+                <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground leading-none">
+                    {unread}
+                </span>
+            )}
+        </div>
+    );
+}
+
+function RoomRow({ room, displayName, active, onPick }: {
+    room: Room; displayName: string; active: boolean; onPick: (id: string) => void;
+}) {
+    const prefix =
+        room.type === "DIRECT_MESSAGE" ? "@" :
+        room.type === "SYSTEM_INBOX"   ? "" : "#";
+    return (
+        <Button
+            type="button"
+            variant="ghost"
+            onClick={() => onPick(room.id)}
+            className={[
+                "h-auto w-full items-center gap-2 justify-start px-3 py-1.5 text-sm transition-colors",
+                active
+                    ? "bg-primary/15 text-foreground font-semibold"
+                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+            ].join(" ")}
+        >
+            <span className="truncate">
+                {prefix}{displayName}
+            </span>
+            {room.unreadCount > 0 && (
+                <span className="ml-auto shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground leading-none">
+                    {room.unreadCount}
+                </span>
+            )}
+        </Button>
+    );
+}
+
 export default function InboxModule({
     currentUserId,
     currentUserName,
@@ -51,9 +101,7 @@ export default function InboxModule({
 
     // ── Loaders ─────────────────────────────────────────────────────────────────
 
-    const loadRooms = useCallback(async () => {
-        try {
-            const res = await axios.get<Room[]>("/api/inbox/rooms");
+    const loadRooms = useCallback(() => axios.get<Room[]>("/api/inbox/rooms").then((res) => {
             setRooms(res.data);
             // This is the authoritative unread count — the sidebar's own figure
             // is a separately-fetched, separately-cached number (`/api/nav/counts`)
@@ -64,19 +112,13 @@ export default function InboxModule({
             // broadcast — would sit wrong until one of them happened to. Telling
             // it to recount against what THIS load just found closes that gap.
             window.dispatchEvent(new CustomEvent("nav-counts:changed"));
-        } catch {
-            toast.error("Failed to load inbox");
-        } finally {
-            setLoadingRooms(false);
-        }
-    }, []);
+        })
+        .catch(() => { toast.error("Failed to load inbox"); })
+        .finally(() => setLoadingRooms(false)), []);
 
-    const loadTeamUsers = useCallback(async () => {
-        try {
-            const res = await axios.get<TeamUser[]>("/api/users");
-            setTeamUsers(res.data.filter((u) => u.id !== currentUserId));
-        } catch { /* non-critical */ }
-    }, [currentUserId]);
+    const loadTeamUsers = useCallback(() => axios.get<TeamUser[]>("/api/users")
+        .then((res) => setTeamUsers(res.data.filter((u) => u.id !== currentUserId)))
+        .catch(() => { /* non-critical */ }), [currentUserId]);
 
     // ── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -94,8 +136,9 @@ export default function InboxModule({
     // this is a cheap, rare re-read of the room list and the team roster.
     useRealtimeTopics(["chat", "settings"], () => { loadRooms(); loadTeamUsers(); });
 
-    useEffect(() => {
-        if (rooms.length === 0 || activeRoomId) return;
+    // No room open yet → the first one of the asked-for section (while rendering;
+    // opening one ends it).
+    if (rooms.length > 0 && !activeRoomId) {
         const sectionTypes: Record<string, RoomType[]> = {
             groups: ["ORG_GROUP"],
             users:  ["DIRECT_MESSAGE"],
@@ -104,7 +147,7 @@ export default function InboxModule({
         const types = sectionTypes[initialSection] ?? sectionTypes.groups;
         const first = rooms.find((r) => types.includes(r.type)) ?? rooms[0];
         if (first) setActiveRoomId(first.id);
-    }, [rooms, activeRoomId, initialSection]);
+    }
 
     // When GlobalInboxListener signals a new message on a background room, refresh
     // the rooms list so the left-panel unread badges stay accurate
@@ -148,53 +191,6 @@ export default function InboxModule({
 
     // ── Sub-components ───────────────────────────────────────────────────────────
 
-    const SectionLabel = ({
-        icon: Icon,
-        label,
-        unread,
-    }: { icon: React.ElementType; label: string; unread: number }) => (
-        <div className="flex items-center gap-2 px-3 pt-4 pb-1">
-            <Icon size={11} className="text-muted-foreground/60" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
-                {label}
-            </span>
-            {unread > 0 && (
-                <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground leading-none">
-                    {unread}
-                </span>
-            )}
-        </div>
-    );
-
-    const RoomRow = ({ room, displayName }: { room: Room; displayName: string }) => {
-        const isActive = activeRoomId === room.id;
-        const prefix =
-            room.type === "DIRECT_MESSAGE" ? "@" :
-            room.type === "SYSTEM_INBOX"   ? "" : "#";
-        return (
-            <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setActiveRoomId(room.id)}
-                className={[
-                    "h-auto w-full items-center gap-2 justify-start px-3 py-1.5 text-sm transition-colors",
-                    isActive
-                        ? "bg-primary/15 text-foreground font-semibold"
-                        : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-                ].join(" ")}
-            >
-                <span className="truncate">
-                    {prefix}{displayName}
-                </span>
-                {room.unreadCount > 0 && (
-                    <span className="ml-auto shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground leading-none">
-                        {room.unreadCount}
-                    </span>
-                )}
-            </Button>
-        );
-    };
-
     // ── Render ───────────────────────────────────────────────────────────────────
 
     return (
@@ -231,7 +227,7 @@ export default function InboxModule({
                         {groupRooms.length === 0
                             ? <p className="px-3 py-1 text-xs text-muted-foreground/65 italic">No groups</p>
                             : groupRooms.map((r) => (
-                                <RoomRow key={r.id} room={r} displayName={r.name} />
+                                <RoomRow key={r.id} room={r} displayName={r.name} active={activeRoomId === r.id} onPick={setActiveRoomId} />
                             ))
                         }
 
@@ -241,6 +237,8 @@ export default function InboxModule({
                             <RoomRow
                                 key={r.id}
                                 room={r}
+                                active={activeRoomId === r.id}
+                                onPick={setActiveRoomId}
                                 displayName={currentUserId ? dmPartnerName(r, currentUserId, teamUsers) : r.name}
                             />
                         ))}
@@ -266,7 +264,7 @@ export default function InboxModule({
                         {/* System */}
                         <SectionLabel icon={Monitor} label="System" unread={totalUnread(systemRooms)} />
                         {systemRooms.map((r) => (
-                            <RoomRow key={r.id} room={r} displayName={r.name} />
+                            <RoomRow key={r.id} room={r} displayName={r.name} active={activeRoomId === r.id} onPick={setActiveRoomId} />
                         ))}
 
                     </nav>

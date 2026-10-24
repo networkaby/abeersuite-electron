@@ -22,6 +22,7 @@ import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import { extractApiError } from "@/shared/lib/api";
 import { useRealtimeTopics } from "@/shared/hooks";
 import { usePartySearch } from "@/shared/hooks/usePartySearch";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 // ── Wire type (mirrors GET /api/calls) ──────────────────────────────────────────
 type Direction = "INCOMING" | "OUTGOING" | "INTERNAL" | "UNKNOWN";
@@ -148,24 +149,27 @@ export default function CallLogWorkspace() {
 
     // Page 1 replaces the list; any later page appends to it ("Load more"), so
     // scrolling back through older calls never loses what's already on screen.
-    const load = useCallback(async (targetPage: number) => {
-        setLoading(true);
-        try {
-            const { data } = await axios.get<CallsResponse>(`/api/calls?${buildParams(targetPage).toString()}`);
+    const readPage = useCallback((targetPage: number) => axios
+        .get<CallsResponse>(`/api/calls?${buildParams(targetPage).toString()}`)
+        .then(({ data }) => {
             setItems((prev) => (targetPage === 1 ? data.items : [...prev, ...data.items]));
             setTotal(data.pagination.total);
             setPage(targetPage);
-        } catch {
-            toast.error("Failed to load calls");
-        } finally {
-            setLoading(false);
-        }
+        })
+        .catch(() => { toast.error("Failed to load calls"); })
+        .finally(() => setLoading(false)),
         // eslint-disable-next-line react-hooks/exhaustive-deps -- buildParams reads exactly these filters
-    }, [search, missedMode, showSpam, showInternal, dateFrom, dateTo, showNoNumber]);
+    [search, missedMode, showSpam, showInternal, dateFrom, dateTo, showNoNumber]);
+    const load = useCallback((targetPage: number) => {
+        setLoading(true);
+        return readPage(targetPage);
+    }, [readPage]);
 
-    // `load` changes identity whenever a filter changes, which restarts the list
-    // from page 1 — no separate page-reset effect needed.
-    useEffect(() => { void load(1); }, [load]);
+    // `readPage` changes identity whenever a filter changes, which restarts the
+    // list from page 1 — no separate page-reset effect needed. The spinner is
+    // set while rendering (from the first render too).
+    if (useValueChange<unknown>(readPage, null)) setLoading(true);
+    useEffect(() => { void readPage(1); }, [readPage]);
 
     // Realtime nudge (a new call pushed by the bridge, a note/spam edit by a
     // colleague): merge the first page's worth of rows into whatever is already
