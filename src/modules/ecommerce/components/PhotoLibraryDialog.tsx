@@ -37,22 +37,24 @@ export default function PhotoLibraryDialog({
 
     useEffect(() => {
         if (!open) return;
-        setPicked([]);
-        setShown(PAGE);
-        setError(null);
         axios
             .get<{ photos: LibraryPhoto[] }>("/api/ecommerce/photo-library")
-            .then((r) => setPhotos(r.data.photos))
+            .then((r) => { setPhotos(r.data.photos); setError(null); })
             .catch((e: unknown) => setError(extractApiError(e, "Could not load the photo library")));
     }, [open]);
 
     // A photo on this product matches by file, whatever Adjust did to its link.
     const onThis = (p: LibraryPhoto) => exclude.some((u) => u.includes(p.publicId));
     const list = (photos ?? []).filter((p) => (tab === "unused" ? !p.used : true));
+    /** Closing clears the picks, so the next open starts fresh. */
+    const close = (o: boolean) => {
+        if (!o) { setPicked([]); setShown(PAGE); }
+        onOpenChange(o);
+    };
     const toggle = (url: string) => setPicked((s) => (s.includes(url) ? s.filter((u) => u !== url) : [...s, url]));
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={open} onOpenChange={close}>
             <DialogContent className="sm:max-w-3xl">
                 <DialogHeader>
                     <DialogTitle>Photo library</DialogTitle>
@@ -117,11 +119,11 @@ export default function PhotoLibraryDialog({
                 </div>
 
                 <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                    <Button type="button" variant="outline" onClick={() => close(false)}>Cancel</Button>
                     <Button
                         type="button"
                         disabled={picked.length === 0}
-                        onClick={() => { onAdd(picked); onOpenChange(false); }}
+                        onClick={() => { onAdd(picked); close(false); }}
                     >
                         Add {picked.length > 0 ? picked.length : ""} photo{picked.length === 1 ? "" : "s"}
                     </Button>
