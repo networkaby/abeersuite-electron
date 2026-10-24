@@ -70,6 +70,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Check, ChevronDown, ChevronsUpDown, ChevronUp, Filter, Loader2, Plus, Printer, RotateCcw, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 // ── Cost methods (short code ↔ real CostMethod enum, for later wiring) ────────
 
@@ -280,6 +281,24 @@ function barcodePrice(
 // ── Sort ──────────────────────────────────────────────────────────────────────
 
 type SortKey = "name" | "brand" | "category" | "group" | "stock" | "cost" | "strategy" | "computed" | "saved" | "barcode";
+
+/** Clickable header for the price table. Module-level, so it is not a new
+ *  component type on every render (that remounted the whole header row). */
+function SortTh({ label, k, align = "right", thClass = "", title, sort, onSort }: {
+    label: string; k: SortKey; align?: "left" | "right"; thClass?: string; title?: string;
+    sort: { key: SortKey; dir: 1 | -1 } | null; onSort: (k: SortKey) => void;
+}) {
+    return (
+        <TableHead className={`text-xs ${align === "right" ? "text-right" : ""} ${thClass}`}>
+            <button type="button" onClick={() => onSort(k)} className="inline-flex items-center gap-1 hover:text-foreground" title={title}>
+                {label}
+                {sort?.key === k
+                    ? sort.dir === 1 ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />
+                    : <ChevronsUpDown className="size-3 opacity-40" />}
+            </button>
+        </TableHead>
+    );
+}
 
 function sortVal(r: Row, key: SortKey): number | string {
     switch (key) {
@@ -702,19 +721,15 @@ export default function GeneratePage() {
     // ?view=selected — arriving from the Print labels page to price the queued
     // products. Same shared queue, so the Selected tab already holds them.
     const view = searchParams.get("view");
-    useEffect(() => {
-        if (view === "selected") setTab("selected");
-    }, [view]);
+    if (useValueChange(view, null) && view === "selected") setTab("selected");
 
     // ── Load real products (engine) + barcode bands (OrgDefaults) ─────────────
     // Merge preserves locally-edited sticky Sale-Price fields and any locally
     // added rows (negative ids) across a reload (e.g. after a cost-method change).
-    const loadData = useCallback(async () => {
-        try {
-            const [itemsRes, odRes] = await Promise.all([
-                axios.get<PricingItem[]>("/api/pricing-strategy/items?withSaleAge=1"),
-                axios.get<{ barcodeBandsJson?: BarcodeBand[] }>("/api/settings/org-defaults"),
-            ]);
+    const loadData = useCallback(() => Promise.all([
+        axios.get<PricingItem[]>("/api/pricing-strategy/items?withSaleAge=1"),
+        axios.get<{ barcodeBandsJson?: BarcodeBand[] }>("/api/settings/org-defaults"),
+    ]).then(([itemsRes, odRes]) => {
             setBarcodeBands(Array.isArray(odRes.data.barcodeBandsJson) ? odRes.data.barcodeBandsJson : []);
             const mapped = itemsRes.data.map(itemToRow);
             setRows((prev) => {
@@ -728,12 +743,9 @@ export default function GeneratePage() {
                 const locals = prev.filter((r) => r.id < 0); // keep locally-added rows
                 return [...merged, ...locals];
             });
-        } catch {
-            toast.error("Failed to load products.");
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+        })
+        .catch(() => { toast.error("Failed to load products."); })
+        .finally(() => setLoading(false)), []);
     useEffect(() => { loadData(); }, [loadData]);
 
     // Product rows, brands and categories behind the label picker are catalogue
@@ -905,7 +917,10 @@ export default function GeneratePage() {
 
     // Jump back to the first page whenever the filtered/sorted list or page size
     // changes, so you never land on a now-empty page.
-    useEffect(() => { setPageIndex(0); }, [query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tBarcodeShrink, tProfitReduce, tProfitIncrease, ranges, sort, tab, pageSize]);
+    // While rendering, keyed on the values themselves (ranges / sort by content).
+    if (useValueChange(JSON.stringify([query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tBarcodeShrink, tProfitReduce, tProfitIncrease, ranges, sort, tab, pageSize]))) {
+        setPageIndex(0);
+    }
 
     // The Selected tab shows only the picked rows (still honouring the same filters/sort).
     const selectionRows = useMemo(() => visible.filter((r) => selectionIds.has(r.id)), [visible, selectionIds]);
@@ -1040,18 +1055,6 @@ export default function GeneratePage() {
     // enabled state + count, so a plain Sale Price edit activates Save on its own.
     const saveCount = rows.filter(isSaveTarget).length;
 
-    const sortIcon = (k: SortKey) =>
-        sort?.key === k
-            ? sort.dir === 1 ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />
-            : <ChevronsUpDown className="size-3 opacity-40" />;
-
-    const SortTh = ({ label, k, align = "right", thClass = "", title }: { label: string; k: SortKey; align?: "left" | "right"; thClass?: string; title?: string }) => (
-        <TableHead className={`text-xs ${align === "right" ? "text-right" : ""} ${thClass}`}>
-            <button type="button" onClick={() => toggleSort(k)} className="inline-flex items-center gap-1 hover:text-foreground" title={title}>
-                {label}{sortIcon(k)}
-            </button>
-        </TableHead>
-    );
 
     // Plain render fns (not components) so they don't remount on each keystroke.
     const filterSelect = (value: string, onChange: (v: string) => void, allLabel: string, options: { value: string; label: string }[]) => (
@@ -1285,19 +1288,19 @@ export default function GeneratePage() {
                                 <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Select all visible rows" />
                             </TableHead>
                             <TableHead className="w-8 text-xs">#</TableHead>
-                            <SortTh label="Product name" k="name" align="left" thClass="w-full min-w-[240px]" />
-                            {show("brand") ? <SortTh label="Brand" k="brand" align="left" /> : null}
-                            {show("category") ? <SortTh label="Category" k="category" align="left" /> : null}
-                            {show("group") ? <SortTh label="Group" k="group" align="left" /> : null}
-                            {show("stock") ? <SortTh label="Stock" k="stock" thClass={COL_TINT.stock} /> : null}
-                            {show("cost") ? <SortTh label="Cost (incl)" k="cost" thClass={COL_TINT.cost} /> : null}
+                            <SortTh sort={sort} onSort={toggleSort} label="Product name" k="name" align="left" thClass="w-full min-w-[240px]" />
+                            {show("brand") ? <SortTh sort={sort} onSort={toggleSort} label="Brand" k="brand" align="left" /> : null}
+                            {show("category") ? <SortTh sort={sort} onSort={toggleSort} label="Category" k="category" align="left" /> : null}
+                            {show("group") ? <SortTh sort={sort} onSort={toggleSort} label="Group" k="group" align="left" /> : null}
+                            {show("stock") ? <SortTh sort={sort} onSort={toggleSort} label="Stock" k="stock" thClass={COL_TINT.stock} /> : null}
+                            {show("cost") ? <SortTh sort={sort} onSort={toggleSort} label="Cost (incl)" k="cost" thClass={COL_TINT.cost} /> : null}
                             {show("margin") ? <TableHead className={`text-right text-xs ${COL_TINT.margin}`}>Margin %</TableHead> : null}
-                            {show("computed") ? <SortTh label="Computed" k="computed" thClass={COL_TINT.computed} /> : null}
-                            {show("strategy") ? <SortTh label="Strategy" k="strategy" thClass={COL_TINT.strategy} title="Go to Strategy page to change" /> : null}
-                            {show("sale") ? <SortTh label="Sale Price" k="saved" thClass={COL_TINT.sale} title="Manual — you type this price" /> : null}
+                            {show("computed") ? <SortTh sort={sort} onSort={toggleSort} label="Computed" k="computed" thClass={COL_TINT.computed} /> : null}
+                            {show("strategy") ? <SortTh sort={sort} onSort={toggleSort} label="Strategy" k="strategy" thClass={COL_TINT.strategy} title="Go to Strategy page to change" /> : null}
+                            {show("sale") ? <SortTh sort={sort} onSort={toggleSort} label="Sale Price" k="saved" thClass={COL_TINT.sale} title="Manual — you type this price" /> : null}
                             {show("selling") ? <TableHead className={`text-right text-xs ${COL_TINT.selling}`}>Selling</TableHead> : null}
                             {show("mrp") ? <TableHead className={`text-right text-xs ${COL_TINT.mrp}`}>MRP</TableHead> : null}
-                            {show("barcode") ? <SortTh label="Barcode" k="barcode" thClass={COL_TINT.barcode} title="Edit Sale Price to change" /> : null}
+                            {show("barcode") ? <SortTh sort={sort} onSort={toggleSort} label="Barcode" k="barcode" thClass={COL_TINT.barcode} title="Edit Sale Price to change" /> : null}
                             <TableHead className="w-8" />
                         </TableRow>
                     </TableHeader>

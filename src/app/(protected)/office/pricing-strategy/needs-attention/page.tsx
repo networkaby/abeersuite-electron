@@ -149,9 +149,7 @@ export default function NeedsAttentionPage() {
         setDialogOpen(true);
     };
 
-    const load = () => {
-        setLoading(true);
-        axios
+    const read = () => axios
             .get<PricingItem[]>("/api/pricing-strategy/items?onlyAttention=1")
             .then((r) => {
                 setItems(r.data);
@@ -160,9 +158,13 @@ export default function NeedsAttentionPage() {
             })
             .catch(() => toast.error("Failed to load"))
             .finally(() => setLoading(false));
+    const load = () => {
+        setLoading(true);
+        void read();
     };
 
-    useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- load once on mount
+    // First load: `loading` starts true, so only the read runs here.
+    useEffect(() => { void read(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- load once on mount
     // Live refresh swaps the rows only — no spinner, groups stay as opened, typed edits stay.
     useRealtimeTopics(["catalogue", "stock"], () => {
         axios.get<PricingItem[]>("/api/pricing-strategy/items?onlyAttention=1")
