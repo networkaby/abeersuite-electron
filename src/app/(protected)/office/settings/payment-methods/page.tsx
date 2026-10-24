@@ -191,22 +191,20 @@ export default function PaymentMethodsSettingsPage() {
     // counter payment accounts pick from).
     const [glAccounts, setGlAccounts] = useState<GlAccount[]>([]);
 
-    const load = useCallback(async () => {
+    const fetchGateways = useCallback(() => Promise.all([
+        getWithRetry<{ gateways: Gateway[] }>("/api/settings/payment-methods"),
+        getWithRetry<{ statuses: StatusesMap }>(
+            "/api/settings/payment-methods/credential-status",
+        ),
+    ]).then(
+        ([list, cred]) => { setGateways(list.gateways); setStatuses(cred.statuses); setLoaded(true); },
+        () => { setLoadError(true); },
+    ), []);
+    /** Retry / refresh: clears the error first. */
+    const load = useCallback(() => {
         setLoadError(false);
-        try {
-            const [list, cred] = await Promise.all([
-                getWithRetry<{ gateways: Gateway[] }>("/api/settings/payment-methods"),
-                getWithRetry<{ statuses: StatusesMap }>(
-                    "/api/settings/payment-methods/credential-status",
-                ),
-            ]);
-            setGateways(list.gateways);
-            setStatuses(cred.statuses);
-            setLoaded(true);
-        } catch {
-            setLoadError(true);
-        }
-    }, []);
+        return fetchGateways();
+    }, [fetchGateways]);
 
     // Load the ledgers money can settle into. Any asset group qualifies —
     // Cash-in-Hand, Bank Accounts, or a custom group like "Gateway" under
@@ -227,9 +225,10 @@ export default function PaymentMethodsSettingsPage() {
         [glAccounts],
     );
 
+    // First read: `loadError` already starts false.
     useEffect(() => {
-        void load();
-    }, [load]);
+        void fetchGateways();
+    }, [fetchGateways]);
     // The list and the ledgers it settles into follow changes; the open dialog keeps its own form.
     useRealtimeTopics(["settings"], () => { void load(); });
     useRealtimeTopics(["ledger"], loadGlAccounts);

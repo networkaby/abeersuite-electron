@@ -35,6 +35,7 @@ import { badgeColor } from "@/shared/lib/format/entityColor";
 import { ColorPicker, randomColor } from "@/shared/components/ColorPicker";
 import { ACTION_TYPES } from "@/modules/repairing/lib/actionTypes";
 import { INTERVAL_UNITS, type IntervalUnit } from "@/shared/lib/format/addInterval";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 // Retry-schedule channels, densest → sparsest. Each is an optional row in the
 // worker dialog's "Attempts" tab; a filled row (every N × T times) becomes a phase.
@@ -738,30 +739,28 @@ export default function WorkersPage() {
 
     const worksById = Object.fromEntries(works.map((w) => [w.id, w]));
 
-    const loadAll = async (pipelineId: string) => {
-        setLoading(true);
-        try {
-            const [statusResponse, workerResponse, pipelineResponse, workResponse] = await Promise.all([
-                axios.get(`/api/ticket-statuses?pipelineId=${pipelineId}`),
-                axios.get(`/api/workers?pipelineId=${pipelineId}`),
-                axios.get("/api/pipelines"),
-                axios.get("/api/works"),
-            ]);
+    const readAll = (pipelineId: string) => Promise.all([
+        axios.get(`/api/ticket-statuses?pipelineId=${pipelineId}`),
+        axios.get(`/api/workers?pipelineId=${pipelineId}`),
+        axios.get("/api/pipelines"),
+        axios.get("/api/works"),
+    ])
+        .then(([statusResponse, workerResponse, pipelineResponse, workResponse]) => {
             setStatuses((statusResponse.data as StatusItem[]).sort((a, b) => a.order - b.order));
             setWorkers(workerResponse.data);
             setPipelines(pipelineResponse.data);
             setWorks(workResponse.data);
-        } catch {
-            toast.error("Failed to load data");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => { loadAll(activePipelineId); }, [activePipelineId]);
+        })
+        .catch(() => { toast.error("Failed to load data"); })
+        .finally(() => setLoading(false));
+    // First load / another pipeline: the spinner is on from the first render
+    // (it starts true), so the effect only reads.
+    if (useValueChange(activePipelineId)) setLoading(true);
+    useEffect(() => { void readAll(activePipelineId); }, [activePipelineId]);
 
     // A worker assigned or removed on another machine announces `tickets`.
-    useRealtimeTopics(["tickets"], () => { loadAll(activePipelineId); });
+    // Read silently, like the statuses page: no spinner over the list being read.
+    useRealtimeTopics(["tickets"], () => { void readAll(activePipelineId); });
 
     const workerPayload = (form: FormValues) => ({
         label: form.label,
