@@ -12334,8 +12334,7 @@
       "notes": null,
       "ledgerAccountId": {
         "name": "Akramul Jakir"
-      },
-      "expenseAccountId": null
+      }
     },
     {
       "userId": {
@@ -12373,8 +12372,7 @@
       "notes": null,
       "ledgerAccountId": {
         "name": "Prokash Karmakar"
-      },
-      "expenseAccountId": null
+      }
     },
     {
       "userId": {
@@ -12412,8 +12410,7 @@
       "notes": null,
       "ledgerAccountId": {
         "name": "Nabajyoty Das"
-      },
-      "expenseAccountId": null
+      }
     }
   ],
   "staffSalaries": [

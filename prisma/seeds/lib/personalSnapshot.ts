@@ -368,7 +368,7 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
     // The staff ledgers are plain GL accounts (no personId), so the `accounts`
     // export above already carries them and the import re-resolves them by name.
     const staffProfiles = (await prisma.staffProfile.findMany()).map((p) =>
-        externalize(omit(p, ["createdAt", "updatedAt"]), { userId: "user", ledgerAccountId: "account", expenseAccountId: "account" }, idx));
+        externalize(omit(p, ["createdAt", "updatedAt"]), { userId: "user", ledgerAccountId: "account" }, idx));
     const staffSalaries = (await prisma.staffSalary.findMany()).map((s) =>
         externalize(omit(s, ["id", "createdAt", "updatedAt", "createdById"]), { userId: "user" }, idx));
     const holidays = (await prisma.holiday.findMany()).map((h) => omit(h, ["id", "createdAt", "updatedAt"]));
@@ -667,7 +667,7 @@ export async function importPersonal(prisma: Db, snap: PersonalSnapshot): Promis
     {
         let n = 0;
         for (const p of snap.staffProfiles ?? []) {
-            const row = internalize(p, { userId: "user", ledgerAccountId: "account", expenseAccountId: "account" }, idx);
+            const row = internalize(p, { userId: "user", ledgerAccountId: "account" }, idx);
             if (row.userId == null) continue;
             const { userId, ...data } = row;
             await prisma.staffProfile.upsert({ where: { userId }, update: data as any, create: { userId, ...data } as any });

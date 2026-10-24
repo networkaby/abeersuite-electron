@@ -23,6 +23,10 @@ const SUPABASE_HOST = (() => {
 })();
 
 const nextConfig: NextConfig = {
+  // `next dev` otherwise appends its own docs block to AGENTS.md whenever it
+  // sees an AI coding agent, leaving our hand-written project rules modified
+  // after every dev run. Dev-only behaviour; builds are unaffected.
+  agentRules: false,
   // The desktop shell loads http://127.0.0.1:<port> while `next dev` treats only
   // `localhost` as its own origin, so under `pnpm electron:dev` the HMR socket was
   // refused and the dev client reloaded the page every ~45 s without ever hydrating.
