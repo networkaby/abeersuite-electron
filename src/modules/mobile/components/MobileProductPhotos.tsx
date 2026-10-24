@@ -9,6 +9,7 @@ import { cloudinaryThumb } from "@/shared/lib/cloudinaryImage";
 import { isAiSkipped, setAiSkipped } from "@/shared/lib/shop/photoMark";
 import { MAX_PRODUCT_PHOTOS } from "@/shared/lib/constants/inventory";
 import { uploadShopPhoto } from "../lib/uploadShopPhoto";
+import { forgetUnsaved, isNoAnswer, readUnsaved, rememberUnsaved, saveFailureText } from "../lib/unsavedPhotos";
 import type { ProductPhotos } from "../lib/types";
 import MobileHeader from "./MobileHeader";
 import PhotoPickButtons from "./PhotoPickButtons";
@@ -19,6 +20,20 @@ type Pending = { key: number; file: File; preview: string; url?: string; error?:
 type CatalogueRow = { id: number; name: string; imageUrl?: string | null };
 
 const api = (id: number) => `/api/mobile/photos/product/${id}`;
+/** Waits before each automatic re-try of a save that got no answer. */
+const RETRY_DELAYS_MS = [2000, 5000, 10000];
+
+/** Attach uploaded photos, trying again by itself while the network gives no answer. */
+async function attach(id: number, urls: string[]): Promise<ProductPhotos> {
+    for (let i = 0; ; i++) {
+        try {
+            return (await axios.patch<ProductPhotos>(api(id), { add: urls })).data;
+        } catch (e) {
+            if (!isNoAnswer(e) || i >= RETRY_DELAYS_MS.length) throw e;
+            await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[i]));
+        }
+    }
+}
 
 /**
  * One product's shop photos on the phone: take or pick photos (each is shrunk,
@@ -49,7 +64,25 @@ export default function MobileProductPhotos({ id }: { id: number }) {
         setLoading(true);
         setLoadError(null);
         try {
-            setData((await axios.get<ProductPhotos>(api(id))).data);
+            const loaded = (await axios.get<ProductPhotos>(api(id))).data;
+            setData(loaded);
+            // Photos uploaded earlier whose attach never got an answer — finish the job.
+            forgetUnsaved(id, loaded.galleryUrls);
+            const left = readUnsaved(id);
+            if (left.length) {
+                setNote({ text: `Attaching ${left.length} photo${left.length > 1 ? "s" : ""} uploaded earlier…`, tone: "warn" });
+                try {
+                    const saved = await attach(id, left);
+                    forgetUnsaved(id, left);
+                    setData(saved);
+                    setNote({ text: "Earlier photos attached.", tone: "good" });
+                    void invalidateProductCatalog();
+                } catch (e) {
+                    // A refusal (photo limit, not ours) will not change on retry — let it go.
+                    if (!isNoAnswer(e)) forgetUnsaved(id, left);
+                    setNote({ text: saveFailureText(e), tone: "bad" });
+                }
+            }
         } catch (e) {
             setLoadError(extractApiError(e, "Could not load the photos."));
         } finally {
@@ -74,13 +107,15 @@ export default function MobileProductPhotos({ id }: { id: number }) {
             const url = item.url ?? setAiSkipped(await uploadShopPhoto(item.file, "product"), item.aiSkip);
             // Remember the upload, so Retry after a failed save does not send the photo again.
             setPending((list) => list.map((p) => (p.key === item.key ? { ...p, url } : p)));
-            const saved = (await axios.patch<ProductPhotos>(api(id), { add: [url] })).data;
+            rememberUnsaved(id, url);
+            const saved = await attach(id, [url]);
+            forgetUnsaved(id, [url]);
             applySaved(saved);
             setPending((list) => list.filter((p) => p.key !== item.key));
             URL.revokeObjectURL(item.preview);
             previews.current.delete(item.preview);
         } catch (e) {
-            const error = e instanceof Error && !axios.isAxiosError(e) ? e.message : extractApiError(e, "Could not save the photo.");
+            const error = e instanceof Error && !axios.isAxiosError(e) ? e.message : saveFailureText(e);
             setPending((list) => list.map((p) => (p.key === item.key ? { ...p, error } : p)));
         }
     };
@@ -104,6 +139,7 @@ export default function MobileProductPhotos({ id }: { id: number }) {
     };
 
     const discard = (item: Pending) => {
+        if (item.url) forgetUnsaved(id, [item.url]);
         setPending((list) => list.filter((p) => p.key !== item.key));
         URL.revokeObjectURL(item.preview);
         previews.current.delete(item.preview);
