@@ -254,9 +254,9 @@ export default function NeedsAttentionPage() {
         if (e.costExcl !== base.costExcl && e.costExcl.trim() !== "") {
             const v = parseFloat(e.costExcl);
             if (!isFinite(v) || v < 0) return toast.error("Invalid opening rate");
-            // Lands on InvProduct.openingRate (Tally-style opening cost) and
-            // mirrors into costPaise on the server side so the cost resolver
-            // picks it up immediately.
+            // Lands on InvProduct.openingRate (Tally-style opening cost). The
+            // cost resolver reads it as the first purchase lot, so it applies
+            // immediately — there is no separate cost column to update.
             payload.openingRatePaise = Math.round(v * 100);
         }
         if (e.mrpIncl !== base.mrpIncl && e.mrpIncl.trim() !== "") {

@@ -4,11 +4,10 @@
  * without pulling Node-only modules into the browser bundle.
  */
 
-// `costPrice` (running cost cache) is intentionally **excluded** from the
-// importer. Cost is derived from `openingRate` at books-beginning by the
-// import (via syncProductCacheFromOpening) and updated thereafter by Purchase
-// voucher posts (weighted-avg method). Letting the operator overwrite cost
-// via CSV would bypass that flow and silently drift inventory valuation.
+// `costPrice` is intentionally **excluded** from the importer. There is no saved
+// cost to write: cost is worked out from the stock ledger's purchase lots
+// (valuation.ts), with the imported `openingRate` as the first lot. A typed cost
+// would disagree with the purchases and drift inventory valuation.
 export const PRODUCT_IMPORT_FIELDS = [
     "name",
     "sku",

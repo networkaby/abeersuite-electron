@@ -372,7 +372,6 @@ export function MatchConditions({
                 <RangeSegment
                     icon={IndianRupee}
                     title="Cost range"
-                    // helper="Applied to InvProduct.costPaise (last-purchase snapshot). Both bounds optional."
                     minLabel="Min ₹"
                     maxLabel="Max ₹"
                     minValue={value.minCost}

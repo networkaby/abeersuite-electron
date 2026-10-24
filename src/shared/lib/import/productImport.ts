@@ -440,9 +440,8 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         }
 
         // costPrice is intentionally not importable — see productImportFields.ts.
-        // The running cost cache (`costPaise`) is set from `openingRate` at
-        // books-beginning by syncProductCacheFromOpening, then updated by
-        // Purchase vouchers thereafter.
+        // There is no saved cost: it is worked out from the stock ledger's
+        // purchase lots (valuation.ts), with `openingRate` as the first lot.
         //
         // In patch mode, only validate a numeric cell when it was actually
         // provided. The existing `toNumber` already returns null for both
@@ -604,8 +603,9 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
 
     /// Partial update payload — only the columns the operator brought in the
     /// CSV. Empty cells stay untouched on the existing product row. Opening-
-    /// related derivatives (openingValue, costPaise cache, stock cache) are
-    /// re-computed only when an opening field was provided.
+    /// related derivatives (openingValue) are re-computed only when an opening
+    /// field was provided; the saved stock total is rebuilt from the ledger after
+    /// the write.
     const buildPatchPayload = (v: (typeof validRows)[number]) => {
         const p = v.present;
         const out: Record<string, unknown> = {};
