@@ -57,6 +57,9 @@ export default function InstallAppButton({
     const [installedHere, setInstalledHere] = useState(false);
     const place = useSyncExternalStore(noSubscribe, readPlace, () => "server");
     const apkOk = useApkAvailable(apk, place === "android");
+    // The version in the address: each release is a new file to Chrome, so it never
+    // hands back an old copy or stops on "download this again?".
+    const apkHref = `${apk}?v=${release.code}`;
     const [qr, setQr] = useState<string | null>(null);
 
     useEffect(() => {
@@ -108,7 +111,7 @@ export default function InstallAppButton({
                 {place === "android" && apkOk && (
                     <>
                         <a
-                            href={apk}
+                            href={apkHref}
                             download
                             className="flex w-full items-center justify-center gap-2 rounded-xl border py-3 text-sm font-medium active:bg-muted"
                         >
@@ -139,7 +142,7 @@ export default function InstallAppButton({
         return (
             <div className="space-y-3">
                 <a
-                    href={apk}
+                    href={apkHref}
                     download
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-4 text-lg font-semibold text-primary-foreground active:opacity-90"
                 >
