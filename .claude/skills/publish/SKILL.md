@@ -142,7 +142,7 @@ Running the script directly is correct **here and only here**: `release` forbids
 
 What the script does: assembles the notes (yours, then the auto commit log since the previous tag), creates the annotated tag **`v<version>`** on `HEAD` if it does not exist, pushes it — the branch too when one is checked out, the tag alone when detached — and publishes a GitHub release to each `GITHUB_UPDATE_REPO_N` with that repo's own `GH_TOKEN_N`, carrying the installer, the blockmap, `latest.yml` and the notes. It prints whether it is doing a full release or a prerelease before it starts. **Read that line.**
 
-## Step 6 — Push the tag to `production`
+## Step 6 — Level `production` (`electron:release` already pushed the release tag there before publishing)
 
 ```bash
 git push production <branch> --tags

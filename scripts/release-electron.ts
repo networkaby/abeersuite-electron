@@ -5,7 +5,8 @@
  *
  * It also ensures:
  * 1. The commit is tagged with `v<version>` matching `package.json`.
- * 2. The commit and tag are pushed to `origin` (`devloperakramul/abeersuite-electron`).
+ * 2. The commit and tag are pushed to `origin` (`devloperakramul/abeersuite-electron`),
+ *    and the tag to every other release repo's remote, before anything is published.
  * 3. Binaries and release notes are attached to the release in both repos.
  */
 import * as fs from "fs";
@@ -222,6 +223,45 @@ try {
     console.error(`[release-electron] Git tag/push failed:`, (err as Error)?.message || err);
     console.error("[release-electron] Please resolve git status or push permissions before releasing.");
     process.exit(1);
+}
+
+// 2b. Our annotated tag must already be on every repo we publish to. When GitHub is
+// asked for a release whose tag it does not have, it makes its OWN lightweight tag on
+// the tip of that repo's default branch. For v1.16.12 that tip was the release commit
+// while the build had moved four commits on, so repo 1's tag named a commit that was
+// never built — and every release left a lightweight tag there that clashed with
+// origin's annotated one (Cursor's "conflicting tag(s)" pull dialog). The repo is
+// matched to a git remote by its "owner/repo" in the remote's push URL.
+const tagCommit = execSync(`git rev-parse ${tagName}^{commit}`, { encoding: "utf-8" }).trim();
+const remotes = execSync("git remote", { encoding: "utf-8" }).split("\n").map(r => r.trim()).filter(Boolean);
+for (const target of publishTargets) {
+    const slug = `${target.owner}/${target.repo}`.toLowerCase();
+    const remote = remotes.find(r => {
+        const url = execSync(`git remote get-url --push ${r}`, { encoding: "utf-8" }).trim().toLowerCase();
+        return url.replace(/\.git$/, "").endsWith(slug);
+    });
+    if (!remote) {
+        console.error(
+            `[release-electron] FATAL: no git remote points at ${target.owner}/${target.repo}, so ${tagName} cannot be pushed there\n` +
+            "  before publishing — GitHub would make its own tag on that repo's default branch instead.\n" +
+            `  Add one: git remote add <name> <url of ${target.owner}/${target.repo}>`
+        );
+        process.exit(1);
+    }
+    // `^{}` is the commit an annotated tag points at; a lightweight tag has only the plain line.
+    const lines = execSync(`git ls-remote ${remote} refs/tags/${tagName} refs/tags/${tagName}^{}`, { encoding: "utf-8" })
+        .split("\n").filter(Boolean).map(l => l.split(/\s+/));
+    const remoteCommit = (lines.find(([, ref]) => ref.endsWith("^{}")) ?? lines[0])?.[0];
+    if (remoteCommit && remoteCommit !== tagCommit) {
+        console.error(
+            `[release-electron] FATAL: ${remote} already has ${tagName} on ${remoteCommit.slice(0, 8)}, but this build is ${tagCommit.slice(0, 8)}.\n` +
+            "  A version number is never reused for a different build — bump the version and release again."
+        );
+        process.exit(1);
+    }
+    console.log(`[release-electron] Pushing tag ${tagName} to ${remote} (${target.owner}/${target.repo})...`);
+    // Forced only so a lightweight tag on the SAME commit is replaced by our annotated one.
+    execSync(`git push --force ${remote} refs/tags/${tagName}`, { stdio: "inherit" });
 }
 
 // 3. Publish to GitHub — one electron-builder invocation PER target. Each repo

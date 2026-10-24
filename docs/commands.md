@@ -340,7 +340,7 @@ For a colour change, a label fix, a spacing tweak, a copy edit — **no schema, 
 7. `git push origin main && git push production main`
 8. `pnpm electron:release`
 9. Check the installer, blockmap and `latest.yml` on every release repo
-10. `git push production main --tags`, then level `dev`, and fast-forward `d_office` / `d_shop` when Vercel needs it — the owner pushes those (§0)
+10. `git push production main --tags` (levels `main` and older tags — `electron:release` already pushed the release tag to every release repo before publishing), then level `dev`, and fast-forward `d_office` / `d_shop` when Vercel needs it — the owner pushes those (§0)
 
 **What is skipped, and why it is safe:**
 

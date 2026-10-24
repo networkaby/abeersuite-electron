@@ -133,7 +133,7 @@ One command owns all of this — never do any part of it by hand:
 check the gate cannot make, do it yourself before or after the pack, then let
 `pnpm electron:release` run straight from pack to publish.
 
-### 7. Push the tag to `production` too
+### 7. Level `main` and older tags on `production` (the release tag is already there — `electron:release` pushed it before publishing)
 
 ```bash
 git push production main --tags
