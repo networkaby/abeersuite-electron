@@ -99,6 +99,8 @@ import {
     type TradingKind, PER_KIND,
 } from "@/modules/accountancy/lib/tradingVoucherKinds";
 import { SERVICE_VOUCHER_TYPES } from "@/shared/lib/accountancy/serviceCharges";
+import { useValueChange } from "@/shared/hooks/useValueChange";
+import { useLocalState } from "@/shared/hooks/useSessionState";
 
 // Re-export so existing importers of the page keep working.
 export type { TradingKind } from "@/modules/accountancy/lib/tradingVoucherKinds";
@@ -491,6 +493,63 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             .catch(() => {/* silent — defaults are optional */ });
     }, [isEditing, kind, copy.showPaymentTerms]);
 
+    // Round Off is optional (Vyapar pattern): unchecked → hidden + treated as 0.
+    // When the checkbox is ticked, the value AUTO-computes to whatever brings
+    // Total to the nearest whole rupee (Math.round(preRound) - preRound). If
+    // the user types into the input directly, we flip `roundOffManuallyEdited`
+    // and stop auto-recomputing so the manual override sticks.
+    const [enableRoundOff, setEnableRoundOff] = useState(false);
+    const [roundOffManuallyEdited, setRoundOffManuallyEdited] = useState(false);
+
+    // ── Column / feature visibility (persisted) ───────────────────────────
+    type ColumnPrefs = {
+        freeQty: boolean;
+        mrpHint: boolean;
+        lineDiscount: boolean;
+        lineTax: boolean;
+        lineDescription: boolean;
+        overallDiscount: boolean;
+        /// true = PRICE column shows/accepts tax-inclusive rate; false =
+        /// exclusive. Default depends on kind (see DEFAULT_PREFS below). On
+        /// PURCHASE the MRP column is always editable regardless of this toggle.
+        rateInclTax: boolean;
+    };
+    // Customer-facing kinds (party = Sundry Debtors) default to tax-inclusive
+    // rates (retail-style MRP entry); supplier-facing kinds (Sundry Creditors)
+    // default to exclusive (bills quote pre-tax rates). Derived from the
+    // existing party field rather than a separate kind list.
+    const DEFAULT_PREFS: ColumnPrefs = {
+        freeQty: true,
+        mrpHint: true,
+        lineDiscount: true,
+        lineTax: true,
+        lineDescription: true,
+        overallDiscount: true,
+        rateInclTax: copy.party === "Sundry Debtors",
+    };
+    // v4: prefs now keyed per voucher kind so Sale/Purchase/etc. remember
+    // their own rateInclTax (and other column prefs) independently instead
+    // of sharing one global browser setting (2026-07-30).
+    const PREFS_KEY = `saleVoucherPage.columnPrefs.v4.${kind}`;
+    // Remembered in this browser (useLocalState restores after mount); what was
+    // saved is laid over this kind's defaults, so a new column starts at its default.
+    const [savedPrefs, setSavedPrefs] = useLocalState<Partial<ColumnPrefs>>(PREFS_KEY, {});
+    const prefs: ColumnPrefs = { ...DEFAULT_PREFS, ...savedPrefs };
+    const setPrefs = (update: (p: ColumnPrefs) => ColumnPrefs) =>
+        setSavedPrefs((saved) => update({ ...DEFAULT_PREFS, ...saved }));
+    const prefsRef = useRef<ColumnPrefs>(DEFAULT_PREFS);
+    useEffect(() => { prefsRef.current = prefs; });
+    // handleProductSelect is a stable useCallback, so it cannot read `lines`
+    // directly — it needs to know what is already on the bill to merge a
+    // repeated item. Same trick as prefsRef above.
+    const linesRef = useRef<LineState[]>([]);
+    useEffect(() => { linesRef.current = lines; });
+    // Which row we blanked after merging a repeat, and how many times — the
+    // item box clears its text off this (see InvProductCombobox's clearNonce).
+    const [clearedRow, setClearedRow] = useState<{ id: number; n: number } | null>(null);
+    const togglePref = (k: keyof ColumnPrefs) => setPrefs((p) => ({ ...p, [k]: !p[k] }));
+
+
     // ── Edit mode: fetch the voucher and prefill all form state ──────────
     // Run once on mount when `?voucherId=` is set. The fetch payload is the
     // standard GET /api/inventory/vouchers/[id] response (header + lines +
@@ -843,13 +902,14 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
 
     // Edit-mode payment-account resolver: when both the loaded voucher's
     // paymentAccountId and the cash/bank list are available, pick the match.
-    useEffect(() => {
-        if (!isEditing) return;
-        if (pendingPaymentAccountId == null) return;
-        if (cashBankAccounts.length === 0) return;
+    // Done while rendering, and only when one of the two arrives or changes — a
+    // later hand pick is left alone.
+    const pendingChanged = useValueChange(pendingPaymentAccountId);
+    const accountsChanged = useValueChange(cashBankAccounts);
+    if ((pendingChanged || accountsChanged) && isEditing && pendingPaymentAccountId != null && cashBankAccounts.length > 0) {
         const match = cashBankAccounts.find((a) => a.id === pendingPaymentAccountId);
         if (match) setPaymentAccount(match);
-    }, [isEditing, pendingPaymentAccountId, cashBankAccounts]);
+    }
 
     // Fetch the picked party's outstanding balance + address so we can show
     // them in the compact info card. accountId / id come straight off
@@ -858,8 +918,9 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // The balance is summed from the GL by account — the same read as the POS Rcv
     // dialog and the credit gate, signed "due > 0 = owes us" — so a company reads
     // the same way as a person. The address comes from the party's own record.
+    if (useValueChange(party) && !party) setPartySnapshot({ balance: 0, address: null });
     useEffect(() => {
-        if (!party) { setPartySnapshot({ balance: 0, address: null }); return; }
+        if (!party) return;
         let cancelled = false;
         const balanceReq = party.accountId != null
             ? axios.get<{ due: number }>(`/api/pos/party-balance/${party.accountId}`).then((r) => r.data.due)
@@ -882,84 +943,13 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     const [printAfterSave, setPrintAfterSave] = useState(() => printAfterSaveDefault(kind));
     const [thermal, setThermal] = useState(() => thermalDefault(kind));
     const [showDescription, setShowDescription] = useState(false);
-    // Round Off is optional (Vyapar pattern): unchecked → hidden + treated as 0.
-    // When the checkbox is ticked, the value AUTO-computes to whatever brings
-    // Total to the nearest whole rupee (Math.round(preRound) - preRound). If
-    // the user types into the input directly, we flip `roundOffManuallyEdited`
-    // and stop auto-recomputing so the manual override sticks.
-    const [enableRoundOff, setEnableRoundOff] = useState(false);
-    const [roundOffManuallyEdited, setRoundOffManuallyEdited] = useState(false);
-
-    // ── Column / feature visibility (persisted) ───────────────────────────
-    type ColumnPrefs = {
-        freeQty: boolean;
-        mrpHint: boolean;
-        lineDiscount: boolean;
-        lineTax: boolean;
-        lineDescription: boolean;
-        overallDiscount: boolean;
-        /// true = PRICE column shows/accepts tax-inclusive rate; false =
-        /// exclusive. Default depends on kind (see DEFAULT_PREFS below). On
-        /// PURCHASE the MRP column is always editable regardless of this toggle.
-        rateInclTax: boolean;
-    };
-    // Customer-facing kinds (party = Sundry Debtors) default to tax-inclusive
-    // rates (retail-style MRP entry); supplier-facing kinds (Sundry Creditors)
-    // default to exclusive (bills quote pre-tax rates). Derived from the
-    // existing party field rather than a separate kind list.
-    const DEFAULT_PREFS: ColumnPrefs = {
-        freeQty: true,
-        mrpHint: true,
-        lineDiscount: true,
-        lineTax: true,
-        lineDescription: true,
-        overallDiscount: true,
-        rateInclTax: copy.party === "Sundry Debtors",
-    };
-    // v4: prefs now keyed per voucher kind so Sale/Purchase/etc. remember
-    // their own rateInclTax (and other column prefs) independently instead
-    // of sharing one global browser setting (2026-07-30).
-    const PREFS_KEY = `saleVoucherPage.columnPrefs.v4.${kind}`;
-    const [prefs, setPrefs] = useState<ColumnPrefs>(DEFAULT_PREFS);
-    const prefsRef = useRef<ColumnPrefs>(DEFAULT_PREFS);
-    useEffect(() => { prefsRef.current = prefs; });
-    // handleProductSelect is a stable useCallback, so it cannot read `lines`
-    // directly — it needs to know what is already on the bill to merge a
-    // repeated item. Same trick as prefsRef above.
-    const linesRef = useRef<LineState[]>([]);
-    useEffect(() => { linesRef.current = lines; });
-    // Which row we blanked after merging a repeat, and how many times — the
-    // item box clears its text off this (see InvProductCombobox's clearNonce).
-    const [clearedRow, setClearedRow] = useState<{ id: number; n: number } | null>(null);
-    useEffect(() => {
-        if (typeof window === "undefined") return;
-        try {
-            const raw = window.localStorage.getItem(PREFS_KEY);
-            if (raw) setPrefs({ ...DEFAULT_PREFS, ...JSON.parse(raw) });
-        } catch { /* ignore */ }
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- saved column prefs are read once; PREFS_KEY / DEFAULT_PREFS are constants
-    }, []);
-    const togglePref = (k: keyof ColumnPrefs) => {
-        setPrefs((p) => {
-            const next = { ...p, [k]: !p[k] };
-            try { window.localStorage.setItem(PREFS_KEY, JSON.stringify(next)); }
-            catch { /* ignore */ }
-            return next;
-        });
-    };
-
     // Toggling rateInclTax flips how the entered PRICE is interpreted: the
     // user's typed number stays as-is, but the AMOUNT column re-derives.
     // Without resyncing taxAmount, calcLine would keep the previous mode's
     // stale value and the total would drift.
     const toggleRateInclTax = () => {
         const willBeInclusive = !prefs.rateInclTax;
-        setPrefs((p) => {
-            const next = { ...p, rateInclTax: !p.rateInclTax };
-            try { window.localStorage.setItem(PREFS_KEY, JSON.stringify(next)); }
-            catch { /* ignore */ }
-            return next;
-        });
+        setPrefs((p) => ({ ...p, rateInclTax: !p.rateInclTax }));
         setLines((ls) => ls.map((l) => {
             const rawRate = parseFloat(l.rate) || 0;
             if (rawRate === 0) return l;
@@ -1188,17 +1178,18 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // Auto round-off: when the checkbox is ticked and the user hasn't typed
     // a manual override, derive header.roundOff so Total lands on a whole
     // rupee. `preRound` excludes the round-off itself to avoid feedback.
-    useEffect(() => {
-        if (!enableRoundOff || roundOffManuallyEdited) return;
+    // Kept while rendering: React re-renders before painting, so the total on
+    // screen is never the un-rounded one.
+    if (enableRoundOff && !roundOffManuallyEdited) {
         const preRound = lineSubtotal - overallDiscount + shipping;
         const target = Math.round(preRound);
         const auto = target - preRound;
-        // Only write when the result actually changes — prevents update churn.
+        // Only write when the result actually changes — this is what ends it.
         const formatted = Math.abs(auto) < 0.005 ? "0" : auto.toFixed(2);
         if (formatted !== header.roundOff) {
             setHeader((h) => ({ ...h, roundOff: formatted }));
         }
-    }, [enableRoundOff, roundOffManuallyEdited, lineSubtotal, overallDiscount, shipping, header.roundOff]);
+    }
 
     const handleDiscountPctChange = (pct: string) => {
         const p = parseFloat(pct) || 0;

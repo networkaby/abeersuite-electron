@@ -47,6 +47,7 @@ import { numberToIndianWords } from "@/shared/lib/format/numberWords";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { toIsoDate } from "@/shared/hooks/useTallyDate";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 // ── Loaded JE shape (edit mode) ─────────────────────────────────────────────
 
@@ -241,10 +242,11 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
     }, []);
 
     // ── Prefill in edit mode ────────────────────────────────────────────────
+    // Another voucher opened in place shows "loading" from its first render.
+    if (useValueChange(isEditing ? voucherId : null) && isEditing && voucherId != null) setLoading(true);
     useEffect(() => {
         if (!isEditing || voucherId == null) return;
         let cancelled = false;
-        setLoading(true);
         axios.get<LoadedJe>(`/api/accountancy/journal-entries/${voucherId}`)
             .then((r) => {
                 if (cancelled) return;

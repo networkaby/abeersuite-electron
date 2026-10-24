@@ -29,6 +29,7 @@ import { useApiResource } from "@/shared/hooks/useApiResource";
 import { usePagedQuery } from "@/shared/hooks/usePagedQuery";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { useEscape } from "@/shared/hooks/useEscape";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 type PendingType = "CHALLAN" | "GRN" | "REJECTION_IN" | "REJECTION_OUT";
 
@@ -204,17 +205,23 @@ function SettleDialog({
     const [loading, setLoading] = useState(false);
     const [linking, setLinking] = useState<number | null>(null);
 
+    // Another voucher (or none): clear / show loading while rendering.
+    if (useValueChange(target)) {
+        if (!target) setLinkable([]);
+        else setLoading(true);
+    }
     useEffect(() => {
-        if (!target) { setLinkable([]); return; }
+        if (!target) return;
+        let cancelled = false;
         const params = new URLSearchParams({ types: SETTLES_BY[target.type].join(",") });
         // Party filter — only show vouchers for the same customer/supplier.
         if (target.partyId) params.set("partyId", String(target.partyId));
         else if (target.partyName) params.set("partyName", target.partyName);
-        setLoading(true);
         axios.get<{ rows: LinkableRow[] }>(`/api/inventory/vouchers/linkable?${params}`)
-            .then((r) => setLinkable(r.data.rows))
-            .catch(() => toast.error("Failed to load vouchers"))
-            .finally(() => setLoading(false));
+            .then((r) => { if (!cancelled) setLinkable(r.data.rows); })
+            .catch(() => { if (!cancelled) toast.error("Failed to load vouchers"); })
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
     }, [target]);
 
     const handleLink = async (settlingId: number) => {
