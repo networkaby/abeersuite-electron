@@ -76,7 +76,21 @@ async function listCloudFiles(): Promise<CloudFile[]> {
     return files;
 }
 
-/** Every text in the database that mentions shop/, joined — one query per table. */
+/**
+ * How much text after each "shop/" the database sends back. A public id longer than
+ * this cannot be matched in full, so `isUsed` counts it as used.
+ */
+const SNIPPET_CHARS = 300;
+
+/**
+ * Every "shop/" in the database with the text that follows it, joined — ONE query.
+ *
+ * Only those snippets travel, not the rows: a product that mentions a photo used to
+ * come back whole (description, specs, every JSON column), on every scan. Splitting
+ * the row text at each "shop/" keeps every occurrence, so `includes(publicId)` on the
+ * snippets answers exactly as it did on the whole text — for any id `isUsed` lets
+ * through.
+ */
 async function databaseText(): Promise<string> {
     const cols = await prisma.$queryRaw<{ table_name: string; column_name: string }[]>`
         SELECT table_name, column_name FROM information_schema.columns
@@ -89,15 +103,26 @@ async function databaseText(): Promise<string> {
         byTable.set(c.table_name, [...(byTable.get(c.table_name) ?? []), c.column_name]);
     }
     const q = (id: string) => `"${id.replace(/"/g, '""')}"`;
-    const parts: string[] = [];
-    for (const [table, columns] of byTable) {
+    const selects = [...byTable].map(([table, columns]) => {
         const text = `concat_ws(' ', ${columns.map((c) => `${q(c)}::text`).join(", ")})`;
-        const rows = await prisma.$queryRawUnsafe<{ t: string }[]>(
-            `SELECT ${text} AS t FROM ${q(table)} WHERE ${text} LIKE '%${PREFIX}%'`,
-        );
-        for (const r of rows) parts.push(r.t);
-    }
-    return parts.join("\n");
+        return `SELECT part FROM ${q(table)}, unnest((string_to_array(${text}, '${PREFIX}'))[2:]) AS part`
+            + ` WHERE ${text} LIKE '%${PREFIX}%'`;
+    });
+    if (selects.length === 0) return "";
+    const rows = await prisma.$queryRawUnsafe<{ t: string }[]>(
+        `SELECT DISTINCT '${PREFIX}' || left(part, ${SNIPPET_CHARS}) AS t FROM (${selects.join(" UNION ALL ")}) s`,
+    );
+    return rows.map((r) => r.t).join("\n");
+}
+
+/**
+ * Does the database text mention this file? An id the snippets cannot hold in full —
+ * longer than a snippet, or with a second "shop/" inside it, where the split cuts —
+ * counts as used, so the cleanup can only ever keep it.
+ */
+function isUsed(text: string, publicId: string): boolean {
+    if (publicId.length > PREFIX.length + SNIPPET_CHARS || publicId.indexOf(PREFIX, 1) !== -1) return true;
+    return text.includes(publicId);
 }
 
 /** Cloudinary's files and the database text, read together. */
@@ -108,9 +133,11 @@ async function scan(): Promise<{ files: CloudFile[]; text: string }> {
 
 export type LibraryPhoto = { url: string; publicId: string; createdAt: string; used: boolean };
 
-// The photo library is read on every picker open; Cloudinary's Admin API allows
-// ~500 calls an hour on the free plan, so one scan serves everyone for a while.
-const LIBRARY_TTL_MS = 3 * 60_000;
+// The photo library is read on every picker open, and each read scans the whole
+// database and pages through Cloudinary's Admin API (~500 calls an hour on the free
+// plan) — so one scan serves everyone for a while. A stale "used" mark only sorts a
+// photo onto the wrong tab of the picker; the cleanup never reads this cache.
+const LIBRARY_TTL_MS = 15 * 60_000;
 let libraryCache: { at: number; photos: LibraryPhoto[] } | null = null;
 
 /**
@@ -123,7 +150,7 @@ export async function photoLibrary(): Promise<LibraryPhoto[]> {
     if (libraryCache && Date.now() - libraryCache.at < LIBRARY_TTL_MS) return libraryCache.photos;
     const { files, text } = await scan();
     const photos = files
-        .map((f) => ({ url: f.url, publicId: f.publicId, createdAt: f.createdAt, used: text.includes(f.publicId) }))
+        .map((f) => ({ url: f.url, publicId: f.publicId, createdAt: f.createdAt, used: isUsed(text, f.publicId) }))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     libraryCache = { at: Date.now(), photos };
     return photos;
@@ -132,7 +159,7 @@ export async function photoLibrary(): Promise<LibraryPhoto[]> {
 export async function planCleanup(): Promise<CleanupPlan> {
     const { files, text } = await scan();
     const cutoff = Date.now() - PHOTO_CLEANUP_MIN_AGE_DAYS * 86_400_000;
-    const unused = files.filter((f) => !text.includes(f.publicId));
+    const unused = files.filter((f) => !isUsed(text, f.publicId));
     const garbage = unused.filter((f) => Date.parse(f.createdAt) < cutoff);
     return {
         total: files.length,
