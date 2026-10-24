@@ -349,7 +349,6 @@ export async function postVoucherInTx(
                     outQty,
                     rate:      stampedRate,
                     amount:    line.amount,
-                    productCurrentStock: line.product.stock,
                     newMrpPaise: isPurchase && line.mrpPaise != null ? line.mrpPaise : undefined,
                 });
             }

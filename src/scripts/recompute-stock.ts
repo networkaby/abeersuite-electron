@@ -37,6 +37,9 @@ const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 const FIX = process.argv.includes("--fix");
 const n = (v: unknown) => Number(v ?? 0);
 const EPS = 0.0005;
+// The stock columns are Int, the ledger Decimal(10,3): compare and write the
+// rounded figure, the way recomputeProductStock's ROUND() does (half away from 0).
+const roundInt = (v: number) => Math.sign(v) * Math.round(Math.abs(v));
 
 async function main() {
     const [byProduct, byBranch, products, branchRows] = await Promise.all([
@@ -53,7 +56,7 @@ async function main() {
     const productDrift: { id: number; sku: string; cached: number; computed: number; delta: number }[] = [];
     for (const p of products) {
         // On-hand = master opening (folded in, GL-style) + ledger movements.
-        const computed = n(p.openingStock) + (computedProduct.get(p.id) ?? 0);
+        const computed = roundInt(n(p.openingStock) + (computedProduct.get(p.id) ?? 0));
         const cached = n(p.stock);
         if (Math.abs(computed - cached) > EPS) {
             productDrift.push({ id: p.id, sku: p.sku, cached, computed, delta: computed - cached });
@@ -67,7 +70,7 @@ async function main() {
 
     const branchDrift: { productId: number; branchId: string; cached: number; computed: number }[] = [];
     for (const b of branchRows) {
-        const computed = computedBranch.get(key(b.productId, b.branchId)) ?? 0;
+        const computed = roundInt(computedBranch.get(key(b.productId, b.branchId)) ?? 0);
         const cached = n(b.stock);
         if (Math.abs(computed - cached) > EPS) {
             branchDrift.push({ productId: b.productId, branchId: b.branchId, cached, computed });

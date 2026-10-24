@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { productOpeningValue, syncProductCacheFromOpening } from "@/modules/inventory/lib/stockValue";
+import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import * as Sentry from "@sentry/nextjs";
 import { PRODUCT_IMPORT_FIELDS, type ProductImportField } from "./productImportFields";
@@ -594,9 +595,9 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             // IS an opening quantity — a branch on a product that opened with
             // nothing would be a lie the branch screens then have to explain.
             openingBranchId: v.data.openingStock != null ? (req.openingBranchId ?? null) : null,
-            // `cachePatch` provides `costPaise` (derived from openingRate) and
-            // `stock`. `costPaise` is not importable directly (see
-            // productImportFields.ts) — opening rate is the only path in.
+            // `cachePatch` is the saved stock total = the opening — right for a NEW
+            // row only (no movement yet). An existing row drops it and is rebuilt
+            // from the ledger after the write (buildUpdatePayload).
             ...cachePatch,
         };
     };
@@ -658,14 +659,12 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             if (p.has("openingStock") && v.data.openingStock != null) {
                 out.openingBranchId = req.openingBranchId ?? null;
             }
-            // Recompute openingValue + cache only when we have BOTH opening
-            // stock and opening rate (either from this CSV or already on the
-            // row). Safe approximation: only write the derivatives when both
-            // values are present in this row.
+            // Recompute openingValue only when we have BOTH opening stock and
+            // opening rate in this row. The saved stock total is rebuilt from
+            // the ledger after the write, like a full-replace update.
             if (v.data.openingStock != null && v.data.openingRate != null) {
                 const opening = { openingStock: v.data.openingStock, openingRate: v.data.openingRate };
                 out.openingValue = productOpeningValue(opening);
-                Object.assign(out, syncProductCacheFromOpening(opening));
             }
         }
         return out;
@@ -678,7 +677,9 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
     /// (Creates go through buildPayload directly and always need their SKU, so
     /// the drop lives here rather than inside buildPayload.)
     const buildUpdatePayload = (v: (typeof validRows)[number]) => {
-        const payload = buildPayload(v);
+        // `stock` is dropped: on a product that has moved, the opening alone is
+        // not its stock (opening 10, +50, −30 = 30, not 10). Rebuilt below.
+        const { stock: _rebuiltFromLedger, ...payload } = buildPayload(v);
         if (!v.matchedByCode) return payload;
         const { sku: _keepExisting, ...rest } = payload;
         return rest;
@@ -727,6 +728,9 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             for (const v of updateRows) {
                 await tx.invProduct.update({ where: { id: v.existingId! }, data: writeOne(v) });
             }
+            // Saved stock totals of every updated row = opening + ledger, in one
+            // batched rebuild (a no-op on rows already right).
+            await recomputeProductStock(tx, updateRows.map((v) => v.existingId!));
         },
         { timeout: 10 * 60 * 1000, maxWait: 30_000 },
     );

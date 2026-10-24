@@ -163,13 +163,8 @@ export async function POST(req: NextRequest) {
                     const inQty       = item.side === "DEBIT" ? item.qty : 0;
                     const outQty      = item.side === "CREDIT" ? item.qty : 0;
 
-                    // NULL + n = NULL in Postgres, so increment/decrement
-                    // silently no-ops on untracked products. Pre-fetch the
-                    // cache to switch to absolute set when uninitialized.
-                    const current = await tx.invProduct.findUnique({
-                        where:  { id: item.productId },
-                        select: { stock: true },
-                    });
+                    // An empty (untracked) total is started from opening +
+                    // ledger inside the writer — no pre-fetch needed.
                     await recordStockMovement(tx, {
                         universalVoucherId: jvSpineId,
                         productId: item.productId,
@@ -179,7 +174,6 @@ export async function POST(req: NextRequest) {
                         outQty,
                         rate:      item.rate,
                         amount:    item.amount,
-                        productCurrentStock: current?.stock ?? null,
                         updateBranchBalance: false,
                     });
                 }

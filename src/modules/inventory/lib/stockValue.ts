@@ -24,10 +24,12 @@ export function productOpeningValue(o: ProductOpeningInput): number | null {
 }
 
 /**
- * Derive the running qty cache from opening qty. Returns a partial
- * InvProduct shape ready to spread into a Prisma update. PR 3 reduced this
- * to a single field (stock) — costPaise is no longer cached. The opening
- * rate still seeds cost via the synthetic first lot in loadInwardLots.
+ * The saved stock total for a product being CREATED: just its opening, because a
+ * new product has no movement yet. Spread into a Prisma create.
+ *
+ * Never use it on an existing product — an edit to the opening must keep the
+ * movements (opening 10, +50, −30 = 30; opening → 12 reads 32, not 12). Write the
+ * opening, then `recomputeProductStock` in the same transaction.
  */
 export function syncProductCacheFromOpening(
     o: ProductOpeningInput,

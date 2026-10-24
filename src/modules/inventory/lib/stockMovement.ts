@@ -50,13 +50,6 @@ export interface RecordStockMovementArgs {
     outQty:    Numeric;
     rate:      Numeric;
     amount:    Numeric;
-    /**
-     * Pre-fetched InvProduct.stock value. When null the cache was uninitialized
-     * and the helper overwrites with the absolute delta (Postgres NULL + n
-     * silently no-ops). When undefined, plain { increment | decrement } — the
-     * POS / cancel paths skip the pre-fetch.
-     */
-    productCurrentStock?: number | null;
     /** Default true. Set false for BRANCH_TRANSFER (org-wide cache unchanged). */
     updateOrgWideStock?:  boolean;
     /** Default true. Set false for routes that don't track per-branch balance. */
@@ -69,56 +62,9 @@ export async function recordStockMovement(
     tx: Prisma.TransactionClient,
     args: RecordStockMovementArgs,
 ): Promise<void> {
-    const inN  = toNumber(args.inQty);
-    const outN = toNumber(args.outQty);
-
-    await tx.invStockLedger.create({
-        data: {
-            productId: args.productId,
-            universalVoucherId: args.universalVoucherId,
-            branchId:  args.branchId,
-            date:      args.date,
-            inQty:     args.inQty as never,
-            outQty:    args.outQty as never,
-            rate:      args.rate as never,
-            amount:    args.amount as never,
-        },
-    });
-
-    const delta = Math.round(inN) - Math.round(outN);
-    const updateOrgWide  = args.updateOrgWideStock  !== false;
-    const updateBranch   = args.updateBranchBalance !== false;
-
-    // 2. Org-wide InvProduct cache (stock + optional MRP stamp).
-    if (updateOrgWide) {
-        const productData: Prisma.InvProductUpdateInput = {};
-        if (delta !== 0) {
-            if (args.productCurrentStock === null) {
-                // Cache uninitialized — absolute value, not delta.
-                productData.stock = delta;
-            } else {
-                productData.stock = delta > 0
-                    ? { increment: delta }
-                    : { decrement: -delta };
-            }
-        }
-        if (args.newMrpPaise != null) productData.mrpPaise = args.newMrpPaise;
-        if (Object.keys(productData).length > 0) {
-            await tx.invProduct.update({
-                where: { id: args.productId },
-                data:  productData,
-            });
-        }
-    }
-
-    // 3. Per-branch balance.
-    if (updateBranch && delta !== 0) {
-        await tx.invProductBranch.upsert({
-            where:  { productId_branchId: { productId: args.productId, branchId: args.branchId } },
-            create: { productId: args.productId, branchId: args.branchId, stock: delta },
-            update: { stock: delta > 0 ? { increment: delta } : { decrement: -delta } },
-        });
-    }
+    // One line is a batch of one — the same three statements, the same rule for
+    // an empty total. There used to be two copies of this, and they drifted.
+    await recordStockMovementsBatch(tx, [args]);
 }
 
 /**
@@ -168,11 +114,8 @@ export async function recordStockMovementsBatch(
         })),
     });
 
-    // Fold the per-line rows into one entry per target row. `absolute` carries the
-    // single-row helper's null-cache rule: when the caller passed
-    // `productCurrentStock: null` the cache was uninitialised and the delta is
-    // written as an absolute value, because Postgres silently no-ops NULL + n.
-    const orgWide  = new Map<number, { delta: number; absolute: boolean; mrp: number | null }>();
+    // Fold the per-line rows into one entry per target row.
+    const orgWide  = new Map<number, { delta: number; mrp: number | null }>();
     const perBranch = new Map<string, { productId: number; branchId: string; delta: number }>();
 
     for (const a of items) {
@@ -180,11 +123,8 @@ export async function recordStockMovementsBatch(
         if (delta === 0 && a.newMrpPaise == null) continue;
 
         if (a.updateOrgWideStock !== false) {
-            const cur = orgWide.get(a.productId) ?? { delta: 0, absolute: false, mrp: null };
+            const cur = orgWide.get(a.productId) ?? { delta: 0, mrp: null };
             cur.delta   += delta;
-            // Absolute wins: the first write sets the value and later ones add to
-            // it, which comes to the same as writing the sum absolutely.
-            cur.absolute = cur.absolute || a.productCurrentStock === null;
             if (a.newMrpPaise != null) cur.mrp = a.newMrpPaise;   // last line wins, as before
             orgWide.set(a.productId, cur);
         }
@@ -198,24 +138,7 @@ export async function recordStockMovementsBatch(
     }
 
     // 2. Org-wide InvProduct cache (stock + optional MRP stamp) — one statement.
-    const org = [...orgWide].filter(([, v]) => v.delta !== 0 || v.mrp != null);
-    if (org.length > 0) {
-        await tx.$executeRaw`
-            UPDATE "InvProduct" AS p
-               SET "stock"     = CASE WHEN v."absolute" THEN v."delta" ELSE p."stock" + v."delta" END,
-                   "mrpPaise"  = COALESCE(v."mrp", p."mrpPaise"),
-                   "updatedAt" = NOW()
-              FROM (
-                    SELECT * FROM UNNEST(
-                        ${org.map(([id]) => id)}::int[],
-                        ${org.map(([, v]) => v.delta)}::int[],
-                        ${org.map(([, v]) => v.absolute)}::boolean[],
-                        ${org.map(([, v]) => v.mrp)}::int[]
-                    ) AS t("id", "delta", "absolute", "mrp")
-                   ) AS v
-             WHERE p."id" = v."id"
-        `;
-    }
+    await applyOrgWideStock(tx, [...orgWide].map(([id, v]) => ({ id, ...v })));
 
     // 3. Per-branch balance — one statement. Insert-or-add, the multi-row form of
     // the upsert this used to run once per line.
@@ -234,6 +157,48 @@ export async function recordStockMovementsBatch(
                    "updatedAt" = NOW()
         `;
     }
+}
+
+/**
+ * Apply per-product changes to the org-wide `InvProduct.stock`, in ONE statement.
+ * Every writer comes through here, so there is one rule for an EMPTY total:
+ *
+ *   stock is a number → stock + delta
+ *   stock is NULL      → openingStock + Σ(inQty − outQty), straight from the ledger
+ *
+ * NULL means "not tracked yet" (a Vyapar-imported product has an opening and no
+ * saved total). Postgres reads NULL + n as NULL, so a plain increment left such a
+ * product empty forever — the shop then treats it as untracked, always in stock —
+ * and the old "absolute" rule wrote just this line's delta, dropping the opening
+ * (opening 10, sell 1 → −1). The ledger rows of THIS movement are inserted before
+ * the call, so the sum already holds them. Rounded: the total is Int, the ledger
+ * Decimal(10,3).
+ */
+async function applyOrgWideStock(
+    tx: Prisma.TransactionClient,
+    rows: Array<{ id: number; delta: number; mrp: number | null }>,
+): Promise<void> {
+    const org = rows.filter((r) => r.delta !== 0 || r.mrp != null);
+    if (org.length === 0) return;
+    await tx.$executeRaw`
+        UPDATE "InvProduct" AS p
+           SET "stock"     = CASE
+                   WHEN p."stock" IS NOT NULL THEN p."stock" + v."delta"
+                   ELSE ROUND(COALESCE(p."openingStock", 0) + COALESCE((
+                       SELECT SUM(l."inQty" - l."outQty") FROM "InvStockLedger" AS l WHERE l."productId" = p."id"
+                   ), 0))::int
+               END,
+               "mrpPaise"  = COALESCE(v."mrp", p."mrpPaise"),
+               "updatedAt" = NOW()
+          FROM (
+                SELECT * FROM UNNEST(
+                    ${org.map((r) => r.id)}::int[],
+                    ${org.map((r) => r.delta)}::int[],
+                    ${org.map((r) => r.mrp)}::int[]
+                ) AS t("id", "delta", "mrp")
+               ) AS v
+         WHERE p."id" = v."id"
+    `;
 }
 
 export interface ReverseStockMovementArgs {
@@ -256,9 +221,8 @@ export interface ReverseStockMovementArgs {
 
 /**
  * Writes a counter-entry that nets out the original row (in↔out swapped,
- * amount sign flipped) and applies the inverse delta to InvProduct.stock and
- * InvProductBranch.stock using plain increment/decrement (no null-aware logic
- * — matches today's cancel/delete behavior).
+ * amount sign flipped) and applies the inverse delta to InvProduct.stock (same
+ * empty-total rule as posting, applyOrgWideStock) and InvProductBranch.stock.
  */
 export async function reverseStockMovement(
     tx: Prisma.TransactionClient,
@@ -295,24 +259,10 @@ export async function reverseStockMovement(
     });
 
     if (updateOrgWideStock) {
-        await tx.invProduct.update({
-            where: { id: ledgerRow.productId },
-            data:  { stock: branchUpdate },
-        });
+        await applyOrgWideStock(tx, [{ id: ledgerRow.productId, delta: reverseDelta, mrp: null }]);
     }
 }
 
-// ── Recompute on-hand from truth (the ② safety net + edit oracle) ────────────
-//
-// Rebuilds the cached InvProduct.stock / InvProductBranch.stock for the given
-// products straight from the source of truth, so callers (e.g. the in-place
-// voucher edit) never hand-maintain the cache with fragile delta math — they
-// mutate the ledger, then call this. Formula (validated catalogue-wide, zero
-// drift — see scripts/recompute-stock.ts):
-//   InvProduct.stock       = openingStock (Tally master column) + Σ(inQty − outQty)
-//   InvProductBranch.stock = Σ(inQty − outQty) per branch
-// `openingStock` is folded in exactly as GL folds Account.openingBalance into
-// aggregateClosingAsOf — it is NOT a ledger row.
 /**
  * Remove the counter-entries a CANCEL wrote for one voucher — the mirror of
  * `reverseStockMovement`, used when a cancelled voucher is restored. Returns the
@@ -343,6 +293,17 @@ export async function deleteCancelCounterRows(
     return [...new Set(rows.map((r) => r.productId))];
 }
 
+// ── Recompute on-hand from truth (the ② safety net + edit oracle) ────────────
+//
+// Rebuilds the cached InvProduct.stock / InvProductBranch.stock for the given
+// products straight from the source of truth, so callers (e.g. the in-place
+// voucher edit) never hand-maintain the cache with fragile delta math — they
+// mutate the ledger, then call this. Formula (validated catalogue-wide, zero
+// drift — see src/scripts/recompute-stock.ts):
+//   InvProduct.stock       = openingStock (Tally master column) + Σ(inQty − outQty)
+//   InvProductBranch.stock = Σ(inQty − outQty) per branch
+// `openingStock` is folded in exactly as GL folds Account.openingBalance into
+// aggregateClosingAsOf — it is NOT a ledger row.
 export async function recomputeProductStock(
     tx: Prisma.TransactionClient,
     productIds: number[],
@@ -350,43 +311,59 @@ export async function recomputeProductStock(
     const ids = [...new Set(productIds)];
     if (ids.length === 0) return;
 
-    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
-    const byProduct = await tx.invStockLedger.groupBy({ by: ["productId"], where: { productId: { in: ids } }, _sum: { inQty: true, outQty: true } });
-    const byBranch = await tx.invStockLedger.groupBy({ by: ["productId", "branchId"], where: { productId: { in: ids } }, _sum: { inQty: true, outQty: true } });
-    const products = await tx.invProduct.findMany({ where: { id: { in: ids } }, select: { id: true, openingStock: true } });
+    // Three statements however many products — this used to be one UPDATE per
+    // product and one upsert per branch row. Rows that already hold the right
+    // number are left alone, so a counter's outbox does not ship a no-op update.
+    // Rounded to the Int column; the ledger is Decimal(10,3) and a bare 2.5 was
+    // silently cut to 2.
+    //
+    // "Not tracked" (NULL) is kept, never invented: a product with no opening and
+    // no ledger row stays NULL if it was NULL, and a number goes to 0 — a rebuild
+    // must not quietly turn a tracked product into an untracked one, which the
+    // shop reads as "always in stock".
+    //
+    // One after another: inside a transaction (one connection) pg refuses parallel queries.
+    await tx.$executeRaw`
+        WITH led AS (
+            SELECT "productId", SUM("inQty" - "outQty") AS q
+              FROM "InvStockLedger" WHERE "productId" = ANY(${ids}::int[])
+             GROUP BY "productId"
+        ), want AS (
+            SELECT p."id",
+                   CASE WHEN p."openingStock" IS NOT NULL OR led.q IS NOT NULL
+                            THEN ROUND(COALESCE(p."openingStock", 0) + COALESCE(led.q, 0))::int
+                        WHEN p."stock" IS NULL THEN NULL
+                        ELSE 0
+                   END AS stock
+              FROM "InvProduct" AS p LEFT JOIN led ON led."productId" = p."id"
+             WHERE p."id" = ANY(${ids}::int[])
+        )
+        UPDATE "InvProduct" AS p
+           SET "stock" = want.stock, "updatedAt" = NOW()
+          FROM want
+         WHERE p."id" = want."id" AND p."stock" IS DISTINCT FROM want.stock
+    `;
 
-    const ledgerByProduct = new Map<number, number>();
-    for (const r of byProduct) ledgerByProduct.set(r.productId, toNumber(r._sum.inQty ?? 0) - toNumber(r._sum.outQty ?? 0));
-
-    for (const p of products) {
-        const stock = toNumber(p.openingStock ?? 0) + (ledgerByProduct.get(p.id) ?? 0);
-        await tx.invProduct.update({ where: { id: p.id }, data: { stock } });
-    }
-
-    const rebuilt = new Set<string>();
-    for (const r of byBranch) {
-        const stock = toNumber(r._sum.inQty ?? 0) - toNumber(r._sum.outQty ?? 0);
-        rebuilt.add(`${r.productId}|${r.branchId}`);
-        await tx.invProductBranch.upsert({
-            where:  { productId_branchId: { productId: r.productId, branchId: r.branchId } },
-            create: { productId: r.productId, branchId: r.branchId, stock },
-            update: { stock },
-        });
-    }
+    await tx.$executeRaw`
+        INSERT INTO "inv_product_branches" ("productId", "branchId", "stock", "updatedAt")
+        SELECT "productId", "branchId", ROUND(SUM("inQty" - "outQty"))::int, NOW()
+          FROM "InvStockLedger" WHERE "productId" = ANY(${ids}::int[])
+         GROUP BY "productId", "branchId"
+        ON CONFLICT ("productId", "branchId") DO UPDATE
+           SET "stock" = EXCLUDED."stock", "updatedAt" = NOW()
+         WHERE "inv_product_branches"."stock" IS DISTINCT FROM EXCLUDED."stock"
+    `;
 
     // A product whose LAST ledger row in a branch just got deleted produces no
-    // groupBy row at all — the loop above can never reach it, so without this the
-    // stale balance survives. Truth for those rows is zero.
-    const staleBranchRows = await tx.invProductBranch.findMany({
-        where:  { productId: { in: ids } },
-        select: { productId: true, branchId: true, stock: true },
-    });
-    for (const row of staleBranchRows) {
-        if (rebuilt.has(`${row.productId}|${row.branchId}`)) continue;
-        if (toNumber(row.stock ?? 0) === 0) continue;
-        await tx.invProductBranch.update({
-            where: { productId_branchId: { productId: row.productId, branchId: row.branchId } },
-            data:  { stock: 0 },
-        });
-    }
+    // group above at all, so without this the stale balance survives. Truth for
+    // those rows is zero.
+    await tx.$executeRaw`
+        UPDATE "inv_product_branches" AS b
+           SET "stock" = 0, "updatedAt" = NOW()
+         WHERE b."productId" = ANY(${ids}::int[]) AND b."stock" <> 0
+           AND NOT EXISTS (
+               SELECT 1 FROM "InvStockLedger" AS l
+                WHERE l."productId" = b."productId" AND l."branchId" = b."branchId"
+           )
+    `;
 }

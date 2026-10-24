@@ -17,6 +17,7 @@
 
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { toNumber } from "@/modules/accountancy/lib/balance";
+import { loadLiveStockMap } from "@/modules/inventory/lib/liveStock";
 
 export type ValuationMethod =
     | "LAST_INWARD"
@@ -373,33 +374,34 @@ export async function loadLastInwardCostMap(
 // ── Org-wide total ────────────────────────────────────────────────────────────
 // Drop-in for the BS closing-stock calculation. Method is selected by the BS
 // dropdown (defaults to OrgDefaults.valuationMethod).
+//
+// Both totals below take the QUANTITY from the truth — `openingStock` master +
+// the ledger — never from the saved `InvProduct.stock`. They used to: the live
+// one valued `p.stock` itself, and both picked products with `stock not null`,
+// so a product whose saved total was empty (a Vyapar opening never saved into
+// it) dropped out of the books entirely — opening 10 @ ₹5 showed ₹0.
+//
+// Every product is in scope. One that was never tracked has quantity 0, and a
+// zero quantity is worth nothing, so it adds nothing and is not counted.
 
 export async function valueStockOrgTotal(method: ValuationMethod): Promise<{
     computed:     number;
     productCount: number;
     method:       ValuationMethod;
 }> {
-    const products = await prisma.invProduct.findMany({
-        where: { stock: { not: null } },
-        select: { id: true, stock: true },
+    // "Now" is the live rule (liveStock.ts): opening + EVERY ledger row, the same
+    // figure the saved total is rebuilt to — including rows dated ahead of today.
+    const masters = await prisma.invProduct.findMany({
+        select: { id: true, openingStock: true, openingBranchId: true },
     });
-    const values = await valueStockBatch(products, method);
-    let total = 0;
-    let count = 0;
-    for (const v of values.values()) {
-        if (v.value === 0) continue;
-        total += v.value;
-        count += 1;
-    }
-    return { computed: total, productCount: count, method };
+    const live = await loadLiveStockMap(masters);
+    return sumOrgValue(masters.map((m) => ({ id: m.id, stock: live.get(m.id) ?? 0 })), method);
 }
 
 // ── As-at-a-date org total (time-travel) ──────────────────────────────────────
 //
-// `valueStockOrgTotal` above reads the LIVE `InvProduct.stock` cache, so it can
-// only ever answer "what is stock worth right now". Reports for a closed period
-// (P&L Opening/Closing Stock, a back-dated Balance Sheet) need "what was stock
-// worth ON that date" — both halves dated:
+// Reports for a closed period (P&L Opening/Closing Stock, a back-dated Balance
+// Sheet) need "what was stock worth ON that date" — both halves dated:
 //
 //   qty  as-at = openingStock master + Σ(inQty − outQty) for rows dated ≤ asOf
 //   cost as-at = the lot walk, capped at asOf (see loadInwardLots)
@@ -407,9 +409,6 @@ export async function valueStockOrgTotal(method: ValuationMethod): Promise<{
 // Deliberately a READ-TIME replay: no snapshot table, no per-voucher stamping,
 // nothing added to the posting path — so seeding purchases/sales is unaffected.
 // It rides the existing @@index([productId, date]) on InvStockLedger.
-//
-// The live cache stays the fast path for everything current (POS scan,
-// available-to-sell, reorder). This is only for dated questions.
 export async function valueStockOrgTotalAsOf(
     asOf: Date,
     method: ValuationMethod,
@@ -419,10 +418,7 @@ export async function valueStockOrgTotalAsOf(
     method:       ValuationMethod;
 }> {
     const [masters, moves] = await Promise.all([
-        prisma.invProduct.findMany({
-            where:  { stock: { not: null } },   // null = stock not tracked
-            select: { id: true, openingStock: true },
-        }),
+        prisma.invProduct.findMany({ select: { id: true, openingStock: true } }),
         prisma.invStockLedger.groupBy({
             by:    ["productId"],
             where: {
@@ -441,12 +437,20 @@ export async function valueStockOrgTotalAsOf(
     // Same formula recomputeProductStock uses for "now", just date-capped:
     // openingStock is a master column, NOT a ledger row, so it is folded in
     // separately (exactly as GL folds Account.openingBalance into its closing).
-    const products: ProductMaster[] = masters.map((m) => ({
+    return sumOrgValue(masters.map((m) => ({
         id:    m.id,
         stock: toNumber(m.openingStock ?? 0) + (movementByProduct.get(m.id) ?? 0),
-    }));
+    })), method, asOf);
+}
 
-    const values = await valueStockBatch(products, method, asOf);
+/** Value every product with stock on hand and add them up. Zero quantity is
+ *  skipped before the lot walk — it is worth nothing whatever its cost. */
+async function sumOrgValue(
+    products: ProductMaster[],
+    method: ValuationMethod,
+    asOf?: Date,
+): Promise<{ computed: number; productCount: number; method: ValuationMethod }> {
+    const values = await valueStockBatch(products.filter((p) => (p.stock ?? 0) !== 0), method, asOf);
     let total = 0;
     let count = 0;
     for (const v of values.values()) {

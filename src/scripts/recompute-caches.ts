@@ -33,6 +33,9 @@ const FIX = process.argv.includes("--fix");
 const n = (v: unknown) => Number(v ?? 0);
 const EPS = 0.0005;
 const round2 = (v: number) => Math.round(v * 100) / 100;
+// The stock columns are Int, the ledger Decimal(10,3): compare and write the
+// rounded figure, the way recomputeProductStock's ROUND() does (half away from 0).
+const roundInt = (v: number) => Math.sign(v) * Math.round(Math.abs(v));
 
 type Drift = { what: string; key: string; cached: number; computed: number };
 
@@ -84,7 +87,7 @@ async function stock(): Promise<Drift[]> {
     const ledger = new Map(byProduct.map((r) => [r.productId, n(r._sum.inQty) - n(r._sum.outQty)]));
     const drift: Drift[] = [];
     for (const p of products) {
-        const c = n(p.openingStock) + (ledger.get(p.id) ?? 0);
+        const c = roundInt(n(p.openingStock) + (ledger.get(p.id) ?? 0));
         if (Math.abs(c - n(p.stock)) > EPS) {
             drift.push({ what: "InvProduct.stock", key: `${p.id} ${p.sku}`, cached: n(p.stock), computed: c });
             if (FIX) await prisma.invProduct.update({ where: { id: p.id }, data: { stock: c } });
@@ -92,7 +95,7 @@ async function stock(): Promise<Drift[]> {
     }
     const branchLedger = new Map(byBranch.map((r) => [`${r.productId}|${r.branchId}`, n(r._sum.inQty) - n(r._sum.outQty)]));
     for (const b of branchRows) {
-        const c = branchLedger.get(`${b.productId}|${b.branchId}`) ?? 0;
+        const c = roundInt(branchLedger.get(`${b.productId}|${b.branchId}`) ?? 0);
         if (Math.abs(c - n(b.stock)) > EPS) {
             drift.push({ what: "InvProductBranch.stock", key: `${b.productId}|${b.branchId}`, cached: n(b.stock), computed: c });
             if (FIX) await prisma.invProductBranch.update({ where: { productId_branchId: { productId: b.productId, branchId: b.branchId } }, data: { stock: c } });

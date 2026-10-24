@@ -10,9 +10,8 @@ import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { parseIdParam } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import {
-    productOpeningValue, syncProductCacheFromOpening,
-} from "@/modules/inventory/lib/stockValue";
+import { productOpeningValue } from "@/modules/inventory/lib/stockValue";
+import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { loadLastInwardCostMap } from "@/modules/inventory/lib/valuation";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import * as Sentry from "@sentry/nextjs";
@@ -124,58 +123,64 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             const clash = await shopSlugClash(b.slug, { kind: "product", id });
             if (clash) return NextResponse.json({ error: clash }, { status: 409 });
         }
-        const row = await prisma.invProduct.update({
-            where: { id },
-            data: {
-                ...(b.sku !== undefined ? { sku } : {}),
-                ...(b.name !== undefined ? { name: b.name } : {}),
-                ...(b.namePart !== undefined ? { namePart: b.namePart } : {}),
-                ...(b.unitId !== undefined ? { unitId: b.unitId } : {}),
-                ...(b.categoryId !== undefined ? { categoryId: b.categoryId } : {}),
-                ...(b.groupId !== undefined ? { groupId: b.groupId } : {}),
-                ...(b.brandId !== undefined ? { brandId: b.brandId } : {}),
-                ...(b.warrantyTermId !== undefined ? { warrantyTermId: b.warrantyTermId } : {}),
-                ...(b.modelNo !== undefined ? { modelNo: b.modelNo } : {}),
-                // Codes are a full replace-set: wipe existing rows, recreate from
-                // the payload. Undefined = leave codes untouched.
-                ...(b.codes !== undefined
-                    ? { codes: { deleteMany: {}, create: normalizeProductCodes(b.codes).map((c, i) => ({ kind: c.kind, value: c.value, sortOrder: i })) } }
-                    : {}),
-                ...(b.notes !== undefined ? { notes: b.notes } : {}),
-                ...(b.requireSaleNote !== undefined ? { requireSaleNote: b.requireSaleNote } : {}),
-                // Reorder inputs (Reorder page inline edit).
-                ...(b.lowStockThreshold !== undefined ? { lowStockThreshold: b.lowStockThreshold } : {}),
-                ...(b.leadTimeDays !== undefined ? { leadTimeDays: b.leadTimeDays } : {}),
-                ...(b.orderPackQty !== undefined ? { orderPackQty: b.orderPackQty } : {}),
-                ...(b.minOrderQty !== undefined ? { minOrderQty: b.minOrderQty } : {}),
-                ...(b.isActive !== undefined ? { isActive: b.isActive } : {}),
-                ...(b.shopSubheading !== undefined ? { shopSubheading: b.shopSubheading } : {}),
-                ...(b.slug !== undefined ? { slug: b.slug } : {}),
-                ...(b.attrsJson !== undefined ? { attrsJson: b.attrsJson ?? Prisma.DbNull } : {}),
-                ...(b.effectiveSalePricePaise !== undefined ? { effectiveSalePricePaise: b.effectiveSalePricePaise } : {}),
-                ...(b.savedSalePricePaise !== undefined ? { savedSalePricePaise: b.savedSalePricePaise } : {}),
-                ...(b.mrpPaise   !== undefined ? { mrpPaise:   b.mrpPaise   } : {}),
-                // Opening fields are written together so openingValue stays consistent.
-                ...((b.openingStock !== undefined || b.openingRate !== undefined) ? {
-                    openingStock: b.openingStock ?? null,
-                    openingRate:  b.openingRate  ?? null,
-                    openingValue: productOpeningValue(b),
-                    // Universal opening — no date; always from the start of the books.
-                    openingStockDate: null,
-                    // A location for no stock is not a location. Setting a
-                    // quantity here leaves openingBranchId as it stands — the
-                    // importer owns it, and this form has no picker for it yet.
-                    ...(b.openingStock == null ? { openingBranchId: null } : {}),
-                    // Sync running caches via shared helper. Explicit
-                    // costPaise (Pricing tab) wins over opening-derived cost.
-                    ...syncProductCacheFromOpening(b),
-                } : {}),
-                // GST classification — null clears the override and re-enables cascade.
-                ...(b.gstRateId  !== undefined ? { gstRateId:  b.gstRateId  } : {}),
-                ...(b.hsnCode    !== undefined ? { hsnCode:    b.hsnCode    } : {}),
-                ...(b.taxability !== undefined ? { taxability: b.taxability } : {}),
-            },
-            include: productInclude,
+        // Editing the opening moves the saved total by the change in the opening —
+        // NOT to the opening itself (opening 10, +50, −30 = 30; opening → 12 must
+        // read 32, not 12). Same transaction, rebuilt from the ledger.
+        const openingTouched = b.openingStock !== undefined || b.openingRate !== undefined;
+        const row = await prisma.$transaction(async (tx) => {
+            const saved = await tx.invProduct.update({
+                where: { id },
+                data: {
+                    ...(b.sku !== undefined ? { sku } : {}),
+                    ...(b.name !== undefined ? { name: b.name } : {}),
+                    ...(b.namePart !== undefined ? { namePart: b.namePart } : {}),
+                    ...(b.unitId !== undefined ? { unitId: b.unitId } : {}),
+                    ...(b.categoryId !== undefined ? { categoryId: b.categoryId } : {}),
+                    ...(b.groupId !== undefined ? { groupId: b.groupId } : {}),
+                    ...(b.brandId !== undefined ? { brandId: b.brandId } : {}),
+                    ...(b.warrantyTermId !== undefined ? { warrantyTermId: b.warrantyTermId } : {}),
+                    ...(b.modelNo !== undefined ? { modelNo: b.modelNo } : {}),
+                    // Codes are a full replace-set: wipe existing rows, recreate from
+                    // the payload. Undefined = leave codes untouched.
+                    ...(b.codes !== undefined
+                        ? { codes: { deleteMany: {}, create: normalizeProductCodes(b.codes).map((c, i) => ({ kind: c.kind, value: c.value, sortOrder: i })) } }
+                        : {}),
+                    ...(b.notes !== undefined ? { notes: b.notes } : {}),
+                    ...(b.requireSaleNote !== undefined ? { requireSaleNote: b.requireSaleNote } : {}),
+                    // Reorder inputs (Reorder page inline edit).
+                    ...(b.lowStockThreshold !== undefined ? { lowStockThreshold: b.lowStockThreshold } : {}),
+                    ...(b.leadTimeDays !== undefined ? { leadTimeDays: b.leadTimeDays } : {}),
+                    ...(b.orderPackQty !== undefined ? { orderPackQty: b.orderPackQty } : {}),
+                    ...(b.minOrderQty !== undefined ? { minOrderQty: b.minOrderQty } : {}),
+                    ...(b.isActive !== undefined ? { isActive: b.isActive } : {}),
+                    ...(b.shopSubheading !== undefined ? { shopSubheading: b.shopSubheading } : {}),
+                    ...(b.slug !== undefined ? { slug: b.slug } : {}),
+                    ...(b.attrsJson !== undefined ? { attrsJson: b.attrsJson ?? Prisma.DbNull } : {}),
+                    ...(b.effectiveSalePricePaise !== undefined ? { effectiveSalePricePaise: b.effectiveSalePricePaise } : {}),
+                    ...(b.savedSalePricePaise !== undefined ? { savedSalePricePaise: b.savedSalePricePaise } : {}),
+                    ...(b.mrpPaise   !== undefined ? { mrpPaise:   b.mrpPaise   } : {}),
+                    // Opening fields are written together so openingValue stays consistent.
+                    ...(openingTouched ? {
+                        openingStock: b.openingStock ?? null,
+                        openingRate:  b.openingRate  ?? null,
+                        openingValue: productOpeningValue(b),
+                        // Universal opening — no date; always from the start of the books.
+                        openingStockDate: null,
+                        // A location for no stock is not a location. Setting a
+                        // quantity here leaves openingBranchId as it stands — the
+                        // importer owns it, and this form has no picker for it yet.
+                        ...(b.openingStock == null ? { openingBranchId: null } : {}),
+                    } : {}),
+                    // GST classification — null clears the override and re-enables cascade.
+                    ...(b.gstRateId  !== undefined ? { gstRateId:  b.gstRateId  } : {}),
+                    ...(b.hsnCode    !== undefined ? { hsnCode:    b.hsnCode    } : {}),
+                    ...(b.taxability !== undefined ? { taxability: b.taxability } : {}),
+                },
+                include: productInclude,
+            });
+            if (!openingTouched) return saved;
+            await recomputeProductStock(tx, [id]);
+            return tx.invProduct.findUniqueOrThrow({ where: { id }, include: productInclude });
         });
         // Re-materialize effectiveSalePricePaise (saved price / cost / GST may have
         // changed) so POS reflects the edit. Skip when the caller set an explicit
