@@ -27,6 +27,7 @@ import { VoucherActionsMenu, editFormUrl } from "@/modules/inventory/components/
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { productMatchesSearch } from "@/shared/lib/inventory";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -158,6 +159,16 @@ export default function InventoryDetailsPage() {
     useEffect(() => {
         loadProducts();
     }, [loadProducts]);
+    const fetchDetail = useCallback((id: number, f: string, t: string) => axios
+        .get<DetailResponse>(`/api/inventory/products/${id}/transactions?from=${f}&to=${t}`)
+        .then((r) => setDetail(r.data))
+        .catch(() => toast.error("Failed to load product transactions"))
+        .finally(() => setDetailLoading(false)), []);
+    const loadDetail = useCallback((id: number, f: string, t: string) => {
+        setDetailLoading(true);
+        void fetchDetail(id, f, t);
+    }, [fetchDetail]);
+
     // Stock vouchers announce `stock`, product edits `catalogue`: refresh the list and
     // the open product's movements in place.
     useRealtimeTopics(["stock", "catalogue"], () => {
@@ -165,35 +176,28 @@ export default function InventoryDetailsPage() {
         if (selectedId) loadDetail(selectedId, from, to);
     });
 
-    const loadDetail = useCallback((id: number, f: string, t: string) => {
-        setDetailLoading(true);
-        axios
-            .get<DetailResponse>(`/api/inventory/products/${id}/transactions?from=${f}&to=${t}`)
-            .then((r) => setDetail(r.data))
-            .catch(() => toast.error("Failed to load product transactions"))
-            .finally(() => setDetailLoading(false));
-    }, []);
-
+    // A product picked (or cleared): the old detail goes / the spinner shows
+    // while rendering; the effect only reads.
+    if (useValueChange(selectedId)) {
+        if (!selectedId) setDetail(null);
+        else setDetailLoading(true);
+    }
     useEffect(() => {
-        if (!selectedId) {
-            setDetail(null);
-            return;
-        }
-        loadDetail(selectedId, from, to);
+        if (selectedId) void fetchDetail(selectedId, from, to);
         // eslint-disable-next-line react-hooks/exhaustive-deps -- a new product loads at the current dates; changed dates apply on Refresh
     }, [selectedId]);
 
     // Reset scope when product changes: org users stay on "org", branch users
     // default to their first branch entry (or "org" if no branchStocks).
-    useEffect(() => {
-        if (!detail) return;
+    // While rendering, only when a different product (or the org right) arrives.
+    if (useValueChange(JSON.stringify([detail?.product.id ?? null, canViewOrg])) && detail) {
         const branches = detail.product.branchStocks ?? [];
         if (!canViewOrg && branches.length > 0) {
             setStockScope(branches[0].branch.id);
         } else {
             setStockScope("org");
         }
-    }, [detail?.product.id, canViewOrg]); // eslint-disable-line react-hooks/exhaustive-deps -- reset scope only when a different product opens
+    }
 
     const handleRefresh = () => {
         if (selectedId) loadDetail(selectedId, from, to);

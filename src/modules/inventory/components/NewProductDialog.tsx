@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 // Lookup-shape matching what /api/inventory/products/lookup returns —
 // the parent combobox expects this exact field set when adding to its list.
@@ -89,21 +90,21 @@ export function NewProductDialog({ open, onOpenChange, initialName = "", onCreat
     const [inlineError, setInlineError] = useState<string | null>(null);
     const [skuConflict, setSkuConflict] = useState(false);
 
-    // Reset form whenever the dialog opens with a new initialName.
-    useEffect(() => {
-        if (!open) return;
+    // Reset form whenever the dialog opens with a new initialName (while
+    // rendering, so the last product's entry never paints).
+    if (useValueChange(open ? initialName : null, null) && open) {
         setName(initialName);
         setSku(generateSku());
         setSalePrice("");
         setUnitId("");
         setInlineError(null);
         setSkuConflict(false);
-    }, [open, initialName]);
+    }
 
     // Fetch units + org defaults together so the unit select pre-selects the org default.
+    if (useValueChange(open, false) && open) setUnitsLoading(true);
     useEffect(() => {
         if (!open) return;
-        setUnitsLoading(true);
         Promise.all([
             axios.get<Unit[]>("/api/inventory/units"),
             getOrgDefaults(),

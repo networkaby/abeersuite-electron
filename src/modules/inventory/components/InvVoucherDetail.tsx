@@ -20,6 +20,7 @@ import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { requiredVoucherPermission } from "@/shared/lib/auth/voucherMatrix";
 import { editFormUrl } from "@/modules/inventory/components/VoucherActionsMenu";
 import { BillNotifyStatus } from "@/shared/components/BillNotifyStatus";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 type Voucher = {
     id:             number;
@@ -96,15 +97,18 @@ export function InvVoucherDetail({ basePath, label, formPath }: {
     const [loading, setLoading] = useState(true);
     const [posting, setPosting] = useState(false);
 
+    const read = (silent: boolean) => axios.get<Voucher>(`/api/inventory/vouchers/${id}`)
+        .then((r) => setVoucher(r.data))
+        .catch(() => { if (!silent) toast.error("Failed to load"); })
+        .finally(() => { if (!silent) setLoading(false); });
     const load = (silent = false) => {
         if (!silent) setLoading(true);
-        axios.get<Voucher>(`/api/inventory/vouchers/${id}`)
-            .then((r) => setVoucher(r.data))
-            .catch(() => { if (!silent) toast.error("Failed to load"); })
-            .finally(() => { if (!silent) setLoading(false); });
+        void read(silent);
     };
+    // One load per voucher id; its spinner is on from the first render.
+    if (useValueChange(id)) setLoading(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one load per voucher id
-    useEffect(() => load(), [id]);
+    useEffect(() => { void read(false); }, [id]);
 
     // This voucher can be posted, cancelled or deleted from another screen while
     // it is open here — and the Post button acts on what is on screen. Silent:
