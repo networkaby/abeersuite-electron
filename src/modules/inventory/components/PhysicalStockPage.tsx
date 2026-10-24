@@ -17,9 +17,11 @@
 //     either ADDS a new row (qty 1) or INCREMENTS the existing row's qty
 //     by 1 if the product is already in the list. Operators can also tap
 //     the +1/-1 buttons or edit qty manually.
-//   • Each row shows: product label (sku + name), unit, live current
-//     cached stock, counted qty (the running tally for this voucher), and
-//     variance (counted − current).
+//   • Each row shows: product label (sku + name), unit, the stock "in
+//     system" for this branch at the start of the count date (opening
+//     included — the figure the server subtracts from, loadStockBeforeDate),
+//     counted qty (the running tally for this voucher), and variance
+//     (counted − in system) = the adjustment posting will write.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
@@ -58,7 +60,6 @@ type LineForm = {
     name:         string;
     unitCode:     string;
     quantity:     string;
-    currentStock: number | null;
 };
 
 type ExistingVoucher = {
@@ -154,7 +155,6 @@ export function PhysicalStockPage() {
                         name:         l.product.name,
                         unitCode:     l.product.unit?.code ?? "",
                         quantity:     String(Number(l.quantity)),
-                        currentStock: null,
                     })),
                 });
             })
@@ -162,34 +162,27 @@ export function PhysicalStockPage() {
             .finally(() => setLoading(false));
     }, [editing, voucherIdParam]);
 
-    // Fetch live current stock for lines that don't have it yet (edit mode).
+    // "In system" per product: this branch, start of the count date — one request
+    // for every line. The last answer stays on screen while a new one loads, so
+    // the column never blanks; a product not answered yet shows "—".
+    const stockBranchId = editing ? selectedBranchId : activeBranchId;
+    const productIdsKey = [...new Set(form.lines.map((l) => l.productId).filter((id) => id > 0))].sort((a, b) => a - b).join(",");
+    const [systemStock, setSystemStock] = useState<Record<number, number>>({});
+    const [stockTick, setStockTick] = useState(0);
     useEffect(() => {
-        const pending = form.lines.filter((l) => l.currentStock == null && l.productId > 0);
-        if (pending.length === 0) return;
-        for (const l of pending) {
-            axios.get<{ stock: number | null }>(`/api/inventory/products/${l.productId}`)
-                .then((r) => setForm((f) => ({
-                    ...f,
-                    lines: f.lines.map((row) => row.productId === l.productId ? { ...row, currentStock: r.data.stock ?? 0 } : row),
-                })))
-                .catch(() => { /* leave null */ });
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- backfills stock for loaded lines; a product pick sets its own stock
-    }, [form.lines.length]);
+        if (!stockBranchId || !productIdsKey) return;
+        let stale = false;
+        axios.get<{ stock: Record<number, number> }>("/api/inventory/products/stock-before", {
+            params: { branchId: stockBranchId, date: form.date, ids: productIdsKey },
+        })
+            .then((r) => { if (!stale) setSystemStock(r.data.stock); })
+            .catch(() => { /* keep the figures on screen */ });
+        return () => { stale = true; };
+    }, [stockBranchId, form.date, productIdsKey, stockTick]);
 
-    // The "in system" figure is reference data: a sale at the till while the count
-    // is being taken moves it here. The counted quantities are never touched.
-    useRealtimeTopics(["stock"], () => {
-        const ids = [...new Set(form.lines.map((l) => l.productId).filter((id) => id > 0))];
-        for (const id of ids) {
-            axios.get<{ stock: number | null }>(`/api/inventory/products/${id}`)
-                .then((r) => setForm((f) => ({
-                    ...f,
-                    lines: f.lines.map((row) => row.productId === id ? { ...row, currentStock: r.data.stock ?? 0 } : row),
-                })))
-                .catch(() => { /* keep the figure on screen */ });
-        }
-    }, form.lines.length > 0);
+    // The "in system" figure is reference data: a back-dated sale entered while
+    // the count is being taken moves it here. The counted quantities are never touched.
+    useRealtimeTopics(["stock"], () => setStockTick((t) => t + 1), form.lines.length > 0);
 
     // ── Scan-to-add ─────────────────────────────────────────────────────────
 
@@ -213,7 +206,6 @@ export function PhysicalStockPage() {
                         name:         p.name,
                         unitCode:     p.unit?.code ?? "",
                         quantity:     "1",
-                        currentStock: p.stock ?? 0,
                     },
                 ],
             };
@@ -239,9 +231,10 @@ export function PhysicalStockPage() {
     const totalsByLine = useMemo(
         () => form.lines.map((l) => ({
             counted:  parseFloat(l.quantity) || 0,
-            variance: (parseFloat(l.quantity) || 0) - (l.currentStock ?? 0),
+            inSystem: systemStock[l.productId] ?? null,
+            variance: (parseFloat(l.quantity) || 0) - (systemStock[l.productId] ?? 0),
         })),
-        [form.lines],
+        [form.lines, systemStock],
     );
     const totalUnits = totalsByLine.reduce((s, t) => s + t.counted, 0);
 
@@ -249,7 +242,7 @@ export function PhysicalStockPage() {
 
     const submit = async (postAfterSave: boolean, print = false) => {
         if (!form.description.trim()) { toast.error("Description required"); return; }
-        const branchId = editing ? selectedBranchId : activeBranchId;
+        const branchId = stockBranchId;
         if (!branchId) {
             toast.error("Pick a branch");
             return;
@@ -358,7 +351,7 @@ export function PhysicalStockPage() {
                             <tr>
                                 <th className="px-3 py-2 text-left font-medium">#</th>
                                 <th className="px-3 py-2 text-left font-medium">Item</th>
-                                <th className="px-3 py-2 text-right font-medium w-24">Current</th>
+                                <th className="px-3 py-2 text-right font-medium w-24" title="Stock in this branch at the start of the count date">In system</th>
                                 <th className="px-3 py-2 text-center font-medium w-44">Counted</th>
                                 <th className="px-3 py-2 text-right font-medium w-24">Variance</th>
                                 <th className="px-3 py-2 w-10" />
@@ -383,7 +376,7 @@ export function PhysicalStockPage() {
                                             </div>
                                         </td>
                                         <td className="px-3 py-2 text-right font-mono text-xs text-muted-foreground">
-                                            {line.currentStock == null ? "—" : line.currentStock}
+                                            {t.inSystem == null ? "—" : t.inSystem}
                                         </td>
                                         <td className="px-3 py-2">
                                             <div className="flex items-center justify-center gap-1">
@@ -403,7 +396,7 @@ export function PhysicalStockPage() {
                                             </div>
                                         </td>
                                         <td className="px-3 py-2 text-right font-mono text-xs">
-                                            {line.currentStock == null ? <span className="text-muted-foreground">—</span>
+                                            {t.inSystem == null ? <span className="text-muted-foreground">—</span>
                                                 : t.variance === 0 ? <span className="text-muted-foreground">0</span>
                                                 : <span className={t.variance > 0 ? "text-emerald-600" : "text-rose-600"}>{t.variance > 0 ? "+" : ""}{t.variance}</span>}
                                         </td>

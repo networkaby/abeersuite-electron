@@ -18,6 +18,7 @@ import { invNextRef } from "@/modules/inventory/lib/stock";
 import { toNumber } from "@/modules/accountancy/lib/balance";
 import { recordStockMovement, stockDirectionForType } from "@/modules/inventory/lib/stockMovement";
 import { valueStockBatch } from "@/modules/inventory/lib/valuation";
+import { loadStockBeforeDate } from "@/modules/inventory/lib/liveStock";
 import { saleToSpec } from "@/modules/accountancy/lib/voucherMappers";
 import { readSettlement } from "@/shared/lib/accountancy/settlement";
 import { allocateSpineNumber, engineCreateSpine, enginePost } from "@/modules/accountancy/lib/transactionEngine";
@@ -265,6 +266,10 @@ export async function postVoucherInTx(
     } else if (!isCommitment && !isFixedDirection) {
         // PHYSICAL_STOCK + MANUFACTURING_JOURNAL only — fixed-direction
         // trading types now move stock via the engine (below).
+        // One batched read for every counted line, before the loop.
+        const stockBeforeDate = isPhysicalStock
+            ? await loadStockBeforeDate(tx, voucher.lines.map((l) => l.productId), voucher.branchId, voucher.universalVoucher!.date)
+            : new Map<number, number>();
         for (const line of voucher.lines) {
             const qty = toNumber(line.quantity);
             const freeQty = line.freeQty != null ? toNumber(line.freeQty) : 0;
@@ -299,28 +304,11 @@ export async function postVoucherInTx(
                     },
                 });
                 if (priorSameDay === 0) {
-                    // First PS of the day for this product → absolute reset.
-                    // IMPORTANT: only sum ledger rows whose source voucher
-                    // is still POSTED (and not soft-deleted). Cancelled
-                    // vouchers leave their original entry in place with a
-                    // counter-entry dated when the cancel happened — that
-                    // counter-entry is often outside the < voucher.universalVoucher!.date
-                    // window, which would double-count the original. The
-                    // join via voucher.status guarantees we only see the
-                    // true pre-date balance.
-                    const priorEntries = await tx.invStockLedger.findMany({
-                        where: {
-                            productId: line.productId,
-                            branchId:  voucher.branchId,
-                            date:      { lt: voucher.universalVoucher!.date },
-                            universalVoucher: { status: "POSTED" },
-                        },
-                        select: { inQty: true, outQty: true },
-                    });
-                    const priorRunning = priorEntries.reduce(
-                        (s, e) => s + toNumber(e.inQty) - toNumber(e.outQty),
-                        0,
-                    );
+                    // First PS of the day for this product → absolute reset,
+                    // against the branch's stock at the start of the date —
+                    // opening INCLUDED (see loadStockBeforeDate; the count
+                    // screen shows the same figure).
+                    const priorRunning = stockBeforeDate.get(line.productId) ?? 0;
                     const delta = qty - priorRunning;
                     if (delta >= 0) inQty  = delta;
                     else            outQty = -delta;
