@@ -9,6 +9,7 @@
 **Workflow:** Understand → Repeat back → Explain plan → Wait for approval → Edit → Check impact → Update seeds/docs → Validate.
 
 **Always inspect and analyze code for bugs, temporary patches, code smells, technical debt, and any opportunities for improvement during all work—without asking for permission. Report every potential issue with its impact and recommended solution, even if unrelated to the current task, so the user can decide whether to fix, refactor, or defer it.**
+**always seed new permission afor admin**
 
 ## 2. Product
 
