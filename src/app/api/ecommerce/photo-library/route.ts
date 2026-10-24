@@ -5,7 +5,7 @@ import { cleanupConfigured, photoLibrary } from "@/modules/ecommerce/lib/photoCl
 
 // GET /api/ecommerce/photo-library — every shop photo in Cloudinary, newest first,
 // each marked used / unused, for the product page's "From library" picker.
-// Read-only; cached a few minutes (photoCleanup.ts).
+// Read-only; cached 15 minutes per server (photoCleanup.ts).
 
 export const maxDuration = 120;
 

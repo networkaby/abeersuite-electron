@@ -29,6 +29,7 @@ import {
     AI_COPY_FLOWS, AI_DEFAULT_COPY_FLOW, AI_KEY_DEFAULTS, AI_KEY_SOURCES, AI_PROVIDER_MODELS, AI_PROVIDERS, AI_STEPS, AI_USES, aiProviderInfo, isWebProvider, type AiNeed,
     type AiCopyFlow, type AiKeySource, type AiProvider, type AiStep,
 } from "@/shared/lib/constants/ai";
+import { todayIso } from "@/shared/lib/format/formatDate";
 
 const API = "/api/settings/ai-keys";
 /** Uses with a tab of their own; a hidden use's lists show inside the jobs that use them,
@@ -128,7 +129,6 @@ function bodyOf(f: Form, secret: string) {
 // ask password managers to stay out too.
 const NO_AUTOFILL = { autoComplete: "off", "data-1p-ignore": true, "data-lpignore": "true" } as const;
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
 const isExpired = (k: AiKeyRow) => !!k.validTill && k.validTill < todayIso();
 const providerLabel = (p: AiProvider) => aiProviderInfo(p)?.label ?? p;
 const NEED_LABEL: Record<AiNeed, string> = { search: "search tick", photo: "photo tick", webSearch: "a web search tool", webRead: "a page-reading tool" };

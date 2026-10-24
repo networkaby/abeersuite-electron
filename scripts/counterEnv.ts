@@ -25,6 +25,11 @@
  * secret, which let anyone holding an installer mint an office session for any user.
  *
  * NOT here, on purpose:
+ *   - `DATABASE_URL` (since 2026-10-24) — the till fetches it from the office at start
+ *     (`POST /api/counter/config`, answered from Vercel's own env) with
+ *     `COUNTER_INSTALL_SECRET`, and keeps a copy locked to that PC for offline starts
+ *     (electron/remoteConfig.ts). The database password is no longer inside the
+ *     installer, and changing it on Vercel reaches every till at its next start.
  *   - `DIRECT_URL` — only seeds and maintenance scripts read it, so the direct 5432
  *     connection string has no reason to sit on a shop PC.
  *   - `SUPER_ADMIN_PASSWORD` on the `counter` variant — see `COUNTER_ENV_SUPER_ADMIN_KEYS`:
@@ -52,8 +57,12 @@ export const COUNTER_ENV_FILE = "counter.env";
  */
 export const COUNTER_ENV_COPIED: readonly string[] = [
     // ── Data path ────────────────────────────────────────────────────────────
-    // Everything the app reads or writes goes through Prisma over this connection.
-    "DATABASE_URL",
+    // Not the database password itself — the key the till shows the office to be given
+    // it (`/api/counter/config`). Same value as on Vercel. Changing it there stops a
+    // leaked installer getting the password; tills already set up keep their copy.
+    "COUNTER_INSTALL_SECRET",
+    // The office origin that answers it. Optional when WRITE_API_URL is set.
+    "COUNTER_CONFIG_URL",
 
     // ── Realtime nudges ──────────────────────────────────────────────────────
     // Next inlines NEXT_PUBLIC_* into the bundles at build time, so the browser half
@@ -166,9 +175,21 @@ export function counterEnvCopiedFor(mode: AppMode): readonly string[] {
  * points at something else entirely. Missing either one fails the build.
  */
 export const COUNTER_ENV_REQUIRED: readonly string[] = [
-    "DATABASE_URL",
+    "COUNTER_INSTALL_SECRET",
     "INTERNAL_STAFF_EMAIL_DOMAINS",
 ];
+
+/** Where a till asks for its database settings: `COUNTER_CONFIG_URL`, else the v_live
+ *  relay target. electron/remoteConfig.ts resolves it the same way. */
+export function counterConfigOrigin(env: ReadonlyMap<string, string>): string | null {
+    const raw = env.get("COUNTER_CONFIG_URL") ?? env.get("WRITE_API_URL");
+    if (!raw) return null;
+    try {
+        return new URL(raw).origin;
+    } catch {
+        return null;
+    }
+}
 
 /** Every key the packaged file is allowed to contain, for the given variant. Used by
  *  `verify-package.ts`'s packaging gate. */
