@@ -15,6 +15,7 @@ import {
 import { TableScrollArea } from "@/shared/components/TableScrollArea";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
 import { formatRupeesFromPaise, parseRupeesToPaise } from "@/shared/lib/format";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 // The pool entry being allocated (subset of the Costing page's PoolEntry).
 export interface AllocEntry {
@@ -89,9 +90,9 @@ export function AllocateVoucherDialog({
     const windowDays = Math.max(1, Math.min(365, Number(days) || DEFAULT_DAYS));
     const to = entry ? entry.date.slice(0, 10) : null;
     const from = to ? daysBefore(to, windowDays) : null;
+    if (useValueChange(open && from && to ? `${from}|${to}` : null, null) && open && from && to) setVouchersLoaded(false);
     useEffect(() => {
         if (!open || !from || !to) return;
-        setVouchersLoaded(false);
         axios.get<VoucherListItem[]>(
             `/api/inventory/vouchers?types=PURCHASE,GRN&status=POSTED&from=${from}&to=${to}`,
         )
@@ -99,19 +100,18 @@ export function AllocateVoucherDialog({
             .catch(() => toast.error("Failed to load vouchers"));
     }, [open, from, to]);
 
-    // Reset per-entry state each time a new entry opens.
-    useEffect(() => {
-        if (open && entry) {
-            setVoucherId(null);
-            setVoucherUvId(null);
-            setVoucherDate(null);
-            setLines([]);
-            resetInputs();
-            setExisting({});
-            setDistAmount((entry.remainingPaise / 100).toFixed(2));
-            setDays(String(DEFAULT_DAYS));
-        }
-    }, [open, entry]);
+    // Reset per-entry state each time a new entry opens — while rendering, so the
+    // last entry's lines never paint.
+    if (useValueChange(open ? entry : null, null) && open && entry) {
+        setVoucherId(null);
+        setVoucherUvId(null);
+        setVoucherDate(null);
+        setLines([]);
+        resetInputs();
+        setExisting({});
+        setDistAmount((entry.remainingPaise / 100).toFixed(2));
+        setDays(String(DEFAULT_DAYS));
+    }
 
     // `id` = InvVoucher id (line/detail fetch); `uvId` = its spine id (draws filter).
     const loadVoucherLines = useCallback(async (id: number, uvId: number | null) => {

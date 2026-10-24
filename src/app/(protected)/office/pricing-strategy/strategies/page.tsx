@@ -17,7 +17,7 @@
 // edited here yet.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useSession } from "next-auth/react";
@@ -63,6 +63,22 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { productMatchesSearch, searchableText } from "@/shared/lib/inventory";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { formatInrLoose } from "@/shared/lib/format/moneyInr";
+import { useValueChange } from "@/shared/hooks/useValueChange";
+
+// The scrollbar width never changes for a browser, so nothing ever needs telling.
+const subscribeNothing = () => () => {};
+let scrollbarWidth: number | null = null;
+function measureScrollbarWidth(): number {
+    if (scrollbarWidth == null) {
+        const el = document.createElement("div");
+        el.style.cssText = "overflow:scroll;position:absolute;top:-9999px;width:50px;height:50px";
+        document.body.appendChild(el);
+        scrollbarWidth = el.offsetWidth - el.clientWidth;
+        el.remove();
+    }
+    return scrollbarWidth;
+}
+
 
 // Default rows-per-page for the preview table (full list is paginated, not capped).
 const DEFAULT_PAGE_SIZE = 50;
@@ -359,14 +375,8 @@ export default function PricingStrategiesPage() {
 
     // Vertical scrollbar width — the tbody is the only scroll region, so we
     // reserve a matching gutter on the header to keep the columns aligned.
-    const [scrollbarW, setScrollbarW] = useState(0);
-    useEffect(() => {
-        const el = document.createElement("div");
-        el.style.cssText = "overflow:scroll;position:absolute;top:-9999px;width:50px;height:50px";
-        document.body.appendChild(el);
-        setScrollbarW(el.offsetWidth - el.clientWidth);
-        el.remove();
-    }, []);
+    // A fact of this browser, measured once (0 on the server pass).
+    const scrollbarW = useSyncExternalStore(subscribeNothing, measureScrollbarWidth, () => 0);
 
     // Load masters + products + saved points on mount.
     useEffect(() => {
@@ -556,9 +566,7 @@ export default function PricingStrategiesPage() {
 
     // Reset to page 1 whenever the filtered result set changes size (new search /
     // filter), so the user never lands on an out-of-range page.
-    useEffect(() => {
-        setPage(1);
-    }, [visible.length, pageSize]);
+    if (useValueChange(`${visible.length}:${pageSize}`)) setPage(1);
 
     const pageCount = Math.max(1, Math.ceil(visible.length / pageSize));
     const safePage = Math.min(page, pageCount);

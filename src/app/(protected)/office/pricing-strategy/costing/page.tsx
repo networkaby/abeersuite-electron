@@ -97,6 +97,24 @@ interface Doc {
 
 type SortKey = "date" | "kind" | "payment" | "inv" | "items" | "amount" | "by";
 
+/** Clickable header for the documents table. Module-level, so it is not a new
+ *  component type on every render (that remounted the whole header row). */
+function SortTh({ label, k, align = "left", sort, onSort }: {
+    label: string; k: SortKey; align?: "left" | "right";
+    sort: { key: SortKey; dir: 1 | -1 }; onSort: (k: SortKey) => void;
+}) {
+    return (
+        <TableHead className={`text-xs ${align === "right" ? "text-right" : ""}`}>
+            <button type="button" onClick={() => onSort(k)} className={`inline-flex items-center gap-1 hover:text-foreground ${align === "right" ? "flex-row-reverse" : ""}`}>
+                {label}
+                {sort.key === k
+                    ? (sort.dir === 1 ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />)
+                    : <ChevronsUpDown className="size-3 opacity-40" />}
+            </button>
+        </TableHead>
+    );
+}
+
 const rupee = (paise: number | null): string => (paise == null ? "—" : formatRupeesFromPaise(paise));
 export default function CostingPage() {
     const [pool, setPool] = useState<PoolSummary | null>(null);
@@ -122,14 +140,14 @@ export default function CostingPage() {
     const [note, setNote] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
-    const loadPool = useCallback(async () => {
-        const r = await axios.get<PoolSummary>("/api/pricing-strategy/costing/pool");
-        setPool(r.data);
-    }, []);
-    const loadDraws = useCallback(async () => {
-        const r = await axios.get<DrawRow[]>("/api/pricing-strategy/costing/draws");
-        setDraws(r.data);
-    }, []);
+    const loadPool = useCallback(
+        () => axios.get<PoolSummary>("/api/pricing-strategy/costing/pool").then((r) => setPool(r.data)),
+        [],
+    );
+    const loadDraws = useCallback(
+        () => axios.get<DrawRow[]>("/api/pricing-strategy/costing/draws").then((r) => setDraws(r.data)),
+        [],
+    );
     const refresh = useCallback(() => Promise.all([loadPool(), loadDraws()]), [loadPool, loadDraws]);
 
     const loadAll = useCallback(() => {
@@ -139,7 +157,12 @@ export default function CostingPage() {
             .finally(() => setLoading(false));
     }, [refresh]);
 
-    useEffect(() => { loadAll(); }, [loadAll]);
+    // First load: `loading` starts true, so only the read runs here.
+    useEffect(() => {
+        void refresh()
+            .catch(() => toast.error("Failed to load costing data"))
+            .finally(() => setLoading(false));
+    }, [refresh]);
 
     // The additional-cost pool and its draws move whenever a purchase is posted
     // or allocated elsewhere — `ledger` for the voucher, `catalogue` for the
@@ -212,17 +235,6 @@ export default function CostingPage() {
         });
     }, [filteredDocuments, sort]);
 
-    const sortIcon = (k: SortKey) =>
-        sort.key === k
-            ? (sort.dir === 1 ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />)
-            : <ChevronsUpDown className="size-3 opacity-40" />;
-    const SortTh = ({ label, k, align = "left" }: { label: string; k: SortKey; align?: "left" | "right" }) => (
-        <TableHead className={`text-xs ${align === "right" ? "text-right" : ""}`}>
-            <button type="button" onClick={() => toggleSort(k)} className={`inline-flex items-center gap-1 hover:text-foreground ${align === "right" ? "flex-row-reverse" : ""}`}>
-                {label}{sortIcon(k)}
-            </button>
-        </TableHead>
-    );
 
     // Group the sorted docs (purchase- or party-wise) into header + rows. The
     // group header row carries the group's count + total.
@@ -500,13 +512,13 @@ export default function CostingPage() {
                     <Table>
                         <TableHeader className={STICKY_HEAD}>
                             <TableRow>
-                                <SortTh label="Effective" k="date" />
-                                <SortTh label="Type" k="kind" />
-                                <SortTh label="Payment voucher" k="payment" />
-                                <SortTh label="Source inventory voucher" k="inv" />
-                                <SortTh label="Items" k="items" align="right" />
-                                <SortTh label="Amount" k="amount" align="right" />
-                                <SortTh label="By" k="by" />
+                                <SortTh sort={sort} onSort={toggleSort} label="Effective" k="date" />
+                                <SortTh sort={sort} onSort={toggleSort} label="Type" k="kind" />
+                                <SortTh sort={sort} onSort={toggleSort} label="Payment voucher" k="payment" />
+                                <SortTh sort={sort} onSort={toggleSort} label="Source inventory voucher" k="inv" />
+                                <SortTh sort={sort} onSort={toggleSort} label="Items" k="items" align="right" />
+                                <SortTh sort={sort} onSort={toggleSort} label="Amount" k="amount" align="right" />
+                                <SortTh sort={sort} onSort={toggleSort} label="By" k="by" />
                                 <TableHead className="text-right text-xs" />
                             </TableRow>
                         </TableHeader>

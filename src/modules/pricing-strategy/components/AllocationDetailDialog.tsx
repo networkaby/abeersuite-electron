@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatRupeesFromPaise, parseRupeesToPaise } from "@/shared/lib/format";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 export interface DetailDraw {
     id: number;
@@ -46,9 +47,8 @@ export function AllocationDetailDialog({
     const [edits, setEdits] = useState<Record<number, LineEdit>>({});
     const [saving, setSaving] = useState(false);
 
-    // Seed the editable rows from the document each time it opens.
-    useEffect(() => {
-        if (!open || !doc) return;
+    // Seed the editable rows from the document each time it opens (while rendering).
+    if (useValueChange(open ? doc : null, null) && open && doc) {
         setLines(doc.draws);
         const e: Record<number, LineEdit> = {};
         for (const d of doc.draws) {
@@ -60,7 +60,7 @@ export function AllocationDetailDialog({
             };
         }
         setEdits(e);
-    }, [open, doc]);
+    }
 
     function setField(id: number, key: keyof LineEdit, val: string) {
         setEdits((p) => ({ ...p, [id]: { ...p[id], [key]: val } }));

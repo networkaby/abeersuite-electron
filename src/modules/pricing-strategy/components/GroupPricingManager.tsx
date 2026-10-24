@@ -89,13 +89,11 @@ export function GroupPricingManager() {
     const groups = useMemo(() => data?.groups ?? [], [data]);
     const selected = groups.find((g) => g.id === selectedId) ?? null;
 
-    // First load → open the first group.
-    useEffect(() => {
-        if (selectedId == null && groups.length > 0) {
-            setSelectedId(groups[0].id);
-            setDraft(toDraft(groups[0]));
-        }
-    }, [groups, selectedId]);
+    // First load → open the first group (while rendering; picking one ends it).
+    if (selectedId == null && groups.length > 0) {
+        setSelectedId(groups[0].id);
+        setDraft(toDraft(groups[0]));
+    }
 
     const dirty = !!(selected && draft && draftSig(draft) !== draftSig(toDraft(selected)));
 
