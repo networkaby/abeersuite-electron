@@ -51,6 +51,7 @@ export function useBranchOptions(): { branches: BranchOption[]; ready: boolean }
         }
     }, []);
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- adopts this browser's saved copy after hydration (see usePositionPicker); reading it during render would mismatch the server's empty pass
     useEffect(() => { void load(false); }, [load]);
     useEffect(() => subscribeToCache<BranchOption[]>(CACHE_KEY, (e) => setBranches(e.data)), []);
     useRealtimeTopics(["settings"], () => { void load(true); });

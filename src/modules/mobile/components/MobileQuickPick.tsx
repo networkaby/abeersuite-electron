@@ -54,6 +54,7 @@ export default function MobileQuickPick({ kind, userId }: { kind: QuickKind; use
     const [query, setQuery] = useState("");
     const recentKey = mobileKey(`recent:${kind}`, userId);
     const [recent, setRecent] = useState<Target[]>([]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the recent picks live in localStorage, read once after mount / per user (the server render has none)
     useEffect(() => { setRecent(readRecent(recentKey)); }, [recentKey]);
 
     const { parties } = usePartyList();

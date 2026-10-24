@@ -812,6 +812,7 @@ export default function GeneratePage() {
             const raw = localStorage.getItem(FILTER_STORAGE_KEY);
             if (raw) {
                 const s = JSON.parse(raw) as Record<string, unknown>;
+                // eslint-disable-next-line react-hooks/set-state-in-effect -- restores the saved filters from localStorage once after mount (the server render has none); `hydrated` holds the persist effect back until it lands
                 if (typeof s.query === "string") setQuery(s.query);
                 if (typeof s.fBrand === "string") setFBrand(s.fBrand);
                 if (typeof s.fCategory === "string") setFCategory(s.fCategory);

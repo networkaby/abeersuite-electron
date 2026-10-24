@@ -225,6 +225,7 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
         if (isEditing) return;
         const dup = consumeDuplicate("JOURNAL");
         if (!dup) return;
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- the Duplicate stash lives in sessionStorage and is consumed (removed) here, so it is read once after mount, never during render
         setDate(dup.date);
         setNarration(dup.narration ?? "");
         const srcLines = dup.lines as { accountId?: number | null; type?: "DEBIT" | "CREDIT"; amount?: number | string }[];

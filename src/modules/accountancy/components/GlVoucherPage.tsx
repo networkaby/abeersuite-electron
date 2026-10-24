@@ -764,6 +764,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
         const amount = settleBill ? settleBill.amount : Number(qs.get("amount"));
         const billId = settleBill ? settleBill.billId : Number(qs.get("billId"));
         const typed  = Number.isFinite(amount) && amount > 0 ? String(round2(amount)) : "";
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- a one-shot start value read off the URL (window.location) after mount; reading it during render would mismatch the server pass
         setRows([{ ...newRow(), accountId: partyAccountId, amount: typed }, newRow()]);
         if (Number.isFinite(billId) && billId > 0 && typed) {
             setBillPickState({ partyId: partyAccountId, picks: { [billId]: round2(amount) } });
@@ -781,6 +782,7 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
         if (isEditing) return;
         const dup = consumeDuplicate(kind);
         if (!dup) return;
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- the Duplicate stash lives in sessionStorage and is consumed (removed) here, so it is read once after mount, never during render
         setDate(dup.date);
         setNarration(dup.narration ?? "");
         if (dup.partyAccountId != null) setTopLedgerId(dup.partyAccountId);

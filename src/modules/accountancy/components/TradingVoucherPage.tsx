@@ -394,6 +394,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         if (isEditing) return;
         const p = consumePreloadParty();
         if (!p) return;
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- the preload party is consumed from activePartyStore exactly once, after mount (a render-time read would consume it twice in StrictMode)
         setPayMode("CREDIT");
         setParty(p);
         // eslint-disable-next-line react-hooks/exhaustive-deps -- the preload is consumed exactly once, on mount
@@ -410,6 +411,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         if (!dup) return;
 
         // Header: date + description.  Other header fields keep their defaults.
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- the Duplicate stash lives in sessionStorage and is consumed (removed) here, so it is read once after mount, never during render
         setHeader((h) => ({
             ...h,
             date: dup.date,

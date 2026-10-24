@@ -343,7 +343,7 @@ export default function InventoryProductsPage() {
         if (!Number.isFinite(id)) return;
         if (handledEditRef.current === id) return;
         handledEditRef.current = id;
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- a ?edit=<id> link opens the dialog once, then leaves the URL
+        // A ?edit=<id> link opens the dialog once, then leaves the URL.
         setDialogEditId(id);
         setDialogOpen(true);
         const next = new URLSearchParams(searchParams.toString());
