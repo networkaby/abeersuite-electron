@@ -60,9 +60,11 @@ const nextConfig: NextConfig = {
     // <Image> pointing at Cloudinary becomes a /_next/image request that makes the
     // COUNTER'S OWN Node server fetch Cloudinary. With no internet that hangs until
     // timeout and holds a server connection per image, so a product grid can stall
-    // the whole page. Unoptimized emits the raw URL instead — the browser fails fast
-    // and the component's onError placeholder shows.
-    unoptimized: COUNTER_BUILD,
+    // the whole page. The counter loader never calls /_next/image: Cloudinary photos
+    // go straight to Cloudinary's resized copy, everything else is the raw URL.
+    // Not `unoptimized` — that also discards the Cloudinary loader, so every photo
+    // downloaded its full-size original (a phone HEIC one never showed at all).
+    ...(COUNTER_BUILD ? { loader: "custom" as const, loaderFile: "./src/shared/lib/counterImageLoader.ts" } : {}),
     // Only the hosts we actually serve images from. A `**` wildcard here is an
     // open image-optimization proxy: anyone may call /_next/image with any URL
     // and spend our transformation quota on it. Most remote images (uploads,

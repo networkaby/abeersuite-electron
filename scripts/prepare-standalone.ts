@@ -86,8 +86,11 @@ const isStrippable = (file: string) => STRIP_SUFFIXES.some((suffix) => file.ends
 function imagesUnoptimized(standaloneDir: string): boolean {
     try {
         const file = path.join(standaloneDir, ".next", "required-server-files.json");
-        const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as { config?: { images?: { unoptimized?: boolean } } };
-        return parsed.config?.images?.unoptimized === true;
+        const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as {
+            config?: { images?: { unoptimized?: boolean; loader?: string } };
+        };
+        // A custom loader never routes through /_next/image either.
+        return parsed.config?.images?.unoptimized === true || parsed.config?.images?.loader === "custom";
     } catch {
         return false;
     }
