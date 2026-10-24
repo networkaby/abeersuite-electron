@@ -25,6 +25,7 @@ import {
     IGNORE_FIELD, STATEMENT_FIELD_LABELS, checkContinuity, normaliseStatementRows, orderStatementRows, parseStatementGrid,
     type FieldChoice, type ParsedStatement, type StatementField, type StatementRow,
 } from "@/shared/lib/import/bankStatement";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 interface Report {
     importId: number | null;
@@ -61,10 +62,9 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
     const [force, setForce] = useState(false);
 
     // Reset when closed so the next upload starts clean.
-    useEffect(() => {
-        if (open) return;
+    if (useValueChange(open) && !open) {
         setFile(null); setParsed(null); setFileHash(""); setMapping({}); setReport(null); setReportError(null); setForce(false);
-    }, [open]);
+    }
 
     const rows = useMemo(() => {
         if (!parsed || parsed.headerRowIndex < 0) return { rows: [] as StatementRow[], errors: [] as Array<{ rowIndex: number; reason: string }> };

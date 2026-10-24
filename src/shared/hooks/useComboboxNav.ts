@@ -6,7 +6,7 @@ import { useEscapeLayer } from "./useEscape";
 
 /**
  * Generic dropdown/combobox keyboard navigation. Owns `open`, `highlighted`,
- * `dropdownWidth`, and the wrapper/list/input refs. Returns a `handleKeyDown`
+ * and the wrapper/list/input refs. Returns a `handleKeyDown`
  * for ArrowUp/Down/Enter, plus `handleBlur`, `dropdownMouseDown` and `clear`.
  * Esc closes the open list through `useEscapeLayer` — before a dialog around it
  * or the page behind it can see the press.
@@ -43,8 +43,6 @@ export function useComboboxNav(opts: {
     setOpen: (v: boolean) => void;
     highlighted: number;
     setHighlighted: (i: number) => void;
-    dropdownWidth: number | null;
-    setDropdownWidth: (v: number | null) => void;
     wrapperRef: RefObject<HTMLDivElement | null>;
     inputRef: RefObject<HTMLInputElement | null>;
     listRef: RefObject<HTMLUListElement | null>;
@@ -56,7 +54,6 @@ export function useComboboxNav(opts: {
     const { count, onSelect, onClear } = opts;
     const [open, setOpen] = useState(false);
     const [highlighted, setHighlighted] = useState(0);
-    const [dropdownWidth, setDropdownWidth] = useState<number | null>(null);
     // Esc closes only the list — not a dialog around it, nor the page behind.
     useEscapeLayer(open, () => setOpen(false));
     const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -120,7 +117,6 @@ export function useComboboxNav(opts: {
     return {
         open, setOpen,
         highlighted, setHighlighted,
-        dropdownWidth, setDropdownWidth,
         wrapperRef, inputRef, listRef,
         handleKeyDown, handleBlur, dropdownMouseDown, clear,
     };

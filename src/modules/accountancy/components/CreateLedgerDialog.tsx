@@ -31,6 +31,7 @@ import {
     loadGroupOptions, inheritedNormalBalance, type GroupOption,
 } from "@/modules/accountancy/lib/groupOptions";
 import { parseAliasInput } from "@/modules/accountancy/lib/accountAlias";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 /**
  * The ledger just made: the Account row the create API returns, plus the aliases
@@ -91,9 +92,9 @@ export function CreateLedgerDialog({
     });
     const [particulars, setParticulars] = useState<ParticularsState>(emptyParticulars);
 
-    // Reset to a blank form whenever the dialog opens.
-    useEffect(() => {
-        if (!open) return;
+    // Reset to a blank form whenever the dialog opens (while rendering, so the
+    // last ledger's entry never paints).
+    if (useValueChange(open ? JSON.stringify([defaultGroupId ?? null, defaultName]) : null, null) && open) {
         setForm({
             name: defaultName,
             aliases: "",
@@ -103,7 +104,7 @@ export function CreateLedgerDialog({
             openingBalanceType: "DEBIT",
         });
         setParticulars(emptyParticulars());
-    }, [open, defaultGroupId, defaultName]);
+    }
 
     // Only fetch the group list when the caller didn't hand one over.
     useEffect(() => {

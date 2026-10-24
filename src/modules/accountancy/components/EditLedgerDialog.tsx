@@ -32,6 +32,7 @@ import {
     loadGroupOptions, isPartyGroup, type GroupOption,
 } from "@/modules/accountancy/lib/groupOptions";
 import { formatAliasInput, parseAliasInput } from "@/modules/accountancy/lib/accountAlias";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 export interface EditableLedger {
     id: number;
@@ -79,16 +80,16 @@ export function EditLedgerDialog({
     const [openingBalance, setOpeningBalance] = useState("");
     const [openingBalanceType, setOpeningBalanceType] = useState<"DEBIT" | "CREDIT">("DEBIT");
 
-    // Reset the form from the target ledger whenever the dialog opens.
-    useEffect(() => {
-        if (!open || !ledger) return;
+    // Reset the form from the target ledger whenever the dialog opens (while
+    // rendering, so the previous ledger's values never paint).
+    if (useValueChange(open ? ledger : null, null) && open && ledger) {
         setName(ledger.name);
         setAliases(formatAliasInput(ledger.aliases ?? []));
         setGroupId(ledger.groupId);
         setParticulars(parseParticulars(ledger as unknown as Record<string, unknown>));
         setOpeningBalance(ledger.openingBalance ? String(ledger.openingBalance) : "");
         setOpeningBalanceType(ledger.openingBalanceType ?? "DEBIT");
-    }, [open, ledger]);
+    }
 
     // Only fetch the group list when the caller didn't hand one over.
     useEffect(() => {

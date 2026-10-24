@@ -30,6 +30,7 @@ import { extractApiError } from "@/shared/lib/api";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { todayIso } from "@/shared/lib/format/formatDate";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 type Row = {
     universalVoucherId?: number;
@@ -72,10 +73,8 @@ export function OpeningBillsDialog({
     const [rows, setRows] = useState<Row[]>([]);
     const [type, setType] = useState<"DEBIT" | "CREDIT">("DEBIT");
 
-    const load = useCallback(async () => {
-        setLoading(true);
-        try {
-            const { data: d } = await axios.get<Loaded>(`/api/accountancy/accounts/${accountId}/opening-bills`);
+    const load = useCallback(() => axios.get<Loaded>(`/api/accountancy/accounts/${accountId}/opening-bills`)
+        .then(({ data: d }) => {
             setData(d);
             if (d.bills.length > 0) {
                 setType(retarget?.type ?? d.bills[0].type);
@@ -98,13 +97,12 @@ export function OpeningBillsDialog({
                     linked: 0,
                 }]);
             }
-        } catch (e) {
-            toast.error(extractApiError(e, "Could not load the opening breakup"));
-        } finally {
-            setLoading(false);
-        }
-    }, [accountId, retarget]);
+        })
+        .catch((e) => { toast.error(extractApiError(e, "Could not load the opening breakup")); })
+        .finally(() => setLoading(false)), [accountId, retarget]);
 
+    // Loading shows from the very render that starts a read (same trigger as below).
+    if (useValueChange(open && accountId ? load : null, null) && open && accountId) setLoading(true);
     useEffect(() => {
         if (open && accountId) void load();
     }, [open, accountId, load]);

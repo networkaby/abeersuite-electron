@@ -15,11 +15,14 @@
  *   3. Scrollable hit list (maxHeight clamped to viewport)
  */
 
-import { useEffect, useMemo, useState, useCallback, useLayoutEffect, useRef } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus } from "lucide-react";
 import { formatInr } from "@/shared/lib/format/moneyInr";
-import { useComboboxNav, useProductCatalog, invalidateProductCatalog } from "@/shared/hooks";
+import {
+    useComboboxNav, useProductCatalog, invalidateProductCatalog,
+    useDropdownPortal, useValueChange, type DropdownPlacement,
+} from "@/shared/hooks";
 import { primaryBarcode, searchProducts, findByExactCode } from "@/shared/lib/inventory";
 import { NewProductDialog, type AdvancedDefaults, type CreatedProductOption } from "./NewProductDialog";
 import { InvProductDialog, type InvProductCreatedRow } from "./InvProductDialog";
@@ -100,6 +103,27 @@ function toSelected(p: ProductOption): SelectedProduct {
  *  narrower query — see the note on `filtered`. */
 const MAX_ROWS = 50;
 
+const VIEWPORT_MARGIN = 12;
+const DROPDOWN_RIGHT_TRIM = 38; // ~1cm — pull the right edge in from the table edge
+// The four number columns take ~590px (4 × fixed width + gaps + padding), so
+// anything narrower leaves the Item column — the product NAME — no room at
+// all. Outside a table the box itself can be far narrower than that.
+const DROPDOWN_MIN_W = 880;
+const PLACEMENT: DropdownPlacement = {
+    maxHeight: 360, flipBelow: 200, minHeight: 120,
+    size: (rect, wrapper) => {
+        const tableRect = wrapper.closest("table")?.getBoundingClientRect();
+        const naturalWidth = tableRect ? tableRect.right - rect.left : rect.width;
+        // Never wider than the window; slide left rather than run off its edge.
+        const width = Math.min(
+            Math.max(DROPDOWN_MIN_W, naturalWidth - DROPDOWN_RIGHT_TRIM),
+            window.innerWidth - 2 * VIEWPORT_MARGIN,
+        );
+        const left = Math.max(VIEWPORT_MARGIN, Math.min(rect.left, window.innerWidth - VIEWPORT_MARGIN - width));
+        return { width, left };
+    },
+};
+
 export function InvProductCombobox({ value, onChange, placeholder = "Search item…", className = "", autoFocus = false, allowCreate = true, clearNonce = 0 }: Props) {
     // Shared IndexedDB-backed catalogue — same array every picker on the page
     // reads, kept fresh by delta sync + realtime (see useProductCatalog).
@@ -116,28 +140,24 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
             : [...catalogProducts, ...justCreated.filter((jc) => !catalogProducts.some((p) => p.id === jc.id))]),
         [catalogProducts, justCreated],
     );
-    const [query, setQuery] = useState("");
     const [createOpen, setCreateOpen] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [advancedDefaults, setAdvancedDefaults] = useState<Partial<InvProductFormState> | undefined>();
 
-    // When value changes externally, update the display text
+    // When value changes externally, update the display text — while rendering.
+    // Null while the picked product is not in the catalogue yet: typing stays.
+    // Keyed on the name, so a catalogue re-read leaves typing alone.
     const selectedProduct = products.find((p) => p.id === value);
-    const syncQuery = useCallback(() => {
-        if (selectedProduct) {
-            setQuery(selectedProduct.name);
-        } else if (!value) {
-            setQuery("");
-        }
-    }, [selectedProduct, value]);
-    useEffect(syncQuery, [syncQuery]);
+    const syncTo = selectedProduct ? selectedProduct.name : !value ? "" : null;
+    const [query, setQuery] = useState(syncTo ?? "");
+    if (useValueChange(syncTo) && syncTo !== null) setQuery(syncTo);
     // The box shows the picked product's name the moment it is picked, before
     // the parent has had its say. When the parent DECLINES the pick — the
     // trading voucher merges a repeat into the line that already has it and
     // blanks this row — `value` never changes, so syncQuery has nothing to
     // react to and the stale name would sit there over an empty line. The
     // parent bumps this counter to say "I cleared you".
-    useEffect(() => { if (clearNonce > 0) setQuery(""); }, [clearNonce]);
+    if (useValueChange(clearNonce) && clearNonce > 0) setQuery("");
 
     // Ranked by the same tiered search the till uses, so an exact SKU or
     // barcode sorts to the top and a run-together query ("a4paper") still
@@ -167,75 +187,13 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
         },
         onClear: () => { setQuery(""); onChange(null); },
     });
+    const { wrapperRef, inputRef, listRef } = cb;
 
-    // ── Portal target — body by default, or the surrounding dialog content so
-    // that Radix Dialog's react-remove-scroll allow-list keeps wheel scrolling
-    // working inside the dropdown. (Same trick as GlAccountCombobox.) ────────
-    const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
-    useEffect(() => {
-        const w = cb.wrapperRef.current;
-        if (!w) return;
-        const inDialog = w.closest('[data-slot="dialog-content"]') as HTMLElement | null;
-        setPortalTarget(inDialog ?? document.body);
-    }, [cb.wrapperRef]);
-
-    // ── Position the dropdown via fixed + computed top/left/width. ───────────
-    // Width tracks the surrounding <table>'s right edge so it spans the row
-    // (Tally / Vyapar style). MaxHeight is clamped to actually-available
-    // space so long product lists never spill past the viewport. Flip up
-    // when bottom space is cramped.
-    const DROPDOWN_MAX_H = 360;
-    const DROPDOWN_RIGHT_TRIM = 38; // ~1cm — pull the right edge in from the table edge
-    // The four number columns take ~590px (4 × fixed width + gaps + padding), so
-    // anything narrower leaves the Item column — the product NAME — no room at
-    // all. Outside a table the box itself can be far narrower than that.
-    const DROPDOWN_MIN_W = 880;
-    const VIEWPORT_MARGIN = 12;
-    const [pos, setPos] = useState<{
-        top: number; left: number; width: number; maxHeight: number; flipUp: boolean;
-    } | null>(null);
-    useLayoutEffect(() => {
-        if (!cb.open || !portalTarget) { setPos(null); return; }
-        const wrapper = cb.wrapperRef.current;
-        if (!wrapper) return;
-        const measure = () => {
-            const rect = wrapper.getBoundingClientRect();
-            const target = portalTarget.getBoundingClientRect();
-            const table = wrapper.closest("table");
-            const tableRect = table?.getBoundingClientRect();
-            const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_MARGIN;
-            const spaceAbove = rect.top - VIEWPORT_MARGIN;
-            const flipUp = spaceBelow < 200 && spaceAbove > spaceBelow;
-            const available = Math.max(120, flipUp ? spaceAbove : spaceBelow);
-            const maxHeight = Math.min(DROPDOWN_MAX_H, available);
-            const naturalWidth = tableRect ? tableRect.right - rect.left : rect.width;
-            // Never wider than the window; slide left rather than run off its edge.
-            const width = Math.min(
-                Math.max(DROPDOWN_MIN_W, naturalWidth - DROPDOWN_RIGHT_TRIM),
-                window.innerWidth - 2 * VIEWPORT_MARGIN,
-            );
-            const left = Math.max(VIEWPORT_MARGIN, Math.min(rect.left, window.innerWidth - VIEWPORT_MARGIN - width));
-            const anchorY = flipUp ? rect.top : rect.bottom;
-            setPos({
-                top: anchorY - target.top,
-                left: left - target.left,
-                width,
-                maxHeight,
-                flipUp,
-            });
-            cb.setDropdownWidth(width);
-        };
-        measure();
-        window.addEventListener("resize", measure);
-        window.addEventListener("scroll", measure, true);
-        return () => {
-            window.removeEventListener("resize", measure);
-            window.removeEventListener("scroll", measure, true);
-        };
-        // The specific `cb` members used here are the stable deps; depending on the
-        // whole `cb` object (new each render from the combobox hook) would re-run every render.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [cb.open, cb.wrapperRef, cb.setDropdownWidth, portalTarget]);
+    // ── Portal + position (useDropdownPortal) — inside the surrounding dialog so
+    // its scroll lock keeps wheel scrolling in the list. Width tracks the
+    // surrounding <table>'s right edge so it spans the row (Tally / Vyapar
+    // style); see PLACEMENT. ──────────────────────────────────────────────
+    const { target: portalTarget, pos } = useDropdownPortal(cb.open, wrapperRef, PLACEMENT);
 
     // Wrap handleKeyDown to add Tab commit-on-exit + Enter-creates-when-empty.
     const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -290,15 +248,10 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
         cb.handleKeyDown(e);
     };
 
-    // Keep the list ref pointing at the scrollable inner div so keyboard
-    // navigation auto-scrolls the highlighted item into view.
-    const listRef = useRef<HTMLUListElement>(null);
-    useEffect(() => { cb.listRef.current = listRef.current; });
-
     return (
-        <div ref={cb.wrapperRef} className={`relative ${className}`}>
+        <div ref={wrapperRef} className={`relative ${className}`}>
             <input
-                ref={cb.inputRef}
+                ref={inputRef}
                 type="text"
                 value={query}
                 autoFocus={autoFocus}
