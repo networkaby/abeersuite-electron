@@ -84,6 +84,8 @@ const NON_SECRET_KEYS = new Set([
     // The office's public address (https://office.…) — already compiled into the
     // bundle as COMPANY_DETAILS.sites.office, so the scanner would otherwise flag it.
     "WRITE_API_URL",
+    // Same office address, for the till's settings fetch (electron/remoteConfig.ts).
+    "COUNTER_CONFIG_URL",
     "COUNTER_PC",
     "PORT",
     // A path, not a credential — see resolveLandingPage() in appModeCore.ts.

@@ -29,6 +29,7 @@ import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { extractApiError } from "@/shared/lib/api";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import { fmt } from "@/shared/lib/format/moneyInr";
+import { todayIso } from "@/shared/lib/format/formatDate";
 
 type Row = {
     universalVoucherId?: number;
@@ -121,7 +122,7 @@ export function OpeningBillsDialog({
 
     const addRow = () => setRows((prev) => [...prev, {
         ref:    data?.defaults.ref ?? "Opening Balance",
-        date:   data?.defaults.date ?? new Date().toISOString().slice(0, 10),
+        date:   data?.defaults.date ?? todayIso(),
         amount: "",
         linked: 0,
     }]);

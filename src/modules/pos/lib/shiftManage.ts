@@ -2,6 +2,7 @@
 
 import type { PrismaClient } from "@/generated/prisma/client";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
+import { BUSINESS_TIME_ZONE } from "@/shared/lib/constants/business";
 
 // ── Reopen ────────────────────────────────────────────────────────────────────
 //
@@ -9,21 +10,26 @@ import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 // counter started from. Voiding those vouchers once a later shift exists would
 // rewrite the till under that shift, so reopen refuses. Likewise a shift that
 // ended by handover has its cash living on in the receiving shift.
+//
+// "Later" is by openedAt, never by id: a shift opened on a counter PC takes an
+// id from that PC's offline block (1,000,000,000+, see idRange.ts), so an older
+// counter-made shift outnumbers every cloud-made one.
 
 export async function shiftManageBlock(
     db: PrismaClient,
-    shift: { id: number; counterId: number; closedAt: Date | null; handoverToShiftId: number | null },
+    shift: { id: number; counterId: number; openedAt: Date; handoverToShiftId: number | null },
 ): Promise<string | null> {
     if (shift.handoverToShiftId != null) {
         return `This shift was handed over to shift #${shift.handoverToShiftId} and cannot be changed.`;
     }
     const later = await db.posShift.findFirst({
-        where:   { counterId: shift.counterId, id: { gt: shift.id } },
-        orderBy: { id: "asc" },
-        select:  { id: true, status: true },
+        where:   { counterId: shift.counterId, id: { not: shift.id }, openedAt: { gt: shift.openedAt } },
+        orderBy: { openedAt: "asc" },
+        select:  { id: true, openedAt: true },
     });
     if (later) {
-        return `Shift #${later.id} has already run on this counter after this one. Only the latest shift on a counter can be reopened.`;
+        const when = later.openedAt.toLocaleString("en-IN", { timeZone: BUSINESS_TIME_ZONE, dateStyle: "medium", timeStyle: "short" });
+        return `Shift #${later.id} (opened ${when}) has already run on this counter after this one. Only the latest shift on a counter can be reopened.`;
     }
     return null;
 }

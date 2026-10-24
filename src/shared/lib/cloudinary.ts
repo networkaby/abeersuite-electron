@@ -25,9 +25,17 @@ export interface CloudinarySignature {
     apiKey: string;
     cloudName: string;
     folder: string;
+    /** Set when the upload is signed to be stored as JPG (see storeAsJpg). */
+    format?: "jpg";
 }
 
-export function cloudinarySignature(rawFolder?: string | null): CloudinarySignature | null {
+/**
+ * `storeAsJpg` signs `format=jpg`, so Cloudinary saves the upload as a JPG. The
+ * client asks for it only for a HEIC/HEIF photo (iPhones, some Androids): a stored
+ * .heic shows nowhere a raw link is used — Chromium/the desktop app, WhatsApp, a
+ * print. Everything else keeps its own format, so a PNG logo keeps its transparency.
+ */
+export function cloudinarySignature(rawFolder?: string | null, storeAsJpg = false): CloudinarySignature | null {
     const apiKey = process.env.CLOUDINARY_API_KEY;
     const apiSecret = process.env.CLOUDINARY_API_SECRET;
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
@@ -40,9 +48,10 @@ export function cloudinarySignature(rawFolder?: string | null): CloudinarySignat
 
     const timestamp = Math.round(Date.now() / 1000);
     // Cloudinary signature: alphabetical param sort, concat with secret, SHA1.
+    const formatParam = storeAsJpg ? "&format=jpg" : "";
     const signature = createHash("sha1")
-        .update(`folder=${folder}&timestamp=${timestamp}${apiSecret}`)
+        .update(`folder=${folder}${formatParam}&timestamp=${timestamp}${apiSecret}`)
         .digest("hex");
 
-    return { timestamp, signature, apiKey, cloudName, folder };
+    return { timestamp, signature, apiKey, cloudName, folder, ...(storeAsJpg ? { format: "jpg" as const } : {}) };
 }

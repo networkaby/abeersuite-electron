@@ -154,3 +154,7 @@ app-triggered run prints the password in its log. Keep the backup repo private.
 The workflow still falls back to the secret and builds the file name itself when no
 input arrives (the GitHub-scheduled runs); both name generators produce
 byte-identical names, and the project ref in the name says which database a dump holds.
+
+Restore is different: the operator types the target database, so its URL travels
+as an input too. `restore.yml`'s first step reads it from the event file and masks it
+(and its password) before anything else runs, so it shows as `***` in every log line.

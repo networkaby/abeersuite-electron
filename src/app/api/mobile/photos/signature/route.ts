@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     if (!(PHOTO_KINDS as readonly string[]).includes(kind)) {
         return NextResponse.json({ error: "Unknown photo kind" }, { status: 400 });
     }
-    const sig = cloudinarySignature(PHOTO_FOLDER[kind as PhotoKind]);
+    const sig = cloudinarySignature(PHOTO_FOLDER[kind as PhotoKind], req.nextUrl.searchParams.get("format") === "jpg");
     if (!sig) return NextResponse.json({ error: "Photo upload is not set up on the server" }, { status: 500 });
     return NextResponse.json(sig);
 }
