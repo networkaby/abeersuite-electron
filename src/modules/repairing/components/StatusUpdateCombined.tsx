@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { badgeColor } from "@/shared/lib/format/entityColor";
@@ -42,7 +42,7 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
 
     const nextMainStatuses: NextMainStatus[] = ticket.ticketStatus.fromTransitions.map((t) => t.to);
 
-    const { register, handleSubmit, watch, setValue, formState: { isSubmitting } } = useForm<FormData>({
+    const { register, handleSubmit, control, setValue, formState: { isSubmitting } } = useForm<FormData>({
         defaultValues: {
             mode: "substatus", workerId: "",
             mainStatusId: nextMainStatuses[0]?.id ?? "",
@@ -50,10 +50,10 @@ export default function StatusUpdateCombined({ ticket, onClose }: Props) {
         },
     });
 
-    const mode = watch("mode");
-    const selectedSubId = watch("workerId");
-    const selectedMainId = watch("mainStatusId");
-    const visibility = watch("visibility");
+    const mode = useWatch({ control, name: "mode" });
+    const selectedSubId = useWatch({ control, name: "workerId" });
+    const selectedMainId = useWatch({ control, name: "mainStatusId" });
+    const visibility = useWatch({ control, name: "visibility" });
     const selectedSub = nextWorkers.find((ss) => ss.id === selectedSubId);
     const selectedMain = nextMainStatuses.find((s) => s.id === selectedMainId);
 

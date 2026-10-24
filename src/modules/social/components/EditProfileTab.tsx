@@ -6,7 +6,7 @@ import { useRef, useState } from "react";
 import Image from "next/image";
 import axios from "axios";
 import { toast } from "sonner";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
 import { Link2, Upload } from "lucide-react";
@@ -44,7 +44,7 @@ export default function EditProfileTab({ profile, onSaved }: { profile: UserProf
     const fileInputRef = useRef<HTMLInputElement>(null);
     const coverInputRef = useRef<HTMLInputElement>(null);
 
-    const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<EditForm>({
+    const { register, handleSubmit, control, setValue, formState: { errors } } = useForm<EditForm>({
         resolver: zodResolver(editSchema),
         defaultValues: {
             name: profile.name,
@@ -58,7 +58,8 @@ export default function EditProfileTab({ profile, onSaved }: { profile: UserProf
         },
     });
 
-    const bioValue = watch("bio") ?? "";
+    const bioValue = useWatch({ control, name: "bio" }) ?? "";
+    const birthday = useWatch({ control, name: "birthday" });
 
     async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>, type: "avatar" | "cover") {
         const file = e.target.files?.[0];
@@ -192,7 +193,7 @@ export default function EditProfileTab({ profile, onSaved }: { profile: UserProf
                     </div>
                     <div className="space-y-1.5">
                         <Label>Birthday <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                        <TallyDateInput value={watch("birthday") ?? ""} onValueChange={(iso) => setValue("birthday", iso, { shouldValidate: true })} />
+                        <TallyDateInput value={birthday ?? ""} onValueChange={(iso) => setValue("birthday", iso, { shouldValidate: true })} />
                     </div>
                 </div>
             </div>

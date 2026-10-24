@@ -21,6 +21,7 @@ import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { formatDate, formatDateTime } from "@/shared/lib/format";
 import type { DealDetailDto, DealStage, DealActivityKind } from "../lib/types";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 const ACTIVITY_KINDS: { kind: Exclude<DealActivityKind, "SYSTEM">; label: string; icon: typeof StickyNote }[] = [
     { kind: "NOTE", label: "Note", icon: StickyNote },
@@ -60,23 +61,23 @@ export default function DealDetailDialog({
     // "now" read in an effect (useNow) — calling Date.now() during render trips react-hooks/purity.
     const now = useNow();
 
+    const readDeal = useCallback((id: number) => axios.get(`/api/deals/${id}`)
+        .then((res) => setDeal(res.data))
+        .catch(() => { toast.error("Failed to load deal"); })
+        .finally(() => setLoading(false)), []);
     const load = useCallback(async () => {
         if (!dealId) return;
         setLoading(true);
-        try {
-            const res = await axios.get(`/api/deals/${dealId}`);
-            setDeal(res.data);
-        } catch {
-            toast.error("Failed to load deal");
-        } finally {
-            setLoading(false);
-        }
-    }, [dealId]);
+        await readDeal(dealId);
+    }, [dealId, readDeal]);
 
+    // Opening a deal shows the spinner, closing clears it — both while rendering.
+    const openDealId = open && dealId ? dealId : null;
+    if (useValueChange(openDealId, null) && openDealId) setLoading(true);
+    if (useValueChange(open, false) && !open) { setDeal(null); setBody(""); setDueAt(""); setComposerKind("NOTE"); }
     useEffect(() => {
-        if (open && dealId) load();
-        if (!open) { setDeal(null); setBody(""); setDueAt(""); setComposerKind("NOTE"); }
-    }, [open, dealId, load]);
+        if (openDealId) void readDeal(openDealId);
+    }, [openDealId, readDeal]);
 
     const moveStage = async (status: string) => {
         if (!deal || status === deal.status) return;

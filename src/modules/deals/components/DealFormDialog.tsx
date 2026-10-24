@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
@@ -21,6 +21,7 @@ import { usePartySearch } from "@/shared/hooks/usePartySearch";
 import { TallyDateTimeInput } from "@/shared/components/TallyDateTimeInput";
 import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import type { DealDetailDto, DealPriority, DealPositionOption } from "../lib/types";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 const PRIORITIES: DealPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 const UNASSIGNED = "__none__";
@@ -66,8 +67,9 @@ export default function DealFormDialog({
     const [linkFocused, setLinkFocused] = useState(false);
     const { hits, loading: linkLoading } = usePartySearch(linkQuery, { enabled: linkFocused && !linked });
 
-    useEffect(() => {
-        if (!open) return;
+    // Each open (or another deal / prefill) seeds the form — while rendering.
+    const seedChanged = [useValueChange(open, false), useValueChange(deal), useValueChange(initialPhone), useValueChange(initialSource)].some(Boolean);
+    if (seedChanged && open) {
         setTitle(deal?.title ?? "");
         setContactName(deal?.contactName ?? "");
         setPhone(deal?.phone ?? initialPhone ?? "");
@@ -87,7 +89,7 @@ export default function DealFormDialog({
                     : null,
         );
         setLinkQuery("");
-    }, [open, deal, initialPhone, initialSource]);
+    }
 
     const handleSave = async () => {
         if (!title.trim()) {

@@ -64,15 +64,14 @@ export default function AccountCreditLimitCard({ accountId, initialLimit, canEdi
     const effective = Math.max(parsed, autoLimit);
     const allowsCredit = effective > 0;
 
-    const loadBreakup = useCallback(async () => {
-        try {
-            const { data } = await axios.get<Breakup>(`/api/accounts/${accountId}/credit-limit`);
+    const loadBreakup = useCallback(() => axios.get<Breakup>(`/api/accounts/${accountId}/credit-limit`)
+        .then(({ data }) => {
             setBreakup(data);
-        } catch {
+        })
+        .catch(() => {
             // Non-fatal — the card still shows and edits the manual limit.
             setBreakup(null);
-        }
-    }, [accountId]);
+        }), [accountId]);
 
     useEffect(() => { void loadBreakup(); }, [loadBreakup]);
 

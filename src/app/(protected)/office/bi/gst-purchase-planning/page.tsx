@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import axios from "axios";
 import { AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2, RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
@@ -15,6 +15,7 @@ import { fmt } from "@/shared/lib/format/moneyInr";
 import { parseAmount, isAmountChars, parseSignedAmount, isSignedAmountChars } from "@/utils/numberInput";
 import { useBiQuery } from "@/modules/bi/hooks/useBiQuery";
 import { KpiCard } from "@/modules/bi/components/KpiCard";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 interface BankOption {
     id: number;
@@ -532,15 +533,15 @@ export default function GstPurchasePlanningPage() {
     /** Word for the purchase every target is derived from, in the current view. */
     const purchaseWord = showForecast ? "forecast purchase" : "booked purchase";
 
-    useEffect(() => {
-        if (!fy) return;
+    // A new year's figures reset the drafts — while rendering.
+    if (useValueChange(fy) && fy) {
         setBankDraft(fy.config.bankAccountIds ?? []);
         setDiffDraft(String(fy.fy.allowedDiff || ""));
         setTaxDraft(String(fy.config.taxRatePercent));
         setGapDraft(String(fy.config.depositGapPercent));
         setPresumptiveDraft(String(fy.config.presumptiveRatePercent));
         setIncomeLimitDraft(String(fy.config.incomeTaxFreeLimit));
-    }, [fy]);
+    }
 
     const reloadAll = useCallback(() => {
         reload();

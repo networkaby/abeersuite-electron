@@ -28,6 +28,7 @@ import {
     type HelpDetailDto, type HelpStage,
 } from "../lib/types";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 export default function HelpDetailDialog({
     ticketId,
@@ -57,27 +58,27 @@ export default function HelpDetailDialog({
     const [deviceOpen, setDeviceOpen] = useState(false);
     const [device, setDevice] = useState({ deviceType: "", brand: "", model: "", problem: "" });
 
+    const readTicket = useCallback((id: number) => axios.get<HelpDetailDto>(`/api/help/${id}`)
+        .then((res) => setTicket(res.data))
+        .catch(() => { toast.error("Failed to load help ticket"); })
+        .finally(() => setLoading(false)), []);
     const load = useCallback(async () => {
         if (ticketId == null) return;
         setLoading(true);
-        try {
-            const res = await axios.get<HelpDetailDto>(`/api/help/${ticketId}`);
-            setTicket(res.data);
-        } catch {
-            toast.error("Failed to load help ticket");
-        } finally {
-            setLoading(false);
-        }
-    }, [ticketId]);
+        await readTicket(ticketId);
+    }, [ticketId, readTicket]);
 
+    // Opening a ticket clears the composer and shows the spinner — while rendering.
+    const openTicketId = open && ticketId != null ? ticketId : null;
+    if (useValueChange(openTicketId, null) && openTicketId != null) {
+        setNote("");
+        setDeviceOpen(false);
+        setDevice({ deviceType: "", brand: "", model: "", problem: "" });
+        setLoading(true);
+    }
     useEffect(() => {
-        if (open && ticketId != null) {
-            setNote("");
-            setDeviceOpen(false);
-            setDevice({ deviceType: "", brand: "", model: "", problem: "" });
-            load();
-        }
-    }, [open, ticketId, load]);
+        if (openTicketId != null) void readTicket(openTicketId);
+    }, [openTicketId, readTicket]);
 
     const patch = async (body: Record<string, unknown>, ok: string) => {
         if (ticketId == null) return;

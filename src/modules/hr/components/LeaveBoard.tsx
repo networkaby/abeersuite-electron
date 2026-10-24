@@ -196,13 +196,11 @@ export function LeaveDialog({ canPickPerson, heldToNotice = !canPickPerson, onCl
        later. If the real one is longer, the dates it opened with are now too
        early and have to be pushed forward — otherwise the box shows a day the
        server will refuse. */
-    useEffect(() => {
-        if (!held) return;
-        setFromDate((f) => (f && f < earliest ? earliest : f));
-        setToDate((t) => (t && t < earliest ? earliest : t));
-    }, [held, earliest]);
     const [fromDate, setFromDate] = useState(held ? earliest : todayIso());
     const [toDate, setToDate] = useState(held ? earliest : todayIso());
+    // While rendering; a date only ever moves forward to `earliest`, so it settles.
+    if (held && fromDate && fromDate < earliest) setFromDate(earliest);
+    if (held && toDate && toDate < earliest) setToDate(earliest);
     const [reason, setReason] = useState("");
     const [saving, setSaving] = useState(false);
     const options = useMemo(() => (staff ?? []).map((s) => ({ value: s.id, label: s.name })), [staff]);

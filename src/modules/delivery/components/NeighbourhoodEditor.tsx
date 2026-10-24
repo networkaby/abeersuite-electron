@@ -148,9 +148,8 @@ export default function NeighbourhoodEditor() {
     const [testPincode, setTestPincode] = useState("");
     const [testNeighbourhood, setTestNeighbourhood] = useState("");
 
-    const load = useCallback(async () => {
-        try {
-            const { data } = await axios.get<{ methods: Method[] }>("/api/settings/couriers");
+    const load = useCallback(() => axios.get<{ methods: Method[] }>("/api/settings/couriers")
+        .then(({ data }) => {
             const row = data.methods.find((m) => m.kind === "OWN_BOY") ?? null;
             setMethod(row);
             const cfg = ((row?.configJson ?? {}) as OwnBoyConfig) ?? {};
@@ -158,10 +157,10 @@ export default function NeighbourhoodEditor() {
             setVehicles(list.length > 0 ? list : [newVehicle("Local delivery")]);
             setActiveIdx(0);
             setLoaded(true);
-        } catch {
+        })
+        .catch(() => {
             setLoaded(true);
-        }
-    }, []);
+        }), []);
     useEffect(() => { void load(); }, [load]);
 
     const active: VehicleForm | undefined = vehicles[activeIdx];

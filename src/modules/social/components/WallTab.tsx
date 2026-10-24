@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import UserAvatar from "@/shared/components/UserAvatar";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { timeAgo, type UserProfile, type WallPost } from "./profileTypes";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 export default function WallTab({ profile, sessionUserId, focusInput }: {
     profile: UserProfile; sessionUserId: number | undefined; focusInput: boolean;
@@ -25,7 +26,6 @@ export default function WallTab({ profile, sessionUserId, focusInput }: {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const readWall = (first: boolean) => {
-        if (first) setLoading(true);
         axios.get<WallPost[]>(`/api/users/${profile.id}/wall`)
             .then(r => setPosts(r.data))
             .catch(e => {
@@ -33,6 +33,8 @@ export default function WallTab({ profile, sessionUserId, focusInput }: {
             })
             .finally(() => { if (first) setLoading(false); });
     };
+    // Another profile's wall: the spinner shows from its first render.
+    if (useValueChange(profile.id)) setLoading(true);
     useEffect(() => { readWall(true); }, [profile.id]); // eslint-disable-line react-hooks/exhaustive-deps -- read the wall once per profile
     // Someone else posting on this wall announces `tasks`; only the posts are re-read.
     useRealtimeTopics(["tasks"], () => readWall(false));
