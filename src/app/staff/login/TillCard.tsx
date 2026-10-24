@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { formatClockTime, formatHhMmFriendly, todayIso, weekdayAndDate, weekdayName } from "@/shared/lib/format/formatDate";
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
+import { formatInrLoose } from "@/shared/lib/format/moneyInr";
 import { myDayStore } from "@/shared/lib/hr/myDay";
 import { nextOpeningText } from "@/shared/lib/hr/nextOpeningText";
 import DutyTimeline from "@/modules/hr/timeline/DutyTimeline";
@@ -20,8 +21,7 @@ type CounterShift = {
     tenders:           { label: string; amountPaise: string }[];
 };
 
-const inr = (paise: string) =>
-    (Number(paise) / 100).toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
+const inr = (paise: string) => formatInrLoose(Number(paise) / 100);
 
 /**
  * The till's own card on the sign-in screen — one card, three things the person

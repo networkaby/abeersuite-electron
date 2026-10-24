@@ -22,6 +22,7 @@
 
 import { isSupplierPartyKind, type VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
 import { rupeesInWords } from "@/shared/lib/format/numberToWords";
+import { formatAmount } from "@/shared/lib/format/moneyInr";
 import type { ThermalReceiptSample } from "@/shared/components/print/ThermalReceiptPreview";
 import { BarcodeSvg } from "@/modules/inventory/components/BarcodeSvg";
 import { QrSvg } from "@/shared/components/print/QrSvg";
@@ -30,7 +31,7 @@ import { gstinDerivedStateCode } from "@/shared/lib/gst/computeGstSplit";
 import { stateNameForCode } from "@/shared/lib/gst/indianStates";
 
 const fmtINR = (n: number) =>
-    `Rs. ${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    `Rs. ${formatAmount(n)}`;
 
 // Class used to scope the inline <style> block when rendered inline in the
 // host page (previewMode=true). MUST stay in sync with the wrapper div below.
@@ -722,7 +723,6 @@ function DepositSlipMiddle({ sample }: A4ChromeProps) {
     const notes = slip.denominations.filter((d) => d >= 10);
     const hasCoins = slip.denominations.some((d) => d < 10);
     const bankLine = [slip.bankName, slip.branch].filter(Boolean).join(", ");
-    const fmtNum = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     // "handover" = cash → cash (an internal transfer between tills/vault). No
     // bank block, no bank-acknowledgment counterfoil — just a from/to record
     // with handed-by / received-by signatures.
@@ -781,13 +781,13 @@ function DepositSlipMiddle({ sample }: A4ChromeProps) {
                                             <tr key={n.denom}>
                                                 <td>{n.denom.toLocaleString("en-IN")}</td>
                                                 <td className="cnt" style={{ textAlign: "center" }}>{n.count}</td>
-                                                <td className="amt">{fmtNum(n.denom * n.count)}</td>
+                                                <td className="amt">{formatAmount(n.denom * n.count)}</td>
                                             </tr>
                                         ))}
                                         <tr className="tot">
                                             <td>Cash Total</td>
                                             <td className="cnt" style={{ textAlign: "center" }}>{counted.notes.reduce((s, n) => s + n.count, 0)}</td>
-                                            <td className="amt">{fmtNum(counted.notes.reduce((s, n) => s + n.denom * n.count, 0))}</td>
+                                            <td className="amt">{formatAmount(counted.notes.reduce((s, n) => s + n.denom * n.count, 0))}</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -801,13 +801,13 @@ function DepositSlipMiddle({ sample }: A4ChromeProps) {
                                         {counted.cheques.map((c, i) => (
                                             <tr key={i}>
                                                 <td>{c.account ? `${c.account} · ${c.no}` : c.no}</td>
-                                                <td className="amt">{fmtNum(c.amount)}</td>
+                                                <td className="amt">{formatAmount(c.amount)}</td>
                                             </tr>
                                         ))}
                                         {counted.cheques.length > 1 && (
                                             <tr className="tot">
                                                 <td>Cheques Total</td>
-                                                <td className="amt">{fmtNum(counted.cheques.reduce((s, c) => s + c.amount, 0))}</td>
+                                                <td className="amt">{formatAmount(counted.cheques.reduce((s, c) => s + c.amount, 0))}</td>
                                             </tr>
                                         )}
                                     </tbody>
@@ -824,7 +824,7 @@ function DepositSlipMiddle({ sample }: A4ChromeProps) {
                                     <tr key={d}><td>{d.toLocaleString("en-IN")}</td><td className="cnt" /><td className="amt" /></tr>
                                 ))}
                                 {hasCoins && <tr><td>Coins / small</td><td className="cnt" /><td className="amt" /></tr>}
-                                <tr className="tot"><td>Total</td><td className="cnt" /><td className="amt">{fmtNum(total)}</td></tr>
+                                <tr className="tot"><td>Total</td><td className="cnt" /><td className="amt">{formatAmount(total)}</td></tr>
                             </tbody>
                         </table>
                     )}
@@ -1076,7 +1076,7 @@ function GoodsTable({
     const midCols = 1 /* description */ + (anyHsn ? 1 : 0) + (anyMrp ? 1 : 0)
         + 1 /* qty */ + (anyUnit ? 1 : 0) + (priced ? 1 : 0) /* rate */ + (anyDisc ? 1 : 0);
 
-    const signed = (n: number) => (n < 0 ? `(-)${fmtINR(Math.abs(n)).replace("Rs. ", "")}` : fmtINR(n).replace("Rs. ", ""));
+    const signed = (n: number) => (n < 0 ? `(-)${formatAmount(Math.abs(n))}` : formatAmount(n));
 
     return (
         <table className="goods">
@@ -1100,7 +1100,7 @@ function GoodsTable({
                     <tr className="ledger">
                         <td />
                         <td colSpan={midCols} className="num">Brought forward</td>
-                        <td className="num">{fmtINR(broughtForward).replace("Rs. ", "")}</td>
+                        <td className="num">{formatAmount(broughtForward)}</td>
                     </tr>
                 )}
                 {lines.map((l, i) => (
@@ -1111,12 +1111,12 @@ function GoodsTable({
                             {template.showLineNote && l.note && <div className="note">{l.note}</div>}
                         </td>
                         {anyHsn && <td className="ctr">{l.hsn ?? ""}</td>}
-                        {anyMrp && <td className="num">{l.mrp ? fmtINR(l.mrp).replace("Rs. ", "") : "—"}</td>}
+                        {anyMrp && <td className="num">{l.mrp ? formatAmount(l.mrp) : "—"}</td>}
                         <td className="num">{l.quantity}</td>
                         {anyUnit && <td className="ctr">{l.unit ?? ""}</td>}
-                        {priced && <td className="num">{fmtINR(unitRate(l)).replace("Rs. ", "")}</td>}
-                        {anyDisc && <td className="num">{(l.discount ?? 0) > 0.005 ? fmtINR(l.discount!).replace("Rs. ", "") : "—"}</td>}
-                        {priced && <td className="num">{fmtINR(value(l)).replace("Rs. ", "")}</td>}
+                        {priced && <td className="num">{formatAmount(unitRate(l))}</td>}
+                        {anyDisc && <td className="num">{(l.discount ?? 0) > 0.005 ? formatAmount(l.discount!) : "—"}</td>}
+                        {priced && <td className="num">{formatAmount(value(l))}</td>}
                     </tr>
                 ))}
 
@@ -1149,7 +1149,7 @@ function GoodsTable({
                         <td colSpan={midCols} className="num" style={{ padding: "10px 6px 4px" }}>
                             Sub Total
                         </td>
-                        <td className="num">{fmtINR(itemTotal).replace("Rs. ", "")}</td>
+                        <td className="num">{formatAmount(itemTotal)}</td>
                     </tr>
                 )}
 
@@ -1166,7 +1166,7 @@ function GoodsTable({
                     <tr className="grand">
                         <td />
                         <td colSpan={midCols} className="num">Carried forward</td>
-                        <td className="num">{fmtINR(carriedForward).replace("Rs. ", "")}</td>
+                        <td className="num">{formatAmount(carriedForward)}</td>
                     </tr>
                 )}
 
@@ -1179,7 +1179,7 @@ function GoodsTable({
                         <td className="num">{qtyLabel}</td>
                         {anyUnit && <td />}
                         {priced && <td />}
-                        {anyDisc && <td className="num">{discTotal > 0.005 ? fmtINR(discTotal).replace("Rs. ", "") : ""}</td>}
+                        {anyDisc && <td className="num">{discTotal > 0.005 ? formatAmount(discTotal) : ""}</td>}
                         {priced && <td className="num">{fmtINR(sample.total!)}</td>}
                     </tr>
                 )}
@@ -1484,7 +1484,6 @@ function DefaultA4Middle({ template, sample, page }: A4ChromeProps & { page?: Pa
             {/* 5b — HSN/SAC-wise tax summary (separate table, toggleable) */}
             {showTax && template.showTaxSummary && sample.hsnSummary && sample.hsnSummary.length > 0 && (() => {
                 const inter = sample.taxBreakdown?.kind === "INTER";
-                const num = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 const sum = sample.hsnSummary.reduce(
                     (a, h) => ({ taxable: a.taxable + h.taxable, cgst: a.cgst + h.cgst, sgst: a.sgst + h.sgst }),
                     { taxable: 0, cgst: 0, sgst: 0 },
@@ -1535,42 +1534,42 @@ function DefaultA4Middle({ template, sample, page }: A4ChromeProps & { page?: Pa
                             {sample.hsnSummary.map((h, i) => (
                                 <tr key={i}>
                                     <td className="l">{h.hsn}</td>
-                                    <td className="num">{num(h.taxable)}</td>
+                                    <td className="num">{formatAmount(h.taxable)}</td>
                                     {inter ? (
-                                        <><td>{h.ratePct}%</td><td className="num">{num(h.cgst + h.sgst)}</td></>
+                                        <><td>{h.ratePct}%</td><td className="num">{formatAmount(h.cgst + h.sgst)}</td></>
                                     ) : (
                                         <>
-                                            <td>{h.ratePct / 2}%</td><td className="num">{num(h.cgst)}</td>
-                                            <td>{h.ratePct / 2}%</td><td className="num">{num(h.sgst)}</td>
+                                            <td>{h.ratePct / 2}%</td><td className="num">{formatAmount(h.cgst)}</td>
+                                            <td>{h.ratePct / 2}%</td><td className="num">{formatAmount(h.sgst)}</td>
                                         </>
                                     )}
-                                    <td className="num">{num(h.cgst + h.sgst)}</td>
+                                    <td className="num">{formatAmount(h.cgst + h.sgst)}</td>
                                 </tr>
                             ))}
                             {chargeTax > 0.005 && chargeAmount > 0.005 && (
                                 <tr>
                                     <td className="l">—</td>
-                                    <td className="num">{num(chargeTaxable)}</td>
+                                    <td className="num">{formatAmount(chargeTaxable)}</td>
                                     {inter ? (
-                                        <><td>{chargeRatePct}%</td><td className="num">{num(chargeTax)}</td></>
+                                        <><td>{chargeRatePct}%</td><td className="num">{formatAmount(chargeTax)}</td></>
                                     ) : (
                                         <>
-                                            <td>{chargeRatePct / 2}%</td><td className="num">{num(chargeTax / 2)}</td>
-                                            <td>{chargeRatePct / 2}%</td><td className="num">{num(chargeTax / 2)}</td>
+                                            <td>{chargeRatePct / 2}%</td><td className="num">{formatAmount(chargeTax / 2)}</td>
+                                            <td>{chargeRatePct / 2}%</td><td className="num">{formatAmount(chargeTax / 2)}</td>
                                         </>
                                     )}
-                                    <td className="num">{num(chargeTax)}</td>
+                                    <td className="num">{formatAmount(chargeTax)}</td>
                                 </tr>
                             )}
                             <tr className="tot">
                                 <td>Total</td>
-                                <td className="num">{num(totalTaxable)}</td>
+                                <td className="num">{formatAmount(totalTaxable)}</td>
                                 {inter ? (
-                                    <><td /><td className="num">{num(totalTax)}</td></>
+                                    <><td /><td className="num">{formatAmount(totalTax)}</td></>
                                 ) : (
-                                    <><td /><td className="num">{num(totalCgst)}</td><td /><td className="num">{num(totalSgst)}</td></>
+                                    <><td /><td className="num">{formatAmount(totalCgst)}</td><td /><td className="num">{formatAmount(totalSgst)}</td></>
                                 )}
-                                <td className="num">{num(totalTax)}</td>
+                                <td className="num">{formatAmount(totalTax)}</td>
                             </tr>
                         </tbody>
                     </table>

@@ -69,6 +69,17 @@ export function formatInr(rupees: number, decimals: 0 | 2 = 2): string {
     })}`;
 }
 
+const AMOUNT_FORMAT = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * Plain 2dp amount with Indian grouping, no ₹ sign (e.g. 123456.5 → "1,23,456.50").
+ * The figure style of printed slips, invoices and WhatsApp messages, where the
+ * column header or the sentence already says it is rupees.
+ */
+export function formatAmount(n: number): string {
+    return AMOUNT_FORMAT.format(n);
+}
+
 /**
  * Plain 2dp amount with en-US grouping, no ₹ sign (e.g. 1234567.5 → "1,234,567.50").
  * The figure style of the accountancy, BI and POS screens.

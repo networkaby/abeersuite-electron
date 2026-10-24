@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { cloudinaryThumb } from "@/shared/lib/cloudinaryImage";
+import { formatRupees } from "@/shared/lib/format/moneyInr";
 import type { PostProduct } from "@/modules/campaigns/lib/post";
 
 /** Rows shown at once — beyond this staff narrow it by typing. */
@@ -23,8 +24,6 @@ export function loadPostProducts(): Promise<PostProduct[]> {
         });
     return listOnce;
 }
-
-const rupees = (paise: number) => `₹${Math.round(paise / 100).toLocaleString("en-IN")}`;
 
 /** Pick one of the products the shop shows customers, to start a post from. */
 export default function PostProductPicker({
@@ -82,7 +81,7 @@ export default function PostProductPicker({
                                         <span className="min-w-0 flex-1">
                                             <span className="block truncate text-sm font-medium">{p.name}</span>
                                             <span className="block text-xs text-muted-foreground">
-                                                {p.category} · {rupees(p.pricePaise)}
+                                                {p.category} · {formatRupees(p.pricePaise / 100)}
                                                 {p.inStock ? "" : " · not in stock"}
                                                 {p.imageUrl ? "" : " · no photo"}
                                             </span>

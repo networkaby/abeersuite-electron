@@ -5,6 +5,7 @@ import { classifyProducts, type MovementClass } from "@/modules/inventory/lib/mo
 import { valueStockBatch, VALUATION_METHODS, type ValuationMethod } from "@/modules/inventory/lib/valuation";
 import { loadLiveStockMap } from "@/modules/inventory/lib/liveStock";
 import { withApiError } from "@/shared/lib/api";
+import { round2 as r2 } from "@/shared/lib/format/moneyInr";
 
 export const maxDuration = 60;
 
@@ -61,8 +62,6 @@ export const GET = withApiError("Failed to build the stock health report", async
         products.map((p) => ({ id: p.id, stock: effectiveStock(p) })),
         method,
     );
-
-    const r2 = (n: number) => Math.round(n * 100) / 100;
 
     interface HealthRow {
         id: number; sku: string; name: string;

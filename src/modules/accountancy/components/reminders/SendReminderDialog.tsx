@@ -11,7 +11,7 @@ import { AlertTriangle, ExternalLink, Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { extractApiError } from "@/shared/lib/api";
-import { fmt } from "@/shared/lib/format/moneyInr";
+import { fmt, formatAmount } from "@/shared/lib/format/moneyInr";
 import { formatDateCompact } from "@/shared/lib/format/formatDate";
 import { fillBody } from "@/shared/lib/whatsapp/billTemplates";
 import { TONE_LABEL, waStatusText, type ReminderSendInfo, type ReminderTone } from "@/shared/lib/whatsapp/dueReminderTypes";
@@ -25,15 +25,13 @@ export type ReminderParty = {
     oldestBillDate: string | null;
     oldestDays: number;
 };
-
-const money = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const day = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 
 /** The WhatsApp bubble — the template's own wording, filled for this party. */
 export function ReminderPreview({ body, party }: { body: string; party: ReminderParty }) {
     const text = fillBody(body, {
         customer: party.name,
-        amount: money.format(party.balance),
+        amount: formatAmount(party.balance),
         date: party.oldestBillDate ? day.format(new Date(party.oldestBillDate)) : "—",
         shop: COMPANY_DETAILS.brandName,
     });

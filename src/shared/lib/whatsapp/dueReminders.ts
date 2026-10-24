@@ -3,7 +3,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
-import { round2 } from "@/shared/lib/format/moneyInr";
+import { formatAmount, round2 } from "@/shared/lib/format/moneyInr";
 import { getOutstandings } from "@/modules/accountancy/lib/outstandings";
 import { creditLimitsFor } from "@/shared/lib/accountancy/creditLimit";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
@@ -34,8 +34,6 @@ import type {
  */
 
 const KIND: Record<ReminderTone, WaTemplateKind> = { SOFT: "DUE_SOFT", FIRM: "DUE_FIRM" };
-
-const money = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const day = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
 
 // ── What each party owes ────────────────────────────────────────────────────
@@ -198,7 +196,7 @@ export async function sendDueReminder(args: {
         }
 
         const kind = KIND[args.action];
-        const amountText = money.format(due.balance);
+        const amountText = formatAmount(due.balance);
         const since = due.oldestBillDate ? day.format(new Date(due.oldestBillDate)) : day.format(new Date());
         const { mobile, push, wa } = await sendPushAndWhatsApp({
             kind,
@@ -344,7 +342,7 @@ export async function runDueReminders(now = new Date()): Promise<RunResult> {
     // One bell for the owner when the run put anyone on the call list.
     if (toCall.length) {
         toCall.sort((a, b) => b.balance - a.balance);
-        const shown = toCall.slice(0, 5).map((d) => `${d.name} ₹${money.format(d.balance)}`).join(" · ");
+        const shown = toCall.slice(0, 5).map((d) => `${d.name} ₹${formatAmount(d.balance)}`).join(" · ");
         const more = toCall.length > 5 ? ` + ${toCall.length - 5} more` : "";
         await createSystemInboxNotifications({
             roleIds: ["R1", "R2"],

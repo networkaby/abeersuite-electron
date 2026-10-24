@@ -20,7 +20,7 @@ import {
 import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableStates";
 import { AllocateVoucherDialog } from "@/modules/pricing-strategy/components/AllocateVoucherDialog";
 import { AllocationDetailDialog, type AllocationDoc } from "@/modules/pricing-strategy/components/AllocationDetailDialog";
-import { parseRupeesToPaise } from "@/shared/lib/format";
+import { formatRupeesFromPaise, parseRupeesToPaise } from "@/shared/lib/format";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 // Sticky-header scroll frame: a plain overflow-auto div (NOT Radix ScrollArea —
@@ -97,7 +97,7 @@ interface Doc {
 
 type SortKey = "date" | "kind" | "payment" | "inv" | "items" | "amount" | "by";
 
-const rupee = (paise: number | null): string => (paise == null ? "—" : `₹${(paise / 100).toFixed(2)}`);
+const rupee = (paise: number | null): string => (paise == null ? "—" : formatRupeesFromPaise(paise));
 export default function CostingPage() {
     const [pool, setPool] = useState<PoolSummary | null>(null);
     const [draws, setDraws] = useState<DrawRow[]>([]);

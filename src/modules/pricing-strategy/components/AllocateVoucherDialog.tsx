@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { TableScrollArea } from "@/shared/components/TableScrollArea";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
-import { parseRupeesToPaise } from "@/shared/lib/format";
+import { formatRupeesFromPaise, parseRupeesToPaise } from "@/shared/lib/format";
 
 // The pool entry being allocated (subset of the Costing page's PoolEntry).
 export interface AllocEntry {
@@ -44,8 +44,6 @@ interface VoucherLine {
     name: string;
     sku: string;
 }
-
-const rupee = (paise: number): string => `₹${(paise / 100).toFixed(2)}`;
 /// yyyy-mm-dd, `days` days back from (and including) `isoDate`.
 function daysBefore(isoDate: string, days: number): string {
     // Work in UTC throughout: a local Date + toISOString() slides the day back
@@ -243,7 +241,7 @@ export function AllocateVoucherDialog({
             })
             .filter((x): x is NonNullable<typeof x> => x != null);
         if (payloadLines.length === 0) return toast.error("Enter a per-unit cost or line draw for at least one product.");
-        if (overBudget) return toast.error(`Total ${rupee(totalPaise)} exceeds the entry's remaining ${rupee(entry.remainingPaise)}.`);
+        if (overBudget) return toast.error(`Total ${formatRupeesFromPaise(totalPaise)} exceeds the entry's remaining ${formatRupeesFromPaise(entry.remainingPaise)}.`);
         setSubmitting(true);
         try {
             await axios.post("/api/pricing-strategy/costing/draws/batch", {
@@ -273,7 +271,7 @@ export function AllocateVoucherDialog({
                         {entry ? (
                             <>
                                 {entry.ledgerName} · {entry.reference} · remaining{" "}
-                                <span className="font-semibold text-amber-700 dark:text-amber-300">{rupee(entry.remainingPaise)}</span>
+                                <span className="font-semibold text-amber-700 dark:text-amber-300">{formatRupeesFromPaise(entry.remainingPaise)}</span>
                                 . Pick the purchase/GRN this courier cost was for, then set each product&apos;s per-unit share
                                 <span className="text-muted-foreground"> (or type the line amount directly — the other fills in)</span>.
                             </>
@@ -384,14 +382,14 @@ export function AllocateVoucherDialog({
                 <DialogFooter className="items-center sm:justify-between">
                     <div className="text-xs text-muted-foreground">
                         Total to draw:{" "}
-                        <span className={`font-mono font-semibold ${overBudget ? "text-red-600" : "text-foreground"}`}>{rupee(totalPaise)}</span>
+                        <span className={`font-mono font-semibold ${overBudget ? "text-red-600" : "text-foreground"}`}>{formatRupeesFromPaise(totalPaise)}</span>
                         {entry ? (
                             <>
                                 {" · leaves "}
                                 <span className={`font-mono font-semibold ${overBudget ? "text-red-600" : "text-amber-700 dark:text-amber-300"}`}>
-                                    {rupee(entry.remainingPaise - totalPaise)}
+                                    {formatRupeesFromPaise(entry.remainingPaise - totalPaise)}
                                 </span>
-                                {" of "}{rupee(entry.remainingPaise)}{" waiting"}
+                                {" of "}{formatRupeesFromPaise(entry.remainingPaise)}{" waiting"}
                             </>
                         ) : null}
                         {overBudget ? <span className="ml-2 text-red-600">over budget</span> : null}

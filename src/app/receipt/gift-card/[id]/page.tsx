@@ -6,6 +6,7 @@ import SetDocumentTitle from "@/shared/components/print/SetDocumentTitle";
 import GiftCardCard from "@/shared/components/print/GiftCardCard";
 import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
 import { requireStaffPage } from "@/shared/lib/auth/permissions";
+import { formatAmount } from "@/shared/lib/format/moneyInr";
 
 // Printable gift card. Opened in a new tab from the Gift Cards admin page;
 // ReceiptButtons auto-prints on mount (browser dialog — a card, not a counter
@@ -25,8 +26,6 @@ export default async function GiftCardPrintPage({ params }: { params: Promise<{ 
         getVoucherTemplate("GIFT_CARD"),
         QRCode.toDataURL(card.code, { width: 240, margin: 1, errorCorrectionLevel: "M" }),
     ]);
-    const fmtAmt = (n: number) => n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
     const subLines = [
         ...(card.ownerAccount ? [`For ${card.ownerAccount.name}.`] : []),
         ...(card.expiresAt ? [`Valid until ${card.expiresAt.toISOString().slice(0, 10)}.`] : []),
@@ -42,7 +41,7 @@ export default async function GiftCardPrintPage({ params }: { params: Promise<{ 
             <div className="no-print" style={{ width: "360px" }}><ReceiptButtons /></div>
             <GiftCardCard
                 template={template}
-                data={{ valueText: `₹${fmtAmt(Number(card.balance))}`, code: card.code, qrDataUrl, subLines }}
+                data={{ valueText: `₹${formatAmount(Number(card.balance))}`, code: card.code, qrDataUrl, subLines }}
             />
         </>
     );

@@ -12,6 +12,7 @@
 
 import type { Prisma } from "@/generated/prisma/client";
 import { toNumber } from "@/modules/accountancy/lib/balance";
+import { round2 } from "@/shared/lib/format/moneyInr";
 
 export type RestoreConflict = {
     kind: "GIFT_CARD" | "COUPON" | "LOYALTY";
@@ -20,8 +21,6 @@ export type RestoreConflict = {
     /** Plain sentence for the warning dialog. */
     message: string;
 };
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export async function findRestoreConflicts(
     tx: Prisma.TransactionClient,

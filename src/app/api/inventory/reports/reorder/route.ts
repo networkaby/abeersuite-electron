@@ -6,6 +6,7 @@ import { classifyProducts } from "@/modules/inventory/lib/movementClass";
 import { loadLastInwardCostMap } from "@/modules/inventory/lib/valuation";
 import { loadLiveStockMap } from "@/modules/inventory/lib/liveStock";
 import { toNumber } from "@/modules/accountancy/lib/balance";
+import { round2 as r2 } from "@/shared/lib/format/moneyInr";
 
 export const maxDuration = 60;
 
@@ -102,8 +103,6 @@ export async function GET(req: Request) {
         : new Map<number, number | null>();
 
     const defaultLeadTimeDays = orgDefaults?.defaultLeadTimeDays ?? 7;
-    const r2 = (n: number) => Math.round(n * 100) / 100;
-
     const rows = products.map((p) => {
         const stock = liveStock.get(p.id) ?? 0;
         // Reservations are org-wide (see StockReservation) — only the global

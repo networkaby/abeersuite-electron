@@ -57,6 +57,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { planAutoLink, type AutoLinkOutcome } from "@/modules/accountancy/lib/autoLinkPlan";
 import { assertLinkPlan, createLink, BillLinkError } from "@/modules/accountancy/lib/billLink";
+import { formatInr } from "@/shared/lib/format/moneyInr";
 
 const rawUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "")
     .replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
@@ -75,8 +76,6 @@ const LIMIT      = flag("limit") ? Number(flag("limit")) : null;
 // Neither flag = both sides. Naming one narrows to it.
 const WANT_RECEIPTS = ARGV.includes("--receipts") || !ARGV.includes("--payments");
 const WANT_PAYMENTS = ARGV.includes("--payments") || !ARGV.includes("--receipts");
-
-const inr = (n: number): string => `₹${n.toFixed(2)}`;
 const pad = (s: string, n: number): string => (s.length >= n ? s : s + " ".repeat(n - s.length));
 const lpad = (s: string, n: number): string => (s.length >= n ? s : " ".repeat(n - s.length) + s);
 
@@ -234,19 +233,19 @@ async function main(): Promise<void> {
         advanceValue += outcome.leftAsAdvance;
 
         const when = c.date.toISOString().slice(0, 10);
-        console.log(`  ${pad(c.type, 7)} ${pad(c.ref, 8)} ${when}  settles ${lpad(inr(outcome.linkedTotal), 12)}`
-            + (outcome.leftAsAdvance > 0.005 ? `   (${inr(outcome.leftAsAdvance)} stays as advance)` : ""));
+        console.log(`  ${pad(c.type, 7)} ${pad(c.ref, 8)} ${when}  settles ${lpad(formatInr(outcome.linkedTotal), 12)}`
+            + (outcome.leftAsAdvance > 0.005 ? `   (${formatInr(outcome.leftAsAdvance)} stays as advance)` : ""));
         for (const l of outcome.links) {
             console.log(`      → ${pad(l.voucherType, 11)} ${pad(l.ref, 8)} due ${l.dueDate.slice(0, 10)}`
-                + `  ${lpad(inr(l.amount), 11)} of ${inr(l.open)} open`);
+                + `  ${lpad(formatInr(l.amount), 11)} of ${formatInr(l.open)} open`);
         }
     }
 
     console.log(`\n${"─".repeat(64)}`);
     console.log(`  settlements examined     : ${scanned}`);
     console.log(`  would link               : ${wouldLink}`);
-    console.log(`  money placed on bills    : ${inr(linkedValue)}`);
-    console.log(`  left as party advances   : ${inr(advanceValue)}`);
+    console.log(`  money placed on bills    : ${formatInr(linkedValue)}`);
+    console.log(`  left as party advances   : ${formatInr(advanceValue)}`);
     console.log(`  nothing to do            : ${skipped}`);
     for (const [why, n] of [...skipReasons.entries()].sort((a, b) => b[1] - a[1])) {
         console.log(`      ${lpad(String(n), 4)} — ${why}`);
@@ -261,7 +260,7 @@ async function main(): Promise<void> {
         return;
     }
     if (FIX) {
-        console.log(`\n✓ Linked ${wouldLink} settlement(s), placing ${inr(linkedValue)} on bills.\n`);
+        console.log(`\n✓ Linked ${wouldLink} settlement(s), placing ${formatInr(linkedValue)} on bills.\n`);
     } else {
         console.log(`\nDRY RUN — nothing was written. Re-run with --fix to apply.\n`);
         process.exitCode = 1;

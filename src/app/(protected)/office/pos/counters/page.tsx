@@ -21,7 +21,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ShiftCloseDialog } from "@/modules/pos/components/ShiftCloseDialog";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { fmt } from "@/shared/lib/format/moneyInr";
+import { fmt, paiseToRupees } from "@/shared/lib/format/moneyInr";
 import { usePolling } from "@/shared/hooks/usePolling";
 import { POS_LIVE_POLL_MS } from "@/shared/lib/constants/polling";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
@@ -57,7 +57,7 @@ type CounterCard = {
     } | null;
 };
 
-const rupees = (paise: string | null) => (paise == null ? 0 : Number(paise) / 100);
+const rupees = (paise: string | null) => (paise == null ? 0 : paiseToRupees(Number(paise)));
 const clock  = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 const since  = (iso: string) => {
     const mins = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));

@@ -13,7 +13,7 @@ import {
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import { parseRupeesToPaise } from "@/shared/lib/format";
+import { formatRupeesFromPaise, parseRupeesToPaise } from "@/shared/lib/format";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 
 export interface DetailDraw {
@@ -35,8 +35,6 @@ export interface AllocationDoc {
     date: string;
     draws: DetailDraw[];
 }
-
-const rupee = (paise: number | null): string => (paise == null ? "—" : `₹${(paise / 100).toFixed(2)}`);
 interface LineEdit { perUnit: string; qty: string; amount: string; note: string }
 
 export function AllocationDetailDialog({
@@ -184,7 +182,7 @@ export function AllocationDetailDialog({
 
                 <DialogFooter className="items-center sm:justify-between">
                     <div className="text-xs text-muted-foreground">
-                        Total: <span className="font-mono font-semibold text-foreground">{rupee(totalPaise)}</span> across {lines.length} line{lines.length !== 1 ? "s" : ""}
+                        Total: <span className="font-mono font-semibold text-foreground">{formatRupeesFromPaise(totalPaise)}</span> across {lines.length} line{lines.length !== 1 ? "s" : ""}
                     </div>
                     <div className="space-x-2">
                         <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>Close</Button>
