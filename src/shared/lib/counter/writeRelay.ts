@@ -35,6 +35,10 @@
  * 401 is the app's verdict and passes through like any other.
  * Each relay opens its own connection (no keep-alive) so a stale pooled socket can
  * never turn "the server closed an idle connection" into an uncertain save.
+ * That covers one attempt. The cashier's NEXT Save of the same bill is covered by its
+ * bill key: a key whose answer was uncertain is remembered, and while it is, that bill
+ * never runs here — not on a connect failure, the breaker or a refused sign-in — it
+ * waits for the office ("Bill keys whose save is uncertain", relayPolicy.ts).
  *
  * ── Read-your-write ──────────────────────────────────────────────────────────
  * A relayed row lands in Supabase, not in this replica, and screens re-read the
@@ -71,7 +75,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { WRITE_API_URL } from "@/shared/lib/prisma/counterMode";
 import { isThisPcReleased, isThisPcWithoutCounter, readCounterSetup } from "@/shared/lib/counter/releaseGuard";
 import { modelsForTopics, topicsForApiPath } from "@/shared/lib/realtime/topics";
-import { RELAY_ACTIVE, RELAY_HEADER, contentLengthOf, decideRelay } from "./relayPolicy";
+import { RELAY_ACTIVE, RELAY_HEADER, UncertainBillKeys, billKeyOf, contentLengthOf, decideRelay } from "./relayPolicy";
 import { pullAndWait } from "./replicaPull";
 import { getToken } from "next-auth/jwt";
 import { isStaffTokenRevoked, SESSION_COOKIE_NAME } from "@/auth";
@@ -94,6 +98,10 @@ const AUTH_BREAKER_MS = 60_000;
 
 const UNCERTAIN_MESSAGE =
     "The office did not confirm this save. It may already be saved — check before entering it again.";
+/** A retried bill whose earlier try may be saved at the office, while the office is
+ *  unreachable — see "Bill keys whose save is uncertain" in relayPolicy.ts. */
+const UNCERTAIN_OFFLINE_MESSAGE =
+    "This bill may already be saved at the office. Wait for the connection to come back, then press Save again.";
 
 // ── Forwarding ───────────────────────────────────────────────────────────────
 
@@ -241,6 +249,7 @@ function replyCode(reply: OfficeReply): string | null {
 // ── Entry point ──────────────────────────────────────────────────────────────
 
 let breakerUntil = 0;
+const uncertainKeys = new UncertainBillKeys();
 
 function bodyIsJson(reply: OfficeReply): boolean {
     const type = reply.headers["content-type"];
@@ -271,15 +280,23 @@ export async function relayWrite(req: NextRequest): Promise<Response | null> {
         alreadyRelayed: req.headers.has(RELAY_HEADER),
     });
     if (!decision.relay) return null;
-    if (Date.now() < breakerUntil) return null;
+    // Reading the body here does not starve the local route on fallback: Next tees
+    // the stream for the proxy and hands the retained copy to the handler. Read before
+    // any fallback, because the bill key in it decides whether one may run here.
+    const body = contentLength && contentLength > 0 ? Buffer.from(await req.arrayBuffer()) : null;
+    const billKey = billKeyOf(pathname, body?.toString("utf8") ?? null);
+    // Every "run it here" below the relay decision goes through this: a bill whose
+    // earlier try may already be saved at the office waits for the office instead.
+    const runHere = (): Response | null =>
+        uncertainKeys.has(billKey, Date.now())
+            ? NextResponse.json({ error: UNCERTAIN_OFFLINE_MESSAGE, code: "relay_uncertain_offline" }, { status: 503 })
+            : null;
+    if (Date.now() < breakerUntil) return runHere();
     if (isThisPcWithoutCounter() || (await isThisPcReleased())) return null;
     const signIn = await officeSignIn(req);
-    if (!signIn) return null;
+    if (!signIn) return runHere();
 
     const target = new URL(pathname + req.nextUrl.search, WRITE_API_URL!);
-    // Reading the body here does not starve the local route on fallback: Next tees
-    // the stream for the proxy and hands the retained copy to the handler.
-    const body = contentLength && contentLength > 0 ? Buffer.from(await req.arrayBuffer()) : null;
 
     let reply: OfficeReply;
     try {
@@ -290,9 +307,10 @@ export async function relayWrite(req: NextRequest): Promise<Response | null> {
         if (!sent) {
             breakerUntil = Date.now() + BREAKER_MS;
             console.warn(`[writeRelay] office unreachable (${code}) — ${req.method} ${pathname} runs here; relay paused ${BREAKER_MS / 1000}s.`);
-            return null;
+            return runHere();
         }
         console.error(`[writeRelay] ${req.method} ${pathname} failed after the request was sent (${code}) — refusing the local fallback.`);
+        uncertainKeys.remember(billKey, Date.now());
         // `error` carries the sentence: extractApiError() toasts that field, and a
         // wire code there would tell the cashier nothing. The code rides alongside.
         return NextResponse.json({ error: UNCERTAIN_MESSAGE, code: "relay_uncertain" }, { status: 502 });
@@ -310,7 +328,7 @@ export async function relayWrite(req: NextRequest): Promise<Response | null> {
         breakerUntil = Date.now() + AUTH_BREAKER_MS;
         if (replyCode(reply) === COUNTER_KEY_REFUSED) forgetCounterKey();
         console.error(`[writeRelay] office did not accept this counter (401 ${replyCode(reply) ?? "no code"}) on ${req.method} ${pathname} — key revoked, or the office deployment predates counter keys; relay paused ${AUTH_BREAKER_MS / 1000}s.`);
-        return null;
+        return runHere();
     }
     if (reply.status === 401) {
         // Revoked. Bring the new `User.tokensValidFrom` into the replica BEFORE the
@@ -325,6 +343,7 @@ export async function relayWrite(req: NextRequest): Promise<Response | null> {
         // rather than a raw HTML page that no toast can read.
         const gateway = reply.headers["x-vercel-error"] ?? "no JSON body";
         console.error(`[writeRelay] gateway ${reply.status} (${String(gateway)}) on ${req.method} ${pathname} — outcome unknown, refusing the local fallback.`);
+        uncertainKeys.remember(billKey, Date.now());
         return NextResponse.json({ error: UNCERTAIN_MESSAGE, code: "relay_uncertain" }, { status: 502 });
     }
     if ((reply.status === 404 || reply.status === 405) && !bodyIsJson(reply)) {
@@ -339,6 +358,10 @@ export async function relayWrite(req: NextRequest): Promise<Response | null> {
         );
     }
     if (reply.status >= 200 && reply.status < 300) {
+        // Saved, or "already saved": the office has answered for this bill key. An
+        // error answer keeps it — a 403 or a 400 comes from the sign-in or body checks
+        // that run before the route's key check, so it proves nothing about the earlier try.
+        uncertainKeys.forget(billKey);
         await pullAndWait(modelsForTopics(topicsForApiPath(pathname)));
     }
     return toResponse(reply);

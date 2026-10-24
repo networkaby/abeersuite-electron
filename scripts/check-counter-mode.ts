@@ -233,6 +233,37 @@ async function counterWriteRelayMode(): Promise<Check[]> {
         ["a body of unknown size runs here", !decide("POST", "/api/settings/item-import", null)],
         ["a non-API path never relays", !decide("POST", "/office/pos")],
         ...keyedRoutes(decide),
+        ...uncertainBillKeys(relay),
+    ];
+}
+
+/** A bill whose save was uncertain must never run here on the next try. */
+function uncertainBillKeys(relay: typeof import("@/shared/lib/counter/relayPolicy")): Check[] {
+    const sale = (body: unknown) => relay.billKeyOf("/api/pos/sale", JSON.stringify(body));
+    const keys = new relay.UncertainBillKeys();
+    const t0 = 1_000_000;
+    const fresh = !keys.has("K1", t0);
+    keys.remember("K1", t0);
+    const blocks = keys.has("K1", t0 + 60_000);
+    const otherBillRuns = !keys.has("K2", t0) && !keys.has(null, t0);
+    keys.forget("K1");
+    const forgotten = !keys.has("K1", t0 + 60_000);
+    keys.remember("K3", t0);
+    const expires = keys.has("K3", t0 + relay.UNCERTAIN_KEY_TTL_MS) && !keys.has("K3", t0 + relay.UNCERTAIN_KEY_TTL_MS + 1);
+    for (let i = 0; i <= relay.UNCERTAIN_KEY_CAP; i++) keys.remember(`C${i}`, t0);
+    const capped = !keys.has("C0", t0) && keys.has(`C${relay.UNCERTAIN_KEY_CAP}`, t0);
+    return [
+        ["a POS sale's bill key is read from its body", sale({ requestKey: " abc-123 " }) === "abc-123"],
+        ["a sale with no key (older screen) has none", sale({ lines: [] }) === null && sale({ requestKey: "" }) === null],
+        ["a body that is not JSON has no key", relay.billKeyOf("/api/pos/sale", "{not json") === null],
+        ["only bill-keyed paths are read", relay.billKeyOf("/api/pos/return", JSON.stringify({ requestKey: "abc" })) === null],
+        ["the path is canonicalised first", relay.billKeyOf("/api/pos/x/../sale", JSON.stringify({ requestKey: "abc" })) === "abc"],
+        ["an unseen key may run here", fresh],
+        ["an uncertain key never runs here", blocks],
+        ["…while another bill, or one with no key, still may", otherBillRuns],
+        ["the office's answer clears the key", forgotten],
+        ["an uncertain key expires after its TTL", expires],
+        ["the oldest key leaves first past the cap", capped],
     ];
 }
 
