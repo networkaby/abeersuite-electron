@@ -190,7 +190,7 @@ async function reconcileCounterBinding(
  * one, so the replay is dropped as superseded and the counter converges on the pull.
  */
 /**
- * An opening quantity always sits at a branch (liveStock.ts, openingBranchOnSave).
+ * An opening quantity always sits at a branch (liveStock.ts, openingBranchForSave).
  * A till pushes its product row WHOLE, so one still holding the image from before
  * the office stamped a branch — or running a build that saved openings without
  * one — would win last-write-wins with the branch empty and wipe the office's.

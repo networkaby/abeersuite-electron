@@ -26,6 +26,7 @@ import {
     type NamingMasters,
 } from "@/modules/inventory/lib/productName";
 import { PRODUCT_CODE_KINDS, type ProductCode, type ProductCodeKind } from "@/shared/lib/inventory";
+import type { BranchOption } from "@/shared/hooks";
 
 export type InvProductFormState = {
     sku: string;
@@ -119,8 +120,6 @@ export const emptyInvProductForm: InvProductFormState = {
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
 
-export type BranchOpt = { id: string; name: string };
-
 export type GstRateOpt = { id: number; rate: string | number; label: string; isActive: boolean };
 
 /** Read-only cascade preview returned by /api/inventory/products/[id]/resolved-tax */
@@ -189,7 +188,7 @@ export function InvProductFormFields({
     namingConfig?: NamingConfigShape | null;
     attrMasters?: AttrMasterRow[];
     /** Active branches for the opening's Stock location picker. */
-    branches?: BranchOpt[];
+    branches?: BranchOption[];
     isEditMode?: boolean;
     /** Initial tab. Callers that deep-link into a specific concern (e.g. Tax
      * Classification report → pencil) pass "tax" so the dialog opens on it. */

@@ -7,7 +7,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { productOpeningValue } from "@/modules/inventory/lib/stockValue";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
-import { openingBranchOnSave } from "@/modules/inventory/lib/liveStock";
+import { openingBranchForSave } from "@/modules/inventory/lib/liveStock";
 import { requireWritableBranchId } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 
@@ -18,6 +18,9 @@ import { auth } from "@/auth";
 const schema = z.object({
     qty:      z.number().nullable(),
     rate:     z.number().nullable(),
+    // Stock location picked on the Opening Balance page; left out, the saved
+    // branch is kept (or the working branch taken) — see openingBranchForSave.
+    branchId: z.string().trim().min(1).nullish(),
 });
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -36,10 +39,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         // Editing the opening moves the saved total by the change in the opening,
         // not to the opening itself — rebuilt from the ledger, same transaction.
         const session = await auth();
+        const current = await prisma.invProduct.findUniqueOrThrow({
+            where: { id: Number(id) }, select: { openingBranchId: true },
+        });
+        const openingBranchId = await openingBranchForSave({
+            openingStock: data.qty, savedBranchId: current.openingBranchId,
+            pickedBranchId: data.branchId, session,
+            workingBranch: () => requireWritableBranchId(req, session),
+        });
         const product = await prisma.$transaction(async (tx) => {
-            const current = await tx.invProduct.findUniqueOrThrow({
-                where: { id: Number(id) }, select: { openingBranchId: true },
-            });
             await tx.invProduct.update({
                 where: { id: Number(id) },
                 data: {
@@ -47,10 +55,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
                     openingRate:      data.rate,
                     openingValue:     productOpeningValue(opening),
                     openingStockDate: null,
-                    // Where the quantity is lying — see openingBranchOnSave.
-                    openingBranchId: openingBranchOnSave(
-                        data.qty, current.openingBranchId, () => requireWritableBranchId(req, session),
-                    ),
+                    openingBranchId,
                 },
             });
             await recomputeProductStock(tx, [Number(id)]);

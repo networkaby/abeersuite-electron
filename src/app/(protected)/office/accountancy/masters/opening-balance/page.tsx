@@ -26,7 +26,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { InvProductCombobox } from "@/modules/inventory/components/InvProductCombobox";
 import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
-import { useProductCatalog, loadProductCatalog } from "@/shared/hooks";
+import { useProductCatalog, loadProductCatalog, useBranchOptions, defaultOpeningBranchId } from "@/shared/hooks";
+import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { productMatchesSearch } from "@/shared/lib/inventory";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { parseRupeesToPaise } from "@/shared/lib/format";
@@ -41,6 +42,8 @@ type AccountRow = {
 type ProductRow = {
     id: number; sku: string; name: string;
     openingStock: number; openingRate: number | null; openingValue: number | null;
+    /** Stock location of the opening quantity (see liveStock.ts). */
+    openingBranchId: string | null; openingBranch: { name: string } | null;
     unit: { code: string; label: string };
 };
 type Summary = {
@@ -385,7 +388,7 @@ function AccountOpeningSection({
             />
 
             {showAdd && (
-                <div className="border-b border-border bg-muted/30 px-5 py-4 grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+                <div className="border-b border-border bg-muted/30 px-5 py-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
                     <div className="space-y-1.5 md:col-span-2">
                         <Label>Account</Label>
                         <GlAccountCombobox
@@ -448,7 +451,7 @@ function AccountOpeningSection({
                     <tbody>
                         {visible.length === 0 && (
                             <tr>
-                                <td colSpan={4} className="px-5 py-6 text-center text-muted-foreground">
+                                <td colSpan={5} className="px-5 py-6 text-center text-muted-foreground">
                                     No account matches “{filter}”.
                                 </td>
                             </tr>
@@ -526,7 +529,11 @@ function ProductOpeningSection({
         productId: 0,
         qty: "",
         rate: "",
+        /** Stock location; "" until filled with the saved or default branch. */
+        branchId: "",
     });
+    const { branches } = useBranchOptions();
+    const activeBranchId = useActiveBranchStore((st) => st.activeBranchId);
     const [saving, setSaving] = useState(false);
     const [filter, setFilter] = useState("");
 
@@ -555,9 +562,17 @@ function ProductOpeningSection({
             // product's qty and rate.
             qty: existing ? String(existing.openingStock ?? "") : "",
             rate: existing ? String(existing.openingRate ?? "") : "",
+            branchId: existing?.openingBranchId ?? "",
         }));
         // eslint-disable-next-line react-hooks/exhaustive-deps -- prefill only when another product is picked; a list refresh must not overwrite what is typed
     }, [form.productId]);
+
+    // A product with no saved location shows (and saves) the working branch,
+    // else Head Office — so what is on screen is what lands.
+    useEffect(() => {
+        if (!form.productId || form.branchId || branches.length === 0) return;
+        setForm((f) => (f.branchId ? f : { ...f, branchId: defaultOpeningBranchId(branches, activeBranchId) }));
+    }, [form.productId, form.branchId, branches, activeBranchId]);
 
     const save = async () => {
         if (!form.productId) { toast.error("Select a product"); return; }
@@ -569,10 +584,11 @@ function ProductOpeningSection({
             await axios.put(`/api/inventory/products/${form.productId}/opening`, {
                 qty: qty === 0 ? null : qty,
                 rate: qty === 0 ? null : (Number.isFinite(rate) ? rate : null),
+                branchId: form.branchId || null,
             });
             toast.success("Opening stock saved");
             setShowAdd(false);
-            setForm({ productId: 0, qty: "", rate: "" });
+            setForm({ productId: 0, qty: "", rate: "", branchId: "" });
             onChanged();
         } catch (err: unknown) {
             const msg = axios.isAxiosError(err) ? err.response?.data?.error : "Failed";
@@ -632,7 +648,17 @@ function ProductOpeningSection({
                             onChange={(e) => setForm((f) => ({ ...f, rate: e.target.value }))}
                             placeholder="0.00" />
                     </div>
-                    <div className="md:col-span-4 flex justify-end gap-2 pt-1">
+                    <div className="space-y-1.5 col-span-2 md:col-span-1">
+                        <Label>Stock location</Label>
+                        <Select value={form.branchId} onValueChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
+                            disabled={branches.length === 0}>
+                            <SelectTrigger><SelectValue placeholder="Working branch" /></SelectTrigger>
+                            <SelectContent>
+                                {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="col-span-2 md:col-span-5 flex justify-end gap-2 pt-1">
                         <Button variant="outline" onClick={() => setShowAdd(false)}>Close</Button>
                         <Button onClick={save} disabled={saving || !form.productId}>
                             {saving && <Loader2 size={14} className="animate-spin" />} Save
@@ -660,6 +686,7 @@ function ProductOpeningSection({
                     <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
                         <tr>
                             <th className="px-5 py-2 text-left font-medium">Product</th>
+                            <th className="px-5 py-2 text-left font-medium">Location</th>
                             <th className="px-5 py-2 text-right font-medium">Qty</th>
                             <th className="px-5 py-2 text-right font-medium">Rate</th>
                             <th className="px-5 py-2 text-right font-medium">Value</th>
@@ -680,6 +707,7 @@ function ProductOpeningSection({
                                     <span className="font-mono text-muted-foreground mr-2">{p.sku}</span>
                                     <span className="font-medium">{p.name}</span>
                                 </td>
+                                <td className="px-5 py-2 text-muted-foreground">{p.openingBranch?.name ?? "Head Office"}</td>
                                 <td className="px-5 py-2 text-right font-mono">
                                     {Number(p.openingStock)} <span className="text-muted-foreground text-xs">{p.unit.code}</span>
                                 </td>
@@ -690,7 +718,7 @@ function ProductOpeningSection({
                     </tbody>
                     <tfoot className="bg-muted border-t-2 border-border font-semibold text-sm">
                         <tr>
-                            <td colSpan={3} className="px-5 py-2 text-muted-foreground">Total Inventory Value</td>
+                            <td colSpan={4} className="px-5 py-2 text-muted-foreground">Total Inventory Value</td>
                             <td className="px-5 py-2 text-right font-mono">{fmt(openingStockTotal)}</td>
                         </tr>
                     </tfoot>

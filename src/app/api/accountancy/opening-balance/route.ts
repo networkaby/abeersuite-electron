@@ -29,6 +29,8 @@ export async function GET() {
                 select: {
                     id: true, sku: true, name: true,
                     openingStock: true, openingRate: true, openingValue: true, openingStockDate: true,
+                    openingBranchId: true,
+                    openingBranch: { select: { name: true } },
                     unit: { select: { code: true, label: true } },
                 },
             }),

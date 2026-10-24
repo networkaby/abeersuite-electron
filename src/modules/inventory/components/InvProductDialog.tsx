@@ -27,7 +27,6 @@ import {
     type EffectiveTax,
     type GstRateOpt,
     type InvProductFormState,
-    type BranchOpt,
     type InvProductFormTab,
     withDefaultCodeRows,
 } from "@/modules/inventory/components/InvProductFormFields";
@@ -40,8 +39,8 @@ import {
 import type { ProductCode, Masters } from "@/shared/lib/inventory";
 import { syncMasters, invalidateMasters } from "@/shared/lib/inventory";
 import { parseRupeesToPaise } from "@/shared/lib/format";
-import { isCombined, useActiveBranchStore } from "@/store/activeBranchStore";
-import { HEAD_OFFICE_BRANCH_ID } from "@/shared/lib/org/systemBranch";
+import { useActiveBranchStore } from "@/store/activeBranchStore";
+import { useBranchOptions, defaultOpeningBranchId } from "@/shared/hooks";
 
 type Opt = { id: number; name?: string; code?: string; label?: string };
 
@@ -168,7 +167,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     const [gstRates, setGstRates] = useState<GstRateOpt[]>([]);
     const [namingConfig, setNamingConfig] = useState<NamingConfigShape>(DEFAULT_NAMING_CONFIG);
     const [attrMasters, setAttrMasters] = useState<AttrMasterRow[]>([]);
-    const [branches, setBranches] = useState<BranchOpt[]>([]);
+    const { branches } = useBranchOptions();
     const activeBranchId = useActiveBranchStore((st) => st.activeBranchId);
     const [effectiveTax, setEffectiveTax] = useState<EffectiveTax | null | undefined>(undefined);
     const [saving, setSaving] = useState(false);
@@ -218,10 +217,6 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             axios.get<GstRateOpt[]>("/api/inventory/gst-rates").then((r) => setGstRates(r.data)),
             axios.get<NamingConfigShape>("/api/inventory/naming-config").then((r) => setNamingConfig({ ...DEFAULT_NAMING_CONFIG, ...r.data })),
             axios.get<AttrMasterRow[]>("/api/inventory/attribute-masters").then((r) => setAttrMasters(r.data)),
-            axios.get<(BranchOpt & { isActive?: boolean })[]>("/api/branches")
-                .then((r) => setBranches(r.data.filter((b) => b.isActive !== false).map(({ id, name }) => ({ id, name }))))
-                // Not fatal: the picker stays disabled and the server picks the branch.
-                .catch(() => {}),
         ])
             .then(() => setRefsLoaded(true))
             .catch(() => toast.error("Failed to load reference data"));
@@ -285,9 +280,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
     // Office — the branch the server would pick anyway, shown so it can be changed.
     useEffect(() => {
         if (!open || branches.length === 0 || form.openingBranchId) return;
-        const has = (id: string | null) => id != null && !isCombined(id) && branches.some((b) => b.id === id);
-        const fallback = has(activeBranchId) ? activeBranchId!
-            : has(HEAD_OFFICE_BRANCH_ID) ? HEAD_OFFICE_BRANCH_ID : branches[0]!.id;
+        const fallback = defaultOpeningBranchId(branches, activeBranchId);
         setForm((f) => (f.openingBranchId ? f : { ...f, openingBranchId: fallback }));
     }, [open, branches, activeBranchId, form.openingBranchId]);
 

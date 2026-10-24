@@ -13,7 +13,7 @@ import {
     productOpeningValue, syncProductCacheFromOpening,
 } from "@/modules/inventory/lib/stockValue";
 import { requireWritableBranchId, resolveActiveBranchId } from "@/shared/lib/auth/activeBranch";
-import { openingBranchOnSave, requireOpeningBranch } from "@/modules/inventory/lib/liveStock";
+import { openingBranchForSave } from "@/modules/inventory/lib/liveStock";
 import {
     loadProductPage, loadProductSelection, parseProductListQuery, productInclude,
 } from "@/modules/inventory/lib/productList";
@@ -91,12 +91,10 @@ export async function POST(req: Request) {
         // it is entered from. Resolved before any lookup so a bad pick, or "My
         // branches" mode, is refused at once.
         const session = await auth();
-        const picked = b.openingStock != null && b.openingBranchId
-            ? await requireOpeningBranch(session, b.openingBranchId)
-            : null;
-        const openingBranchId = openingBranchOnSave(
-            b.openingStock, picked, () => requireWritableBranchId(req, session),
-        );
+        const openingBranchId = await openingBranchForSave({
+            openingStock: b.openingStock, savedBranchId: null, pickedBranchId: b.openingBranchId,
+            session, workingBranch: () => requireWritableBranchId(req, session),
+        });
         // Every pre-save check at once — one round trip instead of up to ten
         // in a row. The answers are then read in the old order, so the user
         // sees the same error first as before.

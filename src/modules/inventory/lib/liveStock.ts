@@ -20,7 +20,7 @@
 //
 // ── Why null means Head Office ──────────────────────────────────────────────
 // Every opening sits at a branch: it is counted at a counter, and a counter
-// belongs to a branch. Writers stamp one (`openingBranchOnSave`), and migration
+// belongs to a branch. Writers stamp one (`openingBranchForSave`), and migration
 // 20261024120000_opening_branch_ho put Head Office on every opening that had
 // none. A null can still turn up — a branch deleted (ON DELETE SET NULL), a
 // script that writes the opening alone — and it then counts where all old stock
@@ -248,40 +248,41 @@ export function openingAppliesTo(
  * The WRITE side of the same column: what `openingBranchId` becomes when a writer
  * saves an opening quantity. Every opening sits at a branch — it is counted at a
  * counter, and a counter belongs to a branch — so a quantity is never saved
- * without one.
+ * without one. Used by product create, product PATCH and PUT …/opening.
  *
  *   quantity cleared               → null (a location for no stock is no location)
+ *   a branch picked, and changed   → the picked one (the form's Stock location)
  *   quantity, branch already set   → kept (an edit, even from another branch,
  *                                    does not move stock that is lying elsewhere)
  *   quantity, no branch yet        → the writer's working branch
  *
- * A branch the user picks (`requireOpeningBranch`) is passed as
- * `currentBranchId`, so it is the one kept.
+ * A pick must be a branch the user may work at, and — since it moves stock OUT
+ * of the saved branch — so must the saved one. A pick equal to the saved branch
+ * is not a change and is not checked: the forms send the saved branch back on
+ * every save, and a Branch 2 user renaming a product whose opening is at Head
+ * Office must not be refused for not working there.
  *
  * `workingBranch` is called only in the last case, so a caller can pass
- * `() => requireWritableBranchId(req, session)` and an edit in "My branches"
- * mode is refused only when it really has to pick a branch.
+ * `() => requireWritableBranchId(req, session)` and "My branches" mode is
+ * refused only when a branch really has to be chosen.
  */
-export function openingBranchOnSave(
-    openingStock: unknown,
-    currentBranchId: string | null,
-    workingBranch: () => string,
-): string | null {
-    if (openingStock == null) return null;
-    return currentBranchId ?? workingBranch();
-}
-
-/**
- * A Stock location the user PICKED for an opening (the product form's picker):
- * it must be a branch, and one this user may work at. Passed to
- * `openingBranchOnSave` as the branch to keep, so a picked branch wins over the
- * saved one and over the working branch.
- */
-export async function requireOpeningBranch(session: Session | null, branchId: string): Promise<string> {
-    requireBranchAccess(session, branchId);
-    const branch = await prisma.branch.findUnique({ where: { id: branchId }, select: { id: true } });
-    if (!branch) throw new BranchAccessError("forbidden_branch", `Stock location "${branchId}" is not a branch.`);
-    return branch.id;
+export async function openingBranchForSave(o: {
+    openingStock: unknown;
+    /** The product's saved branch; null on create. */
+    savedBranchId: string | null;
+    pickedBranchId?: string | null;
+    session: Session | null;
+    workingBranch: () => string;
+}): Promise<string | null> {
+    if (o.openingStock == null) return null;
+    if (o.pickedBranchId && o.pickedBranchId !== o.savedBranchId) {
+        if (o.savedBranchId) requireBranchAccess(o.session, o.savedBranchId);
+        requireBranchAccess(o.session, o.pickedBranchId);
+        const branch = await prisma.branch.findUnique({ where: { id: o.pickedBranchId }, select: { id: true } });
+        if (!branch) throw new BranchAccessError("forbidden_branch", `Stock location "${o.pickedBranchId}" is not a branch.`);
+        return branch.id;
+    }
+    return o.savedBranchId ?? o.workingBranch();
 }
 
 /**
