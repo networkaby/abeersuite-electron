@@ -140,7 +140,7 @@ export function invProductToPublic(
         // Storefront category = the product's OWN group, with shopCategory as the
         // per-product hand-override. Office Category is deliberately NOT in this
         // chain — it is the second, cross-cutting axis and surfaces as `collection`.
-        category: p.shopCategory ?? group?.name ?? "Accessories",
+        category: p.shopCategory ?? group?.name ?? "",
         department: group ? rootOf(group).name : null,
         categoryPath: group?.ancestors.map((a) => a.name) ?? [],
         collection: p.category?.name ?? null,

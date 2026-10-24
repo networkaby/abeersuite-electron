@@ -40,7 +40,7 @@ export default function ProductForm({
     const [name, setName] = useState(initial?.name ?? "");
     // shop fields
     const [slug, setSlug] = useState(initial?.slug ?? "");
-    const [shopCategory, setShopCategory] = useState(initial?.category ?? "");
+    const [shopCategory, setShopCategory] = useState(initial?.shopCategory ?? "");
     // Online display name — manual, no naming-convention regen. Auto-filled from
     // Name so the operator has something to override rather than typing from
     // scratch; once they edit it directly it stops following Name. Falls back to
@@ -291,7 +291,7 @@ export default function ProductForm({
         subheading: subheading.trim() || null,
         displayName: subheading.trim() || name.trim() || "Product name",
         description: description.trim() || null,
-        category: shopCategory.trim() || "Accessories",
+        category: shopCategory.trim() || initial?.groupName || "",
         // Live preview only — the office-side classification and the group chain
         // are not edited on this form, so the preview card carries neither.
         collection: null,
@@ -429,7 +429,7 @@ export default function ProductForm({
                     </div>
                     <div className="grid gap-2">
                         <Label>Shop category</Label>
-                        <Input value={shopCategory} onChange={(e) => setShopCategory(e.target.value)} placeholder="e.g. Laptops" />
+                        <Input value={shopCategory} onChange={(e) => setShopCategory(e.target.value)} placeholder={initial?.groupName ? `From group: ${initial.groupName}` : "None — set a shop category or group"} />
                     </div>
                 </div>
                 <div className="grid gap-2">

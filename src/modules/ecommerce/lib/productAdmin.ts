@@ -52,12 +52,12 @@ export function invProductToAdmin(
     const pub = invProductToPublic(p);
     return {
         ...pub,
-        // Mirror the storefront rule (shopCategory ?? group ?? "Accessories") so the
+        // Mirror the storefront rule (shopCategory ?? group, else blank) so the
         // admin Category column reads the same as the live shop. The admin row has
         // only the product's DIRECT group, not the root — close enough here, and the
         // separate Group filter already exposes the real group. Storefront truth
         // lives in invProductToPublic + loadShopGroupRoots.
-        category: p.shopCategory ?? p.group?.name ?? "Accessories",
+        category: p.shopCategory ?? p.group?.name ?? "",
         sku: p.sku,
         stock: p.stock,
         lowStockThreshold: p.lowStockThreshold,
