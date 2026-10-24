@@ -126,54 +126,49 @@ export default function CountersAdminPage() {
     const [editForm, setEditForm] = useState<EditForm>(EMPTY_EDIT);
     const [saving, setSaving]     = useState(false);
 
-    const loadGlAccounts = async () => {
-        try {
-            const { data } = await axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=false");
+    const loadGlAccounts = () => axios.get<GlAccount[]>("/api/accountancy/gl-accounts?includeParties=false")
+        .then(({ data }) => {
             // Any ASSET-group ledger can receive payment proceeds — Cash-in-Hand,
             // Bank Accounts, or a custom group like "Gateway" under Current Assets
             // (party ledgers already excluded by the API flag).
             setGlAccounts(data.filter((a) => a.group?.type === "ASSET"));
-        } catch {
+        })
+        .catch(() => {
             setGlAccounts([]);
-        }
-    };
+        });
 
-    const loadExpenseAccounts = async () => {
-        try {
-            const { data } = await axios.get<GlAccount[]>("/api/accountancy/gl-accounts?type=EXPENSE");
+    const loadExpenseAccounts = () => axios.get<GlAccount[]>("/api/accountancy/gl-accounts?type=EXPENSE")
+        .then(({ data }) => {
             setExpenseAccounts(data);
-        } catch {
+        })
+        .catch(() => {
             setExpenseAccounts([]);
-        }
-    };
+        });
 
     // Every method under Settings → Payment Methods; the dropdown offers the ones
     // switched on for the counter.
-    const loadGateways = async () => {
-        try {
-            const { data } = await axios.get<{ gateways: CounterGateway[] }>("/api/settings/payment-methods");
+    const loadGateways = () => axios.get<{ gateways: CounterGateway[] }>("/api/settings/payment-methods")
+        .then(({ data }) => {
             setGateways(data.gateways);
-        } catch {
+        })
+        .catch(() => {
             setGateways([]);
-        }
-    };
+        });
 
     // No `setLoading(true)` here — the spinner is for the first load only.
     // Re-showing it after every save blanked the list (blink).
-    const load = async () => {
-        try {
-            const [cRes, bRes] = await Promise.all([
-                axios.get<Counter[]>("/api/pos/counters?scope=all"),
-                axios.get<Branch[]>("/api/branches"),
-            ]);
+    const load = () => Promise.all([
+        axios.get<Counter[]>("/api/pos/counters?scope=all"),
+        axios.get<Branch[]>("/api/branches"),
+    ])
+        .then(([cRes, bRes]) => {
             setCounters(cRes.data);
             setBranches(bRes.data.filter((b) => b.isActive !== false));
-        } catch {
+        })
+        .catch(() => {
             toast.error("Failed to load counters");
-        } finally {
-            setLoading(false);
-        }
-    };
+        })
+        .finally(() => setLoading(false));
     useEffect(() => { void load(); void loadGlAccounts(); void loadExpenseAccounts(); void loadGateways(); }, []);
 
     // Another admin claiming a counter, releasing a lock or adding a payment row

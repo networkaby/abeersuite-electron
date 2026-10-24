@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
@@ -18,6 +18,7 @@ import {
 import { TallyDateTimeInput } from "@/shared/components/TallyDateTimeInput";
 import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import type { TaskDto, TaskPriority, TaskPositionOption } from "../lib/types";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 const PRIORITIES: TaskPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 const UNASSIGNED = "__none__";
@@ -45,16 +46,16 @@ export default function TaskFormDialog({
     const [dueDate, setDueDate] = useState("");
     const [saving, setSaving] = useState(false);
 
-    // Reset form whenever the dialog opens (for create) or the target task changes.
-    useEffect(() => {
-        if (!open) return;
+    // Reset form whenever the dialog opens (for create) or the target task changes
+    // — while rendering, so the last task's values never paint.
+    if (useValueChange<unknown>(open ? task ?? "new" : null, null) && open) {
         setTitle(task?.title ?? "");
         setDescription(task?.description ?? "");
         setCategory(task?.category ?? "");
         setPriority(task?.priority ?? "MEDIUM");
         setAssignedPositionId(task?.assignedPositionId ?? UNASSIGNED);
         setDueDate(toDateTimeLocalInput(task?.dueDate ?? null));
-    }, [open, task]);
+    }
 
     const handleSave = async () => {
         if (!title.trim()) {

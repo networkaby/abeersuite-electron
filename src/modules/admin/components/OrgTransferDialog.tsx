@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 interface PositionHit {
     id: string;
@@ -43,10 +44,13 @@ export default function OrgTransferDialog({
     const [query, setQuery]         = useState("");
     const [busyId, setBusyId]       = useState<string | null>(null);
 
-    useEffect(() => {
-        if (!open) return;
+    // Each open starts with an empty search and the spinner — set while rendering.
+    if (useValueChange(open, false) && open) {
         setQuery("");
         setLoading(true);
+    }
+    useEffect(() => {
+        if (!open) return;
         axios.get<PositionHit[]>("/api/positions")
             .then(r => setPositions(r.data))
             .catch(() => toast.error("Failed to load positions"))

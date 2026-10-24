@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ORDER_STATUS_TRANSITIONS } from "@/modules/ecommerce/lib/orderStatusTransitions";
 import type { ShopOrderStatus } from "@/generated/prisma/enums";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 type NextPipelineStatus = {
     id: string;
@@ -57,11 +58,11 @@ export default function OrderStatusActions({
 
     // Auto-booking may stamp the AWB after mount (page refetch) — flow the new
     // defaults into untouched fields so "Mark Dispatched" carries them.
-    useEffect(() => {
+    // While rendering, and only when the defaults change.
+    if (useValueChange(`${defaultCourier ?? ""}\u0000${defaultTracking ?? ""}`)) {
         if (defaultCourier && !courier) setCourier(defaultCourier);
         if (defaultTracking && !trackingNumber) setTrackingNumber(defaultTracking);
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- only on default changes
-    }, [defaultCourier, defaultTracking]);
+    }
 
     // ── Pipeline mode ───────────────────────────────────────────────────────────
     if (statusId && nextStatuses !== undefined) {

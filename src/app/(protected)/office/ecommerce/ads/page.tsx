@@ -141,26 +141,29 @@ export default function EcommerceAdsPage() {
     const [spotMapOpen, setSpotMapOpen] = useState(false);
     const [products, setProducts] = useState<ShopProductPublic[]>([]);
 
-    const load = useCallback(async () => {
-        setLoadError(false);
-        try {
-            const data = await getWithRetry<{ ads: ShopAd[] }>("/api/ecommerce/ads");
+    const fetchAds = useCallback(() => getWithRetry<{ ads: ShopAd[] }>("/api/ecommerce/ads")
+        .then((data) => {
             setAds(data.ads);
             setSavedJson(JSON.stringify(data.ads));
             setLoaded(true);
-        } catch {
+        })
+        .catch(() => {
             setLoadError(true);
-        }
-    }, []);
+        }), []);
+    /** Retry / refresh: resets first. */
+    const load = useCallback(() => {
+        setLoadError(false);
+        return fetchAds();
+    }, [fetchAds]);
 
     useEffect(() => {
-        void load();
+        void fetchAds();   // first read: `loadError` already starts false
         // The live catalogue feeds the product picker, the category lists and
         // the product-ad preview; the page works without it, just emptier.
         getWithRetry<ShopProductPublic[]>("/api/shop/products")
             .then(setProducts)
             .catch(() => setProducts([]));
-    }, [load]);
+    }, [fetchAds]);
 
     const categories = useMemo(() => [...new Set(products.map((p) => p.category))].sort(), [products]);
     const dirty = loaded && JSON.stringify(ads) !== savedJson;

@@ -443,23 +443,24 @@ export default function PositionsPage() {
     const { data: session } = useSession();
     const myUserId = (session?.user as { id?: string } | undefined)?.id ?? null;
 
-    const loadAll = async () => {
-        try {
-            const [pRes, bRes, dRes, uRes, rRes] = await Promise.all([
-                axios.get<Position[]>("/api/positions"),
-                axios.get<Branch[]>("/api/branches"),
-                axios.get<Department[]>("/api/departments"),
-                axios.get<UserStub[]>("/api/users"),
-                axios.get<RoleOption[]>("/api/roles"),
-            ]);
+    const loadAll = () => Promise.all([
+        axios.get<Position[]>("/api/positions"),
+        axios.get<Branch[]>("/api/branches"),
+        axios.get<Department[]>("/api/departments"),
+        axios.get<UserStub[]>("/api/users"),
+        axios.get<RoleOption[]>("/api/roles"),
+    ])
+        .then(([pRes, bRes, dRes, uRes, rRes]) => {
             setPositions(pRes.data);
             setBranches(bRes.data);
             setDepts(dRes.data);
             setAllUsers(uRes.data);
             setRoleOptions(rRes.data);
-        } catch { toast.error("Failed to load data"); }
-        finally { setLoading(false); }
-    };
+        })
+        .catch(() => {
+            toast.error("Failed to load data");
+        })
+        .finally(() => setLoading(false));
 
     useEffect(() => { loadAll(); }, []);
 

@@ -19,6 +19,7 @@ import {
 import { VOUCHER_MATRIX, VOUCHER_GROUPS, voucherKindPermissionIds } from "@/shared/lib/auth/voucherMatrix";
 import { SIDEBAR_MODULES } from "@/shared/lib/auth/sidebarModules";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 interface Branch { id: string; name: string; }
 interface Department {
@@ -118,19 +119,20 @@ export default function DepartmentsPage() {
     const poolDirty = poolSelected.size !== poolOriginal.size
         || [...poolSelected].some(id => !poolOriginal.has(id));
 
-    const fetchAll = async () => {
-        try {
-            const [dRes, bRes] = await Promise.all([
-                axios.get<Department[]>("/api/departments"),
-                axios.get<Branch[]>("/api/branches"),
-            ]);
+    const fetchAll = () => Promise.all([
+        axios.get<Department[]>("/api/departments"),
+        axios.get<Branch[]>("/api/branches"),
+    ])
+        .then(([dRes, bRes]) => {
             setDepartments(dRes.data);
             setBranches(bRes.data);
             // Keep the current selection, else select the first department.
             setSelectedId(prev => prev && dRes.data.some(d => d.id === prev) ? prev : dRes.data[0]?.id ?? null);
-        } catch { toast.error("Failed to load data"); }
-        finally { setLoading(false); }
-    };
+        })
+        .catch(() => {
+            toast.error("Failed to load data");
+        })
+        .finally(() => setLoading(false));
 
     useEffect(() => { fetchAll(); }, []);
 
@@ -139,11 +141,16 @@ export default function DepartmentsPage() {
     // through ticking permissions is not thrown back to the first department.
     useRealtimeTopics(["settings"], () => { fetchAll(); });
 
-    // Load the selected department's pool whenever the selection changes.
+    // Load the selected department's pool whenever the selection changes. One
+    // with no pool of its own (all-access) shows none — set while rendering.
+    if (useValueChange(selectedId) && selectedId) {
+        const dept = departments.find(d => d.id === selectedId);
+        if (!dept || dept.isAllAccess) { setPoolSelected(new Set()); setPoolOriginal(new Set()); }
+    }
     useEffect(() => {
         if (!selectedId) return;
         const dept = departments.find(d => d.id === selectedId);
-        if (!dept || dept.isAllAccess) { setPoolSelected(new Set()); setPoolOriginal(new Set()); return; }
+        if (!dept || dept.isAllAccess) return;
         let cancelled = false;
         axios.get<{ permissionIds: string[] | null }>(`/api/departments/${selectedId}/permissions`)
             .then(res => {

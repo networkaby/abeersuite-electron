@@ -29,6 +29,7 @@ import { TableEmptyRow, TableLoadingRow } from "@/shared/components/DataTableSta
 import { useCollapsibleTree } from "@/modules/inventory/hooks";
 import ShopImageField from "@/modules/ecommerce/components/ShopImageField";
 import { productMatchesSearch, searchableText } from "@/shared/lib/inventory";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 export type ShopMasterRow = {
     id: number;
@@ -69,17 +70,20 @@ export default function ShopMasterPresentationList({
     const [saving, setSaving] = useState(false);
     const [search, setSearch] = useState("");
 
+    const read = () => axios
+        .get<ShopMasterRow[]>(apiBase)
+        .then((r) => setRows(r.data.map((x) => ({ ...x, parentId: hierarchical ? x.parentId : null }))))
+        .catch(() => toast.error(`Failed to load ${resourceLabel.toLowerCase()}s`))
+        .finally(() => setLoading(false));
     const load = (silent = false) => {
         if (!silent) setLoading(true);
-        axios
-            .get<ShopMasterRow[]>(apiBase)
-            .then((r) => setRows(r.data.map((x) => ({ ...x, parentId: hierarchical ? x.parentId : null }))))
-            .catch(() => toast.error(`Failed to load ${resourceLabel.toLowerCase()}s`))
-            .finally(() => setLoading(false));
+        void read();
     };
 
+    // Another tab's list: the spinner shows from its first render.
+    if (useValueChange(apiBase, null)) setLoading(true);
     useEffect(() => {
-        load();
+        void read();
         // eslint-disable-next-line react-hooks/exhaustive-deps -- apiBase/hierarchical are fixed per tab, not reactive
     }, [apiBase]);
     // Rows refresh in place; the edit form holds its own copy.

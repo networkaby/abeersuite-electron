@@ -53,16 +53,14 @@ export default function RecurringTaskList({
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState<TaskRecurrenceDto | null>(null);
 
-    const load = useCallback(async () => {
-        try {
-            const res = await axios.get<TaskRecurrenceDto[]>("/api/admin-task-recurrences");
+    const load = useCallback(() => axios.get<TaskRecurrenceDto[]>("/api/admin-task-recurrences")
+        .then((res) => {
             setRows(res.data);
-        } catch {
+        })
+        .catch(() => {
             toast.error("Failed to load recurring tasks");
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+        })
+        .finally(() => setLoading(false)), []);
 
     useEffect(() => {
         load();

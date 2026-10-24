@@ -34,6 +34,7 @@ import { ProductFilterButton, ProductFilterPanel } from "@/modules/ecommerce/com
 import { fetchAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
 import { AiDraftNotes, mergeAiSpecs } from "@/modules/ecommerce/components/AiCopyPanel";
 import { FlowButtons, PremiumSwitch, useCopyFlow, usePremiumAi } from "@/modules/ecommerce/components/AiCopyControls";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 // Bulk AI copy for products with no shop description (the one-time backlog,
 // then each month's new items). Same filters as Products so staff pick what
@@ -111,7 +112,8 @@ export default function AiBulkCopyPage() {
     const backlog = useMemo(() => products.filter((p) => p.isActive && !hasDescription(p)).length, [products]);
     const withPhoto = useMemo(() => products.filter((p) => p.isActive && !hasDescription(p) && p.galleryUrls.length > 0).length, [products]);
 
-    useEffect(() => setShown(SHOW_STEP), [filters, query, pick]);
+    // A new filter / search / pick starts from the first batch again (while rendering).
+    if ([useValueChange(filters), useValueChange(query), useValueChange(pick)].some(Boolean)) setShown(SHOW_STEP);
 
     const patchWork = (id: number, patch: Work) =>
         setWork((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
@@ -162,17 +164,21 @@ export default function AiBulkCopyPage() {
 
     // Every row of the set saved or dropped → back to the list. Dropped rows
     // return to the backlog clean (their draft stays cached, so a retry is free).
-    useEffect(() => {
-        if (!batch || running || !batch.every((id) => resolved(work[id]))) return;
+    // Done while rendering (clearing the batch ends it); the toast follows in an effect.
+    const [batchDone, setBatchDone] = useState<{ saved: number; dropped: number } | null>(null);
+    if (batch && !running && batch.every((id) => resolved(work[id]))) {
         const saved = batch.filter((id) => work[id]?.saved).length;
-        toast.success(`Done: ${saved} saved, ${batch.length - saved} not saved`);
+        setBatchDone({ saved, dropped: batch.length - saved });
         setWork((prev) => {
             const next = { ...prev };
             for (const id of batch) if (!prev[id]?.saved) delete next[id];
             return next;
         });
         setBatch(null);
-    }, [batch, running, work]);
+    }
+    useEffect(() => {
+        if (batchDone) toast.success(`Done: ${batchDone.saved} saved, ${batchDone.dropped} not saved`);
+    }, [batchDone]);
 
     const save = async (r: ShopProductAdmin): Promise<boolean> => {
         const draft = work[r.id]?.draft;
