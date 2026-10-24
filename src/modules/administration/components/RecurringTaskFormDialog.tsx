@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
@@ -19,6 +19,7 @@ import {
 import { TallyDateTimeInput } from "@/shared/components/TallyDateTimeInput";
 import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import type { TaskPriority, TaskPositionOption, TaskRecurrenceDto, RecurrenceUnit } from "../lib/types";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 const PRIORITIES: TaskPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 const UNASSIGNED = "__none__";
@@ -63,8 +64,8 @@ export default function RecurringTaskFormDialog({
     const [amount, setAmount] = useState("");
     const [saving, setSaving] = useState(false);
 
-    useEffect(() => {
-        if (!open) return;
+    // Each open (or another recurrence) seeds the form — while rendering.
+    if (useValueChange<unknown>(open ? recurrence ?? "new" : null, null) && open) {
         setTitle(recurrence?.title ?? "");
         setDescription(recurrence?.description ?? "");
         setCategory(recurrence?.category ?? "");
@@ -76,7 +77,7 @@ export default function RecurringTaskFormDialog({
         setAnchorAt(toDateTimeLocalInput(recurrence?.anchorAt ?? null));
         setLeadDays(String(recurrence?.leadDays ?? 0));
         setAmount(recurrence?.amountPaise != null ? String(paiseToRupees(recurrence.amountPaise)) : "");
-    }, [open, recurrence]);
+    }
 
     const handleSave = async () => {
         if (!title.trim()) {

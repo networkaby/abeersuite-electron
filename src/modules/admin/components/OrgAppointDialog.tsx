@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { initials } from "@/shared/lib/format/initials";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 interface UserHit {
     id: number;
@@ -41,10 +42,13 @@ export default function OrgAppointDialog({
     const [query, setQuery]     = useState("");
     const [busyId, setBusyId]   = useState<number | null>(null);
 
-    useEffect(() => {
-        if (!open) return;
+    // Each open starts with an empty search and the spinner — set while rendering.
+    if (useValueChange(open, false) && open) {
         setQuery("");
         setLoading(true);
+    }
+    useEffect(() => {
+        if (!open) return;
         axios.get<UserHit[]>("/api/users")
             .then(r => setUsers(r.data))
             .catch(() => toast.error("Failed to load users"))

@@ -18,6 +18,7 @@ import { PRIORITY_META } from "@/shared/lib/constants/badges";
 import { formatDate, formatDateTime } from "@/shared/lib/format";
 import type { TaskDetailDto, TaskDto, TaskStage } from "../lib/types";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 export default function TaskDetailDialog({
     taskId,
@@ -43,26 +44,26 @@ export default function TaskDetailDialog({
     const [comment, setComment] = useState("");
     const [posting, setPosting] = useState(false);
 
+    const readTask = useCallback((id: number) => axios.get(`/api/admin-tasks/${id}`)
+        .then((res) => setTask(res.data))
+        .catch(() => { toast.error("Failed to load task"); })
+        .finally(() => setLoading(false)), []);
     const load = useCallback(async () => {
         if (!taskId) return;
         setLoading(true);
-        try {
-            const res = await axios.get(`/api/admin-tasks/${taskId}`);
-            setTask(res.data);
-        } catch {
-            toast.error("Failed to load task");
-        } finally {
-            setLoading(false);
-        }
-    }, [taskId]);
+        await readTask(taskId);
+    }, [taskId, readTask]);
 
+    // Opening a task shows the spinner, closing clears it — both while rendering.
+    const openTaskId = open && taskId ? taskId : null;
+    if (useValueChange(openTaskId, null) && openTaskId) setLoading(true);
+    if (useValueChange(open, false) && !open) {
+        setTask(null);
+        setComment("");
+    }
     useEffect(() => {
-        if (open && taskId) load();
-        if (!open) {
-            setTask(null);
-            setComment("");
-        }
-    }, [open, taskId, load]);
+        if (openTaskId) void readTask(openTaskId);
+    }, [openTaskId, readTask]);
 
     const moveStage = async (status: string) => {
         if (!task || status === task.status) return;

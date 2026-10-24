@@ -14,7 +14,7 @@
 //
 // Layout is in-memory only — refresh the page to reset.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
     Landmark, Building2, Layers, Briefcase, AlertCircle,
     Maximize2, RotateCcw, ZoomIn, ZoomOut,
@@ -22,6 +22,7 @@ import {
 import type { OrgStructure } from "@/shared/types/orgChart";
 import { Button } from "@/components/ui/button";
 import { HEAD_OFFICE_BRANCH_ID } from "@/shared/lib/org/systemBranch";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 // Card dimensions are needed to draw edges from card centers.
 const HQ_W = 280, HQ_H = 72;
@@ -309,11 +310,11 @@ export default function OrgCanvas({ structure }: { structure: OrgStructure }) {
     const [drag, setDrag] = useState<DragState | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
 
-    // Re-seed when structure changes (admin adds a branch etc).
-    useEffect(() => {
+    // Re-seed when structure changes (admin adds a branch etc) — while rendering.
+    if (useValueChange(initial)) {
         setNodes(initial.nodes);
         setEdges(initial.edges);
-    }, [initial]);
+    }
 
     // Compute the canvas bounds so SVG and scroll area cover all nodes.
     const bounds = useMemo(() => {

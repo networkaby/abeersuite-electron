@@ -42,6 +42,7 @@ import {
     GlobalPermissionsSection,
 } from "@/modules/admin/components/RolePageSections";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
 export default function RolePage() {
     const [roles, setRoles] = useState<Role[]>([]);
@@ -67,15 +68,14 @@ export default function RolePage() {
 
     const activeRole = roles.find((role) => role.id === activeRoleId) ?? null;
 
-    const loadData = useCallback(async (preferredRoleId?: string) => {
-        try {
-            const [rolesRes, permsRes, deptsRes, worksRes, groupsRes] = await Promise.all([
-                axios.get<Role[]>("/api/roles"),
-                axios.get<Permission[]>("/api/permissions"),
-                axios.get<Department[]>("/api/departments"),
-                axios.get<WorkRow[]>("/api/works"),
-                axios.get<WorkGroupRow[]>("/api/work-groups"),
-            ]);
+    const loadData = useCallback((preferredRoleId?: string) => Promise.all([
+        axios.get<Role[]>("/api/roles"),
+        axios.get<Permission[]>("/api/permissions"),
+        axios.get<Department[]>("/api/departments"),
+        axios.get<WorkRow[]>("/api/works"),
+        axios.get<WorkGroupRow[]>("/api/work-groups"),
+    ])
+        .then(([rolesRes, permsRes, deptsRes, worksRes, groupsRes]) => {
             const fetchedRoles = rolesRes.data;
             const nextActive =
                 preferredRoleId && fetchedRoles.some((role) => role.id === preferredRoleId)
@@ -88,19 +88,18 @@ export default function RolePage() {
             setWorks(worksRes.data);
             setWorkGroups(groupsRes.data);
             setActiveRoleId(nextActive);
-        } catch {
+        })
+        .catch(() => {
             toast.error("Failed to load roles");
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+        })
+        .finally(() => setLoading(false)), []);
 
     useEffect(() => {
         loadData();
     }, [loadData]);
 
-    useEffect(() => {
-        if (!activeRole) return;
+    // Another role (or a fresh copy of it) resets the editor — while rendering.
+    if (useValueChange(activeRole) && activeRole) {
         // Only the highest CRUD rung is STORED (customers:delete alone) — expand
         // for display so Edit + Create show ticked; save normalizes back down.
         const granted = expandCrudGrants(activeRole.permissions.map((permission) => permission.permissionId));
@@ -108,13 +107,14 @@ export default function RolePage() {
         setOriginal(new Set(granted));
         setRoleForm(roleToForm(activeRole));
         setSearch("");
-    }, [activeRole]);
+    }
 
     // Load the active role's department pool — the authoring lens. All-access
     // departments (or a role with no department) leave poolIds null = no filter.
     const activeDeptId = activeRole?.department?.id ?? null;
+    if (useValueChange(activeDeptId) && !activeDeptId) setPoolIds(null);
     useEffect(() => {
-        if (!activeDeptId) { setPoolIds(null); return; }
+        if (!activeDeptId) return;
         let cancelled = false;
         axios
             .get<{ isAllAccess: boolean; permissionIds: string[] | null }>(`/api/departments/${activeDeptId}/permissions`)

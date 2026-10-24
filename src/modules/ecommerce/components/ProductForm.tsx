@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useEffectEvent } from "react";
 import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
@@ -25,7 +25,13 @@ import {
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { Check, ExternalLink, RefreshCw, X } from "lucide-react";
 import type { ProductNaming } from "@/modules/inventory/lib/regenerateNames";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 
+
+const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((u, i) => u === b[i]);
+
+/** "Never seen" for useValueChange, so the form also seeds on its first render. */
+const NOT_SEEN = Symbol("not seen");
 export default function ProductForm({
     initial,
     onSaved,
@@ -62,7 +68,10 @@ export default function ProductForm({
     const [selectedImage, setSelectedImage] = useState(0);
     const [galleryStatus, setGalleryStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
     const [photoChecklist, setPhotoChecklist] = useState<PhotoChecklist | null>(initial?.photoChecklist ?? null);
-    const galleryFirstRun = useRef(true);
+    // The gallery exactly as last shown from the server (seeded, or the answer to
+    // a save). Only a gallery that is a different list from this is a user edit
+    // and autosaves — showing the server's copy never PATCHes it straight back.
+    const [serverGallery, setServerGallery] = useState<string[]>(galleryUrls);
     const galleryDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
     const gallerySeq = useRef(0);
     // The gallery as last saved on the server. Sent with every photo save so the
@@ -72,11 +81,8 @@ export default function ProductForm({
     /** Show the server's gallery without it counting as an edit (no autosave). */
     const showServerGallery = useCallback((urls: string[]) => {
         galleryBase.current = urls;
-        setGalleryUrls((cur) => {
-            if (cur.length === urls.length && cur.every((u, i) => u === urls[i])) return cur;
-            galleryFirstRun.current = true;
-            return urls;
-        });
+        setGalleryUrls((cur) => (sameList(cur, urls) ? cur : urls));
+        setServerGallery(urls);
         setSelectedImage((i) => (i < urls.length ? i : 0));
     }, []);
     const [specPairs, setSpecPairs] = useState<{ k: string; v: string }[]>(() => {
@@ -145,13 +151,10 @@ export default function ProductForm({
     // state above.
     const [regenBusy, setRegenBusy] = useState<null | "slug">(null);
 
-    const regenerate = useCallback(
-        async (silent = false) => {
-            const productId = initial?.id;
-            if (!productId) return;
-            setRegenBusy("slug");
-            try {
-                const { data } = await axios.get<ProductNaming>(`/api/inventory/products/${productId}/naming`);
+    const fetchSlug = useCallback(
+        (productId: number, silent: boolean) => axios
+            .get<ProductNaming>(`/api/inventory/products/${productId}/naming`)
+            .then(({ data }) => {
                 if (data.slugEnabled && data.slug) {
                     setSlug(data.slug);
                     if (silent) toast.info("Masters changed — slug rebuilt. Review, then Save.");
@@ -159,13 +162,21 @@ export default function ProductForm({
                 } else if (!silent) {
                     toast.error("Naming convention produced no slug for this product");
                 }
-            } catch (e: unknown) {
+            })
+            .catch((e: unknown) => {
                 if (!silent) toast.error(extractApiError(e, "Couldn't read the naming convention"));
-            } finally {
-                setRegenBusy(null);
-            }
+            })
+            .finally(() => setRegenBusy(null)),
+        [],
+    );
+    const regenerate = useCallback(
+        async (silent = false) => {
+            const productId = initial?.id;
+            if (!productId) return;
+            setRegenBusy("slug");
+            await fetchSlug(productId, silent);
         },
-        [initial?.id]
+        [initial?.id, fetchSlug]
     );
 
     // Auto-rebuild the slug when a naming source actually changed — i.e. the
@@ -182,38 +193,41 @@ export default function ProductForm({
         initial?.brandId, initial?.groupId, initial?.categoryId,
         initial?.warrantyTermId, initial?.unitId,
     ].join("|");
-    const lastNamingSig = useRef<string | null>(null);
     const published = initial?.isListedInShop ?? false;
 
-    useEffect(() => {
-        const first = lastNamingSig.current === null;
-        const changed = !first && lastNamingSig.current !== namingSig;
-        lastNamingSig.current = namingSig;
-        if (!changed) return;
-        if (published) {
+    // A naming source changed since the last `initial` (never on first render):
+    // noted while rendering — the spinner shows at once — and acted on below.
+    const [namingEvent, setNamingEvent] = useState<{ live: boolean } | null>(null);
+    if (useValueChange(namingSig)) {
+        setNamingEvent({ live: published });
+        if (!published && initial?.id) setRegenBusy("slug");
+    }
+    const onNamingChanged = useEffectEvent((live: boolean) => {
+        if (live) {
             toast.info("Masters changed. This product is live, so its slug was left alone — use ⟳ to rebuild it.");
             return;
         }
-        void regenerate(true);
-    }, [namingSig, published, regenerate]);
+        if (initial?.id) void fetchSlug(initial.id, true);
+    });
+    useEffect(() => { if (namingEvent) onNamingChanged(namingEvent.live); }, [namingEvent]);
 
-    useEffect(() => {
-        if (!initial) return;
+    // Seed the form from the server's copy whenever it arrives (also on mount, as
+    // before) — while rendering, so the previous values never paint. The refs it
+    // owns follow in the effect below.
+    if (useValueChange<unknown>(initial, NOT_SEEN) && initial) {
         setSku(initial.sku ?? "");
         setName(initial.name ?? "");
         setSlug(initial.slug ?? "");
         setShopCategory(initial.category ?? "");
         setSubheading(initial.subheading ?? initial.name ?? "");
-        subheadingTouched.current = !!initial.subheading;
         setDescription(initial.description ?? "");
         setBadge(initial.badge ?? "");
         setGalleryUrls(initial.galleryUrls ?? []);
-        galleryBase.current = initial.galleryUrls ?? [];
         setPhotoChecklist(initial.photoChecklist ?? null);
         setSelectedImage(0);
-        // Loading a product's own saved gallery is not a user edit — skip the
-        // next autosave run so it doesn't re-PATCH the value right back.
-        galleryFirstRun.current = true;
+        // Loading a product's own saved gallery is not a user edit — it becomes
+        // the server copy, so the autosave does not re-PATCH it right back.
+        setServerGallery(initial.galleryUrls ?? []);
         setGalleryStatus("idle");
         setWeightGrams(initial.weightGrams == null ? "" : String(initial.weightGrams));
         setLengthCm(dimStr(initial.lengthCm));
@@ -222,6 +236,11 @@ export default function ProductForm({
         setIsListedInShop(initial.isListedInShop ?? true);
         setAllowBackorder(initial.allowBackorder ?? false);
         setIsActive(initial.isActive ?? true);
+    }
+    useEffect(() => {
+        if (!initial) return;
+        subheadingTouched.current = !!initial.subheading;
+        galleryBase.current = initial.galleryUrls ?? [];
     }, [initial]);
 
     // Autosave the photo block the moment it changes — add/remove/reorder/adjust/
@@ -229,16 +248,14 @@ export default function ProductForm({
     // Photos action without each button wiring its own save call. Only fires for
     // an already-saved product (there's no id to PATCH until the first full Save).
     // Debounced so a burst of clicks (e.g. reordering twice) becomes one request.
+    const galleryEdited = !sameList(galleryUrls, serverGallery);
+    if (useValueChange(galleryUrls) && galleryEdited && initial?.id) setGalleryStatus("saving");
     useEffect(() => {
-        if (galleryFirstRun.current) {
-            galleryFirstRun.current = false;
-            return;
-        }
+        if (!galleryEdited) return;
         const productId = initial?.id;
         if (!productId) return;
 
         if (galleryDebounce.current) clearTimeout(galleryDebounce.current);
-        setGalleryStatus("saving");
         const seq = ++gallerySeq.current;
         galleryDebounce.current = setTimeout(() => {
             axios

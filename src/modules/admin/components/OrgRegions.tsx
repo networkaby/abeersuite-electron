@@ -28,6 +28,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -603,6 +604,7 @@ export default function OrgRegions({
     canManage?: boolean;
     onMutated?: () => void;
 }) {
+    const router = useRouter();
     const [intent, setIntent] = useState<Intent | null>(null);
     const [menu, setMenu] = useState<MenuState | null>(null);
     const [appointFor, setAppointFor] = useState<PositionNode | null>(null);
@@ -693,7 +695,7 @@ export default function OrgRegions({
             items.push({
                 label: `Open ${h.user.name}'s profile`,
                 icon: <Users size={12} />,
-                onClick: () => { window.location.href = `/office/user/${h.user.id}`; },
+                onClick: () => router.push(`/office/user/${h.user.id}`),
             });
         }
 
@@ -734,7 +736,7 @@ export default function OrgRegions({
             onClick: () => handleDelete("position", position.id, position.title),
         });
         openMenu(e.clientX, e.clientY, items);
-    }, [canManage, handleDelete, openMenu, unassignHolder]);
+    }, [canManage, handleDelete, openMenu, unassignHolder, router]);
 
     const onDeptContext = useCallback((
         e: React.MouseEvent, deptId: string, deptName: string, branchId: string | null,

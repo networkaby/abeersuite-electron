@@ -285,16 +285,14 @@ export default function UsersPage() {
     const [editUser, setEditUser] = useState<User | null>(null);
     const [permUser, setPermUser] = useState<User | null>(null);
 
-    const fetchUsers = async () => {
-        try {
-            const res = await axios.get("/api/users");
+    const fetchUsers = () => axios.get("/api/users")
+        .then((res) => {
             setUsers(res.data);
-        } catch {
+        })
+        .catch(() => {
             toast.error("Failed to load users");
-        } finally {
-            setLoading(false);
-        }
-    };
+        })
+        .finally(() => setLoading(false));
 
     useEffect(() => { fetchUsers(); }, []);
 

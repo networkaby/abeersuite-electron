@@ -448,6 +448,11 @@ function ContentEditor({ inst, onChange }: { inst: HomeSectionInstance; onChange
     );
 }
 
+
+/** A fresh client-side id for a copied section (only ever called from a click). */
+function newInstanceId(): string {
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 export default function CustomizeHomePage() {
     const [instances, setInstances] = useState<HomeSectionInstance[]>(DEFAULT_HOME_INSTANCES);
     const [loaded, setLoaded] = useState(false);
@@ -470,21 +475,25 @@ export default function CustomizeHomePage() {
     const permissions = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canUnlock = hasPermissionWithScope(permissions, PERMISSIONS.ECOMMERCE_FALLBACK_UNLOCK);
 
-    const load = useCallback(async () => {
-        setLoadError(false);
-        try {
-            const data = await getWithRetry<{ layout: HomeSectionInstance[] }>("/api/ecommerce/home-layout");
+    const fetchLayout = useCallback(() => getWithRetry<{ layout: HomeSectionInstance[] }>("/api/ecommerce/home-layout")
+        .then((data) => {
             setInstances(data.layout);
             setSavedJson(JSON.stringify(data.layout));
             setLoaded(true);
-        } catch {
+        })
+        .catch(() => {
             setLoadError(true);
-        }
-    }, []);
+        }), []);
+    /** Retry / refresh: resets first. */
+    const load = useCallback(() => {
+        setLoadError(false);
+        return fetchLayout();
+    }, [fetchLayout]);
 
+    // First read: `loadError` already starts false.
     useEffect(() => {
-        void load();
-    }, [load]);
+        void fetchLayout();
+    }, [fetchLayout]);
 
     // Real catalogue data for the preview — the same published-products payload
     // the storefront itself renders from, so a previewed rail / category grid /
@@ -590,7 +599,7 @@ export default function CustomizeHomePage() {
         while (used.has(priority)) priority += 1;
         const clone: HomeSectionInstance = {
             ...src,
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            id: newInstanceId(),
             label: `${src.label} (copy)`,
             priority,
             ...(fromFallback ? { enabled: false, startAt: undefined, endAt: undefined } : {}),

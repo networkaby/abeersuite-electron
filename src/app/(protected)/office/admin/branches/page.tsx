@@ -88,13 +88,14 @@ export default function BranchesPage() {
     const [form, setForm]           = useState<FormState>(EMPTY);
     const [saving, setSaving]       = useState(false);
 
-    const loadBranches = async () => {
-        try {
-            const res = await axios.get<Branch[]>("/api/branches");
+    const loadBranches = () => axios.get<Branch[]>("/api/branches")
+        .then((res) => {
             setBranches(res.data);
-        } catch { toast.error("Failed to load branches"); }
-        finally { setLoading(false); }
-    };
+        })
+        .catch(() => {
+            toast.error("Failed to load branches");
+        })
+        .finally(() => setLoading(false));
 
     useEffect(() => { loadBranches(); }, []);
 
