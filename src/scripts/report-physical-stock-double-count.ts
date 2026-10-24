@@ -41,6 +41,7 @@ import { writeFileSync } from "node:fs";
 import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
+import { HEAD_OFFICE_BRANCH_ID } from "@/shared/lib/org/systemBranch";
 
 const rawUrl = (process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "")
     .replace(/[?&]sslmode=[^&]*/g, "").replace(/[?&]$/, "");
@@ -56,10 +57,10 @@ const same = (a: number, b: number) => Math.abs(a - b) < EPS;
 
 // Inlined rather than imported (same reason as recompute-caches.ts: the shared
 // helpers pull in the app's prisma client). MUST match openingAppliesTo in
-// src/modules/inventory/lib/liveStock.ts: an unassigned opening counts in every
-// branch; an assigned one only in its own.
+// src/modules/inventory/lib/liveStock.ts: an opening counts only at its own
+// branch, and one with no branch at Head Office.
 const openingApplies = (openingBranchId: string | null, branchId: string) =>
-    openingBranchId == null || openingBranchId === branchId;
+    (openingBranchId ?? HEAD_OFFICE_BRANCH_ID) === branchId;
 
 type Row = {
     voucherNo: string; date: string; postedAt: string; branch: string;

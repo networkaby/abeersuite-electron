@@ -10,19 +10,22 @@
 // `where` on the query. The opening half is decided by `openingBranchId` on the
 // product master — the stock LOCATION of the opening quantity:
 //
-//     openingBranchId = null           → folds into every branch (see below)
 //     openingBranchId = the asked one  → folds in
 //     openingBranchId = another branch → left out
+//     openingBranchId = null           → Head Office only (see below)
 //     no branch asked (org-wide)       → always folds in, exactly once
 //
-// ── Why null folds into every branch ────────────────────────────────────────
-// Before 2026-09-17 the opening carried no branch at all and folded into every
-// scope unconditionally. Migration 20260917090000_product_opening_branch stamps
-// BR-HQ on every opening that existed then, so on live "null" now means an
-// opening created since, by an operator who did not pick a location. Folding it
-// everywhere keeps that row reading as it always did rather than quietly
-// dropping to zero on every branch screen — the failure this whole file exists
-// to prevent. It is the lenient half of the rule, and deliberately so.
+// So every opening counts at exactly ONE branch, and the branch figures added
+// together are the company figure.
+//
+// ── Why null means Head Office ──────────────────────────────────────────────
+// Every opening sits at a branch: it is counted at a counter, and a counter
+// belongs to a branch. Writers stamp one (`openingBranchOnSave`), and migration
+// 20261024120000_opening_branch_ho put Head Office on every opening that had
+// none. A null can still turn up — a branch deleted (ON DELETE SET NULL), a
+// script that writes the opening alone — and it then counts where all old stock
+// was: Head Office (BR-HQ). Until 2026-10-24 null folded into EVERY branch, so
+// opening 40 read 40 at HO and 40 at Branch 2: 80 added up, 40 real.
 //
 // The money side is NOT branch-aware and must not become so here: `openingValue`,
 // computeTradingStockAdjustment and valuation.ts are all org-level. This column
@@ -46,6 +49,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { isCombined } from "@/shared/lib/auth/activeBranch";
 import { toNumber } from "@/modules/accountancy/lib/balance";
+import { HEAD_OFFICE_BRANCH_ID } from "@/shared/lib/org/systemBranch";
 
 /**
  * The combined sentinel ("__combined__") is a scope, not a branch id, and
@@ -154,8 +158,8 @@ export async function loadLiveStockByBranch(
     // The opening's own branch may have no ledger row at all — a product that
     // opened with stock and has not moved since. It still belongs in the picker,
     // and it is the one branch showing the quantity.
-    const extras = product.openingBranchId
-        ? [...extraBranchIds, product.openingBranchId]
+    const extras = product.openingStock != null
+        ? [...extraBranchIds, product.openingBranchId ?? HEAD_OFFICE_BRANCH_ID]
         : extraBranchIds;
     for (const id of extras) {
         if (!byBranch.has(id)) byBranch.set(id, foldOpening(
@@ -164,8 +168,8 @@ export async function loadLiveStockByBranch(
     }
 
     // The total is the org-wide scope, so the opening counts once regardless of
-    // where it sits — this is NOT the sum of the branch figures above, and with
-    // an unassigned opening it deliberately is not.
+    // where it sits. The opening sits at one branch, so the branch figures above
+    // add up to it.
     return { total: foldOpening(product.openingStock, movedTotal, true) ?? 0, byBranch };
 }
 
@@ -220,8 +224,8 @@ export async function loadStockBeforeDate(
  * Does this product's opening quantity belong to the scope being asked about?
  *
  * See the rule table in the file header. `null` branchId is the org-wide scope,
- * where every opening counts exactly once; `null` openingBranchId is an
- * unassigned opening, which counts everywhere.
+ * where every opening counts exactly once; `null` openingBranchId is an opening
+ * with no branch on it, which counts at Head Office only.
  *
  * Exported because the BI movement register cannot use `loadLiveStockMap` — its
  * opening is date-aware (`openingStockDate < from`) and it also needs the prior
@@ -236,8 +240,7 @@ export function openingAppliesTo(
 ): boolean {
     const scope = scopeBranch(branchId);
     if (!scope) return true;
-    if (product.openingBranchId == null) return true;
-    return product.openingBranchId === scope;
+    return (product.openingBranchId ?? HEAD_OFFICE_BRANCH_ID) === scope;
 }
 
 /**
