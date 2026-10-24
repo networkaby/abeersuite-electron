@@ -186,6 +186,10 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
     // when bottom space is cramped.
     const DROPDOWN_MAX_H = 360;
     const DROPDOWN_RIGHT_TRIM = 38; // ~1cm — pull the right edge in from the table edge
+    // The four number columns take ~590px (4 × fixed width + gaps + padding), so
+    // anything narrower leaves the Item column — the product NAME — no room at
+    // all. Outside a table the box itself can be far narrower than that.
+    const DROPDOWN_MIN_W = 880;
     const VIEWPORT_MARGIN = 12;
     const [pos, setPos] = useState<{
         top: number; left: number; width: number; maxHeight: number; flipUp: boolean;
@@ -205,11 +209,16 @@ export function InvProductCombobox({ value, onChange, placeholder = "Search item
             const available = Math.max(120, flipUp ? spaceAbove : spaceBelow);
             const maxHeight = Math.min(DROPDOWN_MAX_H, available);
             const naturalWidth = tableRect ? tableRect.right - rect.left : rect.width;
-            const width = Math.max(420, naturalWidth - DROPDOWN_RIGHT_TRIM);
+            // Never wider than the window; slide left rather than run off its edge.
+            const width = Math.min(
+                Math.max(DROPDOWN_MIN_W, naturalWidth - DROPDOWN_RIGHT_TRIM),
+                window.innerWidth - 2 * VIEWPORT_MARGIN,
+            );
+            const left = Math.max(VIEWPORT_MARGIN, Math.min(rect.left, window.innerWidth - VIEWPORT_MARGIN - width));
             const anchorY = flipUp ? rect.top : rect.bottom;
             setPos({
                 top: anchorY - target.top,
-                left: rect.left - target.left,
+                left: left - target.left,
                 width,
                 maxHeight,
                 flipUp,

@@ -567,12 +567,13 @@ function ProductOpeningSection({
         // eslint-disable-next-line react-hooks/exhaustive-deps -- prefill only when another product is picked; a list refresh must not overwrite what is typed
     }, [form.productId]);
 
-    // A product with no saved location shows (and saves) the working branch,
-    // else Head Office — so what is on screen is what lands.
+    // Before a product is picked, and for one with no saved location, the box
+    // shows (and saves) the working branch, else Head Office — never a blank
+    // "Working branch" placeholder — so what is on screen is what lands.
     useEffect(() => {
-        if (!form.productId || form.branchId || branches.length === 0) return;
+        if (form.branchId || branches.length === 0) return;
         setForm((f) => (f.branchId ? f : { ...f, branchId: defaultOpeningBranchId(branches, activeBranchId) }));
-    }, [form.productId, form.branchId, branches, activeBranchId]);
+    }, [form.branchId, branches, activeBranchId]);
 
     const save = async () => {
         if (!form.productId) { toast.error("Select a product"); return; }
@@ -634,6 +635,7 @@ function ProductOpeningSection({
                             onChange={(p) => setForm((f) => ({ ...f, productId: p?.id ?? 0 }))}
                             placeholder="Search name, SKU or barcode…"
                             allowCreate={false}
+                            className="flex h-9 items-center rounded-md border border-input bg-background px-3 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/40"
                         />
                     </div>
                     <div className="space-y-1.5">
@@ -686,7 +688,7 @@ function ProductOpeningSection({
                     <thead className="border-b border-border bg-muted text-xs text-muted-foreground">
                         <tr>
                             <th className="px-5 py-2 text-left font-medium">Product</th>
-                            <th className="px-5 py-2 text-left font-medium">Location</th>
+                            <th className="px-5 py-2 text-left font-medium whitespace-nowrap">Location</th>
                             <th className="px-5 py-2 text-right font-medium">Qty</th>
                             <th className="px-5 py-2 text-right font-medium">Rate</th>
                             <th className="px-5 py-2 text-right font-medium">Value</th>
@@ -707,7 +709,7 @@ function ProductOpeningSection({
                                     <span className="font-mono text-muted-foreground mr-2">{p.sku}</span>
                                     <span className="font-medium">{p.name}</span>
                                 </td>
-                                <td className="px-5 py-2 text-muted-foreground">{p.openingBranch?.name ?? "Head Office"}</td>
+                                <td className="px-5 py-2 text-muted-foreground whitespace-nowrap">{p.openingBranch?.name ?? "Head Office"}</td>
                                 <td className="px-5 py-2 text-right font-mono">
                                     {Number(p.openingStock)} <span className="text-muted-foreground text-xs">{p.unit.code}</span>
                                 </td>
