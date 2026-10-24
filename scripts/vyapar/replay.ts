@@ -261,7 +261,7 @@ async function main(): Promise<void> {
     // someone has to remember, because for weeks nobody did.
     const { spawnSync } = await import("node:child_process");
     for (const [label, script, flag] of [
-        ["stock cache", "src/scripts/recompute-stock.ts", "--fix"],
+        ["stock caches", "src/scripts/recompute-caches.ts", "--fix"],
         ["ledger balances", "prisma/seeds/recompute-balances.ts", "--apply"],
     ] as const) {
         const r = spawnSync("npx", ["tsx", "--tsconfig", "scripts/vyapar/tsconfig.json", script, flag],

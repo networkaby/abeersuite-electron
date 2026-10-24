@@ -40,7 +40,7 @@ const roundInt = (v: number) => Math.sign(v) * Math.round(Math.abs(v));
 type Drift = { what: string; key: string; cached: number; computed: number };
 
 // Inlined rather than imported: the shared helpers pull in the app's prisma client,
-// whose connection setup is wrong for a CLI (same reason recompute-stock.ts inlines).
+// whose connection setup is wrong for a CLI.
 function balanceDelta(nb: "DEBIT" | "CREDIT", type: "DEBIT" | "CREDIT", amount: number): number {
     if (nb === "DEBIT") return type === "DEBIT" ? amount : -amount;
     return type === "CREDIT" ? amount : -amount;

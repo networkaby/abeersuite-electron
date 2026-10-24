@@ -1,6 +1,6 @@
 // Read-only audit — does every voucher's STOCK LEDGER match its GOODS LINES?
 //
-// `recompute-stock.ts` answers a narrower question: does the cached on-hand equal
+// `recompute-caches.ts` answers a narrower question: does the cached on-hand equal
 // Σ(ledger)? That passes even when the ledger itself is wrong for a voucher (rows
 // left behind by an edit, rows on a DRAFT spine, a posted sale that moved nothing).
 // This script audits the voucher→ledger relationship instead, per (voucher, product).

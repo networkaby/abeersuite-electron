@@ -122,7 +122,7 @@ async function main(): Promise<void> {
     console.log(`  ${"".padEnd(42)}${inr(expense).padStart(14)}   total`);
 
     // Closing stock is a master column here, not a ledger, so gross profit has to
-    // pick it up from inventory — see recompute-stock.ts. Opening is what the 31-Mar
+    // pick it up from inventory — see recompute-caches.ts. Opening is what the 31-Mar
     // load put in; closing is what the engine's costing produced.
     const stock = (await pool.query(`
         select coalesce(sum(coalesce("openingStock", 0) * coalesce("openingRate", 0)), 0) open
