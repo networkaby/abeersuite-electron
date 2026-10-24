@@ -4,7 +4,7 @@
 // List of all POS sales (InvVoucher type=SALE, status=POSTED).
 // Lives at /vouchers/pos — mirrors SalesRegister at /vouchers/sales.
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
@@ -24,6 +24,8 @@ import { fetchCurrentShift } from "@/modules/pos/lib/currentShift";
 import { ShiftOpenDialog } from "@/modules/pos/components/ShiftOpenDialog";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { usePagedQuery } from "@/shared/hooks/usePagedQuery";
+import { useApiResource } from "@/shared/hooks/useApiResource";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { EscapeBack } from "@/shared/components/EscapeBack";
 
@@ -94,9 +96,16 @@ const REFUND_COLORS: Record<string, string> = {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const NO_SALES: PosSale[] = [];
+const NO_MOVES: CashMove[] = [];
+const NO_DOCS: PosDoc[] = [];
+
+/** Toast a read's failure once — a new failure, not a re-render over an old one. */
+function useToastOnError(error: string | null, message: string) {
+    const show = useEffectEvent(() => toast.error(message));
+    useEffect(() => { if (error) show(); }, [error]);
+}
 
 export function PosSalesRegister() {
-    const [refreshKey, setRefreshKey] = useState(0);
     const [q, setQ] = useState("");
     const limit = 50;
 
@@ -129,21 +138,18 @@ export function PosSalesRegister() {
     const counterFilterId = onlyThisCounter ? myCounterId : null;
 
     const [tab, setTab] = useState<"sales" | "returns" | "orders" | "estimates" | "cash" | "ledger">("sales");
-    const [moves, setMoves] = useState<CashMove[]>([]);
-    const [movesLoading, setMovesLoading] = useState(false);
-
-    useEffect(() => {
-        if (tab !== "cash") return;
-        setMovesLoading(true);
-        axios.get<{ items: CashMove[] }>(`/api/pos/cash-movements?limit=100${counterFilterId != null ? `&counterId=${counterFilterId}` : ""}`)
-            .then((r) => setMoves(r.data.items))
-            .catch(() => toast.error("Failed to load cash movements"))
-            .finally(() => setMovesLoading(false));
-    }, [tab, refreshKey, counterFilterId]);
+    // Each tab reads only while it is the open one. A refresh keeps the rows on
+    // screen (useApiResource `refreshing`) — a sale landing at another counter
+    // used to blank the tab to a spinner and back.
+    const counterParam = counterFilterId != null ? `&counterId=${counterFilterId}` : "";
+    const movesRes = useApiResource<{ items: CashMove[] }>(
+        tab === "cash" ? `/api/pos/cash-movements?limit=100${counterParam}` : null,
+    );
+    const moves = movesRes.data?.items ?? NO_MOVES;
+    const movesLoading = movesRes.loading;
+    useToastOnError(movesRes.error, "Failed to load cash movements");
 
     // ── POS Orders / Estimates (POS_ORDER / POS_ESTIMATE vouchers) ───────────
-    const [posDocs, setPosDocs] = useState<PosDoc[]>([]);
-    const [posDocsLoading, setPosDocsLoading] = useState(false);
     const [docQuery, setDocQuery] = useState("");
     const [pendingOnly, setPendingOnly] = useState(false);
     // Shared OPTIONAL date range for Sales / Orders / Estimates / Cash tabs
@@ -161,26 +167,31 @@ export function PosSalesRegister() {
         const t = docQuery.trim().toLowerCase();
         return !t || fields.some((f) => (f ?? "").toLowerCase().includes(t));
     };
-    useEffect(() => {
-        if (tab !== "orders" && tab !== "estimates") return;
-        const type = tab === "orders" ? "POS_ORDER" : "POS_ESTIMATE";
-        setPosDocsLoading(true);
-        axios.get<PosDoc[]>(`/api/inventory/vouchers?type=${type}${counterFilterId != null ? `&counterId=${counterFilterId}` : ""}`)
-            // No client re-sort: the server already returns these newest-raised
-            // first. Re-sorting by `id` here would undo that — `id` is insert-at-
-            // office order, which is the very thing that put a late-synced till's
-            // older documents above newer ones.
-            .then((r) => setPosDocs(Array.isArray(r.data) ? r.data : []))
-            .catch(() => toast.error(`Failed to load ${tab}`))
-            .finally(() => setPosDocsLoading(false));
-    }, [tab, refreshKey, counterFilterId]);
+    const docType = tab === "orders" ? "POS_ORDER" : tab === "estimates" ? "POS_ESTIMATE" : null;
+    const posDocsRes = useApiResource<PosDoc[]>(
+        docType ? `/api/inventory/vouchers?type=${docType}${counterParam}` : null,
+    );
+    useToastOnError(posDocsRes.error, `Failed to load ${tab}`);
+    // A status flipped here shows at once; the next read of the list governs again.
+    const [docStatus, setDocStatus] = useState<Record<number, PosDoc["status"]>>({});
+    if (useValueChange(posDocsRes.data)) setDocStatus({});
+    // No client re-sort: the server already returns these newest-raised
+    // first. Re-sorting by `id` here would undo that — `id` is insert-at-
+    // office order, which is the very thing that put a late-synced till's
+    // older documents above newer ones.
+    const posDocs = useMemo(
+        () => (Array.isArray(posDocsRes.data) ? posDocsRes.data : NO_DOCS)
+            .map((d) => (docStatus[d.id] ? { ...d, status: docStatus[d.id] } : d)),
+        [posDocsRes.data, docStatus],
+    );
+    const posDocsLoading = posDocsRes.loading;
 
     // Toggle a non-GL doc between Draft (not finalised) and Issued (given to party).
     async function toggleDocStatus(d: PosDoc) {
         const next = d.status === "POSTED" ? "DRAFT" : "POSTED";
         try {
             await axios.patch(`/api/inventory/vouchers/${d.id}/status`, { status: next });
-            setPosDocs((arr) => arr.map((x) => (x.id === d.id ? { ...x, status: next } : x)));
+            setDocStatus((m) => ({ ...m, [d.id]: next }));
             toast.success(next === "POSTED" ? "Marked Issued" : "Marked Draft");
         } catch {
             toast.error("Couldn't change status");
@@ -189,20 +200,17 @@ export function PosSalesRegister() {
 
     // ── Till cash book (ledger) ──────────────────────────────────────────────
     const todayISO = todayIso();
-    const [ledger, setLedger] = useState<LedgerData | null>(null);
-    const [ledgerLoading, setLedgerLoading] = useState(false);
-
-    useEffect(() => {
-        if (tab !== "ledger" || !activeShift) return;
-        // Shared range; the cash book needs a bounded daily view, so empty ⇒ today.
-        const effFrom = rangeFrom || todayISO;
-        const effTo = rangeTo || todayISO;
-        setLedgerLoading(true);
-        axios.get<LedgerData>(`/api/pos/till-ledger?counterId=${activeShift.counter.id}&from=${effFrom}&to=${effTo}`)
-            .then((r) => setLedger(r.data))
-            .catch(() => toast.error("Failed to load till ledger"))
-            .finally(() => setLedgerLoading(false));
-    }, [tab, activeShift, rangeFrom, rangeTo, todayISO, refreshKey]);
+    // Shared range; the cash book needs a bounded daily view, so empty ⇒ today.
+    const ledgerRes = useApiResource<LedgerData>(
+        tab === "ledger" && myCounterId != null
+            ? `/api/pos/till-ledger?counterId=${myCounterId}&from=${rangeFrom || todayISO}&to=${rangeTo || todayISO}`
+            : null,
+    );
+    const ledger = ledgerRes.data ?? null;
+    const ledgerLoading = ledgerRes.loading;
+    useToastOnError(ledgerRes.error, "Failed to load till ledger");
+    // Opening, closing or handing over a shift moves the cash book too.
+    const refreshShiftAndBook = () => { refreshShift(); void ledgerRes.reload(); };
 
     const listKind: "sale" | "returns" = tab === "returns" ? "returns" : "sale";
     // Changing a filter changes how many rows there are, so page 2 of the old
@@ -224,15 +232,20 @@ export function PosSalesRegister() {
 
     const totalPages = Math.max(1, Math.ceil(total / limit));
     const refreshCurrentTab = () => {
-        setRefreshKey((prev) => prev + 1);
         void sales.reload();
+        void movesRes.reload();
+        void posDocsRes.reload();
+        void ledgerRes.reload();
     };
 
     // A sale or return billed at another counter shows up here on its own. The
-    // refresh key drives the list, the POS documents, the cash moves and the till
-    // ledger together, so one signal brings the whole register up to date.
+    // refresh re-reads the list, the POS documents, the cash moves and the till
+    // ledger together (only the open tab actually reads), so one signal brings
+    // the whole register up to date.
     useRealtimeTopics(["ledger", "stock"], refreshCurrentTab);
-    const anyLoading = loading || posDocsLoading || movesLoading || ledgerLoading;
+    const anyLoading = loading || sales.refreshing
+        || posDocsLoading || posDocsRes.refreshing || movesLoading || movesRes.refreshing
+        || ledgerLoading || ledgerRes.refreshing;
 
     return (
         <div className="space-y-4 h-full">
@@ -245,8 +258,8 @@ export function PosSalesRegister() {
                 <div className="overflow-hidden rounded-lg border border-border">
                     <ActiveShiftBar
                         shift={activeShift}
-                        onClosed={() => { setActiveShift(null); refreshShift(); }}
-                        onHandoverCancelled={refreshShift}
+                        onClosed={() => { setActiveShift(null); refreshShiftAndBook(); }}
+                        onHandoverCancelled={refreshShiftAndBook}
                         rightSlot={
                             <Button asChild size="sm" className="h-7 text-xs">
                                 <Link href="/vouchers/pos/new" target="_blank" rel="noopener noreferrer">
@@ -281,7 +294,7 @@ export function PosSalesRegister() {
             <ShiftOpenDialog
                 open={shiftOpenOpen}
                 onOpenChange={setShiftOpenOpen}
-                onOpened={() => { setShiftOpenOpen(false); refreshShift(); }}
+                onOpened={() => { setShiftOpenOpen(false); refreshShiftAndBook(); }}
             />
 
             {/* ── Header ── */}

@@ -36,6 +36,7 @@ import { usePosDraftStore } from "@/store/posDraftStore";
 import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type OnTopHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
 import { searchProducts, readCachedProducts, syncProducts } from "@/shared/lib/inventory";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 import { focusWhenReady } from "@/shared/lib/ui/focusWhenReady";
 import type { PromoSnapshot } from "@/shared/lib/accountancy/settlement";
 
@@ -477,7 +478,7 @@ export function usePosBilling(opts: {
     }, [productQuery, allProducts]);
 
     // A fresh query is a fresh list — the cashier has not aimed at anything yet.
-    useEffect(() => { setHighlightTouched(false); }, [productQuery]);
+    if (useValueChange(productQuery)) setHighlightTouched(false);
 
     // Per-line tax via the same calcLineTotals helper office SALE uses, so
     // POS and SALE always compute identical GST. POS has no per-line discount
@@ -950,9 +951,12 @@ export function usePosBilling(opts: {
     }, [couponSig, appliedCouponKey, snapshot?.account?.id]);
 
     // Auto-apply: when there's no manual coupon, surface the best eligible AUTO
-    // offer. The server re-applies it at checkout via the autoApply flag.
+    // offer. The server re-applies it at checkout via the autoApply flag. The
+    // moment it stops applying it is cleared, while rendering.
+    const autoCouponApplies = appliedCoupon == null && !!snapshot?.account && cart.length > 0;
+    if (useValueChange(autoCouponApplies) && !autoCouponApplies) setAutoCoupon(null);
     useEffect(() => {
-        if (appliedCoupon != null || !snapshot?.account || cart.length === 0) { setAutoCoupon(null); return; }
+        if (!autoCouponApplies) return;
         let cancelled = false;
         runValidate({ autoApply: true })
             .then((data) => { if (!cancelled) setAutoCoupon(data?.ok ? { ...hit(data), freeLines: data.freeLines } : null); })
@@ -989,8 +993,10 @@ export function usePosBilling(opts: {
     // BOGO offer as FREE rows in the item list (the free-grant analogue of the
     // autoCoupon effect above). A manually applied free offer wins over the
     // automatic pick; the server re-selects the grant at checkout anyway.
+    const autoFreeApplies = appliedFree == null && !!snapshot?.account && cart.length > 0;
+    if (useValueChange(autoFreeApplies) && !autoFreeApplies) setAutoFree(null);
     useEffect(() => {
-        if (appliedFree != null || !snapshot?.account || cart.length === 0) { setAutoFree(null); return; }
+        if (!autoFreeApplies) return;
         let cancelled = false;
         runValidate({ freeAutoApply: true })
             .then((data) => {
@@ -1010,8 +1016,9 @@ export function usePosBilling(opts: {
     // Offers panel — refresh on the same beat as coupon re-validation, debounced
     // so fast scanning doesn't hammer the route. The server owns every gate;
     // this only renders what it returns.
+    if (useValueChange(couponBill == null) && couponBill == null) setOffers(null);
     useEffect(() => {
-        if (!couponBill) { setOffers(null); return; }
+        if (!couponBill) return;
         // The same bill the coupon checks read, so the panel can never disagree.
         const { accountId, isNewCustomer, billAmountIncl: billIncl, lines } = couponBill;
         let cancelled = false;

@@ -16,11 +16,12 @@
 // this clears the dues, part-pays them or leaves an advance. Read fresh on every
 // pick, never cached: this is the figure money is being taken against.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { openCashDrawer, printVoucherThermal } from "@/shared/lib/print/silentThermalPrint";
 import { X } from "lucide-react";
+import { useValueChange } from "@/shared/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -88,8 +89,8 @@ export function PosReceiptDialog({
     const partyRef = useRef<PartySearchAndCreateHandle>(null);
     const cashTenderedRef = useRef<HTMLInputElement>(null);
 
-    useEffect(() => {
-        if (!open) return;
+    // Seed on open only — re-seeding mid-entry would wipe what the cashier typed.
+    if (useValueChange(open, false) && open) {
         // Cash row is always present (TenderEntry); pre-show the accounts flagged
         // "default visible" as rows — same as the Sale/Order checkout does.
         setParty(null); setNote("");
@@ -99,9 +100,7 @@ export function PosReceiptDialog({
                 .filter((a) => a.defaultVisible)
                 .map((a) => ({ id: crypto.randomUUID(), paymentAccountId: a.id, amount: 0, reference: "" })),
         );
-        // Seed on open only — re-seeding mid-entry would wipe what the cashier typed.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open]);
+    }
 
     const total = useMemo(() => {
         const cashNet = Math.max(0, pay.cashTendered - pay.cashReturn);

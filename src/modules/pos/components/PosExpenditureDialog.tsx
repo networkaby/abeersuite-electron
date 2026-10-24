@@ -22,6 +22,7 @@ import { NumericInput } from "@/shared/components/NumericInput";
 import { Label } from "@/components/ui/label";
 import { GlAccountCombobox, type GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
 import { extractApiError } from "@/shared/lib/api";
+import { useValueChange } from "@/shared/hooks";
 
 export function PosExpenditureDialog({
     open, onOpenChange, shiftId, counterName, onDone,
@@ -38,9 +39,13 @@ export function PosExpenditureDialog({
     const [accounts, setAccounts]                 = useState<GlAccount[]>([]);
     const [submitting, setSubmitting]             = useState(false);
 
+    // Each open starts with an empty slip.
+    if (useValueChange(open, false) && open) {
+        setAmount(""); setDescription(""); setExpenseAccountId(null);
+    }
+
     useEffect(() => {
         if (!open) return;
-        setAmount(""); setDescription(""); setExpenseAccountId(null);
         // Only the EXPENSE ledgers this counter is allowed to spend to (the
         // counter's allow-list; empty list → all expense ledgers).
         axios.get<GlAccount[]>(`/api/pos/shifts/${shiftId}/expense-accounts`)

@@ -6,6 +6,7 @@ import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { useForm, useWatch, type Resolver } from "react-hook-form";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod/v3";
 import { useRouter } from "next/navigation";
@@ -102,13 +103,9 @@ export default function QuickTicketButton() {
 
     // Each open starts clean. The dialog's own fields reset while rendering, so the
     // last ticket's choices never paint; the form and the store are reset below.
-    const [seenOpen, setSeenOpen] = useState(false);
-    if (open !== seenOpen) {
-        setSeenOpen(open);
-        if (open) {
-            setIsWarranty(false);
-            if (initialPipelineId) setSelectedPipelineId(initialPipelineId);
-        }
+    if (useValueChange(open, false) && open) {
+        setIsWarranty(false);
+        if (initialPipelineId) setSelectedPipelineId(initialPipelineId);
     }
 
     useEffect(() => {

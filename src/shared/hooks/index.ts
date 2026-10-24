@@ -10,6 +10,7 @@ export { useActiveRow } from "./useActiveRow";
 export { useEscapeBack } from "./useEscapeBack";
 export { useNow } from "./useNow";
 export { useDebouncedValue } from "./useDebouncedValue";
+export { useValueChange } from "./useValueChange";
 export { useNavCounts, useMarkSurfaceSeen, useInboxUnread, useNotificationUnread, refreshNavCounts, NAV_COUNTS_CHANGED } from "./useNavCounts";
 export { usePolling } from "./usePolling";
 export { useTableSort } from "./useTableSort";

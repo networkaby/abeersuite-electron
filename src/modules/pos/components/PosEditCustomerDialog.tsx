@@ -10,6 +10,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { useSession } from "next-auth/react";
+import { useValueChange } from "@/shared/hooks";
 import axios from "axios";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -55,10 +56,15 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
 
     // Load from the party record, not the snapshot: the snapshot's phone may be a
     // derived one (a company's linked person), which is not this party's to edit.
-    useEffect(() => {
-        if (!open) return;
+    // Seed from the snapshot while rendering (no flash of the last customer), then
+    // the effect below reads the record itself.
+    const loadFor = open ? JSON.stringify([base, party.kind, party.name, party.address, party.gstin]) : null;
+    if (useValueChange(loadFor, null) && loadFor !== null) {
         setLoading(true);
         setForm({ name: party.name, address: party.address ?? "", gstin: party.gstin ?? "", phone: "", email: "" });
+    }
+    useEffect(() => {
+        if (!open) return;
         axios.get(base)
             .then(({ data }) => {
                 const phones: { id: number; value: string }[] = party.kind === "person"
