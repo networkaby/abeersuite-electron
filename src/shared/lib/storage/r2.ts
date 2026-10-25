@@ -86,3 +86,11 @@ export async function putR2(bucket: string, key: string, body: ArrayBuffer, cont
     const res = await fetch(url, { method: "PUT", headers: { "Content-Type": contentType }, body });
     if (!res.ok) throw new Error(`R2 upload failed (${res.status}): ${(await res.text().catch(() => "")).slice(0, 200)}`);
 }
+
+/** Server-side read of a small text object (e.g. a saved JSON); null when it is not there. */
+export async function getR2Text(bucket: string, key: string): Promise<string | null> {
+    const res = await fetch(presignR2({ bucket, key, method: "GET", expiresSec: 300 }), { cache: "no-store" });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`R2 read failed (${res.status}): ${(await res.text().catch(() => "")).slice(0, 200)}`);
+    return res.text();
+}

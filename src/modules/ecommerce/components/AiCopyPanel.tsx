@@ -3,10 +3,10 @@
 import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { ExternalLink, Sparkles } from "lucide-react";
+import { ExternalLink, Images, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { extractApiError } from "@/shared/lib/api";
-import { fetchAiCopy, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
+import { fetchAiCopy, fetchAiPhotos, type PhotoAdvice, type ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
 import { FlowButtons, PhotoAiSwitch, PremiumSwitch, useCopyFlow, usePhotoAi, usePremiumAi } from "@/modules/ecommerce/components/AiCopyControls";
 import { AiPhotoArrange, AiPhotoPicker } from "@/modules/ecommerce/components/AiPhotoPicker";
 import type { PhotoChecklist, PhotoKind } from "@/modules/ecommerce/lib/photoChecklist";
@@ -102,6 +102,8 @@ export default function AiCopyPanel({
     const [draft, setDraft] = useState<ProductCopy | null>(null);
     // Verified stopped at the photo check: our own data disagrees with itself.
     const [checkFlags, setCheckFlags] = useState<string[] | null>(null);
+    // "Photos only" answer — newer than the draft's own photo advice.
+    const [photoRun, setPhotoRun] = useState<PhotoAdvice | null>(null);
 
     const run = async (fresh: boolean) => {
         if (!productId) { toast.error("Save the product first, then generate"); return; }
@@ -111,6 +113,7 @@ export default function AiCopyPanel({
         try {
             const copy = await fetchAiCopy({ productId, name: name.trim(), imageUrls, flow, premium, photoAi }, { fresh });
             setDraft(copy);
+            setPhotoRun(null);
             // A cached draft carries the advice of its own run — the saved ticks since then win.
             if (copy.photoChecklist && !copy.fromCache) onPhotoChecklist(copy.photoChecklist);
             const filled: string[] = [];
@@ -131,6 +134,26 @@ export default function AiCopyPanel({
         }
     };
 
+    const runPhotos = async () => {
+        if (!productId) { toast.error("Save the product first, then generate"); return; }
+        if (!name.trim()) { toast.error("Name is required"); return; }
+        setBusy(true);
+        setCheckFlags(null);
+        try {
+            const advice = await fetchAiPhotos({ productId, name: name.trim(), imageUrls, premium });
+            setPhotoRun(advice);
+            if (advice.photoChecklist) onPhotoChecklist(advice.photoChecklist);
+            toast.success("Photo advice ready");
+        } catch (e) {
+            const flags = axios.isAxiosError(e) && e.response?.status === 422 ? (e.response.data as { flags?: string[] }).flags : undefined;
+            if (flags?.length) setCheckFlags(flags);
+            else toast.error(extractApiError(e, "Photo AI could not answer"));
+        } finally {
+            setBusy(false);
+        }
+    };
+    const photoView = photoRun ?? draft;
+
     const descDiffers = draft && description.trim() && description.trim() !== draft.shopDescription.trim();
     const titleDiffers = draft && subheading.trim() && subheading.trim() !== draft.title.trim();
 
@@ -143,6 +166,13 @@ export default function AiCopyPanel({
                 </Button>
                 <PremiumSwitch value={premium} onChange={setPremium} disabled={busy} />
                 {flow === "verified" && <PhotoAiSwitch value={photoAi} onChange={setPhotoAi} disabled={busy} />}
+                {flow === "verified" && (
+                    <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void runPhotos()}
+                        title="One AI call on the last run's search; with none saved it searches first">
+                        <Images className="size-4" />
+                        Photos only
+                    </Button>
+                )}
                 <FlowButtons value={flow} onChange={setFlow} disabled={busy} />
             </div>
             {flow === "verified" && (
@@ -153,6 +183,12 @@ export default function AiCopyPanel({
                 </p>
             )}
             {checkFlags && <DataFlags flags={checkFlags} title="Not written — fix this product's data first:" />}
+            {photoRun && !draft && (
+                <div className="space-y-2 text-sm">
+                    {photoRun.photoArrange && <AiPhotoArrange arrange={photoRun.photoArrange} gallery={imageUrls} onGallery={onGallery} />}
+                    {photoRun.photoSuggestions && <AiPhotoPicker suggestions={photoRun.photoSuggestions} checklist={photoChecklist} onAdd={onAddPhotos} />}
+                </div>
+            )}
             {draft && (
                 <div className="space-y-2 text-sm">
                     <AiDraftNotes draft={draft} />
@@ -167,11 +203,11 @@ export default function AiCopyPanel({
                             Ask AI fresh (new charge)
                         </Button>
                     </div>
-                    {draft.photoArrange && (
-                        <AiPhotoArrange arrange={draft.photoArrange} gallery={imageUrls} onGallery={onGallery} />
+                    {photoView?.photoArrange && (
+                        <AiPhotoArrange arrange={photoView.photoArrange} gallery={imageUrls} onGallery={onGallery} />
                     )}
-                    {draft.photoSuggestions && (
-                        <AiPhotoPicker suggestions={draft.photoSuggestions} checklist={photoChecklist} onAdd={onAddPhotos} />
+                    {photoView?.photoSuggestions && (
+                        <AiPhotoPicker suggestions={photoView.photoSuggestions} checklist={photoChecklist} onAdd={onAddPhotos} />
                     )}
                     {draft.sources.length > 0 && (
                         <div>

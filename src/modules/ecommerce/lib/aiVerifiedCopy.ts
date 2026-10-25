@@ -4,6 +4,7 @@ import { loadAiSetup, stepHasKey } from "@/shared/lib/ai/aiKeys";
 import { AI_PHOTO_LIMITS, type AiStep } from "@/shared/lib/constants/ai";
 import { checkFact, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
 import { findProductPages, type PageRead } from "@/modules/ecommerce/lib/aiPageReader";
+import { loadResearch, saveResearch } from "@/modules/ecommerce/lib/aiResearchStore";
 import {
     AiDataCheckError, OUTPUT_KEYS, assembleDescription, callParsed, callStep, cleanSpecs, copySchema, photoLines, photoParts,
     productLines, text, textList, type ProductCopy, type ProductCopyInput,
@@ -34,6 +35,9 @@ import {
 //     which to remove, and what each web photo shows. Its own call so the copy
 //     prompt stays as tested; a failure only drops the advice. Without it the
 //     web photos are still suggested, unlabelled — they cost nothing.
+// Photos only (owner, 2026-10-25): steps 1–2's web photos are saved in R2
+// (aiResearchStore.ts) so step 5 can run on its own later; with nothing saved
+// it runs 1–2 first, then 5 — never the write.
 
 export type VerifiedCopyInput = ProductCopyInput & {
     modelNo?: string | null;
@@ -45,6 +49,8 @@ export type VerifiedCopyInput = ProductCopyInput & {
     shopWarrantyDays?: number | null;
     /** Product page's Photo AI switch; undefined → AI Setup's switch. */
     photoAi?: boolean;
+    /** Keys the saved research (aiResearchStore.ts); left out, nothing is saved. */
+    productId?: number;
 };
 
 const USE = "product_copy_verified";
@@ -268,11 +274,8 @@ function arrangeFrom(answer: z.infer<typeof photoSchema>, ourUrls: string[], rem
 const letter = (i: number) => String.fromCharCode(65 + i);
 const numbersIn = (s: string) => normForCheck(s).match(/\d+(?:\.\d+)?/g) ?? [];
 
-export async function generateVerifiedCopy(p: VerifiedCopyInput): Promise<ProductCopy> {
-    const premium = !!p.premium;
-    const photos = photoParts(p.imageUrls);
-    const started = Date.now();
-
+/** Steps 1–2: the photo check (a clash throws AiDataCheckError) and the page search. */
+async function research(p: VerifiedCopyInput, photos: ReturnType<typeof photoParts>, premium: boolean) {
     // ── 1. Check
     const [checkUse, checkStep] = await chainFor("check", premium);
     const { value: check, key: checkKey } = await callParsed(
@@ -289,6 +292,36 @@ export async function generateVerifiedCopy(p: VerifiedCopyInput): Promise<Produc
     const found = query && (check.branded || check.labelWebsite || p.codes.length)
         ? await findProductPages({ query, brand: p.brand ?? query.split(/\s+/)[0], labelSite: check.labelWebsite, codes: [...p.codes, ...(p.modelNo ? [p.modelNo] : []), ...check.labelCodes] })
         : { pages: [] as PageRead[], dropped: [] as string[], searchNote: "No brand with a model code, barcode or website on the box — no page search" };
+    return { check, checkKey, found };
+}
+
+/** Photos only: step 5 on the saved research, else after steps 1–2 (saved for next time). Photo AI is asked for, so it runs whatever the switch says. */
+export async function generatePhotoAdvice(p: VerifiedCopyInput): Promise<Pick<ProductCopy, "photoChecklist" | "photoArrange" | "photoSuggestions">> {
+    const premium = !!p.premium;
+    const photos = photoParts(p.imageUrls);
+    const saved = p.productId ? await loadResearch(p.productId, p.name) : null;
+    let web = saved?.web.filter((x) => !p.imageUrls.includes(x.url));
+    if (!web) {
+        // No write step here to accept or reject pages — every page's photos go in; the photo AI drops another product's.
+        const { found } = await research(p, photos, premium);
+        web = webPhotos(p, found.pages);
+        if (p.productId) await saveResearch(p.productId, { name: p.name, web });
+    }
+    const advice = await photoAdvice({ ...p, photoAi: true }, photos, web, premium);
+    if (!advice) throw new Error("Photo AI could not answer — no free key, or the AI failed. Try again or allow a paid key.");
+    console.info(`[aiVerifiedCopy] photos only · research ${saved ? "saved" : "fresh"} · ${web.length} web photos`);
+    return {
+        photoChecklist: advice.checklist,
+        ...(advice.arrange && { photoArrange: advice.arrange }),
+        photoSuggestions: advice.suggestions,
+    };
+}
+
+export async function generateVerifiedCopy(p: VerifiedCopyInput): Promise<ProductCopy> {
+    const premium = !!p.premium;
+    const photos = photoParts(p.imageUrls);
+    const started = Date.now();
+    const { check, checkKey, found } = await research(p, photos, premium);
 
     // ── 3. Write, with 5. Photos beside it
     const web = webPhotos(p, found.pages);
@@ -357,6 +390,8 @@ export async function generateVerifiedCopy(p: VerifiedCopyInput): Promise<Produc
     const rejected = found.pages.flatMap((pg, i) => (accepted.has(letter(i))
         ? []
         : [`${pg.site}: ${w.pages.find((x) => x.page.trim().toUpperCase() === letter(i))?.why || "rejected"}`]));
+    // Saved for Photos only — the photos of the pages this copy kept, as the suggestions below are.
+    if (p.productId) await saveResearch(p.productId, { name: p.name, web: web.filter((x) => trusted.some((pg) => pg.site === x.site)) });
     const used = trusted.map((pg) => `${pg.site}${pg.codeMatch ? " (barcode matched)" : ""}`);
     const note = [
         used.length ? `Verified: label + ${used.join(", ")}.` : `Verified: from the label only${found.searchNote ? ` (${found.searchNote})` : ""}.`,

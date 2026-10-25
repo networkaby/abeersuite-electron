@@ -40,3 +40,11 @@ export async function fetchAiCopy(r: AiCopyRequest, opts: { fresh?: boolean } = 
     }
     return data;
 }
+
+export type PhotoAdvice = Pick<ProductCopy, "photoChecklist" | "photoArrange" | "photoSuggestions">;
+
+/** "Photos only": Photo AI on the last run's saved search — one AI call, never cached (staff ask for it on purpose). */
+export async function fetchAiPhotos(r: Omit<AiCopyRequest, "flow" | "photoAi" | "bulk">): Promise<PhotoAdvice> {
+    const { data } = await axios.post<PhotoAdvice>("/api/ecommerce/products/ai-copy", { ...r, photosOnly: true });
+    return data;
+}

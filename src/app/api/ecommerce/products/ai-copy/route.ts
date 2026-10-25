@@ -4,7 +4,7 @@ import { z } from "zod";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError } from "@/shared/lib/api";
 import { AiDataCheckError, aiErrorMessage, generateProductCopy, isAiConfigured } from "@/modules/ecommerce/lib/aiProductCopy";
-import { generateVerifiedCopy } from "@/modules/ecommerce/lib/aiVerifiedCopy";
+import { generatePhotoAdvice, generateVerifiedCopy } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { type AiCopyFlow } from "@/shared/lib/constants/ai";
 import { loadAiSetup } from "@/shared/lib/ai/aiKeys";
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
@@ -17,6 +17,7 @@ import { photosForAi } from "@/shared/lib/shop/photoMark";
 // The bulk screen lists its backlog from GET /api/ecommerce/products (shared
 // filters and cache with Products), so this route only drafts.
 // POST { productId, name?, imageUrls?, flow: direct|verified } → one draft (photos marked "Skip for AI" are not sent).
+// photosOnly: Verified's Photo AI alone — reuses the run's saved search (R2), returns photo advice only.
 // Verified answers 422 when the photo check finds our own data disagreeing with itself.
 
 async function guard() {
@@ -43,6 +44,8 @@ const postSchema = z.object({
     premium: z.boolean().default(false),
     // Product page's Photo AI switch; left out (an old tab, bulk) → AI Setup's switch.
     photoAi: z.boolean().optional(),
+    // "Photos only" — step 5 of Verified on its own; flow and photoAi are ignored.
+    photosOnly: z.boolean().default(false),
 });
 
 // GET → the option the product page opens on and the Photo AI switch (the admin's picks on AI Setup; cached server-side).
@@ -81,10 +84,12 @@ export async function POST(req: Request) {
             bulk: data.bulk,
             premium: data.premium,
         };
-        const flow = data.flow ?? (await loadAiSetup()).copyFlow;
+        const flow = data.photosOnly ? "verified" : data.flow ?? (await loadAiSetup()).copyFlow;
+        const run = data.photosOnly ? generatePhotoAdvice : generateVerifiedCopy;
         const copy = flow === "verified"
-            ? await generateVerifiedCopy({
+            ? await run({
                 ...base,
+                productId: data.productId,
                 modelNo: p.modelNo,
                 // Our own shop barcodes (BARCODE) are not the maker's — only EAN / UPC are matched.
                 codes: p.codes.map((c) => c.value),
