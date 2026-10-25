@@ -533,7 +533,7 @@ export default function ProductForm({
                         />
                     </div>
                 ) : null}
-                <div className="grid grid-cols-[8rem_1fr_1fr] gap-3">
+                <div className="grid grid-cols-[8rem_1fr] gap-3">
                     <div className="grid gap-1.5">
                         <Label>SKU</Label>
                         <Input
@@ -555,26 +555,8 @@ export default function ProductForm({
                             placeholder="Shown to customers — defaults to Name"
                         />
                     </div>
-                    <div className="grid gap-1.5">
-                        <Label>Slug (optional)</Label>
-                        <div className="flex items-center gap-2">
-                            <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="storefront URL handle" />
-                            {initial?.id ? (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="icon-sm"
-                                    disabled={regenBusy !== null}
-                                    onClick={() => void regenerate()}
-                                    title="Rebuild the slug from Settings → Naming Convention. Changing a live slug breaks its old URL."
-                                >
-                                    <RefreshCw className="size-4" />
-                                </Button>
-                            ) : null}
-                        </div>
-                    </div>
                 </div>
-                <div className="grid grid-cols-3 items-start gap-3">
+                <div className="grid grid-cols-2 items-start gap-3">
                     <div className="grid gap-1.5">
                         <Label>Group</Label>
                         {canEditMasters ? (
@@ -608,6 +590,24 @@ export default function ProductForm({
                         )}
                     </div>
                     <div className="grid gap-1.5">
+                        <Label>Slug (optional)</Label>
+                        <div className="flex items-center gap-2">
+                            <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="storefront URL handle" />
+                            {initial?.id ? (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon-sm"
+                                    disabled={regenBusy !== null}
+                                    onClick={() => void regenerate()}
+                                    title="Rebuild the slug from Settings → Naming Convention. Changing a live slug breaks its old URL."
+                                >
+                                    <RefreshCw className="size-4" />
+                                </Button>
+                            ) : null}
+                        </div>
+                    </div>
+                    <div className="grid gap-1.5">
                         <Label>Collections</Label>
                         {canEditMasters ? (
                             <SearchableMultiSelect
@@ -615,7 +615,7 @@ export default function ProductForm({
                                 onChange={setCollectionIds}
                                 onCreate={() => openCreateMaster("category")}
                                 createLabel="+ New collection…"
-                                placeholder="Add…"
+                                placeholder="Add a collection…"
                                 primaryLabel="Main collection"
                                 options={flattenTree(masters?.categories ?? []).map((r) => ({
                                     value: r.id, label: treeLabel(r), leaf: r.name, searchText: r.name,
@@ -625,7 +625,7 @@ export default function ProductForm({
                             <Input value={collectionNames.join(", ")} placeholder="No collection" disabled />
                         )}
                     </div>
-                    <p className="col-span-3 -mt-1 text-[11px] text-muted-foreground">
+                    <p className="col-span-2 -mt-1 text-[11px] text-muted-foreground">
                         Group = the shop&apos;s Category (and GST/HSN source). Collections = shop filters; ★ is the main one.
                         {initial?.id && groupId !== (initial?.groupId ?? null)
                             ? " A new group can change GST/HSN and rebuilds the Name."
