@@ -26,6 +26,12 @@ import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { Check, ExternalLink, RefreshCw, X } from "lucide-react";
 import type { ProductNaming } from "@/modules/inventory/lib/regenerateNames";
 import { useValueChange } from "@/shared/hooks/useValueChange";
+import { SearchableSelect } from "@/shared/components/SearchableSelect";
+import { InventoryMasterDropdownQuickDialog, flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
+import { syncMasters, invalidateMasters, type Masters } from "@/shared/lib/inventory";
+import { useSession } from "next-auth/react";
+import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 
 
 const sameList = (a: string[], b: string[]) => a.length === b.length && a.every((u, i) => u === b[i]);
@@ -46,7 +52,35 @@ export default function ProductForm({
     const [name, setName] = useState(initial?.name ?? "");
     // shop fields
     const [slug, setSlug] = useState(initial?.slug ?? "");
-    const [shopCategory, setShopCategory] = useState(initial?.shopCategory ?? "");
+    // Group + brand are the inventory masters themselves (no shop-only copy):
+    // the storefront shows the group as the product's Category. Changing them
+    // here needs ECOMMERCE_PRODUCT_MASTERS, checked again by the PATCH route.
+    const [groupId, setGroupId] = useState<number | null>(initial?.groupId ?? null);
+    const [brandId, setBrandId] = useState<number | null>(initial?.brandId ?? null);
+    const { data: session } = useSession();
+    const canEditMasters = hasPermissionWithScope(
+        (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [],
+        PERMISSIONS.ECOMMERCE_PRODUCT_MASTERS,
+    );
+    // Replicated master lists — one delta request, usually "nothing changed".
+    const [masters, setMasters] = useState<Masters | null>(null);
+    useEffect(() => { void syncMasters().then((m) => { if (m) setMasters(m); }); }, []);
+    const [masterKind, setMasterKind] = useState<"group" | "brand" | null>(null);
+    const [gstRates, setGstRates] = useState<{ id: number; rate: string | number; label: string }[]>([]);
+    // "+ New group/brand…" — resolves with the new row's id (null if cancelled)
+    // so the dropdown selects it, the same contract as the inventory form.
+    const masterResolve = useRef<((id: number | null) => void) | null>(null);
+    const openCreateMaster = (kind: "group" | "brand") => new Promise<number | null>((resolve) => {
+        if (kind === "group" && gstRates.length === 0) {
+            axios.get("/api/inventory/gst-rates").then((r) => setGstRates(r.data)).catch(() => {});
+        }
+        masterResolve.current = resolve;
+        setMasterKind(kind);
+    });
+    const masterName = (rows: Masters[keyof Masters] | undefined, id: number | null, fallback?: string | null) =>
+        id == null ? null : (rows?.find((r) => r.id === id)?.name as string | undefined) ?? fallback ?? null;
+    const groupName = masterName(masters?.groups, groupId, initial?.groupName);
+    const brandName = masterName(masters?.brands, brandId, initial?.brandName);
     // Online display name — manual, no naming-convention regen. Auto-filled from
     // Name so the operator has something to override rather than typing from
     // scratch; once they edit it directly it stops following Name. Falls back to
@@ -218,7 +252,8 @@ export default function ProductForm({
         setSku(initial.sku ?? "");
         setName(initial.name ?? "");
         setSlug(initial.slug ?? "");
-        setShopCategory(initial.category ?? "");
+        setGroupId(initial.groupId ?? null);
+        setBrandId(initial.brandId ?? null);
         setSubheading(initial.subheading ?? initial.name ?? "");
         setDescription(initial.description ?? "");
         setBadge(initial.badge ?? "");
@@ -309,11 +344,9 @@ export default function ProductForm({
             imageUrl: galleryUrls[0] ?? null,
             galleryUrls,
             description: description.trim() || null,
-            category: shopCategory.trim() || null,
-            // Group / brand aren't editable here — they come from the inventory
-            // master, so the checklist reads the loaded row.
-            groupId: initial?.groupId ?? null,
-            brandId: initial?.brandId ?? null,
+            category: null,
+            groupId,
+            brandId,
             mrpPaise: effectiveMrpPaise,
             stock: stockValue,
             allowBackorder,
@@ -340,7 +373,7 @@ export default function ProductForm({
         subheading: subheading.trim() || null,
         displayName: subheading.trim() || name.trim() || "Product name",
         description: description.trim() || null,
-        category: shopCategory.trim() || initial?.groupName || "",
+        category: groupName ?? "",
         // Live preview only — the office-side classification and the group chain
         // are not edited on this form, so the preview card carries neither.
         collection: null,
@@ -359,16 +392,16 @@ export default function ProductForm({
         isActive,
         unitId: initial?.unitId ?? 0,
         categoryId: initial?.categoryId ?? null,
-        groupId: initial?.groupId ?? null,
-        brandId: initial?.brandId ?? null,
+        groupId,
+        brandId,
         warrantyTermId: initial?.warrantyTermId ?? null,
         weightGrams: weightGrams.trim() === "" ? null : parseInt(weightGrams, 10),
         lengthCm: lengthCm.trim() === "" ? null : parseInt(lengthCm, 10),
         breadthCm: breadthCm.trim() === "" ? null : parseInt(breadthCm, 10),
         heightCm: heightCm.trim() === "" ? null : parseInt(heightCm, 10),
-        brandName: initial?.brandName ?? null,
-        groupName: initial?.groupName ?? null,
-        shopCategory: shopCategory.trim() || null,
+        brandName,
+        groupName,
+        shopCategory: null,
         savedSalePricePaise: initial?.savedSalePricePaise ?? null,
         barcodePricePaise: initial?.barcodePricePaise ?? null,
         // Preview card is display-only; codes exist purely for list search.
@@ -390,7 +423,11 @@ export default function ProductForm({
             slug: slug.trim() || null,
             shopSubheading: subheading.trim() || null,
             shopDescription: description.trim() || null,
-            shopCategory: shopCategory.trim() || null,
+            // The old free-text shop category is retired — the group is the
+            // category. Saving clears any leftover override.
+            shopCategory: null,
+            ...(canEditMasters && groupId !== (initial?.groupId ?? null) ? { groupId } : {}),
+            ...(canEditMasters && brandId !== (initial?.brandId ?? null) ? { brandId } : {}),
             // pricePaise / mrpPaise / stock / lowStockThreshold deliberately
             // absent — this form does not own them (see the state block above).
             // The PATCH route skips any column it isn't sent, so the pricing
@@ -477,11 +514,67 @@ export default function ProductForm({
                             ) : null}
                         </div>
                     </div>
+                </div>
+                <div className="grid grid-cols-2 items-start gap-3">
                     <div className="grid gap-2">
-                        <Label>Shop category</Label>
-                        <Input value={shopCategory} onChange={(e) => setShopCategory(e.target.value)} placeholder={initial?.groupName ? `From group: ${initial.groupName}` : "None — set a shop category or group"} />
+                        <Label>Group</Label>
+                        {canEditMasters ? (
+                            <SearchableSelect
+                                value={groupId}
+                                onChange={setGroupId}
+                                onCreate={() => openCreateMaster("group")}
+                                createLabel="+ New group…"
+                                placeholder="No group"
+                                options={flattenTree(masters?.groups ?? []).map((r) => ({
+                                    value: r.id, label: treeLabel(r), leaf: r.name, searchText: r.name,
+                                }))}
+                            />
+                        ) : (
+                            <Input value={groupName ?? ""} placeholder="No group" disabled />
+                        )}
+                        <p className="text-[11px] text-muted-foreground">
+                            Accounts &amp; inventory group — shown in the shop as its Category.
+                            {initial?.id && groupId !== (initial?.groupId ?? null)
+                                ? " Changing it can change the GST/HSN taken from the group and the auto-built name."
+                                : ""}
+                        </p>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>Brand</Label>
+                        {canEditMasters ? (
+                            <SearchableSelect
+                                value={brandId}
+                                onChange={setBrandId}
+                                onCreate={() => openCreateMaster("brand")}
+                                createLabel="+ New brand…"
+                                placeholder="No brand"
+                                options={(masters?.brands ?? []).map((b) => ({ value: b.id, label: String(b.name ?? `#${b.id}`) }))}
+                            />
+                        ) : (
+                            <Input value={brandName ?? ""} placeholder="No brand" disabled />
+                        )}
                     </div>
                 </div>
+                <InventoryMasterDropdownQuickDialog
+                    open={masterKind !== null}
+                    onOpenChange={(v) => {
+                        if (v) return;
+                        setMasterKind(null);
+                        masterResolve.current?.(null);
+                        masterResolve.current = null;
+                    }}
+                    kind={masterKind ?? "group"}
+                    siblings={masterKind === "group" ? masters?.groups : undefined}
+                    gstRates={gstRates}
+                    onCreated={async (id) => {
+                        // Drop the held copy so the new row shows without waiting for a delta.
+                        await invalidateMasters();
+                        const m = await syncMasters();
+                        if (m) setMasters(m);
+                        masterResolve.current?.(id);
+                        masterResolve.current = null;
+                    }}
+                />
                 <div className="grid gap-2">
                     <Label>Online display name</Label>
                     <Input

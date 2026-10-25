@@ -546,9 +546,8 @@ export default function EcommerceProductsPage() {
                                             <TableCell colSpan={COL_COUNT} className="bg-muted/20 whitespace-normal">
                                                 <div className="grid gap-4 px-4 py-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
                                                     <Detail label="SKU" value={<span className="font-mono">{p.sku}</span>} />
-                                                    <Detail label="Category" value={p.category} />
-                                                    <Detail label="Brand" value={p.brandName ?? "—"} />
-                                                    <Detail label="Group" value={p.groupName ?? "—"} />
+                                                                                                        <Detail label="Brand" value={p.brandName ?? "—"} />
+                                                    <Detail label="Group (shop category)" value={p.groupName ?? "—"} />
                                                     <Detail
                                                         label="Shop price (barcode)"
                                                         value={p.barcodePricePaise != null ? formatRupeesFromPaise(p.barcodePricePaise) : "— (uses effective)"}

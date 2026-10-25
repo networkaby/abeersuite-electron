@@ -171,6 +171,8 @@ export const PERMISSIONS = {
     ECOMMERCE_FALLBACK_UNLOCK: "ecommerce:fallback:unlock",
     // Settings → E-Commerce → Photo cleanup: deletes Cloudinary files for good.
     ECOMMERCE_PHOTO_CLEANUP: "ecommerce:photos:cleanup",
+    // E-Commerce → Products → Edit: change the product's inventory Group / Brand.
+    ECOMMERCE_PRODUCT_MASTERS: "ecommerce:product:masters",
 
     // POS — shift / till / handover lifecycle
     POS_SHIFT_OPEN: "pos:shift:open",

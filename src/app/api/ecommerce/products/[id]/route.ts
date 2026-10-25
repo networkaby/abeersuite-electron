@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
+import { requireAuth, requireModuleAccess, requirePermission } from "@/shared/lib/auth/permissions";
+import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { invProductToAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { shopProductInclude as productInclude, shopProductPatchSchema, updateShopProduct } from "@/modules/ecommerce/lib/updateShopProduct";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
@@ -31,6 +32,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (!Number.isFinite(pid)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
     const { data, error } = await validateRequest(req, shopProductPatchSchema);
     if (error) return error;
+    // Group / brand are inventory masters (group drives inherited GST/HSN) —
+    // a separate tick from editing the shop copy.
+    if (data.groupId !== undefined || data.brandId !== undefined) {
+        const gate = await requirePermission(PERMISSIONS.ECOMMERCE_PRODUCT_MASTERS);
+        if (gate.response) return gate.response;
+    }
     // Shared with the phone app's Photos screen — see updateShopProduct.ts.
     const saved = await updateShopProduct(pid, data);
     return saved.response ?? NextResponse.json(saved.product);
