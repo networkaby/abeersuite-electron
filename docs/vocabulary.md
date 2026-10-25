@@ -162,6 +162,14 @@ What still reads the cache is the two surfaces that want **every** account in on
 
 ---
 
+## Product group (office) · Category (shop)
+
+**Definition:** One and the same grouping of products, called by two names on purpose. The office says **group** (`InvProductGroup`, `InvProduct.groupId`) because the accountancy side follows the **Tally standard** — stock groups, and **GST / HSN are set group-wise** (a product inherits its tax from its group chain). The shop says **category** because that is the word the e-commerce world uses and customers understand at once.
+
+**In code:** the shop's `category` is `InvProduct.shopCategory` when an explicit one is set, else the group's name (`invProductToPublic` for the storefront, `invProductToAdmin` in [productAdmin.ts](../src/modules/ecommerce/lib/productAdmin.ts) for the admin list and the product form). So a product with no `shopCategory` shows its group as its shop category — and saving the shop form stores that name as `shopCategory`. **Not a bug, do not "fix" it**, and do not rename either side to match the other.
+
+---
+
 ### Data Flow Terms
 
 ## Worker Context
