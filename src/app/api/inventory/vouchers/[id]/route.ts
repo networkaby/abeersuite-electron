@@ -225,6 +225,7 @@ export async function PATCH(req: Request, { params }: Params) {
         showPrices,
         shippingAmt,
         roundOff,
+        roundOffOn,
         discountPct,
         discountAmt,
         lines,
@@ -255,6 +256,8 @@ export async function PATCH(req: Request, { params }: Params) {
         showPrices?:       boolean;
         shippingAmt?:      number;
         roundOff?:         number;
+        /// The form's Round Off tick (VoucherDetail.roundOffOn).
+        roundOffOn?:       boolean;
         discountPct?:      number;
         discountAmt?:      number;
         lines?: {
@@ -623,6 +626,7 @@ export async function PATCH(req: Request, { params }: Params) {
                     ...(showPrices       !== undefined ? { showPrices }                              : {}),
                     ...(shippingAmt      !== undefined ? { shippingAmt }     : {}),
                     ...(roundOffToSave   !== undefined ? { roundOff: roundOffToSave } : {}),
+                    ...(typeof roundOffOn === "boolean" ? { roundOffOn } : {}),
                     ...(discountPct      !== undefined ? { discountPct }     : {}),
                     // Clamped to the bill when the lines were recomputed, so an
                     // over-discount can't drive totalAmount negative.

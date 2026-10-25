@@ -587,6 +587,11 @@ model VoucherDetail {
   /// pools this tax into the CGST/SGST/IGST legs. 0 on non-POS flows (today).
   shippingTaxAmt      Decimal                @default(0) @db.Decimal(14, 2)
   roundOff            Decimal                @default(0) @db.Decimal(14, 2)
+  /// The Round Off tick as the user left it (trading-voucher form), so a bill
+  /// re-opens exactly as saved — even ticked with ₹0.00 because the total was
+  /// already whole. Null on vouchers saved before 2026-10-25 and on flows with
+  /// no tick (POS, online orders): the form then treats a non-zero roundOff as ticked.
+  roundOffOn          Boolean?
   subtotal            Decimal                @db.Decimal(14, 2)
   taxAmount           Decimal                @default(0) @db.Decimal(14, 2)
   totalAmount         Decimal                @db.Decimal(14, 2)
