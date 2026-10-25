@@ -4,11 +4,10 @@
 // a bespoke middle instead of the goods table.
 
 import type { VoucherTemplateDefaults } from "@/shared/lib/print/voucherTemplateDefaults";
-import { formatAmount } from "@/shared/lib/format/moneyInr";
+import { formatRs } from "@/shared/lib/format/moneyInr";
 import type { ThermalReceiptSample } from "@/shared/components/print/ThermalReceiptPreview";
 
-export const fmtINR = (n: number) =>
-    `Rs. ${formatAmount(n)}`;
+export const fmtINR = formatRs;
 
 export type A4ChromeProps = { template: VoucherTemplateDefaults; sample: ThermalReceiptSample };
 

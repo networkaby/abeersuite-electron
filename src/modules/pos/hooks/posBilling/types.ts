@@ -6,7 +6,9 @@
 import { type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
 import type { PromoSnapshot } from "@/shared/lib/accountancy/settlement";
 
-// Text-input sanitiser — same shape as TradingVoucherPage's num.
+// A POS text box's string → number; anything that isn't a plain number
+// (empty, "1,000", "12abc") reads as 0. Stricter than the shared
+// `parseSignedAmount`, which strips grouping — kept as is on purpose.
 // Project rule: no <input type="number">; we keep raw strings in state and
 // parse on submit / when computing totals.
 export function parseAmt(s: string): number {

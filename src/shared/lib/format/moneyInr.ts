@@ -76,19 +76,28 @@ export function formatAmount(n: number): string {
 /** Short name for `formatAmount` — the one most screens already import. */
 export const fmt = formatAmount;
 
+/** Printed-paper style, "Rs. 1,23,456.50" — the A4 and receipt prints spell the
+ *  rupee out rather than trust every printer font with ₹. */
+export function formatRs(n: number): string {
+    return `Rs. ${formatAmount(n)}`;
+}
+
+/** Which side a signed ledger balance sits on. Positive = the account's own
+ *  "normal" side (per `aggregateClosingAsOf`); no nature given reads as DEBIT. */
+export function drCrSide(balance: number, normalBalance: "DEBIT" | "CREDIT" | null): "Dr" | "Cr" {
+    const nb = normalBalance ?? "DEBIT";
+    return balance < 0
+        ? (nb === "DEBIT" ? "Cr" : "Dr")
+        : (nb === "DEBIT" ? "Dr" : "Cr");
+}
+
 /**
- * A signed ledger `closing` (positive = balance sits on the account's own
- * "normal" side, per `aggregateClosingAsOf`) → tally-style "1,23,456.00 Dr/Cr".
- * Same grouping as `fmt()` above, so figures line up identically on the
- * account-ledger screens.
+ * A signed ledger `closing` → tally-style "1,23,456.00 Dr/Cr". Same grouping as
+ * `fmt()` above, so figures line up identically on the account-ledger screens.
  */
 export function formatDrCr(balance: number, normalBalance: "DEBIT" | "CREDIT" | null): string {
     if (balance === 0) return "0.00";
-    const nb = normalBalance ?? "DEBIT";
-    const sign = balance < 0
-        ? (nb === "DEBIT" ? "Cr" : "Dr")
-        : (nb === "DEBIT" ? "Dr" : "Cr");
-    return `${fmt(Math.abs(balance))} ${sign}`;
+    return `${fmt(Math.abs(balance))} ${drCrSide(balance, normalBalance)}`;
 }
 
 /** Float rupees → "₹1,234.5" — up to 2dp, no padding zeros (chips, tooltips, share text). */

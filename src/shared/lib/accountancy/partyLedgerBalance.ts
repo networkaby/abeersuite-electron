@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
-import { formatAmount } from "@/shared/lib/format/moneyInr";
+import { drCrSide, formatRs } from "@/shared/lib/format/moneyInr";
 
 /**
  * Party ledger balance around one voucher — what the party owed BEFORE it and
@@ -75,12 +75,7 @@ export async function partyBalanceAroundVoucher(
     const after = before + own;
 
     // Positive = the account's normal side (customer Dr / supplier Cr).
-    const format = (n: number) => {
-        const side = n >= 0
-            ? (nb === "DEBIT" ? "Dr" : "Cr")
-            : (nb === "DEBIT" ? "Cr" : "Dr");
-        return `Rs. ${formatAmount(Math.abs(n))} ${side}`;
-    };
+    const format = (n: number) => `${formatRs(Math.abs(n))} ${drCrSide(n, nb)}`;
 
     return { before, after, format };
 }

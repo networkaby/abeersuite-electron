@@ -20,3 +20,37 @@ export const parseSignedInput = (s: string): string =>
  *  value settles to once the user leaves the field. */
 export const clampNumber = (n: number, min?: number, max?: number): number =>
     Math.min(max ?? Number.POSITIVE_INFINITY, Math.max(min ?? Number.NEGATIVE_INFINITY, n));
+
+// ── Typed amounts (Tally-style text boxes) ─────────────────────────────────
+// For amount boxes that accept Indian/Western grouping ("1,00,000"): the
+// `is…Chars` checks filter keystrokes, the `parse…` ones read the value.
+
+/** Parse a user-typed amount string. Strips Indian/Western separators;
+ *  tolerant of "10000", "10,000", "1,00,000". Returns 0 for empty/invalid. */
+export function parseAmount(s: string | undefined | null): number {
+    if (!s) return 0;
+    const cleaned = String(s).replace(/[,_\s]/g, "");
+    const n = parseFloat(cleaned);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+/** True iff the string contains only allowed amount characters
+ *  (digits, comma, period, spaces). Used in onChange to filter
+ *  keystrokes — keeps the user from typing letters. */
+export function isAmountChars(s: string): boolean {
+    return /^[\d,.\s]*$/.test(s);
+}
+
+/** As `parseAmount`, but keeps a leading minus — for figures that are
+ *  meaningfully negative (a targeted shortfall, an adjustment). */
+export function parseSignedAmount(s: string | undefined | null): number {
+    if (!s) return 0;
+    const cleaned = String(s).replace(/[,_\s]/g, "");
+    const n = parseFloat(cleaned);
+    return Number.isFinite(n) ? n : 0;
+}
+
+/** As `isAmountChars`, but allows one leading minus sign. */
+export function isSignedAmountChars(s: string): boolean {
+    return /^-?[\d,.\s]*$/.test(s);
+}

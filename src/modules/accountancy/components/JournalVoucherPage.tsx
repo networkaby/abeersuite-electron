@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { JOURNAL_STATUS_COLORS } from "@/shared/lib/constants/badges";
-import { parseAmount, isAmountChars } from "@/utils/numberInput";
+import { parseAmount, isAmountChars } from "@/shared/lib/format/parseNumericInput";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { extractApiError } from "@/shared/lib/api";
 import { consumeDuplicate } from "@/modules/accountancy/lib/duplicate";

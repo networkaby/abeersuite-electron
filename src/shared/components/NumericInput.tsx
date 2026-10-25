@@ -1,6 +1,6 @@
 // The one numeric text input for the whole app.
 //
-// House rule (see `src/utils/numberInput.ts`): never `<input type="number">`.
+// House rule (AGENTS.md §2): never `<input type="number">`.
 // The spinner steals the scroll wheel, paste breaks, and the browser silently
 // blanks a value it dislikes instead of telling the user. So we render plain
 // text, sanitise what is typed, and validate in code.

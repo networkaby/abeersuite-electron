@@ -25,7 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { JOURNAL_STATUS_COLORS } from "@/shared/lib/constants/badges";
-import { parseAmount, isAmountChars } from "@/utils/numberInput";
+import { parseAmount, isAmountChars, parseSignedAmount, isSignedAmountChars } from "@/shared/lib/format/parseNumericInput";
 import { ACCOUNT_GROUPS, PAYMENT_INSTRUMENTS, type PaymentInstrument } from "@/shared/lib/constants/accounting";
 import { extractApiError } from "@/shared/lib/api";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
@@ -400,14 +400,10 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
     // the row list instead of needing a separate voucher. A negative row nets
     // into the top total and, on save, flips to the top account's side.
     const allowNegativeRows = kind === "PAYMENT" || kind === "RECEIPT";
-    const parseRowAmount = (s: string | undefined | null): number => {
-        if (!allowNegativeRows) return parseAmount(s);
-        if (!s) return 0;
-        const n = parseFloat(String(s).replace(/[,_\s]/g, ""));
-        return Number.isFinite(n) ? n : 0;
-    };
+    const parseRowAmount = (s: string | undefined | null): number =>
+        allowNegativeRows ? parseSignedAmount(s) : parseAmount(s);
     const isRowAmountChars = (s: string): boolean =>
-        allowNegativeRows ? /^-?[\d,.\s]*$/.test(s) : isAmountChars(s);
+        allowNegativeRows ? isSignedAmountChars(s) : isAmountChars(s);
 
     // Close / Cancel / Back — go back if there's tab history, otherwise fall
     // Close / back behaviour:

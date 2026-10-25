@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fmt } from "@/shared/lib/format/moneyInr";
-import { parseAmount, isAmountChars, parseSignedAmount, isSignedAmountChars } from "@/utils/numberInput";
+import { parseAmount, isAmountChars, parseSignedAmount, isSignedAmountChars } from "@/shared/lib/format/parseNumericInput";
 import { useBiQuery } from "@/modules/bi/hooks/useBiQuery";
 import { KpiCard } from "@/modules/bi/components/KpiCard";
 import { useValueChange } from "@/shared/hooks/useValueChange";
