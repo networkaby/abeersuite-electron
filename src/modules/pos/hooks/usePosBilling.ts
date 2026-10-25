@@ -30,12 +30,13 @@ import { CHANNEL_LABEL } from "@/modules/pos/lib/counterTenders";
 import { type UpiPanelState } from "@/modules/pos/components/UpiPartsPanel";
 import { usePosDraftStore } from "@/store/posDraftStore";
 import { type Snapshot, type ProductOption, type PosServiceOption, type CartLine, type CouponHit, type OnTopHit, type PosOffer } from "@/modules/pos/lib/posDraftTypes";
-import { searchProducts, readCachedProducts, syncProducts } from "@/shared/lib/inventory";
+import { searchProducts } from "@/shared/lib/inventory";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 import { focusWhenReady } from "@/shared/lib/ui/focusWhenReady";
 import { parseAmt, type EditBill } from "@/modules/pos/hooks/posBilling/types";
 import { usePosShift } from "@/modules/pos/hooks/posBilling/usePosShift";
+import { usePosCatalogue } from "@/modules/pos/hooks/posBilling/usePosCatalogue";
 
 /** How many rows the product dropdown shows — kept constant so the list does
  *  not change height between a good query and a poor one. */
@@ -90,15 +91,11 @@ export function usePosBilling(opts: {
     // Guards Enter against silently adding a "guess" row — an unknown barcode
     // ends in Enter too, and a wrong item on the bill is worse than no item.
     const [highlightTouched, setHighlightTouched] = useState(false);
-    const [allProducts, setAllProducts] = useState<ProductOption[]>([]);
     // Product Explorer hover — shown standalone on the customer-facing DQ11
     // ("Add this item?") while the cashier's mouse rests on a tile, so the
     // customer can see and agree to it before it lands in the cart. null =
     // not hovering (usePosCustomerDisplay falls through to the real cart).
     const [hoverPreviewProduct, setHoverPreviewProduct] = useState<ProductOption | null>(null);
-    // Active service catalogue (Settings → Services) — surfaced in the
-    // same search list AFTER product matches, added to the cart like products.
-    const [allServices, setAllServices] = useState<PosServiceOption[]>([]);
     const cart = usePosDraftStore((s) => s.cart);
     const setCart = usePosDraftStore((s) => s.setCart);
 
@@ -186,34 +183,9 @@ export function usePosBilling(opts: {
 
     // ── Effects ─────────────────────────────────────────────────────────────
 
-    // The whole catalogue, held in memory so typing and scanning never wait on
-    // the network. It comes from the browser's cache first — the till is opened
-    // and closed all day, and re-fetching several thousand enriched rows each
-    // time was our heaviest repeated read — then a delta tops up whatever moved
-    // since, which also keeps prices fresher than the old load-once-per-mount.
-    useEffect(() => {
-        let cancelled = false;
-        void (async () => {
-            const cached = await readCachedProducts<ProductOption>();
-            if (cancelled) return;
-            if (cached) setAllProducts(cached);
-            const synced = await syncProducts<ProductOption>();
-            if (cancelled || !synced) return;
-            setAllProducts(synced);
-        })();
-        return () => { cancelled = true; };
-    }, []);
-
-    // Keep that in-memory catalogue current while the till sits open: a price
-    // re-freeze, a new SKU or a stock voucher elsewhere announces `catalogue` /
-    // `stock`, and the same delta top-up runs again. Cart lines stay snapshotted,
-    // so a sale in progress never shifts.
-    useRealtimeTopics(["catalogue", "stock"], () => {
-        void (async () => {
-            const synced = await syncProducts<ProductOption>();
-            if (synced) setAllProducts(synced);
-        })();
-    });
+    // The product list and the POS services, loaded and kept current: see
+    // posBilling/usePosCatalogue.ts.
+    const { allProducts, setAllProducts, allServices } = usePosCatalogue();
 
     // The counter's own configuration — payment accounts (the checkout's UPI /
     // Card rows), allowed expense ledgers, till account, EPBX — rides in on the
@@ -224,18 +196,6 @@ export function usePosBilling(opts: {
     // it was configured. The shift itself is cheap to re-read and the refresh
     // touches no cart state.
     useRealtimeTopics(["settings"], () => { refreshActiveShift(); });
-
-    // Load the active POS services — added via the "+ Add service charge" button
-    // in the cart (not the product search — services have no barcode). Re-read on
-    // `catalogue` for the same reason the product list is: a service added or
-    // retired in the office should reach the till without a reload.
-    const loadServices = useCallback(() => {
-        axios.get<PosServiceOption[]>("/api/pos/services")
-            .then((r) => setAllServices(r.data))
-            .catch(() => { /* page is still useful without them */ });
-    }, []);
-    useEffect(() => { loadServices(); }, [loadServices]);
-    useRealtimeTopics(["catalogue"], loadServices);
 
     // Ctrl/Cmd+Enter from anywhere → the screen's confirm action (skip when
     // modals are already open). The dispatch lives in a ref so the listener
@@ -1123,7 +1083,7 @@ export function usePosBilling(opts: {
                 }),
             );
         } catch { /* keep current prices if the refresh fails */ }
-    }, []);
+    }, [setAllProducts]);
 
     const onPartyPicked = useCallback((p: PickedParty) => {
         // If we were in change-customer mode, picking any party exits it.
