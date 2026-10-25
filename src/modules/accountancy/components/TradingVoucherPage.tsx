@@ -506,6 +506,9 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // total never moves.
     const [enableRoundOff, setEnableRoundOff] = useState(true);
     const [roundOffManuallyEdited, setRoundOffManuallyEdited] = useState(false);
+    // Edit open: the saved round-off, waiting to be compared with what auto
+    // rounding gives on the loaded lines (see the auto round-off below).
+    const [savedRoundOffToCheck, setSavedRoundOffToCheck] = useState<number | null>(null);
 
     // ── Column / feature visibility (persisted) ───────────────────────────
     type ColumnPrefs = {
@@ -745,7 +748,12 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 // Open exactly as saved — ticked or not, even ticked at ₹0.00. Older
                 // vouchers carry no tick: a non-zero round-off means it was ticked.
                 setEnableRoundOff(v.roundOffOn ?? Math.abs(roundOff) > 0.005);
-                setRoundOffManuallyEdited(Math.abs(roundOff) > 0.005);
+                // Only the amount is stored, not whether it was typed. Decided on
+                // the first render with the loaded lines: equal to auto → it was
+                // auto, so it re-rounds as the bill is edited; different → typed
+                // by hand (e.g. to match a supplier), so it is kept.
+                setRoundOffManuallyEdited(false);
+                setSavedRoundOffToCheck(Math.abs(roundOff) > 0.005 ? roundOff : null);
                 setHeader({
                     date: v.date ? v.date.slice(0, 10) : todayIso(),
                     description: v.description ?? "",
@@ -1198,10 +1206,16 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // minus the round-off itself (left out to avoid feedback).
     // Kept while rendering: React re-renders before painting, so the total on
     // screen is never the un-rounded one.
-    if (enableRoundOff && !roundOffManuallyEdited) {
-        const preRound = lineSubtotal - overallDiscount + shipping + chargesNet;
-        const target = Math.round(preRound);
-        const auto = target - preRound;
+    const preRound = lineSubtotal - overallDiscount + shipping + chargesNet;
+    const autoRoundOff = Math.round(preRound) - preRound;
+    let roundOffIsManual = roundOffManuallyEdited;
+    if (savedRoundOffToCheck !== null) {
+        roundOffIsManual = Math.abs(autoRoundOff - savedRoundOffToCheck) > 0.005;
+        setRoundOffManuallyEdited(roundOffIsManual);
+        setSavedRoundOffToCheck(null);
+    }
+    if (enableRoundOff && !roundOffIsManual) {
+        const auto = autoRoundOff;
         // Only write when the result actually changes — this is what ends it.
         const formatted = Math.abs(auto) < 0.005 ? "0" : auto.toFixed(2);
         if (formatted !== header.roundOff) {
