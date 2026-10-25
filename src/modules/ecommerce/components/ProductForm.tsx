@@ -27,7 +27,7 @@ import { Check, ExternalLink, RefreshCw, X } from "lucide-react";
 import type { ProductNaming } from "@/modules/inventory/lib/regenerateNames";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
-import { SearchableMultiSelect } from "@/shared/components/SearchableMultiSelect";
+import { MultiSelectChips, SearchableMultiSelect } from "@/shared/components/SearchableMultiSelect";
 import { InventoryMasterDropdownQuickDialog, flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 import { syncMasters, invalidateMasters, type Masters } from "@/shared/lib/inventory";
 import { useSession } from "next-auth/react";
@@ -125,6 +125,9 @@ export default function ProductForm({
     const masterName = (rows: Masters[keyof Masters] | undefined, id: number | null, fallback?: string | null) =>
         id == null ? null : (rows?.find((r) => r.id === id)?.name as string | undefined) ?? fallback ?? null;
     const groupName = masterName(masters?.groups, groupId, initial?.groupName);
+    const collectionOptions = flattenTree(masters?.categories ?? []).map((r) => ({
+        value: r.id, label: treeLabel(r), leaf: r.name, searchText: r.name,
+    }));
     const collectionNames = collectionIds
         .map((id) => masterName(masters?.categories, id))
         .filter((n): n is string => !!n);
@@ -589,25 +592,7 @@ export default function ProductForm({
                             <Input value={brandName ?? ""} placeholder="No brand" disabled />
                         )}
                     </div>
-                    <div className="col-span-2 grid gap-1.5">
-                        <Label>Collections</Label>
-                        {canEditMasters ? (
-                            <SearchableMultiSelect
-                                value={collectionIds}
-                                onChange={setCollectionIds}
-                                onCreate={() => openCreateMaster("category")}
-                                createLabel="+ New collection…"
-                                placeholder="Add a collection…"
-                                primaryLabel="Main collection"
-                                options={flattenTree(masters?.categories ?? []).map((r) => ({
-                                    value: r.id, label: treeLabel(r), leaf: r.name, searchText: r.name,
-                                }))}
-                            />
-                        ) : (
-                            <Input value={collectionNames.join(", ")} placeholder="No collection" disabled />
-                        )}
-                    </div>
-                    <div className="col-span-2 grid gap-1.5">
+                    <div className="grid gap-1.5">
                         <Label>Slug (optional)</Label>
                         <div className="flex items-center gap-2">
                             <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="storefront URL handle" />
@@ -625,6 +610,33 @@ export default function ProductForm({
                             ) : null}
                         </div>
                     </div>
+                    <div className="grid gap-1.5">
+                        <Label>Collections</Label>
+                        {canEditMasters ? (
+                            <SearchableMultiSelect
+                                value={collectionIds}
+                                onChange={setCollectionIds}
+                                onCreate={() => openCreateMaster("category")}
+                                createLabel="+ New collection…"
+                                placeholder="Add a collection…"
+                                primaryLabel="Main collection"
+                                showChips={false}
+                                options={collectionOptions}
+                            />
+                        ) : (
+                            <Input value={collectionNames.join(", ")} placeholder="No collection" disabled />
+                        )}
+                    </div>
+                    {canEditMasters && collectionIds.length > 0 ? (
+                        <div className="col-span-2 -mt-1">
+                            <MultiSelectChips
+                                value={collectionIds}
+                                onChange={setCollectionIds}
+                                options={collectionOptions}
+                                primaryLabel="Main collection"
+                            />
+                        </div>
+                    ) : null}
                     <p className="col-span-2 -mt-1 text-[11px] text-muted-foreground">
                         Group = the shop&apos;s Category (and GST/HSN source). Collections = shop filters; ★ is the main one.
                         {initial?.id && groupId !== (initial?.groupId ?? null)
