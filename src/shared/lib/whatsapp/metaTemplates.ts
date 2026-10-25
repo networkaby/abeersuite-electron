@@ -1,10 +1,12 @@
 import "server-only";
-import { WA_CONVERSATION_NUMBER_ID } from "@/shared/lib/constants/whatsapp";
+import QRCode from "qrcode";
+import { META_APP_ID, WA_CONVERSATION_NUMBER_ID } from "@/shared/lib/constants/whatsapp";
 import {
     WA_APP_LINK,
     WA_BILL_LINK_BASE,
     WA_CALL_BUTTON,
     bodyFieldOrder,
+    hasImageHeader,
     sampleValuesFor,
     toMetaBody,
     type WaFieldValues,
@@ -73,19 +75,50 @@ async function graph<T>(path: string, init?: { method?: string; body?: unknown }
     return json;
 }
 
-/** Meta's component list for a draft — body, the optional URL buttons and a
- *  Call us button (last, so the View button
+/**
+ * Upload a sample picture for a photo-header template. Meta wants a handle from
+ * its Resumable Upload API (app-level), not a link, as the header example.
+ */
+async function uploadHeaderSample(bytes: Uint8Array, mime: string): Promise<string> {
+    const session = await graph<{ id: string }>(
+        `${META_APP_ID}/uploads?file_length=${bytes.byteLength}&file_type=${encodeURIComponent(mime)}`,
+        { method: "POST" },
+    );
+    const res = await fetch(`${GRAPH}/${session.id}`, {
+        method: "POST",
+        headers: { Authorization: `OAuth ${token()}`, file_offset: "0" },
+        body: Buffer.from(bytes),
+        cache: "no-store",
+    });
+    const json = (await res.json().catch(() => null)) as ({ h?: string } & GraphError) | null;
+    if (!res.ok || !json?.h) throw new Error(json?.error?.message || `Meta upload failed (${res.status})`);
+    return json.h;
+}
+
+/** A sample UPI QR for Meta's reviewer — the real one is made per request. */
+async function sampleQrPng(): Promise<Uint8Array> {
+    const buf = await QRCode.toBuffer("upi://pay?pa=shop@upi&pn=Shop&am=1250.00&cu=INR", { type: "png", width: 640, margin: 4 });
+    return new Uint8Array(buf);
+}
+
+/** Meta's component list for a draft — optional photo header, body, the
+ *  optional URL buttons and a Call us button (last, so the View button
  *  stays index 0 when sending). */
-function components(kind: WaTemplateKind, draft: WaTemplateDraft) {
+async function components(kind: WaTemplateKind, draft: WaTemplateDraft) {
     const order = bodyFieldOrder(draft.body);
     const samples = sampleValuesFor(kind);
-    const list: unknown[] = [
+    const list: unknown[] = [];
+    if (hasImageHeader(kind)) {
+        const handle = await uploadHeaderSample(await sampleQrPng(), "image/png");
+        list.push({ type: "HEADER", format: "IMAGE", example: { header_handle: [handle] } });
+    }
+    list.push(
         {
             type: "BODY",
             text: toMetaBody(draft.body.trim()),
             ...(order.length ? { example: { body_text: [order.map((k) => samples[k])] } } : {}),
         },
-    ];
+    );
     const buttons: unknown[] = [];
     if (draft.viewButton?.trim()) {
         buttons.push({
@@ -110,7 +143,7 @@ function components(kind: WaTemplateKind, draft: WaTemplateDraft) {
 export async function submitTemplate(kind: WaTemplateKind, name: string, draft: WaTemplateDraft): Promise<{ id: string; status: string }> {
     const r = await graph<{ id: string; status: string }>(
         `${process.env.META_WA_BUSINESS_ACCOUNT_ID}/message_templates`,
-        { method: "POST", body: { name, language: LANG, category: "UTILITY", components: components(kind, draft) } },
+        { method: "POST", body: { name, language: LANG, category: "UTILITY", components: await components(kind, draft) } },
     );
     return { id: r.id, status: r.status };
 }
@@ -139,9 +172,14 @@ export async function sendBillTemplate(args: {
     values: WaFieldValues;
     /** Last part of the View button URL: a voucher id, or t<ticketId>. */
     linkCode: string;
+    /** Public https link to the photo, for a template with a photo header. */
+    headerImage?: string;
 }): Promise<string> {
     const order = bodyFieldOrder(args.approved.body);
     const comps: unknown[] = [];
+    if (args.headerImage) {
+        comps.push({ type: "header", parameters: [{ type: "image", image: { link: args.headerImage } }] });
+    }
     if (order.length) {
         comps.push({ type: "body", parameters: order.map((k) => ({ type: "text", text: args.values[k] })) });
     }

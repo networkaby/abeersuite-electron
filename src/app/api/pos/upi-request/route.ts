@@ -52,6 +52,7 @@ export async function POST(req: Request) {
             app: WA_APP_LINK,
         },
         push: { title: "", body: "" },
+        headerImage: `${WA_BILL_LINK_BASE}${linkCode}/qr`,
         summary: `UPI payment request · ${withCurrency(amountText)}`,
     });
     if (wa.status === "failed") console.error("[upi-request] WhatsApp send failed", wa.error);

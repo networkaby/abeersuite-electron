@@ -417,6 +417,8 @@ export async function sendPushAndWhatsApp(d: {
     values: WaFieldValues;
     push: { title: string; body: string };
     summary: string;
+    /** Photo header link, for a kind with one (hasImageHeader). */
+    headerImage?: string;
 }): Promise<{ mobile: string | null; push: { status: string; messageId: string | null }; wa: WaOutcome }> {
     const mobile = pickMobile(d.phones);
     const [push, wa] = await Promise.all([
@@ -430,7 +432,7 @@ export async function sendPushAndWhatsApp(d: {
                 refId: String(d.refId),
             })
             : Promise.resolve({ status: "no-person" as const, messageId: null }),
-        sendWhatsApp(d.kind, d.linkCode, mobile, d.values),
+        sendWhatsApp(d.kind, d.linkCode, mobile, d.values, d.headerImage),
     ]);
     if (mobile && wa.messageId) {
         await recordBillMessage({ mobile10: mobile, externalId: wa.messageId, billKind: d.kind, billRefId: d.refId, body: d.summary });
@@ -438,7 +440,7 @@ export async function sendPushAndWhatsApp(d: {
     return { mobile, push, wa };
 }
 
-async function sendWhatsApp(kind: WaTemplateKind, linkCode: string, mobile: string | null, values: WaFieldValues): Promise<WaOutcome> {
+async function sendWhatsApp(kind: WaTemplateKind, linkCode: string, mobile: string | null, values: WaFieldValues, headerImage?: string): Promise<WaOutcome> {
     if (!mobile) return { status: "no-mobile" };
     const tpl = await getApprovedWaTemplate(kind);
     if (!tpl) {
@@ -458,7 +460,7 @@ async function sendWhatsApp(kind: WaTemplateKind, linkCode: string, mobile: stri
     }
     if (!isBillSendConfigured()) return { status: "not-configured" };
     try {
-        const messageId = await sendBillTemplate({ mobile10: mobile, name: tpl.name, approved: tpl.draft, values, linkCode });
+        const messageId = await sendBillTemplate({ mobile10: mobile, name: tpl.name, approved: tpl.draft, values, linkCode, headerImage });
         return { status: "sent", messageId };
     } catch (e) {
         return { status: "failed", error: (e instanceof Error ? e.message : String(e)).slice(0, 500) };

@@ -104,6 +104,13 @@ export function waSendHint(state: WaSendState | undefined): string | null {
     return null;
 }
 
+/** Kinds whose template carries a photo header — the UPI QR of a payment
+ *  request (served by /portal/b/<code>/qr). Fixed per kind, not part of the
+ *  editable draft. */
+export function hasImageHeader(kind: WaTemplateKind): boolean {
+    return kind === "PAY_REQUEST";
+}
+
 /** Repair kinds announce a ticket, not a voucher — their refId is Ticket.id. */
 export function isRepairKind(kind: WaTemplateKind): boolean {
     return kind === "REPAIR_RECEIVED" || kind === "REPAIR_READY";
