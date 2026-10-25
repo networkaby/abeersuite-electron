@@ -19,7 +19,7 @@
  * The key is user-scoped because `myPositionIds` depends on who is asking, and
  * localStorage outlives a sign-out on a shared counter machine.
  *
- * Freshness: within MAX_AGE_MS nothing is requested at all. Past it, one small
+ * Freshness (useBrowserCached): within 30 minutes nothing is requested at all. Past it, one small
  * fetch. `useSession()` is primed by the (protected) layout, so the user id is
  * known on the first render and a warm tab makes no request whatsoever.
  *
@@ -31,21 +31,13 @@
  * `constants/polling.ts` — a slower number costs patience, never access.
  */
 
-import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import axios from "axios";
-import {
-    clearCache,
-    readCache,
-    subscribeToCache,
-    userScopedKey,
-    writeCache,
-} from "@/shared/lib/browser/pollCache";
+import { clearCache, userScopedKey } from "@/shared/lib/browser/pollCache";
 import type { PositionPickerOption } from "@/shared/lib/org/positionIncludes";
+import { useBrowserCached } from "./useBrowserCached";
 
 const CACHE_KEY = "position-picker:v1";
-/** Past this the cached list is not trusted and one small fetch replaces it. */
-const MAX_AGE_MS = 30 * 60 * 1000;
 
 export type PositionPickerData = {
     positions:     PositionPickerOption[];
@@ -61,6 +53,14 @@ export function invalidatePositionPicker(userId: string | number): void {
     clearCache(userScopedKey(CACHE_KEY, userId));
 }
 
+async function fetchPicker() {
+    const res = await axios.get<PickerResponse>("/api/positions", { params: { picker: 1 } });
+    return {
+        data: { positions: res.data.positions ?? [], myPositionIds: res.data.myPositionIds ?? [] },
+        computedAt: res.data.computedAt,
+    };
+}
+
 export function usePositionPicker(): PositionPickerData & {
     /** False only until the first cache read or fetch settles. */
     ready: boolean;
@@ -69,61 +69,10 @@ export function usePositionPicker(): PositionPickerData & {
 } {
     const { data: session } = useSession();
     const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
-
-    // Seeded in an effect, never during render: reading localStorage while
-    // rendering would make the client's first pass disagree with the server's
-    // empty one, which is a hydration mismatch.
-    const [data, setData] = useState<PositionPickerData>(EMPTY);
-    const [ready, setReady] = useState(false);
-
-    const load = useCallback(
-        async (force: boolean) => {
-            if (!userId) return;
-            const key = userScopedKey(CACHE_KEY, userId);
-
-            if (!force) {
-                const hit = readCache<PositionPickerData>(key);
-                if (hit && Date.now() - new Date(hit.computedAt).getTime() < MAX_AGE_MS) {
-                    setData(hit.data);
-                    setReady(true);
-                    return;   // the saving: no request leaves the browser
-                }
-            }
-
-            try {
-                const res = await axios.get<PickerResponse>("/api/positions", {
-                    params: { picker: 1 },
-                });
-                const next: PositionPickerData = {
-                    positions:     res.data.positions ?? [],
-                    myPositionIds: res.data.myPositionIds ?? [],
-                };
-                setData(next);
-                writeCache(key, next, res.data.computedAt);
-            } catch {
-                /* Keep whatever is already shown — a stale dropdown still filters. */
-            } finally {
-                setReady(true);
-            }
-        },
-        [userId],
+    const { data, ready, refresh } = useBrowserCached(
+        userId ? userScopedKey(CACHE_KEY, userId) : null,
+        fetchPicker,
+        EMPTY,
     );
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- adopts this browser's saved copy after hydration (see `data` above); reading it during render would mismatch the server's empty pass
-    useEffect(() => { void load(false); }, [load]);
-
-    // Another tab just fetched: adopt its copy rather than fetching again here.
-    useEffect(() => {
-        if (!userId) return;
-        return subscribeToCache<PositionPickerData>(
-            userScopedKey(CACHE_KEY, userId),
-            (entry) => setData(entry.data),
-        );
-    }, [userId]);
-
-    return {
-        ...data,
-        ready,
-        refresh: useCallback(() => { void load(true); }, [load]),
-    };
+    return { ...data, ready, refresh };
 }
