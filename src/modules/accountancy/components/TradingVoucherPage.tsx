@@ -500,7 +500,11 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // Total to the nearest whole rupee (Math.round(preRound) - preRound). If
     // the user types into the input directly, we flip `roundOffManuallyEdited`
     // and stop auto-recomputing so the manual override sticks.
-    const [enableRoundOff, setEnableRoundOff] = useState(false);
+    // A new voucher starts TICKED on every kind, the supplier side too — untick
+    // it when the supplier's bill was not rounded. Re-opening a saved voucher
+    // keeps what it was saved with (the edit prefill below), so an old bill's
+    // total never moves.
+    const [enableRoundOff, setEnableRoundOff] = useState(true);
     const [roundOffManuallyEdited, setRoundOffManuallyEdited] = useState(false);
 
     // ── Column / feature visibility (persisted) ───────────────────────────
@@ -1179,11 +1183,12 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
 
     // Auto round-off: when the checkbox is ticked and the user hasn't typed
     // a manual override, derive header.roundOff so Total lands on a whole
-    // rupee. `preRound` excludes the round-off itself to avoid feedback.
+    // rupee. `preRound` is the FINAL total — Additional charges included —
+    // minus the round-off itself (left out to avoid feedback).
     // Kept while rendering: React re-renders before painting, so the total on
     // screen is never the un-rounded one.
     if (enableRoundOff && !roundOffManuallyEdited) {
-        const preRound = lineSubtotal - overallDiscount + shipping;
+        const preRound = lineSubtotal - overallDiscount + shipping + chargesNet;
         const target = Math.round(preRound);
         const auto = target - preRound;
         // Only write when the result actually changes — this is what ends it.
@@ -1248,7 +1253,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
         });
         setShowProfit(false);
         setShowDescription(false);
-        setEnableRoundOff(false);
+        setEnableRoundOff(true);
         setRoundOffManuallyEdited(false);
         setParentLink(null);
         setShowPricesOnPrint(true);
