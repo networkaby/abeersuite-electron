@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireStaffPage } from "@/shared/lib/auth/permissions";
+import { loadCurrencySymbol } from "@/shared/lib/format/currencySymbol.server";
 import PrintToolbar from "@/shared/components/print/PrintToolbar";
 import SetDocumentTitle from "@/shared/components/print/SetDocumentTitle";
 import StaffIdCard from "@/shared/components/print/StaffIdCard";
@@ -26,6 +27,7 @@ export default async function StaffIdCardPrintPage({
     searchParams?: Promise<{ autoprint?: string }>;
 }) {
     await requireStaffPage();
+    await loadCurrencySymbol();
 
     const { userId } = await params;
     const id = Number(userId);

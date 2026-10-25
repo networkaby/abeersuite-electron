@@ -10,6 +10,7 @@ import { getVoucherTemplate, resolvePaperFormat } from "@/shared/lib/print/vouch
 import { resolveTemplateForFormat } from "@/shared/lib/print/voucherTemplateDefaults";
 import { ShiftCloseBody, type ShiftCloseBodyData } from "@/shared/components/print/ShiftCloseBody";
 import { requireStaffPage } from "@/shared/lib/auth/permissions";
+import { loadCurrencySymbol } from "@/shared/lib/format/currencySymbol.server";
 import {
     sumPaise,
     tillBalancePaise,
@@ -33,6 +34,7 @@ export default async function ShiftReceiptPage({
     searchParams?: Promise<{ paper?: string; autoprint?: string; mode?: string }>;
 }) {
     await requireStaffPage();
+    await loadCurrencySymbol();
 
     const { id: idStr } = await params;
     const shiftId = Number(idStr);

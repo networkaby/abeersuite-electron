@@ -17,7 +17,7 @@ export interface BillSettlementPrint {
     receipts:      { label: string; amount: number }[] | null;
     /** Still owed on THIS bill; null when it is fully paid. */
     balanceDue:    number | null;
-    /** Party's running account around the bill, "Rs. 1,234.00 Dr". */
+    /** Party's running account around the bill, "₹ 1,234.00 Dr". */
     balanceBefore: string | null;
     balanceAfter:  string | null;
 }

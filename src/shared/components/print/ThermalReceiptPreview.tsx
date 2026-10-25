@@ -166,11 +166,11 @@ export interface ThermalReceiptSample {
     /// Comes from the settlement, so a reprint reflects payments as of now.
     receipts?: ReceiptDiscountRow[] | null;
     /// Outstanding after `receipts`. null / 0 → the balance line is hidden, so a
-    /// fully-paid counter bill never shouts "Balance due Rs. 0.00".
+    /// fully-paid counter bill never shouts "Balance due ₹ 0.00".
     balanceDue?: number | null;
     /// Party ledger balance around the voucher — a money slip (RECEIPT/PAYMENT)
     /// or a bill (SALE/POS, printed under Balance due), preformatted with Dr/Cr
-    /// (e.g. "Rs. 7,315.00 Dr"). Null/absent → hidden (walk-in customers have
+    /// (e.g. "₹ 7,315.00 Dr"). Null/absent → hidden (walk-in customers have
     /// no account of their own). Printed only with the "Party balance" toggle.
     balanceBefore?: string | null;
     balanceAfter?:  string | null;
@@ -611,9 +611,9 @@ function DepositThermalMiddle({ sample }: { sample: ThermalReceiptSample }) {
     const notes    = slip.denominations.filter((d) => d >= 10);
     const hasCoins = slip.denominations.some((d) => d < 10);
     const bankLine = [slip.bankName, slip.branch].filter(Boolean).join(", ");
-    // Denomination amounts print WITHOUT the "Rs." prefix — on an 80mm roll the
+    // Denomination amounts print WITHOUT the currency symbol — on an 80mm roll the
     // prefix pushes the number onto a second line. Currency is clear from the
-    // "Rs." total below. nowrap keeps each amount on one right-aligned line.
+    // symbol-led total below. nowrap keeps each amount on one right-aligned line.
     const cashTotal   = counted ? counted.notes.reduce((s, n) => s + n.denom * n.count, 0) : 0;
     const chequeTotal = counted ? counted.cheques.reduce((s, c) => s + c.amount, 0) : 0;
     // Slip = physical deposit (cash + cheques); pen-fill mode → voucher total.

@@ -4,6 +4,8 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { redirectIfPcWithoutCounter } from "@/shared/lib/auth/permissions";
 import SessionWrapper from "@/shared/components/SessionWrapper";
+import CurrencySymbolInit from "@/shared/components/CurrencySymbolInit";
+import { loadCurrencySymbol } from "@/shared/lib/format/currencySymbol.server";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import MobileShell from "@/modules/mobile/components/MobileShell";
 import MobileMessageAlert from "@/modules/mobile/components/MobileMessageAlert";
@@ -46,9 +48,11 @@ export default async function MobileLayout({ children }: { children: React.React
     if ((session.user as { kind?: string }).kind === "customer") redirect("/portal");
     redirectIfPcWithoutCounter();
     const user = session.user as { name?: string | null; roleLabel?: string; permissions?: string[] };
+    const symbol = await loadCurrencySymbol();
 
     return (
         <SessionWrapper session={session}>
+            <CurrencySymbolInit symbol={symbol} />
             <MobileShell user={{ name: user.name ?? "", roleLabel: user.roleLabel ?? null, permissions: user.permissions ?? [] }}>
                 {children}
             </MobileShell>

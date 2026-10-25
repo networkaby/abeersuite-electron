@@ -3,7 +3,8 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
-import { formatAmount, round2 } from "@/shared/lib/format/moneyInr";
+import { formatAmount, round2, withCurrency } from "@/shared/lib/format/moneyInr";
+import { loadCurrencySymbol } from "@/shared/lib/format/currencySymbol.server";
 import { getOutstandings } from "@/modules/accountancy/lib/outstandings";
 import { creditLimitsFor } from "@/shared/lib/accountancy/creditLimit";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
@@ -171,6 +172,7 @@ export async function sendDueReminder(args: {
     const { accountId } = args;
     try {
         if (IS_COUNTER_PC) return { accountId, status: "skipped", reason: "counter" };
+        await loadCurrencySymbol();
         const due = args.due ?? (await loadPartyDues()).get(accountId);
         if (!due) return { accountId, status: "skipped", reason: "nothing due" };
 
@@ -218,10 +220,10 @@ export async function sendDueReminder(args: {
                 app: WA_APP_LINK,
             },
             push: {
-                title: args.action === "FIRM" ? `Rs ${amountText} due since ${since}` : `Reminder: Rs ${amountText} due`,
+                title: args.action === "FIRM" ? `${withCurrency(amountText)} due since ${since}` : `Reminder: ${withCurrency(amountText)} due`,
                 body: "Tap to see your bills and pay by UPI",
             },
-            summary: `Due reminder · Rs ${amountText}`,
+            summary: `Due reminder · ${withCurrency(amountText)}`,
         });
         await prisma.dueReminderLog.create({
             data: { ...log, mobile, pushStatus: push.status, waStatus: wa.status, waMessageId: wa.messageId ?? null, waError: wa.error ?? null },
@@ -342,7 +344,7 @@ export async function runDueReminders(now = new Date()): Promise<RunResult> {
     // One bell for the owner when the run put anyone on the call list.
     if (toCall.length) {
         toCall.sort((a, b) => b.balance - a.balance);
-        const shown = toCall.slice(0, 5).map((d) => `${d.name} ₹${formatAmount(d.balance)}`).join(" · ");
+        const shown = toCall.slice(0, 5).map((d) => `${d.name} ${withCurrency(formatAmount(d.balance))}`).join(" · ");
         const more = toCall.length > 5 ? ` + ${toCall.length - 5} more` : "";
         await createSystemInboxNotifications({
             roleIds: ["R1", "R2"],

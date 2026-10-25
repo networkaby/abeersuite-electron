@@ -3,6 +3,8 @@ import { redirectIfPcWithoutCounter } from "@/shared/lib/auth/permissions";
 import { auth } from "@/auth";
 import { Toaster } from "sonner";
 import SessionWrapper from "@/shared/components/SessionWrapper";
+import CurrencySymbolInit from "@/shared/components/CurrencySymbolInit";
+import { loadCurrencySymbol } from "@/shared/lib/format/currencySymbol.server";
 
 // Shared auth wrapper + SessionProvider for ALL `/vouchers/*` routes.
 //
@@ -20,9 +22,11 @@ export default async function VouchersLayout({ children }: { children: React.Rea
     if (!user) redirect("/staff/login?callbackUrl=%2Fvouchers");
     if (user.kind === "customer") redirect("/staff/login?callbackUrl=%2Fvouchers");
     redirectIfPcWithoutCounter();
+    const symbol = await loadCurrencySymbol();
 
     return (
         <SessionWrapper session={session}>
+            <CurrencySymbolInit symbol={symbol} />
             <Toaster position="top-center" richColors />
             {children}
         </SessionWrapper>

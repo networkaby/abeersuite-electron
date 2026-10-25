@@ -6,6 +6,7 @@ import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { extractApiError } from "@/shared/lib/api";
 import { invalidateOrgDefaultsCache } from "@/shared/lib/orgDefaults";
+import { setCurrencySymbol } from "@/shared/lib/format/moneyInr";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -198,6 +199,7 @@ export function OrgDefaultsForm({ units }: { units: InvUnit[] }) {
             setData(saved);
             setDraft(saved);
             invalidateOrgDefaultsCache();
+            setCurrencySymbol(saved.defaultCurrencySymbol);
             toast.success("Org defaults saved");
         } catch (err) {
             toast.error(extractApiError(err, "Failed to save"));

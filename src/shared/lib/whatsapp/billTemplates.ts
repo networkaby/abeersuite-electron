@@ -127,8 +127,8 @@ export const WA_FIELDS = [
     { key: "subject", label: "Subject / Enquiry", sample: "CCTV camera quote" },
     // The party balance the print template shows (Previous / Closing), worded
     // for a customer: "Rs 2,500.00 due" / "Rs 300.00 advance" / "Nil".
-    { key: "prevBalance", label: "Previous balance", sample: "Rs 2,500.00 due" },
-    { key: "balance", label: "Balance now", sample: "Rs 3,750.00 due" },
+    { key: "prevBalance", label: "Previous balance", sample: "₹2,500.00 due" },
+    { key: "balance", label: "Balance now", sample: "₹3,750.00 due" },
     { key: "shop", label: "Shop name", sample: COMPANY_DETAILS.brandName },
     { key: "link", label: "Document link", sample: `${COMPANY_DETAILS.sites.shop}/portal/b/1042` },
     { key: "app", label: "App install link", sample: `${COMPANY_DETAILS.sites.shop}${SHOP_APP_INSTALL}` },
@@ -369,7 +369,7 @@ const SAMPLE_DOC_NO: Record<WaTemplateKind, string> = {
 export function sampleValuesFor(kind: WaTemplateKind): WaFieldValues {
     const v = { ...BASE_SAMPLES, billNo: SAMPLE_DOC_NO[kind] };
     // Money in brings the balance down; everything else adds to it.
-    if (kind === "RECEIPT") return { ...v, prevBalance: "Rs 3,750.00 due", balance: "Rs 2,500.00 due" };
+    if (kind === "RECEIPT") return { ...v, prevBalance: "₹3,750.00 due", balance: "₹2,500.00 due" };
     if (isDueKind(kind)) return { ...v, amount: "4,250.00", date: "12 Aug 2026", link: `${WA_BILL_LINK_BASE}${DUE_LINK_CODE}` };
     return v;
 }

@@ -393,7 +393,7 @@ function DefaultA4Middle({ template, sample, page }: A4ChromeProps & { page?: Pa
 
             {/* 6c — Settlement. Only prints when money has actually been
                  received against the voucher; a fully-paid bill shows no
-                 balance row rather than a "Balance Rs. 0.00" line. */}
+                 balance row rather than a "Balance ₹ 0.00" line. */}
             {showTails && printsSettlement(sample, template) && (
                 <div className="settle">
                     {/* Left — what was actually tendered. A pure credit sale has

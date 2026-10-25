@@ -40,28 +40,48 @@ export function parseRupeesToPaise(s: string): number | null {
 // Each formatter is built once and reused: building an Intl.NumberFormat is
 // far slower than calling one, and a register can format thousands of cells.
 // Every figure uses Indian grouping (1,23,456.50), on screen and on paper.
-const INR_2DP = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const INR_0DP = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const NUM_2DP = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const NUM_0DP = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const NUM_LOOSE = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 });
 
-/** Format integer paise as ₹ string with two decimals (e.g. 19900 → ₹199.00). */
+// The shop's currency symbol — Org Defaults → Currency symbol. Every money
+// formatter below reads it, so changing the setting changes screens, prints and
+// messages together. Set once per process: on the server by
+// `loadCurrencySymbol()` (currencySymbol.server.ts), in the browser by
+// `CurrencySymbolInit` from the layout, and again whenever Org Defaults loads.
+const DEFAULT_CURRENCY_SYMBOL = "₹";
+let symbol = DEFAULT_CURRENCY_SYMBOL;
+
+export function setCurrencySymbol(s: string | null | undefined): void {
+    symbol = s?.trim() || DEFAULT_CURRENCY_SYMBOL;
+}
+
+export function currencySymbol(): string {
+    return symbol;
+}
+
+/** Symbol + an already-formatted figure. A word-like symbol ("Rs.", "INR")
+ *  gets a space, a sign (₹, $) sits tight; a minus goes in front of either. */
+export function withCurrency(figure: string): string {
+    const neg = figure.startsWith("-");
+    const body = neg ? figure.slice(1) : figure;
+    const gap = /[A-Za-z.]$/.test(symbol) ? " " : "";
+    return `${neg ? "-" : ""}${symbol}${gap}${body}`;
+}
+
+/** Format integer paise with the currency symbol, two decimals (e.g. 19900 → ₹199.00). */
 export function formatRupeesFromPaise(paise: number): string {
-    return INR_2DP.format(paise / 100);
+    return withCurrency(NUM_2DP.format(paise / 100));
 }
 
-/** Format rupees (already a float) as ₹ string with no decimals (e.g. 1234 → ₹1,234). */
+/** Format rupees (already a float) with the currency symbol, no decimals (e.g. 1234 → ₹1,234). */
 export function formatRupees(rupees: number): string {
-    return INR_0DP.format(rupees);
+    return withCurrency(NUM_0DP.format(rupees));
 }
 
-/**
- * Float rupees → "₹1,234.00" (2dp, default) or "₹1,234" (0dp), matching the
- * legacy inline `₹${n.toLocaleString("en-IN", …)}` format used across modules.
- */
+/** Float rupees → "₹1,234.00" (2dp, default) or "₹1,234" (0dp). */
 export function formatInr(rupees: number, decimals: 0 | 2 = 2): string {
-    return `₹${(decimals === 2 ? NUM_2DP : NUM_0DP).format(rupees)}`;
+    return withCurrency((decimals === 2 ? NUM_2DP : NUM_0DP).format(rupees));
 }
 
 /**
@@ -76,10 +96,9 @@ export function formatAmount(n: number): string {
 /** Short name for `formatAmount` — the one most screens already import. */
 export const fmt = formatAmount;
 
-/** Printed-paper style, "Rs. 1,23,456.50" — the A4 and receipt prints spell the
- *  rupee out rather than trust every printer font with ₹. */
+/** Printed-paper style, "₹ 1,23,456.50" — symbol, a space, the 2dp figure. */
 export function formatRs(n: number): string {
-    return `Rs. ${formatAmount(n)}`;
+    return `${symbol} ${formatAmount(n)}`;
 }
 
 /** Which side a signed ledger balance sits on. Positive = the account's own
@@ -102,5 +121,5 @@ export function formatDrCr(balance: number, normalBalance: "DEBIT" | "CREDIT" | 
 
 /** Float rupees → "₹1,234.5" — up to 2dp, no padding zeros (chips, tooltips, share text). */
 export function formatInrLoose(rupees: number): string {
-    return `₹${NUM_LOOSE.format(rupees)}`;
+    return withCurrency(NUM_LOOSE.format(rupees));
 }

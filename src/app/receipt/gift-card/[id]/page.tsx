@@ -6,6 +6,7 @@ import SetDocumentTitle from "@/shared/components/print/SetDocumentTitle";
 import GiftCardCard from "@/shared/components/print/GiftCardCard";
 import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
 import { requireStaffPage } from "@/shared/lib/auth/permissions";
+import { loadCurrencySymbol } from "@/shared/lib/format/currencySymbol.server";
 import { formatAmount } from "@/shared/lib/format/moneyInr";
 
 // Printable gift card. Opened in a new tab from the Gift Cards admin page;
@@ -13,6 +14,7 @@ import { formatAmount } from "@/shared/lib/format/moneyInr";
 // slip). Brand / label / terms / foot come from the GIFT_CARD print template.
 export default async function GiftCardPrintPage({ params }: { params: Promise<{ id: string }> }) {
     await requireStaffPage();
+    await loadCurrencySymbol();
 
     const { id } = await params;
 

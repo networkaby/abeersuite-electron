@@ -1,4 +1,5 @@
 import { requireStaffPage } from "@/shared/lib/auth/permissions";
+import { loadCurrencySymbol } from "@/shared/lib/format/currencySymbol.server";
 import InvoiceReceipt from "@/shared/components/print/InvoiceReceipt";
 
 // Resolves the id as an InvVoucher (the new shape, used by POS sales since
@@ -17,6 +18,7 @@ export default async function PosReceiptPage({
     searchParams?: Promise<{ kind?: string; paper?: string; placeOfSupply?: string; autoprint?: string; mode?: string }>;
 }) {
     await requireStaffPage();
+    await loadCurrencySymbol();
 
     const { id } = await params;
     const sp = (await searchParams) ?? {};

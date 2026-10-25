@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireStaffPage } from "@/shared/lib/auth/permissions";
+import { loadCurrencySymbol } from "@/shared/lib/format/currencySymbol.server";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { toDateOnlyUtc } from "@/shared/lib/format/formatDate";
@@ -28,6 +29,7 @@ export default async function PayslipPage({
     searchParams?: Promise<{ paper?: string; autoprint?: string }>;
 }) {
     await requireStaffPage();
+    await loadCurrencySymbol();
     const session = await auth();
     const me = session?.user as { id?: string | number; permissions?: string[] } | undefined;
     if (!me?.id) redirect("/staff/login");

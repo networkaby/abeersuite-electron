@@ -9,6 +9,7 @@ import { getVoucherTemplate, resolvePaperFormat } from "@/shared/lib/print/vouch
 import { resolveTemplateForFormat } from "@/shared/lib/print/voucherTemplateDefaults";
 import { RepairTicketBody, type RepairTicketBodyData } from "@/shared/components/print/RepairTicketBody";
 import { requireStaffPage } from "@/shared/lib/auth/permissions";
+import { loadCurrencySymbol } from "@/shared/lib/format/currencySymbol.server";
 
 // Repair ticket / job receipt. Prints through the shared template-driven
 // renderer (REPAIR_TICKET kind) following the house print rule: thermal fires
@@ -26,6 +27,7 @@ export default async function ReceiptPage({
     searchParams?: Promise<{ paper?: string; autoprint?: string; mode?: string }>;
 }) {
     await requireStaffPage();
+    await loadCurrencySymbol();
 
     const { id } = await params;
     const sp = (await searchParams) ?? {};

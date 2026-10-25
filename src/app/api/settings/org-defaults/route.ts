@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest } from "@/shared/lib/api";
+import { invalidateCurrencySymbol } from "@/shared/lib/format/currencySymbol.server";
 import { orgDefaultsUpdateSchema } from "@/shared/lib/schemas/orgDefaultsSchemas";
 
 const orgDefaultsInclude = {
@@ -20,6 +21,7 @@ export async function GET() {
         update: {},
         include: orgDefaultsInclude,
     });
+    invalidateCurrencySymbol();
     return NextResponse.json(row);
 }
 

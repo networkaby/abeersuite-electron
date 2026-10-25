@@ -17,6 +17,7 @@ import type { CouponCardData } from "@/shared/components/print/CouponCard";
 import type { GiftCardData } from "@/shared/components/print/GiftCardCard";
 import type { ShiftCloseBodyData } from "@/shared/components/print/ShiftCloseBody";
 import type { PayslipBodyData } from "@/shared/components/print/PayslipBody";
+import { formatRs } from "@/shared/lib/format/moneyInr";
 
 // 1×1 transparent PNG stands in for the QR in the editor preview.
 const SAMPLE_QR = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
@@ -314,8 +315,8 @@ function kindSample(kind: VoucherTemplateKind): ThermalReceiptSample {
                 balanceDue: 1283,
                 // Party's running account — printed only when the template's
                 // "Party balance" toggle is on.
-                balanceBefore: "Rs. 12,400.00 Dr",
-                balanceAfter:  "Rs. 13,683.00 Dr",
+                balanceBefore: `${formatRs(12400)} Dr`,
+                balanceAfter:  `${formatRs(13683)} Dr`,
             };
         case "POS":
             // Customer COUNTER RECEIPT — the price-hiding "Counter discount" ladder:
@@ -354,8 +355,8 @@ function kindSample(kind: VoucherTemplateKind): ThermalReceiptSample {
                 ],
                 receipts: [{ label: "Cash", amount: 1315 }],
                 balanceDue: 1000,
-                balanceBefore: "Rs. 2,500.00 Dr",
-                balanceAfter:  "Rs. 3,500.00 Dr",
+                balanceBefore: `${formatRs(2500)} Dr`,
+                balanceAfter:  `${formatRs(3500)} Dr`,
             };
         case "ONLINE_INVOICE":
             // Parcel-insert receipt — duplicate of the POS ladder look, but for a
@@ -435,8 +436,8 @@ function kindSample(kind: VoucherTemplateKind): ThermalReceiptSample {
                 subtotal: null, taxAmount: null, total: 5000,
                 notes: kind === "RECEIPT" ? "Against bill #SV/26-27/0017" : "Against bill #PV/26-27/0008",
                 // Party ledger strip: customer owes Dr, supplier is owed Cr.
-                balanceBefore: kind === "RECEIPT" ? "Rs. 12,315.00 Dr" : "Rs. 27,712.00 Cr",
-                balanceAfter:  kind === "RECEIPT" ? "Rs. 7,315.00 Dr"  : "Rs. 22,712.00 Cr",
+                balanceBefore: kind === "RECEIPT" ? `${formatRs(12315)} Dr` : `${formatRs(27712)} Cr`,
+                balanceAfter:  kind === "RECEIPT" ? `${formatRs(7315)} Dr`  : `${formatRs(22712)} Cr`,
             };
         case "CONTRA":
             // Plain contra (no denomination slip) — a bank ↔ cash movement that

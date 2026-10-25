@@ -15,6 +15,8 @@ import StaffPushRegister from "@/modules/mobile/components/StaffPushRegister";
 import FinanceTopBar from "@/shared/components/FinanceTopBar";
 import NoAccessNotice from "@/shared/components/NoAccessNotice";
 import { Suspense } from "react";
+import CurrencySymbolInit from "@/shared/components/CurrencySymbolInit";
+import { loadCurrencySymbol } from "@/shared/lib/format/currencySymbol.server";
 
 export default async function ProtectedLayout({
     children,
@@ -41,10 +43,12 @@ export default async function ProtectedLayout({
         avatarUrl?: string;
     };
 
+    const symbol = await loadCurrencySymbol();
     const userId = user.id ? parseInt(user.id, 10) : undefined;
 
     return (
         <SessionWrapper session={session}>
+            <CurrencySymbolInit symbol={symbol} />
             <div className="flex h-screen flex-col overflow-hidden bg-background">
                 {/* Top bar spans full width — not affected by sidebar/buttonbar width */}
                 <FinanceTopBar permissions={user.permissions ?? []} />

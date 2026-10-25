@@ -7,12 +7,14 @@ import CouponCard from "@/shared/components/print/CouponCard";
 import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
 import { couponHeadline, couponValueText } from "@/modules/coupons/lib/couponShare";
 import { requireStaffPage } from "@/shared/lib/auth/permissions";
+import { loadCurrencySymbol } from "@/shared/lib/format/currencySymbol.server";
 
 // Printable coupon card. Opened from the Coupons admin page; ReceiptButtons
 // auto-prints on mount (browser dialog — a card, not a counter slip). Brand /
 // label / terms / foot come from the COUPON print template.
 export default async function CouponPrintPage({ params }: { params: Promise<{ id: string }> }) {
     await requireStaffPage();
+    await loadCurrencySymbol();
 
     const { id } = await params;
 

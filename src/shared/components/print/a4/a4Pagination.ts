@@ -51,7 +51,7 @@ export interface PageSlice {
 
 /** Does the settlement block (Received in · Balance due · party balance) print?
  *  Only once money has been received or is still owed — a fully-paid bill
- *  shows no "Balance Rs. 0.00" row. The discount-ladder receipts skip it,
+ *  shows no "Balance ₹ 0.00" row. The discount-ladder receipts skip it,
  *  except POS: a counter bill on credit has to say what is still owed, same
  *  as a Sale. The Online Invoice ladder keeps it off (owner's call, 2026-09-28). */
 export function printsSettlement(sample: ThermalReceiptSample, template: VoucherTemplateDefaults): boolean {

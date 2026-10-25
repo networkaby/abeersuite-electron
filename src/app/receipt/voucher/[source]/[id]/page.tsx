@@ -8,6 +8,7 @@ import {
     type VoucherReceiptSource,
 } from "@/modules/accountancy/lib/voucherReceiptSample";
 import { requireStaffPage } from "@/shared/lib/auth/permissions";
+import { loadCurrencySymbol } from "@/shared/lib/format/currencySymbol.server";
 
 // ── Generic voucher print page ──────────────────────────────────────────────
 //
@@ -39,6 +40,7 @@ export default async function VoucherReceiptPage({
     searchParams?: Promise<{ paper?: string; width?: string; autoprint?: string; mode?: string }>;
 }) {
     await requireStaffPage();
+    await loadCurrencySymbol();
 
     const { source, id } = await params;
     const sp = (await searchParams) ?? {};

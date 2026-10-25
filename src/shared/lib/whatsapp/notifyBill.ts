@@ -5,7 +5,7 @@ import { getOrganisation } from "@/shared/lib/org/getOrganisation";
 import { normalizeMobile10 } from "@/shared/lib/auth/portalIdentifier";
 import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 import { partyBalanceAroundVoucher } from "@/shared/lib/accountancy/partyLedgerBalance";
-import { formatAmount } from "@/shared/lib/format/moneyInr";
+import { formatAmount, withCurrency } from "@/shared/lib/format/moneyInr";
 import { sendPushToPerson } from "@/shared/lib/push/sendPush";
 import {
     WA_APP_LINK,
@@ -163,7 +163,7 @@ async function notifyVoucher(kind: WaTemplateKind, uvId: number): Promise<Notify
     const balanceText = (n: number) => {
         const rounded = Math.round(n * 100) / 100;
         if (rounded === 0) return "Nil";
-        return `Rs ${formatAmount(Math.abs(rounded))} ${rounded > 0 ? "due" : "advance"}`;
+        return `${withCurrency(formatAmount(Math.abs(rounded)))} ${rounded > 0 ? "due" : "advance"}`;
     };
 
     const docNo = uv.voucherNo ?? `#${uvId}`;
@@ -188,8 +188,8 @@ async function notifyVoucher(kind: WaTemplateKind, uvId: number): Promise<Notify
             link: `${WA_BILL_LINK_BASE}${uvId}`,
             app: WA_APP_LINK,
         },
-        push: { title: `${WA_TEMPLATE_LABEL[kind]} ${docNo}`, body: `Rs ${amountText} · ${dateText} · tap to view` },
-        summary: `${WA_TEMPLATE_LABEL[kind]} ${docNo} · Rs ${amountText}`,
+        push: { title: `${WA_TEMPLATE_LABEL[kind]} ${docNo}`, body: `${withCurrency(amountText)} · ${dateText} · tap to view` },
+        summary: `${WA_TEMPLATE_LABEL[kind]} ${docNo} · ${withCurrency(amountText)}`,
     });
 }
 

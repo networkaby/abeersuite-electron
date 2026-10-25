@@ -1,4 +1,5 @@
 import axios from "axios";
+import { setCurrencySymbol } from "./format/moneyInr";
 import { SHOP_SEASONAL_FALLBACK, type SeasonalHours } from "./hr/seasonalHours";
 import { parsePayRules, type PayRules } from "./hr/payRules";
 
@@ -34,6 +35,7 @@ export async function getOrgDefaults(): Promise<OrgDefaultsData> {
     if (cache) return cache;
     const { data } = await axios.get<OrgDefaultsData>("/api/settings/org-defaults");
     cache = data;
+    setCurrencySymbol(data.defaultCurrencySymbol);
     return data;
 }
 

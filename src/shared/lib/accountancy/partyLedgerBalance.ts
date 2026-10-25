@@ -3,6 +3,7 @@ import { toNumber, balanceDelta } from "@/modules/accountancy/lib/balance";
 import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
 import { defaultNormalBalanceForGroupType } from "@/modules/accountancy/lib/groupNature";
 import { drCrSide, formatRs } from "@/shared/lib/format/moneyInr";
+import { loadCurrencySymbol } from "@/shared/lib/format/currencySymbol.server";
 
 /**
  * Party ledger balance around one voucher — what the party owed BEFORE it and
@@ -25,7 +26,7 @@ import { drCrSide, formatRs } from "@/shared/lib/format/moneyInr";
 export interface PartyLedgerBalance {
     before:  number;
     after:   number;
-    /** "Rs. 1,234.00 Dr" — signed onto the account's normal side. */
+    /** "₹ 1,234.00 Dr" — signed onto the account's normal side. */
     format:  (n: number) => string;
 }
 
@@ -75,6 +76,7 @@ export async function partyBalanceAroundVoucher(
     const after = before + own;
 
     // Positive = the account's normal side (customer Dr / supplier Cr).
+    await loadCurrencySymbol();
     const format = (n: number) => `${formatRs(Math.abs(n))} ${drCrSide(n, nb)}`;
 
     return { before, after, format };
