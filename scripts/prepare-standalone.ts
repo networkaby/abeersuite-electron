@@ -155,7 +155,18 @@ function dereferenceServerExternals(standaloneDir: string): string[] {
         // Collect the dependency folder BEFORE replacing the link: once the package is
         // a real directory here, its container is this externals folder, not the store.
         const sibling = containingNodeModules(real);
-        if (sibling) seeds.push(sibling);
+        if (sibling) {
+            seeds.push(sibling);
+            // Next's trace copies into standalone's own `.pnpm` only the files it saw
+            // required, so a dependency loaded behind a hook (import-in-the-middle's
+            // `acorn`, `cjs-module-lexer`) can be missing there. The project's pnpm store
+            // holds the same folder complete — seed from it too.
+            const standaloneStore = path.join(standaloneDir, "node_modules", ".pnpm") + path.sep;
+            if (sibling.startsWith(standaloneStore)) {
+                const projectSibling = path.join(process.cwd(), "node_modules", ".pnpm", sibling.slice(standaloneStore.length));
+                if (isDirectory(projectSibling)) seeds.push(projectSibling);
+            }
+        }
 
         if (!fs.lstatSync(pkg.path).isSymbolicLink()) continue;
 
