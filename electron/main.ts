@@ -1,9 +1,10 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, session, shell, Tray } from "electron";
 import * as path from "path";
 import * as fs from "fs";
-import { readJsonState, setAsideCorrupt, writeJsonAtomic, type StateRead } from "./stateFile";
+import { setAsideCorrupt, writeJsonAtomic } from "./stateFile";
 import { resolveInstallationId } from "./installationId";
 import { ensureAuthSecret, findMissingEnv, loadCounterEnv } from "./envCheck";
+import { counterSetupFilePath, readCounterSetup, readCounterSetupState, type CounterSetup } from "./counterSetup";
 import { cacheFace, faceDataUrl, forgetFace, loginBackgroundPath, readRoster, ROSTER_MAX, shellQuery, writeRoster, type ShellRosterEntry } from "./shellRoster";
 import { ensureAutoStartMatchesPreference, initAutoStartPreference, isAutoStartEnabled, setAutoStart, writeAutoStartPreference } from "./autoStart";
 
@@ -328,14 +329,7 @@ ipcMain.handle("counter:apply-id-ranges", async (_, blockStart: number) => {
 // setup. Separate from counter-installation-id.json (this machine's own identity,
 // created above) — this file records which counter ROW that identity was matched
 // to, so later launches can skip the setup screen without hitting the server.
-interface CounterSetup {
-    counterId: number;
-    counterNumber: number;
-}
-
-function counterSetupFilePath(): string {
-    return path.join(app.getPath("userData"), "counter-setup.json");
-}
+// The file's shape and readers live in counterSetup.ts.
 
 /**
  * The replica's sync-role url, held from boot so the sync worker can be started later —
@@ -350,23 +344,6 @@ let pendingSyncUrl: string | null = null;
  * is gone, long after the boot path returned.
  */
 let localAdminUrl: string | null = null;
-
-function parseCounterSetup(raw: unknown): CounterSetup | null {
-    const data = raw as { counterId?: unknown; counterNumber?: unknown } | null;
-    return typeof data?.counterId === "number" && typeof data?.counterNumber === "number"
-        ? { counterId: data.counterId, counterNumber: data.counterNumber }
-        : null;
-}
-
-/** present / absent / corrupt — boot treats each differently (see the replica section). */
-function readCounterSetupState(): StateRead<CounterSetup> {
-    return readJsonState(counterSetupFilePath(), parseCounterSetup);
-}
-
-function readCounterSetup(): CounterSetup | null {
-    const state = readCounterSetupState();
-    return state.kind === "present" ? state.value : null;
-}
 
 /**
  * counter-setup.json exists but cannot be read — a save cut short by a power cut, or
