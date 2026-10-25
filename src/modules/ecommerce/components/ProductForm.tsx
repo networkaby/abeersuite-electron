@@ -589,25 +589,7 @@ export default function ProductForm({
                             <Input value={brandName ?? ""} placeholder="No brand" disabled />
                         )}
                     </div>
-                    <div className="grid gap-1.5">
-                        <Label>Slug (optional)</Label>
-                        <div className="flex items-center gap-2">
-                            <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="storefront URL handle" />
-                            {initial?.id ? (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="icon-sm"
-                                    disabled={regenBusy !== null}
-                                    onClick={() => void regenerate()}
-                                    title="Rebuild the slug from Settings → Naming Convention. Changing a live slug breaks its old URL."
-                                >
-                                    <RefreshCw className="size-4" />
-                                </Button>
-                            ) : null}
-                        </div>
-                    </div>
-                    <div className="grid gap-1.5">
+                    <div className="col-span-2 grid gap-1.5">
                         <Label>Collections</Label>
                         {canEditMasters ? (
                             <SearchableMultiSelect
@@ -624,6 +606,24 @@ export default function ProductForm({
                         ) : (
                             <Input value={collectionNames.join(", ")} placeholder="No collection" disabled />
                         )}
+                    </div>
+                    <div className="col-span-2 grid gap-1.5">
+                        <Label>Slug (optional)</Label>
+                        <div className="flex items-center gap-2">
+                            <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="storefront URL handle" />
+                            {initial?.id ? (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon-sm"
+                                    disabled={regenBusy !== null}
+                                    onClick={() => void regenerate()}
+                                    title="Rebuild the slug from Settings → Naming Convention. Changing a live slug breaks its old URL."
+                                >
+                                    <RefreshCw className="size-4" />
+                                </Button>
+                            ) : null}
+                        </div>
                     </div>
                     <p className="col-span-2 -mt-1 text-[11px] text-muted-foreground">
                         Group = the shop&apos;s Category (and GST/HSN source). Collections = shop filters; ★ is the main one.
