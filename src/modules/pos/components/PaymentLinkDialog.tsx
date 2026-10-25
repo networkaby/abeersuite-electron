@@ -218,6 +218,41 @@ export function PaymentLinkDialog({
     // the cashier pastes the QR (Ctrl+V) and hits Send. The text link rides along so
     // nothing is lost if the paste is missed. Clipboard + window.open are both called
     // synchronously in the click so the user-gesture activation survives.
+    // With a phone on file, first ask the server to send the PAY_REQUEST template
+    // from the shop's number (QR-free: its Pay now button opens the UPI app). Only
+    // if that cannot go — template not approved, API not set up, send failed —
+    // fall back to the paste flow below, so the counter never gets stuck.
+    async function sendViaApi() {
+        const vpa = ctx.upiVpa?.trim();
+        if (!waNum || !vpa) return false;
+        setSharing(true);
+        try {
+            const res = await fetch("/api/pos/upi-request", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ phone: waNum, vpa, amount, note: billRef ?? "", partyName }),
+            });
+            const j = (await res.json().catch(() => null)) as { status?: string } | null;
+            if (j?.status === "sent") {
+                toast.success(`Payment request sent to ${partyName || "the customer"} on WhatsApp`);
+                return true;
+            }
+            return false;
+        } catch {
+            return false;
+        } finally {
+            setSharing(false);
+        }
+    }
+
+    async function onWhatsAppClick() {
+        if (await sendViaApi()) return;
+        // Chrome keeps a click's user activation for ~5s, so the clipboard + open
+        // below still work after the fetch.
+        if (waNum) toast.message("Couldn't send from the shop's number — opening WhatsApp Web");
+        sendOnWhatsApp();
+    }
+
     function sendOnWhatsApp() {
         const file = shareFile;
         if (!file) return;
@@ -341,7 +376,7 @@ export function PaymentLinkDialog({
                             {copied ? <Check size={16} /> : <Copy size={16} />} Copy UPI ID
                         </Button>
                         <Button
-                            onClick={sendOnWhatsApp}
+                            onClick={() => void onWhatsAppClick()}
                             disabled={!canShare || !shareFile || sharing}
                             className="bg-[#128C7E] hover:bg-[#128C7E]/90 text-white"
                         >
@@ -352,7 +387,7 @@ export function PaymentLinkDialog({
                     </div>
                     <p className="text-center text-[11px] text-muted-foreground">
                         {waNum
-                            ? <>Opens <span className="font-medium">{partyName || "the customer"}</span>&apos;s WhatsApp &amp; copies the QR — press <span className="font-medium">Ctrl+V</span> to paste it, then Send.</>
+                            ? <>Sends <span className="font-medium">{partyName || "the customer"}</span> a WhatsApp from the shop&apos;s number with a <span className="font-medium">Pay now</span> button that opens their UPI app.</>
                             : "No phone on file — opens a blank WhatsApp compose; the QR is copied to paste in."}
                     </p>
                 </div>

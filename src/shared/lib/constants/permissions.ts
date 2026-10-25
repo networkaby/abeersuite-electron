@@ -181,6 +181,8 @@ export const PERMISSIONS = {
     // Oversight: emergency-close a stuck OPEN shift on another operator's behalf
     // (from the counters board). Distinct from the operator's own `pos:shift:close`.
     POS_SHIFT_FORCE_CLOSE: "pos:shift:force-close",
+    // Share UPI QR → WhatsApp: send the PAY_REQUEST template from the shop's number.
+    POS_UPI_REQUEST_SEND: "pos:upi-request:send",
 
     // Roles
     ROLES_CREATE: "roles:create",

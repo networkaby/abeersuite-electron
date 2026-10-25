@@ -30,6 +30,7 @@ export const WA_TEMPLATE_KINDS = [
     "DEAL_CREATED",
     "HELP_CREATED",
     "TICKET_AUTO_REPLY",
+    "PAY_REQUEST",
 ] as const;
 export type WaTemplateKind = (typeof WA_TEMPLATE_KINDS)[number];
 
@@ -47,6 +48,7 @@ export const WA_TEMPLATE_LABEL: Record<WaTemplateKind, string> = {
     DEAL_CREATED: "Deal / Sales enquiry",
     HELP_CREATED: "Help desk support ticket",
     TICKET_AUTO_REPLY: "Active ticket auto-reply menu",
+    PAY_REQUEST: "UPI payment request",
 };
 
 /** When each kind goes out by itself (Auto send on) — shown on its card. Any of
@@ -65,12 +67,13 @@ export const WA_TEMPLATE_WHEN: Record<WaTemplateKind, string> = {
     DEAL_CREATED: "A new deal or sales enquiry is created from customer chat or CRM.",
     HELP_CREATED: "A new help desk support ticket is created from customer chat or Help module.",
     TICKET_AUTO_REPLY: "A customer with open tickets or deals sends an incoming WhatsApp message.",
+    PAY_REQUEST: "WhatsApp button on the POS Share UPI QR dialog. Pay now opens the customer's UPI app with the amount filled in.",
 };
 
 /** Auto send starts on for every kind except Estimate — staff often make rough
  *  quotes, so an estimate goes only when someone presses Send. */
 export function autoSendDefault(kind: WaTemplateKind): boolean {
-    return kind !== "ESTIMATE";
+    return kind !== "ESTIMATE" && kind !== "PAY_REQUEST";
 }
 
 /** UniversalVoucher type → the template that announces it. A PAYMENT is a
@@ -142,6 +145,8 @@ const DUE_FIELDS = new Set<string>(["customer", "amount", "date", "shop", "link"
 const DEAL_FIELDS = new Set<string>(["customer", "subject", "shop", "link", "app", "date"]);
 const HELP_FIELDS = new Set<string>(["customer", "subject", "billNo", "shop", "link", "app", "date"]);
 const AUTO_REPLY_FIELDS = new Set<string>(["customer", "shop"]);
+/** A UPI payment request: {billNo} is the bill / note the cashier typed, may be blank. */
+const PAY_FIELDS = new Set<string>(["customer", "amount", "billNo", "shop"]);
 
 /** Fields a kind can fill: a repair has a device and no money; a voucher the reverse. */
 export function fieldsFor(kind: WaTemplateKind): readonly (typeof WA_FIELDS)[number][] {
@@ -149,6 +154,7 @@ export function fieldsFor(kind: WaTemplateKind): readonly (typeof WA_FIELDS)[num
     if (kind === "DEAL_CREATED") return WA_FIELDS.filter((f) => DEAL_FIELDS.has(f.key));
     if (kind === "HELP_CREATED") return WA_FIELDS.filter((f) => HELP_FIELDS.has(f.key));
     if (kind === "TICKET_AUTO_REPLY") return WA_FIELDS.filter((f) => AUTO_REPLY_FIELDS.has(f.key));
+    if (kind === "PAY_REQUEST") return WA_FIELDS.filter((f) => PAY_FIELDS.has(f.key));
     return WA_FIELDS.filter((f) => (isRepairKind(kind) ? !VOUCHER_ONLY.has(f.key) && f.key !== "subject" : f.key !== "device" && f.key !== "subject"));
 }
 
@@ -315,6 +321,16 @@ export const WA_TEMPLATE_DEFAULTS: Record<WaTemplateKind, WaTemplateDraft> = {
         viewButton: null,
         appButton: null,
     },
+    // Pay now opens /portal/b/p<signed> → the customer's UPI app (upiPayLink.ts).
+    PAY_REQUEST: {
+        body:
+            "Dear {customer}, please pay Rs {amount} to {shop}.\n\n" +
+            "Tap Pay now to open your UPI app (GPay, PhonePe, Paytm) with the amount filled in. " +
+            "Please ignore this message if you have already paid. Thank you." +
+            HELP_LINE,
+        viewButton: "Pay now",
+        appButton: null,
+    },
 };
 
 /** Bill link and app link — the button URLs Meta approves. The bill button's
@@ -364,6 +380,7 @@ const SAMPLE_DOC_NO: Record<WaTemplateKind, string> = {
     DEAL_CREATED: "",
     HELP_CREATED: "#1042",
     TICKET_AUTO_REPLY: "",
+    PAY_REQUEST: "",
 };
 
 export function sampleValuesFor(kind: WaTemplateKind): WaFieldValues {

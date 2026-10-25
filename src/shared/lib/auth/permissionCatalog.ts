@@ -167,6 +167,7 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     { id: "pos:shift:close", label: "Close POS shift", module: "pos", description: "Declare physical cash count and hand over to manager (posts Contra)." },
     { id: "pos:shift:drop", label: "Record mid-shift cash drop", module: "pos", description: "Log cash dropped into the safe during an open shift." },
     { id: "pos:shift:force-close", label: "Force-close another's shift", module: "pos", description: "Emergency-close a stuck open shift on behalf of the operator (counts the drawer; closedBy = you)." },
+    { id: "pos:upi-request:send", label: "Send UPI payment request", module: "pos", description: "Send the customer a WhatsApp from the shop's number with a Pay now button that opens their UPI app (Share UPI QR dialog)." },
 
     // accountancy
     { id: "compliance:tax:edit", label: "Change tax classification", module: "accountancy", description: "Edit GST rate, HSN code, and taxability on inventory items and product groups from the Tax Classification page." },
