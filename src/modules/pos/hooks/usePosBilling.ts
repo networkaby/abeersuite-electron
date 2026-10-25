@@ -640,7 +640,9 @@ export function usePosBilling(opts: {
         }, 0);
         // Auto round-off: lands Total on a whole rupee; a typed value wins.
         const natural = calcVoucherTotals(rows, shippingAmt, tierDiscount, 0, chargesNet).totalAmount;
-        const ro = roundOffManuallyEdited ? parseAmt(roundOffStr) : editSameBill ? eb?.roundOff ?? 0 : Math.round(natural) - natural;
+        // `natural` is already in paise, so round2 only strips float noise
+        // (0.3999999999996362 → 0.4) — the total cannot move.
+        const ro = roundOffManuallyEdited ? parseAmt(roundOffStr) : editSameBill ? eb?.roundOff ?? 0 : round2(Math.round(natural) - natural);
         // Single source of truth — matches /api/inventory/vouchers SALE math via
         // calcVoucherTotals, so server-side validation cannot disagree.
         const t = calcVoucherTotals(rows, shippingAmt, tierDiscount, ro, chargesNet).totalAmount;
@@ -656,7 +658,7 @@ export function usePosBilling(opts: {
     const billSubtotal = !bill.moved ? subtotal : billLineRows.reduce((sum, r) => sum + r.gross, 0);
     const billTax = !bill.moved ? tax : billLineRows.reduce((sum, r) => sum + r.taxAmount, 0);
     const naturalTotal = bill.natural;
-    const autoRoundOff = Math.round(naturalTotal) - naturalTotal;
+    const autoRoundOff = round2(Math.round(naturalTotal) - naturalTotal);
     const roundOff = bill.roundOff;
     const total = bill.total;
 
