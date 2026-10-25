@@ -595,6 +595,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             refVoucher?: { id: number; reference: string } | null;
             shippingAmt: string | number;
             roundOff: string | number;
+            /** The Round Off tick as saved; null on vouchers from before it was stored. */
+            roundOffOn?: boolean | null;
             discountPct: string | number | null;
             discountAmt: string | number | null;
             amountReceived?: string | number;
@@ -740,7 +742,9 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 const overallDiscAmt = v.discountAmt != null ? Number(v.discountAmt) : 0;
                 const overallDiscPct = v.discountPct != null ? Number(v.discountPct) : 0;
                 const roundOff = Number(v.roundOff ?? 0);
-                setEnableRoundOff(Math.abs(roundOff) > 0.005);
+                // Open exactly as saved — ticked or not, even ticked at ₹0.00. Older
+                // vouchers carry no tick: a non-zero round-off means it was ticked.
+                setEnableRoundOff(v.roundOffOn ?? Math.abs(roundOff) > 0.005);
                 setRoundOffManuallyEdited(Math.abs(roundOff) > 0.005);
                 setHeader({
                     date: v.date ? v.date.slice(0, 10) : todayIso(),
@@ -1185,6 +1189,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     const tendersSum = tenders.reduce((s, t) => s + (parseFloat(t.amount) || 0), 0);
     const received = tendersSum > 0 ? tendersSum : (parseFloat(header.received) || 0);
     const balance = grandTotal - received;
+    // CASH with no party: nothing can carry a balance, so all of it is still due.
+    const walkInMustPay = copy.showPaymentBlock && payMode === "CASH" && !party && balance > 0.005;
 
     // Auto round-off: when the checkbox is ticked and the user hasn't typed
     // a manual override, derive header.roundOff so Total lands on a whole
@@ -1285,6 +1291,13 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             toast.error("Every service line needs a price");
             return;
         }
+        // A walk-in has no account to carry a balance, so a bill going to the
+        // books must be paid in full (a draft may wait). Said here in plain
+        // words — the server's refusal ("no tender rows…") means nothing to a cashier.
+        if (andPost && walkInMustPay) {
+            toast.error(`A walk-in bill must be paid in full — ₹${fmt(balance)} is still due. Enter it under "${copy.cashLedgerLabel}".`);
+            return;
+        }
         if (copy.refLabel && !copy.refOptional) {
             if (!header.refNumber.trim()) {
                 toast.error(`${copy.refLabel} is required`);
@@ -1334,6 +1347,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 ...(copy.showShowPricesToggle ? { showPrices: showPricesOnPrint } : {}),
                 shippingAmt: shipping,
                 roundOff,
+                roundOffOn: enableRoundOff,
                 discountPct: prefs.overallDiscount ? (parseFloat(header.discountPct) || 0) : 0,
                 discountAmt: overallDiscount,
                 lines: validLines.map((l) => {
@@ -2507,7 +2521,9 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                                     {balance > 0.005 && (
                                         <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-center text-sm font-semibold pt-1">
                                             <span className="text-right text-muted-foreground">
-                                                Balance → {party?.name ?? "Customer AR"}
+                                                {walkInMustPay
+                                                    ? "Still to collect (walk-in pays in full)"
+                                                    : <>Balance → {party?.name ?? "Customer AR"}</>}
                                             </span>
                                             <span className="w-24" />
                                             <span className="w-28 text-right font-mono tabular-nums text-destructive">

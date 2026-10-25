@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import axios from "axios";
-import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useSession } from "next-auth/react";
 import { Building2 } from "lucide-react";
 import {
     Select,
@@ -14,65 +13,38 @@ import {
 } from "@/components/ui/select";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { useBranchOptions } from "@/shared/hooks/useBranchOptions";
 
-type Branch = { id: string; name: string; isActive?: boolean };
 type SessionUser = { branchIds?: string[]; permissions?: string[] } | null;
 
 export function BranchSwitcher() {
     const router = useRouter();
     const { activeBranchId, setActiveBranchId, hydrate } = useActiveBranchStore();
-    const [branches, setBranches] = useState<Branch[]>([]);
-    const [user, setUser] = useState<SessionUser>(null);
+    // Both mounts (the office top bar and VoucherTopBar) sit inside the layout's
+    // SessionWrapper, so the session is already here — no /api/auth/session read.
+    const { data: session } = useSession();
+    const user = (session?.user as SessionUser | undefined) ?? null;
+    // The active branches from this browser's saved copy (useBranchOptions): no
+    // /api/branches read per page — only when the copy is 30 min old or the
+    // `settings` topic says a branch was added, renamed or switched off.
+    const { branches: active, ready } = useBranchOptions();
 
-    const permissions = user?.permissions ?? [];
-    const userBranchIds = useMemo(() => user?.branchIds ?? [], [user]);
-    const isAdmin = permissions.includes(PERMISSIONS.ADMIN_BYPASS);
+    const isAdmin = (user?.permissions ?? []).includes(PERMISSIONS.ADMIN_BYPASS);
+    const userBranchIds = user?.branchIds;
+    const branches = useMemo(() => {
+        if (isAdmin) return active;
+        const mine = userBranchIds ?? [];
+        return mine.length > 0 ? active.filter((b) => mine.includes(b.id)) : [];
+    }, [active, isAdmin, userBranchIds]);
 
-    // Fetch session ourselves so we don't depend on SessionProvider being mounted.
+    // Default selection rule: land on the first available branch. The top
+    // bar represents the user's *working* branch — reports default to org-
+    // wide scope on their own, so we never select a combined sentinel here.
+    // hydrate() is a no-op if something is already stored, so persistent
+    // selection survives reload.
     useEffect(() => {
-        let cancelled = false;
-        fetch("/api/auth/session")
-            .then((r) => r.json())
-            .then((s: { user?: SessionUser }) => { if (!cancelled) setUser(s?.user ?? null); })
-            .catch(() => { /* ignore */ });
-        return () => { cancelled = true; };
-    }, []);
-
-    // A branch added or deactivated in Admin announces `settings`. This lives in
-    // the chrome and is never remounted, so without this it shows the branch
-    // list from whenever the window was opened.
-    const [branchesKey, setBranchesKey] = useState(0);
-    useRealtimeTopics(["settings"], () => { setBranchesKey((n) => n + 1); });
-
-    useEffect(() => {
-        let cancelled = false;
-        async function load() {
-            if (!user) return;
-            try {
-                const res = await axios.get<Branch[]>("/api/branches");
-                if (cancelled) return;
-                const active = res.data.filter((b) => b.isActive !== false);
-                let visible: Branch[] = [];
-                if (isAdmin) {
-                    visible = active;
-                } else if (userBranchIds.length > 0) {
-                    visible = active.filter((b) => userBranchIds.includes(b.id));
-                }
-                setBranches(visible);
-                // Default selection rule: land on the first available branch. The top
-                // bar represents the user's *working* branch — reports default to org-
-                // wide scope on their own, so we never select a combined sentinel here.
-                // hydrate() is a no-op if something is already stored, so persistent
-                // selection survives reload.
-                const fallback = visible[0]?.id ?? null;
-                hydrate(fallback);
-            } catch {
-                /* ignore — fallback to empty list */
-            }
-        }
-        load();
-        return () => { cancelled = true; };
-    }, [user, isAdmin, userBranchIds, hydrate, branchesKey]);
+        if (user && ready) hydrate(branches[0]?.id ?? null);
+    }, [user, ready, branches, hydrate]);
 
     if (!user) return null;
 

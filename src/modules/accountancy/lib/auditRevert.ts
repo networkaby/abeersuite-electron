@@ -50,6 +50,7 @@ export function invPatchBodyFromSnapshot(snap: Row): Row {
         showPrices:       (snap.showPrices as boolean | null) ?? undefined,
         shippingAmt:      num(snap.shippingAmt) ?? 0,
         roundOff:         num(snap.roundOff) ?? 0,
+        roundOffOn:       typeof snap.roundOffOn === "boolean" ? snap.roundOffOn : undefined,
         // A POS sale's discount already rides each line (see posSaleEdit.ts); sending the
         // header copy too would take it off a second time, after tax.
         discountPct:      isPos ? 0 : num(snap.discountPct) ?? 0,

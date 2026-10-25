@@ -80,6 +80,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     discountAmt:      source.discountAmt,
                     shippingAmt:      source.shippingAmt,
                     roundOff:         source.roundOff,
+                    roundOffOn:       source.roundOffOn,
                     subtotal:         source.subtotal,
                     taxAmount:        source.taxAmount,
                     totalAmount:      source.totalAmount,

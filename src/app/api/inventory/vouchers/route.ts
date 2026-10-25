@@ -238,6 +238,7 @@ export async function POST(req: NextRequest) {
         destinationBranchId,
         shippingAmt    = 0,
         roundOff       = 0,
+        roundOffOn,
         discountPct,
         discountAmt,
         showPrices,
@@ -273,6 +274,8 @@ export async function POST(req: NextRequest) {
         destinationBranchId?: string;
         shippingAmt?:    number;
         roundOff?:       number;
+        /// The form's Round Off tick, so the bill re-opens as saved (VoucherDetail.roundOffOn).
+        roundOffOn?:     boolean;
         /// Voucher-level discount (mutually-convertible with discountAmt)
         discountPct?:    number;
         discountAmt?:    number;
@@ -641,6 +644,7 @@ export async function POST(req: NextRequest) {
                 destinationBranchId: isBranchTransfer ? destinationBranchId ?? null : null,
                 shippingAmt,
                 roundOff: savedRoundOff,
+                roundOffOn: typeof roundOffOn === "boolean" ? roundOffOn : null,
                 discountPct: discountPct != null ? Number(discountPct) : null,
                 // Tax-INCLUSIVE, as typed (clamped to the bill) — subtracted
                 // from the bottom line: totalAmount = subtotal − discountAmt + …

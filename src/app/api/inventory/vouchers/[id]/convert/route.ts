@@ -50,7 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             select: {
                 id: true,
                 partyJson: true, partyType: true, partyId: true,
-                discountPct: true, discountAmt: true, shippingAmt: true, roundOff: true, totalAmount: true,
+                discountPct: true, discountAmt: true, shippingAmt: true, roundOff: true, roundOffOn: true, totalAmount: true,
                 settlementJson: true,
                 universalVoucherId: true,
                 universalVoucher: { select: { type: true, voucherNo: true, branchId: true, partyAccountId: true, description: true } },
@@ -152,6 +152,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             discountAmt:  source.discountAmt != null ? Number(source.discountAmt) : undefined,
             shippingAmt:  source.shippingAmt != null ? Number(source.shippingAmt) : 0,
             roundOff:     source.roundOff != null ? Number(source.roundOff) : 0,
+            roundOffOn:   source.roundOffOn ?? undefined,
             refVoucherId: sourceId,
             tenders,
             services,
