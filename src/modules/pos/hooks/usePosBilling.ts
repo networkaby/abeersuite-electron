@@ -13,13 +13,9 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { extractApiError } from "@/shared/lib/api";
 import { openPosHelpTab, POS_HELP_URL } from "@/modules/pos/lib/posHelp";
 import { calcVoucherTotals, calcLineTotals, resolveShippingGstRate } from "@/modules/inventory/lib/voucherMath";
 import { type PartySearchAndCreateHandle, type PickedParty } from "@/shared/components/PartySearchAndCreate";
-import { type ActiveShift } from "@/modules/pos/components/ActiveShiftBar";
-import { type CounterTakeover } from "@/modules/pos/components/ShiftTakeoverDialog";
-import { fetchCurrentShift } from "@/modules/pos/lib/currentShift";
 import { type TenderSplit } from "@/modules/pos/components/TenderSplitInput";
 import { usePosAccess } from "@/modules/pos/hooks/usePosAccess";
 import { usePosCustomerDisplay } from "@/modules/pos/hooks/usePosCustomerDisplay";
@@ -39,6 +35,7 @@ import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 import { focusWhenReady } from "@/shared/lib/ui/focusWhenReady";
 import { parseAmt, type EditBill } from "@/modules/pos/hooks/posBilling/types";
+import { usePosShift } from "@/modules/pos/hooks/posBilling/usePosShift";
 
 /** How many rows the product dropdown shows — kept constant so the list does
  *  not change height between a good query and a poor one. */
@@ -162,56 +159,17 @@ export function usePosBilling(opts: {
     const setConvertFrom = usePosDraftStore((s) => s.setConvertFrom);
 
     // ── Active POS shift ────────────────────────────────────────────────────
-    // Mount order:
-    //   1. fetchCurrentShift() — this cashier's own shift. One they had handed
-    //      over and nobody took is quietly resumed (they came back).
-    //      → found : billing enabled
-    //      → null  : is somebody else's drawer on this counter? ↓
-    //   2. GET /api/pos/shifts/counter-takeover (this PC's counter)
-    //      → found : ShiftTakeoverDialog — accept the drawer or sign out
-    //      → null  : fresh start from the ShiftOpenDialog
-    const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
-    // `fromPicker` — chosen in the open-shift dialog (Reject goes back) rather
-    // than found on sign-in at this counter (Reject signs out).
-    const [takeover, setTakeover] = useState<{ data: CounterTakeover; fromPicker: boolean } | null>(null);
-    const [shiftLoaded, setShiftLoaded] = useState(false);
-    const [shiftOpenDialogOpen, setShiftOpenDialogOpen] = useState(false);
-    const [returnDialogOpen, setReturnDialogOpen] = useState(false);
-    const [expenditureDialogOpen, setExpenditureDialogOpen] = useState(false);
-    const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
-    // Shift drop / close — launched from the header ⋮ menu.
-    const [shiftDropOpen, setShiftDropOpen] = useState(false);
-    const [shiftCloseOpen, setShiftCloseOpen] = useState(false);
-
-    const refreshActiveShift = useCallback(() => {
-        // Both asked at once; the counter's answer only counts when there is no
-        // shift of their own.
-        const counterP = axios.get<CounterTakeover | null>("/api/pos/shifts/counter-takeover")
-            .then((r) => r.data).catch(() => null);
-        fetchCurrentShift()
-            .then(async (shift) => {
-                setActiveShift(shift);
-                const t = shift ? null : await counterP;
-                setTakeover(t ? { data: t, fromPicker: false } : null);
-            })
-            .catch(() => { setActiveShift(null); setTakeover(null); })
-            .finally(() => setShiftLoaded(true));
-    }, []);
-
-    // A busy counter picked in the open-shift dialog.
-    const openTakeover = useCallback(async (counterId: number) => {
-        try {
-            const t = await axios.get<CounterTakeover | null>(`/api/pos/shifts/counter-takeover?counterId=${counterId}`);
-            if (t.data) setTakeover({ data: t.data, fromPicker: true });
-            else toast.info("That counter is free now — open a shift on it.");
-        } catch (e: unknown) {
-            toast.error(extractApiError(e, "Could not read that counter"));
-        }
-    }, []);
-
-    useEffect(() => {
-        refreshActiveShift();
-    }, [refreshActiveShift]);
+    // Mount order, takeover and the shift dialogs: see posBilling/usePosShift.ts.
+    const {
+        activeShift, setActiveShift, takeover, setTakeover, shiftLoaded,
+        shiftOpenDialogOpen, setShiftOpenDialogOpen,
+        returnDialogOpen, setReturnDialogOpen,
+        expenditureDialogOpen, setExpenditureDialogOpen,
+        receiptDialogOpen, setReceiptDialogOpen,
+        shiftDropOpen, setShiftDropOpen,
+        shiftCloseOpen, setShiftCloseOpen,
+        refreshActiveShift, openTakeover,
+    } = usePosShift();
 
     // The counter's non-cash payment accounts (UPI 1 → HDFC, UPI 2 → SBI, Card…),
     // configured under /office/admin/counters. Each checkout split picks one of
