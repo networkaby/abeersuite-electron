@@ -52,6 +52,9 @@ export function invProductToAdmin(
     const pub = invProductToPublic(p);
     return {
         ...pub,
+        // "Category" here IS the office product group, renamed for the shop on
+        // purpose: the office follows Tally (stock groups; GST set group-wise), the
+        // shop uses the e-commerce word customers know. See docs/vocabulary.md.
         // Mirror the storefront rule (shopCategory ?? group, else blank) so the
         // admin Category column reads the same as the live shop. The admin row has
         // only the product's DIRECT group, not the root — close enough here, and the
