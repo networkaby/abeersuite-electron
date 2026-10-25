@@ -19,7 +19,7 @@
  * `extraResources` filter to remember why it was written that way.
  *
  * `AUTH_SECRET` is NOT here (since 2026-10-13). Every machine generates its own
- * (`ensureAuthSecret` in electron/main.ts), so a till's staff cookie is good on that till
+ * (`ensureAuthSecret` in electron/envCheck.ts), so a till's staff cookie is good on that till
  * only. A `WRITE_MODE=v_live` till signs in at the office with its own revocable counter
  * key instead (`src/shared/lib/counter/relayKey.ts`); before that it shipped the office's
  * secret, which let anyone holding an installer mint an office session for any user.

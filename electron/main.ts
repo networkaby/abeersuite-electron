@@ -1,11 +1,12 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, session, shell, Tray } from "electron";
 import * as path from "path";
 import * as fs from "fs";
-import { pathToFileURL } from "url";
-import * as crypto from "crypto";
-import * as dotenv from "dotenv";
-import { readJsonState, setAsideCorrupt, writeJsonAtomic, type StateRead } from "./stateFile";
+import { setAsideCorrupt, writeJsonAtomic } from "./stateFile";
 import { resolveInstallationId } from "./installationId";
+import { ensureAuthSecret, findMissingEnv, loadCounterEnv } from "./envCheck";
+import { counterSetupFilePath, readCounterSetup, readCounterSetupState, type CounterSetup } from "./counterSetup";
+import { cacheFace, faceDataUrl, forgetFace, loginBackgroundPath, readRoster, ROSTER_MAX, shellQuery, writeRoster, type ShellRosterEntry } from "./shellRoster";
+import { ensureAutoStartMatchesPreference, initAutoStartPreference, isAutoStartEnabled, setAutoStart, writeAutoStartPreference } from "./autoStart";
 
 // ── File log ─────────────────────────────────────────────────────────────────
 // A fresh log per run (not appended) — this exists to answer "why didn't it boot this
@@ -53,151 +54,8 @@ try {
 // the "AbeerSuite" productName.)
 //
 // The forked Next server inherits this process's env (see serverManager.ts), so
-// loading it once here is enough to configure the whole app.
-
-/**
- * Keys the app cannot work without, each with the symptom its absence produces.
- *
- * Inner arrays are alternatives — any one of them satisfies the entry.
- *
- * Why this exists: a half-filled config used to give the worst failure of all. The app
- * started, the login page rendered, and every sign-in was refused with "Invalid email or
- * password" — because the staff domain allowlist fails closed when
- * `INTERNAL_STAFF_EMAIL_DOMAINS` is unset (see
- * src/shared/lib/auth/staffEmailAllowlist.ts), and it is checked before the password is.
- * Nothing in the UI or the server log said which key was missing.
- *
- * `generate-counter-env.ts` already refuses to build without these, so on a normal
- * installer this check never fires. It stays because it covers what that one cannot: a
- * hand-written per-machine override that shadows a good baked value with a blank or
- * placeholder one.
- *
- * AUTH_SECRET is absent from this list on purpose — `ensureAuthSecret` guarantees it.
- */
-const REQUIRED_ENV: Array<{ keys: string[]; why: string }> = [
-    // DATABASE_URL is not checked here: it is fetched from the office once the app is
-    // ready (electron/remoteConfig.ts), which reports its own failure.
-    {
-        keys: ["INTERNAL_STAFF_EMAIL_DOMAINS", "COMPANY_DOMAIN"],
-        why: "staff login refuses every address — the domain allowlist fails closed",
-    },
-];
-
-/**
- * Example values that are present but worthless, so they count as missing.
- *
- * A copied-verbatim `AUTH_SECRET` is worse than an absent one: it looks configured
- * and it signs real session cookies with a string published in this repository.
- */
-const PLACEHOLDER_ENV_VALUES = new Set([
-    "replace-me-with-a-generated-secret",
-    "your-auth-secret-here",
-]);
-
-function findMissingEnv(): string[] {
-    const missing: string[] = [];
-    for (const entry of REQUIRED_ENV) {
-        const satisfied = entry.keys.some((key) => {
-            const value = process.env[key]?.trim();
-            return !!value && !PLACEHOLDER_ENV_VALUES.has(value);
-        });
-        if (!satisfied) missing.push(`${entry.keys.join(" or ")} — ${entry.why}`);
-    }
-    return missing;
-}
-
-/**
- * Name of the baked file, written by `scripts/generate-counter-env.ts`.
- *
- * Repeated rather than imported: this file is compiled by `electron/tsconfig.json`, whose
- * output path assumes `electron/` is the only root. Importing from `scripts/` would emit
- * `dist-electron/electron/main.js` and break the `main` entry in package.json. Change it in
- * `scripts/counterEnv.ts`, here, and in `build.extraResources` — which already spells it
- * out the same way.
- */
-const COUNTER_ENV_FILE = "counter.env";
-
-/**
- * Loads the baked configuration, letting a per-machine file override it.
- *
- * Order is the mechanism, not a detail: dotenv skips any variable already present, so the
- * override has to be read first to win.
- */
-function loadCounterEnv(): void {
-    const userEnv = path.join(app.getPath("userData"), ".env");
-    if (fs.existsSync(userEnv)) {
-        dotenv.config({ path: userEnv });
-        console.log(`[main] Applied per-machine override: ${userEnv}`);
-    }
-
-    const bakedEnv = path.join(process.resourcesPath, COUNTER_ENV_FILE);
-    if (fs.existsSync(bakedEnv)) {
-        dotenv.config({ path: bakedEnv });
-        return;
-    }
-
-    // Only reachable if the installer was built without scripts/generate-counter-env.ts
-    // having run, or with the extraResources entry for it removed. `verify-package.ts`
-    // fails the build for exactly this, so it should never ship — but if it does, the
-    // symptom otherwise arrives as an unexplained "every page fails" on the shop floor.
-    dialog.showErrorBox(
-        "AbeerSuite — installation incomplete",
-        `AbeerSuite could not find its bundled configuration:\n\n${bakedEnv}\n\n` +
-        "This installer was built incorrectly — the file is generated during packaging " +
-        "and should always be present.\n\n" +
-        "Report this to whoever built the installer. As a stop-gap, a configuration file " +
-        `placed at\n\n${userEnv}\n\nis loaded instead (see '.env.example').`
-    );
-    app.exit(1);
-}
-
-/**
- * Session signing key: one per machine.
- *
- * No build ships `AUTH_SECRET` (scripts/counterEnv.ts), so this generates one: the
- * counter's Next server serves only http://127.0.0.1, so its cookies never cross
- * machines, and a secret read off one PC forges nothing on another or at the office. A
- * `WRITE_MODE=v_live` till signs in at the office with its counter key instead
- * (src/shared/lib/counter/relayKey.ts). A placeholder
- * from .env.example counts as absent — it would sign real cookies with a published string.
- *
- * Stored beside counter-installation-id.json, which survives upgrades, so an update does
- * not sign everybody out.
- */
-function ensureAuthSecret(): void {
-    const configured = process.env.AUTH_SECRET?.trim();
-    if (configured && !PLACEHOLDER_ENV_VALUES.has(configured)) return;
-
-    const file = path.join(app.getPath("userData"), "auth-secret.json");
-    let secret = "";
-    try {
-        if (fs.existsSync(file)) {
-            const parsed = JSON.parse(fs.readFileSync(file, "utf-8")) as { authSecret?: unknown };
-            if (typeof parsed.authSecret === "string" && parsed.authSecret.length >= 32) {
-                secret = parsed.authSecret;
-            }
-        }
-    } catch {
-        // Corrupt or unreadable — replaced below rather than failing the launch.
-    }
-
-    if (!secret) {
-        secret = crypto.randomBytes(32).toString("base64");
-        try {
-            writeJsonAtomic(file, { authSecret: secret });
-            console.log(`[main] Generated this machine's session signing key: ${file}`);
-        } catch (err) {
-            // Not fatal — the app runs. But a fresh secret on every launch signs everyone
-            // out at each restart, which looks like a login bug, so name the real cause.
-            console.error(
-                `[main] Could not save ${file} — staff will be signed out on every restart:`,
-                err
-            );
-        }
-    }
-
-    process.env.AUTH_SECRET = secret;
-}
+// loading it once here is enough to configure the whole app. The loaders and the
+// missing-key check live in envCheck.ts.
 
 if (app.isPackaged) {
     loadCounterEnv();
@@ -224,7 +82,7 @@ const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 /**
  * Minimal, deliberately duplicated copy of the mode/landing-page contract from
  * `src/shared/lib/appModeCore.ts`. Not imported for the same reason `COUNTER_ENV_FILE`
- * above is repeated rather than imported: this file is compiled by
+ * (envCheck.ts) is repeated rather than imported: this file is compiled by
  * `electron/tsconfig.json`, rooted at `electron/`, and an import reaching outside that
  * root would change the emitted output path and break the `main` entry in package.json.
  * Keep this block, appModeCore.ts, and generate-counter-env.ts's copy of the same idea
@@ -293,111 +151,6 @@ function getAppIconPath(): string {
         if (fs.existsSync(p)) return p;
     }
     return "";
-}
-
-function isAutoStartEnabled(): boolean {
-    if (!app.isPackaged) return false;
-    try {
-        const settings = app.getLoginItemSettings({
-            path: process.execPath,
-            args: ["--hidden"],
-        });
-        return settings.openAtLogin;
-    } catch (err) {
-        console.error("[main] Failed to get login item settings:", err);
-        return false;
-    }
-}
-
-function setAutoStart(enabled: boolean): void {
-    if (!app.isPackaged) return;
-    try {
-        app.setLoginItemSettings({
-            openAtLogin: enabled,
-            openAsHidden: true,
-            path: process.execPath,
-            args: ["--hidden"],
-        });
-        console.log(`[main] Auto-start on boot set to: ${enabled}`);
-    } catch (err) {
-        console.error("[main] Failed to set login item settings:", err);
-    }
-}
-
-// ── Auto-start: the preference lives here, not in Windows ───────────────────
-//
-// A counter PC has to come back on its own after a power cut or a Windows update
-// reboot — nobody walks over to start the till — so the app registers itself with
-// `--hidden` and waits in the tray.
-//
-// Until 2026-09-06 that was a ONE-SHOT: turn it on the first time the app ran,
-// write a marker, never look again. So once the Run entry went away — a cleanup
-// tool, a Windows profile reset, a reinstall that kept the settings folder — it
-// never came back and nothing noticed.
-//
-// Keeping our own preference file is what makes checking it again safe. Windows
-// holds only the consequence; this file holds the intent, which is the one thing
-// that tells "the entry was wiped" (put it back) apart from "the owner turned it
-// off" (leave it alone).
-const AUTOSTART_PREF_FILE = "autostart.json";
-/** The pre-2026-09-06 one-shot marker. Its presence means this counter is not a fresh install. */
-const AUTOSTART_LEGACY_FILE = "autostart-initialized.json";
-
-function autoStartPrefPath(): string {
-    return path.join(app.getPath("userData"), AUTOSTART_PREF_FILE);
-}
-
-/** Missing, unreadable or malformed all mean "never answered" — and the answer we want by default is on. */
-function readAutoStartPreference(): boolean {
-    try {
-        const parsed = JSON.parse(fs.readFileSync(autoStartPrefPath(), "utf8")) as { enabled?: unknown };
-        return typeof parsed.enabled === "boolean" ? parsed.enabled : true;
-    } catch {
-        return true;
-    }
-}
-
-function writeAutoStartPreference(enabled: boolean): void {
-    try {
-        writeJsonAtomic(autoStartPrefPath(), { enabled, updated: new Date().toISOString() });
-    } catch (err) {
-        console.warn("[main] Could not save the auto-start preference:", err);
-    }
-}
-
-/**
- * Gives this counter a preference file the first time it runs a version that has one.
- *
- * A counter carrying the old marker is NOT seeded with a plain `true`: the one-shot
- * never recorded what the tray tick box was set to, so Windows is the only surviving
- * record of it. Seeding from the live setting means a counter where somebody
- * deliberately turned auto-start off keeps it off instead of having it forced back on
- * by the very check this change adds.
- */
-function initAutoStartPreference(): void {
-    if (fs.existsSync(autoStartPrefPath())) return;
-    if (fs.existsSync(path.join(app.getPath("userData"), AUTOSTART_LEGACY_FILE))) {
-        writeAutoStartPreference(isAutoStartEnabled());
-        return;
-    }
-    writeAutoStartPreference(true);
-}
-
-/**
- * Puts the Windows startup entry back when it has gone missing — and only then.
- *
- * Switching the app off in Task Manager -> Startup apps does NOT go through here,
- * because Windows records that veto in a separate key (StartupApproved) and leaves
- * the Run entry alone. `openAtLogin` therefore stays true, this returns early, and a
- * choice made in Windows' own screen is never overruled. (`executableWillLaunchAtLogin`
- * is the field that reports the veto, and nothing here reads it on purpose.)
- */
-function ensureAutoStartMatchesPreference(): void {
-    if (!app.isPackaged) return;
-    if (!readAutoStartPreference()) return;
-    if (isAutoStartEnabled()) return;
-    console.log("[main] Auto-start is switched on but Windows has no entry for it — putting it back.");
-    setAutoStart(true);
 }
 
 function showMainWindow(): void {
@@ -576,14 +329,7 @@ ipcMain.handle("counter:apply-id-ranges", async (_, blockStart: number) => {
 // setup. Separate from counter-installation-id.json (this machine's own identity,
 // created above) — this file records which counter ROW that identity was matched
 // to, so later launches can skip the setup screen without hitting the server.
-interface CounterSetup {
-    counterId: number;
-    counterNumber: number;
-}
-
-function counterSetupFilePath(): string {
-    return path.join(app.getPath("userData"), "counter-setup.json");
-}
+// The file's shape and readers live in counterSetup.ts.
 
 /**
  * The replica's sync-role url, held from boot so the sync worker can be started later —
@@ -598,23 +344,6 @@ let pendingSyncUrl: string | null = null;
  * is gone, long after the boot path returned.
  */
 let localAdminUrl: string | null = null;
-
-function parseCounterSetup(raw: unknown): CounterSetup | null {
-    const data = raw as { counterId?: unknown; counterNumber?: unknown } | null;
-    return typeof data?.counterId === "number" && typeof data?.counterNumber === "number"
-        ? { counterId: data.counterId, counterNumber: data.counterNumber }
-        : null;
-}
-
-/** present / absent / corrupt — boot treats each differently (see the replica section). */
-function readCounterSetupState(): StateRead<CounterSetup> {
-    return readJsonState(counterSetupFilePath(), parseCounterSetup);
-}
-
-function readCounterSetup(): CounterSetup | null {
-    const state = readCounterSetupState();
-    return state.kind === "present" ? state.value : null;
-}
 
 /**
  * counter-setup.json exists but cannot be read — a save cut short by a power cut, or
@@ -743,7 +472,7 @@ ipcMain.handle("shell:take-credentials", () => {
 
 // ── The face roster ─────────────────────────────────────────────────────────
 // Who has signed in on THIS PC, so the shell can offer a photograph to tap instead of
-// an email address to type. See rosterPath() for what this is and is not.
+// an email address to type. See rosterPath() in shellRoster.ts for what this is and is not.
 
 ipcMain.handle("shell:roster", (): ShellRosterEntry[] => readRoster().map((entry) => ({
     ...entry,
@@ -1203,146 +932,6 @@ function shellPath(): string {
     return app.isPackaged
         ? path.join(process.resourcesPath, "shell", "login.html")
         : path.join(__dirname, "..", "resources", "shell", "login.html");
-}
-
-/**
- * Who has signed in on this PC — the face grid on the sign-in screen.
- *
- * A CONVENIENCE CACHE and nothing more. It decides whose photograph is offered, never
- * who may sign in: every card still goes through the same server-side sign-in, and a
- * roster someone hand-edited buys them precisely nothing. It lives on disk because the
- * shell paints before the server is up and often before the line is.
- *
- * Kept beside counter-setup.json in userData, so an app update leaves it alone.
- */
-type ShellRosterEntry = {
-    email: string;
-    name: string;
-    title?: string;
-    /** Every Position held, senior first. Shape mirrored in electron/preload.ts. */
-    seats?: { title: string; scope: string }[];
-    /** The profile photo's source URL — kept only to notice when it changes. */
-    avatarUrl?: string;
-    /** File name under faces/, or (over IPC) the file:// URL the shell can use. */
-    avatarFile?: string;
-    hasPin: boolean;
-    lastLoginAt: string;
-};
-
-/** Past a dozen faces the grid is worse than the form it replaced. */
-const ROSTER_MAX = 12;
-
-function rosterPath(): string {
-    return path.join(app.getPath("userData"), "counter-roster.json");
-}
-
-function faceFile(name: string): string {
-    return path.join(app.getPath("userData"), "faces", name);
-}
-
-function readRoster(): ShellRosterEntry[] {
-    try {
-        const raw = fs.readFileSync(rosterPath(), "utf-8");
-        const parsed = JSON.parse(raw) as unknown;
-        if (!Array.isArray(parsed)) return [];
-        return parsed.filter((e): e is ShellRosterEntry =>
-            !!e && typeof (e as ShellRosterEntry).email === "string" && typeof (e as ShellRosterEntry).name === "string");
-    } catch {
-        return [];   // Missing or unreadable — the shell falls back to its form.
-    }
-}
-
-function writeRoster(entries: ShellRosterEntry[]): void {
-    try {
-        writeJsonAtomic(rosterPath(), entries);
-    } catch (err) {
-        console.warn("[Shell] Could not save the face roster:", (err as Error).message);
-    }
-}
-
-/**
- * Keep a copy of someone's profile photo, so tomorrow's sign-in needs no network.
- *
- * Same guards as the login background — an `image/` content type and a size cap — but
- * NOT the same "already held, skip" rule: a face has to follow the person's profile,
- * so the caller re-fetches whenever the source URL changes. Returns the file name to
- * store, or null, and a null costs a photograph and never a sign-in.
- */
-async function cacheFace(email: string, url: string): Promise<string | null> {
-    if (!/^https?:\/\//i.test(url)) return null;
-    const name = `${crypto.createHash("sha1").update(email).digest("hex")}.img`;
-    try {
-        const res = await net.fetch(url);
-        if (!res.ok) return null;
-        if (!(res.headers.get("content-type") || "").startsWith("image/")) return null;
-        const buf = Buffer.from(await res.arrayBuffer());
-        // Tighter than the login background's 8MB: a 52px circle never needs more, and
-        // every face is carried to the screen as base64 now, so the cap bounds what the
-        // roster costs to hand over as well as what it costs on disk.
-        if (buf.byteLength > 1024 * 1024) return null;
-        fs.mkdirSync(path.dirname(faceFile(name)), { recursive: true });
-        fs.writeFileSync(faceFile(name), buf);
-        return name;
-    } catch (err) {
-        console.warn("[Shell] Could not cache a profile photo:", (err as Error).message);
-        return null;
-    }
-}
-
-/**
- * The cached photograph, as a `data:` URL.
- *
- * NOT a `file://` path, which is what this used to hand over and why the app's own
- * sign-in page showed initials where the shell showed faces: the shell is a `file://`
- * document and could load one, but the page is served over http, and Chromium refuses a
- * `file://` subresource from an http document. A data URL is the one form BOTH screens
- * can display, so there is one shape to reason about instead of two.
- *
- * The type is read off the first bytes rather than stored, so the photographs already
- * cached on every till keep working without being re-fetched.
- */
-function faceDataUrl(name: string | undefined): string | undefined {
-    if (!name) return undefined;
-    try {
-        const buf = fs.readFileSync(faceFile(name));
-        const type =
-            buf[0] === 0x89 && buf[1] === 0x50 ? "image/png"
-                : buf[0] === 0xff && buf[1] === 0xd8 ? "image/jpeg"
-                    : buf[0] === 0x47 && buf[1] === 0x49 ? "image/gif"
-                        : buf.subarray(8, 12).toString("ascii") === "WEBP" ? "image/webp"
-                            : null;
-        if (!type) return undefined;   // Not an image we can name — initials instead.
-        return `data:${type};base64,${buf.toString("base64")}`;
-    } catch {
-        return undefined;              // Missing or unreadable: initials, never a hole.
-    }
-}
-
-function forgetFace(name: string | undefined): void {
-    if (!name) return;
-    try { fs.rmSync(faceFile(name), { force: true }); } catch { /* a leftover picture is harmless */ }
-}
-
-/** Where an owner's own background lives, if they have dropped one in. */
-function loginBackgroundPath(): string {
-    return path.join(app.getPath("userData"), "login-background.jpg");
-}
-
-/**
- * `?bg=` — the counter's own picture, when there is one.
- *
- * Passed as a file URL rather than a path because the shell hands it straight to CSS.
- * Absent when no picture has been dropped in, and the shell then falls back through its
- * configured photos to a background drawn in CSS, so the screen is never blank.
- */
-function shellQuery(): Record<string, string> {
-    // The owner's own picture first, then the copy kept from the last time the shell
-    // fetched one. Either way this is a local file, so a counter that has seen its
-    // background once never waits on the network for it again.
-    for (const candidate of [loginBackgroundPath(), path.join(app.getPath("userData"), "login-background-cache.jpg")]) {
-        if (fs.existsSync(candidate)) return { bg: pathToFileURL(candidate).href };
-    }
-    return {};
 }
 
 /**
