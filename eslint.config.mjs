@@ -53,6 +53,22 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  {
+    // A packaged counter loads its .env inside electron/main.ts (`loadCounterEnv`),
+    // which runs AFTER every module main.ts imports has been loaded. A top-level
+    // `process.env` read in any of them sees the setting empty on a real till and
+    // works fine in dev — the worst kind of bug. Read settings inside a function.
+    files: ["electron/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "MemberExpression[object.name='process'][property.name='env']:not(:function MemberExpression)",
+          message: "No top-level process.env in electron/: a packaged counter loads its .env after module load (see main.ts). Read it inside a function.",
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     "node_modules/**",

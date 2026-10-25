@@ -56,6 +56,13 @@ try {
 // The forked Next server inherits this process's env (see serverManager.ts), so
 // loading it once here is enough to configure the whole app. The loaders and the
 // missing-key check live in envCheck.ts.
+//
+// TRAP: every module imported ABOVE this block has already run, so a top-level
+// `process.env` read in any of them sees an empty value on a packaged till (it
+// works in dev, where the shell already has the env). The imports at the top are
+// only ones that read no setting at load. Modules imported further down run after
+// this block, but don't rely on import position either — read settings inside a
+// function. Lint enforces it (no-restricted-syntax for electron/ in eslint.config.mjs).
 
 if (app.isPackaged) {
     loadCounterEnv();
@@ -77,6 +84,7 @@ if (app.isPackaged) {
     }
 }
 
+// eslint-disable-next-line no-restricted-syntax -- runs after loadCounterEnv() above, in this same file
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 
 /**
@@ -792,6 +800,8 @@ ipcMain.handle("update:install-now", () => install("restart now"));
 ipcMain.handle("update:check-now", () => checkNow("asked"));
 ipcMain.handle("update:set-busy", (_, busy: boolean) => setCartBusy(busy === true));
 
+// These imports run after the .env block near the top (tsc keeps their place).
+// Still: read settings inside functions — see the TRAP note above that block.
 import { ensurePostgresRunning, stopEmbeddedPostgres } from "./postgresManager";
 import {
     backupAvailability,

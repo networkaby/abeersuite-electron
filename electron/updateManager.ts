@@ -78,23 +78,27 @@ const FIRST_CHECK_DELAY_MS = 20 * 1000;
 /** How often a ready update re-asks "is it safe now?". */
 const SAFE_POLL_MS = 15 * 1000;
 
+// The test knobs below are read when used, never at module load: on a packaged
+// counter main.ts loads the machine's .env AFTER its imports have run, so a
+// top-level read would see them empty (see the note above main.ts's imports).
+
 /**
  * How long the PC must have been untouched before a QUIET update may restart it.
  * Long, because nobody asked for this restart: a cashier stepping away for tea
  * must not come back to a login screen. Overridable for testing.
  */
-const QUIET_IDLE_SECONDS = Number(process.env.UPDATE_IDLE_SECONDS) || 10 * 60;
+const quietIdleSeconds = () => Number(process.env.UPDATE_IDLE_SECONDS) || 10 * 60;
 /** For urgent/schema tiers: only "hands off the keyboard", not "gone for a while". */
-const URGENT_IDLE_SECONDS = Number(process.env.UPDATE_URGENT_IDLE_SECONDS) || 60;
+const urgentIdleSeconds = () => Number(process.env.UPDATE_URGENT_IDLE_SECONDS) || 60;
 
 /** Grace before an urgent/schema update installs even while someone is working. */
-const GRACE_MS: Record<UpdateTier, number | null> = {
-    quiet: null,
-    urgent: (Number(process.env.UPDATE_URGENT_GRACE_MINUTES) || 30) * 60 * 1000,
-    schema: (Number(process.env.UPDATE_SCHEMA_GRACE_MINUTES) || 5) * 60 * 1000,
-};
+function graceMs(tier: UpdateTier): number | null {
+    if (tier === "urgent") return (Number(process.env.UPDATE_URGENT_GRACE_MINUTES) || 30) * 60 * 1000;
+    if (tier === "schema") return (Number(process.env.UPDATE_SCHEMA_GRACE_MINUTES) || 5) * 60 * 1000;
+    return null;
+}
 
-const DRY_RUN = process.env.UPDATE_DRY_RUN === "1";
+const isDryRun = () => process.env.UPDATE_DRY_RUN === "1";
 
 const state: UpdateState = {
     phase: "idle",
@@ -169,7 +173,7 @@ function currentTier(): UpdateTier {
 function applyTier(): void {
     const tier = currentTier();
     if (tier === state.tier && state.deadlineAt !== null) return;
-    const grace = GRACE_MS[tier];
+    const grace = graceMs(tier);
     // A deadline only starts counting once the update is actually here to install.
     const deadlineAt = grace !== null && state.phase === "ready" ? Date.now() + grace : null;
     patch({ tier, deadlineAt });
@@ -209,15 +213,15 @@ function onSafeScreen(): boolean {
 /**
  * Is this a moment where a restart costs nobody anything?
  *
- * Quiet: an empty cart AND (hidden / login screen OR untouched for QUIET_IDLE_SECONDS).
- * Urgent/schema: an empty cart AND hands off for URGENT_IDLE_SECONDS — the countdown
+ * Quiet: an empty cart AND (hidden / login screen OR untouched for quietIdleSeconds()).
+ * Urgent/schema: an empty cart AND hands off for urgentIdleSeconds() — the countdown
  * on screen has already told the cashier it is coming.
  */
 function safeToInstall(): boolean {
     if (cartBusy) return false;
     const idle = powerMonitor.getSystemIdleTime();
-    if (state.tier === "quiet") return onSafeScreen() || idle >= QUIET_IDLE_SECONDS;
-    return idle >= URGENT_IDLE_SECONDS || onSafeScreen();
+    if (state.tier === "quiet") return onSafeScreen() || idle >= quietIdleSeconds();
+    return idle >= urgentIdleSeconds() || onSafeScreen();
 }
 
 function stopSafePoll(): void {
@@ -320,7 +324,7 @@ export function install(reason: string): void {
     console.log(`[Updater] Installing ${state.version} (${reason}).`);
     stopSafePoll();
     patch({ phase: "installing" });
-    if (DRY_RUN) {
+    if (isDryRun()) {
         console.log("[Updater] UPDATE_DRY_RUN=1 — would run the installer now; staying up.");
         return;
     }
@@ -437,7 +441,7 @@ export function setupAutoUpdater(opts: { isDev: boolean; landingPage: string }):
         };
         configured = true;
         state.feed = feedLabel(feed);
-        console.log(`[Updater] Feed: ${state.feed}${DRY_RUN ? " (dry run)" : ""}.`);
+        console.log(`[Updater] Feed: ${state.feed}${isDryRun() ? " (dry run)" : ""}.`);
 
         autoUpdater.on("checking-for-update", () => {
             if (state.phase === "idle" || state.phase === "error") patch({ phase: "checking", error: null });
