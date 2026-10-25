@@ -1,31 +1,37 @@
-# v1.16.12 [urgent]
+# v1.16.13 [urgent]
 
-Every counter should install this today. It fixes the AI Setup page on counters and brings the new **Campaigns** module (WhatsApp Channel / Status posts). **This release adds new database tables** (AI key usage, Posts and Post shares) — counters should update first; the office site is updated after that, and a counter's sync pauses until it has this version.
+Every counter should install this today. It makes POS bills safe against double saving on a slow network, fixes opening stock that was being counted twice, and adds a saved Round Off tick on vouchers. **This release changes the database** (a bill key on vouchers, the Round Off tick, and Head Office set on old opening stock) — counters must update first; the office site is updated after that, and a counter's sync pauses until it has this version.
 
-## AI Setup
-- The "Failed to load" and "Forbidden" errors on the AI Setup page are gone.
-- AI key limits (how many uses, the gap between uses, the rest time) are now shared by all counters, so a limit really holds.
-- Adding, editing and reordering keys is smooth now — the row updates in place, nothing jumps back while saving, and Enter saves the key dialog.
-- The old "this PC only" AI key is retired; such keys are removed from tills automatically.
-- "Manage AI setup" now has its own tick in the Role Matrix.
+## Billing (POS)
+- A bill whose save was uncertain (slow or dropped network) is never saved twice — the counter sends one key per bill and treats "already saved" as done.
+- A walk-in cash bill must now be paid in full before it saves.
+- You can correct the cash count of any closed shift.
+- Reopening a shift now finds the right later shift.
 
-## Campaigns (new)
-- New Campaigns section in the office with its own sidebar pages; regular posts are separate from marketing campaigns.
-- Prepare a WhatsApp Channel or Status post (photo + caption) in the office; staff share it from the phone app.
-- Make a post straight from a shop product — caption, price and photo are filled for you, edit freely.
-- Queue & Calendar: a week timetable of past and coming posts — green posted, amber due to share, violet coming.
-- Product feeds for Google Merchant Center and Meta catalog, rebuilt at most once a day and only when products changed.
+## Vouchers
+- Round Off is ticked by default and rounds the final total.
+- The Round Off tick is saved with the voucher, so a bill re-opens exactly as you left it; editing a saved voucher re-rounds automatically.
 
-## Staff phone app
-- New Posts screen: posts waiting for WhatsApp, due first, with one-tap Share to WhatsApp.
-- The offline note no longer repeats "no answer from the server" twice.
+## Stock and opening balances
+- A stock count no longer doubles the opening quantity; closing stock counts every product correctly.
+- Opening stock is always saved at a branch — pick the stock location on the Opening Balance page and in its New product window. Old openings with no branch are put at Head Office.
+- A rate-only product edit no longer wipes the opening quantity.
+- A counter's sync no longer empties an opening stock's branch.
+- Faster product create; a bulk save keeps the rows that failed so you can fix them.
+- The products list loads page by page, while search and filters still cover every product.
 
-## POS
-- The customer QR display slideshow now plays offer products (biggest discount first) instead of a still photo.
+## Photos and shop
+- HEIC/HEIF photos from iPhones are stored as JPG.
+- New "From library" picker reuses photos already uploaded, and a Photo cleanup button removes unused shop photos.
+- Product page photos merge with the saved gallery and update live.
 
-## Shop website
-- Shorter, cleaner web addresses for products, categories, collections and brands.
+## Phone apps
+- Staff app 2.3.0 and customer app 2.2.0 update inside the app — no Chrome needed.
+- Take photo now opens the camera, not the gallery; phone photos retry and finish attaching when reopened.
 
-## Other
-- Company PAN corrected to match the GSTIN.
-- Error messages now show the server's status when it gives no reason.
+## Everywhere
+- Indian commas used everywhere for money.
+- Three screens that read "today" in UTC now use the shop's day.
+- Product search list is wide enough to show full names.
+- Many screens tidied up for smoother, more reliable behaviour; settings saved in the browser are no longer lost.
+- Security: the desktop app cannot be navigated to a foreign site; backups never send the database address outside.
