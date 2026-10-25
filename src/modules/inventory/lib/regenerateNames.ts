@@ -67,9 +67,6 @@ export interface ProductNaming {
     slug: string;
     /** False when the convention has the slug block switched off in Settings. */
     slugEnabled: boolean;
-    /** True when the product has a Custom part — only then is `name` meant to
-     *  replace the stored one (same rule as the bulk sweep and the grid). */
-    hasNamePart: boolean;
 }
 
 /** Masters picked on screen but not saved yet — `null` = cleared, absent = as saved. */
@@ -111,7 +108,6 @@ export async function buildProductNaming(
         onlineName: buildOnlineName(masters, config).trim(),
         slug: buildOnlineSlug(masters, config).trim(),
         slugEnabled: config.slugEnabled !== false,
-        hasNamePart: !!p.namePart?.trim(),
     };
 }
 

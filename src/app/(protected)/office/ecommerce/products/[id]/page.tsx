@@ -20,6 +20,8 @@ export default function EcommerceProductEditPage() {
     // Deep edit = the full Inventory product master dialog (brand, warranty
     // term, category, tax…) — fields this shop-facing form doesn't expose.
     const [deepEditOpen, setDeepEditOpen] = useState(false);
+    // Name rebuilt by a Group / Brand pick, not saved yet (ProductForm onNameChange).
+    const [liveName, setLiveName] = useState<string | null>(null);
 
     const load = useCallback(() => {
         if (!Number.isFinite(id)) return;
@@ -47,7 +49,13 @@ export default function EcommerceProductEditPage() {
                 <Button variant="ghost" size="sm" asChild>
                     <Link href="/office/ecommerce/products">← Products</Link>
                 </Button>
-                <h1 className="text-2xl font-semibold tracking-tight">Edit product</h1>
+                <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight" title={liveName ?? product.name}>
+                    Edit product
+                    <span className="ml-2 font-normal text-muted-foreground">· {liveName ?? product.name}</span>
+                    {liveName && liveName !== product.name ? (
+                        <span className="ml-2 align-middle text-xs font-normal text-amber-600">unsaved</span>
+                    ) : null}
+                </h1>
                 <Button
                     type="button"
                     variant="outline"
@@ -65,6 +73,7 @@ export default function EcommerceProductEditPage() {
                 editId={id}
                 onSaved={() => {
                     setDeepEditOpen(false);
+                    setLiveName(null);
                     load();
                     toast.success("Product master updated");
                 }}
@@ -72,8 +81,10 @@ export default function EcommerceProductEditPage() {
             <ProductForm
                 initial={product}
                 submitLabel="Save changes"
+                onNameChange={setLiveName}
                 onSaved={(p) => {
                     setProduct(p);
+                    setLiveName(null);
                     toast.success("Saved");
                     router.refresh();
                 }}

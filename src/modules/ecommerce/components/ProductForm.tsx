@@ -43,10 +43,14 @@ export default function ProductForm({
     initial,
     onSaved,
     submitLabel = "Save product",
+    onNameChange,
 }: {
     initial?: Partial<ShopProductAdmin> | null;
     onSaved?: (p: ShopProductAdmin) => void;
     submitLabel?: string;
+    /** A saved product's Name is shown by the page header, not a box here —
+     *  told the unsaved rebuilt name when Group / Brand change it. */
+    onNameChange?: (name: string) => void;
 }) {
     // inventory fields
     const [sku, setSku] = useState(initial?.sku ?? "");
@@ -87,9 +91,11 @@ export default function ProductForm({
         setMasterKind(kind);
     });
     // Picking a group / brand rebuilds the Name from the naming convention
-    // (server-side, with the unsaved pick) — only for a product with a Custom
-    // part, the grid's rule; a hand-typed name is left alone. The online name
-    // follows only while it is untyped or still a copy of the Name. Saved on Save.
+    // (server-side, with the unsaved pick). The Name is locked on this form, so
+    // a pick is the operator's say-so and always rebuilds — even a product with
+    // no Custom part (the grid's protect-hand-typed rule is for bulk edits).
+    // Picking the saved group + brand again puts the saved name back exactly.
+    // The online name follows while it is untyped or still a copy of the Name.
     const namingSeq = useRef(0);
     const pickMaster = (next: { groupId: number | null; brandId: number | null }) => {
         setGroupId(next.groupId);
@@ -97,17 +103,24 @@ export default function ProductForm({
         const productId = initial?.id;
         if (!productId) return;
         const seq = ++namingSeq.current;
+        const applyName = (nm: string) => {
+            setName(nm);
+            onNameChange?.(nm);
+            if (!subheadingTouched.current || subheading.trim() === name.trim()) setSubheading(nm);
+        };
+        if (next.groupId === (initial?.groupId ?? null) && next.brandId === (initial?.brandId ?? null)) {
+            applyName(initial?.name ?? name);
+            return;
+        }
         axios
-            .get<ProductNaming & { hasNamePart: boolean }>(`/api/inventory/products/${productId}/naming`, {
+            .get<ProductNaming>(`/api/inventory/products/${productId}/naming`, {
                 params: { groupId: next.groupId ?? "", brandId: next.brandId ?? "" },
             })
             .then(({ data }) => {
-                if (seq !== namingSeq.current || !data.hasNamePart || !data.name) return;
-                setName(data.name);
-                // A saved online name that is just a copy of the old Name still follows.
-                if (!subheadingTouched.current || subheading.trim() === name.trim()) setSubheading(data.name);
+                if (seq !== namingSeq.current || !data.name) return;
+                applyName(data.name);
             })
-            .catch(() => { /* the name simply stays as typed */ });
+            .catch(() => { /* the name simply stays as it was */ });
     };
     const masterName = (rows: Masters[keyof Masters] | undefined, id: number | null, fallback?: string | null) =>
         id == null ? null : (rows?.find((r) => r.id === id)?.name as string | undefined) ?? fallback ?? null;
@@ -501,11 +514,26 @@ export default function ProductForm({
     return (
         <div className="grid gap-8 lg:grid-cols-2">
             <div className="space-y-4">
-                {/* Name is built from the naming convention (Group / Brand / Custom
-                    part) and locked here for a saved product — picking a Group or
-                    Brand rebuilds it; Deep edit owns the Custom part. A new product
-                    still types its first name. */}
-                <div className="grid grid-cols-3 gap-3">
+                {/* A saved product's Name is built from the naming convention and
+                    shown in the page header (locked) — picking a Group or Brand
+                    rebuilds it; Deep edit owns the Custom part. A new product still
+                    types its first name here. */}
+                {!initial?.id ? (
+                    <div className="grid gap-1.5">
+                        <Label>Name</Label>
+                        <Input
+                            value={name}
+                            onChange={(e) => {
+                                const v = e.target.value;
+                                setName(v);
+                                // Mirror into the online display name until the operator
+                                // edits that field directly.
+                                if (!subheadingTouched.current) setSubheading(v);
+                            }}
+                        />
+                    </div>
+                ) : null}
+                <div className="grid grid-cols-[8rem_1fr_1fr] gap-3">
                     <div className="grid gap-1.5">
                         <Label>SKU</Label>
                         <Input
@@ -516,23 +544,6 @@ export default function ProductForm({
                             placeholder="e.g. LAPTOP-001"
                         />
                     </div>
-                    <div className="col-span-2 grid gap-1.5">
-                        <Label>Name</Label>
-                        <Input
-                            value={name}
-                            disabled={!!initial?.id}
-                            title={initial?.id ? "Built from the naming convention — change Group / Brand here, or the Custom part in Deep edit." : undefined}
-                            onChange={(e) => {
-                                const v = e.target.value;
-                                setName(v);
-                                // Mirror into the online display name until the operator
-                                // edits that field directly.
-                                if (!subheadingTouched.current) setSubheading(v);
-                            }}
-                        />
-                    </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
                     <div className="grid gap-1.5">
                         <Label>Online display name</Label>
                         <Input
