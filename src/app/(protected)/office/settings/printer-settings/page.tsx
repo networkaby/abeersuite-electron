@@ -37,6 +37,9 @@ interface RelayConfig {
     /** A cash drawer is plugged into this printer: a fresh bill that took or paid
      *  out cash opens it (hardware-bridge/thermal.js `withDrawerKick`). */
     cashDrawer: boolean;
+    /** Draw ₹ as a loaded bitmap (ESC &) on raw slips; off prints "Rs." for a
+     *  printer that ignores it. Missing = on (hardware-bridge/thermal.js `slipOpts`). */
+    rupeeGlyph: boolean;
     /**
      * Not editable here and never printed: the slip header comes from the print
      * template (headerLine1, filled from the Organisation). Kept in the saved
@@ -56,6 +59,7 @@ const DEFAULT: RelayConfig = {
     comPort: "",
     windowsPrinterName: "",
     cashDrawer: false,
+    rupeeGlyph: true,
     companyName: "",
     relayPort: 9191,
     deviceId: null,
@@ -91,6 +95,7 @@ export default function PrinterSettingsPage() {
     const [saving, setSaving] = useState(false);
     const [testing, setTesting] = useState(false);
     const [kicking, setKicking] = useState(false);
+    const [rupeeTesting, setRupeeTesting] = useState(false);
     const [winPrinters, setWinPrinters] = useState<string[]>([]);
     const [comPorts, setComPorts] = useState<string[]>([]);
     const [portsLoading, setPortsLoading] = useState(false);
@@ -262,6 +267,18 @@ export default function PrinterSettingsPage() {
             toast.error(err instanceof Error ? err.message : "Could not reach the drawer");
         } finally {
             setKicking(false);
+        }
+    };
+
+    const handleRupeeTest = async () => {
+        setRupeeTesting(true);
+        try {
+            await bridgeRequest("thermal", "rupee:test");
+            toast.success("₹ test sent — check the printer");
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Test failed");
+        } finally {
+            setRupeeTesting(false);
         }
     };
 
@@ -513,6 +530,31 @@ export default function PrinterSettingsPage() {
                             Open Drawer
                         </Button>
                         <p className="text-xs text-muted-foreground">Uses the saved printer — Save first if you just changed it.</p>
+                    </div>
+
+                    {/* Rupee sign — no printer code page has ₹, so it is drawn; set per PC
+                        because each counter can have a different printer. */}
+                    <div className="rounded-lg border border-border bg-card p-5 space-y-3">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Rupee Sign</p>
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="space-y-1">
+                                <Label htmlFor="rupee-glyph">Print ₹ on thermal slips</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    The sign is sent to the printer as a small drawing, so text stays sharp and
+                                    printing stays as fast. Run the test once: if it prints a ` mark instead of ₹,
+                                    this printer cannot take it — turn this off and slips print &quot;Rs.&quot;.
+                                </p>
+                            </div>
+                            <Switch
+                                id="rupee-glyph"
+                                checked={config.rupeeGlyph !== false}
+                                onCheckedChange={(v) => setConfig((c) => ({ ...c, rupeeGlyph: v }))}
+                            />
+                        </div>
+                        <Button variant="outline" size="sm" onClick={handleRupeeTest} disabled={rupeeTesting || !relayUp}>
+                            {rupeeTesting ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />}
+                            Print ₹ Test
+                        </Button>
                     </div>
 
                     <div className="flex gap-3">

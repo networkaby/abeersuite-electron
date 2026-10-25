@@ -382,3 +382,15 @@ test("drawer opens only when the PC has one AND the slip asks — kick first", a
     assert.ok(!slip.includes(Buffer.from([0x1b, 0x70])));
 });
 
+
+test("rupee: ₹ prints as Rs. by default, as the drawn slot when the PC says so", async () => {
+    assert.equal(rest.rupeeText("Total ₹499.00", false), "Total Rs. 499.00");
+    assert.equal(rest.rupeeText("₹ 5 `x`", true), "` 5 'x'");
+    const payload = { kind: "SHIFT_CLOSE", body: { id: 1, expectedCashPaise: 50000 }, template: baseTemplate };
+    const plain = await buildVoucherBuffer(payload);
+    assert.ok(!plain.includes(rest.RUPEE_DEFINE));
+    const drawn = await buildVoucherBuffer(payload, { rupeeGlyph: true });
+    // Loaded at the top — only the code-page select (ESC t n) comes before it.
+    assert.equal(drawn.indexOf(rest.RUPEE_DEFINE), 3);
+    assert.equal(rest.RUPEE_DEFINE.length, 6 + 36 + 3);
+});

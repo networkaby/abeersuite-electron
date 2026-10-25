@@ -424,9 +424,92 @@ function printMoneyMiddle(printer, sample, t, fmt, formattedDate) {
     }
 }
 
+// ── Rupee sign ────────────────────────────────────────────────────────────────
+//
+// No ESC/POS code page carries ₹ (Epson's tables have none), and iconv turns it into
+// "?". So the sign is drawn: ESC & loads a 12×24 bitmap (Font A's cell) into the
+// printer's user-defined slot for the backtick, ESC % 1 switches that slot on, and every
+// ₹ in the slip's text is sent as a backtick. About 40 bytes, no speed or sharpness lost
+// — the rest of the slip stays text. A printer that ignores ESC & prints a plain
+// backtick instead; Printer Settings has a ₹ test and a switch back to "Rs.".
+// ESC @ (the cut's hardware init) clears the slot, so it is loaded at the top of each slip.
+const RUPEE_SLOT = 0x60; // "`" — never needed on a slip; real backticks print as "'"
+const RUPEE_BITMAP = [
+    "............",
+    "............",
+    "............",
+    ".##########.",
+    ".##########.",
+    ".......##...",
+    "........##..",
+    ".##########.",
+    ".##########.",
+    "........##..",
+    ".......##...",
+    ".######.....",
+    ".#####......",
+    "...###......",
+    "....###.....",
+    ".....###....",
+    "......###...",
+    ".......###..",
+    "........###.",
+    ".........###",
+    "............",
+    "............",
+    "............",
+    "............",
+];
+
+// ESC & y c1 c2 x d… — column by column, 3 bytes (24 dots, top bit first) per column.
+const RUPEE_DEFINE = (() => {
+    const bytes = [0x1b, 0x26, 3, RUPEE_SLOT, RUPEE_SLOT, 12];
+    for (let x = 0; x < 12; x++) {
+        for (let b = 0; b < 3; b++) {
+            let v = 0;
+            for (let bit = 0; bit < 8; bit++) if (RUPEE_BITMAP[b * 8 + bit][x] === "#") v |= 0x80 >> bit;
+            bytes.push(v);
+        }
+    }
+    bytes.push(0x1b, 0x25, 1); // ESC % 1 — use the user-defined slot
+    return Buffer.from(bytes);
+})();
+
+// "Rs." when the printer cannot draw ₹ (Printer Settings switch), else the bitmap slot.
+function rupeeText(s, glyph) {
+    if (typeof s !== "string") return s;
+    return glyph ? s.replace(/`/g, "'").replace(/₹/g, "`") : s.replace(/₹\s?/g, "Rs. ");
+}
+
+/**
+ * The one way a slip's printer is made. Every text call goes through rupeeText, so a ₹
+ * from the app (balances, totals, terms) or from this file prints as the counter's
+ * setting says. tableCustom's cells are objects, table's are strings — both mapped.
+ */
+function newSlipPrinter(width, opts) {
+    const glyph = !!(opts && opts.rupeeGlyph);
+    const printer = new ThermalPrinter({
+        type:         PrinterTypes.EPSON,
+        interface:    "tcp://127.0.0.1:9999",
+        characterSet: CharacterSet.PC437_USA,
+        width,
+    });
+    if (glyph) printer.add(RUPEE_DEFINE);
+    const map = (a) => Array.isArray(a)
+        ? a.map((c) => (c && typeof c === "object" ? { ...c, text: rupeeText(c.text, glyph) } : rupeeText(c, glyph)))
+        : rupeeText(a, glyph);
+    return new Proxy(printer, {
+        get(target, prop) {
+            const v = target[prop];
+            if (typeof v !== "function") return v;
+            return (...args) => v.apply(target, args.map(map));
+        },
+    });
+}
+
 // ── POS receipt builder ───────────────────────────────────────────────────────
 
-async function buildPosBuffer(data) {
+async function buildPosBuffer(data, opts) {
     const { invoiceNumber, date, customerName, customerPhone, customerGstin, lines, subtotal, discountPct, discountAmount, tax, total, receipts, balanceDue, balanceBefore, balanceAfter, branchAddress, grossAtTag, discounts, charges, savings, hsnSummary, taxTotal, template: tpl } = data;
 
     // Thermal-resolved POS print template (header/address/toggles/terms/footer).
@@ -445,12 +528,7 @@ async function buildPosBuffer(data) {
     const charWidth = cols - 2;
     t._cols = cols;
 
-    const printer = new ThermalPrinter({
-        type:         PrinterTypes.EPSON,
-        interface:    "tcp://127.0.0.1:9999",
-        characterSet: CharacterSet.PC437_USA,
-        width:        charWidth,
-    });
+    const printer = newSlipPrinter(charWidth, opts);
 
     // Ladder mode: POS sends the customer-facing "Counter discount" ladder
     // (Gross-at-tag → discount rows → Total → You saved). Older / non-ladder
@@ -776,7 +854,7 @@ function printRepairTicketMiddle(printer, body) {
     printer.println(b.accessories ? String(b.accessories) : "No accessories received.");
     if (b.estimatedCost != null) {
         printer.drawLine();
-        row("Estimated Cost", `Rs. ${b.estimatedCost}`);
+        row("Estimated Cost", `₹${b.estimatedCost}`);
     }
     printer.drawLine();
     row("Priority", b.priority);
@@ -869,12 +947,12 @@ function printShiftCloseMiddle(printer, body) {
     const rupees = (paise) => (paise == null ? 0 : (Number(paise) || 0) / 100);
     const fmt = (n) =>
         Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const money = (paise) => `Rs. ${fmt(rupees(paise))}`;
+    const money = (paise) => `₹${fmt(rupees(paise))}`;
     const signed = (paise) => {
         const val = rupees(paise);
-        if (val > 0) return `+Rs. ${fmt(val)}`;
-        if (val < 0) return `-Rs. ${fmt(Math.abs(val))}`;
-        return `Rs. ${fmt(0)}`;
+        if (val > 0) return `+₹${fmt(val)}`;
+        if (val < 0) return `-₹${fmt(Math.abs(val))}`;
+        return `₹${fmt(0)}`;
     };
     // openedAt / closedAt ride as ISO strings — show them the way the slip does.
     const stamp = (iso) => {
@@ -939,7 +1017,7 @@ function printShiftCloseMiddle(printer, body) {
     if (b.declaredCashPaise != null) {
         row("Physical Count (Declared)", money(b.declaredCashPaise));
         const v = rupees(b.variancePaise);
-        const varText = v === 0 ? "Rs. 0.00 (Balanced)" : (v > 0 ? `+Rs. ${fmt(v)} (Over)` : `-Rs. ${fmt(Math.abs(v))} (Short)`);
+        const varText = v === 0 ? "₹0.00 (Balanced)" : (v > 0 ? `+₹${fmt(v)} (Over)` : `-₹${fmt(Math.abs(v))} (Short)`);
         row("Variance", varText);
     }
     printer.bold(false);
@@ -996,7 +1074,7 @@ function printShiftCloseMiddle(printer, body) {
 // thermal output honours each kind's configured template. Mirrors the web
 // <ThermalReceiptPreview> ReceiptBody. Sent by the app's /receipt/voucher,
 // /receipt/[id] (repair ticket), /shipping-slip, and /receipt/shift/[id] pages → POST /print/voucher.
-async function buildVoucherBuffer(data) {
+async function buildVoucherBuffer(data, opts) {
     const { sample = {}, template: tpl } = data || {};
 
     // Thermal-resolved per-kind print template (header/address/toggles/terms/footer).
@@ -1008,12 +1086,7 @@ async function buildVoucherBuffer(data) {
     const charWidth = cols - 2;
     t._cols = cols;
 
-    const printer = new ThermalPrinter({
-        type:         PrinterTypes.EPSON,
-        interface:    "tcp://127.0.0.1:9999",
-        characterSet: CharacterSet.PC437_USA,
-        width:        charWidth,
-    });
+    const printer = newSlipPrinter(charWidth, opts);
 
     const fmtAmt = (n) =>
         Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1180,6 +1253,11 @@ const DRAWER_KICK = Buffer.from([
 // where cash changed hands, never a reprint — AND this PC says a drawer is fitted. The
 // kick goes FIRST, so the drawer opens while the slip prints and still opens when the
 // paper has run out: the sale is already saved and the customer is waiting for change.
+// Missing setting = draw ₹ (Indian printers mostly take ESC &); the switch turns it off.
+function slipOpts(cfg) {
+    return { rupeeGlyph: cfg.rupeeGlyph !== false };
+}
+
 function withDrawerKick(cfg, payload, buffer) {
     return cfg.cashDrawer && payload && payload.openDrawer ? Buffer.concat([DRAWER_KICK, buffer]) : buffer;
 }
@@ -1412,7 +1490,7 @@ function start({ getConfig, setConfig }) {
             const { invoiceNumber, lines } = payload || {};
             if (!invoiceNumber || !lines) throw new Error("Missing required fields: invoiceNumber, lines");
             const cfg = getConfig();
-            await sendBuffer(cfg, withDrawerKick(cfg, payload, await buildPosBuffer(payload)));
+            await sendBuffer(cfg, withDrawerKick(cfg, payload, await buildPosBuffer(payload, slipOpts(cfg))));
             console.log(`[thermal] POS printed: ${invoiceNumber}`);
             return { ok: true };
         },
@@ -1426,13 +1504,28 @@ function start({ getConfig, setConfig }) {
                 throw new Error("Missing required field: sample.lines");
             }
             const cfg = getConfig();
-            await sendBuffer(cfg, withDrawerKick(cfg, payload, await buildVoucherBuffer(payload)));
+            await sendBuffer(cfg, withDrawerKick(cfg, payload, await buildVoucherBuffer(payload, slipOpts(cfg))));
             console.log(`[thermal] Voucher printed: ${(sample && sample.reference) || (body && `Shift #${body.id}`) || ""}`);
             return { ok: true };
         },
 
         // The "Open drawer" test on Printer Settings — the kick alone, no slip. Ignores
         // the cashDrawer tick on purpose: it is how the wiring is checked before ticking.
+        // The ₹ test on Printer Settings — a few lines in both styles, so the cashier
+        // sees whether this printer draws the sign before relying on it.
+        "rupee:test": async () => {
+            const printer = newSlipPrinter(46, { rupeeGlyph: true });
+            printer.alignCenter();
+            printer.println("Rupee sign test");
+            printer.setTextDoubleHeight(); printer.println("₹1,23,456.00"); printer.setTextNormal();
+            printer.println("Total ₹499.00");
+            printer.println("If the sign above is not a rupee,");
+            printer.println("turn off 'Print ₹' in Printer Settings.");
+            printer.cut();
+            await sendBuffer(getConfig(), printer.getBuffer());
+            return { ok: true };
+        },
+
         "drawer:open": async () => {
             await sendBuffer(getConfig(), DRAWER_KICK);
             console.log("[thermal] drawer opened (test)");
@@ -1478,4 +1571,4 @@ function start({ getConfig, setConfig }) {
     if (cfg.connectionType === "windows") console.log(`[thermal] windows printer: ${cfg.windowsPrinterName}`);
 }
 
-module.exports = { start, buildPosBuffer, buildVoucherBuffer, withDrawerKick, DRAWER_KICK };
+module.exports = { start, buildPosBuffer, rupeeText, RUPEE_DEFINE, buildVoucherBuffer, withDrawerKick, DRAWER_KICK };
