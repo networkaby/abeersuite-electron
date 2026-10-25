@@ -9,7 +9,7 @@
 // the lock, running-balance breaks, an account-number mismatch — before the
 // same rows are saved for real. Nothing is written until "Save".
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useEffectEvent } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, FileText, Loader2, Upload } from "lucide-react";
@@ -143,11 +143,14 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
     }
 
     // Re-check whenever the rows or the force flag change and the file is parsed.
-    useEffect(() => {
+    // check() reads the latest parse; these deps are what change its answer.
+    const recheck = useEffectEvent(() => {
         if (!parsed || parsed.headerRowIndex < 0 || !mappingOk || rows.rows.length === 0) return;
-        const t = setTimeout(() => { void check(); }, 250);
+        void check();
+    });
+    useEffect(() => {
+        const t = setTimeout(() => recheck(), 250);
         return () => clearTimeout(t);
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- check() reads the latest parse; these are what change its answer
     }, [rows.rows, force, mappingOk]);
 
     async function save() {

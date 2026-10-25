@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -173,12 +173,12 @@ export default function OnlinePayPanel({
 
     // On first arrival from checkout the customer already picked a gateway — fire it
     // immediately (once) instead of asking again.
+    const autoPay = useEffectEvent(() => { void pay(); });
     useEffect(() => {
         if (autoLaunch && selected && !startedRef.current) {
             startedRef.current = true;
-            void pay();
+            autoPay();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- auto-launch fires once (startedRef); pay reads the latest selection
     }, [autoLaunch, selected]);
 
     if (gateways.length === 0) return null;

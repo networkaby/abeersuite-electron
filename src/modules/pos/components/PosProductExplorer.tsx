@@ -18,7 +18,7 @@
 // while open the search + all three facet rails come out of ONE memoised pass
 // over the catalogue, fed a deferred query so typing never waits on the grid.
 
-import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useDeferredValue, useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import { ChevronRight, PackageSearch, X, Plus } from "lucide-react";
 import { useValueChange } from "@/shared/hooks";
 import { Input } from "@/components/ui/input";
@@ -190,19 +190,19 @@ export const PosProductExplorer = memo(function PosProductExplorer({
 
     // F3 toggles the explorer from anywhere — a keyboard open has no "leave"
     // to auto-hide on, so it opens pinned. Esc closes it while open.
+    const closeFromKey = useEffectEvent(() => close());
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
             if (e.key === "F3") {
                 e.preventDefault();
-                if (open) close();
+                if (open) closeFromKey();
                 else { setOpen(true); setPinned(true); }
             } else if (e.key === "Escape" && open) {
-                close();
+                closeFromKey();
             }
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- re-bound per open/close; `close` only calls setters + the stable hover callback
     }, [open]);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount-only cleanup, onHoverProduct is stable enough that re-running this on every render would be pointless churn

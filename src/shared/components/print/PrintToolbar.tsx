@@ -16,7 +16,7 @@
 // The page decides the starting way: pass `bridge` for the thermal way; omit
 // it for the selection page.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useEffectEvent } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
 import { bridgeOk, bridgeRequest, thermalPrinterConfigured } from "@/shared/lib/bridge/hardwareBridge";
@@ -126,15 +126,18 @@ export default function PrintToolbar({
         void tryThermal();
     };
 
-    useEffect(() => {
-        if (ranRef.current) return;
-        ranRef.current = true;
+    const autoRun = useEffectEvent(() => {
         if (bridge) {
             void tryThermal();   // status already starts at "trying"
         } else if (autoPrint) {
             window.print();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- auto-print fires once on mount (ranRef)
+    });
+    // Auto-print fires once on mount (ranRef survives the dev double effect).
+    useEffect(() => {
+        if (ranRef.current) return;
+        ranRef.current = true;
+        autoRun();
     }, []);
 
     const currentValue = `${currentPaper ?? ""}|${currentWidth}`;

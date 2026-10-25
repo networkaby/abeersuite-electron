@@ -1,7 +1,7 @@
 "use client";
 
 import { GatedLink } from "@/shared/components/GatedLink";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useEffectEvent } from "react";
 import { RefreshCw, Trash2 } from "lucide-react";
 import { flattenTree, treeLabel, type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
@@ -249,10 +249,13 @@ export function InvProductFormFields({
         }
     }
 
+    // Read at run time: buildMasters closes only over the form fields + masters
+    // already listed below, and isEditMode is fixed for the dialog's life.
+    const namingInputs = useEffectEvent(() => ({ masters: buildMasters(), isEditMode }));
     // Live auto-fill from masters whenever a token-source field changes.
     useEffect(() => {
         if (!namingConfig) return;
-        const masters = buildMasters();
+        const { masters, isEditMode: editing } = namingInputs();
 
         // Name: convention-derived, not hand-editable. Regenerate on every
         // source change; on edit open keep the saved name (first pass) so a
@@ -269,7 +272,7 @@ export function InvProductFormFields({
         // masters-only rebuild would wipe it. Create mode always builds (no
         // existing name to lose). The regenerate button forces a rebuild either way.
         const hasCustom      = !!(form.namePart && form.namePart.trim());
-        const rebuildName    = isEditMode ? (srcChanged && hasCustom) : true;
+        const rebuildName    = editing ? (srcChanged && hasCustom) : true;
 
         const nextName       = rebuildName             ? buildOfflineName(masters, namingConfig) : null;
         const nextOnlineName = onlineNameDirty.current ? null : buildOnlineName(masters, namingConfig);
@@ -280,9 +283,6 @@ export function InvProductFormFields({
             ...(nextOnlineName !== null ? { shopSubheading: nextOnlineName } : {}),
             ...(nextSlug       !== null ? { slug:           nextSlug }       : {}),
         }));
-        // buildMasters closes only over the form fields + masters already listed here;
-        // depending on the function itself (new each render) would re-run every render.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         form.brandId, form.categoryId, form.groupId, form.warrantyTermId,
         form.unitId, form.modelNo, form.attrs, form.namePart,

@@ -17,7 +17,7 @@
  * Secret date code: staff-only price age. See `lib/secretDateCode.ts`.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { cn } from "@/shared/lib/format/utils";
@@ -314,12 +314,13 @@ export function LabelDesigner({
     // has settled so barcodes/prices resolve. The ref guard survives re-renders
     // (incl. the parent clearing the URL via onPrefillConsumed).
     const prefilledRef = useRef(false);
+    const prefill = useEffectEvent((voucherId: number) => {
+        void addVoucherById(voucherId).finally(() => onPrefillConsumed?.());
+    });
     useEffect(() => {
         if (prefilledRef.current || prefillVoucherId == null || !lookupLoaded) return;
         prefilledRef.current = true;
-        void addVoucherById(prefillVoucherId).finally(() => onPrefillConsumed?.());
-        // addVoucherById/onPrefillConsumed intentionally omitted — guarded to run once.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        prefill(prefillVoucherId);
     }, [prefillVoucherId, lookupLoaded]);
 
     const filteredVouchers = useMemo(() => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useEffectEvent } from "react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
@@ -82,10 +82,8 @@ export default function ShopMasterPresentationList({
 
     // Another tab's list: the spinner shows from its first render.
     if (useValueChange(apiBase, null)) setLoading(true);
-    useEffect(() => {
-        void read();
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- apiBase/hierarchical are fixed per tab, not reactive
-    }, [apiBase]);
+    const readList = useEffectEvent(() => { void read(); });
+    useEffect(() => { readList(); }, [apiBase]);
     // Rows refresh in place; the edit form holds its own copy.
     useRealtimeTopics(["catalogue"], () => load(true));
 

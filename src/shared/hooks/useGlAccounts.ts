@@ -19,7 +19,7 @@
  *   • Concurrent callers share ONE request via the in-flight dedupe.
  */
 
-import { useEffect } from "react";
+import { useEffect, useEffectEvent } from "react";
 import axios from "axios";
 import { create } from "zustand";
 import type { GlAccount } from "@/modules/accountancy/components/GlAccountCombobox";
@@ -68,8 +68,9 @@ export function useGlAccounts(opts: { onError?: () => void } = {}): { accounts: 
     const hydrated = useStore((s) => s.hydrated);
     const { onError } = opts;
 
+    const reportError = useEffectEvent(() => onError?.());
     useEffect(() => {
-        loadGlAccounts().catch(() => onError?.());
+        loadGlAccounts().catch(() => reportError());
         // One realtime subscription for however many voucher pages are open.
         if (subscribers++ === 0) {
             unsubscribe = subscribeRealtimeTopics(["ledger"], () => { void loadGlAccounts().catch(() => {}); });
@@ -77,8 +78,7 @@ export function useGlAccounts(opts: { onError?: () => void } = {}): { accounts: 
         return () => {
             if (--subscribers === 0) { unsubscribe?.(); unsubscribe = null; }
         };
-        // onError is a callback identity; the fetch must run once per mount only.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        // The fetch runs once per mount; onError is read when it fails.
     }, []);
 
     return { accounts: rows, loading: !hydrated };
