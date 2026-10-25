@@ -65,6 +65,17 @@ export const newLine = (): LineState => ({
     showDescription: false,
 });
 
+/**
+ * The line's price with GST taken out. In "Price (incl)" mode the typed price
+ * already carries GST (₹118 at 18% is ₹100 + ₹18), so every discount / tax
+ * figure must start from rate / (1 + GST/100), never from the typed price.
+ */
+export function exclusiveRate(l: Pick<LineState, "rate" | "taxRate">, rateInclTax: boolean): number {
+    const rawRate = parseFloat(l.rate) || 0;
+    const tRate = parseFloat(l.taxRate) || 0;
+    return rateInclTax && tRate > 0 ? rawRate / (1 + tRate / 100) : rawRate;
+}
+
 export type CalcOpts = { applyDiscount?: boolean; applyTax?: boolean; rateInclTax?: boolean };
 // Rounds `amount` to 2dp so it matches what's shown per-line and what the
 // server independently re-derives (calcLineTotals in modules/inventory/lib/
@@ -76,12 +87,8 @@ export type CalcOpts = { applyDiscount?: boolean; applyTax?: boolean; rateInclTa
 export function calcLine(l: LineState, opts: CalcOpts = {}) {
     const { applyDiscount = true, applyTax = true, rateInclTax = false } = opts;
     const qty = parseFloat(l.quantity) || 0;
-    const rawRate = parseFloat(l.rate) || 0;
-    // When rate is inclusive of tax, back-calculate the exclusive rate for
-    // gross computation so that (gross − discount) × taxRate = taxAmount.
-    const tRate = parseFloat(l.taxRate) || 0;
-    const rate = rateInclTax && tRate > 0 ? rawRate / (1 + tRate / 100) : rawRate;
-    const gross = qty * rate;
+    // Exclusive rate, so that (gross − discount) × taxRate = taxAmount.
+    const gross = qty * exclusiveRate(l, rateInclTax);
     const discAmt = applyDiscount ? (parseFloat(l.discountAmt) || 0) : 0;
     const taxable = gross - discAmt;
     const taxAmt = applyTax ? (parseFloat(l.taxAmount) || 0) : 0;
@@ -97,11 +104,9 @@ export function calcLine(l: LineState, opts: CalcOpts = {}) {
  * a hand-typed quantity is.
  */
 export function reprice(l: LineState, rateInclTax: boolean): LineState {
-    const rawRate = parseFloat(l.rate) || 0;
     const tRate = parseFloat(l.taxRate) || 0;
     // Use the exclusive rate for the discount regardless of display mode.
-    const rate = rateInclTax && tRate > 0 ? rawRate / (1 + tRate / 100) : rawRate;
-    const gross = (parseFloat(l.quantity) || 0) * rate;
+    const gross = (parseFloat(l.quantity) || 0) * exclusiveRate(l, rateInclTax);
     const discAmt = gross * ((parseFloat(l.discountPct) || 0) / 100);
     const taxAmt = (gross - discAmt) * (tRate / 100);
     return {
