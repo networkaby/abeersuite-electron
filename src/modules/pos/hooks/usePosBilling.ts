@@ -38,46 +38,14 @@ import { searchProducts, readCachedProducts, syncProducts } from "@/shared/lib/i
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 import { focusWhenReady } from "@/shared/lib/ui/focusWhenReady";
-import type { PromoSnapshot } from "@/shared/lib/accountancy/settlement";
+import { parseAmt, type EditBill } from "@/modules/pos/hooks/posBilling/types";
 
 /** How many rows the product dropdown shows — kept constant so the list does
  *  not change height between a good query and a poor one. */
 const DROPDOWN_ROWS = 12;
 
-// Text-input sanitiser — same shape as TradingVoucherPage's num.
-// Project rule: no <input type="number">; we keep raw strings in state and
-// parse on submit / when computing totals.
-export function parseAmt(s: string): number {
-    const n = Number(s);
-    return Number.isFinite(n) ? n : 0;
-}
-
-/** A posted POS sale being re-saved — see `editBill` below and posSaleEdit.ts,
- *  which the PATCH checks every figure here against. */
-export type EditBill = {
-    /** The saved lines, in order, with the level discount each carried (₹, before GST). */
-    lines: { productId: number; qty: number; unitPrice: number; discountAmt: number }[];
-    shippingAmt: number;
-    /** Saved round-off — kept while the bill comes to what it was. */
-    roundOff: number;
-    /** Net of the saved charge rows other than loyalty and coupon (services at gross). */
-    chargesNet: number;
-    /** The coupon the sale used — kept as it was; no new coupon on an edit. */
-    coupon: { code: string; rupees: number } | null;
-    /** The offers the sale was rung under (tier %, loyalty rates). */
-    promo: PromoSnapshot;
-    /** Points the sale redeemed, their ₹, and the most the edit may redeem. */
-    redeemedBefore: number;
-    redeemRupeesBefore: number;
-    maxRedeem: number;
-    /** The gift card it drew: that draw plus what is on the card today may be used. */
-    gift: { code: string | null; usedBefore: number; availableNow: number } | null;
-    /** The payment accounts of the counter the sale was rung on (null = a sale
-     *  with no shift; the editor's own counter takes the payment). */
-    payAccounts: ActiveShift["counter"]["paymentAccounts"] | null;
-    /** How the sale was paid — what a plain checkout open starts from. */
-    savedPayments: { cash: number; splits: { paymentAccountId: number; amount: number; reference: string }[] };
-};
+// Moved to posBilling/types.ts; re-exported so the screens' imports stay as they were.
+export { parseAmt, type EditBill };
 
 export function usePosBilling(opts: {
     /** Ctrl/Cmd+Enter dispatch — called only when the shared guards pass
