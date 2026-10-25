@@ -15,6 +15,7 @@ export { useValueChange } from "./useValueChange";
 export { useNavCounts, useMarkSurfaceSeen, useInboxUnread, useNotificationUnread, refreshNavCounts, NAV_COUNTS_CHANGED } from "./useNavCounts";
 export { usePolling } from "./usePolling";
 export { useTableSort } from "./useTableSort";
+export { useBrowserCached } from "./useBrowserCached";
 export { usePositionPicker, invalidatePositionPicker, type PositionPickerData } from "./usePositionPicker";
 export { useBranchOptions, defaultOpeningBranchId, type BranchOption } from "./useBranchOptions";
 export { useTicketsDelta, type TicketRow, type TicketsQuery, type UseTicketsDeltaOptions } from "./useTicketsDelta";

@@ -6,16 +6,15 @@
  * `/api/branches` is a heavy read (every branch with its positions and their
  * holders, for the admin screens), and the opening-stock pickers — the product
  * form and the Opening Balance page — only want `{ id, name }`. So the list is
- * kept in localStorage (same cache as usePositionPicker) and re-read only when
- * the copy is older than MAX_AGE_MS, or when the `settings` topic says a branch
+ * kept in localStorage (useBrowserCached, like usePositionPicker) and re-read
+ * only when the copy is older than 30 minutes, or when the `settings` topic says a branch
  * was added, renamed or switched off.
  */
 
-import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
-import { readCache, subscribeToCache, writeCache } from "@/shared/lib/browser/pollCache";
 import { HEAD_OFFICE_BRANCH_ID } from "@/shared/lib/org/systemBranch";
 import { isCombined } from "@/store/activeBranchStore";
+import { useBrowserCached } from "./useBrowserCached";
 import { useRealtimeTopics } from "./useRealtimeTopics";
 
 export type BranchOption = { id: string; name: string };
@@ -23,39 +22,19 @@ export type BranchOption = { id: string; name: string };
 // Not user-scoped: the branch master is the same for everyone. What a user may
 // PICK is checked by the server (openingBranchForSave), not by this list.
 const CACHE_KEY = "branch-options:v1";
-const MAX_AGE_MS = 30 * 60 * 1000;
+const NONE: BranchOption[] = [];
+
+async function fetchBranches() {
+    const res = await axios.get<(BranchOption & { isActive?: boolean })[]>("/api/branches");
+    return {
+        data: res.data.filter((b) => b.isActive !== false).map(({ id, name }) => ({ id, name })),
+        computedAt: new Date().toISOString(),
+    };
+}
 
 export function useBranchOptions(): { branches: BranchOption[]; ready: boolean } {
-    // Seeded in an effect, never during render — see usePositionPicker.
-    const [branches, setBranches] = useState<BranchOption[]>([]);
-    const [ready, setReady] = useState(false);
-
-    const load = useCallback(async (force: boolean) => {
-        if (!force) {
-            const hit = readCache<BranchOption[]>(CACHE_KEY);
-            if (hit && Date.now() - new Date(hit.computedAt).getTime() < MAX_AGE_MS) {
-                setBranches(hit.data);
-                setReady(true);
-                return;
-            }
-        }
-        try {
-            const res = await axios.get<(BranchOption & { isActive?: boolean })[]>("/api/branches");
-            const next = res.data.filter((b) => b.isActive !== false).map(({ id, name }) => ({ id, name }));
-            setBranches(next);
-            writeCache(CACHE_KEY, next, new Date().toISOString());
-        } catch {
-            /* Keep what is shown; an empty list only disables the picker. */
-        } finally {
-            setReady(true);
-        }
-    }, []);
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- adopts this browser's saved copy after hydration (see usePositionPicker); reading it during render would mismatch the server's empty pass
-    useEffect(() => { void load(false); }, [load]);
-    useEffect(() => subscribeToCache<BranchOption[]>(CACHE_KEY, (e) => setBranches(e.data)), []);
-    useRealtimeTopics(["settings"], () => { void load(true); });
-
+    const { data: branches, ready, refresh } = useBrowserCached(CACHE_KEY, fetchBranches, NONE);
+    useRealtimeTopics(["settings"], refresh);
     return { branches, ready };
 }
 
