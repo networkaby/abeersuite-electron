@@ -76,7 +76,7 @@ export function PosReceiptDialog({
     paymentAccounts?: TenderAccount[];
     onDone: () => void;
 }) {
-    const [party, setParty]   = useState<{ accountId: number; name: string } | null>(null);
+    const [party, setParty]   = useState<{ accountId: number; name: string; phone: string | null } | null>(null);
     const [pay, setPay]       = useState<PayState>({ cashTendered: 0, cashReturn: 0 });
     const [tenders, setTenders] = useState<TenderSplit[]>([]);
     const [note, setNote]     = useState("");
@@ -109,7 +109,7 @@ export function PosReceiptDialog({
 
     const onPicked = (p: PickedParty) => {
         if (p.accountId == null) { toast.error(`${p.name} has no ledger account yet`); return; }
-        setParty({ accountId: p.accountId, name: p.name });
+        setParty({ accountId: p.accountId, name: p.name, phone: p.phone });
         const req = ++dueReq.current;
         setDue("loading");
         axios.get<{ due: number }>(`/api/pos/party-balance/${p.accountId}`)
@@ -204,6 +204,7 @@ export function PosReceiptDialog({
                 onOpenChange={setShareOpen}
                 defaultAmount={total > 0 ? total : 0}
                 partyName={party?.name}
+                partyPhone={party?.phone ?? null}
                 upiVpa={shareVpa}
                 lockedProviderId="upi"
             />
