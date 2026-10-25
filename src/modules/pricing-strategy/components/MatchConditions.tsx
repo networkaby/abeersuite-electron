@@ -356,7 +356,7 @@ export function MatchConditions({
                         onChange={(ids) => onChange({ groupIds: ids })}
                     />
                     <MultiSelectGroup
-                        label="Categories" icon={Boxes}
+                        label="Collections" icon={Boxes}
                         hierarchical
                         items={buildHierarchy(categories)}
                         selected={value.categoryIds}

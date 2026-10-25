@@ -24,7 +24,7 @@ import {
 
 const TOKEN_LABEL: Record<TokenKind, string> = {
     brand:    "Brand",
-    category: "Category",
+    category: "Collection",
     group:    "Group",
     modelNo:  "Model no.",
     warranty: "Warranty",

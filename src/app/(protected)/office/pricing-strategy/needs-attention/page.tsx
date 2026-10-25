@@ -27,7 +27,7 @@ type View = "group" | "category" | "brand" | "item";
 type SortKey = "name" | "group" | "category" | "brand" | "cost" | "mrp";
 
 function groupKey(item: PricingItem, view: View): string {
-    if (view === "category") return item.categoryName ?? "— No category —";
+    if (view === "category") return item.categoryName ?? "— No collection —";
     if (view === "brand") return item.brandName ?? "— No brand —";
     // view === "item" never uses groupKey; fall through to groupName for safety.
     return item.groupName ?? "— No group —";
@@ -299,7 +299,7 @@ export default function NeedsAttentionPage() {
                                 : "border-border hover:bg-muted"
                             }`}
                     >
-                        {v === "item" ? "Item-wise" : v.charAt(0).toUpperCase() + v.slice(1)}
+                        {v === "item" ? "Item-wise" : v === "category" ? "Collection" : v.charAt(0).toUpperCase() + v.slice(1)}
                     </button>
                 ))}
 
@@ -342,7 +342,7 @@ export default function NeedsAttentionPage() {
                             <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
                                 <SortHeader k="name"     label="Product"      className="px-2 py-2" {...sortProps} />
                                 <SortHeader k="group"    label="Group"        className="px-2 py-2" {...sortProps} />
-                                <SortHeader k="category" label="Category"     className="px-2 py-2" {...sortProps} />
+                                <SortHeader k="category" label="Collection"     className="px-2 py-2" {...sortProps} />
                                 <SortHeader k="brand"    label="Brand"        className="px-2 py-2" {...sortProps} />
                                 <SortHeader k="cost"     label="Opening excl" align="right" firstDir="desc" className="px-2 py-2" {...sortProps} />
                                 <th className="px-2 py-2 text-right font-medium uppercase">Opening incl</th>

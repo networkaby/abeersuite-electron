@@ -32,7 +32,7 @@ export const INVENTORY_MASTERS_NAV_GROUPS: InventoryMastersNavGroup[] = [
         label: "Masters",
         links: [
             { label: "Units", href: `${BASE}/units`, icon: Ruler },
-            { label: "Categories", href: `${BASE}/categories`, icon: Layers },
+            { label: "Collections", href: `${BASE}/categories`, icon: Layers },
             { label: "Groups", href: `${BASE}/product-groups`, icon: LayoutGrid },
             { label: "Brands", href: `${BASE}/brands`, icon: Tag },
             { label: "Warranty terms", href: `${BASE}/warranty-terms`, icon: ShieldCheck },

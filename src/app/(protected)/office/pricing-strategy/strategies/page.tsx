@@ -674,7 +674,7 @@ export default function PricingStrategiesPage() {
                     <PointSection title="Brands" icon={Tag} rows={flatRows(brands)} points={brandPts}
                         relevantKeys={relevant.brand}
                         onChange={(k, v) => setBrandPts((s) => ({ ...s, [k]: v }))} />
-                    <PointSection title="Categories" icon={FolderTree} rows={treeRows(categories)} points={catPts}
+                    <PointSection title="Collections" icon={FolderTree} rows={treeRows(categories)} points={catPts}
                         relevantKeys={relevant.category}
                         onChange={(k, v) => setCatPts((s) => ({ ...s, [k]: v }))} />
                     <PointSection title="Groups" icon={Boxes} rows={treeRows(groups)} points={groupPts}
@@ -816,7 +816,7 @@ export default function PricingStrategiesPage() {
                                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                                         <RangeRow label="Brand pts" value={ptRanges.brand}
                                             onChange={(v) => setPtRanges((s) => ({ ...s, brand: v }))} />
-                                        <RangeRow label="Category pts" value={ptRanges.category}
+                                        <RangeRow label="Collection pts" value={ptRanges.category}
                                             onChange={(v) => setPtRanges((s) => ({ ...s, category: v }))} />
                                         <RangeRow label="Group pts" value={ptRanges.group}
                                             onChange={(v) => setPtRanges((s) => ({ ...s, group: v }))} />

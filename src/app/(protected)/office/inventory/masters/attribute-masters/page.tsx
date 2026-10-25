@@ -149,7 +149,7 @@ export default function AttributeMastersPage() {
 
             <p className="flex-none text-sm text-muted-foreground">
                 Define the attribute keys used in product custom attributes (e.g. <code className="font-mono text-xs">ram</code>, <code className="font-mono text-xs">storage</code>, <code className="font-mono text-xs">os</code>).
-                Optionally restrict an attribute to a specific category — product form dropdowns filter by the selected category plus global attributes.
+                Optionally restrict an attribute to a specific collection — product form dropdowns filter by the selected collection plus global attributes.
                 These keys are also used in the naming convention&apos;s <strong>Custom attribute</strong> token.
             </p>
 
@@ -180,16 +180,16 @@ export default function AttributeMastersPage() {
                             />
                         </div>
                         <div className="space-y-2 min-w-[180px]">
-                            <Label>Category <span className="text-[10px] text-muted-foreground font-normal">(optional)</span></Label>
+                            <Label>Collection <span className="text-[10px] text-muted-foreground font-normal">(optional)</span></Label>
                             <Select
                                 value={form.categoryId || "__none__"}
                                 onValueChange={(v) => setForm((f) => ({ ...f, categoryId: v === "__none__" ? "" : v }))}
                             >
                                 <SelectTrigger>
-                                    <SelectValue placeholder="All categories" />
+                                    <SelectValue placeholder="All collections" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="__none__">All categories (global)</SelectItem>
+                                    <SelectItem value="__none__">All collections (global)</SelectItem>
                                     {flattenTree(categories).map((r) => (
                                         <SelectItem key={r.id} value={String(r.id)}>{treeLabel(r)}</SelectItem>
                                     ))}
@@ -222,7 +222,7 @@ export default function AttributeMastersPage() {
                         <TableRow>
                             <TableHead>Key</TableHead>
                             <TableHead>Label</TableHead>
-                            <TableHead>Category</TableHead>
+                            <TableHead>Collection</TableHead>
                             <TableHead className="text-right"> </TableHead>
                         </TableRow>
                     </TableHeader>

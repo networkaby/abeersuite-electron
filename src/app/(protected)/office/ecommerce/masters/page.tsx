@@ -7,7 +7,7 @@ import ShopMasterPresentationList from "@/modules/ecommerce/components/ShopMaste
 
 const SUB_TABS = [
     { key: "group", label: "Group", icon: LayoutGrid, apiBase: "/api/inventory/product-groups", imageFolder: "shop/groups", hierarchical: true },
-    { key: "category", label: "Category", icon: Layers, apiBase: "/api/inventory/categories", imageFolder: "shop/categories", hierarchical: true },
+    { key: "category", label: "Collection", icon: Layers, apiBase: "/api/inventory/categories", imageFolder: "shop/categories", hierarchical: true },
     { key: "brand", label: "Brand", icon: Tag, apiBase: "/api/inventory/brands", imageFolder: "shop/brands", hierarchical: false },
 ] as const;
 

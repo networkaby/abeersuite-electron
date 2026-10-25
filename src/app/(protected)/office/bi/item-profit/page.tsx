@@ -81,7 +81,7 @@ export default function ItemProfitPage() {
                                 className="h-9 rounded-md border border-input bg-background px-2 text-sm"
                             >
                                 <option value="item">Item</option>
-                                <option value="category">Category</option>
+                                <option value="category">Collection</option>
                                 <option value="brand">Brand</option>
                             </select>
                         </div>
@@ -104,8 +104,8 @@ export default function ItemProfitPage() {
                         <table className="w-full text-sm">
                             <thead className="border-b bg-muted text-xs text-muted-foreground">
                                 <tr>
-                                    <th className="px-3 py-2 text-left font-medium">{groupBy === "item" ? "Item" : groupBy === "category" ? "Category" : "Brand"}</th>
-                                    {groupBy === "item" && <th className="px-3 py-2 text-left font-medium">Category</th>}
+                                    <th className="px-3 py-2 text-left font-medium">{groupBy === "item" ? "Item" : groupBy === "category" ? "Collection" : "Brand"}</th>
+                                    {groupBy === "item" && <th className="px-3 py-2 text-left font-medium">Collection</th>}
                                     <th className="px-3 py-2 text-right font-medium">Qty</th>
                                     <th className="px-3 py-2 text-right font-medium">Revenue</th>
                                     <th className="px-3 py-2 text-right font-medium">Avg Rate</th>

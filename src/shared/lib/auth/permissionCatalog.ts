@@ -40,7 +40,7 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     { id: "mobile:receivables:view", label: "Mobile: receivables", module: "mobile", description: "Phone app: who owes us — total, age, and each party's unpaid bills." },
     { id: "mobile:payables:view", label: "Mobile: payables", module: "mobile", description: "Phone app: whom we owe — total, age, and each supplier's unpaid bills." },
     { id: "mobile:daybook:view", label: "Mobile: day book", module: "mobile", description: "Phone app: every voucher of a chosen day." },
-    { id: "mobile:photos:edit", label: "Mobile: photos", module: "mobile", description: "Phone app: take or pick shop photos for products, brands, groups and categories. A photo that makes a product shop-ready lists it, as the office photo save does." },
+    { id: "mobile:photos:edit", label: "Mobile: photos", module: "mobile", description: "Phone app: take or pick shop photos for products, brands, groups and collections. A photo that makes a product shop-ready lists it, as the office photo save does." },
     { id: "mobile:inbox:view", label: "Mobile: inbox", module: "mobile", description: "Phone app: read and reply to customer WhatsApp messages and chats." },
     { id: "mobile:posts:share", label: "Mobile: posts", module: "mobile", description: "Phone app: see the posts waiting for WhatsApp Channel / Status, share each into WhatsApp and mark it done. The person must also be an admin of our WhatsApp Channel (or hold the company phone, for Status)." },
 
@@ -127,7 +127,7 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     { id: "products:create", label: "Create products", module: "inventory", description: "Add items to the product catalog." },
     { id: "products:edit", label: "Edit products", module: "inventory", description: "Edit product catalog items (non-tax fields; tax uses compliance:tax:edit)." },
     { id: "products:delete", label: "Delete products", module: "inventory", description: "Delete product catalog items." },
-    { id: "inventory:masters:create", label: "Create inventory masters", module: "inventory", description: "Add brands, units, categories, groups, warranty terms, attributes, GST rates, and BOMs." },
+    { id: "inventory:masters:create", label: "Create inventory masters", module: "inventory", description: "Add brands, units, collections, groups, warranty terms, attributes, GST rates, and BOMs." },
     { id: "inventory:masters:edit", label: "Edit inventory masters", module: "inventory", description: "Edit the inventory setup/master tables." },
     { id: "inventory:masters:delete", label: "Delete inventory masters", module: "inventory", description: "Delete inventory setup/master records." },
 

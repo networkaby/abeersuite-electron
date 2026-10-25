@@ -47,7 +47,7 @@ type Opt = { id: number; name?: string; code?: string; label?: string; parentId?
 type GstRateOpt = { id: number; rate: string | number; label: string; isActive?: boolean };
 
 const KIND_META: Record<MasterKind, { title: string; endpoint: string }> = {
-    category: { title: "New category", endpoint: "/api/inventory/categories" },
+    category: { title: "New collection", endpoint: "/api/inventory/categories" },
     brand:    { title: "New brand",    endpoint: "/api/inventory/brands" },
     group:    { title: "New group",    endpoint: "/api/inventory/product-groups" },
     warranty: { title: "New warranty term", endpoint: "/api/inventory/warranty-terms" },

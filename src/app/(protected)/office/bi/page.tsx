@@ -28,7 +28,7 @@ const REPORTS = [
     { href: "/office/bi/customer-profit", icon: Users, label: "Customer-wise Profit", desc: "Revenue, derived COGS and margin per customer, with item drill-down." },
     { href: "/office/bi/bill-profit", icon: Receipt, label: "Bill-wise Profit", desc: "Profit earned on each individual bill — loss-making bills flagged." },
     { href: "/office/bi/top-customers", icon: ChartArea, label: "Top Customers", desc: "Rank by profit, revenue or visit frequency — with share of total." },
-    { href: "/office/bi/item-profit", icon: Box, label: "Item-wise Profit", desc: "Margin per product; pivot by category or brand; below-cost flags." },
+    { href: "/office/bi/item-profit", icon: Box, label: "Item-wise Profit", desc: "Margin per product; pivot by collection or brand; below-cost flags." },
     { href: "/office/bi/item-by-party", icon: Grid2x2, label: "Item by Party", desc: "One item, both sides — who buys it and who supplies it." },
     { href: "/office/bi/party-sale-purchase", icon: ArrowLeftRight, label: "Party Sale & Purchase", desc: "Sold-to vs bought-from per party, with the net flow." },
     { href: "/office/bi/ledger-vs-ledger", icon: ArrowLeftRight, label: "Ledger vs Ledger", desc: "Only the vouchers between two ledgers — Tally's contra-ledger view, with the net." },

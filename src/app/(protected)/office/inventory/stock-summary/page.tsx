@@ -167,7 +167,7 @@ export default function StockSummaryPage() {
     const grouped = useMemo(() => {
         const keyName = (r: Row): string =>
             view === "group" ? r.group?.name ?? "Ungrouped"
-                : view === "category" ? r.category?.name ?? "Uncategorised"
+                : view === "category" ? r.category?.name ?? "No collection"
           /* brand */ : r.brand?.name ?? "No brand";
 
         const map = new Map<string, Row[]>();
@@ -370,7 +370,7 @@ export default function StockSummaryPage() {
                                 : "text-muted-foreground hover:bg-muted"
                                 }`}
                         >
-                            {v === "item" ? "Item-wise" : v}
+                            {v === "item" ? "Item-wise" : v === "category" ? "collection" : v}
                         </button>
                     ))}
                 </div>
@@ -449,7 +449,7 @@ export default function StockSummaryPage() {
                                 <th className="px-3 py-2 text-left font-medium">Particulars</th>
                                 {showCatBrandCols && (
                                     <>
-                                        <th className="px-3 py-2 text-left font-medium">Category</th>
+                                        <th className="px-3 py-2 text-left font-medium">Collection</th>
                                         <th className="px-3 py-2 text-left font-medium">Brand</th>
                                     </>
                                 )}
@@ -645,7 +645,7 @@ export default function StockSummaryPage() {
                             <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
                                 <SortHeader k="name" label="Name" {...sortProps} />
                                 <SortHeader k="group" label="Group" {...sortProps} />
-                                <SortHeader k="category" label="Category" {...sortProps} />
+                                <SortHeader k="category" label="Collection" {...sortProps} />
                                 <SortHeader k="brand" label="Brand" {...sortProps} />
                                 <SortHeader k="quantity" label="Quantity" align="right" firstDir="desc" {...sortProps} />
                                 <SortHeader k="rate" label="Rate" align="right" firstDir="desc" {...sortProps} />

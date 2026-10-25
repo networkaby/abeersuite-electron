@@ -157,8 +157,8 @@ const NONE_KEY = "__none__";
 const fmtQty = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
 const fmtCost = (paise: number | null) => (paise == null ? "—" : fmt(paise / 100));
 
-const FIELD_LABELS: Record<FilterField, string> = { group: "Group", category: "Category", brand: "Brand" };
-const NONE_LABELS: Record<FilterField, string> = { group: "Ungrouped", category: "Uncategorised", brand: "No brand" };
+const FIELD_LABELS: Record<FilterField, string> = { group: "Group", category: "Collection", brand: "Brand" };
+const NONE_LABELS: Record<FilterField, string> = { group: "Ungrouped", category: "No collection", brand: "No brand" };
 
 /// Movement-class badges — Regular stays silent (only exceptions get ink).
 const CLASS_BADGES: Record<MovementClass, { label: string; cls: string } | null> = {

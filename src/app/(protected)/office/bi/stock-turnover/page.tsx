@@ -88,7 +88,7 @@ export default function StockTurnoverPage() {
                                     className="h-9 rounded-md border border-input bg-background px-2 text-sm"
                                 >
                                     <option value="item">Item</option>
-                                    <option value="category">Category</option>
+                                    <option value="category">Collection</option>
                                 </select>
                             </div>
                             <div className="space-y-1">
@@ -113,7 +113,7 @@ export default function StockTurnoverPage() {
                     <table className="w-full text-sm">
                         <thead className="border-b bg-muted text-xs text-muted-foreground">
                             <tr>
-                                <th className="px-3 py-2 text-left font-medium">{groupBy === "item" ? "Item" : "Category"}</th>
+                                <th className="px-3 py-2 text-left font-medium">{groupBy === "item" ? "Item" : "Collection"}</th>
                                 <th className="px-3 py-2 text-right font-medium">COGS</th>
                                 <th className="px-3 py-2 text-right font-medium">Avg Inventory</th>
                                 <th className="px-3 py-2 text-right font-medium">Turnover</th>

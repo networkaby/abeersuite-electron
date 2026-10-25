@@ -65,7 +65,7 @@ export default function InventoryCategoriesPage() {
         axios
             .get<InvCategory[]>("/api/inventory/categories")
             .then((r) => setRows(r.data))
-            .catch(() => toast.error("Failed to load categories"))
+            .catch(() => toast.error("Failed to load collections"))
             .finally(() => setLoading(false));
     };
 
@@ -101,10 +101,10 @@ export default function InventoryCategoriesPage() {
             };
             if (adding) {
                 await axios.post("/api/inventory/categories", payload);
-                toast.success("Category created");
+                toast.success("Collection created");
             } else if (editId != null) {
                 await axios.patch(`/api/inventory/categories/${editId}`, payload);
-                toast.success("Category updated");
+                toast.success("Collection updated");
             }
             cancel();
             load();
@@ -117,7 +117,7 @@ export default function InventoryCategoriesPage() {
 
     const { remove: del } = useDeleteWithConfirm({
         url: (id) => `/api/inventory/categories/${id}`,
-        message: () => "Delete this category?",
+        message: () => "Delete this collection?",
         errorMessage: "Delete failed",
         onSuccess: () => load(),
     });
@@ -134,7 +134,7 @@ export default function InventoryCategoriesPage() {
                 <div>
                     <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
                         <Layers className="size-5" aria-hidden />
-                        Categories
+                        Collections
                     </h2>
                 </div>
                 <div className="flex items-center gap-2">
@@ -146,7 +146,7 @@ export default function InventoryCategoriesPage() {
                     ) : null}
                     <Button type="button" onClick={() => { setForm(empty); setEditId(null); setAdding(true); }} disabled={adding}>
                         <Plus className="size-4" />
-                        New category
+                        New collection
                     </Button>
                 </div>
             </div>
@@ -154,7 +154,7 @@ export default function InventoryCategoriesPage() {
             <Dialog open={adding || editId != null} onOpenChange={(o) => { if (!o) cancel(); }}>
                 <DialogContent className="sm:max-w-lg">
                     <DialogHeader>
-                        <DialogTitle>{adding ? "New category" : "Edit category"}</DialogTitle>
+                        <DialogTitle>{adding ? "New collection" : "Edit collection"}</DialogTitle>
                     </DialogHeader>
                     <div className="grid gap-3 sm:grid-cols-2">
                         <div className="space-y-2">
@@ -205,7 +205,7 @@ export default function InventoryCategoriesPage() {
                             </div>
                             <p className="text-[11px] text-muted-foreground">
                                 Drives the Reorder / Stock Health classes (a product&apos;s group override wins first).
-                                Blank = inherit parent category → org default — e.g. consumables 15/45/90.
+                                Blank = inherit parent collection → org default — e.g. consumables 15/45/90.
                             </p>
                         </div>
                         <div className="flex items-end">
@@ -245,7 +245,7 @@ export default function InventoryCategoriesPage() {
                         ) : visible.length === 0 ? (
                             <TableRow>
                                 <TableCell colSpan={3} className="text-muted-foreground">
-                                    No categories yet.
+                                    No collections yet.
                                 </TableCell>
                             </TableRow>
                         ) : (

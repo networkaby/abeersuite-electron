@@ -95,7 +95,7 @@ const enumFromCode = (c: CostCode): string =>
 type ColKey = "brand" | "category" | "group" | "stock" | "cost" | "margin" | "strategy" | "computed" | "sale" | "selling" | "mrp" | "barcode";
 const COLS: { key: ColKey; label: string }[] = [
     { key: "brand", label: "Brand" },
-    { key: "category", label: "Category" },
+    { key: "category", label: "Collection" },
     { key: "group", label: "Group" },
     { key: "stock", label: "Stock" },
     { key: "cost", label: "Cost + Method" },
@@ -1229,7 +1229,7 @@ export default function GeneratePage() {
                     </div>
                     <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                         {labelled("Brand", filterSelect(fBrand, setFBrand, "All", brands.map((b) => ({ value: b, label: b }))))}
-                        {labelled("Category", filterSelect(fCategory, setFCategory, "All", categories.map((c) => ({ value: c, label: c }))))}
+                        {labelled("Collection", filterSelect(fCategory, setFCategory, "All", categories.map((c) => ({ value: c, label: c }))))}
                         {labelled("Group", filterSelect(fGroup, setFGroup, "All", groups.map((g) => ({ value: g, label: g }))))}
                         {labelled("Method", filterSelect(fMethod, setFMethod, "All", methodOpts))}
                         {labelled("Sells at", filterSelect(fSource, setFSource, "All", SOURCE_OPTIONS))}
@@ -1279,7 +1279,7 @@ export default function GeneratePage() {
                             <TableHead className="w-8 text-xs">#</TableHead>
                             <SortHeader k="name" label="Product name" className={`${SORT_TH} w-full min-w-[240px]`} {...sortProps} />
                             {show("brand") ? <SortHeader k="brand" label="Brand" className={SORT_TH} {...sortProps} /> : null}
-                            {show("category") ? <SortHeader k="category" label="Category" className={SORT_TH} {...sortProps} /> : null}
+                            {show("category") ? <SortHeader k="category" label="Collection" className={SORT_TH} {...sortProps} /> : null}
                             {show("group") ? <SortHeader k="group" label="Group" className={SORT_TH} {...sortProps} /> : null}
                             {show("stock") ? <SortHeader k="stock" label="Stock" align="right" firstDir="desc" className={`${SORT_TH} ${COL_TINT.stock}`} {...sortProps} /> : null}
                             {show("cost") ? <SortHeader k="cost" label="Cost (incl)" align="right" firstDir="desc" className={`${SORT_TH} ${COL_TINT.cost}`} {...sortProps} /> : null}

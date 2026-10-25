@@ -161,7 +161,7 @@ function MasterCard({ masters }: { masters: StatsData["masters"] }) {
         { label: "Party A/cs",     value: masters.parties },
         { label: "Stock Groups",   value: masters.stockGroups },
         { label: "Stock Items",    value: masters.stockItems },
-        { label: "Categories",     value: masters.categories },
+        { label: "Collections",    value: masters.categories },
         { label: "Brands",         value: masters.brands },
         { label: "Units",          value: masters.units },
     ];

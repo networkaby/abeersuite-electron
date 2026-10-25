@@ -132,7 +132,7 @@ const COLUMNS: { id: ColId; label: string }[] = [
     { id: "sku", label: "SKU" },
     { id: "name", label: "Name" },
     { id: "namePart", label: "Custom" },
-    { id: "category", label: "Category" },
+    { id: "category", label: "Collection" },
     { id: "brand", label: "Brand" },
     { id: "group", label: "Group" },
     { id: "warranty", label: "Warranty" },
@@ -784,7 +784,7 @@ export default function InventoryProductsPage() {
                                     {showCol("category") ? (
                                         <TableHead className="min-w-44">
                                             <div className="flex items-center gap-1">
-                                                <SortHead field="categoryName" sort={sort} onSort={cycleSort}>Category</SortHead>
+                                                <SortHead field="categoryName" sort={sort} onSort={cycleSort}>Collection</SortHead>
                                                 <ColFilter field="categoryId" options={categories} colFilters={colFilters} onToggle={toggleColFilter} onClear={clearColFilter} onCreate={() => createMaster("category")} createLabel="category" />
                                             </div>
                                         </TableHead>
@@ -1137,7 +1137,7 @@ export default function InventoryProductsPage() {
                             Apply to <strong>{selected.size}</strong>
                         </span>
                         <span className="h-5 w-px bg-border" aria-hidden />
-                        <BulkApply label="Category" options={categories} field="categoryId" onApply={applyToSelected} onCreate={() => createMaster("category")} />
+                        <BulkApply label="Collection" options={categories} field="categoryId" onApply={applyToSelected} onCreate={() => createMaster("category")} />
                         <BulkApply label="Brand" options={brands} field="brandId" onApply={applyToSelected} onCreate={() => createMaster("brand")} />
                         <BulkApply label="Group" options={groups} field="groupId" onApply={applyToSelected} onCreate={() => createMaster("group")} />
                         <BulkApply label="Warranty" options={warrantyTerms} field="warrantyTermId" onApply={applyToSelected} onCreate={() => createMaster("warranty")} />

@@ -14,7 +14,7 @@ export default function PricingStrategyOverviewPage() {
                 <p>
                     <strong>Strategies</strong> use an additive-margin model: you assign margin
                     POINTS to each dimension, and a product&apos;s margin% is their{" "}
-                    <strong>sum</strong> — <code>base + brand + category + group</code>. The sell
+                    <strong>sum</strong> — <code>base + brand + collection + group</code>. The sell
                     price is a markup on cost, GST-inclusive and MRP-capped:{" "}
                     <code>price = cost × (1 + margin/100)</code>.
                 </p>

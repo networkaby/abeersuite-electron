@@ -5,12 +5,12 @@ import { Box, Layers, LayoutGrid, ListChecks, Percent, Ruler, ShieldCheck, Tag, 
 
 const masterCards = [
     { title: "Units", href: "/office/inventory/masters/units", description: "Measurement units (PCS, KG, …).", icon: Ruler },
-    { title: "Categories", href: "/office/inventory/masters/categories", description: "Product categories (optional hierarchy).", icon: Layers },
+    { title: "Collections", href: "/office/inventory/masters/categories", description: "Product collections (optional hierarchy) — shown in the shop as Collections.", icon: Layers },
     { title: "Groups", href: "/office/inventory/masters/product-groups", description: "Classification groups for items.", icon: LayoutGrid },
     { title: "Brands", href: "/office/inventory/masters/brands", description: "Brand names.", icon: Tag },
     { title: "Warranty terms", href: "/office/inventory/masters/warranty-terms", description: "Shelf warranty policies for masters.", icon: ShieldCheck },
     { title: "Products", href: "/office/inventory/products", description: "SKU master: model no., barcodes, EAN, UPC.", icon: Box },
-    { title: "Attribute masters", href: "/office/inventory/masters/attribute-masters", description: "Define custom attribute keys (RAM, Storage, OS…) per category.", icon: ListChecks },
+    { title: "Attribute masters", href: "/office/inventory/masters/attribute-masters", description: "Define custom attribute keys (RAM, Storage, OS…) per collection.", icon: ListChecks },
     { title: "GST Rates", href: "/office/inventory/masters/gst-rates", description: "GST rate slabs for tax classification.", icon: Percent },
     { title: "BOMs", href: "/office/inventory/masters/boms", description: "Bill of materials — raw materials and finished goods.", icon: Workflow },
 ] as const;

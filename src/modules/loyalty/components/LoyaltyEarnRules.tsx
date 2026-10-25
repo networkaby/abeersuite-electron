@@ -106,7 +106,7 @@ export function LoyaltyEarnRules({
     }
 
     function targetLabel(r: EarnRule): string {
-        if (r.scope === "CATEGORY") return r.category?.name ?? `Category #${r.categoryId}`;
+        if (r.scope === "CATEGORY") return r.category?.name ?? `Collection #${r.categoryId}`;
         if (r.scope === "GROUP") return r.group?.name ?? `Group #${r.groupId}`;
         return r.product ? `${r.product.sku} — ${r.product.name}` : `Product #${r.productId}`;
     }
@@ -154,7 +154,7 @@ export function LoyaltyEarnRules({
                                 <Select value={scope} onValueChange={(v) => { setScope(v as Scope); setTargetId(""); }}>
                                     <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="CATEGORY">Category</SelectItem>
+                                        <SelectItem value="CATEGORY">Collection</SelectItem>
                                         <SelectItem value="GROUP">Group</SelectItem>
                                         <SelectItem value="PRODUCT">Product</SelectItem>
                                     </SelectContent>

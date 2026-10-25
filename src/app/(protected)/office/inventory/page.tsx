@@ -18,7 +18,7 @@ import { moduleColor, moduleTint } from "@/shared/lib/format/moduleTheme";
 // tenth one needs no edit in this file.
 const DESCRIPTIONS: Record<string, string> = {
     "/office/inventory/masters/units": "Measurement units (PCS, KG, …).",
-    "/office/inventory/masters/categories": "Product categories (optional hierarchy).",
+    "/office/inventory/masters/categories": "Product collections (optional hierarchy) — shown in the shop as Collections.",
     "/office/inventory/masters/product-groups": "Classification groups for items.",
     "/office/inventory/masters/brands": "Brand names.",
     "/office/inventory/masters/warranty-terms": "Shelf warranty policies for masters.",

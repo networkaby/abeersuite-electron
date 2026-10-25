@@ -410,12 +410,12 @@ export function InvProductFormFields({
                         <Input value={form.modelNo} onChange={(e) => setForm((f) => ({ ...f, modelNo: e.target.value }))} />
                     </div>
                     <div className="space-y-2">
-                        <Label>Category</Label>
+                        <Label>Collection</Label>
                         <SearchableSelect
                             value={form.categoryId ? Number(form.categoryId) : null}
                             onChange={(v) => setForm((f) => ({ ...f, categoryId: v == null ? "" : String(v) }))}
                             onCreate={onCreateMaster ? () => onCreateMaster("category") : undefined}
-                            createLabel="+ New category…"
+                            createLabel="+ New collection…"
                             placeholder="Optional"
                             options={flattenTree(categories).map((r) => ({
                                 value: r.id,
