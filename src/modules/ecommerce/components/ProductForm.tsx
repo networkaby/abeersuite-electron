@@ -561,38 +561,6 @@ export default function ProductForm({
                 </div>
                 <div className="grid grid-cols-2 items-start gap-3">
                     <div className="grid gap-1.5">
-                        <Label>Group</Label>
-                        {canEditMasters ? (
-                            <SearchableSelect
-                                value={groupId}
-                                onChange={(v) => pickMaster({ groupId: v, brandId })}
-                                onCreate={() => openCreateMaster("group")}
-                                createLabel="+ New group…"
-                                placeholder="No group"
-                                options={flattenTree(masters?.groups ?? []).map((r) => ({
-                                    value: r.id, label: treeLabel(r), leaf: r.name, searchText: r.name,
-                                }))}
-                            />
-                        ) : (
-                            <Input value={groupName ?? ""} placeholder="No group" disabled />
-                        )}
-                    </div>
-                    <div className="grid gap-1.5">
-                        <Label>Brand</Label>
-                        {canEditMasters ? (
-                            <SearchableSelect
-                                value={brandId}
-                                onChange={(v) => pickMaster({ groupId, brandId: v })}
-                                onCreate={() => openCreateMaster("brand")}
-                                createLabel="+ New brand…"
-                                placeholder="No brand"
-                                options={(masters?.brands ?? []).map((b) => ({ value: b.id, label: String(b.name ?? `#${b.id}`) }))}
-                            />
-                        ) : (
-                            <Input value={brandName ?? ""} placeholder="No brand" disabled />
-                        )}
-                    </div>
-                    <div className="grid gap-1.5">
                         <Label>Slug (optional)</Label>
                         <div className="flex items-center gap-2">
                             <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="storefront URL handle" />
@@ -628,7 +596,7 @@ export default function ProductForm({
                         )}
                     </div>
                     {canEditMasters && collectionIds.length > 0 ? (
-                        <div className="col-span-2 -mt-1">
+                        <div className="col-start-2 -mt-1">
                             <MultiSelectChips
                                 value={collectionIds}
                                 onChange={setCollectionIds}
@@ -637,6 +605,38 @@ export default function ProductForm({
                             />
                         </div>
                     ) : null}
+                    <div className="grid gap-1.5">
+                        <Label>Group</Label>
+                        {canEditMasters ? (
+                            <SearchableSelect
+                                value={groupId}
+                                onChange={(v) => pickMaster({ groupId: v, brandId })}
+                                onCreate={() => openCreateMaster("group")}
+                                createLabel="+ New group…"
+                                placeholder="No group"
+                                options={flattenTree(masters?.groups ?? []).map((r) => ({
+                                    value: r.id, label: treeLabel(r), leaf: r.name, searchText: r.name,
+                                }))}
+                            />
+                        ) : (
+                            <Input value={groupName ?? ""} placeholder="No group" disabled />
+                        )}
+                    </div>
+                    <div className="grid gap-1.5">
+                        <Label>Brand</Label>
+                        {canEditMasters ? (
+                            <SearchableSelect
+                                value={brandId}
+                                onChange={(v) => pickMaster({ groupId, brandId: v })}
+                                onCreate={() => openCreateMaster("brand")}
+                                createLabel="+ New brand…"
+                                placeholder="No brand"
+                                options={(masters?.brands ?? []).map((b) => ({ value: b.id, label: String(b.name ?? `#${b.id}`) }))}
+                            />
+                        ) : (
+                            <Input value={brandName ?? ""} placeholder="No brand" disabled />
+                        )}
+                    </div>
                     <p className="col-span-2 -mt-1 text-[11px] text-muted-foreground">
                         Group = the shop&apos;s Category (and GST/HSN source). Collections = shop filters; ★ is the main one.
                         {initial?.id && groupId !== (initial?.groupId ?? null)
