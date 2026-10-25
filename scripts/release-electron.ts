@@ -12,7 +12,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { config as loadDotenv } from "dotenv";
-import { spawnSync, execSync } from "child_process";
+import { spawnSync, execSync, execFileSync } from "child_process";
 
 loadDotenv({ path: path.join(process.cwd(), ".env") });
 
@@ -232,7 +232,9 @@ try {
 // never built — and every release left a lightweight tag there that clashed with
 // origin's annotated one (Cursor's "conflicting tag(s)" pull dialog). The repo is
 // matched to a git remote by its "owner/repo" in the remote's push URL.
-const tagCommit = execSync(`git rev-parse ${tagName}^{commit}`, { encoding: "utf-8" }).trim();
+// execFileSync, not execSync: on Windows execSync goes through cmd.exe, which eats
+// every `^` — `v1.16.13^{commit}` reached git as `v1.16.13{commit}` and stopped v1.16.13.
+const tagCommit = execFileSync("git", ["rev-parse", `${tagName}^{commit}`], { encoding: "utf-8" }).trim();
 const remotes = execSync("git remote", { encoding: "utf-8" }).split("\n").map(r => r.trim()).filter(Boolean);
 for (const target of publishTargets) {
     const slug = `${target.owner}/${target.repo}`.toLowerCase();
@@ -249,7 +251,7 @@ for (const target of publishTargets) {
         process.exit(1);
     }
     // `^{}` is the commit an annotated tag points at; a lightweight tag has only the plain line.
-    const lines = execSync(`git ls-remote ${remote} refs/tags/${tagName} refs/tags/${tagName}^{}`, { encoding: "utf-8" })
+    const lines = execFileSync("git", ["ls-remote", remote, `refs/tags/${tagName}`, `refs/tags/${tagName}^{}`], { encoding: "utf-8" })
         .split("\n").filter(Boolean).map(l => l.split(/\s+/));
     const remoteCommit = (lines.find(([, ref]) => ref.endsWith("^{}")) ?? lines[0])?.[0];
     if (remoteCommit && remoteCommit !== tagCommit) {
