@@ -69,8 +69,10 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Check, ChevronDown, ChevronsUpDown, ChevronUp, Filter, Loader2, Plus, Printer, RotateCcw, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Check, Filter, Loader2, Plus, Printer, RotateCcw, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useValueChange } from "@/shared/hooks/useValueChange";
+import { useTableSort } from "@/shared/hooks/useTableSort";
+import { SortHeader } from "@/shared/components/SortHeader";
 
 // ── Cost methods (short code ↔ real CostMethod enum, for later wiring) ────────
 
@@ -282,23 +284,8 @@ function barcodePrice(
 
 type SortKey = "name" | "brand" | "category" | "group" | "stock" | "cost" | "strategy" | "computed" | "saved" | "barcode";
 
-/** Clickable header for the price table. Module-level, so it is not a new
- *  component type on every render (that remounted the whole header row). */
-function SortTh({ label, k, align = "right", thClass = "", title, sort, onSort }: {
-    label: string; k: SortKey; align?: "left" | "right"; thClass?: string; title?: string;
-    sort: { key: SortKey; dir: 1 | -1 } | null; onSort: (k: SortKey) => void;
-}) {
-    return (
-        <TableHead className={`text-xs ${align === "right" ? "text-right" : ""} ${thClass}`}>
-            <button type="button" onClick={() => onSort(k)} className="inline-flex items-center gap-1 hover:text-foreground" title={title}>
-                {label}
-                {sort?.key === k
-                    ? sort.dir === 1 ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />
-                    : <ChevronsUpDown className="size-3 opacity-40" />}
-            </button>
-        </TableHead>
-    );
-}
+/** The shadcn `TableHead` look, for the shared SortHeader cells in this table. */
+const SORT_TH = "h-11 px-3 align-middle whitespace-nowrap text-xs text-foreground";
 
 function sortVal(r: Row, key: SortKey): number | string {
     switch (key) {
@@ -800,7 +787,9 @@ export default function GeneratePage() {
     const [ranges, setRanges] = useState<Record<RangeKey, { min: string; max: string }>>(emptyRanges);
     const setRange = (key: RangeKey, side: "min" | "max", val: string) =>
         setRanges((prev) => ({ ...prev, [key]: { ...(prev[key] ?? { min: "", max: "" }), [side]: val } }));
-    const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>(null);
+    // "none" = the server's own order; a third click (or "clear sort") comes back to it.
+    const sortProps = useTableSort<SortKey | "none">("none", "asc");
+    const { sortKey, sortDir, isDefaultSort, resetSort } = sortProps;
 
     // ── Saved filters (localStorage) ──────────────────────────────────────────
     // Hydrate once on mount (after SSR, so no hydration mismatch), then persist on
@@ -902,24 +891,26 @@ export default function GeneratePage() {
                 return inRange(rangeVal(r, f.key), lo, hi);
             });
         }
-        if (sort) {
-            const s = sort;
+        if (sortKey !== "none") {
+            const key = sortKey;
+            const dir = sortDir === "asc" ? 1 : -1;
             v = [...v].sort((a, b) => {
-                const av = sortVal(a, s.key);
-                const bv = sortVal(b, s.key);
+                const av = sortVal(a, key);
+                const bv = sortVal(b, key);
                 const c = typeof av === "string" && typeof bv === "string"
                     ? av.localeCompare(bv)
-                    : (av as number) - (bv as number);
-                return c * s.dir;
+                    // Equal first: two blanks are both -Infinity, and -Infinity - -Infinity is NaN.
+                    : av === bv ? 0 : (av as number) - (bv as number);
+                return c * dir;
             });
         }
         return v;
-    }, [rows, query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tBarcodeShrink, tProfitReduce, tProfitIncrease, ranges, sort]);
+    }, [rows, query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tBarcodeShrink, tProfitReduce, tProfitIncrease, ranges, sortKey, sortDir]);
 
     // Jump back to the first page whenever the filtered/sorted list or page size
     // changes, so you never land on a now-empty page.
     // While rendering, keyed on the values themselves (ranges / sort by content).
-    if (useValueChange(JSON.stringify([query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tBarcodeShrink, tProfitReduce, tProfitIncrease, ranges, sort, tab, pageSize]))) {
+    if (useValueChange(JSON.stringify([query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tBarcodeShrink, tProfitReduce, tProfitIncrease, ranges, sortKey, sortDir, tab, pageSize]))) {
         setPageIndex(0);
     }
 
@@ -933,9 +924,6 @@ export default function GeneratePage() {
     const safePage = Math.min(pageIndex, totalPages - 1);
     const pageStart = pageSize === 0 ? 0 : safePage * pageSize;
     const pageRows = pageSize === 0 ? listRows : listRows.slice(pageStart, pageStart + pageSize);
-
-    const toggleSort = (key: SortKey) =>
-        setSort((s) => (s && s.key === key ? (s.dir === 1 ? { key, dir: -1 } : null) : { key, dir: 1 }));
 
     const toggleSel = useCallback((id: number) =>
         setSelected((prev) => {
@@ -1153,8 +1141,8 @@ export default function GeneratePage() {
                 <span className="text-xs text-muted-foreground">
                     {tab === "selected" ? `${listRows.length} in selection` : `${listRows.length} / ${rows.length} shown`}
                 </span>
-                {sort ? (
-                    <button type="button" onClick={() => setSort(null)} className="text-xs text-muted-foreground underline-offset-2 hover:underline">
+                {!isDefaultSort ? (
+                    <button type="button" onClick={resetSort} className="text-xs text-muted-foreground underline-offset-2 hover:underline">
                         clear sort
                     </button>
                 ) : null}
@@ -1289,19 +1277,19 @@ export default function GeneratePage() {
                                 <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Select all visible rows" />
                             </TableHead>
                             <TableHead className="w-8 text-xs">#</TableHead>
-                            <SortTh sort={sort} onSort={toggleSort} label="Product name" k="name" align="left" thClass="w-full min-w-[240px]" />
-                            {show("brand") ? <SortTh sort={sort} onSort={toggleSort} label="Brand" k="brand" align="left" /> : null}
-                            {show("category") ? <SortTh sort={sort} onSort={toggleSort} label="Category" k="category" align="left" /> : null}
-                            {show("group") ? <SortTh sort={sort} onSort={toggleSort} label="Group" k="group" align="left" /> : null}
-                            {show("stock") ? <SortTh sort={sort} onSort={toggleSort} label="Stock" k="stock" thClass={COL_TINT.stock} /> : null}
-                            {show("cost") ? <SortTh sort={sort} onSort={toggleSort} label="Cost (incl)" k="cost" thClass={COL_TINT.cost} /> : null}
+                            <SortHeader k="name" label="Product name" className={`${SORT_TH} w-full min-w-[240px]`} {...sortProps} />
+                            {show("brand") ? <SortHeader k="brand" label="Brand" className={SORT_TH} {...sortProps} /> : null}
+                            {show("category") ? <SortHeader k="category" label="Category" className={SORT_TH} {...sortProps} /> : null}
+                            {show("group") ? <SortHeader k="group" label="Group" className={SORT_TH} {...sortProps} /> : null}
+                            {show("stock") ? <SortHeader k="stock" label="Stock" align="right" firstDir="desc" className={`${SORT_TH} ${COL_TINT.stock}`} {...sortProps} /> : null}
+                            {show("cost") ? <SortHeader k="cost" label="Cost (incl)" align="right" firstDir="desc" className={`${SORT_TH} ${COL_TINT.cost}`} {...sortProps} /> : null}
                             {show("margin") ? <TableHead className={`text-right text-xs ${COL_TINT.margin}`}>Margin %</TableHead> : null}
-                            {show("computed") ? <SortTh sort={sort} onSort={toggleSort} label="Computed" k="computed" thClass={COL_TINT.computed} /> : null}
-                            {show("strategy") ? <SortTh sort={sort} onSort={toggleSort} label="Strategy" k="strategy" thClass={COL_TINT.strategy} title="Go to Strategy page to change" /> : null}
-                            {show("sale") ? <SortTh sort={sort} onSort={toggleSort} label="Sale Price" k="saved" thClass={COL_TINT.sale} title="Manual — you type this price" /> : null}
+                            {show("computed") ? <SortHeader k="computed" label="Computed" align="right" firstDir="desc" className={`${SORT_TH} ${COL_TINT.computed}`} {...sortProps} /> : null}
+                            {show("strategy") ? <SortHeader k="strategy" label="Strategy" align="right" firstDir="desc" title="Go to Strategy page to change" className={`${SORT_TH} ${COL_TINT.strategy}`} {...sortProps} /> : null}
+                            {show("sale") ? <SortHeader k="saved" label="Sale Price" align="right" firstDir="desc" title="Manual — you type this price" className={`${SORT_TH} ${COL_TINT.sale}`} {...sortProps} /> : null}
                             {show("selling") ? <TableHead className={`text-right text-xs ${COL_TINT.selling}`}>Selling</TableHead> : null}
                             {show("mrp") ? <TableHead className={`text-right text-xs ${COL_TINT.mrp}`}>MRP</TableHead> : null}
-                            {show("barcode") ? <SortTh sort={sort} onSort={toggleSort} label="Barcode" k="barcode" thClass={COL_TINT.barcode} title="Edit Sale Price to change" /> : null}
+                            {show("barcode") ? <SortHeader k="barcode" label="Barcode" align="right" firstDir="desc" title="Edit Sale Price to change" className={`${SORT_TH} ${COL_TINT.barcode}`} {...sortProps} /> : null}
                             <TableHead className="w-8" />
                         </TableRow>
                     </TableHeader>

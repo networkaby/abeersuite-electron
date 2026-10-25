@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useTableSort } from "@/shared/hooks";
+import { SortHeader } from "@/shared/components/SortHeader";
 import { toast } from "sonner";
-import { RefreshCw, Settings, AlertTriangle, PackagePlus, XCircle, ChevronRight, RotateCcw, ChevronUp, ChevronDown, ChevronsUpDown, Clock, ListChecks, Search } from "lucide-react";
+import { RefreshCw, Settings, AlertTriangle, PackagePlus, XCircle, ChevronRight, RotateCcw, Clock, ListChecks, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -97,23 +99,8 @@ interface Doc {
 
 type SortKey = "date" | "kind" | "payment" | "inv" | "items" | "amount" | "by";
 
-/** Clickable header for the documents table. Module-level, so it is not a new
- *  component type on every render (that remounted the whole header row). */
-function SortTh({ label, k, align = "left", sort, onSort }: {
-    label: string; k: SortKey; align?: "left" | "right";
-    sort: { key: SortKey; dir: 1 | -1 }; onSort: (k: SortKey) => void;
-}) {
-    return (
-        <TableHead className={`text-xs ${align === "right" ? "text-right" : ""}`}>
-            <button type="button" onClick={() => onSort(k)} className={`inline-flex items-center gap-1 hover:text-foreground ${align === "right" ? "flex-row-reverse" : ""}`}>
-                {label}
-                {sort.key === k
-                    ? (sort.dir === 1 ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />)
-                    : <ChevronsUpDown className="size-3 opacity-40" />}
-            </button>
-        </TableHead>
-    );
-}
+/** The shadcn `TableHead` look, for the shared SortHeader cells in this table. */
+const SORT_TH = "h-11 px-3 align-middle whitespace-nowrap text-xs text-foreground";
 
 const rupee = (paise: number | null): string => (paise == null ? "—" : formatRupeesFromPaise(paise));
 export default function CostingPage() {
@@ -130,9 +117,9 @@ export default function CostingPage() {
     const [histSearch, setHistSearch] = useState("");
     const [histKind, setHistKind] = useState<"ALL" | "ALLOCATION" | "DISMISSAL">("ALL");
     const [groupBy, setGroupBy] = useState<"none" | "inv" | "party">("none");
-    const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "date", dir: -1 });
-    const toggleSort = (k: SortKey) =>
-        setSort((s) => (s.key === k ? { key: k, dir: (s.dir * -1) as 1 | -1 } : { key: k, dir: k === "inv" || k === "payment" || k === "by" ? 1 : -1 }));
+    // Newest first by default; a third click on any header comes back to it.
+    const sortProps = useTableSort<SortKey>("date", "desc");
+    const { sortKey, sortDir } = sortProps;
 
     // Dismiss dialog state
     const [entry, setEntry] = useState<PoolEntry | null>(null);
@@ -217,7 +204,7 @@ export default function CostingPage() {
     // same purchase stay grouped + date-ordered when sorting by purchase/payment.
     const sortedDocuments = useMemo(() => {
         const cmpVal = (g: Doc): string | number => {
-            switch (sort.key) {
+            switch (sortKey) {
                 case "date": return g.date;
                 case "kind": return g.kind;
                 case "payment": return g.paymentRef ?? "";
@@ -227,13 +214,14 @@ export default function CostingPage() {
                 case "by": return g.createdByName ?? "";
             }
         };
+        const dir = sortDir === "asc" ? 1 : -1;
         return [...filteredDocuments].sort((a, b) => {
             const va = cmpVal(a), vb = cmpVal(b);
-            if (va < vb) return -sort.dir;
-            if (va > vb) return sort.dir;
+            if (va < vb) return -dir;
+            if (va > vb) return dir;
             return b.date.localeCompare(a.date); // tiebreak: newest inward first
         });
-    }, [filteredDocuments, sort]);
+    }, [filteredDocuments, sortKey, sortDir]);
 
 
     // Group the sorted docs (purchase- or party-wise) into header + rows. The
@@ -512,13 +500,13 @@ export default function CostingPage() {
                     <Table>
                         <TableHeader className={STICKY_HEAD}>
                             <TableRow>
-                                <SortTh sort={sort} onSort={toggleSort} label="Effective" k="date" />
-                                <SortTh sort={sort} onSort={toggleSort} label="Type" k="kind" />
-                                <SortTh sort={sort} onSort={toggleSort} label="Payment voucher" k="payment" />
-                                <SortTh sort={sort} onSort={toggleSort} label="Source inventory voucher" k="inv" />
-                                <SortTh sort={sort} onSort={toggleSort} label="Items" k="items" align="right" />
-                                <SortTh sort={sort} onSort={toggleSort} label="Amount" k="amount" align="right" />
-                                <SortTh sort={sort} onSort={toggleSort} label="By" k="by" />
+                                <SortHeader k="date" label="Effective" firstDir="desc" className={SORT_TH} {...sortProps} />
+                                <SortHeader k="kind" label="Type" firstDir="desc" className={SORT_TH} {...sortProps} />
+                                <SortHeader k="payment" label="Payment voucher" className={SORT_TH} {...sortProps} />
+                                <SortHeader k="inv" label="Source inventory voucher" className={SORT_TH} {...sortProps} />
+                                <SortHeader k="items" label="Items" align="right" firstDir="desc" className={SORT_TH} {...sortProps} />
+                                <SortHeader k="amount" label="Amount" align="right" firstDir="desc" className={SORT_TH} {...sortProps} />
+                                <SortHeader k="by" label="By" className={SORT_TH} {...sortProps} />
                                 <TableHead className="text-right text-xs" />
                             </TableRow>
                         </TableHeader>

@@ -8,7 +8,6 @@ import Link from "next/link";
 import { GatedLink } from "@/shared/components/GatedLink";
 import {
     Loader2, ArrowLeft, AlertTriangle, ChevronRight, ChevronDown, Pencil,
-    ArrowUp, ArrowDown, ArrowUpDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,7 +19,8 @@ import {
 } from "@/components/ui/breadcrumb";
 import { fmt } from "@/shared/lib/format/moneyInr";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
-import { useEscape } from "@/shared/hooks";
+import { useEscape, useTableSort } from "@/shared/hooks";
+import { SortHeader } from "@/shared/components/SortHeader";
 import { BreadcrumbBar } from "@/shared/components/BreadcrumbBar";
 import { TableScrollArea } from "@/shared/components/TableScrollArea";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
@@ -62,34 +62,6 @@ type SortKey =
     | "name" | "group" | "category" | "brand"
     | "quantity" | "rate" | "value"
     | "saleRate" | "saleValue" | "profit" | "margin";
-type SortDir = "asc" | "desc";
-
-function SortHeader({
-    k, label, align = "left", sortKey, sortDir, toggleSort,
-}: {
-    k: SortKey;
-    label: string;
-    align?: "left" | "right";
-    sortKey: SortKey;
-    sortDir: SortDir;
-    toggleSort: (k: SortKey) => void;
-}) {
-    const active = sortKey === k;
-    const Icon = !active ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
-    return (
-        <th className={`px-3 py-2 font-medium ${align === "right" ? "text-right" : "text-left"}`}>
-            <button
-                type="button"
-                onClick={() => toggleSort(k)}
-                className={`inline-flex items-center gap-1 hover:text-foreground ${active ? "text-foreground" : ""} ${align === "right" ? "flex-row-reverse" : ""}`}
-            >
-                <span>{label}</span>
-                <Icon size={11} className={active ? "" : "opacity-40"} />
-            </button>
-        </th>
-    );
-}
-
 const METHOD_LABELS: Record<ValuationMethod, string> = {
     LAST_INWARD:  "Last Inward",
     WEIGHTED_AVG: "Weighted Avg",
@@ -126,12 +98,8 @@ export default function StockSummaryPage() {
         const v = params.get("view");
         return v === "category" || v === "brand" || v === "item" ? v : "group";
     });
-    const [sortKey, setSortKey] = useState<SortKey>("name");
-    const [sortDir, setSortDir] = useState<SortDir>("asc");
-    const toggleSort = (k: SortKey) => {
-        if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-        else { setSortKey(k); setSortDir("asc"); }
-    };
+    // Name A→Z by default; a third click on any header comes back to it.
+    const { sortKey, sortDir, toggleSort } = useTableSort<SortKey>("name", "asc");
     const [method, setMethodState] = useState<ValuationMethod>(() => {
         const m = params.get("method");
         if (m === "WEIGHTED_AVG" || m === "SIMPLE_AVG" || m === "FIFO" || m === "LAST_INWARD" || m === "MONTHLY_AVG") {
@@ -679,15 +647,15 @@ export default function StockSummaryPage() {
                                 <SortHeader k="group" label="Group" {...sortProps} />
                                 <SortHeader k="category" label="Category" {...sortProps} />
                                 <SortHeader k="brand" label="Brand" {...sortProps} />
-                                <SortHeader k="quantity" label="Quantity" align="right" {...sortProps} />
-                                <SortHeader k="rate" label="Rate" align="right" {...sortProps} />
-                                <SortHeader k="value" label="Value" align="right" {...sortProps} />
+                                <SortHeader k="quantity" label="Quantity" align="right" firstDir="desc" {...sortProps} />
+                                <SortHeader k="rate" label="Rate" align="right" firstDir="desc" {...sortProps} />
+                                <SortHeader k="value" label="Value" align="right" firstDir="desc" {...sortProps} />
                                 {showProfit && (
                                     <>
-                                        <SortHeader k="saleRate" label="Sale Rate" align="right" {...sortProps} />
-                                        <SortHeader k="saleValue" label="Sale Value" align="right" {...sortProps} />
-                                        <SortHeader k="profit" label="Profit" align="right" {...sortProps} />
-                                        <SortHeader k="margin" label="Margin %" align="right" {...sortProps} />
+                                        <SortHeader k="saleRate" label="Sale Rate" align="right" firstDir="desc" {...sortProps} />
+                                        <SortHeader k="saleValue" label="Sale Value" align="right" firstDir="desc" {...sortProps} />
+                                        <SortHeader k="profit" label="Profit" align="right" firstDir="desc" {...sortProps} />
+                                        <SortHeader k="margin" label="Margin %" align="right" firstDir="desc" {...sortProps} />
                                     </>
                                 )}
                                 <th className="px-3 py-2 w-10"></th>

@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
+import { useTableSort } from "@/shared/hooks";
+import { SortHeader } from "@/shared/components/SortHeader";
 import { toast } from "sonner";
 import {
-    AlertCircle, AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown,
+    AlertCircle, AlertTriangle,
     ChevronDown, ChevronRight, Pencil, RefreshCw, Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,7 +25,6 @@ const ROW_GRID = "grid gap-2 items-center grid-cols-[minmax(180px,1fr)_84px_84px
 
 type View = "group" | "category" | "brand" | "item";
 type SortKey = "name" | "group" | "category" | "brand" | "cost" | "mrp";
-type SortDir = "asc" | "desc";
 
 function groupKey(item: PricingItem, view: View): string {
     if (view === "category") return item.categoryName ?? "— No category —";
@@ -94,34 +95,6 @@ function emptyEdit(item: PricingItem): RowEdit {
     return { costExcl, costIncl, mrpIncl };
 }
 
-// ── sortable header cell (item-wise view) ─────────────────────────────────────
-
-function SortHeader({
-    k, label, sortKey, sortDir, onToggle, align = "left",
-}: {
-    k: SortKey;
-    label: string;
-    sortKey: SortKey;
-    sortDir: SortDir;
-    onToggle: (k: SortKey) => void;
-    align?: "left" | "right";
-}) {
-    const active = sortKey === k;
-    const Icon = !active ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
-    return (
-        <th className={`px-2 py-2 font-medium ${align === "right" ? "text-right" : "text-left"}`}>
-            <button
-                type="button"
-                onClick={() => onToggle(k)}
-                className={`inline-flex items-center gap-1 uppercase hover:text-foreground ${active ? "text-foreground" : ""} ${align === "right" ? "flex-row-reverse" : ""}`}
-            >
-                <span>{label}</span>
-                <Icon size={11} className={active ? "" : "opacity-40"} />
-            </button>
-        </th>
-    );
-}
-
 // ── component ─────────────────────────────────────────────────────────────────
 
 export default function NeedsAttentionPage() {
@@ -130,12 +103,9 @@ export default function NeedsAttentionPage() {
     const [view, setView] = useState<View>("group");
     const [showCost, setShowCost] = useState(true);
     const [showMrp, setShowMrp] = useState(true);
-    const [sortKey, setSortKey] = useState<SortKey>("name");
-    const [sortDir, setSortDir] = useState<SortDir>("asc");
-    const toggleSort = (k: SortKey) => {
-        if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-        else { setSortKey(k); setSortDir("asc"); }
-    };
+    // Product A→Z by default; a third click on any header comes back to it.
+    const sortProps = useTableSort<SortKey>("name", "asc");
+    const { sortKey, sortDir } = sortProps;
 
     const [edits, setEdits] = useState<Record<number, RowEdit>>({});
     const [savingId, setSavingId] = useState<number | null>(null);
@@ -369,13 +339,13 @@ export default function NeedsAttentionPage() {
                     <table className="w-full text-sm">
                         <thead className="sticky top-0 z-10 bg-muted/40 backdrop-blur-sm">
                             <tr className="border-b border-border text-xs text-muted-foreground uppercase tracking-wide">
-                                <SortHeader k="name"     label="Product"      sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
-                                <SortHeader k="group"    label="Group"        sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
-                                <SortHeader k="category" label="Category"     sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
-                                <SortHeader k="brand"    label="Brand"        sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} />
-                                <SortHeader k="cost"     label="Opening excl" sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} align="right" />
+                                <SortHeader k="name"     label="Product"      className="px-2 py-2" {...sortProps} />
+                                <SortHeader k="group"    label="Group"        className="px-2 py-2" {...sortProps} />
+                                <SortHeader k="category" label="Category"     className="px-2 py-2" {...sortProps} />
+                                <SortHeader k="brand"    label="Brand"        className="px-2 py-2" {...sortProps} />
+                                <SortHeader k="cost"     label="Opening excl" align="right" firstDir="desc" className="px-2 py-2" {...sortProps} />
                                 <th className="px-2 py-2 text-right font-medium uppercase">Opening incl</th>
-                                <SortHeader k="mrp"      label="MRP"          sortKey={sortKey} sortDir={sortDir} onToggle={toggleSort} align="right" />
+                                <SortHeader k="mrp"      label="MRP"          align="right" firstDir="desc" className="px-2 py-2" {...sortProps} />
                                 <th className="px-2 py-2 w-10"></th>
                             </tr>
                         </thead>
