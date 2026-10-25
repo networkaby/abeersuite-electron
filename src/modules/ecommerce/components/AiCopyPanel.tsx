@@ -143,7 +143,7 @@ export default function AiCopyPanel({
             const advice = await fetchAiPhotos({ productId, name: name.trim(), imageUrls, premium });
             setPhotoRun(advice);
             if (advice.photoChecklist) onPhotoChecklist(advice.photoChecklist);
-            toast.success("Photo advice ready");
+            toast.success(advice.savedSearch ? "Photo advice ready — used the last search" : "Photo advice ready — searched first, saved for next time");
         } catch (e) {
             const flags = axios.isAxiosError(e) && e.response?.status === 422 ? (e.response.data as { flags?: string[] }).flags : undefined;
             if (flags?.length) setCheckFlags(flags);

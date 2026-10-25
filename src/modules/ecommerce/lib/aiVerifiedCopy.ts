@@ -296,7 +296,7 @@ async function research(p: VerifiedCopyInput, photos: ReturnType<typeof photoPar
 }
 
 /** Photos only: step 5 on the saved research, else after steps 1–2 (saved for next time). Photo AI is asked for, so it runs whatever the switch says. */
-export async function generatePhotoAdvice(p: VerifiedCopyInput): Promise<Pick<ProductCopy, "photoChecklist" | "photoArrange" | "photoSuggestions">> {
+export async function generatePhotoAdvice(p: VerifiedCopyInput): Promise<Pick<ProductCopy, "photoChecklist" | "photoArrange" | "photoSuggestions"> & { savedSearch: boolean }> {
     const premium = !!p.premium;
     const photos = photoParts(p.imageUrls);
     const saved = p.productId ? await loadResearch(p.productId, p.name) : null;
@@ -307,10 +307,12 @@ export async function generatePhotoAdvice(p: VerifiedCopyInput): Promise<Pick<Pr
         web = webPhotos(p, found.pages);
         if (p.productId) await saveResearch(p.productId, { name: p.name, web });
     }
+    const started = Date.now();
     const advice = await photoAdvice({ ...p, photoAi: true }, photos, web, premium);
     if (!advice) throw new Error("Photo AI could not answer — no free key, or the AI failed. Try again or allow a paid key.");
-    console.info(`[aiVerifiedCopy] photos only · research ${saved ? "saved" : "fresh"} · ${web.length} web photos`);
+    console.info(`[aiVerifiedCopy] photos only · research ${saved ? "saved" : "fresh"} · ${web.length} web photos · AI ${Date.now() - started} ms`);
     return {
+        savedSearch: !!saved,
         photoChecklist: advice.checklist,
         ...(advice.arrange && { photoArrange: advice.arrange }),
         photoSuggestions: advice.suggestions,

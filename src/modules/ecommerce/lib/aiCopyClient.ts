@@ -41,7 +41,8 @@ export async function fetchAiCopy(r: AiCopyRequest, opts: { fresh?: boolean } = 
     return data;
 }
 
-export type PhotoAdvice = Pick<ProductCopy, "photoChecklist" | "photoArrange" | "photoSuggestions">;
+/** savedSearch = the last run's search was reused (no Check call, no page search). */
+export type PhotoAdvice = Pick<ProductCopy, "photoChecklist" | "photoArrange" | "photoSuggestions"> & { savedSearch?: boolean };
 
 /** "Photos only": Photo AI on the last run's saved search — one AI call, never cached (staff ask for it on purpose). */
 export async function fetchAiPhotos(r: Omit<AiCopyRequest, "flow" | "photoAi" | "bulk">): Promise<PhotoAdvice> {
