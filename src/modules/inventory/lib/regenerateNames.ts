@@ -67,6 +67,15 @@ export interface ProductNaming {
     slug: string;
     /** False when the convention has the slug block switched off in Settings. */
     slugEnabled: boolean;
+    /** True when the product has a Custom part — only then is `name` meant to
+     *  replace the stored one (same rule as the bulk sweep and the grid). */
+    hasNamePart: boolean;
+}
+
+/** Masters picked on screen but not saved yet — `null` = cleared, absent = as saved. */
+export interface NamingOverrides {
+    groupId?: number | null;
+    brandId?: number | null;
 }
 
 /**
@@ -78,19 +87,31 @@ export interface ProductNaming {
  * refuses to touch online name / slug at all: rewriting one product's URL under
  * an operator who is looking at it is a different act from rewriting a thousand.
  */
-export async function buildProductNaming(productId: number): Promise<ProductNaming | null> {
-    const [p, config] = await Promise.all([
+export async function buildProductNaming(
+    productId: number,
+    overrides: NamingOverrides = {},
+): Promise<ProductNaming | null> {
+    const pick = (id: number | null | undefined, find: (id: number) => Promise<{ name: string } | null>) =>
+        id === undefined ? undefined : id === null ? Promise.resolve(null) : find(id);
+    const [p, config, group, brand] = await Promise.all([
         prisma.invProduct.findUnique({ where: { id: productId }, select: NAMING_SELECT }),
         loadNamingConfig(),
+        pick(overrides.groupId, (id) => prisma.invProductGroup.findUnique({ where: { id }, select: { name: true } })),
+        pick(overrides.brandId, (id) => prisma.invBrand.findUnique({ where: { id }, select: { name: true } })),
     ]);
     if (!p) return null;
 
-    const masters = mastersOf(p);
+    const masters = mastersOf({
+        ...p,
+        group: group === undefined ? p.group : group,
+        brand: brand === undefined ? p.brand : brand,
+    });
     return {
         name: buildOfflineName(masters, config).trim(),
         onlineName: buildOnlineName(masters, config).trim(),
         slug: buildOnlineSlug(masters, config).trim(),
         slugEnabled: config.slugEnabled !== false,
+        hasNamePart: !!p.namePart?.trim(),
     };
 }
 

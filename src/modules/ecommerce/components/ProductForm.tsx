@@ -77,6 +77,29 @@ export default function ProductForm({
         masterResolve.current = resolve;
         setMasterKind(kind);
     });
+    // Picking a group / brand rebuilds the Name from the naming convention
+    // (server-side, with the unsaved pick) — only for a product with a Custom
+    // part, the grid's rule; a hand-typed name is left alone. The online name
+    // follows only while it is untyped or still a copy of the Name. Saved on Save.
+    const namingSeq = useRef(0);
+    const pickMaster = (next: { groupId: number | null; brandId: number | null }) => {
+        setGroupId(next.groupId);
+        setBrandId(next.brandId);
+        const productId = initial?.id;
+        if (!productId) return;
+        const seq = ++namingSeq.current;
+        axios
+            .get<ProductNaming & { hasNamePart: boolean }>(`/api/inventory/products/${productId}/naming`, {
+                params: { groupId: next.groupId ?? "", brandId: next.brandId ?? "" },
+            })
+            .then(({ data }) => {
+                if (seq !== namingSeq.current || !data.hasNamePart || !data.name) return;
+                setName(data.name);
+                // A saved online name that is just a copy of the old Name still follows.
+                if (!subheadingTouched.current || subheading.trim() === name.trim()) setSubheading(data.name);
+            })
+            .catch(() => { /* the name simply stays as typed */ });
+    };
     const masterName = (rows: Masters[keyof Masters] | undefined, id: number | null, fallback?: string | null) =>
         id == null ? null : (rows?.find((r) => r.id === id)?.name as string | undefined) ?? fallback ?? null;
     const groupName = masterName(masters?.groups, groupId, initial?.groupName);
@@ -521,7 +544,7 @@ export default function ProductForm({
                         {canEditMasters ? (
                             <SearchableSelect
                                 value={groupId}
-                                onChange={setGroupId}
+                                onChange={(v) => pickMaster({ groupId: v, brandId })}
                                 onCreate={() => openCreateMaster("group")}
                                 createLabel="+ New group…"
                                 placeholder="No group"
@@ -544,7 +567,7 @@ export default function ProductForm({
                         {canEditMasters ? (
                             <SearchableSelect
                                 value={brandId}
-                                onChange={setBrandId}
+                                onChange={(v) => pickMaster({ groupId, brandId: v })}
                                 onCreate={() => openCreateMaster("brand")}
                                 createLabel="+ New brand…"
                                 placeholder="No brand"
