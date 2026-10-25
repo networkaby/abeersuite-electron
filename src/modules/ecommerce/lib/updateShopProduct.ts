@@ -11,7 +11,7 @@ import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
 import { PHOTO_KIND_KEYS } from "@/modules/ecommerce/lib/photoChecklist";
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { mergeGallery } from "@/modules/ecommerce/lib/mergeGallery";
-import { syncMainCollections } from "@/modules/inventory/lib/productCollections";
+import { collectionsExist, setProductCollections, syncMainCollections } from "@/modules/inventory/lib/productCollections";
 
 export const shopProductPatchSchema = z.object({
     // inventory fields
@@ -19,6 +19,8 @@ export const shopProductPatchSchema = z.object({
     name: z.string().trim().min(1).max(500).optional(),
     unitId: z.coerce.number().int().positive().optional(),
     categoryId: z.number().int().positive().nullish(),
+    /** Every collection, main first — wins over categoryId (productCollections.ts). */
+    collectionIds: z.array(z.number().int().positive()).max(50).optional(),
     groupId: z.number().int().positive().nullish(),
     brandId: z.number().int().positive().nullish(),
     warrantyTermId: z.number().int().positive().nullish(),
@@ -60,6 +62,7 @@ export const shopProductInclude = {
     category: { select: { name: true } },
     brand: { select: { name: true } },
     group: { select: { name: true } },
+    collections: { select: { categoryId: true, category: { select: { name: true } } }, orderBy: { sortOrder: "asc" } },
 } as const;
 
 /**
@@ -88,6 +91,9 @@ export async function updateShopProduct(
             },
         });
         if (!existing) return { response: NextResponse.json({ error: "Not found" }, { status: 404 }) };
+        if (b.collectionIds && !(await collectionsExist(b.collectionIds))) {
+            return { response: NextResponse.json({ error: "Collection not found" }, { status: 400 }) };
+        }
 
         if (b.galleryUrls !== undefined && b.galleryBase !== undefined) {
             const merged = mergeGallery(b.galleryBase, b.galleryUrls, productGalleryUrls(existing.galleryJson, existing.imageUrl));
@@ -183,9 +189,12 @@ export async function updateShopProduct(
 
         const p = await prisma.$transaction(async (tx) => {
             const row = await tx.invProduct.update({ where: { id: pid }, data, include: shopProductInclude });
-            // A categoryId sent here moves the main collection (productCollections.ts).
-            if (b.categoryId !== undefined) await syncMainCollections(tx, [pid]);
-            return row;
+            if (b.collectionIds === undefined && b.categoryId === undefined) return row;
+            // Collections go through the one write path (productCollections.ts);
+            // a lone categoryId moves the main one and keeps the extras.
+            if (b.collectionIds !== undefined) await setProductCollections(tx, pid, b.collectionIds);
+            else await syncMainCollections(tx, [pid]);
+            return tx.invProduct.findUniqueOrThrow({ where: { id: pid }, include: shopProductInclude });
         });
         return { product: invProductToAdmin(p, bands) };
     } catch (e: unknown) {

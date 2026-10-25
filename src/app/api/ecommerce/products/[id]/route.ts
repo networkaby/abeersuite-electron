@@ -32,9 +32,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (!Number.isFinite(pid)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
     const { data, error } = await validateRequest(req, shopProductPatchSchema);
     if (error) return error;
-    // Group / brand are inventory masters (group drives inherited GST/HSN) —
+    // Group / brand / collections are inventory masters (group drives inherited GST/HSN) —
     // a separate tick from editing the shop copy.
-    if (data.groupId !== undefined || data.brandId !== undefined) {
+    if (data.groupId !== undefined || data.brandId !== undefined || data.collectionIds !== undefined) {
         const gate = await requirePermission(PERMISSIONS.ECOMMERCE_PRODUCT_MASTERS);
         if (gate.response) return gate.response;
     }

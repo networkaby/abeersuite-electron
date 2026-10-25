@@ -27,6 +27,7 @@ import { Check, ExternalLink, RefreshCw, X } from "lucide-react";
 import type { ProductNaming } from "@/modules/inventory/lib/regenerateNames";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
+import { SearchableMultiSelect } from "@/shared/components/SearchableMultiSelect";
 import { InventoryMasterDropdownQuickDialog, flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 import { syncMasters, invalidateMasters, type Masters } from "@/shared/lib/inventory";
 import { useSession } from "next-auth/react";
@@ -52,11 +53,19 @@ export default function ProductForm({
     const [name, setName] = useState(initial?.name ?? "");
     // shop fields
     const [slug, setSlug] = useState(initial?.slug ?? "");
+    // Online display name — manual, no naming-convention regen. Auto-filled from
+    // Name so the operator has something to override rather than typing from
+    // scratch; once they edit it directly it stops following Name. Falls back to
+    // Name on the storefront whenever it's left blank.
+    const [subheading, setSubheading] = useState(initial?.subheading ?? initial?.name ?? "");
+    const subheadingTouched = useRef(!!initial?.subheading);
     // Group + brand are the inventory masters themselves (no shop-only copy):
     // the storefront shows the group as the product's Category. Changing them
     // here needs ECOMMERCE_PRODUCT_MASTERS, checked again by the PATCH route.
     const [groupId, setGroupId] = useState<number | null>(initial?.groupId ?? null);
     const [brandId, setBrandId] = useState<number | null>(initial?.brandId ?? null);
+    // Collections — shop / marketing only, main first (productCollections.ts).
+    const [collectionIds, setCollectionIds] = useState<number[]>(initial?.collectionIds ?? []);
     const { data: session } = useSession();
     const canEditMasters = hasPermissionWithScope(
         (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [],
@@ -65,12 +74,12 @@ export default function ProductForm({
     // Replicated master lists — one delta request, usually "nothing changed".
     const [masters, setMasters] = useState<Masters | null>(null);
     useEffect(() => { void syncMasters().then((m) => { if (m) setMasters(m); }); }, []);
-    const [masterKind, setMasterKind] = useState<"group" | "brand" | null>(null);
+    const [masterKind, setMasterKind] = useState<"group" | "brand" | "category" | null>(null);
     const [gstRates, setGstRates] = useState<{ id: number; rate: string | number; label: string }[]>([]);
     // "+ New group/brand…" — resolves with the new row's id (null if cancelled)
     // so the dropdown selects it, the same contract as the inventory form.
     const masterResolve = useRef<((id: number | null) => void) | null>(null);
-    const openCreateMaster = (kind: "group" | "brand") => new Promise<number | null>((resolve) => {
+    const openCreateMaster = (kind: "group" | "brand" | "category") => new Promise<number | null>((resolve) => {
         if (kind === "group" && gstRates.length === 0) {
             axios.get("/api/inventory/gst-rates").then((r) => setGstRates(r.data)).catch(() => {});
         }
@@ -103,13 +112,10 @@ export default function ProductForm({
     const masterName = (rows: Masters[keyof Masters] | undefined, id: number | null, fallback?: string | null) =>
         id == null ? null : (rows?.find((r) => r.id === id)?.name as string | undefined) ?? fallback ?? null;
     const groupName = masterName(masters?.groups, groupId, initial?.groupName);
+    const collectionNames = collectionIds
+        .map((id) => masterName(masters?.categories, id))
+        .filter((n): n is string => !!n);
     const brandName = masterName(masters?.brands, brandId, initial?.brandName);
-    // Online display name — manual, no naming-convention regen. Auto-filled from
-    // Name so the operator has something to override rather than typing from
-    // scratch; once they edit it directly it stops following Name. Falls back to
-    // Name on the storefront whenever it's left blank.
-    const [subheading, setSubheading] = useState(initial?.subheading ?? initial?.name ?? "");
-    const subheadingTouched = useRef(!!initial?.subheading);
     const [description, setDescription] = useState(initial?.description ?? "");
     // Price / MRP are deliberately NOT editable here. They are the SAME columns
     // (effectiveSalePricePaise / mrpPaise) that sale vouchers, POS lines and the
@@ -277,6 +283,7 @@ export default function ProductForm({
         setSlug(initial.slug ?? "");
         setGroupId(initial.groupId ?? null);
         setBrandId(initial.brandId ?? null);
+        setCollectionIds(initial.collectionIds ?? []);
         setSubheading(initial.subheading ?? initial.name ?? "");
         setDescription(initial.description ?? "");
         setBadge(initial.badge ?? "");
@@ -399,8 +406,8 @@ export default function ProductForm({
         category: groupName ?? "",
         // Live preview only — the office-side classification and the group chain
         // are not edited on this form, so the preview card carries neither.
-        collection: null,
-        collections: [],
+        collection: collectionNames[0] ?? null,
+        collections: collectionNames,
         department: null,
         categoryPath: [],
         pricePaise: shopPricePaise,
@@ -415,7 +422,8 @@ export default function ProductForm({
         allowBackorder,
         isActive,
         unitId: initial?.unitId ?? 0,
-        categoryId: initial?.categoryId ?? null,
+        categoryId: collectionIds[0] ?? null,
+        collectionIds,
         groupId,
         brandId,
         warrantyTermId: initial?.warrantyTermId ?? null,
@@ -452,6 +460,7 @@ export default function ProductForm({
             shopCategory: null,
             ...(canEditMasters && groupId !== (initial?.groupId ?? null) ? { groupId } : {}),
             ...(canEditMasters && brandId !== (initial?.brandId ?? null) ? { brandId } : {}),
+            ...(canEditMasters && collectionIds.join(",") !== (initial?.collectionIds ?? []).join(",") ? { collectionIds } : {}),
             // pricePaise / mrpPaise / stock / lowStockThreshold deliberately
             // absent — this form does not own them (see the state block above).
             // The PATCH route skips any column it isn't sent, so the pricing
@@ -579,6 +588,27 @@ export default function ProductForm({
                         )}
                     </div>
                 </div>
+                <div className="grid gap-2">
+                    <Label>Collections</Label>
+                    {canEditMasters ? (
+                        <SearchableMultiSelect
+                            value={collectionIds}
+                            onChange={setCollectionIds}
+                            onCreate={() => openCreateMaster("category")}
+                            createLabel="+ New collection…"
+                            placeholder="Add a collection (optional)"
+                            primaryLabel="Main collection"
+                            options={flattenTree(masters?.categories ?? []).map((r) => ({
+                                value: r.id, label: treeLabel(r), leaf: r.name, searchText: r.name,
+                            }))}
+                        />
+                    ) : (
+                        <Input value={collectionNames.join(", ")} placeholder="No collection" disabled />
+                    )}
+                    <p className="text-[11px] text-muted-foreground">
+                        Shop filters and collection pages — a product can sit in several. The starred one is the main collection.
+                    </p>
+                </div>
                 <InventoryMasterDropdownQuickDialog
                     open={masterKind !== null}
                     onOpenChange={(v) => {
@@ -588,7 +618,7 @@ export default function ProductForm({
                         masterResolve.current = null;
                     }}
                     kind={masterKind ?? "group"}
-                    siblings={masterKind === "group" ? masters?.groups : undefined}
+                    siblings={masterKind === "group" ? masters?.groups : masterKind === "category" ? masters?.categories : undefined}
                     gstRates={gstRates}
                     onCreated={async (id) => {
                         // Drop the held copy so the new row shows without waiting for a delta.

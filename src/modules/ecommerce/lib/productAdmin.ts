@@ -14,6 +14,8 @@ export type ShopProductAdmin = ShopProductPublic & {
     allowBackorder: boolean;
     unitId: number;
     categoryId: number | null;
+    /** Every collection id, main first (InvProductCollection). */
+    collectionIds: number[];
     groupId: number | null;
     brandId: number | null;
     warrantyTermId: number | null;
@@ -45,6 +47,7 @@ export function invProductToAdmin(
         brand?: { name: string } | null;
         group?: { name: string } | null;
         codes?: { kind: string; value: string }[];
+        collections?: { categoryId: number; category: { name: string } }[];
     },
     bands?: BarcodeBand[]
 ): ShopProductAdmin {
@@ -69,6 +72,9 @@ export function invProductToAdmin(
         allowBackorder: p.allowBackorder,
         unitId: p.unitId,
         categoryId: p.categoryId,
+        collectionIds: p.collections?.length
+            ? p.collections.map((c) => c.categoryId)
+            : p.categoryId != null ? [p.categoryId] : [],
         groupId: p.groupId,
         brandId: p.brandId,
         warrantyTermId: p.warrantyTermId,

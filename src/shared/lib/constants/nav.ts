@@ -532,7 +532,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
                 children: [
                     { label: "Brands", icon: Tag, href: "/office/inventory/masters/brands" },
                     { label: "Units", icon: Ruler, href: "/office/inventory/masters/units" },
-                    { label: "Collections", icon: Layers, href: "/office/inventory/masters/categories" },
+                    { label: "Collections", sidebarKey: "categories", icon: Layers, href: "/office/inventory/masters/categories" },
                     { label: "Groups", icon: LayoutGrid, href: "/office/inventory/masters/product-groups" },
                     { label: "Warranty Terms", icon: FileBadge2, href: "/office/inventory/masters/warranty-terms" },
                     { label: "Attribute Masters", icon: SlidersHorizontal, href: "/office/inventory/masters/attribute-masters" },
