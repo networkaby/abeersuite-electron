@@ -430,14 +430,18 @@ export function usePosBilling(opts: {
     // margin floor (clearance may sell below cost); only clamp to the line gross so
     // taxable never goes negative. /api/pos/sale re-resolves cost from the ledger and
     // uses ITS answer, so the browser cannot inflate the discount.
+    // The product list by id, built once per catalogue load. The bill maths below
+    // looks a line's product up several times per line on every render; a
+    // `.find` over a catalogue of thousands made that lines × catalogue.
+    const productById = useMemo(() => new Map(allProducts.map((p) => [p.id, p])), [allProducts]);
     const lineCostExcl = (l: CartLine): number | null => {
-        const paise = l.costPaise ?? allProducts.find((p) => p.id === l.productId)?.costPaise ?? null;
+        const paise = l.costPaise ?? productById.get(l.productId)?.costPaise ?? null;
         return paise == null ? null : paise / 100;
     };
     // Discount-protection flag — snapshotted at add-to-cart, falling back to the
     // live product list for restored/edited carts (same pattern as costPaise).
     const lineProtected = (l: CartLine): boolean =>
-        !!l.protected || (allProducts.find((p) => p.id === l.productId)?.protected ?? false);
+        !!l.protected || (productById.get(l.productId)?.protected ?? false);
     // An edit keeps each unchanged line's saved discount to the paisa. A line whose
     // quantity or price moved takes its product's saved discount per unit (the sale
     // day's % of the sale day's cost); a product new to the bill, the sale day's %.
@@ -569,7 +573,7 @@ export function usePosBilling(opts: {
                 tierDiscExcl: round2(lineTierAfterCoupon[i]),
                 costExcl: lineCostExcl(l),
                 protected: lineProtected(l),
-                rule: ruleForGroup(groupPricing, l.groupId ?? allProducts.find((p) => p.id === l.productId)?.groupId ?? null),
+                rule: ruleForGroup(groupPricing, l.groupId ?? productById.get(l.productId)?.groupId ?? null),
             };
         }), billDiscountIncl);
         goodsIdx.forEach((i, k) => { lineRebateExcl[i] = rebates[k]; });
