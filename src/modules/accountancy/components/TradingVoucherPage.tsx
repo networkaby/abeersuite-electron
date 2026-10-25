@@ -70,7 +70,6 @@ import { consumeDuplicate } from "@/modules/accountancy/lib/duplicate";
 import { consumePreloadParty } from "@/store/activePartyStore";
 import { ParentVoucherPicker } from "@/modules/inventory/components/ParentVoucherPicker";
 import { Switch } from "@/components/ui/switch";
-import { ACCOUNT_LEDGERS } from "@/shared/lib/constants/accounting";
 import { isMoneyGroupName } from "@/modules/accountancy/lib/moneyAccount";
 import { extractApiError, creditLimitDetailOf } from "@/shared/lib/api";
 import { parseDecimalInput, round2, todayIso, gridRowClass } from "@/shared/lib/format";
@@ -101,37 +100,11 @@ import {
 import { SERVICE_VOUCHER_TYPES } from "@/shared/lib/accountancy/serviceCharges";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 import { useLocalState } from "@/shared/hooks/useSessionState";
+import { pickDefaultTenderAccount } from "@/modules/accountancy/lib/defaultTenderAccount";
 
 // Re-export so existing importers of the page keep working.
 export type { TradingKind } from "@/modules/accountancy/lib/tradingVoucherKinds";
 
-
-// ── Default "Received In" tender account ─────────────────────────────────────
-// Which cash/bank ledger a NEW voucher opens with. Called by BOTH the first-mount
-// effect and reset()-after-save: reset() used to run its own arbitrary
-// `.find(Cash-in-Hand)` instead, so saving a voucher silently snapped the picker
-// back to whichever till the DB happened to return first (a counter till) even
-// though the operator had chosen another one. Same resolver both paths = the pick
-// survives save-and-continue, not just a fresh page load.
-//
-// Two rungs, deliberately: the account last used on this voucher kind (the
-// localStorage key is per-kind, so a Sale's bank pick can't leak into Purchase),
-// else the Tally-standard Petty Cash ledger — matched by EXACT name, since that
-// name is fixed and bootstrap-seeded. Nothing after that: the old Vault /
-// first-Cash-in-Hand fallbacks resolved to an ARBITRARY counter till, because the
-// list came back in no order anyone chose. An empty picker the operator must fill
-// is better than a confidently wrong till.
-// `list` is already money ledgers only (isMoneyGroupName), so no group check.
-function pickDefaultTenderAccount(list: GlAccount[], storageKey: string): GlAccount | null {
-    let lastId: number | null = null;
-    try {
-        const raw = window.localStorage.getItem(storageKey);
-        lastId = raw ? Number(raw) : null;
-    } catch { /* ignore — private mode / storage disabled */ }
-    return (lastId != null ? list.find((a) => a.id === lastId) : undefined)
-        ?? list.find((a) => a.name === ACCOUNT_LEDGERS.PETTY_CASH)
-        ?? null;
-}
 
 // ── Component ──────────────────────────────────────────────────────────────
 
