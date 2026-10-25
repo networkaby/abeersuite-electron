@@ -2,7 +2,7 @@
   "appId": "in.networkservice.staff",
   "appName": "NS Staff",
   "webDir": "www",
-  "appendUserAgent": "NSStaffApp/5",
+  "appendUserAgent": "NSStaffApp/6",
   "backgroundColor": "#eff4fb",
   "server": {
     "url": "https://office.networkservice.in/m-staff-app",
