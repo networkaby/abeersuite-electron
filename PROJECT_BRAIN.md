@@ -1370,6 +1370,12 @@ First-week pain for a shop moving off Vyapar: the first three rows plus batch/ex
 - GSTIN auto-fill from public GST lookup API when typing a 15-char GSTIN.
 - POS exchange as one atomic transaction (currently credit note → new sale).
 - Personal till accountability via a user dimension on variance JEs (currently counter-only).
+- **POS extra cash → old dues / advance (parked, 2026-10-25)**
+  - When a named customer pays more than the bill and “₹ change back” is left empty, the extra first clears old dues, and the rest becomes advance (Receipt voucher). This is intended. The business collects old dues and advance at the counter every day.
+  - It works well today. No cashier has complained. Do not “fix” it.
+  - Known risk: if the cashier gives change in cash but forgets to type it in “change back”, the drawer is short at shift close, and the customer wrongly gets advance.
+  - Possible later improvements, only if needed: (1) a bigger warning in checkout, (2) print “Old dues cleared / Advance” on the receipt, (3) make the POS edit screen follow the same rule (today it refuses extra money).
+  - Code: `usePosBilling.ts` (overpaid), `PosScreen.tsx` (collectSurplus), `api/pos/sale/route.ts` (surplus handling).
 
 ---
 
