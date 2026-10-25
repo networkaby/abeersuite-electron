@@ -501,8 +501,12 @@ export default function ProductForm({
     return (
         <div className="grid gap-8 lg:grid-cols-2">
             <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                    <div className="grid gap-2">
+                {/* Name is built from the naming convention (Group / Brand / Custom
+                    part) and locked here for a saved product — picking a Group or
+                    Brand rebuilds it; Deep edit owns the Custom part. A new product
+                    still types its first name. */}
+                <div className="grid grid-cols-3 gap-3">
+                    <div className="grid gap-1.5">
                         <Label>SKU</Label>
                         <Input
                             value={sku}
@@ -512,24 +516,35 @@ export default function ProductForm({
                             placeholder="e.g. LAPTOP-001"
                         />
                     </div>
-                    <div className="grid gap-2">
+                    <div className="col-span-2 grid gap-1.5">
                         <Label>Name</Label>
                         <Input
                             value={name}
+                            disabled={!!initial?.id}
+                            title={initial?.id ? "Built from the naming convention — change Group / Brand here, or the Custom part in Deep edit." : undefined}
                             onChange={(e) => {
                                 const v = e.target.value;
                                 setName(v);
                                 // Mirror into the online display name until the operator
-                                // edits that field directly — gives them a real starting
-                                // point instead of a blank box, without ever overwriting
-                                // a value they've already typed.
+                                // edits that field directly.
                                 if (!subheadingTouched.current) setSubheading(v);
                             }}
                         />
                     </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                    <div className="grid gap-2">
+                    <div className="grid gap-1.5">
+                        <Label>Online display name</Label>
+                        <Input
+                            value={subheading}
+                            onChange={(e) => {
+                                subheadingTouched.current = true;
+                                setSubheading(e.target.value);
+                            }}
+                            placeholder="Shown to customers — defaults to Name"
+                        />
+                    </div>
+                    <div className="grid gap-1.5">
                         <Label>Slug (optional)</Label>
                         <div className="flex items-center gap-2">
                             <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="storefront URL handle" />
@@ -548,8 +563,8 @@ export default function ProductForm({
                         </div>
                     </div>
                 </div>
-                <div className="grid grid-cols-2 items-start gap-3">
-                    <div className="grid gap-2">
+                <div className="grid grid-cols-3 items-start gap-3">
+                    <div className="grid gap-1.5">
                         <Label>Group</Label>
                         {canEditMasters ? (
                             <SearchableSelect
@@ -565,14 +580,8 @@ export default function ProductForm({
                         ) : (
                             <Input value={groupName ?? ""} placeholder="No group" disabled />
                         )}
-                        <p className="text-[11px] text-muted-foreground">
-                            Accounts &amp; inventory group — shown in the shop as its Category.
-                            {initial?.id && groupId !== (initial?.groupId ?? null)
-                                ? " Changing it can change the GST/HSN taken from the group and the auto-built name."
-                                : ""}
-                        </p>
                     </div>
-                    <div className="grid gap-2">
+                    <div className="grid gap-1.5">
                         <Label>Brand</Label>
                         {canEditMasters ? (
                             <SearchableSelect
@@ -587,26 +596,29 @@ export default function ProductForm({
                             <Input value={brandName ?? ""} placeholder="No brand" disabled />
                         )}
                     </div>
-                </div>
-                <div className="grid gap-2">
-                    <Label>Collections</Label>
-                    {canEditMasters ? (
-                        <SearchableMultiSelect
-                            value={collectionIds}
-                            onChange={setCollectionIds}
-                            onCreate={() => openCreateMaster("category")}
-                            createLabel="+ New collection…"
-                            placeholder="Add a collection (optional)"
-                            primaryLabel="Main collection"
-                            options={flattenTree(masters?.categories ?? []).map((r) => ({
-                                value: r.id, label: treeLabel(r), leaf: r.name, searchText: r.name,
-                            }))}
-                        />
-                    ) : (
-                        <Input value={collectionNames.join(", ")} placeholder="No collection" disabled />
-                    )}
-                    <p className="text-[11px] text-muted-foreground">
-                        Shop filters and collection pages — a product can sit in several. The starred one is the main collection.
+                    <div className="grid gap-1.5">
+                        <Label>Collections</Label>
+                        {canEditMasters ? (
+                            <SearchableMultiSelect
+                                value={collectionIds}
+                                onChange={setCollectionIds}
+                                onCreate={() => openCreateMaster("category")}
+                                createLabel="+ New collection…"
+                                placeholder="Add…"
+                                primaryLabel="Main collection"
+                                options={flattenTree(masters?.categories ?? []).map((r) => ({
+                                    value: r.id, label: treeLabel(r), leaf: r.name, searchText: r.name,
+                                }))}
+                            />
+                        ) : (
+                            <Input value={collectionNames.join(", ")} placeholder="No collection" disabled />
+                        )}
+                    </div>
+                    <p className="col-span-3 -mt-1 text-[11px] text-muted-foreground">
+                        Group = the shop&apos;s Category (and GST/HSN source). Collections = shop filters; ★ is the main one.
+                        {initial?.id && groupId !== (initial?.groupId ?? null)
+                            ? " A new group can change GST/HSN and rebuilds the Name."
+                            : ""}
                     </p>
                 </div>
                 <InventoryMasterDropdownQuickDialog
@@ -629,17 +641,6 @@ export default function ProductForm({
                         masterResolve.current = null;
                     }}
                 />
-                <div className="grid gap-2">
-                    <Label>Online display name</Label>
-                    <Input
-                        value={subheading}
-                        onChange={(e) => {
-                            subheadingTouched.current = true;
-                            setSubheading(e.target.value);
-                        }}
-                        placeholder="Shown to customers — defaults to Name, edit to override"
-                    />
-                </div>
                 <AiCopyPanel
                     productId={initial?.id}
                     name={name}
