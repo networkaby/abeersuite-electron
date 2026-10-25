@@ -5,7 +5,7 @@
 **Stack:** Next.js 16.4.3 (App Router, Turbopack), React 19, PostgreSQL (Supabase), Prisma 7.7.0 (split schema), NextAuth v5 beta (JWT), Tailwind v4, shadcn/ui, Zustand 5, Sonner, Axios, React Hook Form, Zod, Razorpay, Cloudinary, Sentry.
 **Repo:** `D:\AbeerSuite\service-mgmt-experiment` — branch `dev`.
 **Started:** 2026-04-17.
-**Last updated:** 2026-10-24.
+**Last updated:** 2026-10-25.
 
 This file is the **only doc that carries status**. Architecture lives in [ARCHITECTURE.md](ARCHITECTURE.md). Setup/runbook lives in [README.md](README.md). Contributor rules live in [AGENTS.md](AGENTS.md). POS keyboard conventions live in [docs/pos-conventions.md](docs/pos-conventions.md). For the authoritative history, read `git log`.
 
@@ -26,6 +26,9 @@ Replace paper/spreadsheets across the whole business with one app:
 ---
 
 ## 🔄 In flight
+
+- **2026-10-25 — Big files split into smaller ones, no behaviour change (no migration).** Owner: *"split the 4 biggest source files … with NO change in behaviour"*, one commit per piece moved, on `dev`. Same names, same logic; only imports change.
+  - **`electron/main.ts`** — the counter-config loaders and missing-key check (`loadCounterEnv`, `ensureAuthSecret`, `findMissingEnv`) → [`envCheck.ts`](electron/envCheck.ts). Every `ipcMain.handle` stays in `main.ts`, in its old order.
 
 - **2026-10-24 — A POS sale can never be saved twice after a network failure: one "bill key" per bill (migration `20261024210000_pos_sale_request_key`; counter release FIRST, then the office deploy).** Branch `claude/pos-bill-key`, not merged. Owner: *"go, sales only, make a new migration file"*. The problem: the office committed a sale, the reply was lost (internet blip, Vercel timeout), the cashier pressed Save again → a second bill (stock twice, GL twice, two POS numbers). Returns (`/api/pos/return`) are not covered yet — same pattern later.
   - **Step 1 — the column.** `UniversalVoucher.requestKey String? @unique` ([finance.prisma](prisma/schema/finance.prisma)); NULL on every older and every non-POS voucher. Sync registry + counter local schema regenerated (column + `CREATE UNIQUE INDEX IF NOT EXISTS`).
