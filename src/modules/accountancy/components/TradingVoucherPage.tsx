@@ -46,10 +46,7 @@ import {
     CopyPlus, Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-    Dialog, DialogContent, DialogDescription,
-    DialogFooter, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
+import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { Input } from "@/components/ui/input";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
 import { useFormKeyboardNav } from "@/shared/hooks/useFormKeyboardNav";
@@ -2603,40 +2600,13 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     ) : undefined
                 }
             />
-            <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
-                {/* Keyboard: Esc → Stay (handled natively by Radix Dialog).
-                    Enter → Discard & Close (always, regardless of focused button). */}
-                <DialogContent
-                    showCloseButton={false}
-                    // Esc → Discard (close the page). Semantic flip from Radix's
-                    // native Esc-closes-dialog (Stay): pressing Esc on this
-                    // dialog completes the "I want to leave" gesture instead
-                    // of cancelling it. preventDefault stops Radix from also
-                    // closing the dialog via its own listener — we drive the
-                    // close + navigation explicitly. Enter is intentionally
-                    // unhandled; Radix focuses the Stay button by default so
-                    // Enter clicks it (keep editing).
-                    onEscapeKeyDown={(e) => {
-                        e.preventDefault();
-                        setCloseDialogOpen(false);
-                        closeForm();
-                    }}
-                >
-                    <DialogHeader>
-                        <DialogTitle>Unsaved changes</DialogTitle>
-                        <DialogDescription>
-                            You have unsaved changes that will be lost if you leave now.
-                            <br />
-                            <span className="text-xs text-muted-foreground">Press Esc to discard · Enter to stay.</span>
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>Stay</Button>
-                        <Button variant="outline" onClick={async () => { setCloseDialogOpen(false); await submit(false); }}>Save Draft</Button>
-                        <Button variant="destructive" onClick={() => { setCloseDialogOpen(false); closeForm(); }}>Discard &amp; Close</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <UnsavedChangesDialog
+                open={closeDialogOpen}
+                onOpenChange={setCloseDialogOpen}
+                onSaveDraft={() => submit(false)}
+                onDiscard={closeForm}
+                saveDraftDisabled={saving}
+            />
 
             {/* Bill-wise link. The voucher is already posted here, so the popup
                 writes the links itself; it asks the server how much of this bill is

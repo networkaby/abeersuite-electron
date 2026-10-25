@@ -20,10 +20,7 @@ import { useEscape } from "@/shared/hooks/useEscape";
 import { toast } from "sonner";
 import { Plus, Trash2, CheckCircle2, X, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-    Dialog, DialogContent, DialogDescription,
-    DialogFooter, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
+import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { fmt } from "@/shared/lib/format/moneyInr";
@@ -1647,19 +1644,13 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                     onSaved={() => { clearOpenBillsCache(); setReloadCounter((c) => c + 1); }}
                 />
             )}
-            <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
-                <DialogContent showCloseButton={false}>
-                    <DialogHeader>
-                        <DialogTitle>Unsaved changes</DialogTitle>
-                        <DialogDescription>You have unsaved changes that will be lost if you leave now.</DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>Stay</Button>
-                        <Button variant="outline" onClick={async () => { setCloseDialogOpen(false); await submit(false); }}>Save Draft</Button>
-                        <Button variant="destructive" onClick={() => { setCloseDialogOpen(false); closeForm(); }}>Discard &amp; Close</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <UnsavedChangesDialog
+                open={closeDialogOpen}
+                onOpenChange={setCloseDialogOpen}
+                onSaveDraft={() => submit(false)}
+                onDiscard={closeForm}
+                saveDraftDisabled={saving || !balanced}
+            />
         </div>
     );
 }

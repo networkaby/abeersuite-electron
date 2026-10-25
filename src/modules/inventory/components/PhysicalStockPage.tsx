@@ -34,10 +34,7 @@ import { toast } from "sonner";
 import { Loader2, Trash2, Plus, Minus } from "lucide-react";
 import { useActiveBranchStore } from "@/store/activeBranchStore";
 import { Button } from "@/components/ui/button";
-import {
-    Dialog, DialogContent, DialogDescription,
-    DialogFooter, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
+import { UnsavedChangesDialog } from "@/shared/components/UnsavedChangesDialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ProductScanInput, type ScannedProduct } from "@/modules/inventory/components/ProductScanInput";
@@ -454,19 +451,13 @@ export function PhysicalStockPage() {
                     ) : undefined}
                 />
             </div>
-            <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
-                <DialogContent showCloseButton={false}>
-                    <DialogHeader>
-                        <DialogTitle>Unsaved changes</DialogTitle>
-                        <DialogDescription>You have unsaved changes that will be lost if you leave now.</DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>Stay</Button>
-                        <Button variant="outline" onClick={async () => { setCloseDialogOpen(false); await submit(false); }}>Save Draft</Button>
-                        <Button variant="destructive" onClick={() => { setCloseDialogOpen(false); closeForm(); }}>Discard &amp; Close</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <UnsavedChangesDialog
+                open={closeDialogOpen}
+                onOpenChange={setCloseDialogOpen}
+                onSaveDraft={() => submit(false)}
+                onDiscard={closeForm}
+                saveDraftDisabled={saving}
+            />
         </div>
         </BranchRequired>
     );
