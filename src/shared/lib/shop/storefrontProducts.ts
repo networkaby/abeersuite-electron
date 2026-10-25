@@ -1,6 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { invProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { invProductToPublic, SHOP_PUBLIC_INCLUDE, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
@@ -28,10 +28,11 @@ export async function loadStorefrontProducts(
                 isListedInShop: true,
                 isActive: true,
                 ...(opts.brandId != null ? { brandId: opts.brandId } : {}),
-                ...(opts.categoryId != null ? { categoryId: opts.categoryId } : {}),
+                // A collection page lists every product in it, main or extra.
+                ...(opts.categoryId != null ? { collections: { some: { categoryId: opts.categoryId } } } : {}),
                 ...(opts.groupIds != null ? { groupId: { in: opts.groupIds } } : {}),
             },
-            include: { category: { select: { name: true } } },
+            include: SHOP_PUBLIC_INCLUDE,
             orderBy: narrowed ? { id: "asc" } : [{ shopCategory: "asc" }, { id: "asc" }],
         }),
     ]);

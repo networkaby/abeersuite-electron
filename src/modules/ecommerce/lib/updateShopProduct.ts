@@ -11,6 +11,7 @@ import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
 import { PHOTO_KIND_KEYS } from "@/modules/ecommerce/lib/photoChecklist";
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { mergeGallery } from "@/modules/ecommerce/lib/mergeGallery";
+import { syncMainCollections } from "@/modules/inventory/lib/productCollections";
 
 export const shopProductPatchSchema = z.object({
     // inventory fields
@@ -180,10 +181,11 @@ export async function updateShopProduct(
             if (clash) return { response: NextResponse.json({ error: clash }, { status: 409 }) };
         }
 
-        const p = await prisma.invProduct.update({
-            where: { id: pid },
-            data,
-            include: shopProductInclude,
+        const p = await prisma.$transaction(async (tx) => {
+            const row = await tx.invProduct.update({ where: { id: pid }, data, include: shopProductInclude });
+            // A categoryId sent here moves the main collection (productCollections.ts).
+            if (b.categoryId !== undefined) await syncMainCollections(tx, [pid]);
+            return row;
         });
         return { product: invProductToAdmin(p, bands) };
     } catch (e: unknown) {

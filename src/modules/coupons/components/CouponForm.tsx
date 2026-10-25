@@ -421,7 +421,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
                     className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border/70 px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
                 >
                     <Plus size={13} className="shrink-0" />
-                    {rules.length > 0 ? `Show ${rules.length} item rule${rules.length > 1 ? "s" : ""}` : "Add item rules (product, category, group, brand)"}
+                    {rules.length > 0 ? `Show ${rules.length} item rule${rules.length > 1 ? "s" : ""}` : "Add item rules (product, group, brand)"}
                 </button>
             )}
             {type === "SET_PRICE" && rules.length === 0 && (
@@ -612,7 +612,9 @@ function RuleEditor({ rules, setRules, masters, prodOpts }: {
 
     const pickers: { field: RuleField; placeholder: string; width: string; options: { value: number; label: string; leaf?: string }[] }[] = [
         { field: "productId", placeholder: "+ product", width: "w-48", options: prodOpts },
-        { field: "categoryId", placeholder: "+ category", width: "w-44", options: categories.map((c) => ({ value: c.id, label: c.name })) },
+        // No collection picker: collections are shop-only (a product may sit in
+        // several), so item rules key on product / group / brand. A saved
+        // collection rule still shows as its chip.
         { field: "groupId", placeholder: "+ group", width: "w-44", options: groups.map((g) => ({ value: g.id, label: g.name })) },
         { field: "brandId", placeholder: "+ brand", width: "w-40", options: brands.map((b) => ({ value: b.id, label: b.name })) },
     ];
@@ -643,7 +645,7 @@ function RuleEditor({ rules, setRules, masters, prodOpts }: {
                 </Button>
             </div>
             <p className="text-[10px] text-muted-foreground">
-                Fields set on one rule must ALL match — brand + category = that brand&rsquo;s items in that category. Separate rules match independently.
+                Fields set on one rule must ALL match — brand + group = that brand&rsquo;s items in that group. Separate rules match independently.
             </p>
             {rules.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">

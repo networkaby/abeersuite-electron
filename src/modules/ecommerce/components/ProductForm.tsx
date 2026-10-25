@@ -400,6 +400,7 @@ export default function ProductForm({
         // Live preview only — the office-side classification and the group chain
         // are not edited on this form, so the preview card carries neither.
         collection: null,
+        collections: [],
         department: null,
         categoryPath: [],
         pricePaise: shopPricePaise,

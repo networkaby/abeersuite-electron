@@ -5,6 +5,7 @@ import { useEffect, useRef, useEffectEvent } from "react";
 import { RefreshCw, Trash2 } from "lucide-react";
 import { flattenTree, treeLabel, type MasterKind } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
+import { SearchableMultiSelect } from "@/shared/components/SearchableMultiSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,7 +41,10 @@ export type InvProductFormState = {
     /** URL slug — written to InvProduct.slug. */
     slug: string;
     unitId: string;
+    /** Main collection — always collectionIds[0] (kept in step by the picker). */
     categoryId: string;
+    /** Every collection, main first (InvProductCollection). */
+    collectionIds: number[];
     groupId: string;
     brandId: string;
     warrantyTermId: string;
@@ -97,6 +101,7 @@ export const emptyInvProductForm: InvProductFormState = {
     slug: "",
     unitId: "",
     categoryId: "",
+    collectionIds: [],
     groupId: "",
     brandId: "",
     warrantyTermId: "",
@@ -411,12 +416,13 @@ export function InvProductFormFields({
                     </div>
                     <div className="space-y-2">
                         <Label>Collection</Label>
-                        <SearchableSelect
-                            value={form.categoryId ? Number(form.categoryId) : null}
-                            onChange={(v) => setForm((f) => ({ ...f, categoryId: v == null ? "" : String(v) }))}
+                        <SearchableMultiSelect
+                            value={form.collectionIds}
+                            onChange={(ids) => setForm((f) => ({ ...f, collectionIds: ids, categoryId: ids[0] != null ? String(ids[0]) : "" }))}
                             onCreate={onCreateMaster ? () => onCreateMaster("category") : undefined}
                             createLabel="+ New collection…"
-                            placeholder="Optional"
+                            placeholder="Add a collection (optional)"
+                            primaryLabel="Main collection"
                             options={flattenTree(categories).map((r) => ({
                                 value: r.id,
                                 label: treeLabel(r),

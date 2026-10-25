@@ -1,5 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { invProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { invProductToPublic, SHOP_PUBLIC_INCLUDE, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
@@ -92,7 +92,7 @@ export async function loadSimilarProducts(
                 groupId: { in: groupIds },
                 id: { notIn: [...takenIds] },
             },
-            include: { category: { select: { name: true } } },
+            include: SHOP_PUBLIC_INCLUDE,
             // Over-fetch: some rows are dropped by the availability gate below,
             // and a hard `take` of exactly `limit` could return a short row.
             take: limit * 3,

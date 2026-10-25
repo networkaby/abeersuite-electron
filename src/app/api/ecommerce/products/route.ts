@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
+import { syncMainCollections } from "@/modules/inventory/lib/productCollections";
 import { NextResponse } from "next/server";
 import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { invProductToAdmin } from "@/modules/ecommerce/lib/productAdmin";
@@ -161,6 +162,7 @@ export async function POST(req: Request) {
             },
             include: productInclude,
         });
+        if (p.categoryId != null) await prisma.$transaction((tx) => syncMainCollections(tx, [p.id]));
         return NextResponse.json(invProductToAdmin(p, bands), { status: 201 });
     } catch (e: unknown) {
         const conflict = prismaUniqueError(e, "SKU or slug already exists");

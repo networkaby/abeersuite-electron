@@ -18,6 +18,7 @@ import { openingBranchForSave } from "@/modules/inventory/lib/liveStock";
 import { requireWritableBranchId } from "@/shared/lib/auth/activeBranch";
 import { auth } from "@/auth";
 import * as Sentry from "@sentry/nextjs";
+import { applyCollections, collectionsExist } from "@/modules/inventory/lib/productCollections";
 
 const productInclude = {
     unit: { select: { id: true, code: true, label: true } },
@@ -27,6 +28,7 @@ const productInclude = {
     warrantyTerm: { select: { id: true, name: true } },
     gstRate: { select: { id: true, rate: true, label: true } },
     codes: { select: { id: true, kind: true, value: true, sortOrder: true }, orderBy: { sortOrder: "asc" } },
+    collections: { select: { categoryId: true }, orderBy: { sortOrder: "asc" } },
 } as const;
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -84,7 +86,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (!u) return NextResponse.json({ error: "Unit not found" }, { status: 400 });
         if (categoryId != null) {
             const c = await prisma.invCategory.findUnique({ where: { id: categoryId } });
-            if (!c) return NextResponse.json({ error: "Category not found" }, { status: 400 });
+            if (!c) return NextResponse.json({ error: "Collection not found" }, { status: 400 });
+        }
+        if (b.collectionIds && !(await collectionsExist(b.collectionIds))) {
+            return NextResponse.json({ error: "Collection not found" }, { status: 400 });
         }
         if (groupId != null) {
             const g = await prisma.invProductGroup.findUnique({ where: { id: groupId } });
@@ -195,8 +200,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 },
                 include: productInclude,
             });
-            if (!openingTouched) return saved;
-            await recomputeProductStock(tx, [id]);
+            const collectionsTouched = b.collectionIds !== undefined || b.categoryId !== undefined;
+            if (collectionsTouched) await applyCollections(tx, id, b);
+            if (!openingTouched && !collectionsTouched) return saved;
+            if (openingTouched) await recomputeProductStock(tx, [id]);
             return tx.invProduct.findUniqueOrThrow({ where: { id }, include: productInclude });
         });
         // Re-materialize effectiveSalePricePaise (saved price / cost / GST may have

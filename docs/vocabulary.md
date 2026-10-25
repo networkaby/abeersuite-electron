@@ -475,3 +475,7 @@ What still reads the cache is the two surfaces that want **every** account in on
 ---
 
 _Last updated: 2026-09-21 — Added "Cached balance · Computed balance": the bounded-set-computes / whole-chart-caches rule, and the surfaces that moved off `Account.balance`. Prior: 2026-06-28 — Added + IMPLEMENTED "Voucher No · Universal Voucher No (UVNo)": every voucher holds the per-kind **Voucher No** (`voucherNo`, e.g. SV-/PMT-/POS-, renamed from friendlyRef) and the global **Universal Voucher No** = the spine's `id` (label `UV-<id>` via formatUvNo; the old `reference` string was dropped — the id already identifies the row, and `GL-` wrongly implied GL-only). `reference` the word is now free for a future cross-reference column. Prior: 2026-06-27 — added the "Voucher lines" term (`VoucherGlLine` + `VoucherInventoryLine`; tenders/charges are role-tagged GL rows). 2026-06-25 — merged the transaction- and work-inbox vocabularies into one doc._
+
+## Collection (office) = Collection (shop)
+
+Since 2026-10-25 the office calls `InvCategory` **Collection** on every screen, the same word the shop uses. In code it stays `category` / `categoryId` / `/api/inventory/categories`. A product may sit in several collections (`InvProductCollection`, main first); `InvProduct.categoryId` is the main one and is what rules and reports read. Do not confuse with the shop's **Category**, which is the office **Group**.

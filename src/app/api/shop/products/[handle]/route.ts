@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { invProductToPublic } from "@/shared/lib/shop/productPublic";
+import { invProductToPublic, SHOP_PUBLIC_INCLUDE } from "@/shared/lib/shop/productPublic";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
@@ -19,11 +19,11 @@ export async function GET(_req: Request, ctx: { params: Promise<{ handle: string
         const product = asId
             ? await db.findFirst({
                   where: { id: asId, isListedInShop: true, isActive: true },
-                  include: { category: { select: { name: true } } },
+                  include: SHOP_PUBLIC_INCLUDE,
               })
             : await db.findFirst({
                   where: { slug: decoded, isListedInShop: true, isActive: true },
-                  include: { category: { select: { name: true } } },
+                  include: SHOP_PUBLIC_INCLUDE,
               });
 
         if (!product) {

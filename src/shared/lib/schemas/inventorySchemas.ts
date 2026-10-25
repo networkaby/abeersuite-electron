@@ -160,6 +160,9 @@ export const invProductCreateSchema = z.object({
     namePart: zOptStr(500),
     unitId: z.coerce.number().int().positive(),
     categoryId: z.number().int().positive().nullish(),
+    /// Every Collection, main first (productCollections.ts). Wins over
+    /// categoryId when both are sent.
+    collectionIds: z.array(z.number().int().positive()).max(50).nullish(),
     groupId: z.number().int().positive().nullish(),
     brandId: z.number().int().positive().nullish(),
     warrantyTermId: z.number().int().positive().nullish(),

@@ -58,6 +58,7 @@ export type InvProductRow = {
     modelNo: string | null;
     unitId: number;
     categoryId: number | null;
+    collections?: { categoryId: number }[];
     groupId: number | null;
     brandId: number | null;
     warrantyTermId: number | null;
@@ -103,6 +104,9 @@ function rowToForm(p: InvProductRow): InvProductFormState {
         slug: p.slug ?? "",
         unitId: String(p.unitId),
         categoryId: p.categoryId != null ? String(p.categoryId) : "",
+        collectionIds: p.collections?.length
+            ? p.collections.map((c) => c.categoryId)
+            : p.categoryId != null ? [p.categoryId] : [],
         groupId: p.groupId != null ? String(p.groupId) : "",
         brandId: p.brandId != null ? String(p.brandId) : "",
         warrantyTermId: p.warrantyTermId != null ? String(p.warrantyTermId) : "",
@@ -303,6 +307,7 @@ export function InvProductDialog({ open, onOpenChange, editId, defaultValues, on
             slug: optionalStr(form.slug),
             unitId: unitId!,
             categoryId: optionalId(form.categoryId),
+            collectionIds: form.collectionIds,
             groupId: optionalId(form.groupId),
             brandId: optionalId(form.brandId),
             warrantyTermId: optionalId(form.warrantyTermId),

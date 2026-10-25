@@ -356,6 +356,7 @@ export default function PricingStrategiesPage() {
     const [base, setBase] = useState("");
     const [brandPts, setBrandPts] = useState<Points>({});
     const [catPts, setCatPts] = useState<Points>({});
+    const hasCatPts = Object.values(catPts).some((v) => num(v) !== 0);
     const [groupPts, setGroupPts] = useState<Points>({});
     // Per-product additive override, keyed by product id (as string).
     const [productPts, setProductPts] = useState<Points>({});
@@ -674,9 +675,14 @@ export default function PricingStrategiesPage() {
                     <PointSection title="Brands" icon={Tag} rows={flatRows(brands)} points={brandPts}
                         relevantKeys={relevant.brand}
                         onChange={(k, v) => setBrandPts((s) => ({ ...s, [k]: v }))} />
-                    <PointSection title="Collections" icon={FolderTree} rows={treeRows(categories)} points={catPts}
-                        relevantKeys={relevant.category}
-                        onChange={(k, v) => setCatPts((s) => ({ ...s, [k]: v }))} />
+                    {/* Collections are shop-only (a product may sit in several), so new
+                        points go on Group. Shown only while old collection points exist,
+                        so they can be seen and cleared. */}
+                    {hasCatPts ? (
+                        <PointSection title="Collections" icon={FolderTree} rows={treeRows(categories)} points={catPts}
+                            relevantKeys={relevant.category}
+                            onChange={(k, v) => setCatPts((s) => ({ ...s, [k]: v }))} />
+                    ) : null}
                     <PointSection title="Groups" icon={Boxes} rows={treeRows(groups)} points={groupPts}
                         relevantKeys={relevant.group}
                         onChange={(k, v) => setGroupPts((s) => ({ ...s, [k]: v }))} />
@@ -816,8 +822,10 @@ export default function PricingStrategiesPage() {
                                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                                         <RangeRow label="Brand pts" value={ptRanges.brand}
                                             onChange={(v) => setPtRanges((s) => ({ ...s, brand: v }))} />
-                                        <RangeRow label="Collection pts" value={ptRanges.category}
-                                            onChange={(v) => setPtRanges((s) => ({ ...s, category: v }))} />
+                                        {hasCatPts ? (
+                                            <RangeRow label="Collection pts" value={ptRanges.category}
+                                                onChange={(v) => setPtRanges((s) => ({ ...s, category: v }))} />
+                                        ) : null}
                                         <RangeRow label="Group pts" value={ptRanges.group}
                                             onChange={(v) => setPtRanges((s) => ({ ...s, group: v }))} />
                                         <RangeRow label="Product pts" value={ptRanges.product}

@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { invProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
+import { invProductToPublic, SHOP_PUBLIC_INCLUDE, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
@@ -44,7 +44,7 @@ export const loadShopProduct = cache(
 
         const p = await prisma.invProduct.findFirst({
             where,
-            include: { category: { select: { name: true } } },
+            include: SHOP_PUBLIC_INCLUDE,
         });
         if (!p) return null;
 

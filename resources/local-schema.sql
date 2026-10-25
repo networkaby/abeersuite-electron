@@ -2783,6 +2783,18 @@ ALTER TABLE "inv_product_codes" ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT
 ALTER TABLE "inv_product_codes" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "inv_product_collections" (
+    "productId" INTEGER NOT NULL,
+    "categoryId" INTEGER NOT NULL,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "inv_product_collections_pkey" PRIMARY KEY ("productId","categoryId")
+);
+ALTER TABLE "inv_product_collections" ADD COLUMN IF NOT EXISTS "productId" INTEGER NOT NULL;
+ALTER TABLE "inv_product_collections" ADD COLUMN IF NOT EXISTS "categoryId" INTEGER NOT NULL;
+ALTER TABLE "inv_product_collections" ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "inv_product_branches" (
     "productId" INTEGER NOT NULL,
     "branchId" TEXT NOT NULL,
@@ -5745,6 +5757,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS "inv_product_codes_value_key" ON "inv_product_
 CREATE INDEX IF NOT EXISTS "inv_product_codes_productId_idx" ON "inv_product_codes"("productId");
 
 -- CreateIndex
+CREATE INDEX IF NOT EXISTS "inv_product_collections_categoryId_idx" ON "inv_product_collections"("categoryId");
+
+-- CreateIndex
 CREATE INDEX IF NOT EXISTS "inv_product_branches_branchId_idx" ON "inv_product_branches"("branchId");
 
 -- CreateIndex
@@ -6777,6 +6792,20 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "inv_product_codes" ADD CONSTRAINT "inv_product_codes_productId_fkey" FOREIGN KEY ("productId") REFERENCES "InvProduct"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "inv_product_collections" ADD CONSTRAINT "inv_product_collections_productId_fkey" FOREIGN KEY ("productId") REFERENCES "InvProduct"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "inv_product_collections" ADD CONSTRAINT "inv_product_collections_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "InvCategory"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -8366,6 +8395,13 @@ DO $$ BEGIN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "inv_product_codes";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "inv_product_codes"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."inv_product_collections"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "inv_product_collections";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "inv_product_collections"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('productId', 'categoryId');
     END IF;
 END $$;
 DO $$ BEGIN

@@ -43,7 +43,7 @@ export function LoyaltyEarnRules({
     const [rules, setRules] = useState<EarnRule[]>([]);
     const [loading, setLoading] = useState(true);
     const [showAdd, setShowAdd] = useState(false);
-    const [scope, setScope] = useState<Scope>("CATEGORY");
+    const [scope, setScope] = useState<Scope>("GROUP");
     const [targetId, setTargetId] = useState<string>("");
     const [multiplier, setMultiplier] = useState("1");
     const [redeemCap, setRedeemCap] = useState(""); // blank = inherit global cap
@@ -154,7 +154,7 @@ export function LoyaltyEarnRules({
                                 <Select value={scope} onValueChange={(v) => { setScope(v as Scope); setTargetId(""); }}>
                                     <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="CATEGORY">Collection</SelectItem>
+                                        {/* Collections are shop-only (a product may sit in several) — rules key on Group. */}
                                         <SelectItem value="GROUP">Group</SelectItem>
                                         <SelectItem value="PRODUCT">Product</SelectItem>
                                     </SelectContent>

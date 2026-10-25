@@ -237,7 +237,7 @@ function ShopCatalogInner({
     );
     const collectionValues = useMemo(
         () =>
-            [...new Set(products.map((p) => p.collection).filter((c): c is string => !!c))].sort((a, b) =>
+            [...new Set(products.flatMap((p) => p.collections))].sort((a, b) =>
                 a.localeCompare(b)
             ),
         [products]
@@ -255,7 +255,7 @@ function ShopCatalogInner({
                 departments.size === 0 || (p.department != null && departments.has(p.department)),
             category: (p: ShopProductPublic) => cats.size === 0 || cats.has(p.category),
             collection: (p: ShopProductPublic) =>
-                collections.size === 0 || (p.collection != null && collections.has(p.collection)),
+                collections.size === 0 || p.collections.some((c) => collections.has(c)),
             price: (p: ShopProductPublic) =>
                 priceIds.size === 0 ||
                 [...priceIds].some((id) => {
@@ -504,7 +504,7 @@ function ShopCatalogInner({
                         idPrefix="col"
                         options={collectionValues.map((v) => ({
                             value: v,
-                            count: countBy("collection", (p) => p.collection === v),
+                            count: countBy("collection", (p) => p.collections.includes(v)),
                         }))}
                         selected={collections}
                         onToggle={(v) => setCollections((s) => toggle(s, v))}

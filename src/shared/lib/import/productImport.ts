@@ -1,6 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { productOpeningValue, syncProductCacheFromOpening } from "@/modules/inventory/lib/stockValue";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
+import { syncMainCollections } from "@/modules/inventory/lib/productCollections";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { systemBranchId } from "@/shared/lib/org/systemBranch";
 import * as Sentry from "@sentry/nextjs";
@@ -737,6 +738,14 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             // Saved stock totals of every updated row = opening + ledger, in one
             // batched rebuild (a no-op on rows already right).
             await recomputeProductStock(tx, updateRows.map((v) => v.existingId!));
+            // categoryId was written directly (createMany) — keep the collection
+            // list's main row in step (productCollections.ts).
+            const catUpdatedIds = updateRows.filter((v) => v.present.has("category")).map((v) => v.existingId!);
+            const catNewSkus = validRows.filter((v) => v.existingId == null && v.data.categoryId != null).map((v) => v.data.sku);
+            const catCreatedIds = catNewSkus.length
+                ? (await tx.invProduct.findMany({ where: { sku: { in: catNewSkus } }, select: { id: true } })).map((p) => p.id)
+                : [];
+            await syncMainCollections(tx, [...catUpdatedIds, ...catCreatedIds]);
         },
         { timeout: 10 * 60 * 1000, maxWait: 30_000 },
     );

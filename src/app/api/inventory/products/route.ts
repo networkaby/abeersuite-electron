@@ -19,6 +19,7 @@ import {
 } from "@/modules/inventory/lib/productList";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
 import * as Sentry from "@sentry/nextjs";
+import { applyCollections, collectionsExist } from "@/modules/inventory/lib/productCollections";
 import { auth } from "@/auth";
 
 /** Throws "<Master> not found" for the first referenced master that does not
@@ -113,50 +114,58 @@ export async function POST(req: Request) {
             }).then(() => null, (e: unknown) => e),
             b.slug ? shopSlugClash(b.slug, { kind: "product" }) : null,
         ]);
+        if (b.collectionIds && !(await collectionsExist(b.collectionIds))) {
+            return NextResponse.json({ error: "Collection not found" }, { status: 400 });
+        }
         if (existing) return NextResponse.json({ error: "SKU already exists" }, { status: 409 });
         if (collision) return NextResponse.json({ error: skuCodeCollisionMessage(collision) }, { status: 409 });
         if (fkError) throw fkError;
         if (clash) return NextResponse.json({ error: clash }, { status: 409 });
-        const row = await prisma.invProduct.create({
-            data: {
-                sku,
-                name: b.name,
-                namePart: b.namePart ?? null,
-                unitId: b.unitId,
-                categoryId: b.categoryId ?? null,
-                groupId: b.groupId ?? null,
-                brandId: b.brandId ?? null,
-                warrantyTermId: b.warrantyTermId ?? null,
-                modelNo: b.modelNo ?? null,
-                ...(b.codes && b.codes.length > 0
-                    ? { codes: { create: normalizeProductCodes(b.codes).map((c, i) => ({ kind: c.kind, value: c.value, sortOrder: i })) } }
-                    : {}),
-                notes: b.notes ?? null,
-                requireSaleNote: b.requireSaleNote ?? false,
-                isActive: b.isActive ?? true,
-                shopSubheading: b.shopSubheading ?? null,
-                slug: b.slug ?? null,
-                attrsJson: b.attrsJson ?? Prisma.DbNull,
-                effectiveSalePricePaise: b.effectiveSalePricePaise ?? null,
-                savedSalePricePaise: b.savedSalePricePaise ?? null,
-                mrpPaise:   b.mrpPaise   ?? null,
-                // Books-beginning opening stock — server computes openingValue.
-                openingStock:     b.openingStock ?? null,
-                openingRate:      b.openingRate  ?? null,
-                openingValue:     productOpeningValue(b),
-                openingStockDate: null,
-                openingBranchId,
-                // GST classification — all null by default (resolver cascades at read time).
-                gstRateId:  b.gstRateId  ?? null,
-                hsnCode:    b.hsnCode    ?? null,
-                taxability: b.taxability ?? null,
-                // Sync the running qty cache from opening qty so list views
-                // light up immediately. PR 3 dropped the costPaise cache —
-                // cost now derives from the ledger walk (opening rate is the
-                // synthetic first lot).
-                ...syncProductCacheFromOpening(b),
-            },
-            include: productInclude,
+        const row = await prisma.$transaction(async (tx) => {
+            const created = await tx.invProduct.create({
+                data: {
+                    sku,
+                    name: b.name,
+                    namePart: b.namePart ?? null,
+                    unitId: b.unitId,
+                    categoryId: b.collectionIds?.[0] ?? b.categoryId ?? null,
+                    groupId: b.groupId ?? null,
+                    brandId: b.brandId ?? null,
+                    warrantyTermId: b.warrantyTermId ?? null,
+                    modelNo: b.modelNo ?? null,
+                    ...(b.codes && b.codes.length > 0
+                        ? { codes: { create: normalizeProductCodes(b.codes).map((c, i) => ({ kind: c.kind, value: c.value, sortOrder: i })) } }
+                        : {}),
+                    notes: b.notes ?? null,
+                    requireSaleNote: b.requireSaleNote ?? false,
+                    isActive: b.isActive ?? true,
+                    shopSubheading: b.shopSubheading ?? null,
+                    slug: b.slug ?? null,
+                    attrsJson: b.attrsJson ?? Prisma.DbNull,
+                    effectiveSalePricePaise: b.effectiveSalePricePaise ?? null,
+                    savedSalePricePaise: b.savedSalePricePaise ?? null,
+                    mrpPaise:   b.mrpPaise   ?? null,
+                    // Books-beginning opening stock — server computes openingValue.
+                    openingStock:     b.openingStock ?? null,
+                    openingRate:      b.openingRate  ?? null,
+                    openingValue:     productOpeningValue(b),
+                    openingStockDate: null,
+                    openingBranchId,
+                    // GST classification — all null by default (resolver cascades at read time).
+                    gstRateId:  b.gstRateId  ?? null,
+                    hsnCode:    b.hsnCode    ?? null,
+                    taxability: b.taxability ?? null,
+                    // Sync the running qty cache from opening qty so list views
+                    // light up immediately. PR 3 dropped the costPaise cache —
+                    // cost now derives from the ledger walk (opening rate is the
+                    // synthetic first lot).
+                    ...syncProductCacheFromOpening(b),
+                },
+                include: productInclude,
+            });
+            if (b.collectionIds === undefined && b.categoryId == null) return created;
+            await applyCollections(tx, created.id, b);
+            return created;
         });
         // Materialize effectiveSalePricePaise so the new product is sellable in
         // POS immediately (mirrors voucher posters). Awaited on purpose — that is

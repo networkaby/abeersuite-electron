@@ -42,6 +42,8 @@ export type ShopProductPublic = {
      * deliberately does not compete with `category` for navigation.
      */
     collection: string | null;
+    /** Every collection the product sits in, main first (`collection` is [0]). */
+    collections: string[];
     /**
      * The product's office Group id — the taxonomy key the storefront navigates
      * by. Carried so callers can resolve siblings ("similar products") and the
@@ -114,8 +116,17 @@ export function productGalleryUrls(galleryJson: unknown, imageUrl: string | null
  * `bands` is omitted the legacy behaviour (effectiveSalePricePaise) is kept, so
  * existing non-storefront callers are unaffected.
  */
+/** What a storefront query includes so `collection` / `collections` resolve. */
+export const SHOP_PUBLIC_INCLUDE = {
+    category: { select: { name: true } },
+    collections: { select: { category: { select: { name: true } } }, orderBy: { sortOrder: "asc" } },
+} as const;
+
 export function invProductToPublic(
-    p: InvProduct & { category?: { name: string } | null },
+    p: InvProduct & {
+        category?: { name: string } | null;
+        collections?: { category: { name: string } }[];
+    },
     opts: ShopProductPublicOptions = {}
 ): ShopProductPublic {
     const { bands, avail, groupIndex } = opts;
@@ -144,6 +155,9 @@ export function invProductToPublic(
         department: group ? rootOf(group).name : null,
         categoryPath: group?.ancestors.map((a) => a.name) ?? [],
         collection: p.category?.name ?? null,
+        collections: p.collections?.length
+            ? p.collections.map((c) => c.category.name)
+            : p.category ? [p.category.name] : [],
         groupId: p.groupId,
         // Shop price = printed barcode tag (shelf == shop == receipt) when bands are
         // supplied, else the materialized effectiveSalePricePaise. Exposed under the

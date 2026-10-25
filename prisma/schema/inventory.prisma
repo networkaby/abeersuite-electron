@@ -87,6 +87,8 @@ model InvCategory {
   updatedAt DateTime      @updatedAt
 
   products         InvProduct[]
+  /// Every product in this Collection (a product may sit in several).
+  collectionLinks  InvProductCollection[]
   attributeMasters InvAttributeMaster[]
   loyaltyEarnRules LoyaltyEarnRule[]    @relation("InvCategoryLoyaltyRules")
   couponRules      CouponProductRule[]  @relation("CouponRuleCategory")
@@ -393,12 +395,17 @@ model InvProduct {
   taxability Taxability?
 
   unit         InvUnit          @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  /// The MAIN collection — always the first of `collections` (written only by
+  /// setProductCollections). Kept as a single column so pricing, loyalty,
+  /// coupons, POS and reports keep one bucket per product; the shop reads the
+  /// full list from `collections`.
   category     InvCategory?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   group        InvProductGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
   brand        InvBrand?        @relation(fields: [brandId], references: [id], onDelete: SetNull)
   warrantyTerm InvWarrantyTerm? @relation(fields: [warrantyTermId], references: [id], onDelete: SetNull)
 
   codes                     InvProductCode[]
+  collections               InvProductCollection[]
   orderLines                TicketOrderLine[]
   voucherLines              VoucherInventoryLine[]
   stockEntries              InvStockLedger[]
@@ -455,6 +462,21 @@ model InvProductCode {
 
   @@index([productId])
   @@map("inv_product_codes")
+}
+
+/// Product ↔ Collection (InvCategory). A product may sit in several collections;
+/// sortOrder 0 is the main one, mirrored into InvProduct.categoryId.
+/// Shop / marketing only — rules and reports key on Group.
+model InvProductCollection {
+  productId  Int
+  product    InvProduct  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  categoryId Int
+  category   InvCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  sortOrder  Int         @default(0)
+
+  @@id([productId, categoryId])
+  @@index([categoryId])
+  @@map("inv_product_collections")
 }
 
 /// Per-branch stock balance — replaces global InvProduct.stock for multi-branch
