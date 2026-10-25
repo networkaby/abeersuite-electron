@@ -44,6 +44,7 @@
     "seed:recompute-balances": "tsx prisma/seeds/recompute-balances.ts",
     "recompute:caches": "tsx src/scripts/recompute-caches.ts",
     "report:ps-double-count": "tsx src/scripts/report-physical-stock-double-count.ts",
+    "report:incl-discount": "tsx src/scripts/report-incl-discount-bug.ts",
     "backfill:receipt-allocations": "tsx src/scripts/backfill-online-receipt-allocations.ts",
     "backfill:voucher-branch": "tsx src/scripts/backfill-voucher-branch.ts",
     "backfill:pos-promo": "tsx src/scripts/backfill-pos-promo-snapshots.ts",
