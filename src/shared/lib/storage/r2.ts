@@ -83,13 +83,13 @@ export function presignR2(args: {
 /** Server-side upload of bytes we already hold (e.g. a file fetched from Meta). */
 export async function putR2(bucket: string, key: string, body: ArrayBuffer, contentType: string): Promise<void> {
     const url = presignR2({ bucket, key, method: "PUT", contentType, expiresSec: 300 });
-    const res = await fetch(url, { method: "PUT", headers: { "Content-Type": contentType }, body });
+    const res = await fetch(url, { method: "PUT", headers: { "Content-Type": contentType }, body, signal: AbortSignal.timeout(60_000) });
     if (!res.ok) throw new Error(`R2 upload failed (${res.status}): ${(await res.text().catch(() => "")).slice(0, 200)}`);
 }
 
 /** Server-side read of a small text object (e.g. a saved JSON); null when it is not there. */
 export async function getR2Text(bucket: string, key: string): Promise<string | null> {
-    const res = await fetch(presignR2({ bucket, key, method: "GET", expiresSec: 300 }), { cache: "no-store" });
+    const res = await fetch(presignR2({ bucket, key, method: "GET", expiresSec: 300 }), { cache: "no-store", signal: AbortSignal.timeout(10_000) });
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`R2 read failed (${res.status}): ${(await res.text().catch(() => "")).slice(0, 200)}`);
     return res.text();
