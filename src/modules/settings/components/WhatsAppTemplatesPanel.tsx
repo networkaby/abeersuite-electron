@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
-import { Loader2, RefreshCw, Save, Send, SendHorizontal } from "lucide-react";
+import { Loader2, QrCode, RefreshCw, Save, Send, SendHorizontal } from "lucide-react";
 import { extractApiError } from "@/shared/lib/api";
 import { parseDigitsInput } from "@/shared/lib/format";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import {
     checkBody,
     fillBody,
     isDueKind,
+    hasImageHeader,
     type WaTemplateDraft,
     type WaTemplateKind,
 } from "@/shared/lib/whatsapp/billTemplates";
@@ -239,6 +240,9 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
 
                 <div className="space-y-1.5">
                     <Label htmlFor="wa-body">Message</Label>
+                    {hasImageHeader(kind) && (
+                        <p className="text-xs text-muted-foreground">The bill&apos;s UPI QR goes on top as a photo, made fresh for each request.</p>
+                    )}
                     <div className="flex flex-wrap gap-1.5">
                         {fieldsFor(kind).map((f) => (
                             <Button
@@ -346,6 +350,11 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                 <p className="text-sm font-medium">Preview</p>
                 <div className="rounded-lg bg-[#e5ddd5] p-3 dark:bg-[#0b141a]">
                     <div className="max-w-[300px] rounded-lg rounded-tl-none bg-white p-2.5 text-sm text-[#111b21] shadow-sm dark:bg-[#202c33] dark:text-[#e9edef]">
+                        {hasImageHeader(kind) && (
+                            <div className="mb-2 flex aspect-square items-center justify-center rounded-md bg-white">
+                                <QrCode className="size-3/4 text-[#111b21]" strokeWidth={1.25} aria-label="UPI QR photo" />
+                            </div>
+                        )}
                         <p className="whitespace-pre-wrap break-words">{fillBody(draft.body, sampleValuesFor(kind))}</p>
                         {kind === "TICKET_AUTO_REPLY" && (
                             <div className="mt-2.5 pt-2 border-t border-dashed border-gray-200 dark:border-gray-700 text-xs space-y-1.5 opacity-90">
