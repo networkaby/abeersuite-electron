@@ -30,10 +30,8 @@ import SetDocumentTitle from "@/shared/components/print/SetDocumentTitle";
 import { gstinDerivedStateCode } from "@/shared/lib/gst/computeGstSplit";
 import { stateNameForCode } from "@/shared/lib/gst/indianStates";
 import { A4_PREVIEW_SCOPE_CLASS, inlineA4Styles } from "@/shared/components/print/a4/a4Styles";
+import { DEPOSIT_SLIP_KINDS, fmtINR, JOURNAL_KINDS, MONEY_RECEIPT_KINDS, type A4ChromeProps } from "@/shared/components/print/a4/a4Shared";
 import { paginateGoods, printsSettlement, type PageSlice } from "@/shared/components/print/a4/a4Pagination";
-
-const fmtINR = (n: number) =>
-    `Rs. ${formatAmount(n)}`;
 
 interface InvoiceBodyProps {
     template: VoucherTemplateDefaults;
@@ -43,8 +41,6 @@ interface InvoiceBodyProps {
      *  template-driven letterhead + footer chrome stay shared. */
     body?: React.ReactNode;
 }
-
-type A4ChromeProps = { template: VoucherTemplateDefaults; sample: ThermalReceiptSample };
 
 /** Template-driven letterhead (logo · brand · address · GSTIN · phone) + banner. */
 function A4Header({ template, sample }: A4ChromeProps) {
@@ -134,17 +130,6 @@ function A4Header({ template, sample }: A4ChromeProps) {
         </>
     );
 }
-
-// Money vouchers get the receipt-book middle below instead of the goods
-// invoice table — a ₹5,000 cash receipt is not a sale and shouldn't look
-// like one. Deliberately bespoke; do NOT fold back into DefaultA4Middle.
-const MONEY_RECEIPT_KINDS = new Set(["RECEIPT", "PAYMENT"]);
-
-// Contra print variants that render the bespoke denomination slip: BANK_DEPOSIT
-// carries the bank pay-in slip, CASH_HANDOVER the cash→cash handover slip. Both
-// go through DepositSlipMiddle, which branches on `sample.depositSlip.mode`.
-// Plain CONTRA is NOT here — it keeps the neutral journal table.
-const DEPOSIT_SLIP_KINDS = new Set(["BANK_DEPOSIT", "CASH_HANDOVER"]);
 
 /** Bespoke middle for money vouchers — classic receipt-book prose
  *  ("Received with thanks from ___ the sum of Rupees ___") with dotted
@@ -424,11 +409,6 @@ function DepositSlipMiddle({ sample }: A4ChromeProps) {
         </>
     );
 }
-
-// Journal-style GL vouchers (plain Contra, Journal) — a double-entry document,
-// not a sale. They print a Particulars · Debit · Credit ledger table, never the
-// goods qty/rate table.
-const JOURNAL_KINDS = new Set(["CONTRA", "JOURNAL"]);
 
 /** Bespoke middle for journal-style GL vouchers — ref/date + a
  *  Particulars · Debit · Credit table with a balancing total. */
