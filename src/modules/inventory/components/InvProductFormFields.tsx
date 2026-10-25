@@ -261,6 +261,11 @@ export function InvProductFormFields({
     useEffect(() => {
         if (!namingConfig) return;
         const { masters, isEditMode: editing } = namingInputs();
+        // In edit mode the form starts empty and the saved row + the master
+        // lists arrive later. Don't take the first signature until both are in:
+        // the row landing is not a user change, and a rebuild before the lists
+        // load drops brand / group from the name ("175GSM 50 Sheets").
+        if (editing && (!form.sku || units.length === 0)) return;
 
         // Name: convention-derived, not hand-editable. Regenerate on every
         // source change; on edit open keep the saved name (first pass) so a
@@ -290,7 +295,7 @@ export function InvProductFormFields({
         }));
     }, [
         form.brandId, form.categoryId, form.groupId, form.warrantyTermId,
-        form.unitId, form.modelNo, form.attrs, form.namePart,
+        form.unitId, form.modelNo, form.attrs, form.namePart, form.sku,
         brands, categories, groups, warrantyTerms, units,
         namingConfig, setForm,
     ]);
