@@ -18,7 +18,7 @@
 // balance. The lock (Reconciled upto) advances only when every statement line
 // up to that date is matched — the bank is the truth.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
@@ -415,8 +415,9 @@ export function BankReconciliationPage() {
         setMPage(pos.page && pos.page > 0 ? pos.page : 1);
         requestAnimationFrame(() => { if (scrollRef.current) scrollRef.current.scrollTop = pos.top ?? 0; });
     }, [data]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- save only when the page moves; savePos reads the scroll through a ref
-    useEffect(() => { savePos(); }, [mCurrent]);
+    // Save only when the page moves; savePos reads the scroll through a ref.
+    const onPageMoved = useEffectEvent(() => savePos());
+    useEffect(() => { onPageMoved(); }, [mCurrent]);
 
     const mFrom = mPages.slice(0, mCurrent - 1).reduce((n, p) => n + p.length, 0) + 1;
 

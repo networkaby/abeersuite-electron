@@ -20,7 +20,7 @@
  * offline wizard with a live session behind it would otherwise be a dead end.
  */
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useEffectEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { markDeliberateSignOut } from "@/shared/lib/auth/signOutTo";
@@ -75,7 +75,7 @@ function CounterSetupForm() {
     const [phase, setPhase] = useState<"pick" | "claiming" | "filling">("pick");
     const [progress, setProgress] = useState("Starting the first sync…");
 
-    useEffect(() => {
+    const loadCounters = useEffectEvent(() => {
         // Not an Electron install — this screen has nothing to do. Send them on.
         if (!isElectronEnvironment()) {
             router.replace(next);
@@ -99,8 +99,9 @@ function CounterSetupForm() {
                 if (mine) setSelectedId(String(mine.id));
             })
             .catch(() => setLoadError("Could not load the counter list. Check the connection and reload."));
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- onboarding reads the counter list once
-    }, []);
+    });
+    // Onboarding reads the counter list once.
+    useEffect(() => { loadCounters(); }, []);
 
     const mine = counters?.find((c) => isThisPc(c, identity)) ?? null;
     const selected = counters?.find((c) => String(c.id) === selectedId) ?? null;

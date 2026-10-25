@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useEffectEvent } from "react";
 import { partyProfileHref, type PartyLinkKind } from "@/shared/lib/parties";
 import axios from "axios";
 import Link from "next/link";
@@ -182,9 +182,10 @@ export default function InventoryDetailsPage() {
         if (!selectedId) setDetail(null);
         else setDetailLoading(true);
     }
+    // A new product loads at the current dates; changed dates apply on Refresh.
+    const loadAtCurrentDates = useEffectEvent((id: number) => { void fetchDetail(id, from, to); });
     useEffect(() => {
-        if (selectedId) void fetchDetail(selectedId, from, to);
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- a new product loads at the current dates; changed dates apply on Refresh
+        if (selectedId) loadAtCurrentDates(selectedId);
     }, [selectedId]);
 
     // Reset scope when product changes: org users stay on "org", branch users

@@ -3,7 +3,7 @@
 // A person's wall. Reads its own posts when it mounts — the page no longer
 // fetches the wall for a visitor who never opens this tab (§7).
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useEffectEvent } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
@@ -35,7 +35,8 @@ export default function WallTab({ profile, sessionUserId, focusInput }: {
     };
     // Another profile's wall: the spinner shows from its first render.
     if (useValueChange(profile.id)) setLoading(true);
-    useEffect(() => { readWall(true); }, [profile.id]); // eslint-disable-line react-hooks/exhaustive-deps -- read the wall once per profile
+    const readThisWall = useEffectEvent(() => readWall(true));
+    useEffect(() => { readThisWall(); }, [profile.id]);
     // Someone else posting on this wall announces `tasks`; only the posts are re-read.
     useRealtimeTopics(["tasks"], () => readWall(false));
 

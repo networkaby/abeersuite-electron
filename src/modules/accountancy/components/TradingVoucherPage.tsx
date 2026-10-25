@@ -31,7 +31,7 @@
  */
 /* dont use number input type use text input type and validate to allow only numbers */
 
-import { Fragment, useState, useCallback, useRef, useEffect, Suspense } from "react";
+import { Fragment, useState, useCallback, useRef, useEffect, Suspense, useEffectEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import { NO_ACCESS_HOME } from "@/shared/lib/auth/pageAccess";
@@ -562,6 +562,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     // product info). Anything we can't fully reconstruct (party-table
     // snapshot, product cost / sale prices for line rate auto-fill) is
     // stubbed with null — the user can still hand-edit any cell.
+    const backToLedger = useEffectEvent(() => router.push(itemLedgerOrHome));
+    const editInPos = useEffectEvent((id: number) => router.replace(`/vouchers/pos/new?voucherId=${id}`));
     useEffect(() => {
         if (!isEditing || editVoucherId == null) return;
         let cancelled = false;
@@ -643,12 +645,12 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                     // POS sales edit in the POS screen — it preserves the POS-specific
                     // loyalty / coupon / gift-card charge rows the office form would drop
                     // (which corrupted the Balance Sheet). Send the user there.
-                    router.replace(`/vouchers/pos/new?voucherId=${editVoucherId}`);
+                    editInPos(editVoucherId);
                     return;
                 }
                 if (v.status === "CANCELLED") {
                     toast.error("This voucher is cancelled. Use Duplicate to create a fresh copy.");
-                    router.push(itemLedgerOrHome);
+                    backToLedger();
                     return;
                 }
                 setEditingRef(v.reference);
@@ -741,7 +743,7 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 setEnableRoundOff(Math.abs(roundOff) > 0.005);
                 setRoundOffManuallyEdited(Math.abs(roundOff) > 0.005);
                 setHeader({
-                    date: v.date ? v.date.slice(0, 10) : today,
+                    date: v.date ? v.date.slice(0, 10) : todayIso(),
                     description: v.description ?? "",
                     shippingAmt: Number(v.shippingAmt ?? 0) > 0 ? String(Number(v.shippingAmt)) : "",
                     roundOff: Math.abs(roundOff) > 0.005 ? roundOff.toFixed(2) : "",
@@ -837,11 +839,10 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             .catch(() => {
                 if (cancelled) return;
                 toast.error("Failed to load voucher for editing");
-                router.push(itemLedgerOrHome);
+                backToLedger();
             })
             .finally(() => { if (!cancelled) setEditLoading(false); });
         return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- one load per voucher id; router / helpers are stable
     }, [editVoucherId, isEditing]);
 
     // Load the money ledgers once and pre-select the default till (last-used, else
@@ -860,6 +861,22 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
     const refreshRefData = () => setRefDataKey((n) => n + 1);
     useRealtimeTopics(["ledger", "catalogue"], refreshRefData);
 
+    // New voucher only: pre-select the default till and seed one tender row.
+    // Reads the latest pick, so a till chosen while the read was out is kept.
+    const seedTender = useEffectEvent((cb: GlAccount[]) => {
+        if (isEditing) return;
+        // Last-used account, else Petty Cash. See pickDefaultTenderAccount
+        // (module scope) — reset()-after-save uses the same resolver.
+        const cash = pickDefaultTenderAccount(cb, LAST_PAYMENT_KEY);
+        if (!paymentAccount) {
+            setPaymentAccount(cash);
+        }
+        // Seed one ready-to-fill Cash tender row so the operator
+        // doesn't have to click "+ More payment option" for the
+        // common single-tender path. Empty amount — the auto
+        // Balance row picks up the remainder until they type.
+        setTenders((rows) => rows.length === 0 ? [newTender(cash)] : rows);
+    });
     useEffect(() => {
         // A newer read (the books moved again, or a ledger was just made from
         // one of this page's pickers) supersedes this one — never let the
@@ -876,22 +893,10 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
                 // Insurance etc.). Asset/Liability ledgers are excluded even
                 // though they aren't money accounts.
                 setChargeAccounts(r.data.filter((a) => a.group?.type === "INCOME" || a.group?.type === "EXPENSE"));
-                if (isEditing) return;
-                // Last-used account, else Petty Cash. See pickDefaultTenderAccount
-                // (module scope) — reset()-after-save uses the same resolver.
-                const cash = pickDefaultTenderAccount(cb, LAST_PAYMENT_KEY);
-                if (!paymentAccount) {
-                    setPaymentAccount(cash);
-                }
-                // Seed one ready-to-fill Cash tender row so the operator
-                // doesn't have to click "+ More payment option" for the
-                // common single-tender path. Empty amount — the auto
-                // Balance row picks up the remainder until they type.
-                setTenders((rows) => rows.length === 0 ? [newTender(cash)] : rows);
+                seedTender(cb);
             })
             .catch(() => { if (!cancelled) { setCashBankAccounts([]); setChargeAccounts([]); } });
         return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- reference data reloads on refDataKey; the tender seed reads the latest values
     }, [refDataKey]);
 
     // Service catalogue — the same active-rows read the POS cart uses, so the
@@ -903,8 +908,8 @@ function TradingVoucherPageInner({ kind = "SALE" }: { kind?: TradingKind } = {})
             .then((r) => { if (!cancelled) setAllServices(r.data); })
             .catch(() => { if (!cancelled) setAllServices([]); });
         return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- reloads with the other reference data (refDataKey)
-    }, [refDataKey]);
+        // Reloads with the other reference data (refDataKey); canCarryServices is fixed per voucher kind.
+    }, [refDataKey, canCarryServices]);
 
     // Edit-mode payment-account resolver: when both the loaded voucher's
     // paymentAccountId and the cash/bank list are available, pick the match.

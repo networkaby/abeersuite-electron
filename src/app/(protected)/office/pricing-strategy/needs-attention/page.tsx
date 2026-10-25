@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useTableSort } from "@/shared/hooks";
@@ -134,7 +134,8 @@ export default function NeedsAttentionPage() {
     };
 
     // First load: `loading` starts true, so only the read runs here.
-    useEffect(() => { void read(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- load once on mount
+    const readOnMount = useEffectEvent(() => { void read(); });
+    useEffect(() => { readOnMount(); }, []);
     // Live refresh swaps the rows only — no spinner, groups stay as opened, typed edits stay.
     useRealtimeTopics(["catalogue", "stock"], () => {
         axios.get<PricingItem[]>("/api/pricing-strategy/items?onlyAttention=1")

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import axios from "axios";
@@ -309,11 +309,12 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
     // The new-message popup opens a chat here as ?phone=... once per arrival.
     const wantPhone = openPhone ?? searchParams.get("phone");
     const openedFromLink = useRef<string | null>(null);
+    const openFromLink = useEffectEvent((phone: string) => openConversation(phone));
+    // Open once per link, after the list (unread counts) is in.
     useEffect(() => {
         if (!wantPhone || listLoading || openedFromLink.current === wantPhone) return;
         openedFromLink.current = wantPhone;
-        openConversation(wantPhone);
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- open once per link, after the list (unread counts) is in
+        openFromLink(wantPhone);
     }, [wantPhone, listLoading]);
 
     const changeClaim = async (body: { action: "take" | "leave" } | { action: PickMode; userId: number }, done: string) => {

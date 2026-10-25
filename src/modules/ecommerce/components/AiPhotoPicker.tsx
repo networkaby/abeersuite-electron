@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useEffectEvent } from "react";
 import { toast } from "sonner";
 import { Check, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -186,13 +186,14 @@ export function AiPhotoArrange({
     // Looks the AI put on by itself this session, and the ones staff undid (never re-applied).
     const [auto, setAuto] = useState<{ url: string; next: string; why: string }[]>([]);
     const declined = useRef(new Set<string>());
-    useEffect(() => {
+    // Once per AI answer; the gallery is read at that moment.
+    const applyAiLooks = useEffectEvent(() => {
         const fresh = arrange.looks.filter((l) => gallery.includes(l.url) && withoutAdjust(l.url) === l.url && !declined.current.has(l.url));
         if (!fresh.length) return;
         onGallery((g) => g.map((u) => fresh.find((l) => l.url === u)?.next ?? u));
         setAuto((a) => [...a.filter((x) => !fresh.some((l) => l.url === x.url)), ...fresh]);
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- once per AI answer; the gallery is read at that moment
-    }, [arrange]);
+    });
+    useEffect(() => { applyAiLooks(); }, [arrange]);
     const undo = (l: { url: string; next: string }) => {
         declined.current.add(l.url);
         onGallery((g) => g.map((u) => (u === l.next ? l.url : u)));

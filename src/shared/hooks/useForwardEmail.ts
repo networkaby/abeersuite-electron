@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useEffectEvent } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -35,11 +35,11 @@ export function useForwardEmail(userId: number, reloadKey?: string) {
         );
     const load = () => read(() => true);
     // A reply for the previous person (or login) must not land on this one.
+    const readFor = useEffectEvent((isCurrent: () => boolean) => { void read(isCurrent); });
     useEffect(() => {
         let current = true;
-        void read(() => current);
+        readFor(() => current);
         return () => { current = false; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when the person or their login changes
     }, [userId, reloadKey]);
 
     /** `withHandle` — the caller shows a handle box, so a changed one renames the login. */

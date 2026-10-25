@@ -3,7 +3,7 @@
 // (Sales Order, Purchase Order, GRN, Challan, Stock Journal, Physical Stock,
 // Rejection In/Out). Includes the full lifecycle actions strip.
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useEffectEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import axios from "axios";
@@ -107,8 +107,8 @@ export function InvVoucherDetail({ basePath, label, formPath }: {
     };
     // One load per voucher id; its spinner is on from the first render.
     if (useValueChange(id)) setLoading(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one load per voucher id
-    useEffect(() => { void read(false); }, [id]);
+    const readVoucher = useEffectEvent(() => { void read(false); });
+    useEffect(() => { readVoucher(); }, [id]);
 
     // This voucher can be posted, cancelled or deleted from another screen while
     // it is open here — and the Post button acts on what is on screen. Silent:
