@@ -105,8 +105,7 @@ export async function postSettlementVoucher(
 
     // 1-3. Create + post the RECEIPT via the Transaction Engine: one debit line
     // per tender + one credit line closing the customer's AR. The engine writes
-    // the mirror JournalEntry and the per-line Account.balance deltas (with the
-    // null-normalBalance group-nature fallback the AR/AP party ledgers need).
+    // the spine and its GL lines.
     // `postedAt` is left unset so the engine defaults it to the real posting
     // time (`new Date()`), like every other voucher type. `date` still carries
     // the ledger/business date, so shift-window and Day-Book readers that key

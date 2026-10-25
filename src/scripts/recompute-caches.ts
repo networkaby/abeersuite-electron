@@ -3,7 +3,6 @@
 // never travels between machines; each side re-sums its own ledger" (see
 // `cacheColumns` in scripts/gen-sync-registry.ts).
 //
-//   Account.balance        = Σ balanceDelta over POSTED, non-deleted VoucherGlLine
 //   InvProduct.stock       = openingStock + Σ(inQty − outQty)
 //   InvProductBranch.stock = Σ(inQty − outQty) per branch
 //   GiftCard.balance       = Σ GiftCardTxn.amount   (cards with at least one txn)
@@ -38,44 +37,6 @@ const round2 = (v: number) => Math.round(v * 100) / 100;
 const roundInt = (v: number) => Math.sign(v) * Math.round(Math.abs(v));
 
 type Drift = { what: string; key: string; cached: number; computed: number };
-
-// Inlined rather than imported: the shared helpers pull in the app's prisma client,
-// whose connection setup is wrong for a CLI.
-function balanceDelta(nb: "DEBIT" | "CREDIT", type: "DEBIT" | "CREDIT", amount: number): number {
-    if (nb === "DEBIT") return type === "DEBIT" ? amount : -amount;
-    return type === "CREDIT" ? amount : -amount;
-}
-
-async function accounts(): Promise<Drift[]> {
-    const [rows, sums] = await Promise.all([
-        prisma.account.findMany({ select: { id: true, name: true, balance: true, normalBalance: true, group: { select: { type: true } } } }),
-        prisma.voucherGlLine.groupBy({
-            by: ["accountId", "type"],
-            _sum: { amount: true },
-            where: { universalVoucher: { status: "POSTED" } },
-        }),
-    ]);
-    const nb = new Map<number, "DEBIT" | "CREDIT">();
-    for (const a of rows) {
-        if (a.normalBalance) { nb.set(a.id, a.normalBalance); continue; }
-        const g = a.group?.type;
-        if (g === "ASSET" || g === "EXPENSE") nb.set(a.id, "DEBIT");
-        else if (g) nb.set(a.id, "CREDIT");
-    }
-    const computed = new Map<number, number>();
-    for (const r of sums) {
-        const side = nb.get(r.accountId);
-        if (!side) continue;
-        computed.set(r.accountId, (computed.get(r.accountId) ?? 0) + balanceDelta(side, r.type, n(r._sum.amount)));
-    }
-    const drift: Drift[] = [];
-    for (const a of rows) {
-        const c = round2(computed.get(a.id) ?? 0);
-        if (Math.abs(c - n(a.balance)) > EPS) drift.push({ what: "Account.balance", key: `${a.id} ${a.name}`, cached: n(a.balance), computed: c });
-    }
-    if (FIX) for (const d of drift) await prisma.account.update({ where: { id: Number(d.key.split(" ")[0]) }, data: { balance: d.computed } });
-    return drift;
-}
 
 async function stock(): Promise<Drift[]> {
     const [byProduct, byBranch, products, branchRows] = await Promise.all([
@@ -127,7 +88,7 @@ async function giftCards(): Promise<Drift[]> {
 
 async function main() {
     console.log(`recompute-caches on ${rawUrl.replace(/:\/\/[^@]*@/, "://…@")} ${FIX ? "(FIX)" : "(report only)"}`);
-    const all = [...await accounts(), ...await stock(), ...await giftCards()];
+    const all = [...await stock(), ...await giftCards()];
     const byWhat = new Map<string, number>();
     for (const d of all) byWhat.set(d.what, (byWhat.get(d.what) ?? 0) + 1);
     for (const [what, count] of byWhat) console.log(`  ${what.padEnd(24)} drift rows: ${count}`);

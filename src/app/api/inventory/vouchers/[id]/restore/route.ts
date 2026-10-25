@@ -2,7 +2,6 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
 import { requireAuth, userCanActOnVoucher } from "@/shared/lib/auth/permissions";
-import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { deleteCancelCounterRows, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
@@ -99,10 +98,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     select: { lines: { select: { accountId: true, type: true, amount: true } } },
                 });
                 if (spine) {
-                    // Resolve nature exactly as cancel resolved it (group fallback
-                    // included) and skip a genuinely unknown one, so the two sides
-                    // touch the same set of ledgers and can never drift.
-                    await applyLineBalances(tx, spine.lines, "apply");
                     await setSpineLifecycle(tx, spineId, {
                         status: "POSTED", cancelledAt: null, cancelledById: null, cancelReason: null,
                     });

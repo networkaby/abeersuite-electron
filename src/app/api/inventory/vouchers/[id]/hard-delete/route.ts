@@ -2,7 +2,6 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanActOnVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 import { removeLinksForVoucher } from "@/modules/accountancy/lib/billLink";
@@ -18,8 +17,7 @@ const schema = z.object({ reason: z.string().trim().min(1, "Delete reason is req
 // JournalEntry + JournalLines) is snapshotted first into ONE AuditLog row
 // (entityType INV_VOUCHER), so the deletion is both traceable AND fully restorable
 // from a single row (see /api/audit/[id]/restore). When the voucher is currently
-// posted (not already cancelled / soft-deleted) the cached stock + Account.balance
-// are restored first.
+// posted (not already cancelled / soft-deleted) the cached stock is restored first.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response, user } = await requireAuth();
     if (response) return response;
@@ -86,14 +84,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 // transfer's two rows, physical stock, MJ, returns) and, unlike the
                 // increment/decrement math it replaces, cannot drift.
 
-                // Restore the cached Account.balance (denormalised column read by the
-                // ledgers list / summary bar — NOT recomputed on row delete). Only when
-                // the JE is currently live (a cancelled JE was already
+                // Only when the JE is currently live (a cancelled JE was already
                 // neutralised, so needsReversal is false and we never get here).
                 if (origJe && origJe.status === "POSTED") {
-                    // Spine lines are scalar — resolve nature in one lookup, the
-                    // same way the engine did when it applied these deltas.
-                    await applyLineBalances(tx, origJe.lines, "reverse");
                     // Removing a posted voucher dirties a reconciled window exactly
                     // as much as adding one — same retreat as the posting path.
                     await retreatReconciliation(tx, origJe.lines.map((l) => l.accountId), origJe.date);

@@ -2,7 +2,6 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
-import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
@@ -50,10 +49,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     try {
         const audit = await prisma.$transaction(async (tx) => {
             if (needsLedgerReversal) {
-                // Nature resolves with the group fallback, exactly as the engine
-                // resolved it when posting — a party ledger carries a null
-                // normalBalance, and a bare read used to sign-flip its delta.
-                await applyLineBalances(tx, entry.lines, "reverse");
                 // Removing a posted entry dirties a reconciled window exactly as
                 // much as adding one — same retreat as the posting path.
                 await retreatReconciliation(tx, entry.lines.map((l) => l.accountId), entry.date);

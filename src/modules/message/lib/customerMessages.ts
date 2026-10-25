@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 import { phoneMatchKey, phoneKeyVariants } from "@/shared/lib/format";
 import { getHelpPipeline } from "@/modules/help/lib/helpPipeline";
 import { getDealsPipeline } from "@/modules/deals/lib/dealsPipeline";
@@ -68,7 +69,7 @@ export async function ownersByPhone(keys: string[]): Promise<Map<string, Custome
                     name: true,
                     avatarUrl: true,
                     address: true,
-                    account: { select: { id: true, balance: true, normalBalance: true } },
+                    account: { select: { id: true, normalBalance: true } },
                 },
             },
             company: {
@@ -76,11 +77,16 @@ export async function ownersByPhone(keys: string[]): Promise<Map<string, Custome
                     id: true,
                     name: true,
                     address: true,
-                    account: { select: { id: true, balance: true, normalBalance: true } },
+                    account: { select: { id: true, normalBalance: true } },
                 },
             },
         },
     });
+    // Summed from the ledger (opening included) in one read for every match.
+    const closing = await closingForAccounts(null, rows.flatMap((r) => {
+        const id = r.person?.account?.id ?? r.company?.account?.id;
+        return id != null ? [id] : [];
+    }));
     for (const row of rows) {
         const key = phoneMatchKey(row.phone);
         if (!key || owners.has(key)) continue;
@@ -92,7 +98,7 @@ export async function ownersByPhone(keys: string[]): Promise<Map<string, Custome
                 avatarUrl: row.person.avatarUrl,
                 address: row.person.address,
                 accountId: row.person.account?.id ?? null,
-                balance: row.person.account ? Number(row.person.account.balance) : null,
+                balance: row.person.account ? closing.get(row.person.account.id) ?? 0 : null,
                 normalBalance: (row.person.account?.normalBalance as "DEBIT" | "CREDIT") ?? null,
             });
         } else if (row.company) {
@@ -103,7 +109,7 @@ export async function ownersByPhone(keys: string[]): Promise<Map<string, Custome
                 avatarUrl: null,
                 address: row.company.address,
                 accountId: row.company.account?.id ?? null,
-                balance: row.company.account ? Number(row.company.account.balance) : null,
+                balance: row.company.account ? closing.get(row.company.account.id) ?? 0 : null,
                 normalBalance: (row.company.account?.normalBalance as "DEBIT" | "CREDIT") ?? null,
             });
         }

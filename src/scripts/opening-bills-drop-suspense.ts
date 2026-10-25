@@ -79,27 +79,6 @@ async function main(): Promise<void> {
     await prisma.$transaction(async (tx) => {
         await tx.voucherGlLine.deleteMany({ where: { id: { in: strayOk.map((l) => l.id) } } });
 
-        // Rebuild the movement cache for the ledgers that lost lines, straight
-        // from what is left (same rule as `recomputeAccountBalances`, which this
-        // script cannot import — its module reaches `server-only`).
-        // One after another — a transaction is one connection (pg 9 refuses parallel queries).
-        const sums = await tx.voucherGlLine.groupBy({
-            by:    ["accountId", "type"],
-            where: { accountId: { in: accountIds }, universalVoucher: { status: "POSTED" } },
-            _sum:  { amount: true },
-        });
-        const accounts = await tx.account.findMany({
-            where:  { id: { in: accountIds } },
-            select: { id: true, normalBalance: true, group: { select: { type: true } } },
-        });
-        for (const a of accounts) {
-            const nb = a.normalBalance ?? (a.group?.type === "ASSET" || a.group?.type === "EXPENSE" ? "DEBIT" : "CREDIT");
-            const balance = sums
-                .filter((r) => r.accountId === a.id)
-                .reduce((s, r) => s + (r.type === nb ? 1 : -1) * Number(r._sum.amount ?? 0), 0);
-            await tx.account.update({ where: { id: a.id }, data: { balance: Math.round(balance * 100) / 100 } });
-        }
-
         // Those ledgers' history changed, so their reconciliation starts over.
         await resetReconciliation(tx, accountIds);
     }, { timeout: 60_000, maxWait: 10_000 });

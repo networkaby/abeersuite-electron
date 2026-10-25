@@ -22,8 +22,8 @@ import { ACCOUNT_GROUPS } from "@/shared/lib/constants/accounting";
 // nothing to age or settle, so it stays exactly as it is.
 //
 // `dryRun` (the default) reports what would happen and writes nothing. Ask for
-// it first: this moves `Account.balance`, which is what the POS credit check
-// reads — `pnpm opening:preview` shows that effect in full.
+// it first. The party's balance does not move: the summed ledger counts the
+// master opening and an opening bill alike.
 const schema = z.object({
     dryRun: z.boolean().default(true),
     /** Date every created bill carries. Defaults to the start of this financial year. */

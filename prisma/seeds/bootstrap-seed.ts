@@ -799,8 +799,8 @@ async function upsertLedger(
         return;
     }
     await pool.query(
-        `INSERT INTO "Account" (name, "normalBalance", "groupId", "isActive", balance, "createdAt")
-         VALUES ($1, $2, $3, true, 0, NOW())`,
+        `INSERT INTO "Account" (name, "normalBalance", "groupId", "isActive", "createdAt")
+         VALUES ($1, $2, $3, true, NOW())`,
         [name, normalBalance, groupId],
     );
 }

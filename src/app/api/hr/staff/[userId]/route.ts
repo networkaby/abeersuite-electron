@@ -10,7 +10,7 @@ import { staffProfilePatchSchema, STAFF_JOB_KEYS } from "@/shared/lib/schemas/hr
 import { resolvePartyBank } from "@/shared/lib/schemas/partyBankSchema";
 import { STAFF_USER_SELECT, shapeStaffUser } from "@/shared/lib/users/staffSelect";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
-import { moneyNumber } from "@/shared/lib/format/moneyInr";
+import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 import {
     STAFF_PROFILE_INCLUDE, ensureStaffProfile, generateNextStaffCode, dateOnlyFromIso,
     toStaffProfileDto, toStaffSalaryDto, type StaffProfileWithRels,
@@ -34,9 +34,12 @@ function parseUserId(raw: string): number | null {
     return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-function toDetail(user: { staffProfile: StaffProfileWithRels | null } & Parameters<typeof shapeStaffUser>[0]): StaffDetail {
+async function toDetail(user: { staffProfile: StaffProfileWithRels | null } & Parameters<typeof shapeStaffUser>[0]): Promise<StaffDetail> {
     const shaped = shapeStaffUser(user);
     const p = user.staffProfile;
+    const balance = p?.ledgerAccount
+        ? (await closingForAccounts(null, [p.ledgerAccount.id])).get(p.ledgerAccount.id) ?? 0
+        : 0;
     return {
         user: {
             id: shaped.id, name: shaped.name, email: shaped.email, title: shaped.title,
@@ -48,7 +51,7 @@ function toDetail(user: { staffProfile: StaffProfileWithRels | null } & Paramete
         profile: p ? toStaffProfileDto(p) : null,
         salaries: p ? p.salaries.map(toStaffSalaryDto) : [],
         ledger: p?.ledgerAccount
-            ? { id: p.ledgerAccount.id, name: p.ledgerAccount.name, balance: moneyNumber(p.ledgerAccount.balance), normalBalance: p.ledgerAccount.normalBalance }
+            ? { id: p.ledgerAccount.id, name: p.ledgerAccount.name, balance, normalBalance: p.ledgerAccount.normalBalance }
             : null,
     };
 }
@@ -62,7 +65,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ userId: st
         const user = await prisma.user.findUnique({ where: { id: userId }, select: DETAIL_SELECT });
         if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
         const nextStaffCode = await generateNextStaffCode(prisma);
-        return NextResponse.json({ ...toDetail(user), nextStaffCode });
+        return NextResponse.json({ ...(await toDetail(user)), nextStaffCode });
     } catch (e) {
         return handleApiError(e, "Failed to fetch the staff record");
     }
@@ -155,7 +158,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ userId
 
         const fresh = await prisma.user.findUnique({ where: { id: userId }, select: DETAIL_SELECT });
         if (!fresh) return NextResponse.json({ error: "User not found" }, { status: 404 });
-        return NextResponse.json({ ...toDetail(fresh), vacatedSeats: result.vacatedSeats });
+        return NextResponse.json({ ...(await toDetail(fresh)), vacatedSeats: result.vacatedSeats });
     } catch (e) {
         const conflict = prismaUniqueError(e, { staffCode: "That staff ID is already used by someone else" });
         if (conflict) return conflict;

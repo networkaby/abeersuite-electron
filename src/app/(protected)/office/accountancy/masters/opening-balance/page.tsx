@@ -80,8 +80,7 @@ export default function OpeningBalancePage() {
     // "Convert all to bills" — a party's opening figure is invisible to
     // Receivables, Payables and bill-wise linking until it becomes a real
     // voucher. Always asked TWICE: the first press only reports what would
-    // happen, because converting moves Account.balance and that is what the POS
-    // credit check reads at the counter.
+    // happen, because the change touches every party at once.
     const [convert, setConvert] = useState<{ accounts: number; total: number; skipped: number } | null>(null);
     const [converting, setConverting] = useState(false);
 
@@ -176,11 +175,8 @@ export default function OpeningBalancePage() {
                 </div>
 
                 {/* Asked twice on purpose. The first press writes nothing — it
-                    only reports how many parties and how much, because
-                    converting moves Account.balance, and that is the figure the
-                    POS credit check reads at the counter. A customer who looks
-                    clear today can start hitting their credit limit tomorrow:
-                    correct, but it should not arrive as a surprise. */}
+                    only reports how many parties and how much. No balance
+                    moves: the ledger counts the opening either way. */}
                 {convert && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2 text-sm">
                         <div className="flex items-start gap-3">
@@ -191,8 +187,7 @@ export default function OpeningBalancePage() {
                                 </p>
                                 <p className="text-amber-800/80 text-xs mt-1">
                                     Each becomes one real opening bill, so it appears in Receivables and Payables and money can be
-                                    settled against it. It also moves the ledger balance the counter&apos;s credit check reads, so a
-                                    customer may start hitting their credit limit.
+                                    settled against it. No party&apos;s balance changes.
                                     {convert.skipped > 0 && ` ${convert.skipped} party already broken up bill-wise will be left alone.`}
                                 </p>
                             </div>

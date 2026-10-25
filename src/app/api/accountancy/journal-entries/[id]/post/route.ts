@@ -1,7 +1,7 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
-import { isBalanced, applyLineBalances } from "@/modules/accountancy/lib/balance";
+import { isBalanced } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { handleApiError } from "@/shared/lib/api";
 
@@ -32,14 +32,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 
     try {
         await prisma.$transaction(async (tx) => {
-            // Update each account balance atomically
-            // Nature resolves with the group fallback, exactly as the engine
-            // resolved it when posting — a party ledger carries a null
-            // normalBalance, and a bare read used to sign-flip its delta.
-            await applyLineBalances(tx, entry.lines, "apply");
             await setSpineLifecycle(tx, Number(id), { status: "POSTED", postedAt: new Date() });
-        // Per-line account.update over the Supabase pooler can exceed the
-        // default 5s interactive-tx ceiling (P2028) on multi-line entries.
         }, { timeout: 30_000, maxWait: 10_000 });
 
         const posted = await prisma.universalVoucher.findUnique({

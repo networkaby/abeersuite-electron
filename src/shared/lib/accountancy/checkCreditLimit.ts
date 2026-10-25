@@ -118,6 +118,11 @@ export async function checkCreditLimit(
         required:    current + additionalDebit,
     };
 
+    // An advance covers the unpaid part: the sale's debit only eats into money
+    // the customer already left with us, so no credit is extended at all —
+    // whatever the limit, a zero one included. Sub-paise residue is rounding.
+    if (current + additionalDebit <= 0.005) return;
+
     if (limit === 0) {
         throw new CreditLimitError(
             "No credit facility — the sale must be paid in full.",

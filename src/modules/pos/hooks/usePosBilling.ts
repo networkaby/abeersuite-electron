@@ -1749,6 +1749,8 @@ export function usePosBilling(opts: {
     // it also refuses an anonymous walk-in ledger, limit or no limit.
     const creditLimitBreached: boolean = (() => {
         if (onCredit <= 0) return false;   // fully paid, no AR impact
+        // Customer's advance covers it — mirrors checkCreditLimit.
+        if (snapshot && ledgerBalance + onCredit <= 0.005) return false;
         const limit = snapshot?.creditLimit ?? null;
         if (limit === null) return true;   // no customer / no limit → no credit
         if (limit === 0) return true;      // zero-credit account

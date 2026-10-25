@@ -407,7 +407,6 @@ CREATE TABLE IF NOT EXISTS "Account" (
     "normalBalance" "NormalBalance",
     "description" TEXT,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "balance" DECIMAL(14,2) NOT NULL DEFAULT 0,
     "parentId" INTEGER,
     "groupId" INTEGER,
     "personId" INTEGER,
@@ -437,7 +436,6 @@ ALTER TABLE "Account" ALTER COLUMN "normalBalance" DROP NOT NULL;
 ALTER TABLE "Account" ADD COLUMN IF NOT EXISTS "description" TEXT;
 ALTER TABLE "Account" ALTER COLUMN "description" DROP NOT NULL;
 ALTER TABLE "Account" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
-ALTER TABLE "Account" ADD COLUMN IF NOT EXISTS "balance" DECIMAL(14,2) NOT NULL DEFAULT 0;
 ALTER TABLE "Account" ADD COLUMN IF NOT EXISTS "parentId" INTEGER;
 ALTER TABLE "Account" ALTER COLUMN "parentId" DROP NOT NULL;
 ALTER TABLE "Account" ADD COLUMN IF NOT EXISTS "groupId" INTEGER;
@@ -7936,10 +7934,10 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- A running total (Account.balance, stock, a gift card's balance) is rebuilt
+    -- A running total (stock, a gift card's balance) is rebuilt
     -- from the ledger on each side and never shipped as a change: an UPDATE that
     -- moved nothing else is not a write the cloud needs to hear about. Shipping it
-    -- would put one outbox row per touched account behind every sale, and each of
+    -- would put one outbox row per touched product behind every sale, and each of
     -- them would carry a total another machine may since have moved on from.
     -- updatedAt is ignored alongside: Prisma stamps it on every increment, so
     -- without that the comparison would never be equal.
@@ -7983,7 +7981,7 @@ DO $$ BEGIN
     IF to_regclass('public."Account"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "Account";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Account"
-            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id', '--cache', 'balance');
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;
 DO $$ BEGIN

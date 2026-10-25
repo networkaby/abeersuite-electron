@@ -5,8 +5,8 @@
 // rebuilds it: re-insert every row with fresh ids but the ORIGINAL reference number
 // (the series counter never reuses the number of a voucher whose snapshot still
 // exists, so it's free — only PURGING the snapshot can release it back), re-link the
-// voucher → its new JE, and re-apply the denormalised caches (Account.balance,
-// InvProduct.stock / InvProductBranch.stock) ONLY when the restored entity is live
+// voucher → its new JE, and re-apply the denormalised stock caches
+// (InvProduct.stock / InvProductBranch.stock) ONLY when the restored entity is live
 // (POSTED, not cancelled / soft-deleted) — a cancelled/deleted entity's caches were
 // already reversed upstream and must stay that way.
 //
@@ -15,7 +15,6 @@
 // violation. The truth path self-corrects from the recreated JE's own status.
 
 import type { Prisma } from "@/generated/prisma/client";
-import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 
 type Tx = Prisma.TransactionClient;
@@ -26,7 +25,6 @@ type Num = string | number | { toString(): string };
 interface Row { [key: string]: unknown }
 interface JeLine extends Row { accountId: number; type: EntryType; amount: Num; account?: { normalBalance?: NormalBalance | null } }
 interface JeSnapshot extends Row { lines?: JeLine[]; status?: string }
-interface VoucherLine extends Row { accountId?: number; type?: EntryType; amount?: unknown; account?: { normalBalance?: NormalBalance | null } }
 
 // Real column names per model, straight from the generated datamodel. Snapshots
 // are JSON frozen at delete time, so they drift from the schema in BOTH directions:
@@ -107,22 +105,6 @@ async function recreateJournalEntry(tx: Tx, cols: Map<string, Set<string>>, je: 
     return created.id;
 }
 
-/**
- * Apply POSTED, non-deleted lines forward to the cached Account.balance.
- *
- * Nature comes from the LIVE account through the shared writer, not from the
- * snapshot's own `account.normalBalance`: the snapshot may be months old, and a
- * bare normalBalance read skipped every party ledger (they carry null and take
- * their nature from the group), so a restore used to recreate the lines and
- * leave those legs' balance untouched.
- */
-async function reapplyBalance(tx: Tx, lines: JeLine[]): Promise<void> {
-    // A snapshot line can be account-less; `applyLineBalances` writes per account.
-    const withAccount = lines.filter((l): l is JeLine & { accountId: number } => l.accountId != null);
-    if (withAccount.length === 0) return;
-    await applyLineBalances(tx, withAccount, "apply");
-}
-
 function isLive(status: unknown, cancelledAt: unknown): boolean {
     return status === "POSTED" && !cancelledAt;
 }
@@ -147,21 +129,15 @@ export async function restoreFromAudit(
 
     if (audit.entityType === "JOURNAL_ENTRY") {
         const je = snap as JeSnapshot;
-        const newId = await recreateJournalEntry(tx, cols, je);
-        if (isLive(je.status, undefined)) await reapplyBalance(tx, je.lines ?? []);
-        void newId;
+        await recreateJournalEntry(tx, cols, je);
         return referenceOf(snap, je);
     }
 
     if (audit.entityType === "GL_VOUCHER") {
         // Phase 5 5E: the spine IS the GL voucher. The hard-delete snapshot is the
         // spine itself (lines = VoucherGlLine), so recreate it ONCE via the spine
-        // rebuilder and re-apply balances if the restored voucher is live.
-        const lines = (snap.lines as VoucherLine[]) ?? [];
+        // rebuilder; balances are summed from these lines wherever they are shown.
         await recreateJournalEntry(tx, cols, snap as JeSnapshot);
-        if (isLive(snap.status, snap.cancelledAt)) {
-            await reapplyBalance(tx, lines.filter((l): l is JeLine => l.accountId != null && l.type != null));
-        }
         return referenceOf(snap, snap as JeSnapshot);
     }
 
@@ -210,10 +186,6 @@ export async function restoreFromAudit(
         // hand-applying each row's delta — same safety net as the edit / cancel /
         // delete paths, and correct for branch transfers and physical stock too.
         await recomputeProductStock(tx, stockEntries.map((s) => s.productId as number));
-        // Account.balance forward, from the JE lines (carry account.normalBalance), if the JE is live.
-        if (journalEntry && isLive(journalEntry.status, undefined)) {
-            await reapplyBalance(tx, journalEntry.lines ?? []);
-        }
     }
 
     return referenceOf(snap, journalEntry);

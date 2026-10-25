@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isoDateSchema } from "@/shared/lib/schemas";
-import { isBalanced, applyLineBalances } from "@/modules/accountancy/lib/balance";
+import { isBalanced } from "@/modules/accountancy/lib/balance";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
 import { assertLinksSurviveEdit, BillLinkError } from "@/modules/accountancy/lib/billLink";
@@ -94,11 +94,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     try {
         const updated = await prisma.$transaction(async (tx) => {
-            // ── POSTED: reverse the old GL impact first ─────────────────
-            if (existing.status === "POSTED" && body.lines) {
-                await applyLineBalances(tx, existing.lines, "reverse");
-            }
-
             // Swap lines if provided
             if (body.lines) {
                 await tx.voucherGlLine.deleteMany({ where: { universalVoucherId: entryId } });
@@ -113,11 +108,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     })),
                 });
                 await carryStatementMatches(tx, entryId, existing.lines);
-            }
-
-            // ── POSTED: apply the new GL impact ─────────────────────────
-            if (existing.status === "POSTED" && body.lines) {
-                await applyLineBalances(tx, body.lines, "apply");
             }
 
             const updatedJe = await tx.universalVoucher.update({

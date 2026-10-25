@@ -1,7 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
-import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
@@ -40,13 +39,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     try {
         await prisma.$transaction(async (tx) => {
-            // Cancel decremented each line's delta and flipped the flag; restore does
-            // exactly the opposite. No counter-entry on either side.
-            // Nature resolves with the group fallback, exactly as the engine
-            // resolved it when posting — a party ledger carries a null
-            // normalBalance, and a bare read used to sign-flip its delta.
-            await applyLineBalances(tx, entry.lines, "apply");
-
             await setSpineLifecycle(tx, Number(id), {
                 status: "POSTED",
                 cancelledAt: null,

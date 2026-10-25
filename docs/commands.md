@@ -153,7 +153,6 @@ Read `docs/seeds.md` first. Current DB is **demo**.
 | `pnpm seed:purge-demo` | `purge-demo-contacts` + `purge-demo-products` | demo only |
 | `pnpm seed:purge-vouchers` | Removes vouchers | demo only |
 | `pnpm seed:hard-clean` | Removes everything bootstrap does not seed | demo only |
-| `pnpm seed:recompute-balances` | Recomputes account balances | yes |
 
 > **No `seed:dummy-*` any more.** Those scripts were deleted — see `docs/seeds.md`.
 
@@ -166,7 +165,7 @@ Read `docs/seeds.md` first. Current DB is **demo**.
 | `pnpm test:e2e:report` | Opens the last report |
 | `pnpm reconcile:shop-orders` | Reconciles shop order accounts |
 | `pnpm validate:account-linked-flow` | Validates the account-linked flow |
-| `pnpm recompute:caches` | Reports drift in the saved totals (`Account.balance`, `InvProduct.stock`, `InvProductBranch.stock`, gift-card balances) against their ledgers; `--fix` writes the ledger figure. Run `--fix` only on a build that has the 2026-10-24 stock-writer fixes, or the totals drift again |
+| `pnpm recompute:caches` | Reports drift in the saved totals (`InvProduct.stock`, `InvProductBranch.stock`, gift-card balances) against their ledgers; `--fix` writes the ledger figure. Run `--fix` only on a build that has the 2026-10-24 stock-writer fixes, or the totals drift again |
 | `pnpm report:ps-double-count` | **Report only** (read-only transaction): posted Physical Stock counts that probably added the opening twice, checked against the old and the fixed formula. `--csv <file>` also writes a CSV. A person decides each line |
 | `pnpm report:incl-discount` | **Report only** (read-only transaction): saved Sale / Purchase lines whose discount was taken on a GST-inclusive price ("Price (incl)" bug, fixed 2026-10-25), plus lines with a GST % that is not a real slab. Shows saved vs correct discount and amount. `--csv <file>` also writes a CSV. A person decides each bill |
 

@@ -33,7 +33,6 @@
 // through the ordinary hard-delete route.
 
 import type { Prisma } from "@/generated/prisma/client";
-import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 import { enginePost, type EngineGlLine } from "@/modules/accountancy/lib/transactionEngine";
 import { isDraft, isPosted } from "@/modules/accountancy/lib/voucherLifecycle";
@@ -59,7 +58,6 @@ export async function parkVoucherAsDraftInTx(
     if (isDraft(voucher)) return true;     // already parked
 
     if (isPosted(voucher)) {
-        await applyLineBalances(tx, voucher.lines, "reverse");
         // Un-posting dirties a reconciled window exactly as much as posting did.
         await retreatReconciliation(tx, voucher.lines.map((l) => l.accountId), voucher.date);
     }

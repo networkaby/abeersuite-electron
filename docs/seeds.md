@@ -14,7 +14,6 @@ prisma/seeds/
 ├─ purge-vouchers.ts            OPS — wipes only vouchers/JEs/invoices/payments
 ├─ purge-demo-contacts.ts       OPS — wipes contacts (+ transactions), keeps products + settings
 ├─ purge-demo-products.ts       OPS — wipes products (+ transactions), keeps contacts + settings
-├─ recompute-balances.ts        OPS — recompute Account.balance drift from JournalLine
 ├─ lib/
 │  ├─ purgeDemo.ts       SHARED — transaction table list + purge steps for the demo cleaners
 │  ├─ assertNotCounter.ts SHARED — refuse to run a destructive seed against a counter machine

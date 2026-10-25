@@ -60,21 +60,18 @@ async function main(): Promise<void> {
     );
 
     // ── Parties ─────────────────────────────────────────────────────────────
-    // Closing = the master opening (signed by its Dr/Cr) plus the running balance
-    // the engine accumulated from the replayed vouchers.
-    //
-    // `Account.balance` is kept in the account's NATURAL direction, not as a signed
-    // debit. Party ledgers carry a null `normalBalance`, so the GROUP decides: on a
-    // Sundry Debtor (ASSET) positive means receivable, but on a Sundry Creditor
-    // (LIABILITY) positive means PAYABLE — the opposite of the convention used here
-    // and by Vyapar. Reading it raw inverted all 22 creditor balances and produced
-    // differences that were exactly double the amount, which is the giveaway.
+    // Closing = the master opening (signed by its Dr/Cr) plus the posted GL lines,
+    // both as a signed DEBIT — the convention used here and by Vyapar. Summing the
+    // lines signed by their own Dr/Cr keeps a Sundry Creditor's payable negative,
+    // whatever the ledger's natural side.
     const ours = new Map<number, number>();
     for (const r of (await pool.query(`
         select a.id,
                coalesce(case when a."openingBalanceType" = 'CREDIT' then -a."openingBalance" else a."openingBalance" end, 0)
-             + coalesce(a.balance, 0) * (case when g.type in ('LIABILITY', 'INCOME') then -1 else 1 end) closing
-        from "Account" a left join "AccountGroup" g on g.id = a."groupId"
+             + coalesce((select sum(case when l.type = 'DEBIT' then l.amount else -l.amount end)
+                           from "VoucherGlLine" l join "UniversalVoucher" v on v.id = l."universalVoucherId"
+                          where l."accountId" = a.id and v.status = 'POSTED'), 0) closing
+        from "Account" a
     `)).rows) ours.set(r.id, Number(r.closing));
 
     type Diff = { name: string; theirs: number; mine: number; gap: number };

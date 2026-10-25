@@ -65,53 +65,6 @@ export async function loadNormalBalanceMap(
 }
 
 /**
- * Recompute the cached `Account.balance` for the given accounts straight from the
- * GL truth (Σ posted `VoucherGlLine` deltas) — the GL parallel of
- * `recomputeProductStock`. Policy: create updates the cache incrementally; an
- * EDIT rewrites the ledger then calls this, so the cache rebuilds from truth with
- * no fragile reverse/reapply math. NB: `Account.balance` is movement-only — the
- * master `openingBalance` is folded in at read time by `aggregateClosingAsOf`,
- * NOT stored in the cache (unlike stock's `openingStock`), so it's excluded here.
- */
-export async function recomputeAccountBalances(
-    tx: Prisma.TransactionClient,
-    accountIds: number[],
-): Promise<void> {
-    const ids = [...new Set(accountIds)];
-    if (ids.length === 0) return;
-
-    // One after another: inside a transaction (one connection) pg 9 refuses parallel queries.
-    const sums = await tx.voucherGlLine.groupBy({
-        by:    ["accountId", "type"],
-        where: { accountId: { in: ids }, universalVoucher: { ...ledgerStatusFilterUv() } },
-        _sum:  { amount: true },
-    });
-    const accounts = await tx.account.findMany({
-        where:  { id: { in: ids } },
-        select: { id: true, normalBalance: true, group: { select: { type: true } } },
-    });
-
-    const nb = new Map<number, "DEBIT" | "CREDIT">();
-    for (const a of accounts) {
-        if (a.normalBalance) { nb.set(a.id, a.normalBalance); continue; }
-        const g = a.group?.type;
-        if (g === "ASSET" || g === "EXPENSE") nb.set(a.id, "DEBIT");
-        else if (g) nb.set(a.id, "CREDIT");
-    }
-
-    const computed = new Map<number, number>();
-    for (const r of sums) {
-        const side = nb.get(r.accountId);
-        if (!side) continue;
-        computed.set(r.accountId, (computed.get(r.accountId) ?? 0) + balanceDelta(side, r.type, Number(r._sum.amount ?? 0)));
-    }
-
-    for (const id of ids) {
-        await tx.account.update({ where: { id }, data: { balance: computed.get(id) ?? 0 } });
-    }
-}
-
-/**
  * The one rule for every opening — a master figure or an opening bill alike:
  * it is the position BEFORE the books begin, so it counts on every date, as the
  * opening, whatever date it carries. 1 April already has transactions, so the

@@ -17,7 +17,7 @@
 // DESTRUCTIVE — contacts and every transaction are unrecoverable.
 
 import {
-    makeSeedPool, purgeTransactions, purgeParties, resetBalances, printKept,
+    makeSeedPool, purgeTransactions, purgeParties, printKept,
 } from "./lib/purgeDemo";
 
 const pool = makeSeedPool();
@@ -25,9 +25,8 @@ const pool = makeSeedPool();
 async function main(): Promise<void> {
     console.log("Purging demo contacts (products + settings preserved)…\n");
 
-    await purgeTransactions(pool, "[1/3]");
-    await purgeParties(pool, "[2/3]");
-    await resetBalances(pool, "[3/3]");
+    await purgeTransactions(pool, "[1/2]");
+    await purgeParties(pool, "[2/2]");
 
     await printKept(pool);
     console.log("\nDone. Contacts gone; products + settings untouched.");

@@ -9,7 +9,7 @@ import type { StaffProfileDto, StaffSalaryDto } from "./staffTypes";
 
 /** Everything the profile workspace reads off a StaffProfile row. */
 export const STAFF_PROFILE_INCLUDE = {
-    ledgerAccount:  { select: { id: true, name: true, balance: true, normalBalance: true } },
+    ledgerAccount:  { select: { id: true, name: true, normalBalance: true } },
     salaries:       { orderBy: { effectiveFrom: "desc" as const } },
 } satisfies Prisma.StaffProfileInclude;
 

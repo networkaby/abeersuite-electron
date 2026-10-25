@@ -109,8 +109,8 @@ async function main(): Promise<void> {
 
     for (const p of plan) {
         await pool.query(
-            `insert into "Account" (name, "groupId", "normalBalance", "isActive", balance, "creditLimit", "createdAt", "updatedAt")
-             values ($1, $2, $3::"NormalBalance", true, 0, 0, now(), now())`,
+            `insert into "Account" (name, "groupId", "normalBalance", "isActive", "creditLimit", "createdAt", "updatedAt")
+             values ($1, $2, $3::"NormalBalance", true, 0, now(), now())`,
             [p.name, p.groupId, p.nb],
         );
         console.log(`  ✓ created ${p.name}`);

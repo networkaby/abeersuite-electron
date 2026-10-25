@@ -1,4 +1,3 @@
-import { defaultNormalBalanceForGroupType } from "./groupNature";
 import { businessToday, startOfDayUtc, businessTodayIso } from "@/shared/lib/format/formatDate";
 import { round2 } from "@/shared/lib/format/moneyInr";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
@@ -14,7 +13,7 @@ export function toNumber(v: { toString(): string } | number | string): number {
     return typeof v === "number" ? v : Number(v);
 }
 
-/** Delta to apply to GlAccount.balance when posting a line. */
+/** What one line adds to its account's balance, signed toward the account's normal side. */
 export function balanceDelta(
     normalBalance: "DEBIT" | "CREDIT",
     entryType: "DEBIT" | "CREDIT",
@@ -24,73 +23,6 @@ export function balanceDelta(
         return entryType === "DEBIT" ? amount : -amount;
     }
     return entryType === "CREDIT" ? amount : -amount;
-}
-
-/**
- * Resolve each account's normal side the SAME way the posting engine does:
- * `normalBalance`, else the group's natural side, else null (nature unknown).
- *
- * Use this for every reversal of a cached `Account.balance` (cancel / hard-delete).
- * The engine (`engineGlArm`) applies its delta with the group fallback, so a
- * reversal that reads bare `normalBalance` is NOT its mirror image: the ~25
- * null-`normalBalance` ledgers (Payment Gateway, a Bank current a/c, Unsecured
- * Loans, Suspense…) get incremented on post and then either skipped on reverse
- * (`if (!nb) continue`) or — worse — sign-flipped, because `balanceDelta(null,…)`
- * fails the `=== "DEBIT"` test and silently takes the CREDIT branch. Either way
- * the cache drifts away from the ledger, permanently.
- *
- * One query, and the reverse paths already ran an `account.findMany` here, so
- * routing them through this costs nothing extra.
- */
-export async function loadNormalBalances(
-    tx: import("@/generated/prisma/client").Prisma.TransactionClient,
-    accountIds: number[],
-): Promise<Map<number, "DEBIT" | "CREDIT" | null>> {
-    const ids = [...new Set(accountIds)];
-    const out = new Map<number, "DEBIT" | "CREDIT" | null>();
-    if (ids.length === 0) return out;
-
-    const rows = await tx.account.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, normalBalance: true, group: { select: { type: true } } },
-    });
-    for (const r of rows) {
-        out.set(
-            r.id,
-            r.normalBalance
-            ?? (r.group?.type ? defaultNormalBalanceForGroupType(r.group.type) : null),
-        );
-    }
-    return out;
-}
-
-/**
- * Apply — or take back — the cached `Account.balance` deltas for a voucher's GL
- * lines. `"apply"` is what posting does; `"reverse"` is what cancel, park and
- * hard-delete do. Nature resolves exactly as the engine resolved it on the way in
- * (group fallback included), so a null-nature ledger is skipped on BOTH sides and
- * can never drift. One place, so the two directions can never fall out of step.
- */
-export async function applyLineBalances(
-    tx: import("@/generated/prisma/client").Prisma.TransactionClient,
-    lines: { accountId: number; type: "DEBIT" | "CREDIT"; amount: { toString(): string } | number | string }[],
-    direction: "apply" | "reverse",
-): Promise<void> {
-    const nbById = await loadNormalBalances(tx, lines.map((l) => l.accountId));
-    for (const line of lines) {
-        const nb = nbById.get(line.accountId);
-        if (!nb) continue;
-        // Round at the money boundary, exactly where the engine rounds
-        // (transactionEngine.ts engineGlArm): the stored VoucherGlLine.amount is
-        // Decimal(14,2), so an unrounded caller float would move the cached
-        // balance by a hair the lines can never account for. A no-op for callers
-        // that already hand us 2dp Decimals.
-        const delta = balanceDelta(nb, line.type, round2(toNumber(line.amount)));
-        await tx.account.update({
-            where: { id: line.accountId },
-            data:  { balance: direction === "apply" ? { increment: delta } : { decrement: delta } },
-        });
-    }
 }
 
 /**

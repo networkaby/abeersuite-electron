@@ -5,7 +5,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { STAFF_USER_SELECT, shapeStaffUser } from "@/shared/lib/users/staffSelect";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 import { businessTodayIso, toDateOnlyUtc } from "@/shared/lib/format/formatDate";
-import { moneyNumber } from "@/shared/lib/format/moneyInr";
+import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 import { dateOnlyFromIso } from "@/modules/hr/lib/staffProfileServer";
 import type { StaffRow } from "@/modules/hr/lib/staffTypes";
 
@@ -31,9 +31,9 @@ export async function GET(req: Request) {
                     select: {
                         ...STAFF_USER_SELECT.staffProfile.select,
                         // Their own Salary Payable account — the standing the
-                        // directory shows. One join for the whole staff, not a
-                        // balance query per person.
-                        ledgerAccount: { select: { id: true, name: true, balance: true } },
+                        // directory shows, summed below in one ledger read for
+                        // the whole staff, not a query per person.
+                        ledgerAccount: { select: { id: true, name: true } },
                         salaries: {
                             where: { effectiveFrom: { lte: dateOnlyFromIso(todayIso) } },
                             orderBy: { effectiveFrom: "desc" },
@@ -44,6 +44,8 @@ export async function GET(req: Request) {
                 },
             },
         });
+
+        const closing = await closingForAccounts(null, users.flatMap((u) => u.staffProfile?.ledgerAccount ? [u.staffProfile.ledgerAccount.id] : []));
 
         const rows: StaffRow[] = users
             .filter((u) => includeLeft || !staffHasLeft(u.staffProfile, todayIso))
@@ -73,7 +75,7 @@ export async function GET(req: Request) {
                         }
                         : null,
                     ledger: p?.ledgerAccount
-                        ? { id: p.ledgerAccount.id, name: p.ledgerAccount.name, balance: moneyNumber(p.ledgerAccount.balance) }
+                        ? { id: p.ledgerAccount.id, name: p.ledgerAccount.name, balance: closing.get(p.ledgerAccount.id) ?? 0 }
                         : null,
                     currentSalary: current
                         ? { effectiveFrom: toDateOnlyUtc(current.effectiveFrom), grossPaise: current.grossPaise, netPaise: current.netPaise }

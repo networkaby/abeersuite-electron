@@ -8,7 +8,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
 import { isoDateSchema } from "@/shared/lib/schemas";
-import { isBalanced, applyLineBalances } from "@/modules/accountancy/lib/balance";
+import { isBalanced } from "@/modules/accountancy/lib/balance";
 import { auditSnapshot } from "@/modules/accountancy/lib/voucherLifecycle";
 import { validateRequest } from "@/shared/lib/api";
 import { handleApiError } from "@/shared/lib/api";
@@ -133,12 +133,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         actorId:     user!.id,
                     }),
                 });
-                // Reverse the old GL impact. Through the shared writer, so nature
-                // resolves with the group fallback exactly as the engine resolved
-                // it when posting — a bare normalBalance read skipped the party
-                // ledgers on BOTH legs here, leaving the old delta on the account
-                // and never applying the new one.
-                await applyLineBalances(tx, existing.lines, "reverse");
             }
 
             // Rewrite the spine's GL lines.
@@ -156,11 +150,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 })),
             });
             await carryStatementMatches(tx, voucherId, existing.lines);
-
-            if (wasPosted) {
-                // Apply the new GL impact.
-                await applyLineBalances(tx, body.lines, "apply");
-            }
 
             // Update the spine header. denomJson: undefined = leave untouched;
             // null or an empty/zero-only payload clears the saved capture.

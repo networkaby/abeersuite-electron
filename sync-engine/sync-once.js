@@ -731,7 +731,7 @@ async function main(opts, cfg, pools = null, hooks = {}) {
         }
         // ---- Pass 4: re-sum the running totals this cycle's ledger rows touched -
         //
-        // Pulled rows leave Account.balance / stock / GiftCard.balance alone (see
+        // Pulled rows leave stock / GiftCard.balance alone (see
         // rebuildTotals.js); this is where the replica's own copies catch up. Runs
         // after every pass, including reconcile repairs, so a repaired GL line is
         // counted the same cycle it arrives — and it also finishes what a cycle killed

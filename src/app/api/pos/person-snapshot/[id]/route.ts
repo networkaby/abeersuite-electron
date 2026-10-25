@@ -3,6 +3,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { Prisma } from "@/generated/prisma/client";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError, parseIdParam } from "@/shared/lib/api";
+import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 import { selectPrimaryPhone, selectPrimaryEmail } from "@/shared/lib/prisma/fragments";
 
 // GET /api/pos/person-snapshot/[id]
@@ -38,7 +39,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
                 id: true, name: true, gstin: true,
                 phones: selectPrimaryPhone,
                 emails: selectPrimaryEmail,
-                account: { select: { id: true, balance: true, openingBalance: true } },
+                account: { select: { id: true, openingBalance: true } },
             },
         });
         if (!person) return NextResponse.json({ error: "Person not found" }, { status: 404 });
@@ -110,6 +111,11 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
             return a > b ? a : b;
         })();
 
+        // Summed from the ledger (opening included) — there is no cached balance.
+        const balance = person.account
+            ? (await closingForAccounts(null, [person.account.id])).get(person.account.id) ?? 0
+            : 0;
+
         return NextResponse.json({
             person: {
                 id: person.id,
@@ -121,7 +127,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
             account: person.account
                 ? {
                     id: person.account.id,
-                    balance: Number(person.account.balance),
+                    balance,
                     openingBalance: person.account.openingBalance ? Number(person.account.openingBalance) : null,
                 }
                 : null,

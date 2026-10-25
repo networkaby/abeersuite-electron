@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { handleApiError } from "@/shared/lib/api";
-import { moneyNumber } from "@/shared/lib/format/moneyInr";
+import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 import { businessTodayIso, toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
 import type { PayableStaffDto } from "@/modules/hr/lib/payrollTypes";
@@ -19,9 +19,9 @@ import type { PayableStaffDto } from "@/modules/hr/lib/payrollTypes";
 // payable; the rest are listed with their balance so the screen can say why
 // they are not being paid.
 //
-// `Account.balance` holds only posted vouchers — the opening balance is a
-// master field kept apart from it, so it is added back here. Without it, staff
-// whose salary was owed when the books started read as holding an advance.
+// The balance is summed from the ledger with the opening balance folded in, so
+// staff whose salary was owed when the books started are not read as holding
+// an advance.
 //
 // A person who has left still appears while their balance is outstanding —
 // leaving does not cancel what is owed for the days already worked.
@@ -39,16 +39,17 @@ export async function GET() {
                 staffCode: true,
                 leftOn: true,
                 user: { select: { name: true } },
-                ledgerAccount: { select: { id: true, name: true, balance: true, openingBalance: true, openingBalanceType: true } },
+                ledgerAccount: { select: { id: true, name: true } },
             },
         });
+
+        const closing = await closingForAccounts(null, profiles.flatMap((p) => p.ledgerAccount ? [p.ledgerAccount.id] : []));
 
         const rows: PayableStaffDto[] = profiles
             .filter((p) => p.ledgerAccount)
             .map((p) => {
                 const acc = p.ledgerAccount!;
-                const opening = moneyNumber(acc.openingBalance ?? 0);
-                const balance = moneyNumber(acc.balance) + (acc.openingBalanceType === "DEBIT" ? -opening : opening);
+                const balance = closing.get(acc.id) ?? 0;
                 return {
                     userId: p.userId,
                     name: p.user.name,

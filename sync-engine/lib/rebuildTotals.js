@@ -3,8 +3,8 @@
 /**
  * Re-sum the replica's running totals after a cycle landed ledger rows.
  *
- * `Account.balance`, `InvProduct.stock` / `inv_product_branches.stock` and
- * `GiftCard.balance` never travel between machines (see `cacheColumns` in the
+ * `InvProduct.stock` / `inv_product_branches.stock` and `GiftCard.balance`
+ * never travel between machines (see `cacheColumns` in the
  * registry): a pulled row leaves the local total alone, and this module rebuilds
  * the totals whose ledger rows arrived in this cycle from the LOCAL ledger. The
  * app's push side does the same on Supabase (src/shared/lib/sync/rebuildTotals.ts);
@@ -13,7 +13,7 @@
  * ── Why collect ids rather than rebuild everything ──────────────────────────
  * A full rebuild is one aggregate over every GL line, every cycle, on a shop PC —
  * fine once, not every ten minutes. The pull already has the rows in hand, so noting
- * `accountId` / `productId` / `giftCardId` as they go by costs nothing.
+ * `productId` / `giftCardId` as they go by costs nothing.
  *
  * ── Why the ids are kept in a table, `_sync_dirty` ──────────────────────────
  * pull.js notes them on the SAME transaction that lands the page, and the rebuild at
@@ -34,7 +34,8 @@ const { ensureTable } = require("./bookkeeping");
 
 const DIRTY = "_sync_dirty";
 
-/** `kind` is a bucket of TOUCH below (accounts, products, giftCards, vouchers). */
+/** `kind` is a bucket of TOUCH below (products, giftCards). Rows of the retired
+ *  `accounts` / `vouchers` kinds an older build left behind are simply cleared. */
 const DIRTY_COLUMNS = [
     ["kind", "text NOT NULL"],
     ["id", "integer NOT NULL"],
@@ -46,12 +47,8 @@ async function ensure(client) {
 
 /** Physical table -> which column names a total. Tables not listed touch nothing. */
 const TOUCH = {
-    VoucherGlLine: { accounts: "accountId" },
     InvStockLedger: { products: "productId" },
     GiftCardTxn: { giftCards: "giftCardId" },
-    // A cancel changes Account.balance without writing a GL line: the sum counts
-    // POSTED, non-deleted vouchers only. Resolved to accounts at rebuild time.
-    UniversalVoucher: { vouchers: "id" },
 };
 
 function asInt(v) {
@@ -75,7 +72,7 @@ async function noteRows(client, table, rows) {
 
 /**
  * Before a child set is replaced or keys are deleted, note what the rows ABOUT TO
- * GO touched: a GL line re-pointed at another account leaves the old account's
+ * GO touched: a stock row re-pointed at another product leaves the old product's
  * total stale unless it is re-summed too.
  */
 async function noteBeforeDelete(client, table, whereSql, params) {
@@ -85,34 +82,6 @@ async function noteBeforeDelete(client, table, whereSql, params) {
     const res = await client.query(`SELECT ${cols} FROM ${q(table)} WHERE ${whereSql}`, params);
     await noteRows(client, table, res.rows);
 }
-
-const ACCOUNTS_SQL = `
-WITH ids AS (SELECT unnest($1::int[]) AS id),
-nb AS (
-    SELECT a.id,
-           COALESCE(a."normalBalance"::text,
-                    CASE WHEN g.type IS NULL THEN NULL
-                         WHEN g.type::text IN ('ASSET', 'EXPENSE') THEN 'DEBIT'
-                         ELSE 'CREDIT' END) AS side
-      FROM "Account" a
-      JOIN ids ON ids.id = a.id
-      LEFT JOIN "AccountGroup" g ON g.id = a."groupId"
-),
-sums AS (
-    SELECT l."accountId" AS id,
-           SUM(CASE WHEN nb.side = l.type::text THEN l.amount ELSE -l.amount END) AS total
-      FROM "VoucherGlLine" l
-      JOIN nb ON nb.id = l."accountId" AND nb.side IS NOT NULL
-      JOIN "UniversalVoucher" v ON v.id = l."universalVoucherId"
-     WHERE v.status = 'POSTED'
-     GROUP BY l."accountId"
-)
-UPDATE "Account" a
-   SET balance = COALESCE(s.total, 0)
-  FROM ids
-  LEFT JOIN sums s ON s.id = ids.id
- WHERE a.id = ids.id
-   AND a.balance IS DISTINCT FROM COALESCE(s.total, 0)`;
 
 /**
  * The saved total a product should hold — the office's rule, recomputeProductStock
@@ -188,21 +157,10 @@ async function rebuildTouched(local, log) {
     if (noted.length === 0) return 0;
     const ids = (kind) => (noted.find((r) => r.kind === kind) || { ids: [] }).ids;
 
-    const accounts = new Set(ids("accounts"));
-    if (ids("vouchers").length > 0) {
-        const res = await local.query(
-            `SELECT DISTINCT "accountId" FROM "VoucherGlLine" WHERE "universalVoucherId" = ANY($1::int[])`,
-            [ids("vouchers")],
-        );
-        for (const r of res.rows) accounts.add(r.accountId);
-    }
     const products = ids("products");
     const giftCards = ids("giftCards");
 
     let changed = 0;
-    if (accounts.size > 0) {
-        changed += (await local.query(ACCOUNTS_SQL, [[...accounts]])).rowCount || 0;
-    }
     if (products.length > 0) {
         changed += (await local.query(PRODUCT_SQL, [products])).rowCount || 0;
         changed += (await local.query(BRANCH_UPSERT_SQL, [products])).rowCount || 0;
@@ -219,7 +177,7 @@ async function rebuildTouched(local, log) {
         await local.query(`DELETE FROM ${q(DIRTY)} WHERE kind = $1 AND id = ANY($2::int[])`, [r.kind, r.ids]);
     }
     if (log) {
-        log(`  totals re-summed: ${accounts.size} account(s), ${products.length} product(s), ` +
+        log(`  totals re-summed: ${products.length} product(s), ` +
             `${giftCards.length} gift card(s) — ${changed} value(s) changed`);
     }
     return changed;
@@ -231,26 +189,6 @@ async function rebuildTouched(local, log) {
  * Reads only; the rebuild is what fixes them.
  */
 async function driftReport(client) {
-    const accounts = await client.query(`
-        WITH nb AS (
-            SELECT a.id, a.balance,
-                   COALESCE(a."normalBalance"::text,
-                            CASE WHEN g.type IS NULL THEN NULL
-                                 WHEN g.type::text IN ('ASSET', 'EXPENSE') THEN 'DEBIT'
-                                 ELSE 'CREDIT' END) AS side
-              FROM "Account" a LEFT JOIN "AccountGroup" g ON g.id = a."groupId"
-        ),
-        sums AS (
-            SELECT l."accountId" AS id,
-                   SUM(CASE WHEN nb.side = l.type::text THEN l.amount ELSE -l.amount END) AS total
-              FROM "VoucherGlLine" l
-              JOIN nb ON nb.id = l."accountId" AND nb.side IS NOT NULL
-              JOIN "UniversalVoucher" v ON v.id = l."universalVoucherId"
-             WHERE v.status = 'POSTED'
-             GROUP BY 1
-        )
-        SELECT count(*)::int AS n FROM nb LEFT JOIN sums s ON s.id = nb.id
-         WHERE nb.balance IS DISTINCT FROM COALESCE(s.total, 0)`);
     const products = await client.query(`
         WITH led AS (SELECT "productId" AS id, SUM("inQty" - "outQty") AS qty FROM "InvStockLedger" GROUP BY 1)
         SELECT count(*)::int AS n FROM "InvProduct" p LEFT JOIN led ON led.id = p.id
@@ -264,7 +202,6 @@ async function driftReport(client) {
         WITH s AS (SELECT "giftCardId" AS id, SUM(amount) AS total FROM "GiftCardTxn" GROUP BY 1)
         SELECT count(*)::int AS n FROM "GiftCard" g JOIN s ON s.id = g.id WHERE g.balance IS DISTINCT FROM s.total`);
     return {
-        accounts: accounts.rows[0].n,
         products: products.rows[0].n,
         branches: branches.rows[0].n,
         giftCards: giftCards.rows[0].n,

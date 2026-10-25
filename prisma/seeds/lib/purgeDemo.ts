@@ -121,13 +121,6 @@ export async function purgeProducts(pool: Pool, step: string): Promise<void> {
     console.log(`      ✓ Deleted ${prods.rowCount} InvProduct rows (+ cascade children)\n`);
 }
 
-/** Reset the cached running balances the purged rows were derived from. */
-export async function resetBalances(pool: Pool, step: string): Promise<void> {
-    console.log(`${step} Resetting cached running balances`);
-    await pool.query(`UPDATE "Account" SET balance = 0`);
-    console.log("      ✓ Account.balance reset to 0 (opening fields preserved)\n");
-}
-
 /** Print what survived, so settings can be confirmed at a glance. */
 export async function printKept(pool: Pool): Promise<void> {
     const k = await pool.query<Record<string, string>>(`

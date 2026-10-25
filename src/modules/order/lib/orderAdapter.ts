@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { toNumber } from "@/modules/accountancy/lib/balance";
+import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 import { readPartyName } from "@/shared/lib/accountancy/partySnapshot";
 import { syncVoucherLink } from "@/modules/accountancy/lib/voucherLinks";
 import { ORDER_RELEASE_STAGES } from "./orderPipeline";
@@ -62,9 +63,11 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
     // whether confirming it on credit would breach the limit — the Review gate.
     const acctIds = [...new Set(invs.map((v) => v.universalVoucher?.partyAccountId).filter((x): x is number => x != null))];
     const acctRows = acctIds.length
-        ? await prisma.account.findMany({ where: { id: { in: acctIds } }, select: { id: true, creditLimit: true, balance: true } })
+        ? await prisma.account.findMany({ where: { id: { in: acctIds } }, select: { id: true, creditLimit: true } })
         : [];
     const acctById = new Map(acctRows.map((a) => [a.id, a]));
+    // Summed from the ledger (opening included) — the same read checkCreditLimit makes.
+    const closing = await closingForAccounts(null, acctIds);
 
     const fromInv: NormalizedOrder[] = invs.map((v) => {
         const total = toNumber(v.totalAmount);
@@ -74,8 +77,10 @@ export async function listOrders(opts?: { statusId?: string }): Promise<Normaliz
         if (acct) {
             // Deny-by-default: NULL limit == 0 == no credit (mirrors checkCreditLimit).
             const limit = acct.creditLimit == null ? 0 : toNumber(acct.creditLimit);
-            const outstanding = toNumber(acct.balance); // positive = customer owes us
-            const breach = limit === 0 ? total > 0.005 : outstanding + total > limit + 0.005;
+            const outstanding = closing.get(acct.id) ?? 0; // positive = customer owes us
+            // An advance that covers the order is no credit at all, limit or none.
+            const breach = outstanding + total > 0.005
+                && (limit === 0 || outstanding + total > limit + 0.005);
             credit = { limit, outstanding: Math.max(0, outstanding), breach };
         }
         const uvLinks = v.universalVoucher?.links ?? [];

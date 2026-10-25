@@ -1,6 +1,5 @@
 // Cancel a posted financial voucher (spine) inside a caller's transaction:
-// reverse the cached Account.balance for every GL line and mark the spine
-// CANCELLED. No counter-entry — the CANCELLED flag drops it from the truth path,
+// mark the spine CANCELLED. No counter-entry — the CANCELLED flag drops it from the truth path,
 // so a reversing entry would double-reverse.
 //
 // Shared by the voucher cancel route and the POS shift reopen/delete routes,
@@ -8,7 +7,6 @@
 // the shift-row change.
 
 import type { Prisma } from "@/generated/prisma/client";
-import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 import { ensureCancelable, cancelFields, isCancelled } from "@/modules/accountancy/lib/voucherLifecycle";
 
@@ -30,10 +28,6 @@ export async function cancelVoucherInTx(
     if (opts.skipIfCancelled && isCancelled(voucher)) return;
     ensureCancelable(voucher);
 
-    // Spine lines are scalar — the shared helper resolves the reversal's nature
-    // exactly as the engine resolved it when posting (group fallback included),
-    // or the null-nature ledgers never get their delta taken back out.
-    await applyLineBalances(tx, voucher.lines, "reverse");
     // Taking a voucher out of the books dirties a reconciled window exactly as much
     // as posting one — same retreat as the posting path. Idempotent, and the
     // watermark only ever travels backwards.

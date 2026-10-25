@@ -270,10 +270,9 @@ function voucherWouldUnpost(
  * order route. Every one of those mints FRESH ids for the replacement lines.
  *
  * So a counter still holding an unpushed `_outbox` row for one of the discarded ids
- * resurrects it. The line lands under a voucher that is still POSTED, which is exactly
- * the set `recomputeAccountBalances` re-sums — and that re-sum is authoritative, so the
- * inflated figure becomes `Account.balance` cloud-wide with no error raised and nothing
- * reporting that the voucher's debits and credits have stopped agreeing.
+ * resurrects it. The line lands under a voucher that is still POSTED, so every summed
+ * balance counts it — the inflated figure shows cloud-wide with no error raised and
+ * nothing reporting that the voucher's debits and credits have stopped agreeing.
  *
  * The window is only rows still PENDING on a counter (a pushed row is never re-sent,
  * and a pulled row never re-enters the outbox), but it is not exotic: the drain is 50
@@ -563,7 +562,7 @@ export async function pushMutations(records: OutboxRecord[]): Promise<PushOutcom
                     `[SyncPush] ${rec.table_name} ${lineId}: dropping a replayed write — ` +
                     `voucher ${parentId} already carries office-written (cloud-range) lines, ` +
                     `so its line set has been rewritten upstream and this line was discarded. ` +
-                    `Re-creating it would unbalance the voucher and drift Account.balance.`,
+                    `Re-creating it would unbalance the voucher and inflate its ledgers' balances.`,
                 );
                 pushedIds.push(rec.id);
                 continue;

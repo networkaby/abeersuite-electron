@@ -23,7 +23,6 @@ import { auth } from "@/auth";
 // Writes (when postImmediately=true):
 //   Voucher + VoucherLine          (DRAFT or POSTED depending on flag)
 //   JournalEntry + JournalLine     (mirror, audit)
-//   Account.balance                (per-line delta)
 // And, if any stockItems:
 //   VoucherInventoryLine           (on the journal's own spine)
 //   InvStockLedger                 (inQty for Dr-side items, outQty for Cr-side items)

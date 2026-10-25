@@ -321,40 +321,43 @@ async function main() {
 
         console.log("\n7. A cycle killed after a ledger page landed, before the totals were re-summed");
 
-        // The few columns rebuildTotals' account SQL reads, on both sides.
+        // The few columns rebuildTotals' stock SQL reads, on both sides.
         const LEDGER = `
-            DROP TABLE IF EXISTS "VoucherGlLine", "UniversalVoucher", "Account", "AccountGroup", "_sync_dirty";
-            CREATE TABLE "AccountGroup" (id int PRIMARY KEY, type text);
-            CREATE TABLE "Account" (id int PRIMARY KEY, "groupId" int, "normalBalance" text, balance numeric NOT NULL DEFAULT 0);
+            DROP TABLE IF EXISTS "InvStockLedger", "UniversalVoucher", "InvProduct", "inv_product_branches", "_sync_dirty";
+            CREATE TABLE "InvProduct" (id int PRIMARY KEY, "openingStock" numeric, stock int);
+            CREATE TABLE "inv_product_branches" ("productId" int, "branchId" text, stock int, "updatedAt" timestamp,
+                                                 PRIMARY KEY ("productId", "branchId"));
             CREATE TABLE "UniversalVoucher" (id int PRIMARY KEY, status text);
-            CREATE TABLE "VoucherGlLine" (id int PRIMARY KEY, "universalVoucherId" int, "accountId" int, type text, amount numeric);
-            INSERT INTO "Account" (id, "normalBalance") VALUES (50, 'DEBIT');
+            CREATE TABLE "InvStockLedger" (id int PRIMARY KEY, "universalVoucherId" int, "productId" int, "branchId" text,
+                                           "inQty" numeric, "outQty" numeric);
+            INSERT INTO "InvProduct" VALUES (50, NULL, NULL);
             INSERT INTO "UniversalVoucher" VALUES (7, 'POSTED');
         `;
         await source.query(LEDGER);
         await local.query(LEDGER);
-        await source.query(`INSERT INTO "VoucherGlLine" VALUES (1, 7, 50, 'DEBIT', 100)`);
+        await source.query(`INSERT INTO "InvStockLedger" VALUES (1, 7, 50, 'BR-HQ', 100, 0)`);
         await totals.ensure(local);
 
-        const glLine = { n: 6, table: "VoucherGlLine", pk: ["id"], strategy: "child", parent: "UniversalVoucher", fk: "universalVoucherId" };
-        await pullByKeys(source, local, glLine, ["1"]);
+        const stockLine = { n: 43, table: "InvStockLedger", pk: ["id"], strategy: "child", parent: "UniversalVoucher", fk: "universalVoucherId" };
+        await pullByKeys(source, local, stockLine, ["1"]);
         // The process dies here. Nothing in memory survives; only the database does.
         check("the page and its note landed together",
-            (await local.query(`SELECT kind, id FROM "_sync_dirty"`)).rows, [{ kind: "accounts", id: 50 }]);
-        check("...and the balance is still stale", Number((await local.query(`SELECT balance FROM "Account" WHERE id = 50`)).rows[0].balance), 0);
+            (await local.query(`SELECT kind, id FROM "_sync_dirty"`)).rows, [{ kind: "products", id: 50 }]);
+        check("...and the stock is still stale", (await local.query(`SELECT stock FROM "InvProduct" WHERE id = 50`)).rows[0].stock, null);
 
         // A page that rolls back takes its note with it — no rebuild for a row never landed.
         await inReplicaTransaction(local, async () => {
-            await totals.noteRows(local, "VoucherGlLine", [{ accountId: 51 }]);
+            await totals.noteRows(local, "InvStockLedger", [{ productId: 51 }]);
             throw new Error("page failed");
         }).catch(() => {});
         check("a rolled-back page leaves no note",
             (await local.query(`SELECT count(*)::int AS c FROM "_sync_dirty" WHERE id = 51`)).rows[0].c, 0);
 
         // The next cycle's pass 4, in a fresh process: it pulled nothing itself.
+        // Two values change: the product's total and its branch row.
         const resummed = await totals.rebuildTouched(local);
-        check("the next cycle re-sums what the killed one left", resummed, 1);
-        check("...the balance is right", Number((await local.query(`SELECT balance FROM "Account" WHERE id = 50`)).rows[0].balance), 100);
+        check("the next cycle re-sums what the killed one left", resummed, 2);
+        check("...the stock is right", (await local.query(`SELECT stock FROM "InvProduct" WHERE id = 50`)).rows[0].stock, 100);
         check("...and the list is cleared", (await local.query(`SELECT count(*)::int AS c FROM "_sync_dirty"`)).rows[0].c, 0);
 
         console.log("\n8. A product never tracked stays untracked; the drift check agrees with the office");

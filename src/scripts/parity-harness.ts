@@ -27,7 +27,7 @@ import type { PostVoucherInput } from "@/modules/accountancy/lib/postInvVoucher"
 import { saleToSpec, buildTradingStockMoves } from "@/modules/accountancy/lib/voucherMappers";
 import { enginePost, engineCreateVoucher, engineCreateSpine, engineGlArm } from "@/modules/accountancy/lib/transactionEngine";
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
-import { recomputeAccountBalances, ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
+import { ledgerStatusFilterUv } from "@/modules/accountancy/lib/aggregateLedger";
 import { reapplyTradingVoucherInPlace } from "@/modules/accountancy/lib/reapplyTradingVoucher";
 import { postReceiptVoucher } from "@/modules/accountancy/lib/postReceiptVoucher";
 import { loadTenderLines } from "@/modules/accountancy/lib/outstandings";
@@ -508,28 +508,15 @@ async function runStockRecompute(): Promise<boolean> {
                 { ...v, type: "SALE", date: new Date(), tenders: [{ accountId: cash.id, amount: 118 }], charges: [], sellerStateCode: "19", buyerStateCode: "19" } as unknown as PostVoucherInput["voucher"],
                 { branchId: branch.id, lines: vLines },
             );
-            await enginePost(tx, spec, user.id, { branchId: PARITY_BRANCH, existingSpineId: spineId });   // incremental: stock arm + Account.balance deltas
+            await enginePost(tx, spec, user.id, { branchId: PARITY_BRANCH, existingSpineId: spineId });   // incremental: stock arm
             const stockAfterPost = await tx.invProduct.findUnique({ where: { id: product.id }, select: { stock: true } });
-            const cashAfterPost  = await tx.account.findUnique({ where: { id: cash.id }, select: { balance: true } });
             await recomputeProductStock(tx, [product.id]);       // rebuild stock from openingStock + ledger
-            await recomputeAccountBalances(tx, [cash.id]);       // rebuild Account.balance from posted lines
             const stockAfterRecompute = await tx.invProduct.findUnique({ where: { id: product.id }, select: { stock: true } });
-            const cashAfterRecompute  = await tx.account.findUnique({ where: { id: cash.id }, select: { balance: true } });
             // Stock cache was clean (validated), so recompute must match incremental.
             const stockOk = Number(stockAfterPost?.stock) === Number(stockAfterRecompute?.stock);
-            // Account.balance can carry pre-existing drift, so verify the helper
-            // against an INDEPENDENT line-sum (Cash is DEBIT-normal) instead.
-            const cashLines = await tx.voucherGlLine.groupBy({
-                by: ["type"], where: { accountId: cash.id, universalVoucher: { status: "POSTED" } }, _sum: { amount: true },
-            });
-            let expectedCash = 0;
-            for (const l of cashLines) expectedCash += (String(l.type) === "DEBIT" ? 1 : -1) * Number(l._sum.amount ?? 0);
-            const acctOk = Math.abs(Number(cashAfterRecompute?.balance) - expectedCash) < 0.01;
-            const drift  = Number(cashAfterPost?.balance) - Number(cashAfterRecompute?.balance);
             console.log(`\n=== recompute (post sale → recompute helpers, rolled back) ===`);
             console.log(`stock recompute == incremental: ${stockOk ? "✓" : "✗"}`);
-            console.log(`account recompute == independent line-sum: ${acctOk ? "✓" : "✗"}  (pre-existing Account.balance drift on Cash = ${drift.toFixed(2)})`);
-            ok = stockOk && acctOk;
+            ok = stockOk;
             throw new Error(ROLLBACK);
         }, { timeout: 30_000, maxWait: 10_000 });
     } catch (e) {

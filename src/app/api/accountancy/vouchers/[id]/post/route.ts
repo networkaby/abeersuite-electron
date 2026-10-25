@@ -5,8 +5,8 @@ import { enginePostSpine } from "@/modules/accountancy/lib/transactionEngine";
 import { handleApiError } from "@/shared/lib/api";
 
 // POST /api/accountancy/vouchers/[id]/post
-// DRAFT → POSTED: applies the GL impact (Account.balance deltas) and flips the
-// spine. Phase 5 5E: the UniversalVoucher spine IS the financial voucher (the
+// DRAFT → POSTED: flips the spine, which puts its GL lines into every summed
+// balance. Phase 5 5E: the UniversalVoucher spine IS the financial voucher (the
 // Voucher table is dropped), so `id` is the spine id.
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { user, response } = await requireAuth();

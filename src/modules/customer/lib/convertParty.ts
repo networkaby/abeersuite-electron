@@ -574,21 +574,16 @@ export async function mergeParty(
             });
         }
 
-        // 2. Roll the loser's cached balance + opening balance into the winner.
-        //    Cached `Account.balance` is read by dashboards. `openingBalance`
+        // 2. Roll the loser's opening balance into the winner. `openingBalance`
         //    (signed by `openingBalanceType` Dr/Cr) is the master figure
         //    re-posted at books-beginning; merging duplicates must sum it too
         //    or the winner's "started with X" line would silently lose Y.
         const accountSelect = {
-            balance: true,
             openingBalance: true,
             openingBalanceType: true,
         } as const;
         const winnerAcct = await tx.account.findUniqueOrThrow({ where: { id: winnerAccountId }, select: accountSelect });
         const loserAcct = await tx.account.findUniqueOrThrow({ where: { id: loserAccountId }, select: accountSelect });
-
-        // Cached balance — straight sum (both are already signed in the same direction).
-        const summedBalance = Number(winnerAcct.balance) + Number(loserAcct.balance);
 
         // Opening balance — signed sum using EntryType. DEBIT counts +,
         // CREDIT counts −. Reconstruct the type from the sign of the result.
@@ -606,7 +601,6 @@ export async function mergeParty(
         await tx.account.update({
             where: { id: winnerAccountId },
             data: {
-                balance: summedBalance.toFixed(2),
                 openingBalance: openMag === 0 ? null : openMag.toFixed(2),
                 openingBalanceType: openType,
                 // Universal opening — no date; always from the start of the books.

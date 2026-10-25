@@ -3,7 +3,6 @@ import { formatUvNo } from "@/shared/lib/accountancy/uvNo";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
 import { z } from "zod";
-import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { auditSnapshot, isPosted, isCancelled, lifecycleErrorResponse } from "@/modules/accountancy/lib/voucherLifecycle";
 import { retreatReconciliation } from "@/modules/accountancy/lib/reconciliation";
 import { removeLinksForVoucher } from "@/modules/accountancy/lib/billLink";
@@ -38,7 +37,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     try {
         const audit = await prisma.$transaction(async (tx) => {
             if (needsReversal) {
-                await applyLineBalances(tx, voucher.lines, "reverse");
                 // Removing a posted voucher dirties a reconciled window exactly as
                 // much as adding one — same retreat as the posting path.
                 await retreatReconciliation(tx, voucher.lines.map((l) => l.accountId), voucher.date);

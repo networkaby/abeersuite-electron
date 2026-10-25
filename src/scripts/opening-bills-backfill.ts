@@ -22,11 +22,8 @@
 //   pnpm opening:to-bills            # dry run — writes nothing
 //   pnpm opening:to-bills --apply    # actually convert
 //
-// Read `pnpm opening:preview` FIRST. Converting moves `Account.balance`, which
-// is what the POS credit check reads, so a customer who looks clear today can
-// start hitting their credit limit at the counter. That is correct accounting
-// and still a live change on the shop floor — it should be a decision, not a
-// surprise.
+// Converting does not move any party's balance: the summed ledger counts the
+// master opening and an opening bill alike.
 
 import * as dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
@@ -98,7 +95,6 @@ async function main(): Promise<void> {
 
     if (!APPLY) {
         console.log(`\nNothing was written. Re-run with --apply to convert.`);
-        console.log(`Check 'pnpm opening:preview' first — this moves Account.balance, which the POS credit check reads.\n`);
         return;
     }
 

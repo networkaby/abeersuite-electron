@@ -323,11 +323,11 @@ export async function exportPersonal(prisma: Db): Promise<PersonalSnapshot> {
     const accounts = accRows.map((a) => externalize(
         {
             // `reconciled*` is bank-reconciliation STATE, not configuration — it belongs
-            // with `balance` on the excluded side. Worse, `reconciledById` is a User id
+            // on the excluded side. Worse, `reconciledById` is a User id
             // from the source database, and a fresh install does not have those users, so
             // restoring a snapshot onto an empty database died on
             // Account_reconciledById_fkey with nothing imported after it.
-            ...omit(a, ["id", "parentId", "personId", "companyId", "balance", "createdAt", "aliases",
+            ...omit(a, ["id", "parentId", "personId", "companyId", "createdAt", "aliases",
                 "reconciledThrough", "reconciledAt", "reconciledById"]),
             parentName: a.parentId != null ? accNameById.get(a.parentId) ?? null : null,
             aliases: a.aliases.map((x) => x.alias),

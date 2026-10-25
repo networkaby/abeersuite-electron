@@ -202,8 +202,7 @@ type TableEntry = {
     /**
      * Running-total columns that must NEVER travel between machines on an UPDATE.
      *
-     * `Account.balance`, `InvProduct.stock`, `InvProductBranch.stock` and
-     * `GiftCard.balance` are caches kept by increments. Two machines that each add to
+     * `InvProduct.stock`, `InvProductBranch.stock` and `GiftCard.balance` are caches kept by increments. Two machines that each add to
      * the same total from the value they last pulled would overwrite each other under
      * last-write-wins, so each side rebuilds these from its own ledger instead: the
      * capture trigger ships no outbox row when only these changed, the push and the

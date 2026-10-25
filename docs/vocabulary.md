@@ -53,7 +53,7 @@ This file unifies what used to be two separate glossaries — the Transaction En
 
 ## General Ledger (GL)
 
-**Definition:** The posted truth — `JournalEntry` + `JournalLine` + `Account.balance`. Every financial transaction posts here. Branch is recorded as `JournalLine.branchId` (a per-line tag), not on the transaction header.
+**Definition:** The posted truth — `JournalEntry` + `JournalLine`. Every financial transaction posts here. Branch is recorded as `JournalLine.branchId` (a per-line tag), not on the transaction header.
 
 ---
 
@@ -101,10 +101,10 @@ This file unifies what used to be two separate glossaries — the Transaction En
 
 | Term | What it is | Read it with |
 | --- | --- | --- |
-| **Cached balance** | `Account.balance` — a running total kept by increments on every post / cancel. Movements only; the master `openingBalance` is folded in at read time. | Not read for display — screens sum the GL (`closingForAccounts`, `aggregateClosingAsOf`). |
+| **Cached balance** | Retired 2026-10-26 — the `Account.balance` column is dropped. | — |
 | **Computed balance** | Summed from the account's own `VoucherGlLine` rows, plus its master opening. The ledger is the truth; this is that truth. | `closingForAccounts` (bounded), `aggregateClosingAsOf` (all) |
 
-**The rule — bounded set of accounts → compute; the whole chart at once → cache.**
+**The rule — every account balance is computed.** (Until 2026-10-26 the whole-chart surfaces read a cache; it is gone.)
 
 Every counter carries a full local replica, so summing a known handful of accounts is an indexed local read. Measured on the 2026-09-20 copy (3,835 accounts, 13,974 GL lines): one account 2ms, a 50-party page 3ms, every party account 46ms, the whole ledger 86ms. At those numbers a figure that *cannot drift* beats a figure that is marginally cheaper, so anything that shows or decides money computes:
 
@@ -114,9 +114,7 @@ Every counter carries a full local replica, so summing a known handful of accoun
 - the party-delete guard (`deleteParty`)
 - every till figure (`tillBalancesPaise`, which got there first)
 
-What still reads the cache is the two surfaces that want **every** account in one request — the ledgers list and the finance top bar — where computing means a full-ledger scan on every poll.
-
-**Consequence:** drift in `Account.balance` is now a display matter, not a money matter. The Accountancy maintenance "recompute balances" button repairs it; `pnpm recompute:caches` reports and repairs all four running totals (`Account.balance`, `InvProduct.stock`, `InvProductBranch.stock`, `GiftCard.balance`).
+**Consequence:** an account balance cannot drift. `pnpm recompute:caches` reports and repairs the three running totals still cached (`InvProduct.stock`, `InvProductBranch.stock`, `GiftCard.balance`).
 
 **Not covered by this rule:** stock and gift-card totals stay cached. They are read per keystroke on POS and per row on product lists, where computing would be a query-per-item.
 

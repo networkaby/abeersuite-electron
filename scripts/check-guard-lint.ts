@@ -124,34 +124,6 @@ function findRouteFiles(dir: string, out: string[] = []): string[] {
 }
 
 
-// ── Rule 2: one writer for Account.balance ───────────────────────────────────
-//
-// Every path that moves the cached `Account.balance` must go through
-// `applyLineBalances` (balance.ts) or the engine, because those two resolve a
-// ledger's nature the way it was resolved when the voucher was POSTED — with the
-// account-group fallback. A hand-rolled loop reading bare `normalBalance` gets
-// `null` for every party (AR/AP) ledger, and then either skips the line (leaving
-// a stale cached balance) or, with a `!` assertion, feeds null into
-// `balanceDelta` and applies the delta on the WRONG SIDE. Both shipped; see the
-// journal-entry lifecycle routes before 2026-09-13.
-//
-// It also matters for the FY opening wall: the wall's dirty stamp lives inside
-// these writers, so a fourth writer would silently serve a stale cached year.
-//
-// What this rule can NOT catch, on purpose: an ABSOLUTE write (`balance: <value>`)
-// as used by the recompute-from-truth tooling — aggregateLedger.recomputeAccountBalances,
-// the recompute-balances maintenance route and scripts/recompute-caches. Those are
-// legitimate and are not deltas.
-const BALANCE_WRITER_ALLOWLIST = new Set([
-    "src/modules/accountancy/lib/balance.ts",          // applyLineBalances itself
-    "src/modules/accountancy/lib/transactionEngine.ts", // the posting engine
-    // openingBills builds ONE pre-aggregated delta per account from a signed
-    // total and deliberately treats a null-group, null-nature ledger as CREDIT,
-    // where applyLineBalances skips it. Converting it is a behaviour change, so
-    // it stays out until that call is made deliberately.
-    "src/modules/accountancy/lib/openingBills.ts",
-]);
-
 function findTsFiles(dir: string, out: string[] = []): string[] {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, entry.name);
@@ -165,30 +137,7 @@ function findTsFiles(dir: string, out: string[] = []): string[] {
     return out;
 }
 
-/** Hand-rolled `account.update({ ... balance: { increment|decrement } })` sites. */
-function findBalanceWriters(): string[] {
-    const offenders: string[] = [];
-    for (const file of findTsFiles(SRC_DIR)) {
-        const rel = path.relative(REPO, file).replace(/\\/g, "/");
-        if (BALANCE_WRITER_ALLOWLIST.has(rel)) continue;
-        const lines = fs.readFileSync(file, "utf8").split("\n");
-        for (let i = 0; i < lines.length; i++) {
-            if (!/balance:\s*\{\s*(increment|decrement)/.test(lines[i])) continue;
-            // Which model is being updated? Walk back to the nearest `.<model>.update(`
-            // so GiftCard.balance / LoyaltyAccount.balance are not false positives.
-            let model: string | null = null;
-            for (let j = i; j >= Math.max(0, i - 8); j--) {
-                const m = /\.(\w+)\.update(?:Many)?\s*\(/.exec(lines[j]);
-                if (m) { model = m[1]; break; }
-            }
-            if (model === "account") offenders.push(`${rel}:${i + 1}`);
-        }
-    }
-    return offenders;
-}
-
-
-// ── Rule 3: un-posting is an office-only move ────────────────────────────────
+// ── Rule 2: un-posting is an office-only move ────────────────────────────────
 //
 // `parkVoucherAsDraftInTx` turns a POSTED voucher back into a DRAFT, and its two
 // companions DELETE rows (the old GL lines on a repost, the whole draft on a
@@ -224,7 +173,7 @@ function findUnguardedParkCallers(): string[] {
 }
 
 
-// ── Rule 4: recycling voucher-line ids is an announced move ──────────────────
+// ── Rule 3: recycling voucher-line ids is an announced move ──────────────────
 //
 // `VoucherGlLine` and `VoucherInventoryLine` carry no `updatedAt` and no
 // `createdAt`, so the sync push has no timestamp to arbitrate them with and every
@@ -305,17 +254,6 @@ function main() {
         process.exit(1);
     }
 
-    const balanceOffenders = findBalanceWriters();
-    if (balanceOffenders.length > 0) {
-        console.error(`
-[guard-lint] ERROR: ${balanceOffenders.length} hand-rolled Account.balance delta(s):`);
-        for (const hit of balanceOffenders) console.error(`  - ${hit}`);
-        console.error(`  Use applyLineBalances(tx, lines, "apply" | "reverse") from`);
-        console.error(`  src/modules/accountancy/lib/balance.ts — it resolves ledger nature`);
-        console.error(`  with the account-group fallback, as the posting engine does.`);
-        process.exit(1);
-    }
-
     const parkOffenders = findUnguardedParkCallers();
     if (parkOffenders.length > 0) {
         console.error(`
@@ -339,7 +277,6 @@ function main() {
     }
 
     console.log(`[guard-lint] PASS: All ${officeCount} office API route handlers enforce authentication.`);
-    console.log(`[guard-lint] PASS: Account.balance deltas all go through the shared writer.`);
     console.log(`[guard-lint] PASS: un-posting stays on the authoritative database.`);
     console.log(`[guard-lint] PASS: every voucher-line recycler is announced.`);
     process.exit(0);

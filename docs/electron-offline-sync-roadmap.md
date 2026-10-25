@@ -316,8 +316,8 @@ and reconcile run regardless), it only makes things happen sooner.
 
 ### 4.4 Running totals never travel (2026-09-05)
 
-`Account.balance`, `InvProduct.stock` / `InvProductBranch.stock` and `GiftCard.balance`
-are caches kept by increments. Shipped as row images under last-write-wins, two machines
+`InvProduct.stock` / `InvProductBranch.stock` and `GiftCard.balance` are caches kept by
+increments. (`Account.balance` was one too until it was dropped on 2026-10-26.) Shipped as row images under last-write-wins, two machines
 adding to the same total from the value each last pulled overwrote each other's
 increments. The rule now: **a running total is never sent on an update; each side re-sums
 it from its own ledger after ledger rows land.** One list, `cacheColumns` in

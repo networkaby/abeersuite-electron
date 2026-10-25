@@ -137,10 +137,6 @@ async function main(): Promise<void> {
     const gc = await pool.query(`UPDATE "GiftCard" SET balance = 0`);
     console.log(`  ✓ GiftCard.balance reset (${gc.rowCount} rows)`);
 
-    // Reset cached running balances on Account (they were derived from
-    // the now-gone JournalLines). Opening-balance fields are kept.
-    await pool.query(`UPDATE "Account" SET balance = 0`);
-    console.log("  ✓ Account.balance reset to 0");
 
     // Reset every product to stock = 0 so Purchase increments actually move the
     // cache. (NULL + 1 = NULL in Postgres — see init-product-stock.ts comment.)

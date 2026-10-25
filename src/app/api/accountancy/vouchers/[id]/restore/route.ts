@@ -11,8 +11,7 @@ import { handleApiError } from "@/shared/lib/api";
 const schema = z.object({ reason: z.string().trim().min(1, "Restore reason required") });
 
 // POST /api/accountancy/vouchers/[id]/restore
-// Un-cancel: re-applies the cached Account.balance the cancel took out and puts
-// the spine back to POSTED. Gated by the SAME per-kind key as cancel — whoever
+// Un-cancel: puts the spine back to POSTED. Gated by the SAME per-kind key as cancel — whoever
 // may cancel a voucher kind may restore it.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { user, response } = await requireAuth();

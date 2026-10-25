@@ -34,7 +34,6 @@ model Account {
   normalBalance NormalBalance?
   description   String?
   isActive      Boolean        @default(true)
-  balance       Decimal        @default(0) @db.Decimal(14, 2)
   parentId      Int?
   groupId       Int?
   // Identity linkage — set only for person / company accounts

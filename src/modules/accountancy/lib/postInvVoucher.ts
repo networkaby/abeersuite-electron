@@ -1,5 +1,5 @@
 // GL auto-posting for InvVoucher (SALE, PURCHASE).
-// Builds a balanced JournalEntry from the voucher and runs Account.balance updates.
+// Builds a balanced JournalEntry from the voucher.
 // NB: COGS / closing-stock is not posted per voucher — closing stock is computed
 // live at report time via getClosingStockValue (matches Tally).
 //

@@ -125,8 +125,8 @@ async function main() {
             // happen is a total disagreeing with the ledger beneath it.
             for (const [label, client] of [["source", source], ["replica", local]]) {
                 const d = await totals.driftReport(client);
-                const n = d.accounts + d.products + d.branches + d.giftCards;
-                console.log(`  totals   ${label.padEnd(28)} ${n === 0 ? "in step with ledger" : `DRIFT accounts=${d.accounts} products=${d.products} branches=${d.branches} giftCards=${d.giftCards}`}`);
+                const n = d.products + d.branches + d.giftCards;
+                console.log(`  totals   ${label.padEnd(28)} ${n === 0 ? "in step with ledger" : `DRIFT products=${d.products} branches=${d.branches} giftCards=${d.giftCards}`}`);
                 if (n > 0) bad.push({ model: `totals@${label}`, entry: null, error: "running totals drift from ledger" });
             }
         }

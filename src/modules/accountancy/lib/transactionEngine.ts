@@ -2,7 +2,7 @@
 //
 // The single internal writer for ledger postings. Every posting voucher funnels
 // through `enginePost`, which drives two internal arms in the caller's tx:
-//   • engineGlArm    — mirror JournalEntry + JournalLines + Account.balance deltas
+//   • engineGlArm    — write the spine's GL lines
 //   • engineStockArm — InvStockLedger + InvProduct/InvProductBranch stock caches
 //
 // INVARIANT: one voucher → one `enginePost` call carrying both arms; both run in
@@ -20,10 +20,10 @@
 // and are being subsumed by `enginePost` as callers migrate (see plan Phase 3).
 
 import type { Prisma, VoucherType, VoucherGlRole, PaymentMethod } from "@/generated/prisma/client";
-import { balanceDelta, glGapPaise, nextRefFromSeries, toNumber, type LineForBalance } from "./balance";
+import { glGapPaise, nextRefFromSeries, toNumber, type LineForBalance } from "./balance";
 import { GlBuildError } from "./postInvVoucher";
 import { round2 } from "@/shared/lib/format";
-import { defaultNormalBalanceForGroupType, type GroupTypeStr } from "./groupNature";
+import { type GroupTypeStr } from "./groupNature";
 import { recordStockMovementsBatch, type RecordStockMovementArgs } from "@/modules/inventory/lib/stockMovement";
 import { bindingForType } from "@/shared/lib/accountancy/voucherBinding";
 import { retreatReconciliation } from "./reconciliation";
@@ -149,12 +149,9 @@ export interface PostableVoucher {
 /**
  * The single GL writer (Phase 4 G5: legacy JournalEntry/JournalLine dropped — the
  * UniversalVoucher spine + VoucherGlLine children ARE the GL). Writes the spine's
- * GL lines (branch-stamped) and applies per-line `Account.balance` deltas with the
- * null-normalBalance group-nature fallback. Returns `{journalEntryId, universalVoucherId}`
+ * GL lines (branch-stamped). Balances are summed from these lines wherever they
+ * are shown — nothing is cached. Returns `{journalEntryId, universalVoucherId}`
  * (both the spine id since G5's self-ref).
- *
- * Ledger nature comes from each line's pre-loaded `account` when present; the
- * engine batch-loads any missing ledgers.
  */
 export async function engineGlArm(
     tx: Prisma.TransactionClient,
@@ -183,76 +180,6 @@ export async function engineGlArm(
 ): Promise<{ journalEntryId: number; universalVoucherId: number }> {
     const { date, description, lines, userId, branchId, postedAt } = args;
     assertGlBalanced(lines);
-
-    // Resolve each ledger's normal side for the balance delta. Use the caller's
-    // pre-loaded `account` when present; batch-load the rest. Null-normalBalance
-    // subsidiary (AR/AP) ledgers fall back to their group's natural side; a line
-    // with neither is skipped rather than mis-posted.
-    const natureById = new Map<number, Drcr | null>();
-    for (const l of lines) {
-        if (l.account) {
-            natureById.set(
-                l.accountId,
-                l.account.normalBalance
-                    ?? (l.account.group?.type ? defaultNormalBalanceForGroupType(l.account.group.type) : null),
-            );
-        }
-    }
-    const missing = [...new Set(lines.filter((l) => !natureById.has(l.accountId)).map((l) => l.accountId))];
-    if (missing.length > 0) {
-        const rows = await tx.account.findMany({
-            where:  { id: { in: missing } },
-            select: { id: true, normalBalance: true, group: { select: { type: true } } },
-        });
-        for (const r of rows) {
-            natureById.set(
-                r.id,
-                (r.normalBalance as Drcr | null)
-                    ?? (r.group?.type ? defaultNormalBalanceForGroupType(r.group.type as GroupTypeStr) : null),
-            );
-        }
-    }
-    // Money boundary: callers may hand us float sums (GST splits, discounts).
-    // Round once to 2dp here so the stored line and the balance delta are the
-    // SAME number — the Decimal(14,2) column would round on write anyway, and an
-    // unrounded delta would drift the cached Account.balance away from its lines.
-    //
-    // ONE statement for every line, not one per line. Each statement inside the
-    // transaction is a separate round trip to Supabase, and a bill's GL legs
-    // (body + CGST + SGST + one per tender + charges) add up fast. Two legs can
-    // land on the SAME ledger (two tender rows against one bank account), so the
-    // deltas are summed per account — in Postgres `numeric`, not in JS floats, so
-    // the arithmetic is exactly what N separate increments produced. `updatedAt`
-    // is stamped by hand: `@updatedAt` is a Prisma client-side feature that raw
-    // SQL does not get for free.
-    const deltaRows: { id: number; delta: string }[] = [];
-    for (const l of lines) {
-        const side = natureById.get(l.accountId) ?? null;
-        if (!side) continue;
-        deltaRows.push({
-            id:    l.accountId,
-            delta: balanceDelta(side, l.type, round2(toNumber(l.amount))).toFixed(2),
-        });
-    }
-    if (deltaRows.length > 0) {
-        await tx.$executeRaw`
-            UPDATE "Account" AS a
-               SET "balance"   = a."balance" + v."delta",
-                   "updatedAt" = NOW()
-              FROM (
-                    -- The deltas travel as text and are cast one element at a time:
-                    -- they are exact 2dp strings, and a whole-array text[]→numeric[]
-                    -- cast is a far less certain thing to rely on than this.
-                    SELECT t."id", SUM(t."delta"::numeric) AS "delta"
-                      FROM UNNEST(
-                            ${deltaRows.map((d) => d.id)}::int[],
-                            ${deltaRows.map((d) => d.delta)}::text[]
-                           ) AS t("id", "delta")
-                     GROUP BY t."id"
-                   ) AS v
-             WHERE a."id" = v."id"
-        `;
-    }
 
     // A posting dated inside an already-reconciled window invalidates that
     // reconciliation — pull each affected ledger's watermark back to the day
@@ -576,7 +503,7 @@ export interface CreatedVoucher {
 
 /**
  * Phase 5 5E: flip a DRAFT spine (its VoucherGlLine already written at create) to
- * POSTED and apply the Account.balance deltas. The spine IS the financial voucher
+ * POSTED. The spine IS the financial voucher
  * now (Voucher table dropped), so there is no second row to flip.
  */
 export async function enginePostSpine(
@@ -587,26 +514,12 @@ export async function enginePostSpine(
     const postedAt = opts.postedAt ?? new Date();
     const lines = await tx.voucherGlLine.findMany({
         where:  { universalVoucherId: spineId },
-        select: { accountId: true, type: true, amount: true },
+        select: { accountId: true },
     });
     const ids = [...new Set(lines.map((l) => l.accountId))];
-    const rows = ids.length === 0 ? [] : await tx.account.findMany({
-        where:  { id: { in: ids } },
-        select: { id: true, normalBalance: true, group: { select: { type: true } } },
-    });
-    const natureById = new Map<number, Drcr | null>();
-    for (const r of rows) {
-        natureById.set(r.id, (r.normalBalance as Drcr | null)
-            ?? (r.group?.type ? defaultNormalBalanceForGroupType(r.group.type as GroupTypeStr) : null));
-    }
-    for (const l of lines) {
-        const side = natureById.get(l.accountId) ?? null;
-        if (!side) continue;
-        await tx.account.update({ where: { id: l.accountId }, data: { balance: { increment: balanceDelta(side, l.type, toNumber(l.amount)) } } });
-    }
     // Same reconciliation retreat as engineGlArm — this is the OTHER path a spine
     // can reach POSTED by (engineCreateVoucher → enginePostSpine), and a DRAFT
-    // moves no balances, so posting is the moment the window turns dirty.
+    // counts in no balance, so posting is the moment the window turns dirty.
     const spine = await tx.universalVoucher.findUnique({
         where:  { id: spineId },
         select: { date: true, type: true, voucherNo: true },

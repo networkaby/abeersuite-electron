@@ -185,8 +185,6 @@ export async function saveOpeningBills(
         + existing.reduce((s, b) => s + signed(b.amount, b.type), 0);
     if (removed.length > 0) {
         const ids = removed.map((b) => b.universalVoucherId);
-        // Balances first: these postings are being withdrawn.
-        await reverseOpeningBalances(tx, ids);
         await tx.universalVoucher.deleteMany({ where: { id: { in: ids } } });
     }
 
@@ -206,12 +204,10 @@ export async function saveOpeningBills(
             data:  { voucherNo: b.ref.trim() || DEFAULT_OPENING_REF, date: new Date(`${b.date}T00:00:00.000Z`) },
         });
         if (Math.abs(b.amount - was.amount) > EPS || was.type !== args.type) {
-            await reverseOpeningBalances(tx, [b.universalVoucherId]);
             await tx.voucherGlLine.deleteMany({ where: { universalVoucherId: b.universalVoucherId } });
             await tx.voucherGlLine.create({
                 data: { universalVoucherId: b.universalVoucherId, accountId: args.accountId, type: args.type, amount: b.amount, seq: 0 },
             });
-            await applyOpeningBalances(tx, [b.universalVoucherId]);
         }
     }
 
@@ -243,8 +239,6 @@ export async function saveOpeningBills(
         created.push(uv.id);
     }
 
-    await applyOpeningBalances(tx, created);
-
     // The account now carries its opening through vouchers, so the scalar must
     // go — leaving both would count the same money twice in every report.
     await tx.account.update({
@@ -267,49 +261,3 @@ export async function saveOpeningBills(
     };
 }
 
-/** Apply the cached `Account.balance` delta for the given vouchers' legs. */
-async function applyOpeningBalances(tx: Prisma.TransactionClient, ids: number[]): Promise<void> {
-    await shiftBalances(tx, ids, 1);
-}
-
-/** Take those deltas back out again. */
-async function reverseOpeningBalances(tx: Prisma.TransactionClient, ids: number[]): Promise<void> {
-    await shiftBalances(tx, ids, -1);
-}
-
-/**
- * Move `Account.balance` by each leg of the given vouchers, in `sign` direction.
- *
- * `Account.balance` is a movement-only cache that every posting keeps current, so
- * an opening that is now a real posting has to be in it — which is also why the
- * conversion changes what the POS credit check sees, and why that was measured
- * before any of it ran (`pnpm opening:preview`).
- */
-async function shiftBalances(tx: Prisma.TransactionClient, ids: number[], sign: 1 | -1): Promise<void> {
-    if (ids.length === 0) return;
-    const lines = await tx.voucherGlLine.findMany({
-        where:  { universalVoucherId: { in: ids } },
-        select: { accountId: true, type: true, amount: true },
-    });
-    const accountIds = [...new Set(lines.map((l) => l.accountId))];
-    const accounts = await tx.account.findMany({
-        where:  { id: { in: accountIds } },
-        select: { id: true, normalBalance: true, group: { select: { type: true } } },
-    });
-    const nbById = new Map(accounts.map((a) => [
-        a.id,
-        a.normalBalance ?? (a.group?.type === "ASSET" || a.group?.type === "EXPENSE" ? "DEBIT" as const : "CREDIT" as const),
-    ]));
-
-    const delta = new Map<number, number>();
-    for (const l of lines) {
-        const nb = nbById.get(l.accountId);
-        if (!nb) continue;
-        const d = (nb === l.type ? 1 : -1) * Number(l.amount) * sign;
-        delta.set(l.accountId, round2((delta.get(l.accountId) ?? 0) + d));
-    }
-    for (const [accountId, d] of delta) {
-        if (Math.abs(d) < EPS) continue;
-        await tx.account.update({ where: { id: accountId }, data: { balance: { increment: d } } });
-    }
-}

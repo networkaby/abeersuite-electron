@@ -10,8 +10,7 @@ import { handleApiError } from "@/shared/lib/api";
 const schema = z.object({ reason: z.string().trim().min(1, "Cancel reason required") });
 
 // POST /api/accountancy/vouchers/[id]/cancel
-// Reverses the cached Account.balance and marks the spine CANCELLED (truth path
-// drops it). Phase 5 5E: the spine IS the financial voucher; `id` is the spine id.
+// Marks the spine CANCELLED, which drops it from every summed balance. Phase 5 5E: the spine IS the financial voucher; `id` is the spine id.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { user, response } = await requireAuth();
     if (response) return response;

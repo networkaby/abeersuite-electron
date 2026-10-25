@@ -22,7 +22,7 @@
 // DESTRUCTIVE — products and every transaction are unrecoverable.
 
 import {
-    makeSeedPool, purgeTransactions, purgeProducts, resetBalances, printKept,
+    makeSeedPool, purgeTransactions, purgeProducts, printKept,
 } from "./lib/purgeDemo";
 
 const pool = makeSeedPool();
@@ -30,9 +30,8 @@ const pool = makeSeedPool();
 async function main(): Promise<void> {
     console.log("Purging demo product catalog (contacts + settings preserved)…\n");
 
-    await purgeTransactions(pool, "[1/3]");
-    await purgeProducts(pool, "[2/3]");
-    await resetBalances(pool, "[3/3]");
+    await purgeTransactions(pool, "[1/2]");
+    await purgeProducts(pool, "[2/2]");
 
     await printKept(pool);
     console.log("\nDone. Products gone; contacts + settings untouched.");

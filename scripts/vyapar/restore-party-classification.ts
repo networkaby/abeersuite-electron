@@ -103,19 +103,6 @@ async function main(): Promise<void> {
     for (const f of fix) await cur.query(`update "Account" set "groupId" = $2 where id = $1`, [f.id, f.groupId]);
     console.log(`\nrestored ${fix.length} party classification(s) — no other field touched`);
 
-    // A group change INVERTS how Account.balance reads. The cached figure is held in
-    // the account's natural direction and, for a party ledger with a null
-    // normalBalance, the GROUP decides what natural means — so moving a supplier from
-    // Sundry Debtors (asset) to Sundry Creditors (liability) flips the sign of a
-    // number nobody edited. Five ledgers went wrong that way the first time this ran,
-    // and it only surfaced because reconcile happened to run afterwards.
-    const { spawnSync } = await import("node:child_process");
-    const r = spawnSync("npx", ["tsx", "--tsconfig", "scripts/vyapar/tsconfig.json",
-        "prisma/seeds/recompute-balances.ts", "--apply"],
-        { stdio: "pipe", shell: process.platform === "win32", encoding: "utf8" });
-    const tail = String(r.stdout ?? "").trim().split("\n").filter(Boolean).slice(-1)[0] ?? "";
-    console.log(`  balances: ${r.status === 0 ? tail : "FAILED — run seed:recompute-balances --apply by hand"}\n`);
-
     await cur.end();
     await ref.end();
 }

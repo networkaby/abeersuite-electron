@@ -2,7 +2,6 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
 import { requireAuth, userCanActOnVoucher } from "@/shared/lib/auth/permissions";
-import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { reverseStockMovement, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
@@ -81,14 +80,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     select: { status: true, lines: { select: { accountId: true, type: true, amount: true } } },
                 });
                 if (spine && spine.status === "POSTED") {
-                    // Reverse the cached Account.balance, then mark the spine CANCELLED so
-                    // the truth path (Balance Sheet / ledgers) drops it. No counter-entry.
-                    // Nature must resolve exactly as the engine resolved it on post
-                    // (group fallback included). The old `!` here fed `null` into
-                    // balanceDelta, which fails `=== "DEBIT"` and silently reverses
-                    // a null-nature ledger on the CREDIT side — a sign flip, not a
-                    // no-op. Skip a line whose nature is genuinely unknown instead.
-                    await applyLineBalances(tx, spine.lines, "reverse");
                     await setSpineLifecycle(tx, voucher.universalVoucherId, {
                         status: "CANCELLED", cancelledAt: new Date(), cancelledById: userId,
                         cancelReason: `Voucher ${voucher.universalVoucher?.voucherNo ?? ""} cancelled: ${reason.trim()}`,

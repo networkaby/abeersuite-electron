@@ -3,19 +3,17 @@
 // The decided edit model: an edit keeps the SAME voucher AND the same GL entry —
 // we rewrite the JE's lines in place (so receipts allocated against its
 // journalEntryId stay linked), rewrite the stock rows, and rebuild the cached
-// Account.balance / InvProduct.stock from truth (recompute, not reverse+reapply).
+// InvProduct.stock from truth (recompute, not reverse+reapply).
 //
 // Called by the inventory-voucher PATCH route AFTER it has snapshotted the old
 // state to AuditLog and written the new voucher lines/charges/tenders/header.
 // The exact sequence here is proven by the parity harness `runEditCycle`.
 //
-// ORDER MATTERS: rewrite spine GL lines → recomputeAccountBalances
-// (it reads the spine); stock rows → recomputeProductStock.
+// ORDER MATTERS: stock rows → recomputeProductStock.
 
 import type { Prisma } from "@/generated/prisma/client";
 import { saleToSpec, type TradingStockLine } from "./voucherMappers";
 import { GlBuildError, type PostVoucherInput } from "./postInvVoucher";
-import { recomputeAccountBalances } from "./aggregateLedger";
 import { assertGlBalanced, glLineRow } from "./transactionEngine";
 import { recordStockMovement, recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { carryStatementMatches, changedLedgers, retreatReconciliation } from "./reconciliation";
@@ -86,7 +84,6 @@ export async function reapplyTradingVoucherInPlace(
         // The lines were just re-minted: carry each bank tick to its twin.
         await carryStatementMatches(tx, journalEntryId, oldLines);
 
-        await recomputeAccountBalances(tx, [...new Set([...oldLines.map((l) => l.accountId), ...spec.glLines.map((l) => l.accountId)])]);
 
         // A backdated edit pulls the lock back only on the ledgers whose amounts
         // it changed — all of them when the date moved — from the earlier of the

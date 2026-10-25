@@ -1,7 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, userCanVoucher } from "@/shared/lib/auth/permissions";
-import { applyLineBalances } from "@/modules/accountancy/lib/balance";
 import { setSpineLifecycle } from "@/modules/accountancy/lib/transactionEngine";
 import { z } from "zod";
 import { validateRequest } from "@/shared/lib/api";
@@ -38,10 +37,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     try {
         await prisma.$transaction(async (tx) => {
-            // Nature resolves with the group fallback, exactly as the engine
-            // resolved it when posting — a party ledger carries a null
-            // normalBalance, and a bare read used to sign-flip its delta.
-            await applyLineBalances(tx, entry.lines, "reverse");
 
             // Phase 4 (flag-only cancel): the POSTED-only gate already excludes a
             // CANCELLED entry from every count, so we do NOT post a reversal JE.

@@ -8,7 +8,6 @@
 //   1. Generate a sequential reference (`CV-2026-NNNN`)
 //   2. Create the `Voucher` row with `type = CONTRA`, `status = POSTED`
 //   3. Create the mirror `JournalEntry` so reports / Day Book see it
-//   4. Update `Account.balance` for each affected ledger
 //
 // Used by:
 //   • POST `/api/accountancy/vouchers` + `[id]/post`  — the existing Contra

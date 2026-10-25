@@ -84,7 +84,7 @@ async function upsert(client, table, pk, rows, jsonCols, cacheCols, force) {
     // EXCLUDED.*) keeps the statement valid if the row shape ever narrows.
     //
     // Except a running total (`cacheColumns` in the registry): the source's
-    // Account.balance is the SOURCE's sum, and this replica may hold sales the source
+    // stock is the SOURCE's sum, and this replica may hold sales the source
     // has not received yet. The total is inserted with a new row (NOT NULL) but never
     // overwritten on an existing one; rebuildTotals.js re-sums it from the local
     // ledger once this cycle's ledger rows are in.

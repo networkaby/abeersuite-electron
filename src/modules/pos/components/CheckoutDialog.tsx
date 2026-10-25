@@ -113,7 +113,14 @@ export function CheckoutDialog({
     // blocks Confirm. An order advance / a receipt are optional in amount, so
     // only `submitting` (+ a parent-supplied guard) gates them.
     const confirmBlocked = submitting || confirmDisabled || (isSale && creditLimitBreached);
+    // The unpaid part first eats into an advance the customer holds (the sale
+    // debit just nets against it); only the rest is real credit.
+    const fromAdvance = isSale ? Math.min(onCredit, Math.max(0, -ledgerBalance)) : 0;
+    const realCredit = Math.max(0, onCredit - fromAdvance);
     const underpayTitle = isConfirm ? undefined
+        : isSale && fromAdvance > 0.01
+            ? `${formatInr(fromAdvance)} adjusted from advance — ${formatInr(Math.max(0, -ledgerBalance) - fromAdvance)} advance left` +
+              (realCredit > 0.01 ? `, ${formatInr(realCredit)} on credit` : "")
         : isSale && onCredit > 0.01
             ? `${formatInr(onCredit)} goes on the customer's account — they owe it after this bill`
             : overpaid > 0 ? "Extra is collected as a Receipt voucher — clears old dues first, leftover becomes advance" : undefined;
@@ -155,10 +162,18 @@ export function CheckoutDialog({
                             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Collected</div>
                             <div className="font-semibold">{formatInr(collected)}</div>
                         </div>
-                        <div>
-                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">On credit</div>
-                            <div className={`font-semibold ${onCredit > 0 ? "text-amber-600" : "text-emerald-600"}`}>{formatInr(onCredit)}</div>
-                        </div>
+                        {fromAdvance > 0.005 && realCredit <= 0.005 ? (
+                            <div>
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">From advance</div>
+                                <div className="font-semibold text-emerald-600">{formatInr(fromAdvance)}</div>
+                            </div>
+                        ) : (
+                            <div>
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">On credit</div>
+                                <div className={`font-semibold ${realCredit > 0 ? "text-amber-600" : "text-emerald-600"}`}>{formatInr(realCredit)}</div>
+                                {fromAdvance > 0.005 && <div className="text-[10px] text-emerald-600">+ {formatInr(fromAdvance)} from advance</div>}
+                            </div>
+                        )}
                     </div>
                     )}
 
@@ -166,6 +181,12 @@ export function CheckoutDialog({
                         <div className="flex items-center justify-between rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-sm dark:border-teal-500/30 dark:bg-teal-500/10">
                             <span className="flex items-center gap-1.5 text-teal-700 dark:text-teal-300"><CreditCard size={14} /> Gift card {giftCardCode} − {formatInr(giftCardApplied)}</span>
                             <span className="font-semibold tabular-nums">Pay {formatInr(payableTotal)}</span>
+                        </div>
+                    )}
+
+                    {isSale && fromAdvance > 0.005 && (
+                        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+                            {underpayTitle}
                         </div>
                     )}
 

@@ -491,10 +491,10 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- A running total (Account.balance, stock, a gift card's balance) is rebuilt
+    -- A running total (stock, a gift card's balance) is rebuilt
     -- from the ledger on each side and never shipped as a change: an UPDATE that
     -- moved nothing else is not a write the cloud needs to hear about. Shipping it
-    -- would put one outbox row per touched account behind every sale, and each of
+    -- would put one outbox row per touched product behind every sale, and each of
     -- them would carry a total another machine may since have moved on from.
     -- updatedAt is ignored alongside: Prisma stamps it on every increment, so
     -- without that the comparison would never be equal.
