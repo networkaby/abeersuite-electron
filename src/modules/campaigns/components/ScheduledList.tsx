@@ -220,7 +220,7 @@ export default function ScheduledList() {
                                     <ul>
                                         {pendingCampaigns.map((c) => (
                                             <li key={c.id} className={row}>
-                                                <span className="flex w-40 shrink-0 items-center gap-1 tabular-nums"><CalendarClock size={14} className="text-muted-foreground" />{when(c.scheduledAt!)}</span>
+                                                <span className="flex w-48 shrink-0 items-center gap-1 whitespace-nowrap tabular-nums"><CalendarClock size={14} className="text-muted-foreground" />{when(c.scheduledAt!)}</span>
                                                 <span className="min-w-0 flex-1 truncate"><span className="font-medium">{c.title}</span> <span className="text-muted-foreground">· {c.name}</span></span>
                                                 <Button variant="ghost" size="sm" disabled={busyCampaign === c.id} onClick={() => void sendCampaignNow(c)}>
                                                     <Send size={14} /> Send now
@@ -286,8 +286,8 @@ export default function ScheduledList() {
                             <section className={card}>
                                 <SectionHead icon={Mail} title="Emails" note="Go out at the next half-hourly run." link={{ href: "/office/settings/email-templates", label: "Templates" }} />
                                 {data.emails.map((g) => (
-                                    <div key={g.kind} className="border-t first:border-t-0">
-                                        <p className="px-4 pt-2 text-xs font-medium text-muted-foreground">
+                                    <div key={g.kind} className="border-t py-1 first:border-t-0">
+                                        <p className="px-4 py-1.5 text-xs font-medium text-muted-foreground">
                                             {g.label}
                                             {!g.enabled && " — switched off, nothing goes"}
                                         </p>
