@@ -22,6 +22,7 @@ import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { channelOf } from "@/modules/campaigns/lib/post";
 import { ACTION_LABEL, MODE_LABEL, waStatusText, type DuePreview, type ReminderLogRow } from "@/shared/lib/whatsapp/dueReminderTypes";
 import CampaignsHeader from "./CampaignsHeader";
+import ScheduleTimeline from "./ScheduleTimeline";
 
 type EmailPreview = {
     kind: string;
@@ -89,6 +90,7 @@ export default function ScheduledList() {
     const [removed, setRemoved] = useState<Set<number>>(new Set());
     const [busyCampaign, setBusyCampaign] = useState<number | null>(null);
     const [filter, setFilter] = useState<Filter>("ALL");
+    const [view, setView] = useState<"TIMELINE" | "LIST">("TIMELINE");
     const [now, setNow] = useState(() => Date.now());
     useEffect(() => {
         const t = setInterval(() => setNow(Date.now()), 60_000);
@@ -185,7 +187,19 @@ export default function ScheduledList() {
                     }
                 />
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="mr-2 flex rounded-lg border p-0.5">
+                        {(["TIMELINE", "LIST"] as const).map((v) => (
+                            <button
+                                key={v}
+                                type="button"
+                                onClick={() => setView(v)}
+                                className={`rounded-md px-3 py-1 text-sm ${view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                            >
+                                {v === "TIMELINE" ? "Timeline" : "List"}
+                            </button>
+                        ))}
+                    </div>
                     {FILTERS.map((f) => (
                         <button
                             key={f.value}
@@ -198,7 +212,9 @@ export default function ScheduledList() {
                     ))}
                 </div>
 
-                {loading || !data || !r ? (
+                {view === "TIMELINE" ? (
+                    <ScheduleTimeline show={show} />
+                ) : loading || !data || !r ? (
                     <div className="flex justify-center py-16"><Loader2 className="animate-spin text-muted-foreground" /></div>
                 ) : (
                     <>

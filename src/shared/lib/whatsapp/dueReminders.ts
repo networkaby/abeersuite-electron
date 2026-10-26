@@ -430,6 +430,12 @@ export async function remindersSentToday(now = new Date()): Promise<ReminderLogR
     return rows.map(toLogRow);
 }
 
+/** Every reminder logged in [from, to) — the Scheduled timeline. Newest first, capped. */
+export async function remindersBetween(from: Date, to: Date, take = 500): Promise<ReminderLogRow[]> {
+    const rows = await prisma.dueReminderLog.findMany({ where: { createdAt: { gte: from, lt: to } }, orderBy: { createdAt: "desc" }, take });
+    return rows.map(toLogRow);
+}
+
 /** "Remove" on the Scheduled page: put a party on the Never remind list. */
 export async function excludeFromReminders(accountId: number): Promise<void> {
     const s = await readSettings();

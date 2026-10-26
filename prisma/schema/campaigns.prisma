@@ -56,6 +56,8 @@ model Post {
   channels      String[]
   status        String      @default("DRAFT")
   scheduledAt   DateTime?
+  /// Last "Post due — share now" staff push; the job waits POST_REMINDER_EVERY_MIN after it.
+  lastRemindedAt DateTime?
   googleType    String      @default("UPDATE")
   googleButton  String?
   mediaKey      String?
