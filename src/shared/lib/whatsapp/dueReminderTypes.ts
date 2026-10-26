@@ -1,7 +1,7 @@
 // Due reminders — the shapes and words the office screens and the server share.
 // No DB, no React: safe to import from either side. Server logic is in
 // dueReminders.ts; the screens are Receivables (send one / send to all) and
-// Settings → Due Reminders (automation).
+// Campaigns → Due Reminders (automation).
 
 export type ReminderTone = "SOFT" | "FIRM";
 export type ReminderAction = ReminderTone | "CALL_LIST";
@@ -70,6 +70,18 @@ export type ReminderLogRow = {
     waStatus: string;
     pushStatus: string;
     waError: string | null;
+};
+
+/** Today's automatic run as Campaigns → Scheduled shows it (previewDueReminders). */
+export type DuePreview = {
+    enabled: boolean;
+    sendTime: string;
+    ranToday: boolean;
+    /** Today is in "Don't send on". */
+    skipToday: boolean;
+    dailyCap: number;
+    /** Who it would reach; `overCap` = past the day's message limit, waits for tomorrow. */
+    list: { accountId: number; name: string; balance: number; oldestDays: number; rule: string; action: ReminderAction; overCap: boolean }[];
 };
 
 /** Per party: when it was last reminded — the dialogs warn on a repeat. */

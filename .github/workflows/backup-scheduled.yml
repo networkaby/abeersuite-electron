@@ -66,9 +66,8 @@ jobs:
             AUTH=()
           fi
 
-          # The hourly tick also rings the abandoned-cart / payment-pending emails (each
-          # sent once, safe to repeat). Never blocks the backup. Due reminders are rung
-          # by cron-job.org instead.
+          # The same hourly tick wakes the abandoned-cart / payment-pending emails
+          # (each sent once, safe to repeat). Due reminders are rung by cron-job.org.
           curl -sS --max-time 120 -o /dev/null "${AUTH[@]}" "${APP_BASE_URL%/}/api/cron/email-reminders" || true
 
           BODY=$(curl -sS --max-time 30 "${AUTH[@]}" "${APP_BASE_URL%/}/api/cron/backup-due" || echo '')

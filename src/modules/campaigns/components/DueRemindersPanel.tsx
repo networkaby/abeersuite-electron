@@ -1,6 +1,6 @@
 "use client";
 
-// Settings → Due Reminders. The automation switch, the age/amount rules, the
+// Campaigns → Due Reminders. The automation switch, the age/amount rules, the
 // customers who are never reminded, a preview of each message and the recent
 // sends. One Save writes the whole page (PUT /api/due-reminders/settings).
 
