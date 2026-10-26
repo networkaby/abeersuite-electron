@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requirePermission } from "@/shared/lib/auth/permissions";
+import { requireDueRemindersPage } from "@/modules/campaigns/lib/campaignAccess";
 import { validateRequest } from "@/shared/lib/api";
 import { getReminderSettings, recentReminders, saveReminderSettings } from "@/shared/lib/whatsapp/dueReminders";
 
-// GET /api/due-reminders/settings — Settings → Due Reminders: the switch, rules,
+// GET /api/due-reminders/settings — Campaigns → Due Reminders: the switch, rules,
 // never-remind list and the recent sends.
 export async function GET() {
-    const { response } = await requirePermission("settings:manage");
+    const { response } = await requireDueRemindersPage();
     if (response) return response;
     const [settings, log] = await Promise.all([getReminderSettings(), recentReminders(50)]);
     return NextResponse.json({ settings, log });
@@ -37,7 +37,7 @@ const schema = z.object({
 
 // PUT /api/due-reminders/settings — save the whole page.
 export async function PUT(req: Request) {
-    const { response } = await requirePermission("settings:manage");
+    const { response } = await requireDueRemindersPage();
     if (response) return response;
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;

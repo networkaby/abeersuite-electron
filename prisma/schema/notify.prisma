@@ -127,7 +127,7 @@ model EmailOptOut {
 //
 // A party's whole balance due, sent by hand (Receivables → Send), to many at once
 // (Send to all) or by the daily job when a rule matches. Edited at
-// /office/settings/due-reminders; wording is the DUE_SOFT / DUE_FIRM templates.
+// /office/campaigns/due-reminders; wording is the DUE_SOFT / DUE_FIRM templates.
 // See src/shared/lib/whatsapp/dueReminders.ts.
 
 /// Singleton (id = 1). The automation switch and its limits.

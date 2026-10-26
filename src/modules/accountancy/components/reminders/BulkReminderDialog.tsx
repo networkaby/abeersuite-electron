@@ -113,7 +113,7 @@ export function BulkReminderDialog({
                                 {progress.noWa} got the app notification only (no mobile, or the template is not approved yet).
                             </p>
                         )}
-                        <p className="text-xs text-muted-foreground">Every send is listed under Settings → Due Reminders → Recent reminders.</p>
+                        <p className="text-xs text-muted-foreground">Every send is listed under Campaigns → Due Reminders → Recent reminders.</p>
                     </div>
                 ) : (
                     <>

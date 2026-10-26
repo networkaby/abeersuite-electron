@@ -1,5 +1,5 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { DueRemindersPanel } from "@/modules/settings/components/DueRemindersPanel";
+import { DueRemindersPanel } from "@/modules/campaigns/components/DueRemindersPanel";
 
 export const metadata = { title: "Due Reminders" };
 

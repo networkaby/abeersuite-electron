@@ -12,6 +12,7 @@ import { DUE_LINK_CODE, WA_APP_LINK, WA_BILL_LINK_BASE } from "./billTemplates";
 import { partySelect, sendPushAndWhatsApp } from "./notifyBill";
 import { sendTemplatedEmail } from "@/shared/lib/email/notifyEmail";
 import type {
+    DuePreview,
     LastReminded,
     ReminderAction,
     ReminderLogRow,
@@ -81,9 +82,15 @@ export async function loadPartyDues(): Promise<Map<number, PartyDue>> {
 
 // ── Settings ────────────────────────────────────────────────────────────────
 
+/** The one settings row. A plain read every time; only the very first call creates it. */
+async function readSettings() {
+    return (await prisma.dueReminderSettings.findUnique({ where: { id: 1 } }))
+        ?? prisma.dueReminderSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
+}
+
 export async function getReminderSettings(): Promise<ReminderSettings> {
     const [s, rules] = await Promise.all([
-        prisma.dueReminderSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} }),
+        readSettings(),
         prisma.dueReminderRule.findMany({ orderBy: [{ minDays: "asc" }, { id: "asc" }] }),
     ]);
     const names = s.excludedAccountIds.length
@@ -132,7 +139,13 @@ export async function saveReminderSettings(input: Omit<ReminderSettings, "exclud
 
 export async function recentReminders(take = 50): Promise<ReminderLogRow[]> {
     const rows = await prisma.dueReminderLog.findMany({ orderBy: { createdAt: "desc" }, take });
-    return rows.map((r) => ({
+    return rows.map(toLogRow);
+}
+
+type LogDbRow = Awaited<ReturnType<typeof prisma.dueReminderLog.findMany>>[number];
+
+function toLogRow(r: LogDbRow): ReminderLogRow {
+    return {
         id: r.id,
         at: r.createdAt.toISOString(),
         accountId: r.accountId,
@@ -143,7 +156,7 @@ export async function recentReminders(take = 50): Promise<ReminderLogRow[]> {
         waStatus: r.waStatus,
         pushStatus: r.pushStatus,
         waError: r.waError,
-    }));
+    };
 }
 
 /** Last reminder per party in the past `days` — the dialogs' "already reminded" warning. */
@@ -245,7 +258,7 @@ export async function sendDueReminder(args: {
 export async function sendDueReminders(accountIds: number[], tone: ReminderTone, mode: ReminderMode, sentById: number | null): Promise<SendResult[]> {
     const [dues, s] = await Promise.all([
         loadPartyDues(),
-        prisma.dueReminderSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {}, select: { excludedAccountIds: true } }),
+        readSettings(),
     ]);
     const excluded = new Set(mode === "ALL" ? s.excludedAccountIds : []);
     const out: SendResult[] = [];
@@ -272,33 +285,21 @@ function istNow(now: Date) {
 
 export type RunResult = { ran: boolean; reason?: string; sent?: number; callList?: number; skipped?: number };
 
+type SettingsRow = Awaited<ReturnType<typeof readSettings>>;
+type Planned = { due: PartyDue; rule: ReminderRule };
+
 /**
- * Called by the hourly tick and the daily Vercel cron. Sends on the first call
- * at or after the send time, once per India day; a day in "Don't send on" is
- * marked done without sending.
+ * Who the job would remind right now, strongest rule first per party — before the
+ * daily cap, which `runDueReminders` counts on real sends. `skipped` = matched a
+ * rule but already reminded (today, or within the rule's repeat window).
+ * Shared by the job and Campaigns → Scheduled's preview so the two never differ.
  */
-export async function runDueReminders(now = new Date()): Promise<RunResult> {
-    if (IS_COUNTER_PC) return { ran: false, reason: "counter" };
-    const s = await prisma.dueReminderSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
-    if (!s.enabled) return { ran: false, reason: "off" };
-    const t = istNow(now);
-    if (s.lastRunDate === t.date) return { ran: false, reason: "already ran today" };
-    if (t.time < s.sendTime) return { ran: false, reason: `waiting for ${s.sendTime}` };
-
-    // Claim the day first, so two ticks arriving together cannot both send.
-    const claimed = await prisma.dueReminderSettings.updateMany({
-        where: { id: 1, OR: [{ lastRunDate: null }, { lastRunDate: { not: t.date } }] },
-        data: { lastRunDate: t.date },
-    });
-    if (claimed.count === 0) return { ran: false, reason: "already ran today" };
-    if (s.skipDays.includes(t.weekday)) return { ran: false, reason: "not a sending day" };
-
+async function planDueReminders(s: SettingsRow, now: Date): Promise<{ list: Planned[]; skipped: number }> {
     const rules = (await prisma.dueReminderRule.findMany({ where: { enabled: true } }))
         .map(toRule)
         .sort((a, b) => b.minDays - a.minDays || b.minAmount - a.minAmount);
-    if (!rules.length) return { ran: true, sent: 0 };
+    if (!rules.length) return { list: [], skipped: 0 };
 
-    duesCache = null;
     const dues = await loadPartyDues();
     const excluded = new Set(s.excludedAccountIds);
     const minBalance = Number(s.minBalance);
@@ -321,10 +322,10 @@ export async function runDueReminders(now = new Date()): Promise<RunResult> {
         orderBy: { createdAt: "desc" },
         select: { accountId: true, ruleId: true, mode: true, createdAt: true },
     });
-    const todayStart = new Date(`${t.date}T00:00:00+05:30`);
+    const todayStart = new Date(`${istNow(now).date}T00:00:00+05:30`);
 
-    let sent = 0, callList = 0, skipped = 0;
-    const toCall: PartyDue[] = [];
+    const list: Planned[] = [];
+    let skipped = 0;
     for (const due of dues.values()) {
         if (excluded.has(due.accountId) || due.balance < minBalance || insideLimit(due)) continue;
         // The strongest rule this party matches.
@@ -341,6 +342,37 @@ export async function runDueReminders(now = new Date()): Promise<RunResult> {
                 : due.oldestBillDate ? new Date(due.oldestBillDate) : new Date(0);
             if (last.createdAt >= since) { skipped++; continue; }
         }
+        list.push({ due, rule });
+    }
+    return { list, skipped };
+}
+
+/**
+ * Called by the cron-job.org daytime tick and the daily Vercel cron. Sends on the
+ * first call at or after the send time, once per India day; a day in "Don't send on" is
+ * marked done without sending.
+ */
+export async function runDueReminders(now = new Date()): Promise<RunResult> {
+    if (IS_COUNTER_PC) return { ran: false, reason: "counter" };
+    const s = await readSettings();
+    if (!s.enabled) return { ran: false, reason: "off" };
+    const t = istNow(now);
+    if (s.lastRunDate === t.date) return { ran: false, reason: "already ran today" };
+    if (t.time < s.sendTime) return { ran: false, reason: `waiting for ${s.sendTime}` };
+
+    // Claim the day first, so two ticks arriving together cannot both send.
+    const claimed = await prisma.dueReminderSettings.updateMany({
+        where: { id: 1, OR: [{ lastRunDate: null }, { lastRunDate: { not: t.date } }] },
+        data: { lastRunDate: t.date },
+    });
+    if (claimed.count === 0) return { ran: false, reason: "already ran today" };
+    if (s.skipDays.includes(t.weekday)) return { ran: false, reason: "not a sending day" };
+
+    duesCache = null;
+    const plan = await planDueReminders(s, now);
+    let sent = 0, callList = 0, skipped = plan.skipped;
+    const toCall: PartyDue[] = [];
+    for (const { due, rule } of plan.list) {
         if (rule.action !== "CALL_LIST" && sent >= s.dailyCap) { skipped++; continue; }
         const r = await sendDueReminder({ accountId: due.accountId, action: rule.action, mode: "AUTO", ruleId: rule.id, due });
         if (r.status !== "sent") { skipped++; continue; }
@@ -356,8 +388,51 @@ export async function runDueReminders(now = new Date()): Promise<RunResult> {
             roleIds: ["R1", "R2"],
             title: `${toCall.length} customer${toCall.length > 1 ? "s" : ""} to call for dues`,
             body: shown + more,
-            link: "/office/settings/due-reminders",
+            link: "/office/campaigns/due-reminders",
         }).catch(() => undefined);
     }
     return { ran: true, sent, callList, skipped };
+}
+
+// ── Campaigns → Scheduled ───────────────────────────────────────────────────
+
+/**
+ * Today's automatic run as Campaigns → Scheduled shows it: whether and when it
+ * goes, and who it would reach (the same plan the job uses, with the daily cap
+ * applied in the same order). Empty once today's run is done — those sends are
+ * in `sentToday`.
+ */
+export async function previewDueReminders(now = new Date()): Promise<DuePreview> {
+    const s = await readSettings();
+    const t = istNow(now);
+    const ranToday = s.lastRunDate === t.date;
+    const skipToday = s.skipDays.includes(t.weekday);
+    const base = { enabled: s.enabled, sendTime: s.sendTime, ranToday, skipToday, dailyCap: s.dailyCap };
+    if (!s.enabled || ranToday || skipToday) return { ...base, list: [] };
+
+    const { list } = await planDueReminders(s, now);
+    let messages = 0;
+    return {
+        ...base,
+        list: list.map(({ due, rule }) => {
+            const overCap = rule.action !== "CALL_LIST" && messages++ >= s.dailyCap;
+            return { accountId: due.accountId, name: due.name, balance: due.balance, oldestDays: due.oldestDays, rule: rule.name, action: rule.action, overCap };
+        }),
+    };
+}
+
+/** Every reminder logged since India midnight — manual, Send to all and the job. */
+export async function remindersSentToday(now = new Date()): Promise<ReminderLogRow[]> {
+    const rows = await prisma.dueReminderLog.findMany({
+        where: { createdAt: { gte: new Date(`${istNow(now).date}T00:00:00+05:30`) } },
+        orderBy: { createdAt: "desc" },
+    });
+    return rows.map(toLogRow);
+}
+
+/** "Remove" on the Scheduled page: put a party on the Never remind list. */
+export async function excludeFromReminders(accountId: number): Promise<void> {
+    const s = await readSettings();
+    if (s.excludedAccountIds.includes(accountId)) return;
+    await prisma.dueReminderSettings.update({ where: { id: 1 }, data: { excludedAccountIds: { push: accountId } } });
 }

@@ -62,8 +62,8 @@ export const WA_TEMPLATE_WHEN: Record<WaTemplateKind, string> = {
     ESTIMATE: "Estimate saved (POS or office). Auto send starts off — send from the 3-dot menu.",
     REPAIR_RECEIVED: "A repair stage with the action \"Tell customer: repair received\" is completed.",
     REPAIR_READY: "A repair stage with the action \"Tell customer: repair ready\" is completed.",
-    DUE_SOFT: "Send reminder on Receivables, Send to all, or a Soft rule under Settings → Due Reminders.",
-    DUE_FIRM: "Send reminder on Receivables, Send to all, or a Firm rule under Settings → Due Reminders.",
+    DUE_SOFT: "Send reminder on Receivables, Send to all, or a Soft rule under Campaigns → Due Reminders.",
+    DUE_FIRM: "Send reminder on Receivables, Send to all, or a Firm rule under Campaigns → Due Reminders.",
     DEAL_CREATED: "A new deal or sales enquiry is created from customer chat or CRM.",
     HELP_CREATED: "A new help desk support ticket is created from customer chat or Help module.",
     TICKET_AUTO_REPLY: "A customer with open tickets or deals sends an incoming WhatsApp message.",
@@ -117,7 +117,7 @@ export function isRepairKind(kind: WaTemplateKind): boolean {
 }
 
 /** Due reminders announce a party's whole balance, not one document — their
- *  refId is the party's Account id and Settings → Due Reminders decides when
+ *  refId is the party's Account id and Campaigns → Due Reminders decides when
  *  they go, not the Auto send switch. */
 export function isDueKind(kind: WaTemplateKind): kind is "DUE_SOFT" | "DUE_FIRM" {
     return kind === "DUE_SOFT" || kind === "DUE_FIRM";
