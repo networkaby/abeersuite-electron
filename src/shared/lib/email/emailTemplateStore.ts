@@ -16,6 +16,9 @@ import {
  * the same shape as whatsapp/waTemplateStore.ts.
  */
 
+/** Whether staff can send a kind by hand now: "ready", or why not. */
+export type EmailSendState = "ready" | "off" | "not-configured";
+
 export type EmailTemplateView = {
     kind: EmailTemplateKind;
     enabled: boolean;

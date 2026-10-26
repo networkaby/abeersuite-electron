@@ -3,30 +3,30 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { fillBody, type WaFieldValues } from "@/shared/lib/whatsapp/billTemplates";
 import { loadVoucherMessage, type EmailRow, type NotifyResult } from "@/shared/lib/whatsapp/notifyBill";
-import { emailBodyToHtml, isEmailKind, type EmailTemplateDraft } from "./emailTemplates";
-import { getEmailTemplate } from "./emailTemplateStore";
+import { emailBodyToHtml, isEmailKind, EMAIL_TEMPLATE_KINDS, type EmailTemplateDraft, type EmailTemplateKind } from "./emailTemplates";
+import { getEmailTemplate, type EmailSendState } from "./emailTemplateStore";
 import { isEmailConfigured, sendEmail } from "./sendEmail";
 
 /**
  * Email a posted customer document — the email twin of notifyBill's WhatsApp.
  *
- * Automatic only (notifyBill on a save): goes when the kind is switched on AND
- * its Auto send is on AND the customer has a verified email. No manual send
- * yet — owner's call 2026-10-26. Same skip rules as WhatsApp
+ * Automatic (notifyBill on a save) goes when the kind is switched on AND its
+ * Auto send is on AND the customer has a verified email; staff's "Send email"
+ * (3-dot menu) only needs the kind on. Same skip rules as WhatsApp
  * (loadVoucherMessage: walk-in, supplier, …).
  *
  * One EmailNotification row per (kind, document), claimed before sending, so a
- * retried save never emails twice. A FAILED row can be claimed again — the
- * next save of that document retries instead of reading "already sent".
+ * retried save or a second click never emails twice. A FAILED row can be claimed again — the
+ * next save or click retries instead of reading "already sent".
  * Never throws.
  */
-export async function notifyEmail(kind: string, uvId: number): Promise<NotifyResult> {
+export async function notifyEmail(kind: string, uvId: number, mode: { manual?: boolean } = {}): Promise<NotifyResult> {
     if (!isEmailKind(kind)) return { status: "skipped", reason: "not a customer document" };
     try {
         if (IS_COUNTER_PC) return { status: "skipped", reason: "counter" };
         const tpl = await getEmailTemplate(kind);
         if (!tpl.enabled) return { status: "skipped", reason: "template off" };
-        if (!tpl.autoSend) return { status: "skipped", reason: "auto off" };
+        if (!mode.manual && !tpl.autoSend) return { status: "skipped", reason: "auto off" };
         if (!isEmailConfigured()) return { status: "skipped", reason: "email not configured" };
 
         const m = await loadVoucherMessage(kind, uvId);
@@ -56,6 +56,15 @@ export async function sendFilled(to: string, draft: EmailTemplateDraft, values: 
     } catch (e) {
         return { error: (e instanceof Error ? e.message : String(e)).slice(0, 500) };
     }
+}
+
+/** Per kind, whether the 3-dot menu's "Send email" works now. */
+export async function emailSendStates(): Promise<Record<EmailTemplateKind, EmailSendState>> {
+    const configured = isEmailConfigured();
+    const pairs = await Promise.all(
+        EMAIL_TEMPLATE_KINDS.map(async (k) => [k, !configured ? "not-configured" : (await getEmailTemplate(k)).enabled ? "ready" : "off"] as const),
+    );
+    return Object.fromEntries(pairs) as Record<EmailTemplateKind, EmailSendState>;
 }
 
 /** Take the (kind, document) row: a new one, or a failed one back to pending.

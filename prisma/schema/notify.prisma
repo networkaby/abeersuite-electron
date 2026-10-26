@@ -76,7 +76,7 @@ model BillNotification {
 model EmailTemplate {
   kind      String   @id
   enabled   Boolean  @default(false)
-  /// Send by itself when the document is posted. Off = not sent (no manual send yet).
+  /// Send by itself when the document is posted. Off = only staff's "Send email".
   autoSend  Boolean  @default(true)
   subject   String
   body      String

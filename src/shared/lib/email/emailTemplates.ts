@@ -12,6 +12,7 @@
 import {
     WA_TEMPLATE_LABEL,
     WA_TEMPLATE_WHEN,
+    autoKindForVoucherType,
     fieldsFor,
     sampleValuesFor,
     type WaTemplateKind,
@@ -27,8 +28,7 @@ export const EMAIL_TEMPLATE_LABEL: Record<EmailTemplateKind, string> = Object.fr
 
 export const EMAIL_TEMPLATE_WHEN: Record<EmailTemplateKind, string> = {
     ...(Object.fromEntries(EMAIL_TEMPLATE_KINDS.map((k) => [k, WA_TEMPLATE_WHEN[k]])) as Record<EmailTemplateKind, string>),
-    // WhatsApp's wording points at its 3-dot send; email has none yet.
-    ESTIMATE: "Estimate saved (POS or office). Auto send starts off.",
+    ESTIMATE: "Estimate saved (POS or office). Auto send starts off — send from the 3-dot menu.",
 };
 
 export function isEmailKind(kind: string): kind is EmailTemplateKind {
@@ -36,6 +36,12 @@ export function isEmailKind(kind: string): kind is EmailTemplateKind {
 }
 
 /** UniversalVoucher type → the email kind that announces it, or null. */
+/** UniversalVoucher type → the email kind that announces it, or null. */
+export function emailKindForVoucherType(type: string): EmailTemplateKind | null {
+    const k = autoKindForVoucherType(type);
+    return k && isEmailKind(k) ? k : null;
+}
+
 /** Estimates start off, as on WhatsApp — staff make rough quotes. */
 export function emailAutoSendDefault(kind: EmailTemplateKind): boolean {
     return kind !== "ESTIMATE";

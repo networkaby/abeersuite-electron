@@ -130,7 +130,7 @@ export function EmailTemplatesPanel({ initialTemplates, sendReady }: Props) {
                         <Switch checked={enabled} onCheckedChange={setEnabled} />
                         Send by email
                     </label>
-                    <label className="flex items-center gap-2 text-sm" title="On: goes by itself when the document is posted. Off: no email for this kind.">
+                    <label className="flex items-center gap-2 text-sm" title="On: goes by itself when the document is posted. Off: only from the 3-dot menu's Send email.">
                         <Switch checked={autoSend} onCheckedChange={setAutoSend} disabled={!enabled} />
                         Auto send
                     </label>
