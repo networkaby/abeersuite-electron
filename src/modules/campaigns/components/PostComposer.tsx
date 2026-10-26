@@ -26,17 +26,12 @@ import {
 import CampaignsHeader from "./CampaignsHeader";
 import PostSharePanel from "./PostSharePanel";
 import PostProductPicker, { loadPostProducts } from "./PostProductPicker";
+import { toLocalInput } from "@/modules/campaigns/lib/campaign";
 
 type Form = Omit<PostInput, "link" | "scheduledAt"> & { link: string; scheduledAt: string };
 
 const blank: Form = { caption: "", link: "", channels: ["WA_CHANNEL", "GOOGLE_BUSINESS"], scheduledAt: "", googleType: "UPDATE", googleButton: "SHOP", campaignId: null, status: "DRAFT" };
 
-/** ISO → the "YYYY-MM-DDTHH:mm" a datetime-local box shows, in this PC's time. */
-const toLocalInput = (iso: string | null) => {
-    if (!iso) return "";
-    const d = new Date(iso);
-    return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-};
 
 const fromRow = (p: PostRow): Form => ({
     caption: p.caption,

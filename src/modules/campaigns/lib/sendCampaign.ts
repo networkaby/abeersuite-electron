@@ -39,6 +39,30 @@ export async function sendCampaign(id: number): Promise<void> {
     }
 }
 
+/**
+ * Scheduled campaigns whose time has come, sent by the communications job. Each
+ * is moved SCHEDULED → SENT in its own guarded update first, so a run racing a
+ * Send now (or another run) sends it once. Returns how many went.
+ */
+export async function runScheduledCampaigns(now = new Date()): Promise<{ sent: number }> {
+    const due = await prisma.campaign.findMany({
+        where: { status: "SCHEDULED", scheduledAt: { lte: now }, channel: "PUSH" },
+        select: { id: true },
+        orderBy: { scheduledAt: "asc" },
+    });
+    let sent = 0;
+    for (const { id } of due) {
+        const { count } = await prisma.campaign.updateMany({
+            where: { id, status: "SCHEDULED" },
+            data: { status: "SENT", sentAt: new Date() },
+        });
+        if (count === 0) continue;
+        await sendCampaign(id);
+        sent++;
+    }
+    return { sent };
+}
+
 export type CampaignStats = { customers: number; reached: number; shown: number; tapped: number };
 
 /** Per campaign: customers messaged, reached (push service took it), shown on the phone, tapped. */

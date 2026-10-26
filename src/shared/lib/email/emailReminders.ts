@@ -52,16 +52,72 @@ async function alreadyDone(kind: string, ids: number[]): Promise<Set<number>> {
     return new Set(rows.map((r) => r.refId));
 }
 
-async function cartReminders(before: Date, after: Date): Promise<number> {
-    if (!(await getEmailTemplate("CART_ABANDONED")).enabled) return 0;
+/** Carts the next run would email — shared by the run and the Scheduled preview. */
+async function cartsToRemind(before: Date, after: Date) {
     const carts = await prisma.shopCart.findMany({
         where: { updatedAt: { lt: before, gt: after } },
-        select: { id: true, personId: true, lines: true },
+        select: { id: true, personId: true, lines: true, updatedAt: true },
         orderBy: { updatedAt: "asc" },
         take: BATCH * 2,
     });
     const done = await alreadyDone("CART_ABANDONED", carts.map((c) => c.id));
-    const todo = carts.filter((c) => !done.has(c.id)).slice(0, BATCH);
+    return carts.filter((c) => !done.has(c.id)).slice(0, BATCH);
+}
+
+/** Unpaid online orders the next run would email — shared by the run and the preview. */
+async function ordersToRemind(before: Date, after: Date) {
+    const orders = await prisma.ticketOrder.findMany({
+        where: {
+            legacyStatus: "PENDING_PAYMENT",
+            paymentMethod: "ONLINE",
+            personId: { not: null },
+            ticket: { createdAt: { lt: before, gt: after } },
+        },
+        select: { ticketId: true, totalPaise: true, ticket: { select: { createdAt: true } }, person: { select: { name: true, emails: emailsSelect } } },
+        take: BATCH * 2,
+    });
+    const done = await alreadyDone("PAYMENT_PENDING", orders.map((o) => o.ticketId));
+    return orders.filter((x) => !done.has(x.ticketId)).slice(0, BATCH);
+}
+
+export type EmailReminderPreview = {
+    kind: "CART_ABANDONED" | "PAYMENT_PENDING";
+    /** False = the template is switched off, so nothing of this kind goes. */
+    enabled: boolean;
+    rows: { refId: number; name: string; amountPaise: number | null; since: Date }[];
+};
+
+/** Who the next email run would reach, for Campaigns → Scheduled. Read-only. */
+export async function previewEmailReminders(now = new Date()): Promise<EmailReminderPreview[]> {
+    if (IS_COUNTER_PC) return [];
+    const before = new Date(now.getTime() - REMINDER_AFTER_HOURS * 3_600_000);
+    const after = new Date(now.getTime() - REMINDER_MAX_AGE_DAYS * 86_400_000);
+    const [cartT, payT] = await Promise.all([getEmailTemplate("CART_ABANDONED"), getEmailTemplate("PAYMENT_PENDING")]);
+    const [carts, orders] = await Promise.all([
+        cartT.enabled ? cartsToRemind(before, after) : [],
+        payT.enabled ? ordersToRemind(before, after) : [],
+    ]);
+    const people = carts.length
+        ? await prisma.person.findMany({ where: { id: { in: carts.map((c) => c.personId) } }, select: { id: true, name: true } })
+        : [];
+    const nameOf = new Map(people.map((p) => [p.id, p.name]));
+    return [
+        {
+            kind: "CART_ABANDONED",
+            enabled: cartT.enabled,
+            rows: carts.map((c) => ({ refId: c.id, name: nameOf.get(c.personId) ?? "Customer", amountPaise: null, since: c.updatedAt })),
+        },
+        {
+            kind: "PAYMENT_PENDING",
+            enabled: payT.enabled,
+            rows: orders.map((o) => ({ refId: o.ticketId, name: o.person?.name ?? "Customer", amountPaise: o.totalPaise, since: o.ticket.createdAt })),
+        },
+    ];
+}
+
+async function cartReminders(before: Date, after: Date): Promise<number> {
+    if (!(await getEmailTemplate("CART_ABANDONED")).enabled) return 0;
+    const todo = await cartsToRemind(before, after);
     if (!todo.length) return 0;
 
     const people = await prisma.person.findMany({
@@ -110,19 +166,8 @@ async function cartValues(name: string, lines: CartLine[]) {
 
 async function paymentReminders(before: Date, after: Date): Promise<number> {
     if (!(await getEmailTemplate("PAYMENT_PENDING")).enabled) return 0;
-    const orders = await prisma.ticketOrder.findMany({
-        where: {
-            legacyStatus: "PENDING_PAYMENT",
-            paymentMethod: "ONLINE",
-            personId: { not: null },
-            ticket: { createdAt: { lt: before, gt: after } },
-        },
-        select: { ticketId: true, totalPaise: true, ticket: { select: { createdAt: true } }, person: { select: { name: true, emails: emailsSelect } } },
-        take: BATCH * 2,
-    });
-    const done = await alreadyDone("PAYMENT_PENDING", orders.map((o) => o.ticketId));
     let sent = 0;
-    for (const o of orders.filter((x) => !done.has(x.ticketId)).slice(0, BATCH)) {
+    for (const o of await ordersToRemind(before, after)) {
         if (!o.person) continue;
         const r = await sendTemplatedEmail({
             kind: "PAYMENT_PENDING",

@@ -3,14 +3,15 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Bell, Send, Trash2 } from "lucide-react";
+import { Bell, CalendarClock, Send, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { SearchableSelect } from "@/shared/components/SearchableSelect";import { extractApiError } from "@/shared/lib/api/extractApiError";
+import { SearchableSelect } from "@/shared/components/SearchableSelect";
+import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import {
     CAMPAIGN_AUDIENCES,
@@ -18,6 +19,8 @@ import {
     CAMPAIGN_CHANNELS,
     CAMPAIGN_TITLE_MAX,
     campaignBody,
+    scheduleTimeError,
+    toLocalInput,
     type CampaignInput,
     type CampaignRow,
 } from "@/modules/campaigns/lib/campaign";
@@ -58,6 +61,8 @@ export default function CampaignEditor({
     const [options, setOptions] = useState<Options | null>(null);
     const [saving, setSaving] = useState(false);
     const sent = campaign?.status === "SENT";
+    const scheduled = campaign?.status === "SCHEDULED";
+    const [when, setWhen] = useState(toLocalInput(campaign?.scheduledAt ?? null));
 
     useEffect(() => {
         axios
@@ -116,6 +121,39 @@ export default function CampaignEditor({
         }
     }
 
+    /** Saves the latest wording, then puts it on the schedule (or moves its time). */
+    async function schedule() {
+        if (!campaign) return;
+        const at = new Date(when);
+        const bad = scheduleTimeError(at);
+        if (bad) return void toast.error(bad);
+        setSaving(true);
+        try {
+            await axios.patch(`/api/campaigns/${campaign.id}`, form);
+            await axios.post(`/api/campaigns/${campaign.id}/schedule`, { at: at.toISOString() });
+            toast.success(`Scheduled for ${at.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}`);
+            onSaved();
+        } catch (e) {
+            toast.error(extractApiError(e, "Failed to schedule the campaign"));
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    async function unschedule() {
+        if (!campaign) return;
+        setSaving(true);
+        try {
+            await axios.post(`/api/campaigns/${campaign.id}/schedule`, { at: null });
+            toast.success("Taken off the schedule");
+            onSaved();
+        } catch (e) {
+            toast.error(extractApiError(e, "Failed to cancel the schedule"));
+        } finally {
+            setSaving(false);
+        }
+    }
+
     async function remove() {
         if (!campaign) return;
         if (!(await confirmAction({ title: `Delete "${campaign.name}"?`, body: "This cannot be undone.", confirmLabel: "Delete" }))) return;
@@ -136,7 +174,9 @@ export default function CampaignEditor({
                     <DialogDescription>
                         {sent
                             ? "This campaign was sent and is kept as history."
-                            : "Save it as a draft, or send it to every customer with notifications on."}
+                            : scheduled
+                              ? `Scheduled for ${new Date(campaign!.scheduledAt!).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })} — edits keep the time.`
+                              : "Save it as a draft, send it now, or schedule it for later."}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -219,10 +259,34 @@ export default function CampaignEditor({
                             </p>
                         </div>
 
+                        <div className="space-y-1.5">
+                            <Label htmlFor="cmp-when">Schedule for (optional)</Label>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Input id="cmp-when" type="datetime-local" className="w-auto" value={when} onChange={(e) => setWhen(e.target.value)} />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={schedule}
+                                    disabled={saving || !campaign || !canSend || !when}
+                                    title={!campaign ? "Save it first" : !canSend ? "Needs the Send campaigns tick" : undefined}
+                                >
+                                    <CalendarClock className="mr-1.5 h-4 w-4" /> {scheduled ? "Move to this time" : "Schedule"}
+                                </Button>
+                                {scheduled && (
+                                    <Button type="button" variant="ghost" onClick={unschedule} disabled={saving || !canSend}>
+                                        Cancel schedule
+                                    </Button>
+                                )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">Goes out at the first half-hourly run on or after this time. Between 8:00 am and 8:00 pm.</p>
+                        </div>
+
+                        {!scheduled && (
                         <label className="flex items-center gap-2 text-sm">
                             <Checkbox checked={form.status === "READY"} onCheckedChange={(v) => set("status", v === true ? "READY" : "DRAFT")} />
                             Ready to send (checked by the writer)
                         </label>
+                        )}
                     </fieldset>
 
                     <div>

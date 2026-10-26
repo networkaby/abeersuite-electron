@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { runDueReminders } from "@/shared/lib/whatsapp/dueReminders";
 import { runEmailReminders } from "@/shared/lib/email/emailReminders";
 import { runPostReminders } from "@/modules/campaigns/lib/postReminders";
+import { runScheduledCampaigns } from "@/modules/campaigns/lib/sendCampaign";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +12,8 @@ export const maxDuration = 300;
  * GET /api/cron/communications — every pending customer message and social post, in one call.
  *
  * Woken every 30 minutes from 08:00 to 20:00 IST by cron-job.org. Runs the due
- * reminders, the email reminders and the post reminders side by side; each is
+ * reminders, the email reminders, the post reminders and any
+ * scheduled campaign whose time has come, side by side; each is
  * safe to repeat and decides for itself whether anything is due. One failing
  * does not stop the others — its error is logged and returned under its name.
  * Backup is not part of this: Vercel's nightly cron owns it.
@@ -24,7 +26,7 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const jobs = { dueReminders: runDueReminders, emailReminders: runEmailReminders, postReminders: runPostReminders };
+    const jobs = { dueReminders: runDueReminders, emailReminders: runEmailReminders, postReminders: runPostReminders, campaigns: runScheduledCampaigns };
     const settled = await Promise.allSettled(Object.values(jobs).map((run) => run()));
     const out: Record<string, unknown> = {};
     Object.keys(jobs).forEach((name, i) => {

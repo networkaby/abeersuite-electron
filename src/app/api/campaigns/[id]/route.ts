@@ -6,6 +6,7 @@ import { requireCampaignsPage } from "@/modules/campaigns/lib/campaignAccess";
 
 /**
  * PATCH  /api/campaigns/:id — save changes. A sent campaign is history: locked.
+ *        A scheduled one keeps its status and time; only its content changes.
  * DELETE /api/campaigns/:id — remove a draft or ready one; a sent one stays.
  */
 
@@ -21,11 +22,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (error) return error;
 
     try {
-        const { count } = await prisma.campaign.updateMany({ where: { id, status: { not: "SENT" } }, data });
-        if (count === 0) {
-            const exists = await prisma.campaign.findUnique({ where: { id }, select: { id: true } });
-            return exists ? locked() : NextResponse.json({ error: "Campaign not found" }, { status: 404 });
-        }
+        const cur = await prisma.campaign.findUnique({ where: { id }, select: { status: true } });
+        if (!cur) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+        // A scheduled campaign stays scheduled through an edit; Schedule / Cancel move it.
+        const { status, ...fields } = data;
+        const { count } = await prisma.campaign.updateMany({
+            where: { id, status: cur.status === "SCHEDULED" ? "SCHEDULED" : { notIn: ["SENT", "SCHEDULED"] } },
+            data: cur.status === "SCHEDULED" ? fields : { ...fields, status },
+        });
+        if (count === 0) return locked();
         const row = await prisma.campaign.findUnique({ where: { id }, select: CAMPAIGN_SELECT });
         return NextResponse.json(row);
     } catch (e) {

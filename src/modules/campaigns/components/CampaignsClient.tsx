@@ -15,6 +15,7 @@ import CampaignEditor from "./CampaignEditor";
 const STATUS_TONE: Record<string, string> = {
     DRAFT: "bg-muted text-muted-foreground",
     READY: "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
+    SCHEDULED: "bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300",
     SENT: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
 };
 
@@ -88,6 +89,8 @@ export default function CampaignsClient() {
                                         <span className="font-medium">{c.name}</span>
                                         <Badge variant="secondary" className={STATUS_TONE[c.status]}>
                                             {labelOf(CAMPAIGN_STATUSES, c.status)}
+                                            {c.status === "SCHEDULED" && c.scheduledAt &&
+                                                ` · ${new Date(c.scheduledAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}`}
                                         </Badge>
                                         <span className="text-xs text-muted-foreground">{labelOf(CAMPAIGN_CHANNELS, c.channel)}</span>
                                         {c.coupon && (

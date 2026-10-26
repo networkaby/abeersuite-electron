@@ -15,10 +15,11 @@ export const CAMPAIGN_AUDIENCES = [
     { value: "ALL_PUSH", label: "All customers with notifications on" },
 ] as const;
 
-/** DRAFT and READY are set by staff; SENT only by the send step (phase 2). */
+/** DRAFT and READY are set by staff; SCHEDULED by Schedule; SENT only by the send step. */
 export const CAMPAIGN_STATUSES = [
     { value: "DRAFT", label: "Draft" },
     { value: "READY", label: "Ready" },
+    { value: "SCHEDULED", label: "Scheduled" },
     { value: "SENT", label: "Sent" },
 ] as const;
 
@@ -64,6 +65,7 @@ export const CAMPAIGN_SELECT = {
     audience: true,
     status: true,
     sentAt: true,
+    scheduledAt: true,
     createdAt: true,
     updatedAt: true,
     createdBy: { select: { name: true } },
@@ -81,9 +83,40 @@ export type CampaignRow = {
     audience: string;
     status: string;
     sentAt: string | null;
+    scheduledAt: string | null;
     createdAt: string;
     updatedAt: string;
     createdBy: { name: string } | null;
     /** Sent campaigns only: customers messaged, reached, shown on the phone, tapped. */
     stats?: { customers: number; reached: number; shown: number; tapped: number } | null;
+};
+
+/**
+ * The 30-minute communications job rings from 08:00 to 20:00 IST only, so a
+ * scheduled time must fall in that span (inclusive) and lie in the future — a
+ * later time would sit unsent until next morning's first run.
+ */
+export const SCHEDULE_FIRST_HOUR = 8;
+export const SCHEDULE_LAST_HOUR = 20;
+
+/** Why this time cannot be used, or null when it can. */
+export function scheduleTimeError(at: Date, now = new Date()): string | null {
+    if (Number.isNaN(at.getTime())) return "Pick a date and time";
+    if (at.getTime() <= now.getTime()) return "Pick a time in the future";
+    const [h, m] = at.toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false }).split(":").map(Number);
+    const mins = h * 60 + m;
+    if (mins < SCHEDULE_FIRST_HOUR * 60 || mins > SCHEDULE_LAST_HOUR * 60) return "Pick a time between 8:00 am and 8:00 pm";
+    return null;
+}
+
+export const campaignScheduleSchema = z.object({
+    /** ISO time to send at; null takes the campaign off the schedule (back to Ready). */
+    at: z.string().datetime({ offset: true }).nullable(),
+});
+
+/** ISO → the "YYYY-MM-DDTHH:mm" a datetime-local box shows, in this PC's time. */
+export const toLocalInput = (iso: string | null) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 };

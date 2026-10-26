@@ -1036,6 +1036,7 @@ CREATE TABLE IF NOT EXISTS "Campaign" (
     "audience" TEXT NOT NULL DEFAULT 'ALL_PUSH',
     "status" TEXT NOT NULL DEFAULT 'DRAFT',
     "sentAt" TIMESTAMP(3),
+    "scheduledAt" TIMESTAMP(3),
     "createdById" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -1055,6 +1056,8 @@ ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "audience" TEXT NOT NULL DEFAULT
 ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'DRAFT';
 ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "sentAt" TIMESTAMP(3);
 ALTER TABLE "Campaign" ALTER COLUMN "sentAt" DROP NOT NULL;
+ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "scheduledAt" TIMESTAMP(3);
+ALTER TABLE "Campaign" ALTER COLUMN "scheduledAt" DROP NOT NULL;
 ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "createdById" INTEGER;
 ALTER TABLE "Campaign" ALTER COLUMN "createdById" DROP NOT NULL;
 ALTER TABLE "Campaign" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
@@ -5467,6 +5470,9 @@ CREATE INDEX IF NOT EXISTS "Call_updatedAt_idx" ON "Call"("updatedAt");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "Campaign_status_createdAt_idx" ON "Campaign"("status", "createdAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "Campaign_status_scheduledAt_idx" ON "Campaign"("status", "scheduledAt");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "Campaign_couponId_idx" ON "Campaign"("couponId");

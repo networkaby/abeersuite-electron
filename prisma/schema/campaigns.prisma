@@ -9,7 +9,8 @@
 
 /// One campaign. `channel` "PUSH" | "WHATSAPP" (WhatsApp not wired yet);
 /// `audience` "ALL_PUSH" (every customer with notifications on); `status`
-/// "DRAFT" | "READY" | "SENT". Strings, not enums: values will grow, and an enum
+/// "DRAFT" | "READY" | "SCHEDULED" | "SENT" (SCHEDULED = sent by the communications
+/// job at the first run on or after `scheduledAt`). Strings, not enums: values will grow, and an enum
 /// ADD VALUE needs a migration of its own.
 model Campaign {
   id          Int       @id @default(autoincrement())
@@ -24,6 +25,7 @@ model Campaign {
   audience    String    @default("ALL_PUSH")
   status      String    @default("DRAFT")
   sentAt      DateTime?
+  scheduledAt DateTime?
   createdById Int?
   createdBy   User?     @relation("CampaignCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime  @default(now())
@@ -31,6 +33,7 @@ model Campaign {
   posts       Post[]
 
   @@index([status, createdAt])
+  @@index([status, scheduledAt])
   @@index([couponId])
 }
 
