@@ -5,14 +5,6 @@
     {
       "path": "/api/cron/backup",
       "schedule": "30 16 * * *"
-    },
-    {
-      "path": "/api/cron/due-reminders",
-      "schedule": "30 6 * * *"
-    },
-    {
-      "path": "/api/cron/email-reminders",
-      "schedule": "0 5 * * *"
     }
   ]
 }

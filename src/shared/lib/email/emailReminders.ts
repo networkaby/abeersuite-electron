@@ -8,7 +8,7 @@ import { getEmailTemplate } from "./emailTemplateStore";
 import { sendTemplatedEmail } from "./notifyEmail";
 
 /**
- * The shop reminder emails, run by the hourly tick (/api/cron/email-reminders):
+ * The shop reminder emails, run every 30 minutes by /api/cron/communications:
  *   - Abandoned cart — a signed-in customer's cart untouched for
  *     REMINDER_AFTER_HOURS. Once per cart (ShopCart.id).
  *   - Payment pending — an online-payment order still unpaid after

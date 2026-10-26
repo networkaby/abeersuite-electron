@@ -8,8 +8,8 @@ export const maxDuration = 300;
 /**
  * GET /api/cron/due-reminders — the daily due-reminder job.
  *
- * Woken every 30 minutes from 08:00 to 20:00 IST by cron-job.org and, as a
- * floor, by the daily Vercel cron (vercel.json, 12:00 IST). The job itself decides: it sends on the
+ * Not scheduled on its own any more: /api/cron/communications runs it every 30
+ * minutes (08:00–20:00 IST, cron-job.org). Kept for a manual run. The job decides: it sends on the
  * first call at or after Campaigns → Due Reminders' send time, once per India
  * day, and only while automatic reminders are switched on.
  *
