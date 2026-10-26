@@ -66,10 +66,6 @@ jobs:
             AUTH=()
           fi
 
-          # The same hourly tick wakes the due-reminder job; it decides for itself
-          # whether its send time has come and runs once a day. Never blocks the backup.
-          curl -sS --max-time 120 -o /dev/null "${AUTH[@]}" "${APP_BASE_URL%/}/api/cron/due-reminders" || true
-
           BODY=$(curl -sS --max-time 30 "${AUTH[@]}" "${APP_BASE_URL%/}/api/cron/backup-due" || echo '')
 
           # Fail CLOSED. Failing open would turn an app outage into 24 full dumps a
