@@ -81,9 +81,15 @@ export async function loadPartyDues(): Promise<Map<number, PartyDue>> {
 
 // ── Settings ────────────────────────────────────────────────────────────────
 
+/** The one settings row. A plain read every time; only the very first call creates it. */
+async function readSettings() {
+    return (await prisma.dueReminderSettings.findUnique({ where: { id: 1 } }))
+        ?? prisma.dueReminderSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
+}
+
 export async function getReminderSettings(): Promise<ReminderSettings> {
     const [s, rules] = await Promise.all([
-        prisma.dueReminderSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} }),
+        readSettings(),
         prisma.dueReminderRule.findMany({ orderBy: [{ minDays: "asc" }, { id: "asc" }] }),
     ]);
     const names = s.excludedAccountIds.length
@@ -245,7 +251,7 @@ export async function sendDueReminder(args: {
 export async function sendDueReminders(accountIds: number[], tone: ReminderTone, mode: ReminderMode, sentById: number | null): Promise<SendResult[]> {
     const [dues, s] = await Promise.all([
         loadPartyDues(),
-        prisma.dueReminderSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {}, select: { excludedAccountIds: true } }),
+        readSettings(),
     ]);
     const excluded = new Set(mode === "ALL" ? s.excludedAccountIds : []);
     const out: SendResult[] = [];
@@ -273,13 +279,13 @@ function istNow(now: Date) {
 export type RunResult = { ran: boolean; reason?: string; sent?: number; callList?: number; skipped?: number };
 
 /**
- * Called by the hourly tick and the daily Vercel cron. Sends on the first call
- * at or after the send time, once per India day; a day in "Don't send on" is
+ * Called by the cron-job.org daytime tick and the daily Vercel cron. Sends on the
+ * first call at or after the send time, once per India day; a day in "Don't send on" is
  * marked done without sending.
  */
 export async function runDueReminders(now = new Date()): Promise<RunResult> {
     if (IS_COUNTER_PC) return { ran: false, reason: "counter" };
-    const s = await prisma.dueReminderSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
+    const s = await readSettings();
     if (!s.enabled) return { ran: false, reason: "off" };
     const t = istNow(now);
     if (s.lastRunDate === t.date) return { ran: false, reason: "already ran today" };
