@@ -10,14 +10,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { fillBody } from "@/shared/lib/whatsapp/billTemplates";
 import {
     EMAIL_BODY_MAX,
     EMAIL_SUBJECT_MAX,
     EMAIL_TEMPLATE_DEFAULTS,
     EMAIL_TEMPLATE_LABEL,
     EMAIL_TEMPLATE_WHEN,
+    UNSUBSCRIBE_SAMPLE_URL,
     checkEmailDraft,
+    fillEmail,
+    hasAutoSendSwitch,
+    isMarketingKind,
+    unsubscribeLine,
     emailFieldsFor,
     emailSampleValues,
     type EmailTemplateDraft,
@@ -130,10 +134,12 @@ export function EmailTemplatesPanel({ initialTemplates, sendReady }: Props) {
                         <Switch checked={enabled} onCheckedChange={setEnabled} />
                         Send by email
                     </label>
-                    <label className="flex items-center gap-2 text-sm" title="On: goes by itself when the document is posted. Off: only from the 3-dot menu's Send email.">
-                        <Switch checked={autoSend} onCheckedChange={setAutoSend} disabled={!enabled} />
-                        Auto send
-                    </label>
+                    {hasAutoSendSwitch(kind) && (
+                        <label className="flex items-center gap-2 text-sm" title="On: goes by itself when the document is posted. Off: only from the 3-dot menu's Send email.">
+                            <Switch checked={autoSend} onCheckedChange={setAutoSend} disabled={!enabled} />
+                            Auto send
+                        </label>
+                    )}
                 </div>
 
                 <div className="flex flex-wrap gap-1.5">
@@ -206,10 +212,18 @@ export function EmailTemplatesPanel({ initialTemplates, sendReady }: Props) {
                 <div className="rounded-lg border bg-background">
                     <div className="border-b px-3 py-2 text-sm">
                         <span className="text-muted-foreground">Subject: </span>
-                        <b className="break-words">{fillBody(draft.subject, samples)}</b>
+                        <b className="break-words">{fillEmail(draft.subject, samples)}</b>
                     </div>
-                    <p className="whitespace-pre-wrap break-words p-3 text-sm">{fillBody(draft.body, samples)}</p>
+                    <p className="whitespace-pre-wrap break-words p-3 text-sm">
+                        {fillEmail(draft.body, samples)}
+                        {isMarketingKind(kind) && <span className="text-muted-foreground">{unsubscribeLine(UNSUBSCRIBE_SAMPLE_URL)}</span>}
+                    </p>
                 </div>
+                {isMarketingKind(kind) && (
+                    <p className="text-xs text-muted-foreground">
+                        A promotional email — the unsubscribe line is added by itself and cannot be removed. Anyone who unsubscribes still gets bills and receipts.
+                    </p>
+                )}
             </div>
         </div>
     );

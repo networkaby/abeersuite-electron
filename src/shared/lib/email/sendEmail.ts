@@ -27,6 +27,8 @@ export type OutgoingEmail = {
     /** Plain-text body — always send one; some clients prefer it. */
     text: string;
     html?: string;
+    /** Extra mail headers — e.g. List-Unsubscribe on a marketing email. */
+    headers?: Record<string, string>;
 };
 
 export async function sendEmail(msg: OutgoingEmail): Promise<void> {
@@ -44,6 +46,7 @@ export async function sendEmail(msg: OutgoingEmail): Promise<void> {
             subject: msg.subject,
             text: msg.text,
             ...(msg.html ? { html: msg.html } : {}),
+            ...(msg.headers ? { headers: msg.headers } : {}),
         }),
     });
 

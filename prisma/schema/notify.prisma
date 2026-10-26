@@ -68,11 +68,13 @@ model BillNotification {
 // EmailTemplate is the email twin of WhatsAppTemplate: one row per document kind,
 // edited at /office/settings/email-templates. No approval step — the saved copy
 // is the one sent. Same friendly fields ({customer}, {billNo}, …) as WhatsApp.
-// EmailNotification is one row per (kind, document) emailed — claimed before
-// sending so a customer never gets two; a failed row is retried on the next save.
+// EmailNotification is one row per (kind, refId) emailed — claimed before
+// sending so a customer never gets two; a failed row is retried on the next
+// try. refId = UniversalVoucher id, Ticket id (repair, payment pending),
+// DueReminderLog id, ShopCart id, or Person id (welcome).
 // See src/shared/lib/email/notifyEmail.ts.
 
-/// One email kind ("SALE" | "RECEIPT" | …). A missing row = the code default, off.
+/// One email kind ("SALE" | "CART_ABANDONED" | …). A missing row = the code default, off.
 model EmailTemplate {
   kind      String   @id
   enabled   Boolean  @default(false)
@@ -83,7 +85,7 @@ model EmailTemplate {
   updatedAt DateTime @default(now()) @updatedAt
 }
 
-/// One document emailed to its customer — once per (kind, refId = UniversalVoucher id).
+/// One email sent — once per (kind, refId); see the note above for what refId is.
 model EmailNotification {
   id        Int      @id @default(autoincrement())
   kind      String
@@ -96,6 +98,29 @@ model EmailNotification {
   updatedAt DateTime @default(now()) @updatedAt
 
   @@unique([kind, refId])
+}
+
+/// A signed-in customer's shop / app cart, copied up from their device so the
+/// hourly job can see an abandoned one (the device keeps its own copy). Deleted
+/// when the cart is emptied — checkout empties it — so a new cart is a new row
+/// (new id) and gets its own one reminder (EmailNotification refId = id).
+model ShopCart {
+  id        Int      @id @default(autoincrement())
+  personId  Int      @unique
+  /// [{ productId, quantity }] — as the device holds it.
+  lines     Json
+  createdAt DateTime @default(now())
+  /// Moves only when the lines change, never on a same-cart page load.
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([updatedAt])
+}
+
+/// An email address that unsubscribed from marketing emails (abandoned cart,
+/// welcome). Bills, receipts, repairs and dues still go.
+model EmailOptOut {
+  email     String   @id
+  createdAt DateTime @default(now())
 }
 
 // ── Due reminders ────────────────────────────────────────────────────────────

@@ -3545,6 +3545,32 @@ ALTER TABLE "EmailNotification" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3
 ALTER TABLE "EmailNotification" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "ShopCart" (
+    "id" SERIAL NOT NULL,
+    "personId" INTEGER NOT NULL,
+    "lines" JSONB NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ShopCart_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "ShopCart" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "ShopCart" ADD COLUMN IF NOT EXISTS "personId" INTEGER NOT NULL;
+ALTER TABLE "ShopCart" ADD COLUMN IF NOT EXISTS "lines" JSONB NOT NULL;
+ALTER TABLE "ShopCart" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "ShopCart" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "EmailOptOut" (
+    "email" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "EmailOptOut_pkey" PRIMARY KEY ("email")
+);
+ALTER TABLE "EmailOptOut" ADD COLUMN IF NOT EXISTS "email" TEXT NOT NULL;
+ALTER TABLE "EmailOptOut" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "DueReminderSettings" (
     "id" INTEGER NOT NULL DEFAULT 1,
     "enabled" BOOLEAN NOT NULL DEFAULT false,
@@ -5939,6 +5965,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS "BillNotification_kind_refId_key" ON "BillNoti
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "EmailNotification_kind_refId_key" ON "EmailNotification"("kind", "refId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "ShopCart_personId_key" ON "ShopCart"("personId");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "ShopCart_updatedAt_idx" ON "ShopCart"("updatedAt");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "DueReminderLog_accountId_createdAt_idx" ON "DueReminderLog"("accountId", "createdAt");
@@ -8357,6 +8389,13 @@ DO $$ BEGIN
     END IF;
 END $$;
 DO $$ BEGIN
+    IF to_regclass('public."EmailOptOut"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "EmailOptOut";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "EmailOptOut"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('email');
+    END IF;
+END $$;
+DO $$ BEGIN
     IF to_regclass('public."EmailTemplate"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "EmailTemplate";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "EmailTemplate"
@@ -8769,6 +8808,13 @@ DO $$ BEGIN
     IF to_regclass('public."SavedFilter"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "SavedFilter";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "SavedFilter"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."ShopCart"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "ShopCart";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "ShopCart"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;

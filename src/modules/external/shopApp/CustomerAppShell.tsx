@@ -7,6 +7,7 @@ import { SessionProvider } from "next-auth/react";
 import { House, LayoutGrid, ShoppingBag, ShoppingCart, UserRound } from "lucide-react";
 import { Toaster } from "@/components/ui/sonner";
 import AppPushRegister from "@/modules/external/shopApp/AppPushRegister";
+import CartServerSync from "@/store/external/CartServerSync";
 import { useShopCartStore } from "@/store/external/shopCartStore";
 import { noSubscribe } from "@/modules/mobile/components/installPlace";
 import { APP } from "@/modules/external/shopApp/appPaths";
@@ -60,6 +61,7 @@ export default function CustomerAppShell({ children }: { children: React.ReactNo
                 {!pushed && <TabBar />}
             </div>
             <AppPushRegister />
+            <CartServerSync />
             <Toaster position="top-center" richColors />
         </SessionProvider>
     );

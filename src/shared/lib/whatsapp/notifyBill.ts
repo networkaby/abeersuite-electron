@@ -18,7 +18,7 @@ import {
 } from "./billTemplates";
 import { getApprovedWaTemplate, getWaTemplateDraft, isAutoSend } from "./waTemplateStore";
 import { recordBillMessage } from "@/modules/message/lib/customerMessages";
-import { notifyEmail } from "@/shared/lib/email/notifyEmail";
+import { notifyEmail, notifyRepairEmail } from "@/shared/lib/email/notifyEmail";
 
 export { autoKindForVoucherType };
 import { isBillSendConfigured, sendBillTemplate, sendTextMessage } from "./metaTemplates";
@@ -72,6 +72,9 @@ export async function notifyBill(kind: WaTemplateKind, universalVoucherId: numbe
 }
 
 export async function notifyRepair(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: number, mode: SendMode = {}): Promise<NotifyResult> {
+    // The stage completing also emails (Settings → Email Templates); the repair
+    // ticket's manual WhatsApp buttons do not.
+    const email = mode.manual ? null : notifyRepairEmail(kind, ticketId);
     try {
         const stop = await allowed(kind, mode);
         if (stop) return stop;
@@ -79,6 +82,8 @@ export async function notifyRepair(kind: "REPAIR_RECEIVED" | "REPAIR_READY", tic
     } catch (e) {
         console.error(`[notify-bill] ${kind} ticket ${ticketId} failed`, e);
         return { status: "skipped", reason: "error" };
+    } finally {
+        await email;
     }
 }
 
@@ -227,7 +232,9 @@ async function notifyVoucher(kind: WaTemplateKind, uvId: number): Promise<Notify
     });
 }
 
-async function notifyTicket(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: number): Promise<NotifyResult> {
+/** A repair ticket's customer and fields, for WhatsApp here and email in
+ *  email/notifyEmail.ts — or why it has nobody to tell. */
+export async function loadRepairMessage(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: number) {
     const t = await prisma.ticket.findUnique({
         where: { id: ticketId },
         select: {
@@ -238,18 +245,18 @@ async function notifyTicket(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: 
     const device = t?.repair?.device;
     const account = device?.account;
     const party = account?.person ?? account?.company;
-    if (!t || !device || !account || !party) return { status: "skipped", reason: "no customer" };
+    if (!t || !device || !account || !party) return { status: "skipped", reason: "no customer" } as NotifyResult;
 
     const deviceName = [device.brand, device.model].filter(Boolean).join(" ") || device.type || "device";
     const jobNo = `#${ticketId}`;
     const code = `t${ticketId}`;
-    const ready = kind === "REPAIR_READY";
-    return deliver({
-        kind,
-        refId: ticketId,
-        linkCode: code,
+    return {
         personId: account.personId,
         phones: party.phones,
+        emails: party.emails,
+        deviceName,
+        jobNo,
+        code,
         values: {
             customer: party.name,
             billNo: jobNo,
@@ -262,7 +269,22 @@ async function notifyTicket(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: 
             shop: getOrganisation().brandName,
             link: `${WA_BILL_LINK_BASE}${code}`,
             app: WA_APP_LINK,
-        },
+        } satisfies WaFieldValues,
+    };
+}
+
+async function notifyTicket(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: number): Promise<NotifyResult> {
+    const m = await loadRepairMessage(kind, ticketId);
+    if ("status" in m) return m;
+    const { deviceName, jobNo } = m;
+    const ready = kind === "REPAIR_READY";
+    return deliver({
+        kind,
+        refId: ticketId,
+        linkCode: m.code,
+        personId: m.personId,
+        phones: m.phones,
+        values: m.values,
         push: {
             title: ready ? `Your ${deviceName} is ready` : `Repair ${jobNo} received`,
             body: ready ? `Job ${jobNo} · ready for pickup · tap for details` : `${deviceName} · tap to track`,

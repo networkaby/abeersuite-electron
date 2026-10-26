@@ -12,6 +12,7 @@ import { Heart, GitCompare, ShoppingBag, Menu, UserRound, ShieldCheck } from "lu
 import ShopSearchBar from "./ShopSearchBar";
 import ShopBrandMark from "./ShopBrandMark";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import CartServerSync from "@/store/external/CartServerSync";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -42,6 +43,7 @@ export default function ShopHeader() {
     if (isCheckout) {
         return (
             <header className="sticky top-0 z-50 border-b border-border/80 bg-background/85 backdrop-blur-md supports-backdrop-filter:bg-background/70 pt-[env(safe-area-inset-top,0px)]">
+                <CartServerSync />
                 <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
                     <Link href="/" className="flex min-w-0 items-center gap-2 font-bold text-base leading-tight tracking-tight sm:text-lg">
                         <ShopBrandMark className="h-8 w-28 sm:h-9 sm:w-32" />
@@ -58,6 +60,7 @@ export default function ShopHeader() {
 
     return (
         <header className="sticky top-0 z-50 border-b border-border/80 bg-background/85 backdrop-blur-md supports-backdrop-filter:bg-background/70 pt-[env(safe-area-inset-top,0px)]">
+            <CartServerSync />
             <div className="mx-auto flex max-w-6xl flex-col gap-2.5 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3 md:flex-row md:items-center md:justify-between">
                 <div className="flex min-w-0 items-center justify-between gap-2 md:contents">
                     <div className="flex min-w-0 items-center gap-2 sm:gap-3">

@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
+import { notifyWelcomeEmail } from "@/shared/lib/email/notifyEmail";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
@@ -96,6 +97,10 @@ export async function POST(req: Request) {
                 update: { passwordHash },
             });
         }
+
+        // A brand-new account (no credential before) gets the welcome email —
+        // a password reset does not. After the response, never slows sign-up.
+        if (!existing) after(() => notifyWelcomeEmail(person.id));
 
         return NextResponse.json({ ok: true });
     } catch (e) {

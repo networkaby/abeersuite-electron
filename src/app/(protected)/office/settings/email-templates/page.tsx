@@ -13,8 +13,9 @@ export default async function EmailTemplatesPage() {
                 <div>
                     <h1 className="text-xl font-semibold">Email Templates</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        The email a customer gets for each bill, receipt, return, refund, order and estimate. It goes to the
-                        customer&apos;s <b>verified</b> email, together with the WhatsApp. No approval needed — the saved wording is sent.
+                        The email a customer gets for each bill, receipt, return, refund, order, estimate, repair update and due
+                        reminder (together with the WhatsApp), plus the shop&apos;s own emails: abandoned cart, payment pending and
+                        welcome. It goes only to the customer&apos;s <b>verified</b> email. No approval needed — the saved wording is sent.
                     </p>
                 </div>
                 <EmailTemplatesPanel initialTemplates={templates} sendReady={isEmailConfigured()} />

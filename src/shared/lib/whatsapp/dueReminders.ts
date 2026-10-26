@@ -8,8 +8,9 @@ import { loadCurrencySymbol } from "@/shared/lib/format/currencySymbol.server";
 import { getOutstandings } from "@/modules/accountancy/lib/outstandings";
 import { creditLimitsFor } from "@/shared/lib/accountancy/creditLimit";
 import { createSystemInboxNotifications } from "@/modules/message/lib/inbox";
-import { DUE_LINK_CODE, WA_APP_LINK, WA_BILL_LINK_BASE, type WaTemplateKind } from "./billTemplates";
+import { DUE_LINK_CODE, WA_APP_LINK, WA_BILL_LINK_BASE } from "./billTemplates";
 import { partySelect, sendPushAndWhatsApp } from "./notifyBill";
+import { sendTemplatedEmail } from "@/shared/lib/email/notifyEmail";
 import type {
     LastReminded,
     ReminderAction,
@@ -34,7 +35,7 @@ import type {
  * the party has paid but not yet linked to a bill — never a stored balance.
  */
 
-const KIND: Record<ReminderTone, WaTemplateKind> = { SOFT: "DUE_SOFT", FIRM: "DUE_FIRM" };
+const KIND: Record<ReminderTone, "DUE_SOFT" | "DUE_FIRM"> = { SOFT: "DUE_SOFT", FIRM: "DUE_FIRM" };
 const day = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" });
 
 // ── What each party owes ────────────────────────────────────────────────────
@@ -200,34 +201,39 @@ export async function sendDueReminder(args: {
         const kind = KIND[args.action];
         const amountText = formatAmount(due.balance);
         const since = due.oldestBillDate ? day.format(new Date(due.oldestBillDate)) : day.format(new Date());
+        const values = {
+            customer: party.name,
+            billNo: "",
+            amount: amountText,
+            date: since,
+            prevBalance: "",
+            balance: "",
+            device: "",
+            subject: "",
+            shop: getOrganisation().brandName,
+            link: `${WA_BILL_LINK_BASE}${DUE_LINK_CODE}`,
+            app: WA_APP_LINK,
+        };
         const { mobile, push, wa } = await sendPushAndWhatsApp({
             kind,
             refId: accountId,
             linkCode: DUE_LINK_CODE,
             personId: account.personId,
             phones: party.phones,
-            values: {
-                customer: party.name,
-                billNo: "",
-                amount: amountText,
-                date: since,
-                prevBalance: "",
-                balance: "",
-                device: "",
-                subject: "",
-                shop: getOrganisation().brandName,
-                link: `${WA_BILL_LINK_BASE}${DUE_LINK_CODE}`,
-                app: WA_APP_LINK,
-            },
+            values,
             push: {
                 title: args.action === "FIRM" ? `${withCurrency(amountText)} due since ${since}` : `Reminder: ${withCurrency(amountText)} due`,
                 body: "Tap to see your bills and pay by UPI",
             },
             summary: `Due reminder · ${withCurrency(amountText)}`,
         });
-        await prisma.dueReminderLog.create({
+        const row = await prisma.dueReminderLog.create({
             data: { ...log, mobile, pushStatus: push.status, waStatus: wa.status, waMessageId: wa.messageId ?? null, waError: wa.error ?? null },
+            select: { id: true },
         });
+        // The same reminder by email, when its card is on (Settings → Email
+        // Templates). One per reminder sent — the log row is its refId.
+        await sendTemplatedEmail({ kind, refId: row.id, emails: party.emails, values });
         return { accountId, status: "sent", waStatus: wa.status };
     } catch (e) {
         console.error(`[due-reminder] ${accountId} failed`, e);

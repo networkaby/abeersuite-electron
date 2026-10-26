@@ -1,57 +1,135 @@
 import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
-import { fillBody, type WaFieldValues } from "@/shared/lib/whatsapp/billTemplates";
-import { loadVoucherMessage, type EmailRow, type NotifyResult } from "@/shared/lib/whatsapp/notifyBill";
-import { emailBodyToHtml, isEmailKind, EMAIL_TEMPLATE_KINDS, type EmailTemplateDraft, type EmailTemplateKind } from "./emailTemplates";
+import { getOrganisation } from "@/shared/lib/org/getOrganisation";
+import { loadRepairMessage, loadVoucherMessage, type EmailRow, type NotifyResult } from "@/shared/lib/whatsapp/notifyBill";
+import {
+    EMAIL_TEMPLATE_KINDS,
+    PORTAL_URL,
+    SHOP_APP_URL,
+    emailBodyToHtml,
+    fillEmail,
+    hasAutoSendSwitch,
+    isDocEmailKind,
+    isMarketingKind,
+    unsubscribeLine,
+    type EmailFieldValues,
+    type EmailTemplateDraft,
+    type EmailTemplateKind,
+} from "./emailTemplates";
 import { getEmailTemplate, type EmailSendState } from "./emailTemplateStore";
 import { isEmailConfigured, sendEmail } from "./sendEmail";
+import { isOptedOut, unsubscribeUrl } from "./unsubscribe";
 
 /**
- * Email a posted customer document — the email twin of notifyBill's WhatsApp.
+ * Every customer email goes through `sendTemplatedEmail` — documents (here),
+ * repairs, due reminders, welcome (here) and the hourly cart / payment
+ * reminders (emailReminders.ts).
  *
- * Automatic (notifyBill on a save) goes when the kind is switched on AND its
- * Auto send is on AND the customer has a verified email; staff's "Send email"
- * (3-dot menu) only needs the kind on. Same skip rules as WhatsApp
- * (loadVoucherMessage: walk-in, supplier, …).
+ * It goes only when: the kind is switched on (Settings → Email Templates); for
+ * a kind with an Auto send switch, that is on too — unless staff pressed "Send
+ * email"; email is set up on this server; the customer has a VERIFIED email;
+ * and, for a marketing kind, they have not unsubscribed.
  *
- * One EmailNotification row per (kind, document), claimed before sending, so a
- * retried save or a second click never emails twice. A FAILED row can be claimed again — the
- * next save or click retries instead of reading "already sent".
+ * One EmailNotification row per (kind, refId), claimed before sending, so a
+ * retry or a second click never emails twice. A FAILED row can be claimed
+ * again, so a failure is retried instead of reading "already sent".
  * Never throws.
  */
-export async function notifyEmail(kind: string, uvId: number, mode: { manual?: boolean } = {}): Promise<NotifyResult> {
-    if (!isEmailKind(kind)) return { status: "skipped", reason: "not a customer document" };
+export async function sendTemplatedEmail(d: {
+    kind: EmailTemplateKind;
+    refId: number;
+    emails: EmailRow[];
+    /** Loaded only once the cheap checks pass. */
+    values: EmailFieldValues | (() => Promise<EmailFieldValues | NotifyResult>);
+    manual?: boolean;
+}): Promise<NotifyResult> {
+    const { kind, refId } = d;
     try {
         if (IS_COUNTER_PC) return { status: "skipped", reason: "counter" };
         const tpl = await getEmailTemplate(kind);
         if (!tpl.enabled) return { status: "skipped", reason: "template off" };
-        if (!mode.manual && !tpl.autoSend) return { status: "skipped", reason: "auto off" };
+        if (hasAutoSendSwitch(kind) && !d.manual && !tpl.autoSend) return { status: "skipped", reason: "auto off" };
         if (!isEmailConfigured()) return { status: "skipped", reason: "email not configured" };
-
-        const m = await loadVoucherMessage(kind, uvId);
-        if ("status" in m) return m;
-        const to = pickEmail(m.emails);
+        const to = pickEmail(d.emails);
         if (!to) return { status: "skipped", reason: "no email" };
+        const marketing = isMarketingKind(kind);
+        if (marketing && (await isOptedOut(to))) return { status: "skipped", reason: "unsubscribed" };
 
-        if (!(await claim(kind, uvId, to))) return { status: "already" };
-        const out = await sendFilled(to, tpl.draft, m.values);
+        const values = typeof d.values === "function" ? await d.values() : d.values;
+        if ("status" in values) return values as NotifyResult;
+
+        if (!(await claim(kind, refId, to))) return { status: "already" };
+        const out = await sendFilled(to, tpl.draft, values as EmailFieldValues, marketing ? unsubscribeUrl(to) : undefined);
         await prisma.emailNotification.update({
-            where: { kind_refId: { kind, refId: uvId } },
+            where: { kind_refId: { kind, refId } },
             data: { status: out.error ? "failed" : "sent", error: out.error ?? null },
         });
         return out.error ? { status: "skipped", reason: "send failed" } : { status: "sent" };
+    } catch (e) {
+        console.error(`[notify-email] ${kind} ${refId} failed`, e);
+        return { status: "skipped", reason: "error" };
+    }
+}
+
+/** A posted customer document (notifyBill on a save, or staff's "Send email"). */
+export async function notifyEmail(kind: string, uvId: number, mode: { manual?: boolean } = {}): Promise<NotifyResult> {
+    if (!isDocEmailKind(kind)) return { status: "skipped", reason: "not a customer document" };
+    // The party's emails come with the voucher, so load it first; the template
+    // checks inside sendTemplatedEmail still run before anything is claimed.
+    try {
+        const tpl = await getEmailTemplate(kind);
+        if (!tpl.enabled) return { status: "skipped", reason: "template off" };
+        const m = await loadVoucherMessage(kind, uvId);
+        if ("status" in m) return m;
+        return sendTemplatedEmail({ kind, refId: uvId, emails: m.emails, values: m.values, manual: mode.manual });
     } catch (e) {
         console.error(`[notify-email] ${kind} ${uvId} failed`, e);
         return { status: "skipped", reason: "error" };
     }
 }
 
-/** Fill a template and send it. Used by the real send and the settings test. */
-export async function sendFilled(to: string, draft: EmailTemplateDraft, values: Partial<WaFieldValues>): Promise<{ error?: string }> {
-    const text = fillBody(draft.body, values);
+/** A repair stage with "Tell customer: repair received / ready" completed. */
+export async function notifyRepairEmail(kind: "REPAIR_RECEIVED" | "REPAIR_READY", ticketId: number): Promise<NotifyResult> {
     try {
-        await sendEmail({ to, subject: fillBody(draft.subject, values), text, html: emailBodyToHtml(text) });
+        const tpl = await getEmailTemplate(kind);
+        if (!tpl.enabled || !tpl.autoSend) return { status: "skipped", reason: "template off" };
+        const m = await loadRepairMessage(kind, ticketId);
+        if ("status" in m) return m;
+        return sendTemplatedEmail({ kind, refId: ticketId, emails: m.emails, values: m.values });
+    } catch (e) {
+        console.error(`[notify-email] ${kind} ticket ${ticketId} failed`, e);
+        return { status: "skipped", reason: "error" };
+    }
+}
+
+/** A new portal account — once per person. */
+export async function notifyWelcomeEmail(personId: number): Promise<NotifyResult> {
+    const p = await prisma.person.findUnique({
+        where: { id: personId },
+        select: { name: true, emails: { select: { email: true, isPrimary: true, verifiedAt: true } } },
+    });
+    if (!p) return { status: "skipped", reason: "no person" };
+    return sendTemplatedEmail({
+        kind: "WELCOME",
+        refId: personId,
+        emails: p.emails,
+        values: { customer: p.name, shop: getOrganisation().brandName, link: PORTAL_URL, app: SHOP_APP_URL },
+    });
+}
+
+/** Fill a template and send it. Used by the real send and the settings test. */
+export async function sendFilled(to: string, draft: EmailTemplateDraft, values: EmailFieldValues, unsubscribe?: string): Promise<{ error?: string }> {
+    const text = fillEmail(draft.body, values) + (unsubscribe ? unsubscribeLine(unsubscribe) : "");
+    try {
+        await sendEmail({
+            to,
+            subject: fillEmail(draft.subject, values),
+            text,
+            html: emailBodyToHtml(text),
+            // One-click unsubscribe in Gmail / Outlook — keeps marketing mail out of spam.
+            ...(unsubscribe ? { headers: { "List-Unsubscribe": `<${unsubscribe}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } } : {}),
+        });
         return {};
     } catch (e) {
         return { error: (e instanceof Error ? e.message : String(e)).slice(0, 500) };
@@ -67,8 +145,8 @@ export async function emailSendStates(): Promise<Record<EmailTemplateKind, Email
     return Object.fromEntries(pairs) as Record<EmailTemplateKind, EmailSendState>;
 }
 
-/** Take the (kind, document) row: a new one, or a failed one back to pending.
- *  Both are single atomic writes, so two saves at once still send only once. */
+/** Take the (kind, refId) row: a new one, or a failed one back to pending.
+ *  Both are single atomic writes, so two tries at once still send only once. */
 async function claim(kind: string, refId: number, email: string): Promise<boolean> {
     try {
         await prisma.emailNotification.create({ data: { kind, refId, email, status: "pending" } });
