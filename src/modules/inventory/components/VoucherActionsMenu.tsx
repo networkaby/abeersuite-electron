@@ -12,7 +12,6 @@
 //                  restores via POST /api/audit/[id]/restore.
 //   • Duplicate  — POST /api/inventory/vouchers/[id]/duplicate → navigate to draft
 //   • Send on WhatsApp — a customer document whose template is switched on
-//   • Send email — the same, on Settings → Email Templates
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -25,7 +24,6 @@ import { extractApiError } from "@/shared/lib/api";
 import { canActOnVoucher } from "@/shared/lib/auth/posVoucherMatrix";
 import { autoKindForVoucherType, waSendHint } from "@/shared/lib/whatsapp/billTemplates";
 import { sendOnWhatsApp, useWaSendStates } from "@/shared/hooks/useWhatsAppSend";
-import { SendEmailMenuItem } from "@/shared/components/SendEmailMenuItem";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -200,7 +198,6 @@ export function VoucherActionsMenu({ voucherId, voucherType, voucherRef, onChang
                             </span>
                         </DropdownMenuItem>
                     )}
-                    <SendEmailMenuItem voucherType={voucherType} source="inv" id={voucherId} />
                     {canPrintLabels && (
                         <DropdownMenuItem onSelect={goPrintLabels} disabled={busy}>
                             <Printer className="size-4" /> Print labels

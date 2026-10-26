@@ -3,7 +3,7 @@
 // Cross-source 3-dot row menu — used by the Day Book, the All Vouchers
 // register, and (after the DRY migration) every per-kind voucher register.
 //
-//   Edit · Cancel · Delete · Duplicate · Convert · Send on WhatsApp · Send email
+//   Edit · Cancel · Delete · Duplicate · Convert · Send on WhatsApp
 //
 // "Delete" is the ONE delete: it posts to `${apiBase}/hard-delete`, which removes
 // the row and snapshots the whole graph to AuditLog = the Recycle Bin (restore via
@@ -17,7 +17,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { SendEmailMenuItem } from "@/shared/components/SendEmailMenuItem";
 import { useSession } from "next-auth/react";
 import axios from "axios";
 import { toast } from "sonner";
@@ -264,7 +263,6 @@ export function DayBookActionsMenu({
                             </span>
                         </DropdownMenuItem>
                     )}
-                    {source !== "je" && <SendEmailMenuItem voucherType={kind} source={source === "gl" ? "uv" : "inv"} id={rawId} />}
                     <DropdownMenuSeparator />
                     {canEdit && (
                         <DropdownMenuItem onSelect={goEdit} disabled={busy}>

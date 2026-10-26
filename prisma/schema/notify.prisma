@@ -68,15 +68,15 @@ model BillNotification {
 // EmailTemplate is the email twin of WhatsAppTemplate: one row per document kind,
 // edited at /office/settings/email-templates. No approval step — the saved copy
 // is the one sent. Same friendly fields ({customer}, {billNo}, …) as WhatsApp.
-// EmailNotification is one row per (kind, document) emailed — the automatic
-// send and staff's "Send email" both claim it, so a customer never gets two.
+// EmailNotification is one row per (kind, document) emailed — claimed before
+// sending so a customer never gets two; a failed row is retried on the next save.
 // See src/shared/lib/email/notifyEmail.ts.
 
 /// One email kind ("SALE" | "RECEIPT" | …). A missing row = the code default, off.
 model EmailTemplate {
   kind      String   @id
   enabled   Boolean  @default(false)
-  /// Send by itself when the document is posted. Off = only staff's "Send email".
+  /// Send by itself when the document is posted. Off = not sent (no manual send yet).
   autoSend  Boolean  @default(true)
   subject   String
   body      String

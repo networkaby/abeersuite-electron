@@ -57,8 +57,7 @@ async function allowed(kind: WaTemplateKind, mode: SendMode): Promise<NotifyResu
 
 export async function notifyBill(kind: WaTemplateKind, universalVoucherId: number, mode: SendMode = {}): Promise<NotifyResult> {
     // The automatic send also emails, on its own switches (Settings → Email
-    // Templates). Staff's manual "Send on WhatsApp" does not — "Send email" is
-    // its own menu item.
+    // Templates). Staff's manual "Send on WhatsApp" does not.
     const email = mode.manual ? null : notifyEmail(kind, universalVoucherId);
     try {
         const stop = await allowed(kind, mode);

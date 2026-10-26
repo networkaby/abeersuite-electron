@@ -23,9 +23,6 @@ export type EmailTemplateView = {
     draft: EmailTemplateDraft;
 };
 
-/** Whether staff can send a kind by hand now: "ready", or "off" with the reason shown. */
-export type EmailSendState = "ready" | "off" | "not-configured";
-
 function toView(kind: EmailTemplateKind, r: EmailTemplate | null | undefined): EmailTemplateView {
     if (!r) return { kind, enabled: false, autoSend: emailAutoSendDefault(kind), draft: EMAIL_TEMPLATE_DEFAULTS[kind] };
     return { kind, enabled: r.enabled, autoSend: r.autoSend, draft: { subject: r.subject, body: r.body } };
