@@ -91,6 +91,7 @@ export default function ScheduledList() {
     const [busyCampaign, setBusyCampaign] = useState<number | null>(null);
     const [filter, setFilter] = useState<Filter>("ALL");
     const [view, setView] = useState<"TIMELINE" | "LIST">("TIMELINE");
+    const [timelineKey, setTimelineKey] = useState(0);
     const [now, setNow] = useState(() => Date.now());
     useEffect(() => {
         const t = setInterval(() => setNow(Date.now()), 60_000);
@@ -181,7 +182,7 @@ export default function ScheduledList() {
                     title="Scheduled"
                     description="Everything waiting to go out on every channel, and what already went today."
                     actions={
-                        <Button variant="outline" size="sm" onClick={() => void reload()} disabled={refreshing}>
+                        <Button variant="outline" size="sm" onClick={() => { void reload(); setTimelineKey((k) => k + 1); }} disabled={refreshing}>
                             <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} /> Refresh
                         </Button>
                     }
@@ -213,7 +214,7 @@ export default function ScheduledList() {
                 </div>
 
                 {view === "TIMELINE" ? (
-                    <ScheduleTimeline show={show} />
+                    <ScheduleTimeline show={show} reloadKey={timelineKey} />
                 ) : loading || !data || !r ? (
                     <div className="flex justify-center py-16"><Loader2 className="animate-spin text-muted-foreground" /></div>
                 ) : (

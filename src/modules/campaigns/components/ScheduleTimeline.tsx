@@ -40,7 +40,8 @@ function dayLabel(date: string, today: string): string {
     return new Date(`${date}T12:00:00+05:30`).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" });
 }
 
-export default function ScheduleTimeline({ show }: { show: (c: Channel) => boolean }) {
+/** `reloadKey` changes when the page's Refresh is pressed. */
+export default function ScheduleTimeline({ show, reloadKey }: { show: (c: Channel) => boolean; reloadKey: number }) {
     const [today, setToday] = useState(() => istDate(new Date()));
     const [now, setNow] = useState(() => Date.now());
     const [from, setFrom] = useState(() => shiftDate(istDate(new Date()), -1));
@@ -56,7 +57,11 @@ export default function ScheduleTimeline({ show }: { show: (c: Channel) => boole
         return () => clearInterval(t);
     }, []);
 
-    const { data, loading } = useApiResource<Data>(`/api/campaigns/timeline?from=${from}&days=${days}`, { topics: ["settings"] });
+    const { data, loading, reload } = useApiResource<Data>(`/api/campaigns/timeline?from=${from}&days=${days}`, { topics: ["settings"] });
+    useEffect(() => {
+        if (reloadKey) void reload();
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- only a Refresh press reloads
+    }, [reloadKey]);
 
     // Open on "now" once, not on every refresh — the reader may have scrolled away.
     useEffect(() => {
