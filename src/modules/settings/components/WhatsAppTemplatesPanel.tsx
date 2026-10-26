@@ -218,7 +218,7 @@ export function WhatsAppTemplatesPanel({ initialTemplates, templateApiReady, sen
                             Send on WhatsApp
                         </label>
                     )}
-                    {/* Due reminders go by Settings → Due Reminders' rules, not on a save. */}
+                    {/* Due reminders go by Campaigns → Due Reminders' rules, not on a save. */}
                     {!isDueKind(current.kind) && (
                         <label
                             className={`flex items-center gap-2 text-sm ${current.kind === "TICKET_AUTO_REPLY" ? "ml-auto" : ""}`}
