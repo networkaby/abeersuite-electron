@@ -5,7 +5,7 @@
 // reach — Remove puts one on the Never remind list) and the posts waiting to be
 // shared. Read from GET /api/campaigns/scheduled.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
@@ -47,6 +47,11 @@ export default function ScheduledList() {
     const { data, loading, refreshing, reload } = useApiResource<Data>("/api/campaigns/scheduled", { topics: ["settings"] });
     const [removing, setRemoving] = useState<number | null>(null);
     const [removed, setRemoved] = useState<Set<number>>(new Set());
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        const t = setInterval(() => setNow(Date.now()), 60_000);
+        return () => clearInterval(t);
+    }, []);
 
     const remove = async (accountId: number, name: string) => {
         setRemoving(accountId);
@@ -65,6 +70,9 @@ export default function ScheduledList() {
     const r = data?.reminders;
     const list = r?.list.filter((p) => !removed.has(p.accountId)) ?? [];
     const sentCount = (data?.remindersSent.length ?? 0) + (data?.shares.length ?? 0);
+    // Time has come but not shared everywhere yet — staff also get a push each half hour (runPostReminders).
+    const dueNow = (iso: string) => new Date(iso).getTime() <= now;
+    const dueCount = data?.posts.filter((p) => dueNow(p.scheduledAt)).length ?? 0;
 
     return (
         <ScrollArea className="h-full" type="always">
@@ -84,6 +92,13 @@ export default function ScheduledList() {
                     <div className="flex justify-center py-16"><Loader2 className="animate-spin text-muted-foreground" /></div>
                 ) : (
                     <>
+                        {dueCount > 0 && (
+                            <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
+                                <Megaphone size={16} />
+                                {dueCount === 1 ? "1 post is due — share it now." : `${dueCount} posts are due — share them now.`}
+                            </div>
+                        )}
+
                         <h2 className="text-sm font-semibold text-muted-foreground">Pending</h2>
 
                         <section className={card}>
@@ -143,7 +158,7 @@ export default function ScheduledList() {
                                 <div className="flex items-center gap-2">
                                     <Megaphone size={16} />
                                     <span className="font-medium">Posts</span>
-                                    <span className="text-sm text-muted-foreground">Shared by hand at their time.</span>
+                                    <span className="text-sm text-muted-foreground">Shared by hand at their time — staff get a reminder when one is due.</span>
                                 </div>
                                 <Link href="/office/campaigns/posts" className="text-sm text-primary hover:underline">Calendar</Link>
                             </div>
@@ -154,6 +169,9 @@ export default function ScheduledList() {
                                     {data.posts.map((p) => (
                                         <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-4 py-2 text-sm first:border-t-0">
                                             <span className="w-40 shrink-0 tabular-nums">{when(p.scheduledAt)}</span>
+                                            {dueNow(p.scheduledAt) && (
+                                                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900 dark:text-amber-100">Due now</span>
+                                            )}
                                             <Link href={`/office/campaigns/posts/${p.id}`} className="min-w-0 flex-1 truncate hover:underline">{p.caption}</Link>
                                             <span className="text-muted-foreground">{p.channels.map(channelName).join(", ")}</span>
                                         </li>
