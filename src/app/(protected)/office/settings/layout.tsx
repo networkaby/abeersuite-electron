@@ -19,6 +19,7 @@ const SETTINGS_CRUMB_LABELS: Record<string, string> = {
     "pos-services": "Services",
     "voucher-templates": "Print Templates",
     "whatsapp-templates": "WhatsApp Templates",
+    "email-templates": "Email Templates",
     preview: "Preview",
     "backup-restore": "Backup & Restore",
     "item-import": "Item Import",

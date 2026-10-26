@@ -3503,6 +3503,48 @@ ALTER TABLE "BillNotification" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3)
 ALTER TABLE "BillNotification" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "EmailTemplate" (
+    "kind" TEXT NOT NULL,
+    "enabled" BOOLEAN NOT NULL DEFAULT false,
+    "autoSend" BOOLEAN NOT NULL DEFAULT true,
+    "subject" TEXT NOT NULL,
+    "body" TEXT NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "EmailTemplate_pkey" PRIMARY KEY ("kind")
+);
+ALTER TABLE "EmailTemplate" ADD COLUMN IF NOT EXISTS "kind" TEXT NOT NULL;
+ALTER TABLE "EmailTemplate" ADD COLUMN IF NOT EXISTS "enabled" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "EmailTemplate" ADD COLUMN IF NOT EXISTS "autoSend" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "EmailTemplate" ADD COLUMN IF NOT EXISTS "subject" TEXT NOT NULL;
+ALTER TABLE "EmailTemplate" ADD COLUMN IF NOT EXISTS "body" TEXT NOT NULL;
+ALTER TABLE "EmailTemplate" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "EmailNotification" (
+    "id" SERIAL NOT NULL,
+    "kind" TEXT NOT NULL,
+    "refId" INTEGER NOT NULL,
+    "email" TEXT,
+    "status" TEXT NOT NULL,
+    "error" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "EmailNotification_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "EmailNotification" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "EmailNotification" ADD COLUMN IF NOT EXISTS "kind" TEXT NOT NULL;
+ALTER TABLE "EmailNotification" ADD COLUMN IF NOT EXISTS "refId" INTEGER NOT NULL;
+ALTER TABLE "EmailNotification" ADD COLUMN IF NOT EXISTS "email" TEXT;
+ALTER TABLE "EmailNotification" ALTER COLUMN "email" DROP NOT NULL;
+ALTER TABLE "EmailNotification" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL;
+ALTER TABLE "EmailNotification" ADD COLUMN IF NOT EXISTS "error" TEXT;
+ALTER TABLE "EmailNotification" ALTER COLUMN "error" DROP NOT NULL;
+ALTER TABLE "EmailNotification" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "EmailNotification" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "DueReminderSettings" (
     "id" INTEGER NOT NULL DEFAULT 1,
     "enabled" BOOLEAN NOT NULL DEFAULT false,
@@ -5894,6 +5936,9 @@ CREATE INDEX IF NOT EXISTS "BillNotification_personId_createdAt_idx" ON "BillNot
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "BillNotification_kind_refId_key" ON "BillNotification"("kind", "refId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "EmailNotification_kind_refId_key" ON "EmailNotification"("kind", "refId");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "DueReminderLog_accountId_createdAt_idx" ON "DueReminderLog"("accountId", "createdAt");
@@ -8302,6 +8347,20 @@ DO $$ BEGIN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "Email";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Email"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."EmailNotification"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "EmailNotification";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "EmailNotification"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."EmailTemplate"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "EmailTemplate";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "EmailTemplate"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('kind');
     END IF;
 END $$;
 DO $$ BEGIN

@@ -63,6 +63,41 @@ model BillNotification {
   @@index([personId, createdAt])
 }
 
+// ── Bill / receipt emails to the customer ─────────────────────────────────────
+//
+// EmailTemplate is the email twin of WhatsAppTemplate: one row per document kind,
+// edited at /office/settings/email-templates. No approval step — the saved copy
+// is the one sent. Same friendly fields ({customer}, {billNo}, …) as WhatsApp.
+// EmailNotification is one row per (kind, document) emailed — the automatic
+// send and staff's "Send email" both claim it, so a customer never gets two.
+// See src/shared/lib/email/notifyEmail.ts.
+
+/// One email kind ("SALE" | "RECEIPT" | …). A missing row = the code default, off.
+model EmailTemplate {
+  kind      String   @id
+  enabled   Boolean  @default(false)
+  /// Send by itself when the document is posted. Off = only staff's "Send email".
+  autoSend  Boolean  @default(true)
+  subject   String
+  body      String
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+/// One document emailed to its customer — once per (kind, refId = UniversalVoucher id).
+model EmailNotification {
+  id        Int      @id @default(autoincrement())
+  kind      String
+  refId     Int
+  email     String?
+  /// pending | sent | failed | not-configured | no-email
+  status    String
+  error     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([kind, refId])
+}
+
 // ── Due reminders ────────────────────────────────────────────────────────────
 //
 // A party's whole balance due, sent by hand (Receivables → Send), to many at once

@@ -1,0 +1,75 @@
+import "server-only";
+import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
+import { fillBody, type WaFieldValues } from "@/shared/lib/whatsapp/billTemplates";
+import { loadVoucherMessage, type EmailRow, type NotifyResult } from "@/shared/lib/whatsapp/notifyBill";
+import { emailBodyToHtml, isEmailKind, EMAIL_TEMPLATE_KINDS, type EmailTemplateDraft, type EmailTemplateKind } from "./emailTemplates";
+import { getEmailTemplate, type EmailSendState } from "./emailTemplateStore";
+import { isEmailConfigured, sendEmail } from "./sendEmail";
+
+/**
+ * Email a posted customer document — the email twin of notifyBill's WhatsApp.
+ *
+ * Automatic (notifyBill on a save) goes only when the kind is switched on AND
+ * its Auto send is on; staff's "Send email" (3-dot menu) only needs it on.
+ * Same skip rules as WhatsApp (loadVoucherMessage: walk-in, supplier, …).
+ * One EmailNotification row per (kind, document): claimed before sending, so a
+ * retried save or a second click never emails twice. Never throws.
+ */
+export async function notifyEmail(kind: string, uvId: number, mode: { manual?: boolean } = {}): Promise<NotifyResult> {
+    if (!isEmailKind(kind)) return { status: "skipped", reason: "not a customer document" };
+    try {
+        if (IS_COUNTER_PC) return { status: "skipped", reason: "counter" };
+        const tpl = await getEmailTemplate(kind);
+        if (!tpl.enabled) return { status: "skipped", reason: "template off" };
+        if (!mode.manual && !tpl.autoSend) return { status: "skipped", reason: "auto off" };
+        if (!isEmailConfigured()) return { status: "skipped", reason: "email not configured" };
+
+        const m = await loadVoucherMessage(kind, uvId);
+        if ("status" in m) return m;
+        const to = pickEmail(m.emails);
+        if (!to) return { status: "skipped", reason: "no email" };
+
+        try {
+            await prisma.emailNotification.create({ data: { kind, refId: uvId, email: to, status: "pending" } });
+        } catch {
+            return { status: "already" };
+        }
+        const out = await sendFilled(to, tpl.draft, m.values);
+        await prisma.emailNotification.update({
+            where: { kind_refId: { kind, refId: uvId } },
+            data: { status: out.error ? "failed" : "sent", error: out.error ?? null },
+        });
+        return out.error ? { status: "skipped", reason: "send failed" } : { status: "sent" };
+    } catch (e) {
+        console.error(`[notify-email] ${kind} ${uvId} failed`, e);
+        return { status: "skipped", reason: "error" };
+    }
+}
+
+/** Fill a template and send it. Used by the real send and the settings test. */
+export async function sendFilled(to: string, draft: EmailTemplateDraft, values: Partial<WaFieldValues>): Promise<{ error?: string }> {
+    const text = fillBody(draft.body, values);
+    try {
+        await sendEmail({ to, subject: fillBody(draft.subject, values), text, html: emailBodyToHtml(text) });
+        return {};
+    } catch (e) {
+        return { error: (e instanceof Error ? e.message : String(e)).slice(0, 500) };
+    }
+}
+
+/** Per kind, whether the 3-dot menu's "Send email" works now. */
+export async function emailSendStates(): Promise<Record<EmailTemplateKind, EmailSendState>> {
+    const configured = isEmailConfigured();
+    const pairs = await Promise.all(
+        EMAIL_TEMPLATE_KINDS.map(async (k) => [k, !configured ? "not-configured" : (await getEmailTemplate(k)).enabled ? "ready" : "off"] as const),
+    );
+    return Object.fromEntries(pairs) as Record<EmailTemplateKind, EmailSendState>;
+}
+
+/** Primary verified email first, then any verified — never one the customer typed unproved. */
+function pickEmail(emails: EmailRow[]): string | null {
+    const ok = emails.filter((e) => e.verifiedAt && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.email));
+    ok.sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
+    return ok[0]?.email ?? null;
+}

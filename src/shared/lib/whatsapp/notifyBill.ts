@@ -18,6 +18,7 @@ import {
 } from "./billTemplates";
 import { getApprovedWaTemplate, getWaTemplateDraft, isAutoSend } from "./waTemplateStore";
 import { recordBillMessage } from "@/modules/message/lib/customerMessages";
+import { notifyEmail } from "@/shared/lib/email/notifyEmail";
 
 export { autoKindForVoucherType };
 import { isBillSendConfigured, sendBillTemplate, sendTextMessage } from "./metaTemplates";
@@ -55,6 +56,10 @@ async function allowed(kind: WaTemplateKind, mode: SendMode): Promise<NotifyResu
 }
 
 export async function notifyBill(kind: WaTemplateKind, universalVoucherId: number, mode: SendMode = {}): Promise<NotifyResult> {
+    // The automatic send also emails, on its own switches (Settings → Email
+    // Templates). Staff's manual "Send on WhatsApp" does not — "Send email" is
+    // its own menu item.
+    const email = mode.manual ? null : notifyEmail(kind, universalVoucherId);
     try {
         const stop = await allowed(kind, mode);
         if (stop) return stop;
@@ -62,6 +67,8 @@ export async function notifyBill(kind: WaTemplateKind, universalVoucherId: numbe
     } catch (e) {
         console.error(`[notify-bill] ${kind} ${universalVoucherId} failed`, e);
         return { status: "skipped", reason: "error" };
+    } finally {
+        await email;
     }
 }
 
@@ -118,15 +125,29 @@ const day = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", y
 
 export type PhoneRow = { phone: string; isPrimary: boolean; verifiedAt: Date | null };
 const phonesSelect = { select: { phone: true, isPrimary: true, verifiedAt: true } } as const;
+export type EmailRow = { email: string; isPrimary: boolean; verifiedAt: Date | null };
+const emailsSelect = { select: { email: true, isPrimary: true, verifiedAt: true } } as const;
 export const partySelect = {
     personId: true,
     companyId: true,
     groupId: true,
-    person: { select: { name: true, phones: phonesSelect } },
-    company: { select: { name: true, phones: phonesSelect } },
+    person: { select: { name: true, phones: phonesSelect, emails: emailsSelect } },
+    company: { select: { name: true, phones: phonesSelect, emails: emailsSelect } },
 } as const;
 
-async function notifyVoucher(kind: WaTemplateKind, uvId: number): Promise<NotifyResult> {
+/** A posted customer voucher, ready to announce on any channel (WhatsApp here,
+ *  email in email/notifyEmail.ts) — or why it is not sent at all. */
+export type VoucherMessage = {
+    personId: number | null;
+    phones: PhoneRow[];
+    emails: EmailRow[];
+    docNo: string;
+    amountText: string;
+    dateText: string;
+    values: WaFieldValues;
+};
+
+export async function loadVoucherMessage(kind: WaTemplateKind, uvId: number): Promise<VoucherMessage | NotifyResult> {
     const uv = await prisma.universalVoucher.findUnique({
         where: { id: uvId },
         select: {
@@ -169,12 +190,13 @@ async function notifyVoucher(kind: WaTemplateKind, uvId: number): Promise<Notify
     const docNo = uv.voucherNo ?? `#${uvId}`;
     const amountText = formatAmount(amount);
     const dateText = day.format(uv.date);
-    return deliver({
-        kind,
-        refId: uvId,
-        linkCode: String(uvId),
+    return {
         personId: account.personId,
         phones: party.phones,
+        emails: party.emails,
+        docNo,
+        amountText,
+        dateText,
         values: {
             customer: party.name,
             billNo: docNo,
@@ -188,8 +210,21 @@ async function notifyVoucher(kind: WaTemplateKind, uvId: number): Promise<Notify
             link: `${WA_BILL_LINK_BASE}${uvId}`,
             app: WA_APP_LINK,
         },
-        push: { title: `${WA_TEMPLATE_LABEL[kind]} ${docNo}`, body: `${withCurrency(amountText)} · ${dateText} · tap to view` },
-        summary: `${WA_TEMPLATE_LABEL[kind]} ${docNo} · ${withCurrency(amountText)}`,
+    };
+}
+
+async function notifyVoucher(kind: WaTemplateKind, uvId: number): Promise<NotifyResult> {
+    const m = await loadVoucherMessage(kind, uvId);
+    if ("status" in m) return m;
+    return deliver({
+        kind,
+        refId: uvId,
+        linkCode: String(uvId),
+        personId: m.personId,
+        phones: m.phones,
+        values: m.values,
+        push: { title: `${WA_TEMPLATE_LABEL[kind]} ${m.docNo}`, body: `${withCurrency(m.amountText)} · ${m.dateText} · tap to view` },
+        summary: `${WA_TEMPLATE_LABEL[kind]} ${m.docNo} · ${withCurrency(m.amountText)}`,
     });
 }
 
