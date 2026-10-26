@@ -55,7 +55,7 @@ export default function PortalSetPasswordFlow({
                         ? "First, confirm your mobile or email so we can link you to your existing orders."
                         : "Confirm your mobile or email and we will let you pick a new password."}
                 </p>
-                <PortalOtpLoginForm onVerified={onVerified} busy={busy} submitError="" />
+                <PortalOtpLoginForm onVerified={onVerified} busy={busy} submitError="" purpose={registering ? undefined : "reset"} />
             </div>
         );
     }

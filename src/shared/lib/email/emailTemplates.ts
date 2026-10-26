@@ -16,6 +16,7 @@
  */
 
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import { OTP_CODE_TTL_MS } from "@/shared/lib/constants/session";
 import { SHOP_APP_INSTALL } from "@/shared/lib/device/shopApp";
 import {
     WA_FIELDS,
@@ -42,10 +43,29 @@ const SHARED_KINDS = [
 ] as const satisfies readonly WaTemplateKind[];
 type SharedKind = (typeof SHARED_KINDS)[number];
 
-export const EMAIL_TEMPLATE_KINDS = [...SHARED_KINDS, "CART_ABANDONED", "PAYMENT_PENDING", "WELCOME"] as const;
+const SHOP_KINDS = ["CART_ABANDONED", "PAYMENT_PENDING", "WELCOME"] as const;
+/** Sign-in / reset codes. Always on — switched off, nobody could sign in. */
+const SECURITY_KINDS = ["OTP_SIGN_IN", "OTP_PASSWORD_RESET", "STAFF_PASSWORD_RESET"] as const;
+export type SecurityEmailKind = (typeof SECURITY_KINDS)[number];
+
+export const EMAIL_TEMPLATE_KINDS = [...SHARED_KINDS, ...SHOP_KINDS, ...SECURITY_KINDS] as const;
 export type EmailTemplateKind = (typeof EMAIL_TEMPLATE_KINDS)[number];
 
 const isShared = (k: EmailTemplateKind): k is SharedKind => (SHARED_KINDS as readonly string[]).includes(k);
+
+export function isSecurityKind(kind: EmailTemplateKind): kind is SecurityEmailKind {
+    return (SECURITY_KINDS as readonly string[]).includes(kind);
+}
+
+/** The editor's left-hand list, in three headings. */
+export const EMAIL_KIND_GROUPS: { title: string; kinds: readonly EmailTemplateKind[] }[] = [
+    { title: "Documents & reminders", kinds: SHARED_KINDS },
+    { title: "Shop", kinds: SHOP_KINDS },
+    { title: "Sign-in & security", kinds: SECURITY_KINDS },
+];
+
+/** How long a sign-in / reset code works — the OTP cookie's life. */
+export const OTP_MINUTES = Math.round(OTP_CODE_TTL_MS / 60_000);
 
 export function isEmailKind(kind: string): kind is EmailTemplateKind {
     return (EMAIL_TEMPLATE_KINDS as readonly string[]).includes(kind);
@@ -61,6 +81,7 @@ export function isMarketingKind(kind: EmailTemplateKind): boolean {
 /** Only a document / repair kind goes "on a save", so only those have an Auto
  *  send switch; the rest are sent by their own trigger whenever switched on. */
 export function hasAutoSendSwitch(kind: EmailTemplateKind): boolean {
+    // (Security kinds are not shared kinds, so they never get one.)
     return isShared(kind) && kind !== "DUE_SOFT" && kind !== "DUE_FIRM";
 }
 
@@ -93,6 +114,9 @@ export const EMAIL_TEMPLATE_LABEL: Record<EmailTemplateKind, string> = {
     CART_ABANDONED: "Abandoned cart",
     PAYMENT_PENDING: "Payment pending",
     WELCOME: "Welcome (new account)",
+    OTP_SIGN_IN: "Customer sign-in code",
+    OTP_PASSWORD_RESET: "Customer password reset code",
+    STAFF_PASSWORD_RESET: "Staff password reset code",
 };
 
 export const EMAIL_TEMPLATE_WHEN: Record<EmailTemplateKind, string> = {
@@ -101,6 +125,9 @@ export const EMAIL_TEMPLATE_WHEN: Record<EmailTemplateKind, string> = {
     CART_ABANDONED: `A signed-in customer leaves items in the shop / app cart for ${REMINDER_AFTER_HOURS} hours without ordering. Once per cart; not for carts older than ${REMINDER_MAX_AGE_DAYS} days.`,
     PAYMENT_PENDING: `An online-payment order is still unpaid ${REMINDER_AFTER_HOURS} hours after it was placed. Once per order.`,
     WELCOME: "A customer creates an account on the website or app.",
+    OTP_SIGN_IN: "A customer signs in, creates an account or verifies an email on the website / app (email code). Always on.",
+    OTP_PASSWORD_RESET: "A customer uses Forgot password on the website / app with their email. Always on.",
+    STAFF_PASSWORD_RESET: "A staff member uses Forgot password on the office sign-in page. Always on.",
 };
 
 // ── Fields ──────────────────────────────────────────────────────────────────
@@ -113,6 +140,8 @@ export const EMAIL_FIELDS = [
     { key: "items", label: "Cart items", sample: "1 × HP Wireless Mouse\n2 × A4 Paper Ream" },
     { key: "total", label: "Cart total", sample: "1,890.00" },
     { key: "cartLink", label: "Cart link", sample: `${SHOP_URL}/shop/cart` },
+    { key: "code", label: "Code", sample: "482913" },
+    { key: "minutes", label: "Valid for (minutes)", sample: String(OTP_MINUTES) },
 ] as const;
 export type EmailFieldKey = (typeof EMAIL_FIELDS)[number]["key"];
 export type EmailFieldValues = Partial<Record<EmailFieldKey, string>>;
@@ -122,6 +151,9 @@ const OWN_FIELDS: Record<Exclude<EmailTemplateKind, SharedKind>, readonly string
     CART_ABANDONED: ["customer", "items", "total", "cartLink", "shop", "app"],
     PAYMENT_PENDING: ["customer", "billNo", "amount", "date", "link", "shop"],
     WELCOME: ["customer", "shop", "link", "app"],
+    OTP_SIGN_IN: ["code", "minutes", "shop"],
+    OTP_PASSWORD_RESET: ["code", "minutes", "shop"],
+    STAFF_PASSWORD_RESET: ["code", "minutes", "shop"],
 };
 
 export function emailFieldsFor(kind: EmailTemplateKind): readonly EmailField[] {
@@ -212,6 +244,19 @@ export const EMAIL_TEMPLATE_DEFAULTS: Record<EmailTemplateKind, EmailTemplateDra
         subject: "Welcome to {shop}",
         body: `Dear {customer},\n\nWelcome! Your account is ready.\n\nSee your bills, payments, warranty and repair status anytime: {link}\nGet our app: {app}${SIGN_OFF}`,
     },
+    // The wording these emails had in code before they became templates.
+    OTP_SIGN_IN: {
+        subject: "{code} is your {shop} sign-in code",
+        body: "Your sign-in code is {code}\n\nIt expires in {minutes} minutes. Type it on the sign-in page you already have open.\nIf you did not request this, you can ignore this email — nobody can sign in without the code.\n\n{shop}",
+    },
+    OTP_PASSWORD_RESET: {
+        subject: "{code} is your {shop} password reset code",
+        body: "Your password reset code is {code}\n\nIt expires in {minutes} minutes. Type it on the reset page you already have open.\nIf you did not ask for this, ignore this email — your password stays as it is.\n\n{shop}",
+    },
+    STAFF_PASSWORD_RESET: {
+        subject: "{code} is your {shop} password reset code",
+        body: "Your password reset code is {code}\n\nIt expires in {minutes} minutes. Type it on the reset page you already have open.\nIf you did not ask for this, ignore this email — your password stays as it is.\n\n{shop}",
+    },
 };
 
 /** Problems with a draft — empty means fine. */
@@ -221,6 +266,8 @@ export function checkEmailDraft(draft: EmailTemplateDraft, kind: EmailTemplateKi
     if (!draft.body.trim()) errs.push("Message is empty.");
     if (draft.subject.length > EMAIL_SUBJECT_MAX) errs.push(`Subject is longer than ${EMAIL_SUBJECT_MAX} characters.`);
     if (draft.body.length > EMAIL_BODY_MAX) errs.push(`Message is longer than ${EMAIL_BODY_MAX} characters.`);
+    // A code email without the code is useless — and cannot be switched off.
+    if (isSecurityKind(kind) && !draft.body.includes("{code}")) errs.push("The message must contain {code}.");
     const allowed = new Set<string>(emailFieldsFor(kind).map((f) => f.key));
     const seen = new Set<string>();
     for (const m of `${draft.subject}\n${draft.body}`.matchAll(FIELD_RE)) {

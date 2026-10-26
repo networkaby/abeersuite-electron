@@ -6,6 +6,7 @@ import {
     EMAIL_TEMPLATE_KINDS,
     checkEmailDraft,
     emailAutoSendDefault,
+    isSecurityKind,
     type EmailTemplateDraft,
     type EmailTemplateKind,
 } from "./emailTemplates";
@@ -27,8 +28,10 @@ export type EmailTemplateView = {
 };
 
 function toView(kind: EmailTemplateKind, r: EmailTemplate | null | undefined): EmailTemplateView {
-    if (!r) return { kind, enabled: false, autoSend: emailAutoSendDefault(kind), draft: EMAIL_TEMPLATE_DEFAULTS[kind] };
-    return { kind, enabled: r.enabled, autoSend: r.autoSend, draft: { subject: r.subject, body: r.body } };
+    // A sign-in / reset code always goes — whatever the row says.
+    const always = isSecurityKind(kind);
+    if (!r) return { kind, enabled: always, autoSend: emailAutoSendDefault(kind), draft: EMAIL_TEMPLATE_DEFAULTS[kind] };
+    return { kind, enabled: always || r.enabled, autoSend: r.autoSend, draft: { subject: r.subject, body: r.body } };
 }
 
 export async function listEmailTemplates(): Promise<EmailTemplateView[]> {
@@ -54,7 +57,7 @@ export class EmailTemplateError extends Error {}
 export async function saveEmailTemplate(kind: EmailTemplateKind, input: { enabled: boolean; autoSend: boolean; draft: EmailTemplateDraft }): Promise<EmailTemplateView> {
     const errs = checkEmailDraft(input.draft, kind);
     if (errs.length) throw new EmailTemplateError(errs.join(" "));
-    const data = { enabled: input.enabled, autoSend: input.autoSend, subject: input.draft.subject, body: input.draft.body };
+    const data = { enabled: isSecurityKind(kind) || input.enabled, autoSend: input.autoSend, subject: input.draft.subject, body: input.draft.body };
     const row = await prisma.emailTemplate.upsert({ where: { kind }, create: { kind, ...data }, update: data });
     cache.delete(kind);
     return toView(kind, row);

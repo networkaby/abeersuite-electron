@@ -93,12 +93,13 @@ function confirmationFor(via: OtpDelivery, smsAvailable: boolean, partner?: stri
  * whether it is a mobile or an email and picks the delivery channel.
  * `sms`: the customer asked for SMS instead of WhatsApp; `smsTry` is how many
  * SMS this screen already sent, so the server hands it to the next provider.
+ * `purpose` "reset" (Forgot password) only picks the email's wording.
  */
-export async function sendOtp(identifier: string, sms?: { smsTry: number }): Promise<OtpConfirmation> {
+export async function sendOtp(identifier: string, sms?: { smsTry: number }, purpose?: "reset"): Promise<OtpConfirmation> {
     const res = await fetch("/api/portal/otp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(sms ? { identifier, via: "sms", smsTry: sms.smsTry } : { identifier }),
+        body: JSON.stringify({ identifier, ...(sms ? { via: "sms", smsTry: sms.smsTry } : {}), ...(purpose ? { purpose } : {}) }),
     });
     const body = (await res.json().catch(() => null)) as { error?: string; via?: OtpDelivery; smsAvailable?: boolean; partner?: string } | null;
     if (!res.ok) {

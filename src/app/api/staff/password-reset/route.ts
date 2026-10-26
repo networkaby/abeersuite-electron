@@ -38,9 +38,9 @@ import {
 } from "@/shared/lib/auth/otpChallenge";
 import { clearLoginFailures, isLoginBlocked, recordLoginFailure } from "@/shared/lib/auth/loginRateLimit";
 import { isStaffEmailDomainAllowed } from "@/shared/lib/auth/staffEmailAllowlist";
-import { isEmailConfigured, sendEmail } from "@/shared/lib/email/sendEmail";
+import { isEmailConfigured } from "@/shared/lib/email/sendEmail";
+import { sendCodeEmail } from "@/shared/lib/email/codeEmail";
 import { staffHasLeft } from "@/shared/lib/hr/staffStatus";
-import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 const COOKIE = "staff_reset_otp";
 const TOO_MANY = "Too many attempts. Please wait a few minutes.";
@@ -78,18 +78,7 @@ async function send(email: string) {
     if (user && !staffHasLeft(user.staffProfile)) {
         // After the response: a real address must answer as fast as a made-up one, and
         // a failed send must not turn into an error only a real address can produce.
-        after(() => sendEmail({
-            to: email,
-            subject: `${code} is your ${COMPANY_DETAILS.brandName} password reset code`,
-            text: [
-                `Your password reset code is ${code}`,
-                "",
-                "It expires in 10 minutes. Type it on the reset page you already have open.",
-                "If you did not ask for this, ignore this email — your password stays as it is.",
-                "",
-                COMPANY_DETAILS.brandName,
-            ].join("\n"),
-        }).catch((e: unknown) => console.error("[staff password reset] code mail failed", e)));
+        after(() => sendCodeEmail("STAFF_PASSWORD_RESET", email, code).catch((e: unknown) => console.error("[staff password reset] code mail failed", e)));
     }
     // Same answer and same cookie whether or not the account exists.
     const res = NextResponse.json({ ok: true });

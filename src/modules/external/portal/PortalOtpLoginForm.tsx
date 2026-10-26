@@ -37,6 +37,7 @@ export default function PortalOtpLoginForm({
     initialStep = "identify",
     lockedIdentifier,
     verifyLabel = "Verify & sign in",
+    purpose,
 }: {
     /** Called with a verified token from whichever channel was used. */
     onVerified: (token: string, channel: OtpChannel, identity: string) => void;
@@ -50,6 +51,8 @@ export default function PortalOtpLoginForm({
     lockedIdentifier?: string;
     /** Button text on the code step — "sign in" reads wrong on a profile page. */
     verifyLabel?: string;
+    /** "reset": Forgot password — the email code gets the password-reset wording. */
+    purpose?: "reset";
 }) {
     const [step, setStep] = useState<OtpStep>(initialStep);
     // One field for mobile OR email — we work out which it is.
@@ -102,7 +105,8 @@ export default function PortalOtpLoginForm({
             // identifier and picks WhatsApp or email.
             confirmation.current = await sendOtp(
                 identifier.trim(),
-                viaSms ? { smsTry: smsTries.current } : undefined
+                viaSms ? { smsTry: smsTries.current } : undefined,
+                purpose
             );
             if (confirmation.current.via === "sms") smsTries.current += 1;
             setVia(confirmation.current.via);

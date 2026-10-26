@@ -17,8 +17,10 @@ import {
     EMAIL_TEMPLATE_LABEL,
     EMAIL_TEMPLATE_WHEN,
     UNSUBSCRIBE_SAMPLE_URL,
+    EMAIL_KIND_GROUPS,
     checkEmailDraft,
     fillEmail,
+    isSecurityKind,
     hasAutoSendSwitch,
     isMarketingKind,
     unsubscribeLine,
@@ -103,19 +105,26 @@ export function EmailTemplatesPanel({ initialTemplates, sendReady }: Props) {
     return (
         <div className="grid gap-4 lg:grid-cols-[200px_1fr_360px]">
             {/* Kinds */}
-            <div className="space-y-1">
-                {templates.map((t) => (
-                    <button
-                        key={t.kind}
-                        type="button"
-                        onClick={() => setKind(t.kind)}
-                        className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm ${
-                            t.kind === kind ? "border-primary bg-primary/5 font-medium" : "hover:bg-muted"
-                        }`}
-                    >
-                        <span>{EMAIL_TEMPLATE_LABEL[t.kind]}</span>
-                        <span className={`text-xs ${t.enabled ? "text-emerald-600" : "text-muted-foreground"}`}>{t.enabled ? "On" : "Off"}</span>
-                    </button>
+            <div className="space-y-3">
+                {EMAIL_KIND_GROUPS.map((g) => (
+                    <div key={g.title} className="space-y-1">
+                        <p className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{g.title}</p>
+                        {templates.filter((t) => g.kinds.includes(t.kind)).map((t) => (
+                            <button
+                                key={t.kind}
+                                type="button"
+                                onClick={() => setKind(t.kind)}
+                                className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm ${
+                                    t.kind === kind ? "border-primary bg-primary/5 font-medium" : "hover:bg-muted"
+                                }`}
+                            >
+                                <span>{EMAIL_TEMPLATE_LABEL[t.kind]}</span>
+                                <span className={`text-xs ${t.enabled ? "text-emerald-600" : "text-muted-foreground"}`}>
+                                    {isSecurityKind(t.kind) ? "Always" : t.enabled ? "On" : "Off"}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
                 ))}
             </div>
 
@@ -130,10 +139,12 @@ export function EmailTemplatesPanel({ initialTemplates, sendReady }: Props) {
                     <b>Sent when:</b> {EMAIL_TEMPLATE_WHEN[kind]}
                 </p>
                 <div className="flex flex-wrap items-center gap-3">
-                    <label className="flex items-center gap-2 text-sm">
-                        <Switch checked={enabled} onCheckedChange={setEnabled} />
-                        Send by email
-                    </label>
+                    {!isSecurityKind(kind) && (
+                        <label className="flex items-center gap-2 text-sm">
+                            <Switch checked={enabled} onCheckedChange={setEnabled} />
+                            Send by email
+                        </label>
+                    )}
                     {hasAutoSendSwitch(kind) && (
                         <label className="flex items-center gap-2 text-sm" title="On: goes by itself when the document is posted. Off: only from the 3-dot menu's Send email.">
                             <Switch checked={autoSend} onCheckedChange={setAutoSend} disabled={!enabled} />

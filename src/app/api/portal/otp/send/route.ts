@@ -14,10 +14,10 @@ import {
     TICKET_COOKIE,
 } from "@/shared/lib/auth/otpChallenge";
 import { isLoginBlocked, recordLoginFailure } from "@/shared/lib/auth/loginRateLimit";
-import { isEmailConfigured, sendEmail } from "@/shared/lib/email/sendEmail";
+import { isEmailConfigured } from "@/shared/lib/email/sendEmail";
+import { sendCodeEmail } from "@/shared/lib/email/codeEmail";
 import { isSmsConfigured, sendOtpSms, SMS_PARTNER_LABEL } from "@/shared/lib/sms/sendSms";
 import { isWhatsAppConfigured, sendOtpWhatsApp } from "@/shared/lib/whatsapp/sendWhatsApp";
-import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 
 /**
  * Send a 6-digit sign-in code to a mobile or email — the customer types one
@@ -34,6 +34,8 @@ const bodySchema = z.object({
     via: z.enum(["sms"]).optional(),
     /** How many SMS this screen has already asked for — picks the next provider. */
     smsTry: z.number().int().min(0).max(100).optional(),
+    /** "reset": Forgot password — only picks the email's wording, the code is the same. */
+    purpose: z.enum(["reset"]).optional(),
 });
 
 /**
@@ -138,18 +140,9 @@ export async function POST(req: Request) {
         let partner: string | undefined;
 
         if (asEmail) {
-            await sendEmail({
-                to: identity,
-                subject: `${code} is your ${COMPANY_DETAILS.brandName} sign-in code`,
-                text: [
-                    `Your sign-in code is ${code}`,
-                    "",
-                    "It expires in 10 minutes. Type it on the sign-in page you already have open.",
-                    "If you did not request this, you can ignore this email — nobody can sign in without the code.",
-                    "",
-                    COMPANY_DETAILS.brandName,
-                ].join("\n"),
-            });
+            // Forgot password gets its own wording (Email Templates); sign-in,
+            // register and verify-email share the sign-in code email.
+            await sendCodeEmail(data.purpose === "reset" ? "OTP_PASSWORD_RESET" : "OTP_SIGN_IN", identity, code);
         } else {
             // Already exactly 10 bare digits, which is what both pipes want.
             ({ via, remote, partner } = await sendMobileOtp(identity, code, smsOnly, data.smsTry ?? 0));
