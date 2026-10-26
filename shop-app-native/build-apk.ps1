@@ -1,4 +1,5 @@
-# Builds the signed customer-app APK (Capacitor) and puts it where the website serves it.
+# Builds the signed customer-app APK (Capacitor) and puts it where the website serves it,
+# plus the signed AAB for Google Play (ns-shop.keystore is Play's upload key).
 #   pwsh -File shop-app-native\build-apk.ps1
 #
 # Asks for the signing key's passwords — only the owner types those; they live in
@@ -37,7 +38,7 @@ $env:NS_SHOP_KEY_PASSWORD = if ($keyPlain) { $keyPlain } else { $env:NS_SHOP_KEY
 
 try {
     Push-Location android
-    .\gradlew.bat assembleRelease --no-daemon
+    .\gradlew.bat assembleRelease bundleRelease --no-daemon
     if ($LASTEXITCODE -ne 0) { throw "gradle build failed ($LASTEXITCODE)" }
 } finally {
     Pop-Location
