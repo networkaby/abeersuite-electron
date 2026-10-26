@@ -430,7 +430,7 @@ export class AdPicker {
             size,
             imageUrl: adPlaceholderImage(size),
             imageAlt: `${adSizeDef(size).label} placeholder`,
-            href: "/office/ecommerce/ads",
+            href: "/office/campaigns/ads",
             placeholder: true,
         };
     }

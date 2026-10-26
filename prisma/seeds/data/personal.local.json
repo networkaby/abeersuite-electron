@@ -9972,7 +9972,7 @@
     },
     {
       "roleId": "R2",
-      "permissionId": "ui:sidebar:e-commerce:ads"
+      "permissionId": "ui:sidebar:campaigns:shop-ads"
     },
     {
       "roleId": "R2",
@@ -10336,7 +10336,7 @@
     },
     {
       "roleId": "R3",
-      "permissionId": "ui:sidebar:e-commerce:ads"
+      "permissionId": "ui:sidebar:campaigns:shop-ads"
     },
     {
       "roleId": "R3",
@@ -10664,7 +10664,7 @@
     },
     {
       "roleId": "R1",
-      "permissionId": "ui:sidebar:e-commerce:ads"
+      "permissionId": "ui:sidebar:campaigns:shop-ads"
     },
     {
       "roleId": "R1",
@@ -11046,7 +11046,7 @@
     },
     {
       "departmentId": "DEP-SALES",
-      "permissionId": "ui:sidebar:e-commerce:ads"
+      "permissionId": "ui:sidebar:campaigns:shop-ads"
     },
     {
       "departmentId": "DEP-SALES",
@@ -12026,7 +12026,7 @@
     },
     {
       "departmentId": "DEP-OP",
-      "permissionId": "ui:sidebar:e-commerce:ads"
+      "permissionId": "ui:sidebar:campaigns:shop-ads"
     },
     {
       "departmentId": "DEP-OP",

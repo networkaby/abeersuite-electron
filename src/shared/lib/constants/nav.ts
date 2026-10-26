@@ -600,7 +600,6 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Products", icon: Box, href: "/office/ecommerce/products" },
             { label: "Masters", icon: LayoutGrid, href: "/office/ecommerce/masters" },
             { label: "Customize Home", icon: LayoutTemplate, href: "/office/ecommerce/home" },
-            { label: "Ads", icon: Presentation, href: "/office/ecommerce/ads" },
         ],
     },
 
@@ -736,6 +735,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
             { label: "Compose", icon: SquarePen, href: "/office/campaigns/posts/new" },
             { label: "Queue & Calendar", icon: CalendarFold, href: "/office/campaigns/posts" },
             { label: "Media Library", icon: GalleryVerticalEnd, href: "/office/campaigns/media" },
+            { label: "Shop Ads", icon: Presentation, href: "/office/campaigns/ads" },
             { label: "Campaigns", icon: Megaphone, href: "/office/campaigns" },
             { label: "Broadcast", icon: RadioTower, href: "/office/campaigns/broadcast" },
             { label: "Newsletter", icon: Newspaper, href: "/office/campaigns/newsletter" },
