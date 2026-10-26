@@ -23,6 +23,7 @@ export async function GET(req: Request) {
     // out by accident.
     const cronSecret = process.env.CRON_SECRET?.trim();
     if (cronSecret && req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+        console.error("[cron/backup] 401: Authorization header does not match CRON_SECRET.");
         return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -40,6 +41,7 @@ export async function GET(req: Request) {
 
     const { canBackup, missing } = backupAvailability();
     if (!canBackup) {
+        console.error("[cron/backup] 503: backup keys missing:", missing);
         return Response.json(
             { error: "Backup cannot run: required GitHub/Dropbox keys missing.", missing },
             { status: 503 },
@@ -60,6 +62,7 @@ export async function GET(req: Request) {
     // `pgbouncer=true` by libpqUrl — the same fallback as the settings route.
     const dbUrl = libpqUrl(process.env.DIRECT_URL) ?? libpqUrl(process.env.DATABASE_URL);
     if (!dbUrl) {
+        console.error("[cron/backup] 500: DIRECT_URL / DATABASE_URL missing or invalid.");
         return Response.json(
             { error: "Active database URL is missing or invalid in server environment." },
             { status: 500 },
@@ -72,6 +75,7 @@ export async function GET(req: Request) {
     try {
         await triggerWorkflow(process.env.GITHUB_BACKUP_WORKFLOW?.trim() || "backup.yml", inputs);
     } catch (err) {
+        console.error("[cron/backup] 500: workflow dispatch failed:", (err as Error).message);
         return Response.json({ error: (err as Error).message }, { status: 500 });
     }
 
