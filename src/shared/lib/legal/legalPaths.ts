@@ -11,7 +11,7 @@
  */
 
 /** Order matters — this is the order the links appear in the footer. */
-export const LEGAL_SLUGS = ["terms", "privacy", "refunds", "shipping"] as const;
+export const LEGAL_SLUGS = ["terms", "privacy", "refunds", "shipping", "delete-account"] as const;
 
 export type LegalSlug = (typeof LEGAL_SLUGS)[number];
 

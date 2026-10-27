@@ -163,6 +163,7 @@ export const PRIVACY_POLICY: LegalDoc = {
                 "- Erase data we no longer need for a lawful purpose.",
                 "- Nominate someone to exercise these rights on your behalf if you die or become incapable.",
                 `To make a request, write to ${C.contact.supportEmail}. We will respond within a reasonable time. If you are not satisfied with our answer, you may complain to the Data Protection Board of India.`,
+                "To close your account and delete your data, see our Delete your account page (/delete-account).",
             ],
         },
         {
@@ -458,6 +459,48 @@ export const SHIPPING_POLICY: LegalDoc = {
 };
 
 /**
+ * Google Play requires a public web page that tells app users how to ask for
+ * their account and data to be deleted, reachable without signing in.
+ */
+export const DELETE_ACCOUNT: LegalDoc = {
+    slug: "delete-account",
+    title: "Delete your account",
+    summary: `How to ask ${C.legalName} to close your customer account and delete your data, in the ${C.legalName} app or on our website.`,
+    lastUpdated: "2026-10-27",
+    sections: [
+        {
+            heading: "How to ask",
+            body: [
+                `This covers the ${C.legalName} Android app and our customer portal at ${C.sites.shop} — they share one account.`,
+                `- Email ${C.contact.supportEmail} from the email address on your account, or`,
+                `- Message ${C.contact.whatsapp} on WhatsApp from the mobile number on your account.`,
+                'Write "Delete my account" and your name. We may ask you to confirm with a one-time code so nobody else can close your account.',
+            ],
+        },
+        {
+            heading: "What we delete",
+            body: [
+                "Within 30 days of confirming your request we close your account and delete your sign-in details, saved addresses, wishlist, cart, notification settings and marketing preferences.",
+                "Reward points and unused gift card balance on the account lapse when it is closed, so please use them first.",
+            ],
+        },
+        {
+            heading: "What we must keep",
+            body: [
+                "Indian tax law requires us to keep GST invoices and the related order and payment records for eight financial years. We keep only those records, only for that purpose, and delete them when the period ends.",
+                "Repair and warranty records are kept until the warranty ends, so we can still honour a claim on a product you bought.",
+            ],
+        },
+        {
+            heading: "Deleting only some data",
+            body: [
+                `You can also ask us to delete part of your data — for example your saved addresses or your Google sign-in link — without closing the account. Write to ${C.contact.supportEmail} with what you want removed.`,
+            ],
+        },
+    ],
+};
+
+/**
  * Every slug must have a document — TypeScript fails the build if a slug is
  * added to LEGAL_SLUGS without the prose to go with it.
  */
@@ -466,6 +509,7 @@ const DOC_BY_SLUG: Record<LegalSlug, LegalDoc> = {
     privacy: PRIVACY_POLICY,
     refunds: REFUND_POLICY,
     shipping: SHIPPING_POLICY,
+    "delete-account": DELETE_ACCOUNT,
 };
 
 /** All documents, in the order they appear in the footer. */
