@@ -2,7 +2,7 @@
   "appId": "in.networkservice.shop",
   "appName": "Network Service",
   "webDir": "www",
-  "appendUserAgent": "NSShopApp/7",
+  "appendUserAgent": "NSShopApp/8",
   "backgroundColor": "#eff4fb",
   "server": {
     "url": "https://shop.networkservice.in/m-shop-app",

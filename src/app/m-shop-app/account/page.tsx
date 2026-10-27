@@ -10,7 +10,7 @@ import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { LEGAL_LINKS } from "@/shared/lib/legal/legalContent";
 import { AppVersionLine } from "@/shared/components/AppUpdateBar";
 import { SHOP_APP_RELEASE } from "@/shared/lib/constants/appVersions";
-import { SHOP_APP_APK, SHOP_APP_INSTALL, SHOP_NATIVE_UA } from "@/shared/lib/device/shopApp";
+import { SHOP_APP_APK, SHOP_APP_INSTALL, SHOP_APP_PLAY_URL, SHOP_NATIVE_UA } from "@/shared/lib/device/shopApp";
 
 const ROW = "flex items-center gap-3 px-4 py-3.5 text-[15px] active:bg-muted";
 const CARD = "overflow-hidden rounded-2xl border border-border/70 bg-background divide-y divide-border/60";
@@ -110,7 +110,7 @@ export default async function CustomerAppAccountPage() {
                 </ul>
 
                 {signedIn && <AppSignOutButton />}
-                <AppVersionLine uaTag={SHOP_NATIVE_UA} release={SHOP_APP_RELEASE} installUrl={`${COMPANY_DETAILS.sites.shop}.${SHOP_APP_INSTALL}`} apk={SHOP_APP_APK} />
+                <AppVersionLine uaTag={SHOP_NATIVE_UA} release={SHOP_APP_RELEASE} installUrl={`${COMPANY_DETAILS.sites.shop}.${SHOP_APP_INSTALL}`} apk={SHOP_APP_APK} playUrl={SHOP_APP_PLAY_URL} />
             </main>
         </>
     );

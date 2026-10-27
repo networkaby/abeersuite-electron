@@ -20,11 +20,20 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NsGooglePlugin.class);
         registerPlugin(NsUpdatePlugin.class);
         super.onCreate(savedInstanceState);
+        markPlayBuild();
         NsMessagingService.ensureChannel(this);
         askForNotifications();
         openFromNotification(getIntent());
         openFromLink(getIntent());
         backStepsThroughPages();
+    }
+
+    /** The Play build adds " PlayStore" to the user agent, so AppUpdateBar sends
+     *  updates to the Play listing instead of downloading the website's APK. */
+    private void markPlayBuild() {
+        if (!"play".equals(BuildConfig.FLAVOR)) return;
+        WebView web = getBridge().getWebView();
+        web.getSettings().setUserAgentString(web.getSettings().getUserAgentString() + " PlayStore");
     }
 
     /**

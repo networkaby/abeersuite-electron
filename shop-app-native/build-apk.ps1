@@ -1,5 +1,6 @@
 # Builds the signed customer-app APK (Capacitor) and puts it where the website serves it,
-# plus the signed AAB for Google Play (ns-shop.keystore is Play's upload key).
+# plus the signed AAB for Google Play (ns-shop.keystore is Play's upload key) —
+# the "play" flavor, which Play updates, so it has no self-install permission.
 #   pwsh -File shop-app-native\build-apk.ps1
 #
 # Asks for the signing key's passwords — only the owner types those; they live in
@@ -38,17 +39,20 @@ $env:NS_SHOP_KEY_PASSWORD = if ($keyPlain) { $keyPlain } else { $env:NS_SHOP_KEY
 
 try {
     Push-Location android
-    .\gradlew.bat assembleRelease bundleRelease --no-daemon
+    # site flavor: the self-updating APK for the website. play flavor: the AAB for
+    # Google Play, without the self-install permission (build.gradle productFlavors).
+    .\gradlew.bat assembleSiteRelease bundlePlayRelease --no-daemon
     if ($LASTEXITCODE -ne 0) { throw "gradle build failed ($LASTEXITCODE)" }
 } finally {
     Pop-Location
     Remove-Item Env:NS_SHOP_KEYSTORE_PASSWORD, Env:NS_SHOP_KEY_PASSWORD -ErrorAction SilentlyContinue
 }
 
-$apk = ".\android\app\build\outputs\apk\release\app-release.apk"
+$apk = ".\android\app\build\outputs\apk\site\release\app-site-release.apk"
 Copy-Item $apk "..\public\ns-shop.apk" -Force
+$aab = ".\android\app\build\outputs\bundle\playRelease\app-play-release.aab"
 
 # Keeps the staff app's entry (phone-app/) — see scripts/set-assetlinks.ps1.
 . "$PSScriptRoot\..\scripts\set-assetlinks.ps1"
 Set-AssetLink -Package (Get-Content ".\capacitor.config.json" -Raw | ConvertFrom-Json).appId -Apk $apk
-Write-Host "Done: public\ns-shop.apk and public\.well-known\assetlinks.json updated."
+Write-Host "Done: public\ns-shop.apk and public\.well-known\assetlinks.json updated. Play upload: shop-app-native\$($aab.TrimStart('.\'))"

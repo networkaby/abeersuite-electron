@@ -13,4 +13,4 @@ export type AppRelease = { code: number; name: string; urgent: boolean };
 
 export const STAFF_APP_RELEASE: AppRelease = { code: 6, name: "2.3.0", urgent: false };
 
-export const SHOP_APP_RELEASE: AppRelease = { code: 7, name: "2.2.1", urgent: false };
+export const SHOP_APP_RELEASE: AppRelease = { code: 8, name: "2.2.2", urgent: false };

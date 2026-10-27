@@ -9,8 +9,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Must climb on every APK: the retired TWA was 1, and a phone
         // refuses an "update" whose code is not higher than what it has.
-        versionCode 7
-        versionName "2.2.1"
+        versionCode 8
+        versionName "2.2.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -28,6 +28,16 @@ android {
             keyAlias "ns-shop"
             keyPassword System.getenv("NS_SHOP_KEY_PASSWORD")
         }
+    }
+    // site: the APK the website serves, updating itself (NsUpdatePlugin).
+    // play: the Google Play AAB — Play forbids self-install, so it drops that
+    // permission (src/play/AndroidManifest.xml) and tells the page it came from
+    // Play (MainActivity), whose update bar then opens the Play listing.
+    buildFeatures { buildConfig = true } // BuildConfig.FLAVOR, read by MainActivity
+    flavorDimensions = ["store"]
+    productFlavors {
+        site { dimension "store" }
+        play { dimension "store" }
     }
     buildTypes {
         release {

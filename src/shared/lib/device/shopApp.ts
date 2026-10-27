@@ -29,6 +29,13 @@ export const SHOP_APP_ANDROID_PACKAGE = "in.networkservice.shop";
 /** The APK, served from `public/` until the Play Store listing is live. */
 export const SHOP_APP_APK = "/ns-shop.apk";
 
+/** The Google Play listing — where the Play build's update bar sends people. */
+export const SHOP_APP_PLAY_URL = `https://play.google.com/store/apps/details?id=${SHOP_APP_ANDROID_PACKAGE}`;
+
+/** Turn on once the Play listing is public (production): until then the link
+ *  shows "item not found" to everyone outside the closed test. */
+export const SHOP_APP_ON_PLAY = false;
+
 /** Status bar / splash colours — same page colours as the staff app. */
 export const SHOP_APP_THEME = { light: "#eff4fb", dark: "#101725" } as const;
 

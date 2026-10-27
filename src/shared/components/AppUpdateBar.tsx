@@ -18,6 +18,18 @@ function installedAppCode(uaTag: string): number | null {
     return m[1] ? Number(m[1]) : UNSTAMPED_CODE;
 }
 
+/** The Play build appends this to its user agent (shop-app-native MainActivity):
+ *  Play updates it, so it must never download the website's APK. */
+const PLAY_UA_MARK = "PlayStore";
+const isPlayBuild = () => navigator.userAgent.includes(PLAY_UA_MARK);
+
+/** Where the download tap goes: the Play listing for a Play build that has one,
+ *  else the site's install page. */
+function useUpdateTarget(installUrl: string, playUrl: string | undefined): { href: string; play: boolean } {
+    const play = useSyncExternalStore(noSubscribe, () => !!playUrl && isPlayBuild(), () => false);
+    return { href: play && playUrl ? playUrl : installUrl, play };
+}
+
 /** The apps' in-app updater (NsUpdatePlugin.java in phone-app and shop-app-native) —
  *  absent in older builds and a browser. */
 type NativeUpdate = {
@@ -33,14 +45,14 @@ const nativeUpdate = (): NativeUpdate | null =>
  * here, the link opens `installUrl` in Chrome. A failed in-app download keeps the
  * Chrome page on hand (`failed`).
  */
-function useAppUpdate(release: AppRelease, apk: string) {
-    const native = useSyncExternalStore(noSubscribe, () => nativeUpdate() !== null, () => false);
+function useAppUpdate(release: AppRelease, apk: string, play: boolean) {
+    const native = useSyncExternalStore(noSubscribe, () => !play && nativeUpdate() !== null, () => false);
     const [status, setStatus] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [failed, setFailed] = useState(false);
 
     const start = async (e: MouseEvent) => {
-        const updater = nativeUpdate();
+        const updater = play ? null : nativeUpdate();
         if (!updater) return; // the link does it
         e.preventDefault();
         if (busy) return;
@@ -88,10 +100,16 @@ function useAppUpdate(release: AppRelease, apk: string) {
  * file?" question — while the same tap on the install page, the fresh-install path,
  * always worked. That site must be deployed whenever its APK changes, or phones
  * reinstall the old file in a loop.
+ *
+ * `playUrl`: the app's Play listing. A Play build (PLAY_UA_MARK) is sent there
+ * instead — Play does the update, and that build has no self-install permission.
  */
-export default function AppUpdateBar({ uaTag, release, installUrl, apk }: { uaTag: string; release: AppRelease; installUrl: string; apk: string }) {
+type UpdateProps = { uaTag: string; release: AppRelease; installUrl: string; apk: string; playUrl?: string };
+
+export default function AppUpdateBar({ uaTag, release, installUrl, apk, playUrl }: UpdateProps) {
     const [dismissed, setDismissed] = useState(false);
-    const update = useAppUpdate(release, apk);
+    const target = useUpdateTarget(installUrl, playUrl);
+    const update = useAppUpdate(release, apk, target.play);
     const laterKey = `app-update-later:${uaTag}:${release.code}`;
     // Read once per visit, never on the server — the user agent and a "Later" tap
     // from an earlier visit do not change while the page is open.
@@ -112,14 +130,16 @@ export default function AppUpdateBar({ uaTag, release, installUrl, apk }: { uaTa
     };
     const download = (
         <Button asChild size="sm" className="gap-1.5">
-            <a href={installUrl} target="_blank" rel="noopener" onClick={update.start} aria-disabled={update.busy}>
-                <Download className="size-4" /> {update.native ? "Update now" : "Download update"}
+            <a href={target.href} target="_blank" rel="noopener" onClick={update.start} aria-disabled={update.busy}>
+                <Download className="size-4" /> {update.native || target.play ? "Update now" : "Download update"}
             </a>
         </Button>
     );
-    const help = update.status ?? (update.native
-        ? "Downloads inside the app, then tap Install. You stay signed in."
-        : "Chrome opens the download page: tap Download, open the file and tap Install. You stay signed in.");
+    const help = update.status ?? (target.play
+        ? "Opens Google Play: tap Update. You stay signed in."
+        : update.native
+          ? "Downloads inside the app, then tap Install. You stay signed in."
+          : "Chrome opens the download page: tap Download, open the file and tap Install. You stay signed in.");
     const fallback = update.failed && (
         <a href={installUrl} target="_blank" rel="noopener" className="text-xs font-medium text-primary underline">
             Download from Chrome instead
@@ -162,16 +182,17 @@ export default function AppUpdateBar({ uaTag, release, installUrl, apk }: { uaTa
  * whether this phone is up to date, with the download always on hand when it is
  * not (even after "Later" hid the bar). Shown only inside the app.
  */
-export function AppVersionLine({ uaTag, release, installUrl, apk }: { uaTag: string; release: AppRelease; installUrl: string; apk: string }) {
+export function AppVersionLine({ uaTag, release, installUrl, apk, playUrl }: UpdateProps) {
     const installed = useSyncExternalStore(noSubscribe, () => installedAppCode(uaTag), () => null);
-    const update = useAppUpdate(release, apk);
+    const target = useUpdateTarget(installUrl, playUrl);
+    const update = useAppUpdate(release, apk, target.play);
     if (installed === null) return null;
     const old = installed < release.code;
     return (
         <p className="py-3 text-center text-xs text-muted-foreground">
             App build {installed} · latest {release.name} (build {release.code})
             {old ? (
-                <> · <a href={installUrl} target="_blank" rel="noopener" onClick={update.start} className="font-medium text-primary underline">{update.native ? "Update now" : "Download update"}</a></>
+                <> · <a href={target.href} target="_blank" rel="noopener" onClick={update.start} className="font-medium text-primary underline">{update.native || target.play ? "Update now" : "Download update"}</a></>
             ) : " · up to date"}
             {update.status && <span className="block">{update.status}</span>}
             {update.failed && (
