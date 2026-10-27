@@ -213,6 +213,13 @@ model OrgDefaults {
   // E-Commerce). Per-product `InvProduct.allowBackorder` can override to BACKORDER.
   shopOutOfStockPolicy ShopOutOfStockPolicy @default(NOTIFY)
 
+  // Storefront tracking codes (Settings → Tracking Codes): GA4 / GTM / Meta Pixel /
+  // TikTok Pixel ids with on/off switches, plus custom head/body HTML. Loaded only
+  // on the public shop pages, never in office or on a counter. Shape: TrackingCodes
+  // (src/shared/lib/shop/trackingCodes.ts). Admin-chosen, so bootstrap-seed leaves
+  // it untouched.
+  trackingCodesJson Json @default("{}")
+
   // Product description option every product page opens on (Settings → AI
   // Setup): "direct" | "verified" (AI_COPY_FLOWS). Staff may switch for one
   // write. Admin-chosen, so bootstrap-seed leaves it untouched.

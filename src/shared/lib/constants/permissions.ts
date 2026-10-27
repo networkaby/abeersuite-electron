@@ -208,6 +208,7 @@ export const PERMISSIONS = {
     // Settings
     SETTINGS_MANAGE: "settings:manage",
     SETTINGS_AI_MANAGE: "settings:ai:manage",
+    SETTINGS_TRACKING_MANAGE: "settings:tracking:manage",
 
 
     // Compliance (GST reports) — read access rides the accountancy sidebar nav;
