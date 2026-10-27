@@ -15,7 +15,8 @@ export const metadata: Metadata = {
     manifest: SHOP_APP_MANIFEST,
     // iPhone has no manifest install: "Add to Home Screen" reads these instead.
     appleWebApp: { capable: true, title: COMPANY_DETAILS.brandName },
-    icons: { apple: "/shop-icon-192.png" },
+    // The shop's own tab icon — the root favicon.ico is the office's.
+    icons: { icon: "/shop-icon-192.png", apple: "/shop-icon-192.png" },
 };
 
 export const viewport: Viewport = {
