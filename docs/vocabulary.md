@@ -16,9 +16,9 @@ This file unifies what used to be two separate glossaries — the Transaction En
 
 - **Office** — the office web app on Vercel (`APP_MODE=office`, `d_office`).
 - **Shop** / **public** — the storefront + customer portal on Vercel (`APP_MODE=public`, `d_shop`).
-- **Counter app** = **counter** = **desktop app** = **till** — the Electron app, always built as `APP_MODE=office`. All four words mean the same thing.
+- **Counter app** = **counter** = **desktop app** — the Electron app, always built as `APP_MODE=office`. All three words mean the same thing. Do not call it "till" (owner finds it annoying); older docs and code comments still say till — read it as counter.
 
-**Retired for now:** the separate `APP_MODE=counter` desktop variant. No build uses it, so code and docs that say "office build" vs "counter build" of the desktop app describe one app. The code still carries the variant (`counterEnvCopiedFor`, `appModeCore.ts`); do not build it, and do not add new counter-variant-only rules.
+**Retired for now:** the separate `APP_MODE=counter` desktop variant. No build uses it, so code and docs that say "office build" vs "counter build" of the desktop app describe one app today. It may be revived in the far future, so **keep its code and documentation as they are** — do not delete the variant (`counterEnvCopiedFor`, `appModeCore.ts`) or the docs describing it; just do not build it or add new rules that only it needs.
 
 ---
 
