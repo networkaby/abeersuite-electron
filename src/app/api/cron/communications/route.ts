@@ -3,6 +3,7 @@ import { runDueReminders } from "@/shared/lib/whatsapp/dueReminders";
 import { runEmailReminders } from "@/shared/lib/email/emailReminders";
 import { runPostReminders } from "@/modules/campaigns/lib/postReminders";
 import { runScheduledCampaigns } from "@/modules/campaigns/lib/sendCampaign";
+import { runGooglePosts } from "@/modules/campaigns/lib/googlePosts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +17,8 @@ export const maxDuration = 300;
  * scheduled campaign whose time has come, side by side; each is
  * safe to repeat and decides for itself whether anything is due. One failing
  * does not stop the others — its error is logged and returned under its name.
+ * Due posts go to Google Business Profile first, on their own, so the post
+ * reminders that follow no longer count Google as waiting for a hand share.
  * Backup is not part of this: Vercel's nightly cron owns it.
  *
  * CRON_SECRET is optional, as for /api/cron/due-reminders — blank counts as absent.
@@ -26,9 +29,16 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const out: Record<string, unknown> = {};
+    try {
+        out.googlePosts = await runGooglePosts();
+    } catch (e) {
+        console.error("[cron/communications] googlePosts failed:", e);
+        out.googlePosts = { error: (e as Error)?.message ?? String(e) };
+    }
+
     const jobs = { dueReminders: runDueReminders, emailReminders: runEmailReminders, postReminders: runPostReminders, campaigns: runScheduledCampaigns };
     const settled = await Promise.allSettled(Object.values(jobs).map((run) => run()));
-    const out: Record<string, unknown> = {};
     Object.keys(jobs).forEach((name, i) => {
         const r = settled[i];
         if (r.status === "fulfilled") out[name] = r.value;

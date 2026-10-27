@@ -1138,6 +1138,41 @@ ALTER TABLE "PostShare" ALTER COLUMN "sharedByName" DROP NOT NULL;
 ALTER TABLE "PostShare" ADD COLUMN IF NOT EXISTS "sharedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "GoogleBusinessLink" (
+    "id" INTEGER NOT NULL DEFAULT 1,
+    "refreshTokenEnc" TEXT NOT NULL,
+    "googleEmail" TEXT,
+    "accountName" TEXT,
+    "locationName" TEXT,
+    "locationTitle" TEXT,
+    "connectedById" INTEGER,
+    "connectedByName" TEXT,
+    "lastError" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "GoogleBusinessLink_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "GoogleBusinessLink" ADD COLUMN IF NOT EXISTS "id" INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE "GoogleBusinessLink" ADD COLUMN IF NOT EXISTS "refreshTokenEnc" TEXT NOT NULL;
+ALTER TABLE "GoogleBusinessLink" ADD COLUMN IF NOT EXISTS "googleEmail" TEXT;
+ALTER TABLE "GoogleBusinessLink" ALTER COLUMN "googleEmail" DROP NOT NULL;
+ALTER TABLE "GoogleBusinessLink" ADD COLUMN IF NOT EXISTS "accountName" TEXT;
+ALTER TABLE "GoogleBusinessLink" ALTER COLUMN "accountName" DROP NOT NULL;
+ALTER TABLE "GoogleBusinessLink" ADD COLUMN IF NOT EXISTS "locationName" TEXT;
+ALTER TABLE "GoogleBusinessLink" ALTER COLUMN "locationName" DROP NOT NULL;
+ALTER TABLE "GoogleBusinessLink" ADD COLUMN IF NOT EXISTS "locationTitle" TEXT;
+ALTER TABLE "GoogleBusinessLink" ALTER COLUMN "locationTitle" DROP NOT NULL;
+ALTER TABLE "GoogleBusinessLink" ADD COLUMN IF NOT EXISTS "connectedById" INTEGER;
+ALTER TABLE "GoogleBusinessLink" ALTER COLUMN "connectedById" DROP NOT NULL;
+ALTER TABLE "GoogleBusinessLink" ADD COLUMN IF NOT EXISTS "connectedByName" TEXT;
+ALTER TABLE "GoogleBusinessLink" ALTER COLUMN "connectedByName" DROP NOT NULL;
+ALTER TABLE "GoogleBusinessLink" ADD COLUMN IF NOT EXISTS "lastError" TEXT;
+ALTER TABLE "GoogleBusinessLink" ALTER COLUMN "lastError" DROP NOT NULL;
+ALTER TABLE "GoogleBusinessLink" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "GoogleBusinessLink" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "Coupon" (
     "id" SERIAL NOT NULL,
     "code" TEXT,
@@ -3814,6 +3849,7 @@ CREATE TABLE IF NOT EXISTS "OrgDefaults" (
     "shippingPoolGroupId" INTEGER,
     "shopPublishRulesJson" JSONB,
     "shopOutOfStockPolicy" "ShopOutOfStockPolicy" NOT NULL DEFAULT 'NOTIFY',
+    "trackingCodesJson" JSONB NOT NULL DEFAULT '{}',
     "aiCopyFlow" TEXT NOT NULL DEFAULT 'verified',
     "aiPhotoCheck" BOOLEAN NOT NULL DEFAULT false,
     "posEstimateShowDiscountsJson" JSONB,
@@ -3857,6 +3893,7 @@ ALTER TABLE "OrgDefaults" ALTER COLUMN "shippingPoolGroupId" DROP NOT NULL;
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "shopPublishRulesJson" JSONB;
 ALTER TABLE "OrgDefaults" ALTER COLUMN "shopPublishRulesJson" DROP NOT NULL;
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "shopOutOfStockPolicy" "ShopOutOfStockPolicy" NOT NULL DEFAULT 'NOTIFY';
+ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "trackingCodesJson" JSONB NOT NULL DEFAULT '{}';
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "aiCopyFlow" TEXT NOT NULL DEFAULT 'verified';
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "aiPhotoCheck" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "OrgDefaults" ADD COLUMN IF NOT EXISTS "posEstimateShowDiscountsJson" JSONB;
@@ -8422,6 +8459,13 @@ DO $$ BEGIN
     IF to_regclass('public."GiftCardTxn"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "GiftCardTxn";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "GiftCardTxn"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."GoogleBusinessLink"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "GoogleBusinessLink";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "GoogleBusinessLink"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;

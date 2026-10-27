@@ -664,6 +664,7 @@ export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, ExtraToggle | ExtraToggle
     [sidebarChildPermissionId("crm", "messages")]: { id: "messages:reply", label: "Can reply on WhatsApp" },
     // Campaigns — writing opens on the link; sending goes to every customer at once.
     [sidebarChildPermissionId("campaigns", "campaigns")]: { id: "campaigns:send", label: "Can send campaigns" },
+    [sidebarChildPermissionId("campaigns", "channels")]: { id: "campaigns:google:connect", label: "Can connect Google" },
 };
 
 /** The extra toggles for a link, as a list (bare entries normalise to one item). */

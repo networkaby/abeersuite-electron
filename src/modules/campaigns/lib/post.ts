@@ -6,11 +6,11 @@ import { formatRupees } from "@/shared/lib/format/moneyInr";
  * (prisma/schema/campaigns.prisma `Post`). Shared by the API routes and the
  * screens so both read the same rules.
  *
- * Every channel is "share by hand" for now: WhatsApp has no posting API at all,
- * and Google Business Profile has one only once Google approves our access.
- * Share prepares the photo and caption and opens the right app; staff then mark
- * it done, which writes a PostShare line. When a channel's API arrives its
- * `mode` turns "AUTO" and the same post goes out by itself.
+ * WhatsApp has no posting API at all, so Share prepares the photo and caption
+ * and opens the app; staff then mark it done, which writes a PostShare line.
+ * Google Business Profile posts by itself once connected on Campaigns →
+ * Channels (googleBusiness.ts) — Post to Google, or the communications job at
+ * the scheduled time — and falls back to the same hand share when it cannot.
  */
 
 export const POST_CHANNELS = [
@@ -28,7 +28,7 @@ export const POST_CHANNELS = [
         short: "Google",
         mode: "PHONE",
         ready: true,
-        hint: "Share copies the text, saves the photo and opens the Business Profile — click Add update and paste.",
+        hint: "Posts by itself once connected on Campaigns → Channels. By hand: Share copies the text, saves the photo and opens the Business Profile.",
     },
     {
         value: "WA_STATUS",
@@ -64,6 +64,18 @@ export const GOOGLE_BUTTONS = [
     { value: "LEARN_MORE", label: "Learn more" },
     { value: "BOOK", label: "Book" },
 ] as const;
+
+/**
+ * Why a post cannot go to Google by itself, or null when it can. The API
+ * posting covers an Update with a JPG / PNG photo (or none); an Offer or Event
+ * needs a title and dates the post does not hold, and Google takes no video or
+ * WebP here — those stay "share by hand".
+ */
+export function googleAutoBlock(p: { googleType: string; mediaType: string | null }): string | null {
+    if (p.googleType !== "UPDATE") return "Only an Update posts by itself — share an Offer or Event by hand.";
+    if (p.mediaType && !["image/jpeg", "image/png"].includes(p.mediaType)) return "Google takes a JPG or PNG photo here — share a video or WebP by hand.";
+    return null;
+}
 
 /** Google allows 1,500 characters; WhatsApp more — the stricter one wins. */
 export const POST_CAPTION_MAX = 1500;
