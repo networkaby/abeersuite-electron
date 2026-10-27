@@ -1366,6 +1366,7 @@ First-week pain for a shop moving off Vyapar: the first three rows plus batch/ex
 
 ## 🧠 Key decisions
 
+- **2026-10-28 — One desktop app: the `APP_MODE=counter` variant is retired for now.** Owner: *"Temporarily we retire counter app, we call office app counter app or counter or desktop app alternatively"*. Counter app = counter = desktop app = till = the Electron app built as `APP_MODE=office`; office = the Vercel office site; shop = the public site ([vocabulary](docs/vocabulary.md#office--shop--counter-app-deployments)). Any "office build vs counter build" split in code or docs is one app today; the variant code stays but is not built.
 | Area                  | Choice                                          | Why                                                                                           |
 | --------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | Framework             | Next.js 16 App Router                           | Server + client co-location; Turbopack for dev speed.                                         |

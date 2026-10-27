@@ -10,6 +10,18 @@ This file unifies what used to be two separate glossaries — the Transaction En
 
 **Status note (2026-06-25):** the vocabulary below is **adopted**, but the **code has not been renamed yet** — the live Prisma models are still `Voucher` / `InvVoucher` and the bridge is still `postInvVoucherToGl`. Use these terms in discussion and new design; see the "Current code ↔ vocabulary" map before grepping. The rename + the Transaction Engine itself are a planned, phased migration (see `PROJECT_BRAIN.md`).
 
+## Office · Shop · Counter app (deployments)
+
+**Definition (2026-10-28):** three words for where the app runs.
+
+- **Office** — the office web app on Vercel (`APP_MODE=office`, `d_office`).
+- **Shop** / **public** — the storefront + customer portal on Vercel (`APP_MODE=public`, `d_shop`).
+- **Counter app** = **counter** = **desktop app** = **till** — the Electron app, always built as `APP_MODE=office`. All four words mean the same thing.
+
+**Retired for now:** the separate `APP_MODE=counter` desktop variant. No build uses it, so code and docs that say "office build" vs "counter build" of the desktop app describe one app. The code still carries the variant (`counterEnvCopiedFor`, `appModeCore.ts`); do not build it, and do not add new counter-variant-only rules.
+
+---
+
 ## Transaction
 
 **Definition:** The umbrella term for any business event the books must record. Every transaction has a **money side** (it must be expressible as balanced debit/credit). Two kinds exist — see below.
