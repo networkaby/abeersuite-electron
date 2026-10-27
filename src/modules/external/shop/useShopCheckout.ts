@@ -6,6 +6,7 @@ import { useShopCartStore } from "@/store/external/shopCartStore";
 import { usePortalAccountStore } from "@/store/external/portalAccountStore";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { useValueChange } from "@/shared/hooks/useValueChange";
+import { trackPurchase } from "@/shared/lib/shop/trackingCodes";
 
 /**
  * Everything a checkout knows and does — the address with its pincode lookups
@@ -383,6 +384,7 @@ export function useShopCheckout({ onPlaced }: { onPlaced: (orderId: number) => v
                 redeemPoints: requestedRedeemPts || undefined,
             });
             clear();
+            trackPurchase(order.id, grand);
             onPlaced(order.id);
         } catch (err: unknown) {
             const msg =

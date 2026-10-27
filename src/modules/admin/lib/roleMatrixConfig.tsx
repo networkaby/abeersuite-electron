@@ -657,6 +657,9 @@ export const SIDEBAR_LINK_EXTRA_TOGGLE: Record<string, ExtraToggle | ExtraToggle
     // AI Setup — the page opens on its link; its API holds secret keys, so reading
     // or changing them is settings:ai:manage (no other box grants it).
     [sidebarChildPermissionId("settings", "ai-setup")]: { id: "settings:ai:manage", label: "Can manage AI keys" },
+    // Tracking Codes — the page opens on its link; saving puts code on every shop
+    // page, so it is settings:tracking:manage (no other box grants it).
+    [sidebarChildPermissionId("settings", "tracking-codes")]: { id: "settings:tracking:manage", label: "Can edit tracking codes" },
     // CRM → Messages — reading opens on the link; a reply is a paid WhatsApp message.
     [sidebarChildPermissionId("crm", "messages")]: { id: "messages:reply", label: "Can reply on WhatsApp" },
     // Campaigns — writing opens on the link; sending goes to every customer at once.
