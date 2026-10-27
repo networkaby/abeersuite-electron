@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import CampaignsHeader from "./CampaignsHeader";
@@ -16,17 +17,21 @@ export default function PlannedPage({
     description,
     sections,
     footnote,
+    children,
 }: {
     icon: LucideIcon;
     title: string;
     description: string;
     sections: PlannedSection[];
     footnote?: string;
+    /** A part already working, shown above the sample sections. */
+    children?: ReactNode;
 }) {
     return (
         <ScrollArea className="h-full" type="always">
             <div className="mx-auto max-w-5xl space-y-6 px-6 pt-4 pb-10">
                 <CampaignsHeader icon={icon} title={title} description={description} planned />
+                {children}
                 <div className="grid gap-4 md:grid-cols-2">
                     {sections.map((s) => (
                         <section key={s.heading} className="rounded-xl border">

@@ -10852,6 +10852,10 @@
     },
     {
       "roleId": "R1",
+      "permissionId": "campaigns:google:connect"
+    },
+    {
+      "roleId": "R1",
       "permissionId": "mobile:posts:share"
     },
     {

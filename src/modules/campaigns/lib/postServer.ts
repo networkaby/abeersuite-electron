@@ -90,16 +90,17 @@ export async function whatsappWaiting() {
 }
 
 /**
- * Log that `userId` put the post up on `channel`; once every channel the post is
+ * Log that `userId` put the post up on `channel` (`byName` overrides the name —
+ * "Auto (Google)" for the communications job); once every channel the post is
  * meant for has a share, it turns DONE. Shared by the office and the phone app.
  * Returns the post as the screens want it, or null when there is no such post.
  */
-export async function recordShare(postId: number, channel: string, userId: number) {
+export async function recordShare(postId: number, channel: string, userId: number | null, byName?: string) {
     const post = await prisma.post.findUnique({ where: { id: postId }, select: { channels: true, shares: { select: { channel: true } } } });
     if (!post) return null;
     const shared = new Set([...post.shares.map((s) => s.channel), channel]);
     await prisma.$transaction([
-        prisma.postShare.create({ data: { postId, channel, sharedById: userId, sharedByName: await staffName(userId) } }),
+        prisma.postShare.create({ data: { postId, channel, sharedById: userId, sharedByName: byName ?? (userId ? await staffName(userId) : null) } }),
         ...(post.channels.every((c) => shared.has(c)) ? [prisma.post.update({ where: { id: postId }, data: { status: "DONE" } })] : []),
     ]);
     return loadPost(postId);

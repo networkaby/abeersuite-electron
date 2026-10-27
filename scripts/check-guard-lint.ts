@@ -56,6 +56,10 @@ const GUARD_PATTERNS = [
     // Campaigns: named requireAnyPermission(sidebar link) helpers — campaignAccess.ts.
     /\brequireCampaignsPage\b/,
     /\brequirePostsPage\b/,
+    /\brequireScheduledPage\b/,
+    /\brequireDueRemindersPage\b/,
+    /\brequireGoogleStatus\b/,
+    /\brequireGoogleConnect\b/,
     // NOT a bare `auth()`: it answers "is anyone signed in", portal customers
     // included, and skips the released-counter stop. Staff routes use requireAuth().
     /\bverifyWebhookSignature\b/,

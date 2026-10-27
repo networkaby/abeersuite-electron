@@ -89,3 +89,23 @@ model PostShare {
 
   @@index([postId, sharedAt])
 }
+
+/// The shop's Google Business Profile connection — one row (id 1), made by
+/// Campaigns → Channels → Connect. The refresh token is locked with the shared
+/// AI_KEY_SECRET (secretBox), never stored plain.
+model GoogleBusinessLink {
+  id              Int      @id @default(1)
+  refreshTokenEnc String
+  /// The Google sign-in that allowed it — must own or manage the listing.
+  googleEmail     String?
+  /// "accounts/123" and "locations/456" — picked after connecting; posts go here.
+  accountName     String?
+  locationName    String?
+  locationTitle   String?
+  connectedById   Int?
+  connectedByName String?
+  /// Last failure talking to Google (expired access, refused post), shown on Channels.
+  lastError       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}

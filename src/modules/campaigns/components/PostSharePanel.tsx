@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Check, Copy, Download, ExternalLink, ImagePlus, Share2, Trash2 } from "lucide-react";
+import { Check, Copy, Download, ExternalLink, ImagePlus, Send, Share2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
@@ -13,6 +13,7 @@ import {
     POST_MEDIA_TYPES,
     channelOf,
     checkPostMedia,
+    googleAutoBlock,
     postCaption,
     type PostRow,
 } from "@/modules/campaigns/lib/post";
@@ -20,8 +21,9 @@ import {
 const when = (iso: string) => new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 
 /**
- * The photo and the "put it up" part of one saved post. No channel can be posted
- * to by software yet, so Share prepares each one by hand:
+ * The photo and the "put it up" part of one saved post. Google Business Profile
+ * posts itself (Post to Google) once connected on Campaigns → Channels; Share
+ * prepares each channel by hand:
  *   • WhatsApp Channel / Status — the phone's share sheet with photo + caption
  *     (caption copied too, since WhatsApp can drop it); on a PC, download + copy.
  *   • Google Business Profile — copies the caption, downloads the photo and
@@ -33,6 +35,30 @@ export default function PostSharePanel({ post, onChanged }: { post: PostRow; onC
     const fileInput = useRef<HTMLInputElement>(null);
     const caption = postCaption(post, COMPANY_DETAILS.sites.shop);
     const isVideo = post.mediaType?.startsWith("video/");
+    // Is the Google connection ready? Asked once; null while asking or when it fails.
+    const [googleReady, setGoogleReady] = useState<boolean | null>(null);
+    useEffect(() => {
+        if (!post.channels.includes("GOOGLE_BUSINESS")) return;
+        axios
+            .get<{ ready: boolean }>("/api/campaigns/google")
+            .then(({ data }) => setGoogleReady(data.ready))
+            .catch(() => setGoogleReady(false));
+    }, [post.channels]);
+    const googleBlock = googleAutoBlock(post);
+
+    async function postToGoogle(again: boolean) {
+        if (again && !window.confirm("This post is already on Google. Post it there again?")) return;
+        setBusy("google");
+        try {
+            const { data } = await axios.post<{ post: PostRow; url: string | null }>(`/api/campaigns/posts/${post.id}/google`, { again });
+            onChanged(data.post);
+            toast.success("Posted on Google Business Profile", data.url ? { action: { label: "View", onClick: () => window.open(data.url!, "_blank", "noopener") } } : undefined);
+        } catch (e) {
+            toast.error(extractApiError(e, "Google did not take the post"));
+        } finally {
+            setBusy(null);
+        }
+    }
 
     async function upload(file: File) {
         const bad = checkPostMedia(file.type, file.size);
@@ -213,8 +239,25 @@ export default function PostSharePanel({ post, onChanged }: { post: PostRow; onC
                                         {last ? `Posted ${when(last.sharedAt)}${last.sharedByName ? ` by ${last.sharedByName}` : ""}` : ch?.hint}
                                     </p>
                                 </div>
-                                <div className="flex gap-1.5">
-                                    <Button type="button" size="sm" disabled={busy !== null} onClick={() => share(value)}>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {value === "GOOGLE_BUSINESS" && googleReady && (
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            disabled={busy !== null || !!googleBlock}
+                                            title={googleBlock ?? "Put it up on the listing now, through Google"}
+                                            onClick={() => postToGoogle(!!last)}
+                                        >
+                                            <Send className="mr-1 h-3.5 w-3.5" /> {busy === "google" ? "Posting…" : last ? "Post again" : "Post to Google"}
+                                        </Button>
+                                    )}
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={value === "GOOGLE_BUSINESS" && googleReady ? "outline" : "default"}
+                                        disabled={busy !== null}
+                                        onClick={() => share(value)}
+                                    >
                                         {value === "GOOGLE_BUSINESS" ? <ExternalLink className="mr-1 h-3.5 w-3.5" /> : <Share2 className="mr-1 h-3.5 w-3.5" />}
                                         {busy === `share-${value}` ? "Opening…" : "Share"}
                                     </Button>
