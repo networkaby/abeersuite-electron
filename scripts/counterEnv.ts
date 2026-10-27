@@ -25,21 +25,21 @@
  * secret, which let anyone holding an installer mint an office session for any user.
  *
  * NOT here, on purpose:
- *   - `DATABASE_URL` (since 2026-10-24) — the till fetches it from the office at start
- *     (`POST /api/counter/config`, answered from Vercel's own env) with
- *     `COUNTER_INSTALL_SECRET`, and keeps a copy locked to that PC for offline starts
- *     (electron/remoteConfig.ts). The database password is no longer inside the
- *     installer, and changing it on Vercel reaches every till at its next start.
- *   - `DIRECT_URL` — only seeds and maintenance scripts read it, so the direct 5432
- *     connection string has no reason to sit on a shop PC.
- *   - `SUPER_ADMIN_PASSWORD` on the `counter` variant — see `COUNTER_ENV_SUPER_ADMIN_KEYS`:
- *     only the `office` build carries the super admin login.
- *   - Payments, Firebase, Meta WA, Resend, Sentry — no counter surface uses them, and
- *     each one is a credential that cannot be un-shipped once installed.
- *   - Cloudinary on the `counter` variant — see `COUNTER_ENV_CLOUDINARY_KEYS`: only the
- *     `office` build uploads images.
- *   - Cloudflare on the `counter` variant — see `COUNTER_ENV_CLOUDFLARE_KEYS`: only the
- *     `office` build edits mail forwarding.
+ *   - Every secret (since 2026-10-28; `DATABASE_URL` since 2026-10-24) — database
+ *     password, backup, Cloudinary key/secret, Cloudflare/R2, courier, super admin login,
+ *     WhatsApp and AI keys. The counter fetches them from the office at start
+ *     (`POST /api/counter/config`, answered from Vercel's own env; the list is
+ *     src/shared/lib/counter/officeConfigKeys.ts) with `COUNTER_INSTALL_SECRET`, and keeps
+ *     a copy locked to that PC for offline starts (electron/remoteConfig.ts). Nothing
+ *     secret is inside the installer, and a key changed on Vercel reaches every counter at
+ *     its next start.
+ *   - `DIRECT_URL` — only seeds and maintenance scripts read it.
+ *   - Payments, Firebase, Resend, Sentry — no counter surface uses them.
+ *
+ * Still baked: the install secret and office address (needed to ask at all), the mode
+ * dials, public `NEXT_PUBLIC_*` values, the staff email domain, and the read-only
+ * release-download token — so a counter can still update itself to a fix even if the
+ * office's config route is broken.
  */
 
 import * as fs from "fs";
@@ -103,71 +103,17 @@ export const COUNTER_ENV_COPIED: readonly string[] = [
     "GITHUB_DOWNLOAD_UPDATE_PAT_TOKEN",
 ];
 
-/**
- * Backup/restore keys — Dropbox-listing + GitHub-Actions-triggered dump/restore.
- *
- * Withheld from the `counter` variant on purpose: a till has no business triggering a
- * database restore (the most destructive call in the app — see the comment in
- * `src/app/api/settings/restore/route.ts`), and `backupAvailability()`
- * (`src/shared/lib/backup/availability.ts`) already turns the whole feature off
- * everywhere, with a gentle in-app message, purely from these keys being absent — see
- * `BackupRestorePanel.tsx`. Granted to `office`, since admin/management is exactly who
- * should be able to run a backup or restore from the desktop app.
- */
-export const COUNTER_ENV_BACKUP_KEYS: readonly string[] = [
-    "DROPBOX_APP_KEY",
-    "DROPBOX_APP_SECRET",
-    "DROPBOX_REFRESH_TOKEN",
-    "DROPBOX_FOLDER",
-    "GITHUB_DISPATCH_TOKEN",
-    "GITHUB_REPO",
-    "GITHUB_WORKFLOW_REF",
-];
+/** Office build extras — public only. Cloudinary's cloud name is inlined into the
+ *  screens anyway; its key and secret come from the office (officeConfigKeys.ts). */
+export const COUNTER_ENV_OFFICE_PUBLIC_KEYS: readonly string[] = ["NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME"];
 
 /**
- * Image-upload keys — `GET /api/upload-signature` signs every upload with them
- * (`src/shared/lib/cloudinary.ts`): product photos (Add and From URL) and staff avatars.
- *
- * That route is a read, so `WRITE_MODE=v_live` never relays it — it runs on this PC,
- * and without these keys it answers "Cloudinary not configured". Granted to `office`
- * on the owner's call (2026-09-27), over relaying the signature to the office. The cost:
- * whoever holds an office installer can upload to and delete from the Cloudinary
- * account. The `counter` variant has no upload screen, so it keeps going without.
- */
-export const COUNTER_ENV_CLOUDINARY_KEYS: readonly string[] = [
-    "NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME",
-    "CLOUDINARY_API_KEY",
-    "CLOUDINARY_API_SECRET",
-];
-
-/**
- * Cloudflare keys — Me → Security → Forward Email (`src/shared/lib/email/cloudflareRouting.ts`)
- * and Cloudflare R2 bucket storage for WhatsApp attachments (`src/shared/lib/storage/r2.ts`).
- *
- * Mail forwarding and attachment signing/viewing are reads, so `v_live` never relays them — without
- * these keys the desktop app says "Attachment not saved".
- * Granted to `office` desktop variant; cost: puts R2 storage keys on every office till.
- */
-export const COUNTER_ENV_CLOUDFLARE_KEYS: readonly string[] = [
-    "CLOUDFLARE_API_TOKEN",
-    "CLOUDFLARE_ACCOUNT_ID",
-    "CLOUDFLARE_ZONE_ID",
-    "R2_ACCESS_KEY_ID",
-    "R2_SECRET_ACCESS_KEY",
-];
-
-/**
- * Which keys `generate-counter-env.ts` copies, per desktop variant. `full`/`public`
- * are Vercel modes in practice — if a desktop build is ever made with one of them
- * (allowed, just unusual — see `electron-build.ts`), it gets the same minimal set as
- * `counter`: withholding backup, upload and mail keys by default is the safer failure mode.
+ * Which keys `generate-counter-env.ts` copies, per desktop variant. Only `office` is
+ * built today; the `counter` variant is retired but kept for a possible revival
+ * (docs/vocabulary.md). `full`/`public` desktop builds get the minimal set.
  */
 export function counterEnvCopiedFor(mode: AppMode): readonly string[] {
-    return mode === "office"
-        ? [...COUNTER_ENV_COPIED, ...COUNTER_ENV_BACKUP_KEYS, ...COUNTER_ENV_CLOUDINARY_KEYS,
-        ...COUNTER_ENV_CLOUDFLARE_KEYS, ...COUNTER_ENV_COURIER_KEYS, ...COUNTER_ENV_SUPER_ADMIN_KEYS,
-        ...COUNTER_ENV_WHATSAPP_KEYS]
-        : COUNTER_ENV_COPIED;
+    return mode === "office" ? [...COUNTER_ENV_COPIED, ...COUNTER_ENV_OFFICE_PUBLIC_KEYS] : COUNTER_ENV_COPIED;
 }
 
 /**
@@ -238,41 +184,3 @@ export function parseEnvFile(file: string): Map<string, string> {
     }
     return out;
 }
-
-
-/**
- * Courier keys — Change courier prices Shiprocket/Shipway through a GET, which v_live
- * never relays. Office only; the desktop app is private (2026-09-28).
- * REMOVE before any public desktop release.
- */
-export const COUNTER_ENV_COURIER_KEYS: readonly string[] = [
-    "SHIPROCKET_EMAIL",
-    "SHIPROCKET_PASSWORD",
-    "SHIPWAY_USERNAME",
-    "SHIPWAY_LICENSE",
-    "SHIPWAY_TOKEN",
-    "SHIPWAY_API_BASE",
-];
-
-/**
- * The env super admin login (`checkSuperAdminEnv` in authorizeStaff.ts) — the way into a
- * till when no staff login works. The email alone only let Permissions show the super
- * admin as full access; the password was added on the owner's call (2026-09-30), office
- * only like the rest. The cost: a full-authority login in plaintext on every till and in
- * every installer. REMOVE before any public desktop release.
- */
-export const COUNTER_ENV_SUPER_ADMIN_KEYS: readonly string[] = ["SUPER_ADMIN_EMAIL", "SUPER_ADMIN_PASSWORD"];
-
-/**
- * Meta WhatsApp keys — Settings → WhatsApp Templates reads approval status and sends a
- * test through GETs / local calls that v_live never relays (`metaTemplates.ts`), so without
- * them the page says "Sending for approval is not set up". Office only (2026-10-07), same
- * cost as the rest: whoever holds an office installer can send as the business number.
- */
-export const COUNTER_ENV_WHATSAPP_KEYS: readonly string[] = [
-    "META_WA_ACCESS_TOKEN",
-    "META_WA_PHONE_NUMBER_ID",
-    "META_WA_BUSINESS_ACCOUNT_ID",
-];
-// No AI keys: a till never holds one. AI copy and AI Setup → Test relay to the office
-// (`relayPolicy.ts`), which runs them with every key it has, costly .env ones included.

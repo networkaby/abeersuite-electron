@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { AI_KEY_SOURCES, AI_PROVIDERS, isWebProvider } from "@/shared/lib/constants/ai";
 import { invalidateAiSetup, keyUsages, loadAiSetup, whyNotUsable, whyNotUsableAnywhere, type AiKeyConfig, type KeyUsage } from "@/shared/lib/ai/aiKeys";
-import { RELAY_ACTIVE } from "@/shared/lib/counter/relayPolicy";
+import { aiRunsOnOffice } from "@/shared/lib/counter/relayPolicy";
 import { hasSharedSecret, lockSecret } from "@/shared/lib/ai/secretBox";
 
 // Settings → AI Setup API helpers (routes under /api/settings/ai-keys). A key
@@ -36,13 +36,13 @@ export const aiKeyBodySchema = z.object({
 export type AiKeyBody = z.infer<typeof aiKeyBodySchema>;
 
 /** What the setup page gets for one key — usable/why on THIS server, and its shared counts.
- *  A relaying till holds no AI keys and sends every AI job to the office, so there only
- *  the key's own settings count; whether the office holds it is the office's to say. */
+ *  A relaying counter that did not get the AI keys from the office sends every AI job
+ *  there, so only the key's own settings count; whether the office holds it is its to say. */
 export function aiKeyView(k: AiKeyConfig, usage: KeyUsage) {
     const { secretEnc: _secret, ...rest } = k;
     return {
         ...rest,
-        notUsableHere: RELAY_ACTIVE ? whyNotUsableAnywhere(k) : whyNotUsable(k),
+        notUsableHere: aiRunsOnOffice() ? whyNotUsableAnywhere(k) : whyNotUsable(k),
         usage,
     };
 }

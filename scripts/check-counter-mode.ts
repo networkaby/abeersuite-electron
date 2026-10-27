@@ -270,7 +270,8 @@ function uncertainBillKeys(relay: typeof import("@/shared/lib/counter/relayPolic
 /** Outside-service routes run here only when this till holds their keys, else relay. */
 function keyedRoutes(decide: (method: string, pathname: string) => boolean): Check[] {
     const routes: [string, string[]][] = [
-        ["/api/ecommerce/products/ai-copy", ["GOOGLE_GENERATIVE_AI_API_KEY"]],
+        ["/api/ecommerce/products/ai-copy", ["AI_KEY_SECRET"]],
+        ["/api/settings/ai-keys/1/test", ["AI_KEY_SECRET"]],
         ["/api/messages/upload-url", ["CLOUDFLARE_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"]],
     ];
     return routes.flatMap(([path, keys]): Check[] => {

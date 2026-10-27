@@ -53,14 +53,19 @@ const NEVER_RELAY: readonly RegExp[] = [
 
 /**
  * Writes that save nothing in our database — they only talk to an outside service — so
- * running them here skips the ~0.4s relay hop. Only when this till holds that service's
- * keys (office builds, `scripts/counterEnv.ts`); a till without them relays, and the
- * office answers. Never list a route that saves a row: that write belongs to the office.
- *
- * AI is deliberately absent: tills hold no AI keys, so AI copy and AI Setup → Test
- * always relay, and the office runs them with every key it holds (costly ones in its env).
+ * running them here skips the ~0.4s relay hop. Only when this counter holds that
+ * service's keys (fetched from the office at start, electron/remoteConfig.ts); a counter
+ * without them relays, and the office answers. Never list a route that saves a row: that
+ * write belongs to the office.
  */
+/** The office hands `AI_KEY_SECRET` out together with every AI `.env` key it holds
+ *  (officeConfigKeys.ts), so holding it means this counter has the office's whole AI set. */
+const AI_LOCAL_KEY = "AI_KEY_SECRET";
 const LOCAL_WHEN_KEYED: readonly { path: RegExp; keys: readonly string[] }[] = [
+    // AI product copy: reads one product and the AI Setup from the replica, calls the AI.
+    { path: /^\/api\/ecommerce\/products\/ai-copy$/, keys: [AI_LOCAL_KEY] },
+    // AI Setup → Test: one tiny call on a key, from wherever AI copy would run. Writes no row.
+    { path: /^\/api\/settings\/ai-keys\/\d+\/test$/, keys: [AI_LOCAL_KEY] },
     // WhatsApp attachment: signs an R2 upload URL; the browser uploads straight to R2.
     { path: /^\/api\/messages\/upload-url$/, keys: ["CLOUDFLARE_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"] },
     // A post's photo (Campaigns → Posts): same — signs only; attaching it (…/media) relays.
@@ -70,6 +75,11 @@ const LOCAL_WHEN_KEYED: readonly { path: RegExp; keys: readonly string[] }[] = [
 const hasEnv = (k: string) => !!process.env[k]?.trim();
 const runsHereWithKeys = (pathname: string): boolean =>
     LOCAL_WHEN_KEYED.some((r) => r.path.test(pathname) && r.keys.every(hasEnv));
+
+/** AI jobs on this machine go to the office: a relaying counter that did not get the AI
+ *  keys (office not yet deployed, or never reached). AI Setup then judges keys by their
+ *  own settings only. */
+export const aiRunsOnOffice = (): boolean => RELAY_ACTIVE && !hasEnv(AI_LOCAL_KEY);
 
 export type RelaySkipReason =
     | "read" | "not-api" | "already-relayed" | "excluded"

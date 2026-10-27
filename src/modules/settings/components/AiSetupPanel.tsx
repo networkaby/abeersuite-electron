@@ -5,8 +5,9 @@
 // src/shared/lib/ai/aiKeys.ts. Where a key lives:
 //   db  — pasted here, saved locked in the database (every counter + website)
 //   env — only the .env variable NAME; the key is already in that .env
-// "Usable here" is this server's; a relaying counter holds no keys and runs every AI
-// job on the office, so there only a key's own settings are checked. Counts are shared.
+// "Usable here" is this server's — a counter gets the office's keys at start. A relaying
+// counter that has not got them runs every AI job on the office, so there only a key's
+// own settings are checked. Counts are shared.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -314,7 +315,7 @@ export function AiSetupPanel() {
                         <h2 className="text-base font-semibold">AI keys</h2>
                         <p className="text-sm text-muted-foreground">
                             Every key has the same settings; only where the actual key is kept differs. {here.runsOnOffice
-                                ? <>This counter holds no AI keys — every AI job and Test runs on the office website, with its keys.</>
+                                ? <>This counter has not got the AI keys from the office yet — every AI job and Test runs on the office website for now.</>
                                 : <>&quot;Usable&quot; is for this machine.</>} The counts are every counter and the website together.
                         </p>
                     </div>

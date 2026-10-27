@@ -37,7 +37,7 @@ const EXCLUDED_OFFICE_ROUTES = new Set([
     // the SHOP's weekly off is a shop fact, while a person's own weekly off lives
     // on StaffProfile and never reaches this route.
     "src/app/api/office-hours/next/route.ts",
-    // A till's database settings, asked at start before anyone can sign in. Guarded by the
+    // A counter's settings and secrets, asked at start before anyone can sign in. Guarded by the
     // Install <COUNTER_INSTALL_SECRET> header, and shut on a till and when the secret is unset.
     "src/app/api/counter/config/route.ts",
     // Staff forgot-password: nobody is signed in yet by definition; sends and code guesses are throttled per address.
