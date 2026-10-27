@@ -3,6 +3,7 @@ import { ArrowDownLeft, ArrowUpRight, ChevronRight, Receipt, Send } from "lucide
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { whatsappWaiting } from "@/modules/campaigns/lib/postServer";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import { chromeLinkTo } from "@/shared/lib/device/openInChrome";
 import { BUSINESS_TIME_ZONE } from "@/shared/lib/constants/business";
 import { loginGreeting } from "@/shared/lib/constants/loginShowcase";
 import { mobileUser } from "@/modules/mobile/lib/mobileAccess";
@@ -102,7 +103,7 @@ export default async function MobileHome() {
                         </ul>
                     </section>
                 )}
-                <AppVersionLine uaTag={PHONE_APP_UA} release={STAFF_APP_RELEASE} installUrl={`${COMPANY_DETAILS.sites.office}.${PHONE_APP_INSTALL}`} apk={PHONE_APP_APK} />
+                <AppVersionLine uaTag={PHONE_APP_UA} release={STAFF_APP_RELEASE} installUrl={chromeLinkTo(COMPANY_DETAILS.sites.office, PHONE_APP_INSTALL)} apk={PHONE_APP_APK} />
             </main>
         </>
     );

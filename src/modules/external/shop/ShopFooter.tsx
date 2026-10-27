@@ -9,7 +9,8 @@ import AboutBusinessNote from "@/modules/external/shop/AboutBusinessNote";
 import ShopBrandMark from "@/modules/external/shop/ShopBrandMark";
 import PaymentMethodLogos from "@/modules/external/shop/PaymentMethodLogos";
 import SocialLinks from "@/modules/external/shop/SocialLinks";
-import { SHOP_APP_INSTALL } from "@/shared/lib/device/shopApp";
+import GooglePlayBadge from "@/modules/external/shop/GooglePlayBadge";
+import { SHOP_APP_INSTALL, SHOP_APP_ON_PLAY, SHOP_APP_PLAY_URL } from "@/shared/lib/device/shopApp";
 
 /** The business story lives on the company site — linked here, never in the
  *  shop's top bar, so buying stays uncluttered. */
@@ -116,10 +117,10 @@ export default function ShopFooter() {
                                 Service portal
                             </Link>
                         </li>
+                        {/* The app link IS the Play badge: our install page until the Play
+                            listing is public (SHOP_APP_ON_PLAY), then Play itself. */}
                         <li>
-                            <Link href={SHOP_APP_INSTALL} className="hover:text-foreground">
-                                Get our app
-                            </Link>
+                            <GooglePlayBadge href={SHOP_APP_ON_PLAY ? SHOP_APP_PLAY_URL : SHOP_APP_INSTALL} external={SHOP_APP_ON_PLAY} />
                         </li>
                     </ul>
                 </div>

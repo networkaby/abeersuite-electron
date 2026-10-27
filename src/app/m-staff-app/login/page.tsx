@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import { chromeLinkTo } from "@/shared/lib/device/openInChrome";
 import StaffLoginPage from "@/app/staff/login/page";
 import { AppVersionLine } from "@/shared/components/AppUpdateBar";
 import { STAFF_APP_RELEASE } from "@/shared/lib/constants/appVersions";
@@ -24,7 +25,7 @@ export default function PhoneAppLoginPage() {
     return (
         <>
             <StaffLoginPage />
-            <AppVersionLine uaTag={PHONE_APP_UA} release={STAFF_APP_RELEASE} installUrl={`${COMPANY_DETAILS.sites.office}.${PHONE_APP_INSTALL}`} apk={PHONE_APP_APK} />
+            <AppVersionLine uaTag={PHONE_APP_UA} release={STAFF_APP_RELEASE} installUrl={chromeLinkTo(COMPANY_DETAILS.sites.office, PHONE_APP_INSTALL)} apk={PHONE_APP_APK} />
         </>
     );
 }

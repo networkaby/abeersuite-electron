@@ -7,6 +7,7 @@ import PortalProfileSwitch from "@/modules/external/portal/PortalProfileSwitch";
 import { PORTAL_NAV_ITEMS } from "@/modules/external/portal/portalNav";
 import { APP, appLoginPath } from "@/modules/external/shopApp/appPaths";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import { chromeLinkTo } from "@/shared/lib/device/openInChrome";
 import { LEGAL_LINKS } from "@/shared/lib/legal/legalContent";
 import { AppVersionLine } from "@/shared/components/AppUpdateBar";
 import { SHOP_APP_RELEASE } from "@/shared/lib/constants/appVersions";
@@ -110,7 +111,7 @@ export default async function CustomerAppAccountPage() {
                 </ul>
 
                 {signedIn && <AppSignOutButton />}
-                <AppVersionLine uaTag={SHOP_NATIVE_UA} release={SHOP_APP_RELEASE} installUrl={`${COMPANY_DETAILS.sites.shop}.${SHOP_APP_INSTALL}`} apk={SHOP_APP_APK} playUrl={SHOP_APP_PLAY_URL} />
+                <AppVersionLine uaTag={SHOP_NATIVE_UA} release={SHOP_APP_RELEASE} installUrl={chromeLinkTo(COMPANY_DETAILS.sites.shop, SHOP_APP_INSTALL)} apk={SHOP_APP_APK} playUrl={SHOP_APP_PLAY_URL} />
             </main>
         </>
     );

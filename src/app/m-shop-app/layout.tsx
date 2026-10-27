@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import NativeAppReady from "@/modules/mobile/components/NativeAppReady";
 import CustomerAppShell from "@/modules/external/shopApp/CustomerAppShell";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import { chromeLinkTo } from "@/shared/lib/device/openInChrome";
 import { SHOP_APP_APK, SHOP_APP_INSTALL, SHOP_APP_PLAY_URL, SHOP_APP_THEME, SHOP_NATIVE_UA } from "@/shared/lib/device/shopApp";
 import AppUpdateBar from "@/shared/components/AppUpdateBar";
 import { SHOP_APP_RELEASE } from "@/shared/lib/constants/appVersions";
@@ -35,7 +36,7 @@ export default function CustomerAppLayout({ children }: { children: React.ReactN
         <>
             <NativeAppReady />
             {/* Install page on the dotted shop address, so the link leaves the app's WebView for Chrome. */}
-            <AppUpdateBar uaTag={SHOP_NATIVE_UA} release={SHOP_APP_RELEASE} installUrl={`${COMPANY_DETAILS.sites.shop}.${SHOP_APP_INSTALL}`} apk={SHOP_APP_APK} playUrl={SHOP_APP_PLAY_URL} />
+            <AppUpdateBar uaTag={SHOP_NATIVE_UA} release={SHOP_APP_RELEASE} installUrl={chromeLinkTo(COMPANY_DETAILS.sites.shop, SHOP_APP_INSTALL)} apk={SHOP_APP_APK} playUrl={SHOP_APP_PLAY_URL} />
             <CustomerAppShell>{children}</CustomerAppShell>
         </>
     );

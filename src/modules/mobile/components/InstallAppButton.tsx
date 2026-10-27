@@ -165,6 +165,29 @@ export default function InstallAppButton({
             </div>
         );
     }
+    // Before Chrome's offer: desktop Chrome fires it a moment after load, and the QR
+    // (the phone is where the app goes) must not vanish for a computer install.
+    if (qrOnComputer && place === "browser") {
+        return (
+            <div className="space-y-3 text-center">
+                {qr && (
+                    // eslint-disable-next-line @next/next/no-img-element -- data: URL, nothing to optimise
+                    <img src={qr} alt={`QR code to get ${appName} on your phone`} width={240} height={240} className="mx-auto rounded-xl border bg-white p-2" />
+                )}
+                <p className="text-sm">
+                    Scan with your <b>phone camera</b> to get the app on your phone.
+                </p>
+                {/* The Android file too — to copy to a phone over USB or share it. */}
+                <a
+                    href={apkHref}
+                    download
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border py-3 text-sm font-medium active:bg-muted"
+                >
+                    <Download className="size-4" /> Download for Android ({release.name})
+                </a>
+            </div>
+        );
+    }
     if (prompt) {
         return (
             <button
@@ -183,19 +206,6 @@ export default function InstallAppButton({
                     In <b>Safari</b>: tap <b>Share</b> (the square with an arrow), then <b>Add to Home Screen</b>, then <b>Add</b>.
                 </p>
                 {openApp}
-            </div>
-        );
-    }
-    if (qrOnComputer && place === "browser") {
-        return (
-            <div className="space-y-3 text-center">
-                {qr && (
-                    // eslint-disable-next-line @next/next/no-img-element -- data: URL, nothing to optimise
-                    <img src={qr} alt={`QR code to get ${appName} on your phone`} width={240} height={240} className="mx-auto rounded-xl border bg-white p-2" />
-                )}
-                <p className="text-sm">
-                    Scan with your <b>phone camera</b> to get the app on your phone.
-                </p>
             </div>
         );
     }
