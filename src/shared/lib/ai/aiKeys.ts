@@ -91,11 +91,19 @@ export function keyValue(k: AiKeyConfig): string | null {
     return k.secretEnc && hasSharedSecret() ? unlockSecret(k.secretEnc, "shared") : null;
 }
 
-/** Why this key cannot be used on this server (settings, not rest) — null = usable. */
-export function whyNotUsable(k: AiKeyConfig): string | null {
+/** Why this key cannot be used on any server (its settings alone) — null = it may be. */
+export function whyNotUsableAnywhere(k: AiKeyConfig): string | null {
     if (!k.active) return "Turned off";
     if (k.validTill && k.validTill < businessTodayIso()) return "Offer ended";
     if (!providerReady(k.provider)) return "Provider not built in yet";
+    if (k.source === "db" && !k.secretEnc) return "No key saved";
+    return null;
+}
+
+/** Why this key cannot be used on this server (settings, not rest) — null = usable. */
+export function whyNotUsable(k: AiKeyConfig): string | null {
+    const anywhere = whyNotUsableAnywhere(k);
+    if (anywhere) return anywhere;
     if (k.source === "env") return k.envName && process.env[k.envName]?.trim() ? null : `${k.envName ?? "Variable"} is not set here`;
     if (!k.secretEnc) return "No key saved";
     if (!hasSharedSecret()) return "AI_KEY_SECRET is not set here";

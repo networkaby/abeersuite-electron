@@ -5,7 +5,8 @@
 // src/shared/lib/ai/aiKeys.ts. Where a key lives:
 //   db  — pasted here, saved locked in the database (every counter + website)
 //   env — only the .env variable NAME; the key is already in that .env
-// "Usable here" and the counts are this server's — on a counter, that counter's.
+// "Usable here" is this server's; a relaying counter holds no keys and runs every AI
+// job on the office, so there only a key's own settings are checked. Counts are shared.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -77,7 +78,7 @@ type AiKeyRow = {
 
 /** chains[useKey][step] = ordered key ids. */
 type Chains = Record<string, Partial<Record<AiStep, number[]>>>;
-type Setup = { keys: AiKeyRow[]; chains: Chains; copyFlow: AiCopyFlow; photoCheck: boolean; here: { sharedSecret: boolean } };
+type Setup = { keys: AiKeyRow[]; chains: Chains; copyFlow: AiCopyFlow; photoCheck: boolean; here: { sharedSecret: boolean; runsOnOffice: boolean } };
 
 /** The dialog's fields — numbers as typed text (NumericInput). */
 type Form = {
@@ -186,7 +187,7 @@ export function AiSetupPanel() {
     }, [data]);
 
     const byId = useMemo(() => new Map(keys.map((k) => [k.id, k])), [keys]);
-    const here = data?.here ?? { sharedSecret: false };
+    const here = data?.here ?? { sharedSecret: false, runsOnOffice: false };
 
     const toggleActive = async (k: AiKeyRow, active: boolean) => {
         setKeys((prev) => prev.map((x) => (x.id === k.id ? { ...x, active } : x)));
@@ -312,7 +313,9 @@ export function AiSetupPanel() {
                     <div>
                         <h2 className="text-base font-semibold">AI keys</h2>
                         <p className="text-sm text-muted-foreground">
-                            Every key has the same settings; only where the actual key is kept differs. &quot;Usable&quot; is for this machine; the counts are every counter and the website together.
+                            Every key has the same settings; only where the actual key is kept differs. {here.runsOnOffice
+                                ? <>This counter holds no AI keys — every AI job and Test runs on the office website, with its keys.</>
+                                : <>&quot;Usable&quot; is for this machine.</>} The counts are every counter and the website together.
                         </p>
                     </div>
                     <Button size="sm" onClick={() => setEditing("new")}><Plus className="mr-1 h-4 w-4" />Add key</Button>
@@ -339,7 +342,7 @@ export function AiSetupPanel() {
                                 <tr key={k.id} className="border-t align-top">
                                     <td className="px-3 py-2">
                                         <div className="font-medium">{k.name}</div>
-                                        {k.notUsableHere && k.active && <div className="text-xs text-amber-700 dark:text-amber-400">Not here: {k.notUsableHere}</div>}
+                                        {k.notUsableHere && k.active && <div className="text-xs text-amber-700 dark:text-amber-400">{here.runsOnOffice ? "" : "Not here: "}{k.notUsableHere}</div>}
                                         {isExpired(k) && <div className="text-xs font-medium text-destructive">Offer ended {k.validTill}</div>}
                                         {!isExpired(k) && k.validTill && <div className="text-xs text-muted-foreground">Valid till {k.validTill}</div>}
                                     </td>

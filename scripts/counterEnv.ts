@@ -166,7 +166,7 @@ export function counterEnvCopiedFor(mode: AppMode): readonly string[] {
     return mode === "office"
         ? [...COUNTER_ENV_COPIED, ...COUNTER_ENV_BACKUP_KEYS, ...COUNTER_ENV_CLOUDINARY_KEYS,
         ...COUNTER_ENV_CLOUDFLARE_KEYS, ...COUNTER_ENV_COURIER_KEYS, ...COUNTER_ENV_SUPER_ADMIN_KEYS,
-        ...COUNTER_ENV_WHATSAPP_KEYS, ...COUNTER_ENV_AI_KEYS]
+        ...COUNTER_ENV_WHATSAPP_KEYS]
         : COUNTER_ENV_COPIED;
 }
 
@@ -274,21 +274,5 @@ export const COUNTER_ENV_WHATSAPP_KEYS: readonly string[] = [
     "META_WA_PHONE_NUMBER_ID",
     "META_WA_BUSINESS_ACCOUNT_ID",
 ];
-/**
- * AI keys for product copy. With them the till calls the AI itself instead of
- * relaying through the office (`relayPolicy.ts` LOCAL_WHEN_KEYED) — one hop faster.
- * Office only, like the rest: a counter build without them simply keeps relaying.
- */
-export const COUNTER_ENV_AI_KEYS: readonly string[] = [
-    // Opens the keys pasted on Settings → AI Setup (ai_keys.secretEnc). Must match Vercel's.
-    "AI_KEY_SECRET",
-    // The .env names today's AI Setup rows point at (migration 20261021120000_ai_setup) —
-    // a till missing one skips that key.
-    "GOOGLE_GENERATIVE_AI_API_KEY",
-    "GOOGLE_GENERATIVE_AI_API_KEY1",
-    "GOOGLE_GENERATIVE_AI_API_KEY2",
-    "GOOGLE_GENERATIVE_AI_API_KEY3",
-    "GOOGLE_GENERATIVE_AI_API_KEY4",
-    "GOOGLE_GENERATIVE_AI_API_KEY5",
-    "GOOGLE_AI_SEARCH_API_KEY",
-];
+// No AI keys: a till never holds one. AI copy and AI Setup → Test relay to the office
+// (`relayPolicy.ts`), which runs them with every key it has, costly .env ones included.

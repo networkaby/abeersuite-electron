@@ -5,6 +5,7 @@ import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { invalidateAiSetup, keyUsages, loadAiSetup } from "@/shared/lib/ai/aiKeys";
 import { hasSharedSecret } from "@/shared/lib/ai/secretBox";
+import { RELAY_ACTIVE } from "@/shared/lib/counter/relayPolicy";
 import { aiKeyBodySchema, aiKeyRowData, savedAiKeyView, aiKeyView } from "@/modules/settings/lib/aiKeysServer";
 
 // Settings → AI Setup. GET = keys + chains + what this server can do;
@@ -24,7 +25,8 @@ export async function GET() {
             chains,
             copyFlow,
             photoCheck,
-            here: { sharedSecret: hasSharedSecret() },
+            // A relaying till holds no AI keys: saves, tests and AI jobs all go to the office.
+            here: { sharedSecret: RELAY_ACTIVE || hasSharedSecret(), runsOnOffice: RELAY_ACTIVE },
         });
     } catch (e) {
         return handleApiError(e, "Failed to load AI setup");
