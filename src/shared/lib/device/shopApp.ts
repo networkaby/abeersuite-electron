@@ -36,6 +36,13 @@ export const SHOP_APP_PLAY_URL = `https://play.google.com/store/apps/details?id=
  *  shows "item not found" to everyone outside the closed test. */
 export const SHOP_APP_ON_PLAY = false;
 
+/** Reward points and My Wallet stay out of the app for now: Google Play counts
+ *  "rewards, points" as a financial feature, which only an Organization account
+ *  may publish (rejected 2026-10-27). Turn back on once the account is converted
+ *  with the D-U-N-S number, together with the Play "Financial features" answer.
+ *  The website portal keeps both. */
+export const SHOP_APP_HIDE_REWARDS = true;
+
 /** Status bar / splash colours — same page colours as the staff app. */
 export const SHOP_APP_THEME = { light: "#eff4fb", dark: "#101725" } as const;
 
