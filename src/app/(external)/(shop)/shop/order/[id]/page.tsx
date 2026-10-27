@@ -7,8 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getPayableOnlineGateways } from "@/shared/lib/payments/activeOnlineGateway";
 import OnlinePayPanel from "@/modules/external/shop/OnlinePayPanel";
+import TrackPurchaseOnce from "@/modules/external/shop/TrackPurchaseOnce";
 import { DELIVERY_STAGE_LABEL } from "@/modules/delivery/lib/shiprocketStatus";
 import { customerOrderTicketWhere } from "@/modules/external/portal/portalOrders";
+
+/** Within the last two days — a new sale, not an old order opened again. */
+function isRecent(at: Date): boolean {
+    return Date.now() - at.getTime() < 2 * 24 * 3600 * 1000;
+}
 
 export default async function ShopOrderConfirmationPage({
     params,
@@ -55,6 +61,7 @@ export default async function ShopOrderConfirmationPage({
             legacyStatus: true,
             paymentMethod: true,
             paidAt: true,
+            ticket: { select: { createdAt: true } },
             totalPaise: true,
             shippingChargePaise: true,
             tierDiscountPaise: true,
@@ -102,6 +109,12 @@ export default async function ShopOrderConfirmationPage({
     const chosenProvider =
         (order.shippingAddress as { onlineProvider?: string } | null)?.onlineProvider ?? null;
     const payFailed = pay === "failed";
+    // Purchase event for the ad trackers: only the buyer, only once the order is
+    // done (COD placed / online paid), and only a recent one — an old order opened
+    // from the portal later is not a new sale.
+    const doneAt = order.paidAt ?? order.ticket.createdAt;
+    const sendPurchase =
+        order.personId === customerId && !unpaidOnline && isRecent(doneAt);
     // Auto-launch the pre-chosen gateway on first arrival (skip the picker); on a
     // failed/cancelled return, show the picker so they can retry or switch.
     const autoLaunch =
@@ -109,6 +122,7 @@ export default async function ShopOrderConfirmationPage({
 
     return (
         <main className="mx-auto max-w-lg px-4 py-8 space-y-5">
+            {sendPurchase ? <TrackPurchaseOnce orderId={order.ticketId} valuePaise={grand} /> : null}
             <div>
                 <h1 className="text-2xl font-semibold">Order #{order.ticketId}</h1>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
