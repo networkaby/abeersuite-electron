@@ -1,23 +1,31 @@
-# v1.16.14 [urgent]
+# v1.16.15 [urgent]
 
-Every counter should install this today. It adds the new product Collections list, which the office site will start using soon — counters must be on this version before that goes live, or their sync will pause.
+Every counter should install this today. It brings the database changes for scheduled campaigns, post reminders and email templates, and a counter that has not updated will pause its sync once the office site goes live with them.
 
-## Products and Collections
+## Database update — counters first
 
-- "Category" is now called **Collection** on every office screen.
-- A product can now sit in **several Collections**. Its first one stays the main Collection, so prices, loyalty, coupons, POS and reports work exactly as before.
-- Opening Edit product no longer changes the product Name by itself.
+- This version adds new columns (campaign schedule time, post reminder time) and new tables (email templates, email log, saved shop carts, email unsubscribe list), and removes the old stored account balance.
+- Update every counter **before** the office site is deployed. A counter left on the old version stops syncing until it updates.
 
-## Online shop product form
+## Campaigns
 
-- Pick Group and Brand right on the shop product form; the product Name rebuilds itself from them and shows live in the header.
-- Pick Collections on the same form. The form is packed tighter — SKU, Group, Brand, Slug and Collections fit in a few rows.
-- **Photos only** runs Photo AI on its own, reusing the last search, and tells you when it did.
+- A campaign can now be **scheduled** for a later date and time instead of sending at once.
+- The **Scheduled** page shows everything due on every channel — WhatsApp, email and posts — with a new timeline view, and Refresh reloads the timeline too.
+- Due Reminders and Shop Ads now live under Campaigns.
+- Staff get a push reminder when a post is due to be shared, repeated until it is posted.
 
-## Reliability
+## Email
 
-- Photo storage reads and uploads now give up after a timeout instead of hanging the screen.
+- Customer documents can be emailed automatically, and **Send email** is back in the 3-dot menus.
+- Editable email templates for repairs, due reminders, abandoned carts, pending payments, welcome mails and sign-in / password-reset codes.
+- A failed email is retried on the next save.
 
-## For the office
+## Billing and payments
 
-This release adds a new database table (product collections). Update every counter first; push the office site only after the tills have restarted on v1.16.14.
+- A customer's advance can pay the bill directly.
+- **Share UPI QR** sends a WhatsApp "Pay now" request with the QR as a photo, from the shop's number.
+- Money now shows the currency symbol set in Org Defaults, and thermal slips print the ₹ sign.
+
+## Behind the scenes
+
+- All scheduled jobs (messages, posts, reminders) now run from one timer, and backup failures are logged with their reason.
