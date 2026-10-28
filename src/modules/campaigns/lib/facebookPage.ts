@@ -7,7 +7,8 @@ import { facebookAutoBlock, postCaption } from "@/modules/campaigns/lib/post";
 
 /**
  * Facebook Page — posting a Post to the shop's page through Meta's Graph API,
- * once it is connected on Campaigns → Channels.
+ * once it is connected on Campaigns → Channels. The page's linked Instagram
+ * business account rides the same login (instagram.ts).
  *
  * The shop's own Meta app (META_APP_ID / META_APP_SECRET — the one Facebook
  * login already uses) with Facebook Login's redirect URL set to the callback.
@@ -18,9 +19,9 @@ import { facebookAutoBlock, postCaption } from "@/modules/campaigns/lib/post";
  * admins / developers can connect — enough for the shop's page, no app review.
  */
 
-const GRAPH = "https://graph.facebook.com/v21.0";
+export const GRAPH = "https://graph.facebook.com/v21.0";
 const AUTH_URL = "https://www.facebook.com/v21.0/dialog/oauth";
-const SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts"];
+const SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "instagram_basic", "instagram_content_publish"];
 
 export const FACEBOOK_LINK_ID = 1;
 
@@ -59,7 +60,7 @@ export class FacebookError extends Error {}
 type GraphError = { error?: { message?: string; code?: number; type?: string } };
 
 /** One Graph call; a refusal becomes a FacebookError with Facebook's own words. */
-async function graph<T>(path: string, init?: { method?: string; params?: Record<string, string> }): Promise<T> {
+export async function graph<T>(path: string, init?: { method?: string; params?: Record<string, string> }): Promise<T> {
     const q = new URLSearchParams(init?.params);
     const post = init?.method === "POST";
     const res = await fetch(post ? `${GRAPH}${path}` : `${GRAPH}${path}?${q}`, {
@@ -77,7 +78,7 @@ async function graph<T>(path: string, init?: { method?: string; params?: Record<
 }
 
 /** Best effort: a failed note must never replace the Facebook message the user should see. */
-const noteFacebookError = (lastError: string | null) =>
+export const noteFacebookError = (lastError: string | null) =>
     prisma.facebookPageLink
         .updateMany({ where: { id: FACEBOOK_LINK_ID }, data: { lastError } })
         .catch((e) => console.warn("[facebookPage] could not note lastError:", e));
@@ -106,7 +107,7 @@ export async function saveFacebookConnection(code: string, user: { id: number; n
             connectedById: user.id,
             connectedByName: user.name,
             lastError: null,
-            ...(keepPage ? {} : { pageId: null, pageName: null, pageTokenEnc: null }),
+            ...(keepPage ? {} : { pageId: null, pageName: null, pageTokenEnc: null, igUserId: null, igUsername: null }),
         };
         await prisma.facebookPageLink.upsert({ where: { id: FACEBOOK_LINK_ID }, create: { id: FACEBOOK_LINK_ID, ...data }, update: data });
         return null;
@@ -155,13 +156,34 @@ export async function listFacebookPages(): Promise<FacebookPage[]> {
     }));
 }
 
-/** Pick the page posts go to: its own token is read here, server side, and locked away. */
+/** The Instagram business account linked to a page, or null when it has none. */
+async function linkedInstagram(pageId: string, pageToken: string): Promise<{ id: string; username: string | null } | null> {
+    const r = await graph<{ instagram_business_account?: { id: string; username?: string } }>(`/${pageId}`, {
+        params: { fields: "instagram_business_account{id,username}", access_token: pageToken },
+    });
+    const ig = r.instagram_business_account;
+    return ig ? { id: ig.id, username: ig.username ?? null } : null;
+}
+
+/**
+ * Pick the page posts go to: its own token is read here, server side, and
+ * locked away; its linked Instagram account (if any) is noted with it.
+ */
 export async function pickFacebookPage(pageId: string): Promise<string | null> {
     const page = (await pageRows()).find((p) => p.id === pageId);
     if (!page?.access_token) return "That page is not managed by the connected Facebook account.";
+    // An older Connect lacks the Instagram permissions — the page still posts, Instagram waits for a Reconnect.
+    const ig = await linkedInstagram(page.id, page.access_token).catch(() => null);
     await prisma.facebookPageLink.update({
         where: { id: FACEBOOK_LINK_ID },
-        data: { pageId: page.id, pageName: page.name, pageTokenEnc: lockSecret(page.access_token, "shared"), lastError: null },
+        data: {
+            pageId: page.id,
+            pageName: page.name,
+            pageTokenEnc: lockSecret(page.access_token, "shared"),
+            igUserId: ig?.id ?? null,
+            igUsername: ig?.username ?? null,
+            lastError: null,
+        },
     });
     return null;
 }
@@ -170,9 +192,10 @@ export async function pickFacebookPage(pageId: string): Promise<string | null> {
 export async function facebookStatus() {
     const row = await prisma.facebookPageLink.findUnique({
         where: { id: FACEBOOK_LINK_ID },
-        select: { fbUserName: true, pageId: true, pageName: true, connectedByName: true, lastError: true, updatedAt: true },
+        select: { fbUserName: true, pageId: true, pageName: true, igUsername: true, igUserId: true, connectedByName: true, lastError: true, updatedAt: true },
     });
-    return { setupProblem: facebookSetupProblem(), connected: !!row, ...row, ready: !!row?.pageId && !facebookSetupProblem() };
+    const ready = !!row?.pageId && !facebookSetupProblem();
+    return { setupProblem: facebookSetupProblem(), connected: !!row, ...row, ready, instagramReady: ready && !!row?.igUserId };
 }
 
 /** Is Facebook posting fully set up (connected and a page picked)? */
@@ -180,6 +203,17 @@ export async function facebookReady(): Promise<boolean> {
     if (facebookSetupProblem()) return false;
     const row = await prisma.facebookPageLink.findUnique({ where: { id: FACEBOOK_LINK_ID }, select: { pageId: true } });
     return !!row?.pageId;
+}
+
+/** The picked page, its opened token and its linked Instagram id — for every API post. */
+export async function pageAccess(): Promise<{ pageId: string; token: string; igUserId: string | null }> {
+    const problem = facebookSetupProblem();
+    if (problem) throw new FacebookError(problem);
+    const row = await prisma.facebookPageLink.findUnique({ where: { id: FACEBOOK_LINK_ID }, select: { pageId: true, pageTokenEnc: true, igUserId: true } });
+    if (!row?.pageId || !row.pageTokenEnc) throw new FacebookError("Pick the shop's page on Campaigns → Channels first.");
+    const token = unlockSecret(row.pageTokenEnc, "shared");
+    if (!token) throw new FacebookError("The saved Facebook access cannot be opened (AI_KEY_SECRET changed?) — connect again.");
+    return { pageId: row.pageId, token, igUserId: row.igUserId };
 }
 
 type PostForFacebook = { caption: string; link: string | null; mediaKey: string | null; mediaType: string | null };
@@ -193,11 +227,7 @@ type PostForFacebook = { caption: string; link: string | null; mediaKey: string 
 export async function postToFacebook(p: PostForFacebook): Promise<string | null> {
     const block = facebookAutoBlock(p);
     if (block) throw new FacebookError(block);
-    if (facebookSetupProblem()) throw new FacebookError(facebookSetupProblem()!);
-    const row = await prisma.facebookPageLink.findUnique({ where: { id: FACEBOOK_LINK_ID }, select: { pageId: true, pageTokenEnc: true } });
-    if (!row?.pageId || !row.pageTokenEnc) throw new FacebookError("Pick the shop's page on Campaigns → Channels first.");
-    const token = unlockSecret(row.pageTokenEnc, "shared");
-    if (!token) throw new FacebookError("The saved Facebook access cannot be opened (AI_KEY_SECRET changed?) — connect again.");
+    const { pageId, token } = await pageAccess();
 
     const shop = COMPANY_DETAILS.sites.shop;
     const text = postCaption(p, shop);
@@ -206,11 +236,11 @@ export async function postToFacebook(p: PostForFacebook): Promise<string | null>
         const url = mediaLink(p.mediaKey);
         if (!url) throw new FacebookError("File storage (R2) is not set up on this server, so Facebook cannot fetch the photo.");
         call = p.mediaType?.startsWith("video/")
-            ? { path: `/${row.pageId}/videos`, params: { file_url: url, description: text } }
-            : { path: `/${row.pageId}/photos`, params: { url, caption: text } };
+            ? { path: `/${pageId}/videos`, params: { file_url: url, description: text } }
+            : { path: `/${pageId}/photos`, params: { url, caption: text } };
     } else {
         // A text post: the link field gives the shop page its preview card.
-        call = { path: `/${row.pageId}/feed`, params: { message: text, ...(p.link ? { link: `${shop}${p.link}` } : {}) } };
+        call = { path: `/${pageId}/feed`, params: { message: text, ...(p.link ? { link: `${shop}${p.link}` } : {}) } };
     }
 
     try {

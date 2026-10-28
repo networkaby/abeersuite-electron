@@ -12,32 +12,42 @@ import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import {
     FACEBOOK_PAGE_URL,
     GOOGLE_BUSINESS_URL,
+    INSTAGRAM_URL,
     POST_MEDIA_TYPES,
     channelOf,
     checkPostMedia,
     facebookAutoBlock,
     googleAutoBlock,
+    instagramAutoBlock,
     postCaption,
     type PostRow,
 } from "@/modules/campaigns/lib/post";
 
-/** Channels that post through their API once connected: status route, button name, why one cannot go. */
-const AUTO: Record<string, { api: string; name: string; block: (p: PostRow) => string | null }> = {
-    GOOGLE_BUSINESS: { api: "google", name: "Google", block: googleAutoBlock },
-    FACEBOOK: { api: "facebook", name: "Facebook", block: facebookAutoBlock },
+/**
+ * Channels that post through their API once connected: the post route, the
+ * status route and its "ready" field, the button name, why one cannot go.
+ */
+const AUTO: Record<string, { api: string; status: string; readyKey: string; name: string; block: (p: PostRow) => string | null }> = {
+    GOOGLE_BUSINESS: { api: "google", status: "google", readyKey: "ready", name: "Google", block: googleAutoBlock },
+    FACEBOOK: { api: "facebook", status: "facebook", readyKey: "ready", name: "Facebook", block: facebookAutoBlock },
+    // Instagram rides the Facebook connection.
+    INSTAGRAM: { api: "instagram", status: "facebook", readyKey: "instagramReady", name: "Instagram", block: instagramAutoBlock },
 };
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 
 /**
  * The photo and the "put it up" part of one saved post. Google Business Profile
- * and the Facebook Page post themselves (Post to Google / Facebook) once
+ * the Facebook Page and Instagram post themselves (Post to Google / Facebook /
+ * Instagram) once
  * connected on Campaigns → Channels; Share prepares each channel by hand:
  *   • WhatsApp Channel / Status — the phone's share sheet with photo + caption
  *     (caption copied too, since WhatsApp can drop it); on a PC, download + copy.
  *   • Google Business Profile — copies the caption, downloads the photo and
  *     opens the Business Profile, where staff click Add update and paste.
  *   • Facebook Page — the same: copies, downloads and opens the shop's page.
+ *   • Instagram — the phone's share sheet, like WhatsApp; on a PC, download,
+ *     copy and open the profile.
  * Staff then press Done for that channel, which keeps who and when.
  */
 export default function PostSharePanel({ post, onChanged }: { post: PostRow; onChanged: (p: PostRow) => void }) {
@@ -51,8 +61,8 @@ export default function PostSharePanel({ post, onChanged }: { post: PostRow; onC
         for (const [channel, a] of Object.entries(AUTO)) {
             if (!post.channels.includes(channel)) continue;
             axios
-                .get<{ ready: boolean }>(`/api/campaigns/${a.api}`)
-                .then(({ data }) => setReady((r) => ({ ...r, [channel]: data.ready })))
+                .get<Record<string, unknown>>(`/api/campaigns/${a.status}`)
+                .then(({ data }) => setReady((r) => ({ ...r, [channel]: data[a.readyKey] === true })))
                 .catch(() => setReady((r) => ({ ...r, [channel]: false })));
         }
     }, [post.channels]);
@@ -148,7 +158,8 @@ export default function PostSharePanel({ post, onChanged }: { post: PostRow; onC
                 return;
             }
             download();
-            toast.success(copied ? "Photo downloading, caption copied — paste both into WhatsApp" : "Photo downloading — copy the caption from here");
+            if (channel === "INSTAGRAM") window.open(COMPANY_DETAILS.social.instagram || INSTAGRAM_URL, "_blank", "noopener");
+            toast.success(copied ? `Photo downloading, caption copied — paste both into ${channel === "INSTAGRAM" ? "Instagram" : "WhatsApp"}` : "Photo downloading — copy the caption from here");
         } catch {
             /* the share sheet was closed */
         } finally {
@@ -267,7 +278,7 @@ export default function PostSharePanel({ post, onChanged }: { post: PostRow; onC
                                         </Button>
                                     )}
                                     <Button type="button" size="sm" variant={auto ? "outline" : "default"} disabled={busy !== null} onClick={() => share(value)}>
-                                        {AUTO[value] ? <ExternalLink className="mr-1 h-3.5 w-3.5" /> : <Share2 className="mr-1 h-3.5 w-3.5" />}
+                                        {value === "GOOGLE_BUSINESS" || value === "FACEBOOK" ? <ExternalLink className="mr-1 h-3.5 w-3.5" /> : <Share2 className="mr-1 h-3.5 w-3.5" />}
                                         {busy === `share-${value}` ? "Opening…" : "Share"}
                                     </Button>
                                     <Button type="button" size="sm" variant="outline" disabled={busy !== null} onClick={() => markDone(value)}>

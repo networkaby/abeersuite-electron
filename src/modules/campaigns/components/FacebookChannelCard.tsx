@@ -15,6 +15,8 @@ type Status = {
     connected: boolean;
     ready: boolean;
     fbUserName?: string | null;
+    igUsername?: string | null;
+    instagramReady?: boolean;
     pageName?: string | null;
     connectedByName?: string | null;
     lastError?: string | null;
@@ -23,7 +25,8 @@ type Page = { id: string; name: string; category: string | null; canPost: boolea
 
 /**
  * Campaigns → Channels: connect the shop's Facebook Page once (a page admin
- * signs in), then pick the page. After that a post's Post to Facebook — and the
+ * signs in), then pick the page; its linked Instagram business account comes
+ * with it. After that a post's Post to Facebook — and the
  * communications job at its scheduled time — put it up by themselves.
  */
 export default function FacebookChannelCard() {
@@ -98,7 +101,7 @@ export default function FacebookChannelCard() {
                 <div className="min-w-0">
                     <h2 className="flex items-center gap-1.5 text-sm font-semibold">
                         {status?.ready && <Check className="h-4 w-4 text-emerald-600" />}
-                        Facebook Page — automatic posting
+                        Facebook Page & Instagram — automatic posting
                     </h2>
                     <p className="text-xs text-muted-foreground">
                         {!status
@@ -111,6 +114,13 @@ export default function FacebookChannelCard() {
                                   ? `Posting to ${status.pageName} as ${status.fbUserName ?? "Facebook"}${status.connectedByName ? ` · connected by ${status.connectedByName}` : ""}`
                                   : `Connected as ${status.fbUserName ?? "Facebook"} — pick the shop's page.`}
                     </p>
+                    {status?.ready && (
+                        <p className="text-xs text-muted-foreground">
+                            {status.instagramReady
+                                ? `Instagram: posting to @${status.igUsername ?? "linked account"} too`
+                                : "Instagram: no business account is linked to this page — link it in Meta Business Suite, then press Reconnect and pick the page again."}
+                        </p>
+                    )}
                     {status?.lastError && <p className="mt-1 text-xs text-destructive">Last problem: {status.lastError}</p>}
                 </div>
                 {canConnect && status && !status.setupProblem && (

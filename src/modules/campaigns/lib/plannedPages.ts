@@ -139,7 +139,7 @@ export const PLANNED_PAGES: Record<string, { title: string; description: string;
                 { title: "Google Business Profile", sub: "Posts by itself once connected above", right: "Working" },
                 { title: "WhatsApp Status", sub: "Company phone, after Meta's coexistence approval", right: "Waiting on Meta" },
                 { title: "Facebook Page", sub: "Posts by itself once connected above", right: "Working" },
-                { title: "Instagram", sub: "Same Meta login, needs a linked Instagram business account", right: "Later" },
+                { title: "Instagram", sub: "Posts by itself through the Facebook connection above (linked business account)", right: "Working" },
                 { title: "Threads, YouTube Shorts, Telegram", right: "Later" },
             ] },
             { heading: "Settings", rows: [

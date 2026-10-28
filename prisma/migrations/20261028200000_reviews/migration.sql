@@ -49,6 +49,8 @@ CREATE TABLE "FacebookPageLink" (
     "pageId" TEXT,
     "pageName" TEXT,
     "pageTokenEnc" TEXT,
+    "igUserId" TEXT,
+    "igUsername" TEXT,
     "connectedById" INTEGER,
     "connectedByName" TEXT,
     "lastError" TEXT,

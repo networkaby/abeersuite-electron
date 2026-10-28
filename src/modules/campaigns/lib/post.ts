@@ -12,7 +12,8 @@ import { formatRupees } from "@/shared/lib/format/moneyInr";
  * Channels (googleBusiness.ts) — Post to Google, or the communications job at
  * the scheduled time — and falls back to the same hand share when it cannot.
  * A Facebook Page works the same way (facebookPage.ts): Post to Facebook, or
- * the job, once the page is connected and picked on Channels.
+ * the job, once the page is connected and picked on Channels — and so does the
+ * page's linked Instagram business account (instagram.ts), on the same login.
  */
 
 export const POST_CHANNELS = [
@@ -48,7 +49,14 @@ export const POST_CHANNELS = [
         ready: true,
         hint: "Posts by itself once the page is connected on Campaigns → Channels. By hand: Share copies the text, saves the photo and opens the page.",
     },
-    { value: "INSTAGRAM", label: "Instagram", short: "IG", mode: "AUTO", ready: false, hint: "Needs Meta's posting approval." },
+    {
+        value: "INSTAGRAM",
+        label: "Instagram",
+        short: "IG",
+        mode: "AUTO",
+        ready: true,
+        hint: "Posts by itself through the Facebook connection on Campaigns → Channels (needs a JPG photo or an MP4). By hand: Share opens Instagram.",
+    },
 ] as const;
 
 export type PostChannel = (typeof POST_CHANNELS)[number]["value"];
@@ -95,6 +103,20 @@ export const FACEBOOK_PAGE_URL = "https://www.facebook.com/";
  */
 export function facebookAutoBlock(p: { mediaType: string | null }): string | null {
     if (p.mediaType === "image/webp") return "Facebook takes a JPG or PNG photo here — share a WebP by hand, or replace it.";
+    return null;
+}
+
+/** Where Share sends staff for Instagram — the shop's profile. */
+export const INSTAGRAM_URL = "https://www.instagram.com/";
+
+/**
+ * Why a post cannot go to Instagram by itself, or null when it can. Instagram
+ * needs a photo or video (no text-only post), and its API takes a JPG photo
+ * (no PNG / WebP) or an MP4, which goes up as a Reel.
+ */
+export function instagramAutoBlock(p: { mediaType: string | null }): string | null {
+    if (!p.mediaType) return "Instagram needs a photo or video — add one, or share by hand.";
+    if (p.mediaType !== "image/jpeg" && p.mediaType !== "video/mp4") return "Instagram takes a JPG photo or an MP4 here — share a PNG or WebP by hand, or replace it.";
     return null;
 }
 

@@ -1180,6 +1180,8 @@ CREATE TABLE IF NOT EXISTS "FacebookPageLink" (
     "pageId" TEXT,
     "pageName" TEXT,
     "pageTokenEnc" TEXT,
+    "igUserId" TEXT,
+    "igUsername" TEXT,
     "connectedById" INTEGER,
     "connectedByName" TEXT,
     "lastError" TEXT,
@@ -1198,6 +1200,10 @@ ALTER TABLE "FacebookPageLink" ADD COLUMN IF NOT EXISTS "pageName" TEXT;
 ALTER TABLE "FacebookPageLink" ALTER COLUMN "pageName" DROP NOT NULL;
 ALTER TABLE "FacebookPageLink" ADD COLUMN IF NOT EXISTS "pageTokenEnc" TEXT;
 ALTER TABLE "FacebookPageLink" ALTER COLUMN "pageTokenEnc" DROP NOT NULL;
+ALTER TABLE "FacebookPageLink" ADD COLUMN IF NOT EXISTS "igUserId" TEXT;
+ALTER TABLE "FacebookPageLink" ALTER COLUMN "igUserId" DROP NOT NULL;
+ALTER TABLE "FacebookPageLink" ADD COLUMN IF NOT EXISTS "igUsername" TEXT;
+ALTER TABLE "FacebookPageLink" ALTER COLUMN "igUsername" DROP NOT NULL;
 ALTER TABLE "FacebookPageLink" ADD COLUMN IF NOT EXISTS "connectedById" INTEGER;
 ALTER TABLE "FacebookPageLink" ALTER COLUMN "connectedById" DROP NOT NULL;
 ALTER TABLE "FacebookPageLink" ADD COLUMN IF NOT EXISTS "connectedByName" TEXT;
