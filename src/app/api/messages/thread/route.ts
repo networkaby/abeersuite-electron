@@ -6,7 +6,7 @@ import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { phoneMatchKey } from "@/shared/lib/format";
 import { isMissedCall } from "@/shared/lib/calls";
 import { ASSIGNED_POSITION_SELECT } from "@/shared/lib/api/ticketSelects";
-import { claimsByPhone, conversationsByPhone, mediaLink, menuAfterTemplateApplies, ownersByPhone, replyWindowOpen } from "@/modules/message/lib/customerMessages";
+import { claimsByPhone, conversationsByPhone, mediaLink, menuAfterTemplateApplies, ownersByPhone, replyWindowOpen, setNumberSpam } from "@/modules/message/lib/customerMessages";
 
 // /api/messages/thread?phone=<10 digits>
 //
@@ -14,7 +14,8 @@ import { claimsByPhone, conversationsByPhone, mediaLink, menuAfterTemplateApplie
 //         customer the number belongs to, the open conversation (topic) and its
 //         ticket, and whether a free reply is still allowed. Read-only.
 // PATCH — { phone, seen: true } marks their messages read;
-//         { phone, spam: boolean } flags / clears the number, as on the Call Log.
+//         { phone, spam: boolean } flags / clears the number and blocks /
+//         unblocks it at Meta; answers { meta, metaError }.
 
 const THREAD_LIMIT = 200;
 
@@ -168,7 +169,7 @@ export async function PATCH(req: Request) {
             await prisma.message.updateMany({ where: { phone, direction: { in: ["IN", "NOTE"] }, seenAt: null }, data: { seenAt: new Date() } });
         }
         if (data.spam !== undefined) {
-            await prisma.message.updateMany({ where: { phone }, data: { spam: data.spam } });
+            return NextResponse.json({ ok: true, ...(await setNumberSpam(phone, data.spam)) });
         }
         return NextResponse.json({ ok: true });
     } catch (e) {

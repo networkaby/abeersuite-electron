@@ -223,6 +223,18 @@ export async function sendTextMessage(mobile10: string, text: string, fromNumber
     return id;
 }
 
+/**
+ * Block / unblock a number on one of our WhatsApp numbers. Blocked, they cannot
+ * message that number and we cannot message them. Meta allows a block only
+ * within 24 hours of their last message to it; an unblock any time.
+ */
+export async function setWaUserBlocked(mobile10: string, blocked: boolean, numberId: string): Promise<void> {
+    await graph(`${numberId}/block_users`, {
+        method: blocked ? "POST" : "DELETE",
+        body: { messaging_product: "whatsapp", block_users: [{ user: `+91${mobile10}` }] },
+    });
+}
+
 export type WaMediaType = "image" | "video" | "audio" | "document";
 
 /** Which WhatsApp message type a file goes out as. Meta takes only JPEG/PNG as

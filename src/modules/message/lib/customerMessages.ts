@@ -12,6 +12,7 @@ import {
     isBillSendConfigured,
     sendMediaMessage,
     sendTextMessage,
+    setWaUserBlocked,
     waMediaTypeFor,
 } from "@/shared/lib/whatsapp/metaTemplates";
 import { isR2Configured, presignR2, putR2 } from "@/shared/lib/storage/r2";
@@ -692,6 +693,32 @@ export function mediaLink(key: string | null, fileName?: string | null, download
     });
 }
 
+/**
+ * Mark / clear a number as spam: hide its messages here, and block / unblock it
+ * at Meta on every number of ours it has written to. A block Meta refuses (no
+ * message in the last 24 hours) is retried when that number next writes in.
+ * Returns how many of our numbers took the change, and Meta's first refusal.
+ */
+export async function setNumberSpam(phone: string, spam: boolean): Promise<{ meta: number; metaError: string | null }> {
+    await prisma.message.updateMany({ where: { phone }, data: { spam } });
+    const numbers = await prisma.message.findMany({
+        where: { phone, direction: "IN", businessNumberId: { not: null } },
+        distinct: ["businessNumberId"],
+        select: { businessNumberId: true },
+    });
+    let meta = 0;
+    let metaError: string | null = null;
+    for (const n of numbers) {
+        try {
+            await setWaUserBlocked(phone, spam, n.businessNumberId!);
+            meta++;
+        } catch (e) {
+            metaError ??= e instanceof Error ? e.message : String(e);
+        }
+    }
+    return { meta, metaError };
+}
+
 /** Store the customer messages in one webhook change. Duplicates (Meta retries) are skipped. */
 export async function ingestInbound(
     value: WaChangeValue,
@@ -729,7 +756,13 @@ export async function ingestInbound(
         const conv = route?.conv ?? null;
         const ticketId = conv?.topic === "TICKET" ? conv.ticketId : null;
 
-        const media = await keepInboundMedia(m);
+        // A spam number's files are not kept. Its fresh message reopens Meta's
+        // 24-hour block window, so a block that failed earlier is tried again.
+        const media = spam ? NO_MEDIA : await keepInboundMedia(m);
+        if (spam && phone && value.metadata?.phone_number_id) {
+            await setWaUserBlocked(phone, true, value.metadata.phone_number_id)
+                .catch((e) => console.error("[messages] spam re-block failed", phone, e));
+        }
 
         try {
             await prisma.message.create({

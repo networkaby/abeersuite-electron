@@ -470,8 +470,10 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
     const toggleSpam = async () => {
         if (!thread) return;
         try {
-            await axios.patch("/api/messages/thread", { phone: thread.phone, spam: !thread.spam });
-            toast.success(thread.spam ? "Number un-flagged" : "Number marked spam — hidden from the list");
+            const { data } = await axios.patch<{ meta: number; metaError: string | null }>("/api/messages/thread", { phone: thread.phone, spam: !thread.spam });
+            if (thread.spam) toast.success(data.meta ? "Number un-flagged and unblocked on WhatsApp" : "Number un-flagged");
+            else if (data.meta) toast.success("Number marked spam and blocked on WhatsApp");
+            else toast.warning(`Marked spam and hidden. WhatsApp block not done yet${data.metaError ? ` (${data.metaError})` : ""}. It is tried again when they next write.`);
             void loadThread(thread.phone);
             void loadList(1);
         } catch (e) {
