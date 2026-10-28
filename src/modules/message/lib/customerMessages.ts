@@ -27,7 +27,7 @@ import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { isAutoSend, getWaTemplateDraft } from "@/shared/lib/whatsapp/waTemplateStore";
 import { fillBody } from "@/shared/lib/whatsapp/billTemplates";
 import { getOrganisation } from "@/shared/lib/org/getOrganisation";
-import { notifyDealCreated, notifyHelpCreated } from "@/shared/lib/whatsapp/notifyBill";
+import { isSupplierAccount, notifyDealCreated, notifyHelpCreated } from "@/shared/lib/whatsapp/notifyBill";
 
 /**
  * Customer messages — the logic behind the Meta webhook and the Messages screen.
@@ -706,6 +706,9 @@ export async function ingestInbound(
 
         const phone = phoneMatchKey(m.from);
         const owner = phone ? (await ownersByPhone([phone])).get(phone) ?? null : null;
+        // A supplier is blocked both ways: we never send them a bill, and what
+        // they send is dropped — not stored, no inbox, no push, no auto-reply.
+        if (await isSupplierAccount(owner?.accountId)) continue;
         const spam = phone
             ? !!(await prisma.message.findFirst({ where: { phone, spam: true }, select: { id: true } }))
             : false;

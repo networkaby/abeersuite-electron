@@ -40,7 +40,8 @@ import { isBillSendConfigured, sendBillTemplate, sendTextMessage } from "./metaT
  * Skipped without a row: a counter PC (no Meta / push keys there — the relayed
  * save runs on the office server and is announced from there), a draft or
  * cancelled voucher, a walk-in (the pooled walk-in ledger names nobody), any
- * party under Sundry Creditors (a supplier — automatic or manual, every kind),
+ * party under Sundry Creditors (a supplier — automatic or manual, every kind;
+ * their incoming messages are dropped too, see `ingestInbound`),
  * a REFUND to anyone outside Sundry Debtors, and a document already announced
  * under that kind.
  */
@@ -538,6 +539,13 @@ function pickMobile(phones: PhoneRow[]): string | null {
 // ── Group check: Sundry Creditors (never sent) / Sundry Debtors (REFUND) ──────
 // The group tree is a few dozen rows; cached for five minutes per server.
 let groupCache: { at: number; byId: Map<number, { parentId: number | null; name: string }> } | null = null;
+
+/** Is this ledger a supplier (under Sundry Creditors)? The inbound webhook drops their messages. */
+export async function isSupplierAccount(accountId: number | null | undefined): Promise<boolean> {
+    if (accountId == null) return false;
+    const acc = await prisma.account.findUnique({ where: { id: accountId }, select: { groupId: true } });
+    return isUnderGroup(acc?.groupId ?? null, ACCOUNT_GROUPS.SUNDRY_CREDITORS);
+}
 
 async function isUnderGroup(groupId: number | null, groupName: string): Promise<boolean> {
     if (groupId == null) return false;
