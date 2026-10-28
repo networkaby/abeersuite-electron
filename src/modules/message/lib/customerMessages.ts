@@ -1,5 +1,4 @@
 import "server-only";
-import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 import { phoneMatchKey, phoneKeyVariants } from "@/shared/lib/format";
@@ -1106,60 +1105,6 @@ export async function changeClaim(phone: string, callerId: number, a: ClaimActio
 }
 
 /**
- * Open a Help Desk or Deal ticket at its pipeline's entry stage, with its first
- * history line — the one way a message or a review becomes a ticket. `owner`
- * links the contact only when it is known for sure (by phone, never by name).
- */
-export async function raiseLeadTicket(p: {
-    kind: "help" | "deal";
-    subject: string;
-    notes: string;
-    contactName: string | null;
-    phone: string | null;
-    owner: { kind: string; id: number } | null;
-    author: Prisma.InputJsonValue;
-    /** Deal source tag ("WHATSAPP", "GOOGLE_REVIEW"). */
-    source: string;
-    /** For the history line: "a WhatsApp message", "a Google review". */
-    from: string;
-}): Promise<number> {
-    const contact = {
-        contactName: p.contactName,
-        phone: p.phone,
-        personId: p.owner?.kind === "person" ? p.owner.id : null,
-        companyId: p.owner?.kind === "company" ? p.owner.id : null,
-    };
-    const pipeline = p.kind === "deal" ? await getDealsPipeline(prisma) : await getHelpPipeline(prisma);
-    const entry = pipeline?.statuses.find((s) => s.isEntryPoint) ?? pipeline?.statuses[0];
-    if (!pipeline || !entry) throw new ReplyRefusedError(`${p.kind === "deal" ? "Deals" : "Help Desk"} pipeline is not set up.`);
-    const ticket = await prisma.ticket.create({
-        data: {
-            sourceCounterId: await sourceCounterId(),
-            pipelineId: pipeline.id,
-            status: entry.id,
-            title: p.subject,
-            notes: p.notes,
-            createdBy: p.author,
-            ...(p.kind === "deal"
-                ? { priority: "MEDIUM" as const, deal: { create: { ...contact, source: p.source } } }
-                : { category: "OTHER", help: { create: { ...contact, inquiryType: "OTHER", subject: p.subject } } }),
-        },
-        select: { id: true, status: true },
-    });
-    await prisma.ticketLog.create({
-        data: {
-            ticketId: ticket.id,
-            status: ticket.status,
-            note: p.kind === "deal" ? `Deal lead created from ${p.from}` : `Help ticket raised from ${p.from}`,
-            author: p.author,
-        },
-    });
-    if (p.kind === "deal") void notifyDealCreated(ticket.id).catch((err) => console.error("[notify-deal] error:", err));
-    else void notifyHelpCreated(ticket.id).catch((err) => console.error("[notify-help] error:", err));
-    return ticket.id;
-}
-
-/**
  * Raise a help or deal ticket from a message, or join it to an existing ticket.
  * Maps the conversation's unlinked messages to the ticket and logs them into ticket history.
  */
@@ -1180,17 +1125,70 @@ export async function ticketFromMessage(
     const author = await buildActorSnapshot(userId);
 
     if (ticketId == null) {
-        ticketId = await raiseLeadTicket({
-            kind,
-            subject: msg.body.split("\n")[0].slice(0, 120) || (kind === "deal" ? "WhatsApp lead" : "WhatsApp message"),
-            notes: msg.body,
-            contactName: owner?.name ?? msg.senderName ?? null,
-            phone: msg.phone,
-            owner,
-            author,
-            source: "WHATSAPP",
-            from: "a WhatsApp message",
-        });
+        if (kind === "deal") {
+            const pipeline = await getDealsPipeline(prisma);
+            const entry = pipeline?.statuses.find((s) => s.isEntryPoint) ?? pipeline?.statuses[0];
+            if (!pipeline || !entry) throw new ReplyRefusedError("Deals pipeline is not set up.");
+            const subject = msg.body.split("\n")[0].slice(0, 120) || "WhatsApp lead";
+            const ticket = await prisma.ticket.create({
+                data: {
+                    sourceCounterId: await sourceCounterId(),
+                    pipelineId: pipeline.id,
+                    status: entry.id,
+                    title: subject,
+                    priority: "MEDIUM",
+                    notes: msg.body,
+                    createdBy: author,
+                    deal: {
+                        create: {
+                            contactName: owner?.name ?? msg.senderName ?? null,
+                            phone: msg.phone,
+                            personId: owner?.kind === "person" ? owner.id : null,
+                            companyId: owner?.kind === "company" ? owner.id : null,
+                            source: "WHATSAPP",
+                        },
+                    },
+                },
+                select: { id: true, status: true },
+            });
+            await prisma.ticketLog.create({
+                data: { ticketId: ticket.id, status: ticket.status, note: "Deal lead created from a WhatsApp message", author },
+            });
+            ticketId = ticket.id;
+            void notifyDealCreated(ticket.id).catch((err) => console.error("[notify-deal] error:", err));
+        } else {
+            const pipeline = await getHelpPipeline(prisma);
+            const entry = pipeline?.statuses.find((s) => s.isEntryPoint) ?? pipeline?.statuses[0];
+            if (!pipeline || !entry) throw new ReplyRefusedError("Help Desk pipeline is not set up.");
+            const subject = msg.body.split("\n")[0].slice(0, 120) || "WhatsApp message";
+            const ticket = await prisma.ticket.create({
+                data: {
+                    sourceCounterId: await sourceCounterId(),
+                    pipelineId: pipeline.id,
+                    status: entry.id,
+                    title: subject,
+                    category: "OTHER",
+                    notes: msg.body,
+                    createdBy: author,
+                    help: {
+                        create: {
+                            contactName: owner?.name ?? msg.senderName ?? null,
+                            phone: msg.phone,
+                            personId: owner?.kind === "person" ? owner.id : null,
+                            companyId: owner?.kind === "company" ? owner.id : null,
+                            inquiryType: "OTHER",
+                            subject,
+                        },
+                    },
+                },
+                select: { id: true, status: true },
+            });
+            await prisma.ticketLog.create({
+                data: { ticketId: ticket.id, status: ticket.status, note: "Help ticket raised from a WhatsApp message", author },
+            });
+            ticketId = ticket.id;
+            void notifyHelpCreated(ticket.id).catch((err) => console.error("[notify-help] error:", err));
+        }
     }
 
     // The whole conversation goes onto the ticket — this one only, never the

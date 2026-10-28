@@ -4,8 +4,8 @@
 // now, Facebook page reviews later) lands on CRM → Reviews. Anything where we
 // can tell (WhatsApp, Telegram, Messenger, a comment from a known person) goes
 // to the Messages inbox instead. A review is never matched to a customer by
-// name — the same name holds many people — staff raise a Help or Deal ticket
-// from it by hand when there is work to do.
+// name (the same name holds many people), and raises no ticket: with no mobile
+// or email, a reviewer is not a contact or a lead.
 //
 // A copy of the platform's reviews, refreshed by the communications job and
 // by Refresh on the page, so the page never asks the platform on every open.
@@ -29,12 +29,9 @@ model Review {
   replyText       String?
   repliedAt       DateTime?
   repliedByName   String?
-  /// Help or Deal ticket raised from this review (plain scalar, like Message.ticketId).
-  ticketId        Int?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   @@unique([platform, externalId])
   @@index([platform, reviewedAt])
-  @@index([ticketId])
 }

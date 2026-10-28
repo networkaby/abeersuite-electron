@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
-import { LifeBuoy, Handshake, RefreshCw, Star, Trash2 } from "lucide-react";
+import { RefreshCw, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { PaginationBar } from "@/shared/components/PaginationBar";
@@ -22,8 +22,6 @@ type Review = {
     replyText: string | null;
     repliedAt: string | null;
     repliedByName: string | null;
-    ticketId: number | null;
-    ticketHref: string | null;
 };
 type ListReply = {
     rows: Review[];
@@ -51,10 +49,10 @@ function Stars({ n }: { n: number | null }) {
 /**
  * CRM → Reviews: public reviews where we cannot tell who wrote them (Google
  * now). Read from our saved copy; Refresh asks Google for new ones. A reply is
- * public on Google at once. A review is never matched to a customer by name —
- * staff raise a Help or Deal ticket from it when there is work to do.
+ * public on Google at once. A review is never matched to a customer and raises
+ * no ticket — with no mobile or email, a reviewer is not a contact or a lead.
  */
-export function ReviewsWorkspace({ canReply, canHelp, canDeal }: { canReply: boolean; canHelp: boolean; canDeal: boolean }) {
+export function ReviewsWorkspace({ canReply }: { canReply: boolean }) {
     const [data, setData] = useState<ListReply | null>(null);
     const [page, setPage] = useState(1);
     const [stars, setStars] = useState<number[]>([]);
@@ -127,19 +125,6 @@ export function ReviewsWorkspace({ canReply, canHelp, canDeal }: { canReply: boo
         } catch (e) {
             patchRow(r.id, before);
             toast.error(extractApiError(e, "Reply not removed"));
-        } finally {
-            setBusy(null);
-        }
-    }
-
-    async function raise(r: Review, kind: "help" | "deal") {
-        setBusy(`ticket-${r.id}`);
-        try {
-            const { data: res } = await axios.post<{ ticketId: number }>(`/api/reviews/${r.id}/ticket`, { kind });
-            patchRow(r.id, { ticketId: res.ticketId, ticketHref: kind === "deal" ? "/office/crm/deals" : `/office/help?ticket=${res.ticketId}` });
-            toast.success(`${kind === "deal" ? "Deal" : "Help ticket"} #${res.ticketId} raised`);
-        } catch (e) {
-            toast.error(extractApiError(e, "Ticket not raised"));
         } finally {
             setBusy(null);
         }
@@ -257,26 +242,6 @@ export function ReviewsWorkspace({ canReply, canHelp, canDeal }: { canReply: boo
                                         )}
                                     </div>
 
-                                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                                        {r.ticketId ? (
-                                            <Link href={r.ticketHref ?? "#"} className="text-sm underline">
-                                                Ticket #{r.ticketId}
-                                            </Link>
-                                        ) : (
-                                            <>
-                                                {canHelp && (
-                                                    <Button size="sm" variant="outline" onClick={() => raise(r, "help")} disabled={busy === `ticket-${r.id}`}>
-                                                        <LifeBuoy className="size-4" /> Help ticket
-                                                    </Button>
-                                                )}
-                                                {canDeal && (
-                                                    <Button size="sm" variant="outline" onClick={() => raise(r, "deal")} disabled={busy === `ticket-${r.id}`}>
-                                                        <Handshake className="size-4" /> Deal
-                                                    </Button>
-                                                )}
-                                            </>
-                                        )}
-                                    </div>
                                 </div>
                             </div>
                         </li>

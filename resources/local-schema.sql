@@ -4660,7 +4660,6 @@ CREATE TABLE IF NOT EXISTS "Review" (
     "replyText" TEXT,
     "repliedAt" TIMESTAMP(3),
     "repliedByName" TEXT,
-    "ticketId" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -4685,8 +4684,6 @@ ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "repliedAt" TIMESTAMP(3);
 ALTER TABLE "Review" ALTER COLUMN "repliedAt" DROP NOT NULL;
 ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "repliedByName" TEXT;
 ALTER TABLE "Review" ALTER COLUMN "repliedByName" DROP NOT NULL;
-ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "ticketId" INTEGER;
-ALTER TABLE "Review" ALTER COLUMN "ticketId" DROP NOT NULL;
 ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
 
@@ -6184,9 +6181,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS "UserPermission_userId_permissionId_key" ON "U
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "Review_platform_reviewedAt_idx" ON "Review"("platform", "reviewedAt");
-
--- CreateIndex
-CREATE INDEX IF NOT EXISTS "Review_ticketId_idx" ON "Review"("ticketId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "Review_platform_externalId_key" ON "Review"("platform", "externalId");

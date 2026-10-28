@@ -13,7 +13,6 @@ CREATE TABLE "Review" (
     "replyText" TEXT,
     "repliedAt" TIMESTAMP(3),
     "repliedByName" TEXT,
-    "ticketId" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -22,4 +21,3 @@ CREATE TABLE "Review" (
 
 CREATE UNIQUE INDEX "Review_platform_externalId_key" ON "Review"("platform", "externalId");
 CREATE INDEX "Review_platform_reviewedAt_idx" ON "Review"("platform", "reviewedAt");
-CREATE INDEX "Review_ticketId_idx" ON "Review"("ticketId");

@@ -17,10 +17,6 @@ export default async function ReviewsPage() {
     const can = (id: string) => hasPermissionWithScope(permissions, id);
 
     return (
-        <ReviewsWorkspace
-            canReply={can(PERMISSIONS.REVIEWS_REPLY)}
-            canHelp={can(PERMISSIONS.HELP_CREATE)}
-            canDeal={can(PERMISSIONS.DEALS_CREATE)}
-        />
+        <ReviewsWorkspace canReply={can(PERMISSIONS.REVIEWS_REPLY)} />
     );
 }

@@ -32,23 +32,15 @@ export async function GET(req: Request) {
                 take: PAGE_SIZE,
                 select: {
                     id: true, platform: true, reviewerName: true, reviewerPhoto: true, stars: true, comment: true,
-                    reviewedAt: true, replyText: true, repliedAt: true, repliedByName: true, ticketId: true,
+                    reviewedAt: true, replyText: true, repliedAt: true, repliedByName: true,
                 },
             }),
             prisma.review.count({ where }),
             prisma.review.count({ where: { replyText: null } }),
             googleStatus(),
         ]);
-        // Where each raised ticket opens — Deals board or the Help Desk ticket.
-        const ticketIds = rows.flatMap((r) => (r.ticketId ? [r.ticketId] : []));
-        const deals = ticketIds.length
-            ? new Set((await prisma.ticketDeal.findMany({ where: { ticketId: { in: ticketIds } }, select: { ticketId: true } })).map((d) => d.ticketId))
-            : new Set<number>();
         return NextResponse.json({
-            rows: rows.map((r) => ({
-                ...r,
-                ticketHref: r.ticketId ? (deals.has(r.ticketId) ? "/office/crm/deals" : `/office/help?ticket=${r.ticketId}`) : null,
-            })),
+            rows,
             total,
             pageSize: PAGE_SIZE,
             waiting,
