@@ -104,7 +104,10 @@ export function appScreenFor(pathname: string): string | null {
     const order = pathname.match(/^\/shop\/order\/(\d+)$/);
     if (order) return `${SHOP_NATIVE_HOME}/order/${order[1]}`;
     const short = pathname.match(/^\/portal\/b\/([^/]+)$/);
-    if (short) return `${SHOP_NATIVE_HOME}/b/${short[1]}`;
+    // Except a UPI request's Pay now (p<payload>.<sig>, upiPayLink.ts — not
+    // importable here, it is server-only): the website's pay page opens the UPI
+    // app from inside the app too; the app's own screens have no pay page.
+    if (short && !/^p[^.]*\.[^.]+$/.test(short[1])) return `${SHOP_NATIVE_HOME}/b/${short[1]}`;
     // A bill or receipt link someone copied from the app or the portal — without
     // this the website page opens inside the app with no header and no way back.
     const bill = pathname.match(/^\/portal\/orders\/(\d+)\/bill$/);
