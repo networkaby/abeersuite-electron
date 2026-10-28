@@ -30,11 +30,21 @@ function useUpdateTarget(installUrl: string, playUrl: string | undefined): { hre
     return { href: play && playUrl ? playUrl : installUrl, play };
 }
 
+/** Older APKs send only `percent`; newer ones add bytes, and drop `percent` when the size is unknown. */
+type ProgressEvent = { percent?: number; got?: number; total?: number };
+const mb = (bytes: number) => (bytes / 1048576).toFixed(1);
+const progressText = ({ percent, got, total }: ProgressEvent) =>
+    got !== undefined && total
+        ? `Downloading… ${mb(got)} of ${mb(total)} MB`
+        : got !== undefined
+            ? `Downloading… ${mb(got)} MB`
+            : `Downloading… ${percent ?? 0}%`;
+
 /** The apps' in-app updater (NsUpdatePlugin.java in phone-app and shop-app-native) —
  *  absent in older builds and a browser. */
 type NativeUpdate = {
     install: (o: { path: string }) => Promise<void>;
-    addListener: (event: "progress", cb: (e: { percent: number }) => void) => Promise<{ remove: () => Promise<void> }>;
+    addListener: (event: "progress", cb: (e: ProgressEvent) => void) => Promise<{ remove: () => Promise<void> }>;
 };
 const nativeUpdate = (): NativeUpdate | null =>
     (window as { Capacitor?: { Plugins?: { NsUpdate?: NativeUpdate } } }).Capacitor?.Plugins?.NsUpdate ?? null;
@@ -59,7 +69,7 @@ function useAppUpdate(release: AppRelease, apk: string, play: boolean) {
         setBusy(true);
         setFailed(false);
         setStatus("Downloading…");
-        const sub = await updater.addListener("progress", ({ percent }) => setStatus(`Downloading… ${percent}%`)).catch(() => null);
+        const sub = await updater.addListener("progress", (p) => setStatus(progressText(p))).catch(() => null);
         try {
             await updater.install({ path: `${apk}?v=${release.code}` });
             setStatus("Tap Install on the next screen. You stay signed in.");

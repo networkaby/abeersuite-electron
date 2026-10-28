@@ -30,7 +30,7 @@ import java.net.URL;
  * the two alike:
  *
  *   window.Capacitor.Plugins.NsUpdate.install({ path: "/ns-staff.apk?v=6" })
- *   addListener("progress", ({ percent }) => …)
+ *   addListener("progress", ({ got, total, percent }) => …)
  *
  * Only a `.apk` on our own site (R.string.ns_site) — the page names the path, never
  * the host. The file must be this app, newer than this one, or it is refused
@@ -43,6 +43,8 @@ import java.net.URL;
 @CapacitorPlugin(name = "NsUpdate")
 public class NsUpdatePlugin extends Plugin {
     private static final String APK_TYPE = "application/vnd.android.package-archive";
+    /** A trickle never trips the read timeout, so the whole download gets a limit too. */
+    private static final long DOWNLOAD_LIMIT_MS = 3 * 60 * 1000;
     private volatile boolean busy = false;
 
     @PluginMethod
@@ -99,21 +101,25 @@ public class NsUpdatePlugin extends Plugin {
             if (status != HttpURLConnection.HTTP_OK) throw new Exception("The site answered " + status);
             long total = conn.getContentLengthLong();
             long got = 0;
-            int lastPercent = -1;
+            long lastReported = -1;
+            long deadline = System.currentTimeMillis() + DOWNLOAD_LIMIT_MS;
             byte[] buf = new byte[64 * 1024];
             try (InputStream in = conn.getInputStream(); OutputStream out = new FileOutputStream(part)) {
                 int n;
                 while ((n = in.read(buf)) != -1) {
                     out.write(buf, 0, n);
                     got += n;
-                    if (total > 0) {
-                        int percent = (int) (got * 100 / total);
-                        if (percent != lastPercent) {
-                            lastPercent = percent;
-                            JSObject p = new JSObject();
-                            p.put("percent", percent);
-                            notifyListeners("progress", p);
-                        }
+                    if (System.currentTimeMillis() > deadline) {
+                        throw new Exception("The connection is too slow — try again on better internet");
+                    }
+                    // Every ~100 KB: bytes always, percent only when the size is known.
+                    if (got - lastReported >= 100 * 1024 || got == total) {
+                        lastReported = got;
+                        JSObject p = new JSObject();
+                        p.put("got", got);
+                        p.put("total", total);
+                        if (total > 0) p.put("percent", (int) (got * 100 / total));
+                        notifyListeners("progress", p);
                     }
                 }
             }
