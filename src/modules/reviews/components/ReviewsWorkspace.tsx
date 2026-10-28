@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
-import { RefreshCw, Star, Trash2 } from "lucide-react";
+import { Pencil, RefreshCw, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { PaginationBar } from "@/shared/components/PaginationBar";
@@ -65,6 +65,12 @@ export function ReviewsWorkspace({ canReply }: { canReply: boolean }) {
     const [loading, setLoading] = useState(false);
     const [busy, setBusy] = useState<string | null>(null);
     const [drafts, setDrafts] = useState<Record<number, string>>({});
+    /** Reviews whose posted reply is open for editing — a live reply stays locked until Edit, so a stray key never changes it. */
+    const [editing, setEditing] = useState<number[]>([]);
+    const stopEditing = (id: number) => {
+        setEditing((e) => e.filter((x) => x !== id));
+        setDrafts(({ [id]: _, ...rest }) => rest);
+    };
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -109,7 +115,7 @@ export function ReviewsWorkspace({ canReply }: { canReply: boolean }) {
         try {
             const { data: row } = await axios.put<Review>(`/api/reviews/${r.id}/reply`, { comment });
             patchRow(r.id, { replyText: row.replyText, repliedAt: row.repliedAt, repliedByName: row.repliedByName });
-            setDrafts(({ [r.id]: _, ...rest }) => rest);
+            stopEditing(r.id);
             toast.success("Reply is live on Google");
         } catch (e) {
             patchRow(r.id, before);
@@ -126,6 +132,7 @@ export function ReviewsWorkspace({ canReply }: { canReply: boolean }) {
         setBusy(`reply-${r.id}`);
         try {
             await axios.delete(`/api/reviews/${r.id}/reply`);
+            stopEditing(r.id);
             toast.success("Reply removed");
         } catch (e) {
             patchRow(r.id, before);
@@ -204,6 +211,9 @@ export function ReviewsWorkspace({ canReply }: { canReply: boolean }) {
                 {data?.rows.map((r) => {
                     const draft = drafts[r.id] ?? r.draftText ?? r.replyText ?? "";
                     const changed = draft.trim() !== (r.replyText ?? "") && !!draft.trim();
+                    // A posted reply is read-only until Edit; an agent draft on top of it stays open for review.
+                    const isEditing = editing.includes(r.id);
+                    const locked = !!r.replyText && !r.draftText && !isEditing;
                     return (
                         <li key={r.id} className="rounded-lg border bg-card p-4">
                             <div className="flex items-start gap-3">
@@ -226,7 +236,21 @@ export function ReviewsWorkspace({ canReply }: { canReply: boolean }) {
                                     {r.comment ? <p className="mt-1 whitespace-pre-wrap text-sm">{r.comment}</p> : <p className="mt-1 text-sm italic text-muted-foreground">Stars only, no comment.</p>}
 
                                     <div className="mt-3 rounded-md bg-muted/50 p-3">
-                                        {canReply ? (
+                                        {canReply && locked ? (
+                                            <>
+                                                <p className="whitespace-pre-wrap text-sm">{r.replyText}</p>
+                                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                                    <Button size="sm" variant="outline" onClick={() => setEditing((e) => [...e, r.id])}>
+                                                        <Pencil className="size-4" /> Edit
+                                                    </Button>
+                                                    {r.repliedAt && (
+                                                        <span className="text-xs text-muted-foreground">
+                                                            Replied {dateText(r.repliedAt)}{r.repliedByName ? ` by ${r.repliedByName}` : ""}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </>
+                                        ) : canReply ? (
                                             <>
                                                 {r.draftText && (
                                                     <p className="mb-2 text-xs font-medium text-amber-700 dark:text-amber-300">
@@ -244,9 +268,9 @@ export function ReviewsWorkspace({ canReply }: { canReply: boolean }) {
                                                     <Button size="sm" onClick={() => saveReply(r)} disabled={!changed || busy === `reply-${r.id}`}>
                                                         {r.replyText ? "Update reply" : "Post reply"}
                                                     </Button>
-                                                    {r.replyText && (
-                                                        <Button size="sm" variant="ghost" onClick={() => deleteReply(r)} disabled={busy === `reply-${r.id}`}>
-                                                            <Trash2 className="size-4" /> Remove
+                                                    {isEditing && (
+                                                        <Button size="sm" variant="ghost" onClick={() => stopEditing(r.id)} disabled={busy === `reply-${r.id}`}>
+                                                            Cancel
                                                         </Button>
                                                     )}
                                                     {r.draftText && (
@@ -258,6 +282,17 @@ export function ReviewsWorkspace({ canReply }: { canReply: boolean }) {
                                                         <span className="text-xs text-muted-foreground">
                                                             Replied {dateText(r.repliedAt)}{r.repliedByName ? ` by ${r.repliedByName}` : ""}
                                                         </span>
+                                                    )}
+                                                    {isEditing && r.replyText && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                                            onClick={() => deleteReply(r)}
+                                                            disabled={busy === `reply-${r.id}`}
+                                                        >
+                                                            <Trash2 className="size-4" /> Remove
+                                                        </Button>
                                                     )}
                                                 </div>
                                             </>
