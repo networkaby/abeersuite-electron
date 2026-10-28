@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { isDue } from "@/shared/lib/backup/schedule";
+import { requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,8 +23,8 @@ export const dynamic = "force-dynamic";
  * to lock the scheduler out.
  */
 export async function GET(req: Request) {
-    const secret = process.env.CRON_SECRET?.trim();
-    if (secret && req.headers.get("authorization") !== `Bearer ${secret}`) {
+    // CRON_SECRET or the cron-job.org key on Settings → Incoming API (incomingApi.ts).
+    if (!(await requireIncomingKey(req, "CRON"))) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

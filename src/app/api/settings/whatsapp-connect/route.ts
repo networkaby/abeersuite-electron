@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
 import { META_APP_ID } from "@/shared/lib/constants/whatsapp";
+import { incomingSecret } from "@/modules/incoming/lib/incomingApi";
 
 /**
  * POST /api/settings/whatsapp-connect — finish Meta's Embedded Signup for a
@@ -33,8 +34,8 @@ export async function POST(req: Request) {
     if (response) return response;
 
     const appId = META_APP_ID;
-    const secret = process.env.META_WA_APP_SECRET;
-    if (!appId || !secret) return NextResponse.json({ error: "META_WA_APP_SECRET not set" }, { status: 503 });
+    const { value: secret } = await incomingSecret("META_WA_APP");
+    if (!appId || !secret) return NextResponse.json({ error: "WhatsApp app secret not set — Settings → Incoming API (or META_WA_APP_SECRET)" }, { status: 503 });
 
     const { code, phoneNumberId, wabaId } = (await req.json().catch(() => ({}))) as { code?: string; phoneNumberId?: string; wabaId?: string };
     if (!code || !phoneNumberId || !wabaId) return NextResponse.json({ error: "code, phoneNumberId and wabaId are required" }, { status: 400 });

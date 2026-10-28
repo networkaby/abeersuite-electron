@@ -1,0 +1,42 @@
+// ── Reviews: what people say about the shop on public platforms ──────────────
+//
+// Owner, 2026-10-28: a review where we cannot tell who the person is (Google
+// now, Facebook page reviews later) lands on CRM → Reviews. Anything where we
+// can tell (WhatsApp, Telegram, Messenger, a comment from a known person) goes
+// to the Messages inbox instead. A review is never matched to a customer by
+// name (the same name holds many people), and raises no ticket: with no mobile
+// or email, a reviewer is not a contact or a lead.
+//
+// A copy of the platform's reviews, refreshed by the communications job and
+// by Refresh on the page, so the page never asks the platform on every open.
+
+/// One review on one platform. `platform` "GOOGLE" (later "FACEBOOK");
+/// `externalId` the platform's own id — for Google the full resource name
+/// ("accounts/1/locations/2/reviews/3"), which the reply call needs.
+/// `stars` 1–5, null when the platform gives none. `reply*` is the shop's
+/// public answer as the platform last showed it.
+model Review {
+  id              Int       @id @default(autoincrement())
+  platform        String
+  externalId      String
+  reviewerName    String?
+  reviewerPhoto   String?
+  stars           Int?
+  comment         String?
+  reviewedAt      DateTime
+  /// The platform's own "last changed" time — a newer one means the review or its reply changed.
+  sourceUpdatedAt DateTime
+  replyText       String?
+  repliedAt       DateTime?
+  repliedByName   String?
+  /// A reply waiting for staff: written by an outside agent (Cowork) in Draft
+  /// mode, or forced to Draft (1–2 stars). Posting the reply clears it.
+  draftText       String?
+  draftByName     String?
+  draftedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([platform, externalId])
+  @@index([platform, reviewedAt])
+}

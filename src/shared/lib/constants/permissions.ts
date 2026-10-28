@@ -143,6 +143,9 @@ export const PERMISSIONS = {
     // Customer Messages (CRM → Messages). View rides the sidebar link; REPLY gates
     // sending a WhatsApp reply — checked at the API, since each reply costs money.
     MESSAGES_REPLY: "messages:reply",
+    // Reviews (CRM → Reviews). View rides the sidebar link; REPLY gates the public
+    // answer on Google — everyone can read it, so it is its own tick.
+    REVIEWS_REPLY: "reviews:reply",
     // Campaigns — writing rides the sidebar link; SEND reaches every customer at once.
     CAMPAIGNS_SEND: "campaigns:send",
     CAMPAIGNS_GOOGLE_CONNECT: "campaigns:google:connect",
@@ -210,6 +213,8 @@ export const PERMISSIONS = {
     SETTINGS_MANAGE: "settings:manage",
     SETTINGS_AI_MANAGE: "settings:ai:manage",
     SETTINGS_TRACKING_MANAGE: "settings:tracking:manage",
+    // Settings → Incoming API — every outside caller's key; one tick for the whole page.
+    SETTINGS_INCOMING_MANAGE: "settings:incoming:manage",
 
 
     // Compliance (GST reports) — read access rides the accountancy sidebar nav;

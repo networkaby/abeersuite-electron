@@ -148,7 +148,16 @@ const noteGoogleError = (lastError: string | null) =>
         .updateMany({ where: { id: GOOGLE_LINK_ID }, data: { lastError } })
         .catch((e) => console.warn("[googleBusiness] could not note lastError:", e));
 
-async function googleApi<T>(url: string, init?: RequestInit): Promise<T> {
+/** Every v4 call (posts, reviews) goes under this base. */
+export const GOOGLE_V4_API = POSTS_API;
+
+/** The picked listing as v4 names it ("accounts/1/locations/2"), or null before one is picked. */
+export async function googleListingParent(): Promise<string | null> {
+    const link = await prisma.googleBusinessLink.findUnique({ where: { id: GOOGLE_LINK_ID }, select: { accountName: true, locationName: true } });
+    return link?.accountName && link.locationName ? `${link.accountName}/${link.locationName}` : null;
+}
+
+export async function googleApi<T>(url: string, init?: RequestInit): Promise<T> {
     const res = await fetch(url, {
         ...init,
         headers: { Authorization: `Bearer ${await accessToken()}`, "Content-Type": "application/json", ...init?.headers },
@@ -218,8 +227,8 @@ type PostForGoogle = {
 export async function postToGoogle(p: PostForGoogle): Promise<string | null> {
     const block = googleAutoBlock(p);
     if (block) throw new GoogleError(block);
-    const link = await prisma.googleBusinessLink.findUnique({ where: { id: GOOGLE_LINK_ID }, select: { accountName: true, locationName: true } });
-    if (!link?.accountName || !link.locationName) throw new GoogleError("Pick the shop's listing on Campaigns → Channels first.");
+    const parent = await googleListingParent();
+    if (!parent) throw new GoogleError("Pick the shop's listing on Campaigns → Channels first.");
 
     const shop = COMPANY_DETAILS.sites.shop;
     const body: Record<string, unknown> = {
@@ -238,8 +247,6 @@ export async function postToGoogle(p: PostForGoogle): Promise<string | null> {
         body.media = [{ mediaFormat: "PHOTO", sourceUrl: url }];
     }
 
-    // locationName is "locations/456"; v4 wants it under its account.
-    const parent = `${link.accountName}/${link.locationName}`;
     try {
         const made = await googleApi<{ searchUrl?: string }>(`${POSTS_API}/${parent}/localPosts`, { method: "POST", body: JSON.stringify(body) });
         await noteGoogleError(null);
