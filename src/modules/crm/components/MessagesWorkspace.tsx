@@ -400,7 +400,12 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
         }
     };
 
+    // A ref, not just the state: a fast double click lands before the re-render
+    // that disables the buttons.
+    const ticketBusy = useRef(false);
     const raiseTicket = async (opts: { messageId?: number; ticketId?: number; kind?: "help" | "deal" }) => {
+        if (ticketBusy.current) return;
+        ticketBusy.current = true;
         try {
             setTicketSubmitting(true);
             const targetMessageId = (opts.messageId && opts.messageId > 0)
@@ -411,11 +416,13 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                 return;
             }
             const payload = opts.ticketId ? { ticketId: opts.ticketId } : { kind: opts.kind ?? "help" };
-            const { data } = await axios.post<{ ticketId: number }>(`/api/messages/${targetMessageId}/ticket`, payload);
+            const { data } = await axios.post<{ ticketId: number; existing?: boolean }>(`/api/messages/${targetMessageId}/ticket`, payload);
             toast.success(
                 opts.ticketId
                     ? `Mapped conversation to ticket #${data.ticketId}`
-                    : opts.kind === "deal"
+                    : data.existing
+                        ? `This conversation is already on ticket #${data.ticketId}`
+                        : opts.kind === "deal"
                         ? `Deal lead #${data.ticketId} created & conversation mapped`
                         : `Help ticket #${data.ticketId} raised & conversation mapped`
             );
@@ -425,6 +432,7 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
         } catch (e) {
             toast.error(extractApiError(e, "Could not create/link ticket"));
         } finally {
+            ticketBusy.current = false;
             setTicketSubmitting(false);
         }
     };

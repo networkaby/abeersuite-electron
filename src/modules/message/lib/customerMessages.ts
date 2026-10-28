@@ -1142,89 +1142,26 @@ export async function changeClaim(phone: string, callerId: number, a: ClaimActio
 /**
  * Raise a help or deal ticket from a message, or join it to an existing ticket.
  * Maps the conversation's unlinked messages to the ticket and logs them into ticket history.
+ *
+ * Raising is claim-first: the conversation row (or the message, when it has no
+ * phone) is locked while the ticket is made, so a double click or two staff at
+ * once cannot make two tickets — the second waits, finds the first one's ticket
+ * and gets it back as `existing`, with no new note or notification.
  */
 export async function ticketFromMessage(
     messageId: number,
     userId: number,
     existingTicketId?: number | null,
     kind: "help" | "deal" = "help"
-) {
+): Promise<{ ticketId: number; existing: boolean }> {
     const msg = await prisma.message.findUnique({
         where: { id: messageId },
         select: { id: true, phone: true, body: true, senderName: true, occurredAt: true, conversationId: true },
     });
     if (!msg) throw new ReplyRefusedError("Message not found.");
 
-    let ticketId = existingTicketId ?? null;
     const owner = msg.phone ? (await ownersByPhone([msg.phone])).get(msg.phone) ?? null : null;
     const author = await buildActorSnapshot(userId);
-
-    if (ticketId == null) {
-        if (kind === "deal") {
-            const pipeline = await getDealsPipeline(prisma);
-            const entry = pipeline?.statuses.find((s) => s.isEntryPoint) ?? pipeline?.statuses[0];
-            if (!pipeline || !entry) throw new ReplyRefusedError("Deals pipeline is not set up.");
-            const subject = msg.body.split("\n")[0].slice(0, 120) || "WhatsApp lead";
-            const ticket = await prisma.ticket.create({
-                data: {
-                    sourceCounterId: await sourceCounterId(),
-                    pipelineId: pipeline.id,
-                    status: entry.id,
-                    title: subject,
-                    priority: "MEDIUM",
-                    notes: msg.body,
-                    createdBy: author,
-                    deal: {
-                        create: {
-                            contactName: owner?.name ?? msg.senderName ?? null,
-                            phone: msg.phone,
-                            personId: owner?.kind === "person" ? owner.id : null,
-                            companyId: owner?.kind === "company" ? owner.id : null,
-                            source: "WHATSAPP",
-                        },
-                    },
-                },
-                select: { id: true, status: true },
-            });
-            await prisma.ticketLog.create({
-                data: { ticketId: ticket.id, status: ticket.status, note: "Deal lead created from a WhatsApp message", author },
-            });
-            ticketId = ticket.id;
-            void notifyDealCreated(ticket.id).catch((err) => console.error("[notify-deal] error:", err));
-        } else {
-            const pipeline = await getHelpPipeline(prisma);
-            const entry = pipeline?.statuses.find((s) => s.isEntryPoint) ?? pipeline?.statuses[0];
-            if (!pipeline || !entry) throw new ReplyRefusedError("Help Desk pipeline is not set up.");
-            const subject = msg.body.split("\n")[0].slice(0, 120) || "WhatsApp message";
-            const ticket = await prisma.ticket.create({
-                data: {
-                    sourceCounterId: await sourceCounterId(),
-                    pipelineId: pipeline.id,
-                    status: entry.id,
-                    title: subject,
-                    category: "OTHER",
-                    notes: msg.body,
-                    createdBy: author,
-                    help: {
-                        create: {
-                            contactName: owner?.name ?? msg.senderName ?? null,
-                            phone: msg.phone,
-                            personId: owner?.kind === "person" ? owner.id : null,
-                            companyId: owner?.kind === "company" ? owner.id : null,
-                            inquiryType: "OTHER",
-                            subject,
-                        },
-                    },
-                },
-                select: { id: true, status: true },
-            });
-            await prisma.ticketLog.create({
-                data: { ticketId: ticket.id, status: ticket.status, note: "Help ticket raised from a WhatsApp message", author },
-            });
-            ticketId = ticket.id;
-            void notifyHelpCreated(ticket.id).catch((err) => console.error("[notify-help] error:", err));
-        }
-    }
 
     // The whole conversation goes onto the ticket — this one only, never the
     // number's older conversations. A message from before conversations existed
@@ -1233,10 +1170,21 @@ export async function ticketFromMessage(
     if (msg.phone) {
         conversationId = msg.conversationId ?? (await conversationForStaff(msg.phone, new Date())).id;
         if (!msg.conversationId) await prisma.message.update({ where: { id: msg.id }, data: { conversationId } });
-        await attachConversationToTicket(conversationId, ticketId, owner);
-    } else {
-        await prisma.message.update({ where: { id: msg.id }, data: { ticketId } });
     }
+
+    let ticketId: number;
+    if (existingTicketId != null) {
+        ticketId = existingTicketId;
+    } else {
+        const raised = await raiseTicketClaimed({ msg, conversationId, owner, author, kind });
+        if (raised.existing) return raised;
+        ticketId = raised.ticketId;
+        if (kind === "deal") void notifyDealCreated(ticketId).catch((err) => console.error("[notify-deal] error:", err));
+        else void notifyHelpCreated(ticketId).catch((err) => console.error("[notify-help] error:", err));
+    }
+
+    if (conversationId != null) await attachConversationToTicket(conversationId, ticketId, owner);
+    else await prisma.message.update({ where: { id: msg.id }, data: { ticketId } });
 
     // The chat's own record that staff took it up — and the mark that answers
     // the customer for the follow-up popups (lastContactByPhone reads NOTE rows
@@ -1259,5 +1207,97 @@ export async function ticketFromMessage(
     }
 
     void publishChangeServer(["messages", "tickets"]);
-    return ticketId;
+    return { ticketId, existing: false };
+}
+
+/**
+ * Make the Help / Deal ticket under a row lock on the conversation (or the lone
+ * message) and claim that row for it in the same transaction. A row already on
+ * a ticket that still exists is handed back instead. Notifying and moving the
+ * messages stay with the caller, after the commit.
+ */
+async function raiseTicketClaimed(a: {
+    msg: { id: number; phone: string | null; body: string; senderName: string | null };
+    conversationId: number | null;
+    owner: CustomerOwner | null;
+    author: Awaited<ReturnType<typeof buildActorSnapshot>>;
+    kind: "help" | "deal";
+}): Promise<{ ticketId: number; existing: boolean }> {
+    const { msg, conversationId, owner, author, kind } = a;
+    const pipeline = kind === "deal" ? await getDealsPipeline(prisma) : await getHelpPipeline(prisma);
+    const entry = pipeline?.statuses.find((s) => s.isEntryPoint) ?? pipeline?.statuses[0];
+    if (!pipeline || !entry) throw new ReplyRefusedError(kind === "deal" ? "Deals pipeline is not set up." : "Help Desk pipeline is not set up.");
+
+    return prisma.$transaction(async (tx) => {
+        const [row] = conversationId != null
+            ? await tx.$queryRaw<{ ticketId: number | null }[]>`SELECT "ticketId" FROM "MessageConversation" WHERE id = ${conversationId} FOR UPDATE`
+            : await tx.$queryRaw<{ ticketId: number | null }[]>`SELECT "ticketId" FROM "Message" WHERE id = ${msg.id} FOR UPDATE`;
+        // ticketId is a plain scalar — a deleted ticket leaves it dangling, so check it is still there.
+        if (row?.ticketId != null && (await tx.ticket.findUnique({ where: { id: row.ticketId }, select: { id: true } }))) {
+            return { ticketId: row.ticketId, existing: true };
+        }
+
+        let ticketId: number;
+        if (kind === "deal") {
+            const subject = msg.body.split("\n")[0].slice(0, 120) || "WhatsApp lead";
+            const ticket = await tx.ticket.create({
+                data: {
+                    sourceCounterId: await sourceCounterId(tx),
+                    pipelineId: pipeline.id,
+                    status: entry.id,
+                    title: subject,
+                    priority: "MEDIUM",
+                    notes: msg.body,
+                    createdBy: author,
+                    deal: {
+                        create: {
+                            contactName: owner?.name ?? msg.senderName ?? null,
+                            phone: msg.phone,
+                            personId: owner?.kind === "person" ? owner.id : null,
+                            companyId: owner?.kind === "company" ? owner.id : null,
+                            source: "WHATSAPP",
+                        },
+                    },
+                },
+                select: { id: true, status: true },
+            });
+            await tx.ticketLog.create({
+                data: { ticketId: ticket.id, status: ticket.status, note: "Deal lead created from a WhatsApp message", author },
+            });
+            ticketId = ticket.id;
+        } else {
+            const subject = msg.body.split("\n")[0].slice(0, 120) || "WhatsApp message";
+            const ticket = await tx.ticket.create({
+                data: {
+                    sourceCounterId: await sourceCounterId(tx),
+                    pipelineId: pipeline.id,
+                    status: entry.id,
+                    title: subject,
+                    category: "OTHER",
+                    notes: msg.body,
+                    createdBy: author,
+                    help: {
+                        create: {
+                            contactName: owner?.name ?? msg.senderName ?? null,
+                            phone: msg.phone,
+                            personId: owner?.kind === "person" ? owner.id : null,
+                            companyId: owner?.kind === "company" ? owner.id : null,
+                            inquiryType: "OTHER",
+                            subject,
+                        },
+                    },
+                },
+                select: { id: true, status: true },
+            });
+            await tx.ticketLog.create({
+                data: { ticketId: ticket.id, status: ticket.status, note: "Help ticket raised from a WhatsApp message", author },
+            });
+            ticketId = ticket.id;
+        }
+
+        // The claim itself — anyone queued on the lock now sees this ticket.
+        if (conversationId != null) await tx.messageConversation.update({ where: { id: conversationId }, data: { topic: "TICKET", ticketId } });
+        else await tx.message.update({ where: { id: msg.id }, data: { ticketId } });
+        return { ticketId, existing: false };
+    });
 }
