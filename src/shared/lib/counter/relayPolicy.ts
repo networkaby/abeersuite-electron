@@ -41,7 +41,7 @@ const NEVER_RELAY: readonly RegExp[] = [
     /^\/api\/health$/,                           // Electron's boot probe: relayed, a till with no internet never starts
     /^\/api\/sync(\/|$)/,                        // the outbox push is this machine's work
     /^\/api\/pos\/counters(\/|$)/,               // bind THIS device; already write authoritatively
-    /^\/api\/settings\/(backup|restore)(\/|$)/,  // credentials withheld from tills on purpose
+    /^\/api\/settings\/(backup|restore)(\/|$)/,  // runs here with the backup keys fetched from the office
     // A PIN belongs to THIS counter, and the office is not one: relayed, `thisCounterId()`
     // answers null there and the route refuses its own till. Nothing is lost by staying
     // here — the write already goes through `prismaAuthoritative`, a direct Supabase
