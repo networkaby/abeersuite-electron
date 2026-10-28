@@ -81,7 +81,14 @@ export async function replyGoogleReview(reviewId: number, comment: string, byNam
     });
     return prisma.review.update({
         where: { id: reviewId },
-        data: { replyText: made.comment ?? comment, repliedAt: made.updateTime ? new Date(made.updateTime) : new Date(), repliedByName: byName },
+        data: {
+            replyText: made.comment ?? comment,
+            repliedAt: made.updateTime ? new Date(made.updateTime) : new Date(),
+            repliedByName: byName,
+            draftText: null,
+            draftByName: null,
+            draftedAt: null,
+        },
     });
 }
 
@@ -92,4 +99,12 @@ export async function deleteGoogleReviewReply(reviewId: number) {
     if (review.platform !== GOOGLE) throw new GoogleError("Replying is only wired for Google reviews.");
     await googleApi(`${GOOGLE_V4_API}/${review.externalId}/reply`, { method: "DELETE" });
     return prisma.review.update({ where: { id: reviewId }, data: { replyText: null, repliedAt: null, repliedByName: null } });
+}
+
+/** Keep a reply for staff to check (an agent's draft). Replaces any earlier draft. */
+export function saveReviewDraft(reviewId: number, text: string | null, byName: string | null) {
+    return prisma.review.update({
+        where: { id: reviewId },
+        data: text ? { draftText: text, draftByName: byName, draftedAt: new Date() } : { draftText: null, draftByName: null, draftedAt: null },
+    });
 }

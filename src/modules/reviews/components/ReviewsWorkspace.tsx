@@ -22,15 +22,20 @@ type Review = {
     replyText: string | null;
     repliedAt: string | null;
     repliedByName: string | null;
+    /** An agent's reply waiting for staff (Cowork in Draft mode, or 1–2 stars). */
+    draftText: string | null;
+    draftByName: string | null;
+    draftedAt: string | null;
 };
 type ListReply = {
     rows: Review[];
     total: number;
     pageSize: number;
     waiting: number;
+    drafts: number;
     google: { ready: boolean; lastError: string | null; setupProblem: string | null };
 };
-type Replied = "" | "no" | "yes";
+type Replied = "" | "no" | "draft" | "yes";
 
 const PLATFORM_LABEL: Record<string, string> = { GOOGLE: "Google" };
 const dateText = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
@@ -96,10 +101,10 @@ export function ReviewsWorkspace({ canReply }: { canReply: boolean }) {
     }
 
     async function saveReply(r: Review) {
-        const comment = (drafts[r.id] ?? r.replyText ?? "").trim();
+        const comment = (drafts[r.id] ?? r.draftText ?? r.replyText ?? "").trim();
         if (!comment) return;
-        const before = { replyText: r.replyText, repliedAt: r.repliedAt, repliedByName: r.repliedByName };
-        patchRow(r.id, { replyText: comment, repliedAt: new Date().toISOString() });
+        const before = { replyText: r.replyText, repliedAt: r.repliedAt, repliedByName: r.repliedByName, draftText: r.draftText };
+        patchRow(r.id, { replyText: comment, repliedAt: new Date().toISOString(), draftText: null });
         setBusy(`reply-${r.id}`);
         try {
             const { data: row } = await axios.put<Review>(`/api/reviews/${r.id}/reply`, { comment });
@@ -130,6 +135,20 @@ export function ReviewsWorkspace({ canReply }: { canReply: boolean }) {
         }
     }
 
+    async function discardDraft(r: Review) {
+        patchRow(r.id, { draftText: null });
+        setDrafts(({ [r.id]: _, ...rest }) => rest);
+        setBusy(`reply-${r.id}`);
+        try {
+            await axios.delete(`/api/reviews/${r.id}/draft`);
+        } catch (e) {
+            patchRow(r.id, { draftText: r.draftText });
+            toast.error(extractApiError(e, "Draft not discarded"));
+        } finally {
+            setBusy(null);
+        }
+    }
+
     const toggleStar = (n: number) => {
         setPage(1);
         setStars((s) => (s.includes(n) ? s.filter((x) => x !== n) : [...s, n]));
@@ -141,7 +160,7 @@ export function ReviewsWorkspace({ canReply }: { canReply: boolean }) {
         <div className="mx-auto flex max-w-4xl flex-col gap-4 p-4">
             <div className="flex flex-wrap items-center gap-2">
                 <h1 className="mr-auto text-lg font-semibold">
-                    Reviews {data ? <span className="text-sm font-normal text-muted-foreground">· {data.waiting} waiting for a reply</span> : null}
+                    Reviews {data ? <span className="text-sm font-normal text-muted-foreground">· {data.waiting} waiting for a reply{data.drafts ? ` · ${data.drafts} draft${data.drafts === 1 ? "" : "s"} to check` : ""}</span> : null}
                 </h1>
                 {canReply && (
                     <Button size="sm" variant="outline" onClick={refresh} disabled={busy === "sync" || !google?.ready}>
@@ -163,7 +182,7 @@ export function ReviewsWorkspace({ canReply }: { canReply: boolean }) {
             )}
 
             <div className="flex flex-wrap items-center gap-2 text-sm">
-                {([["", "All"], ["no", "Waiting"], ["yes", "Replied"]] as const).map(([v, label]) => (
+                {([["", "All"], ["no", "Waiting"], ["draft", "Drafts"], ["yes", "Replied"]] as const).map(([v, label]) => (
                     <Button key={v} size="sm" variant={replied === v ? "default" : "outline"} onClick={() => { setPage(1); setReplied(v); }}>
                         {label}
                     </Button>
@@ -183,7 +202,7 @@ export function ReviewsWorkspace({ canReply }: { canReply: boolean }) {
 
             <ul className={cn("flex flex-col gap-3", loading && "opacity-60")}>
                 {data?.rows.map((r) => {
-                    const draft = drafts[r.id] ?? r.replyText ?? "";
+                    const draft = drafts[r.id] ?? r.draftText ?? r.replyText ?? "";
                     const changed = draft.trim() !== (r.replyText ?? "") && !!draft.trim();
                     return (
                         <li key={r.id} className="rounded-lg border bg-card p-4">
@@ -209,6 +228,11 @@ export function ReviewsWorkspace({ canReply }: { canReply: boolean }) {
                                     <div className="mt-3 rounded-md bg-muted/50 p-3">
                                         {canReply ? (
                                             <>
+                                                {r.draftText && (
+                                                    <p className="mb-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+                                                        Draft by {r.draftByName ?? "agent"}{r.draftedAt ? ` · ${dateText(r.draftedAt)}` : ""} — check it, then Post reply. Not on Google yet.
+                                                    </p>
+                                                )}
                                                 <Textarea
                                                     value={draft}
                                                     onChange={(e) => setDrafts((d) => ({ ...d, [r.id]: e.target.value }))}
@@ -223,6 +247,11 @@ export function ReviewsWorkspace({ canReply }: { canReply: boolean }) {
                                                     {r.replyText && (
                                                         <Button size="sm" variant="ghost" onClick={() => deleteReply(r)} disabled={busy === `reply-${r.id}`}>
                                                             <Trash2 className="size-4" /> Remove
+                                                        </Button>
+                                                    )}
+                                                    {r.draftText && (
+                                                        <Button size="sm" variant="ghost" onClick={() => discardDraft(r)} disabled={busy === `reply-${r.id}`}>
+                                                            Discard draft
                                                         </Button>
                                                     )}
                                                     {r.repliedAt && (

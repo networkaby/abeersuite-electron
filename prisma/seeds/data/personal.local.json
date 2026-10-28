@@ -10864,6 +10864,10 @@
     },
     {
       "roleId": "R1",
+      "permissionId": "settings:incoming:manage"
+    },
+    {
+      "roleId": "R1",
       "permissionId": "mobile:posts:share"
     },
     {

@@ -29,6 +29,11 @@ model Review {
   replyText       String?
   repliedAt       DateTime?
   repliedByName   String?
+  /// A reply waiting for staff: written by an outside agent (Cowork) in Draft
+  /// mode, or forced to Draft (1–2 stars). Posting the reply clears it.
+  draftText       String?
+  draftByName     String?
+  draftedAt       DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

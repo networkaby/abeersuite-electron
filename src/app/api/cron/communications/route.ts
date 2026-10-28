@@ -5,6 +5,7 @@ import { runPostReminders } from "@/modules/campaigns/lib/postReminders";
 import { runScheduledCampaigns } from "@/modules/campaigns/lib/sendCampaign";
 import { runGooglePosts } from "@/modules/campaigns/lib/googlePosts";
 import { syncGoogleReviews } from "@/modules/reviews/lib/googleReviews";
+import { requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,8 +27,8 @@ export const maxDuration = 300;
  * CRON_SECRET is optional, as for /api/cron/due-reminders — blank counts as absent.
  */
 export async function GET(req: Request) {
-    const secret = process.env.CRON_SECRET?.trim();
-    if (secret && req.headers.get("authorization") !== `Bearer ${secret}`) {
+    // CRON_SECRET or the cron-job.org key on Settings → Incoming API (incomingApi.ts).
+    if (!(await requireIncomingKey(req, "CRON"))) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

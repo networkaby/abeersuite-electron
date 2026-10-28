@@ -2414,6 +2414,34 @@ ALTER TABLE "ChatMessage" ALTER COLUMN "link" DROP NOT NULL;
 ALTER TABLE "ChatMessage" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "IncomingApi" (
+    "id" TEXT NOT NULL,
+    "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "secretEnc" TEXT,
+    "secretHint" TEXT,
+    "settings" JSONB NOT NULL DEFAULT '{}',
+    "lastUsedAt" TIMESTAMP(3),
+    "updatedByName" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "IncomingApi_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "IncomingApi" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL;
+ALTER TABLE "IncomingApi" ADD COLUMN IF NOT EXISTS "enabled" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "IncomingApi" ADD COLUMN IF NOT EXISTS "secretEnc" TEXT;
+ALTER TABLE "IncomingApi" ALTER COLUMN "secretEnc" DROP NOT NULL;
+ALTER TABLE "IncomingApi" ADD COLUMN IF NOT EXISTS "secretHint" TEXT;
+ALTER TABLE "IncomingApi" ALTER COLUMN "secretHint" DROP NOT NULL;
+ALTER TABLE "IncomingApi" ADD COLUMN IF NOT EXISTS "settings" JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE "IncomingApi" ADD COLUMN IF NOT EXISTS "lastUsedAt" TIMESTAMP(3);
+ALTER TABLE "IncomingApi" ALTER COLUMN "lastUsedAt" DROP NOT NULL;
+ALTER TABLE "IncomingApi" ADD COLUMN IF NOT EXISTS "updatedByName" TEXT;
+ALTER TABLE "IncomingApi" ALTER COLUMN "updatedByName" DROP NOT NULL;
+ALTER TABLE "IncomingApi" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "IncomingApi" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "InvUnit" (
     "id" SERIAL NOT NULL,
     "code" TEXT NOT NULL,
@@ -4660,6 +4688,9 @@ CREATE TABLE IF NOT EXISTS "Review" (
     "replyText" TEXT,
     "repliedAt" TIMESTAMP(3),
     "repliedByName" TEXT,
+    "draftText" TEXT,
+    "draftByName" TEXT,
+    "draftedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -4684,6 +4715,12 @@ ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "repliedAt" TIMESTAMP(3);
 ALTER TABLE "Review" ALTER COLUMN "repliedAt" DROP NOT NULL;
 ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "repliedByName" TEXT;
 ALTER TABLE "Review" ALTER COLUMN "repliedByName" DROP NOT NULL;
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "draftText" TEXT;
+ALTER TABLE "Review" ALTER COLUMN "draftText" DROP NOT NULL;
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "draftByName" TEXT;
+ALTER TABLE "Review" ALTER COLUMN "draftByName" DROP NOT NULL;
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "draftedAt" TIMESTAMP(3);
+ALTER TABLE "Review" ALTER COLUMN "draftedAt" DROP NOT NULL;
 ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
 
@@ -8527,6 +8564,13 @@ DO $$ BEGIN
     IF to_regclass('public."holidays"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "holidays";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "holidays"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."IncomingApi"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "IncomingApi";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "IncomingApi"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;

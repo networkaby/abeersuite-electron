@@ -3,6 +3,7 @@ import { NextResponse, after } from "next/server";
 import { pushInboundToStaff, type InboundForPush } from "@/shared/lib/push/staffPush";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { applyStatuses, ingestInbound, type WaChangeValue } from "@/modules/message/lib/customerMessages";
+import { incomingSecret } from "@/modules/incoming/lib/incomingApi";
 
 /**
  * Meta WhatsApp webhook — customer replies and delivered / read ticks.
@@ -20,7 +21,8 @@ import { applyStatuses, ingestInbound, type WaChangeValue } from "@/modules/mess
 
 export async function GET(req: Request) {
     const sp = new URL(req.url).searchParams;
-    const expected = process.env.META_WA_VERIFY_TOKEN;
+    // META_WA_VERIFY_TOKEN, or the verify token on Settings → Incoming API.
+    const { value: expected } = await incomingSecret("META_WA_VERIFY");
     if (expected && sp.get("hub.mode") === "subscribe" && sp.get("hub.verify_token") === expected) {
         return new Response(sp.get("hub.challenge") ?? "", { status: 200, headers: { "Content-Type": "text/plain" } });
     }
@@ -29,8 +31,9 @@ export async function GET(req: Request) {
 
 /** True when the body carries Meta's signature for our app secret. Unset secret
  *  is accepted only outside production, so a dev box can post sample payloads. */
-function verifyWebhookSignature(raw: string, header: string | null): boolean {
-    const secret = process.env.META_WA_APP_SECRET;
+async function verifyWebhookSignature(raw: string, header: string | null): Promise<boolean> {
+    const { value: secret, enabled } = await incomingSecret("META_WA_APP");
+    if (!enabled) return false;
     if (!secret) return process.env.NODE_ENV !== "production";
     if (!header?.startsWith("sha256=")) return false;
     const want = Buffer.from(createHmac("sha256", secret).update(raw, "utf8").digest("hex"));
@@ -42,7 +45,7 @@ type WebhookBody = { object?: string; entry?: { changes?: { field?: string; valu
 
 export async function POST(req: Request) {
     const raw = await req.text();
-    if (!verifyWebhookSignature(raw, req.headers.get("x-hub-signature-256"))) {
+    if (!(await verifyWebhookSignature(raw, req.headers.get("x-hub-signature-256")))) {
         return NextResponse.json({ error: "bad signature" }, { status: 401 });
     }
     let body: WebhookBody;

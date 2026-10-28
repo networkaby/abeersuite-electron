@@ -5,7 +5,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { requireReviewsPage } from "@/modules/reviews/lib/reviewsAccess";
 import { googleStatus } from "@/modules/campaigns/lib/googleBusiness";
 
-// GET /api/reviews?platform=GOOGLE&stars=1,2&replied=no&page=1 — CRM → Reviews.
+// GET /api/reviews?platform=GOOGLE&stars=1,2&replied=no|yes|draft&page=1 — CRM → Reviews.
 // Reads our saved copy only; Google is asked by POST /api/reviews/sync and the
 // communications job, never on page open.
 
@@ -22,9 +22,15 @@ export async function GET(req: Request) {
         const where: Prisma.ReviewWhereInput = {
             ...(q.get("platform") ? { platform: q.get("platform")! } : {}),
             ...(stars.length ? { stars: { in: stars } } : {}),
-            ...(replied === "no" ? { replyText: null } : replied === "yes" ? { replyText: { not: null } } : {}),
+            ...(replied === "no"
+                ? { replyText: null }
+                : replied === "yes"
+                  ? { replyText: { not: null } }
+                  : replied === "draft"
+                    ? { draftText: { not: null } }
+                    : {}),
         };
-        const [rows, total, waiting, google] = await Promise.all([
+        const [rows, total, waiting, drafts, google] = await Promise.all([
             prisma.review.findMany({
                 where,
                 orderBy: { reviewedAt: "desc" },
@@ -32,11 +38,12 @@ export async function GET(req: Request) {
                 take: PAGE_SIZE,
                 select: {
                     id: true, platform: true, reviewerName: true, reviewerPhoto: true, stars: true, comment: true,
-                    reviewedAt: true, replyText: true, repliedAt: true, repliedByName: true,
+                    reviewedAt: true, replyText: true, repliedAt: true, repliedByName: true, draftText: true, draftByName: true, draftedAt: true,
                 },
             }),
             prisma.review.count({ where }),
             prisma.review.count({ where: { replyText: null } }),
+            prisma.review.count({ where: { draftText: { not: null } } }),
             googleStatus(),
         ]);
         return NextResponse.json({
@@ -44,6 +51,7 @@ export async function GET(req: Request) {
             total,
             pageSize: PAGE_SIZE,
             waiting,
+            drafts,
             google: { ready: google.ready, lastError: google.lastError ?? null, setupProblem: google.setupProblem },
         });
     } catch (e) {
