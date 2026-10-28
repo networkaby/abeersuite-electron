@@ -12,10 +12,10 @@
 // save, for granting / revoking one id across roles in bulk, and as the
 // catalog ↔ DB diff report.
 //
-// The documented cure is `pnpm prisma db seed`, and for one new nav link that is
-// far too big a hammer: Step 2 of catalog-seed tops R1 up with every
-// non-systemOnly permission in the catalog (~109 grants at the time of writing)
-// and resurrects anything deliberately taken away from R1 in the Role Matrix.
+// THIS IS `pnpm prisma db seed` (prisma.config.ts runs it with --apply). Every
+// run also tops R1 (Admin) up with every non-systemOnly catalog permission it
+// lacks — AGENTS.md: "always seed new permission for admin". That resurrects
+// anything deliberately taken away from R1 in the Role Matrix; read the dry run.
 //
 // IT CARRIES NO DATA OF ITS OWN. The old `apply-permissions.ts` was deleted
 // because its hardcoded ADDITIONS list had become a third copy of the catalog
@@ -34,11 +34,12 @@
 //
 // Run:
 //   pnpm seed:sync-permissions                                  # dry run — show the catalog ↔ DB diff
-//   pnpm seed:sync-permissions --apply                          # create/update the missing rows
+//   pnpm seed:sync-permissions --apply                          # create/update the missing rows + R1 top-up
+//   pnpm prisma db seed                                         # same as the line above
 //   pnpm seed:sync-permissions --grant <id> --roles R1,R2,R3    # dry run, with grants
 //   pnpm seed:sync-permissions --grant <id> --roles R1,R2,R3 --apply
 //   pnpm seed:sync-permissions --grant <id> --revoke-from R2,R3 --apply   # take it back
-//   pnpm seed:sync-permissions --grant-missing --roles R1 [--apply]   # every non-systemOnly id R1 lacks
+//   pnpm seed:sync-permissions --grant-missing --roles R2 [--apply]   # every non-systemOnly id R2 lacks (R1 always)
 //
 //   --no-revoke   leave sessions alone (see below)
 //
@@ -81,6 +82,9 @@ function flag(name: string): string | undefined {
 const grantId = flag("--grant");
 const roleIds = (flag("--roles") ?? "").split(",").map((r) => r.trim()).filter(Boolean);
 const revokeFrom = (flag("--revoke-from") ?? "").split(",").map((r) => r.trim()).filter(Boolean);
+
+/** Admin always holds every grantable permission — topped up on every run. */
+const ADMIN_ROLE_ID = "R1";
 
 /** Which database is about to be written to. Printed because this script is safe
  *  on live BY CONSTRUCTION, not by configuration — the operator still gets to see
@@ -139,8 +143,11 @@ async function main(): Promise<void> {
 
     // ── 2. Grants ────────────────────────────────────────────────────────────
     let changed = 0;
+    // Roles topped up with every grantable permission they lack: R1 always (unless
+    // this is a single --grant run), plus --roles when --grant-missing asks for it.
+    const topUpRoles = grantId ? [] : [...new Set([ADMIN_ROLE_ID, ...(grantMissing ? roleIds : [])])];
     // Everyone whose sessions this run could invalidate — granted TO or taken FROM.
-    const touchedRoles = [...new Set([...roleIds, ...revokeFrom])];
+    const touchedRoles = [...new Set([...roleIds, ...revokeFrom, ...topUpRoles])];
     if (grantId) {
         // A typo must fail loudly. Granting an id that is not in the catalog would
         // either break the FK or leave a row a later prune silently removes.
@@ -203,30 +210,32 @@ async function main(): Promise<void> {
     }
 
     // ── 2b. Every catalog permission the roles lack ─────────────────────────
-    // The full seed's R1 top-up (catalog-seed Step 2), without the rest of
-    // the seed. Adds only — and resurrects anything deliberately taken away, so
-    // read the dry-run list first.
-    if (grantMissing) {
-        if (grantId) {
-            console.error(`\n✖ --grant-missing and --grant are separate runs. Nothing changed.\n`);
-            process.exit(1);
-        }
-        if (roleIds.length === 0) {
-            console.error(`\n✖ --grant-missing needs --roles (e.g. --roles R1).\n`);
-            process.exit(1);
-        }
-        const roles = await prisma.role.findMany({ where: { id: { in: roleIds } }, select: { id: true } });
-        const unknown = roleIds.filter((r) => !roles.some((x) => x.id === r));
-        if (unknown.length) {
+    // R1 on every run, plus --grant-missing --roles. Adds only — and resurrects
+    // anything deliberately taken away, so read the dry-run list first.
+    if (grantMissing && grantId) {
+        console.error(`\n✖ --grant-missing and --grant are separate runs. Nothing changed.\n`);
+        process.exit(1);
+    }
+    if (grantMissing && roleIds.length === 0) {
+        console.error(`\n✖ --grant-missing needs --roles (e.g. --roles R2).\n`);
+        process.exit(1);
+    }
+    if (topUpRoles.length) {
+        const roles = await prisma.role.findMany({ where: { id: { in: topUpRoles } }, select: { id: true } });
+        const unknown = topUpRoles.filter((r) => !roles.some((x) => x.id === r));
+        // A fresh DB with no R1 yet (before `pnpm seed:generic`) just skips the top-up.
+        if (unknown.some((r) => r !== ADMIN_ROLE_ID)) {
             console.error(`\n✖ Unknown role(s): ${unknown.join(", ")}. Nothing changed.\n`);
             process.exit(1);
         }
+        if (unknown.length) console.log(`\n  • Role ${ADMIN_ROLE_ID} not present — top-up skipped (run pnpm seed:generic on a fresh DB).`);
+        const present = topUpRoles.filter((r) => !unknown.includes(r));
         const grantable = PERMISSION_CATALOG.filter((p) => !p.systemOnly);
         const held = await prisma.rolePermission.findMany({
-            where: { roleId: { in: roleIds } },
+            where: { roleId: { in: present } },
             select: { roleId: true, permissionId: true },
         });
-        for (const roleId of roleIds) {
+        for (const roleId of present) {
             const has = new Set(held.filter((h) => h.roleId === roleId).map((h) => h.permissionId));
             // A lower CRUD rung (create / edit) is implied by a held higher one and is
             // never stored (crudLadder.ts) — granting it would only be noise.

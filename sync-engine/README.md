@@ -109,7 +109,7 @@ Move through `shadow` first if you want a proving week.
 
 ## Two things that must never happen
 
-- **Never run a seed against the replica.** `bootstrap-seed` and `catalog-seed`
+- **Never run a seed against the replica.** `bootstrap-seed` and `sync-permissions`
   mint autoincrement ids; the replica's ids must stay byte-identical to Supabase's,
   because a `User.id` in a JWT and a `universalVoucherId` on a ledger line resolve
   against whichever database answers. A colliding id attaches a session or a ledger

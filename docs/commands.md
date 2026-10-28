@@ -142,7 +142,7 @@ Read `docs/seeds.md` first. Current DB is **demo**.
 
 | Command | What it does | Safe on live? |
 | --- | --- | --- |
-| `pnpm prisma db seed` | Catalog seed — code-owned permissions, constraints, voucher series + R1 top-up | yes |
+| `pnpm prisma db seed` | Same as `pnpm seed:sync-permissions --apply` — catalog permissions the DB lacks + R1 top-up | yes |
 | `pnpm seed:generic` | Generic new-client demo world | **no** — fresh installs only |
 | `pnpm seed:apply-taxonomy` | Fills group + brand on the real catalog from product names (`--dry` previews) | yes (fills NULLs only) |
 | `pnpm seed:sync-permissions` | Creates catalog `Permission` rows the DB lacks, then grants one to roles (`--roles`) or takes it back (`--revoke-from`). Dry by default; `--apply` writes, `--no-revoke` spares sessions | yes (never deletes a `Permission`) |

@@ -5,10 +5,9 @@ All seed scripts and their fixture data live under `prisma/seeds/`.
 ```
 prisma/seeds/
 ├─ bootstrap-seed.ts            GENERIC — new-client installer (run via `pnpm seed:generic`)
-├─ catalog-seed.ts              CATALOG — what `pnpm prisma db seed` runs: code-owned catalog + R1 top-up (safe on live)
 ├─ helper-brands.ts             HELPER — trade-specific brand master (InvBrand)
 ├─ apply-taxonomy.ts            APPLY — classify group + brand on the real catalog from product names (`--dry` previews)
-├─ sync-permissions.ts          APPLY — bring Permission rows in line with the catalog + grant one to roles, without a full seed
+├─ sync-permissions.ts          PERMISSIONS — what `pnpm prisma db seed` runs (`--apply`): catalog rows the DB lacks + R1 top-up; also grants / revokes one id
 ├─ hard-clean.ts                CLEANER — wipes everything bootstrap doesn't seed
 ├─ purge-vouchers.ts            OPS — wipes only vouchers/JEs/invoices/payments
 ├─ purge-demo-contacts.ts       OPS — wipes contacts (+ transactions), keeps products + settings
@@ -17,7 +16,7 @@ prisma/seeds/
 │  ├─ purgeDemo.ts       SHARED — transaction table list + purge steps for the demo cleaners
 │  ├─ assertNotCounter.ts SHARED — refuse to run a destructive seed against a counter machine
 │  ├─ positionSeedSync.ts SHARED — upsert a position + its role-template links
-│  ├─ codeOwnedCatalog.ts SHARED — code-owned data both seeds use: XOR CHECK constraints, voucher series, and a re-export of the permission catalog. ADD NEW PERMISSIONS in src/shared/lib/auth/permissionCatalog.ts (the app reads it too).
+│  ├─ codeOwnedCatalog.ts SHARED — code-owned helpers: XOR CHECK constraints, portal-profile columns, and a re-export of the permission catalog. ADD NEW PERMISSIONS in src/shared/lib/auth/permissionCatalog.ts (the app reads it too).
 └─ data/                 Vyapar opening-balance inputs (scripts/vyapar/)
 ```
 
@@ -29,19 +28,20 @@ prisma/seeds/
 >
 > Every seed left in this folder is one you would actually run on a real install.
 
-## The official seed — `pnpm prisma db seed` = CATALOG
+## The official seed — `pnpm prisma db seed` = SYNC-PERMISSIONS
 
-The Prisma seed wired in [`prisma.config.ts`](../prisma.config.ts) is the
-**catalog seed**:
+The Prisma seed wired in [`prisma.config.ts`](../prisma.config.ts) is
+**`sync-permissions --apply`** — the same thing as `pnpm seed:sync-permissions --apply`:
 
 ```ts
-migrations: { seed: "pnpm exec tsx prisma/seeds/catalog-seed.ts" }
+migrations: { seed: "pnpm exec tsx prisma/seeds/sync-permissions.ts --apply" }
 ```
 
-It applies only what the **code** owns: the permission catalog (upsert + prune of
-ids retired from code), the Phone/Email XOR CHECK constraints, the voucher
-numbering series, the existence of the `BackupConfig` row, and the **R1 top-up**.
-It never touches config or transactions, so it is safe on the live DB.
+It creates (or relabels) every catalog `Permission` the DB lacks and gives **R1
+(Admin) every non-`systemOnly` permission** it does not hold. It never deletes a
+`Permission` (a DB row absent from the catalog is reported and left alone) and
+never touches config or transactions, so it is safe on the live DB. Extra flags
+pass through: `pnpm prisma db seed -- --no-revoke`.
 
 > **There is no personal snapshot any more** (retired 2026-10-28). The old
 > `personal-bootstrap.ts` / `export-personal.ts` / `data/personal.local.json`
@@ -52,8 +52,7 @@ It never touches config or transactions, so it is safe on the live DB.
 
 > **`BackupConfig` row.** `/api/cron/backup-due` reads that row every hour to
 > decide whether a backup is due, so **a missing row means no backups, silently**.
-> The catalog seed creates it (create-only, schema defaults — every weekday,
-> hour 22) so a fresh DB is covered; an admin's edit always survives.
+> `pnpm seed:generic` creates it on a fresh install; a running org already has it.
 
 ## `bootstrap-seed.ts` — OUR installer, not a generic one
 
@@ -69,7 +68,7 @@ values someone should tune later".
 Idempotent, and every write is create-only where an admin can edit the value, so
 a re-run never overwrites tuned settings. It seeds:
 
-- **RBAC** — **3 roles**: `R1` Role-Admin (the only `isSystem` role, homed in the all-access `DEP-ADMIN`), `R2` Branch Manager (`DEP-OP`), `R3` Counter Operator (`DEP-SALES`). Their **grants are not seeded here** — those are config and live only in the database; bootstrap only guarantees the rows and their department homes (the catalog seed grants R1 everything). Plus 130+ permissions, including a **per-kind voucher gate** for every hand-created voucher kind (GL `finance:voucher:<action>:<kind>`, inventory `inventory:voucher:<action>:<kind>`) generated from `src/shared/lib/auth/voucherMatrix.ts` so the mapping never drifts.
+- **RBAC** — **3 roles**: `R1` Role-Admin (the only `isSystem` role, homed in the all-access `DEP-ADMIN`), `R2` Branch Manager (`DEP-OP`), `R3` Counter Operator (`DEP-SALES`). Their **grants are not seeded here** — those are config and live only in the database; bootstrap only guarantees the rows and their department homes (bootstrap and `pnpm prisma db seed` grant R1 everything). Plus 130+ permissions, including a **per-kind voucher gate** for every hand-created voucher kind (GL `finance:voucher:<action>:<kind>`, inventory `inventory:voucher:<action>:<kind>`) generated from `src/shared/lib/auth/voucherMatrix.ts` so the mapping never drifts.
 - **Workflow** — 9 pipelines, 61 ticket statuses, 5 work groups, 48 status transitions. **No works and no ticket workers** (see below).
 - **Couriers** — our 6 real delivery methods, including Local delivery's per-neighbourhood pricing for the pincodes we serve (783384 Abhayapuri / Lengtisinga, 783380 Barpara), INDIA POST zone rates, and the Shiprocket / Shipway pickup pincode.
 - **Payment** — 4 gateways (Pay-on-delivery, Razorpay, PayU, Cashfree), each linked to its settlement ledger **by name**, plus the `Payment Gateway` account group and those four ledgers.
@@ -163,15 +162,14 @@ These do just the one job.
 | Script | Purpose |
 |---|---|
 | `pnpm seed:apply-taxonomy` | Fills `group` + `brand` on the **real** catalog by matching product names. Two-pass (head-noun first, then anywhere) and only ever fills NULLs, so manual corrections survive. `--dry` previews. Re-run after a bulk import — see the note below. |
-| `pnpm seed:sync-permissions` | Creates the `Permission` rows the code-owned catalog has and the DB does not, and grants one to named roles (`--roles`) or takes it back (`--revoke-from`). **Dry by default — `--apply` writes.** Never deletes a `Permission`; a DB row absent from the catalog is reported and left alone. Carries no permission list of its own (it imports `PERMISSION_CATALOG`), so it cannot drift. Use it when a new `ui:sidebar:*` id appears and you do NOT want the R1 top-up a full seed brings. |
+| `pnpm seed:sync-permissions` | Creates the `Permission` rows the code-owned catalog has and the DB does not, and grants one to named roles (`--roles`) or takes it back (`--revoke-from`). **Dry by default — `--apply` writes.** Never deletes a `Permission`; a DB row absent from the catalog is reported and left alone. Carries no permission list of its own (it imports `PERMISSION_CATALOG`), so it cannot drift. Every `--apply` run (except a single `--grant` run) also tops R1 up with every grantable permission. |
 
 ### Shipping a permission
 
 There is **no `apply-permissions` script any more.** It existed to write a handful of
 rows without a full seed, but every row it wrote was already in
-`src/shared/lib/auth/permissionCatalog.ts` (re-exported by `lib/codeOwnedCatalog.ts`), and **both** seeds apply that catalog in full with the
-identical upsert (`bootstrap-seed.ts` line ~865, and `applyCodeOwnedCatalog()` for
-`pnpm prisma db seed`). Its `ADDITIONS` list had become a third copy of the same
+`src/shared/lib/auth/permissionCatalog.ts` (re-exported by `lib/codeOwnedCatalog.ts`), and `bootstrap-seed.ts` and `sync-permissions.ts` both apply
+that catalog in full. Its `ADDITIONS` list had become a third copy of the same
 data, guarded by nothing, and all 12 entries were finished work.
 
 The flow is now:
@@ -181,11 +179,10 @@ The flow is now:
    these two agree).
 2. `pnpm prisma db seed`.
 
-> **A full seed does one thing the old script did not: the R1 top-up.** Step 2 of
-> `catalog-seed.ts` grants R1 every non-`systemOnly` permission in the catalog.
-> R1 currently holds 177 of 286, so the next reseed will add roughly 108 grants — and
-> if a permission was deliberately removed from R1 in the Role Matrix, it comes back.
-> Decide which you want before reseeding. (`admin:bypass` is `systemOnly` and stays
+> **Every run also does the R1 top-up.** `sync-permissions` grants R1 every
+> non-`systemOnly` permission in the catalog (lower CRUD rungs implied by a held
+> higher one are skipped). If a permission was deliberately removed from R1 in the
+> Role Matrix, it comes back — run `pnpm seed:sync-permissions` (dry) first to see. (`admin:bypass` is `systemOnly` and stays
 > excluded.)
 
 **Some permissions are never typed by hand.** Adding a nav entry to `SETTINGS_NAV` /
@@ -214,21 +211,18 @@ back only that one permission from only those roles:
 pnpm seed:sync-permissions --grant ui:sidebar:settings:screen-size --revoke-from R2,R3 --apply
 ```
 
-The R1 top-up on its own, without a full seed — every non-`systemOnly` catalog permission
-the role lacks (lower CRUD rungs implied by a held higher one are skipped). It adds only,
-so anything deliberately taken away comes back: read the dry-run list first.
+The same top-up for another role — every non-`systemOnly` catalog permission it lacks
+(R1 is always included). It adds only, so read the dry-run list first.
 
 ```bash
-pnpm seed:sync-permissions --grant-missing --roles R1                       # preview
-pnpm seed:sync-permissions --grant-missing --roles R1 --apply --no-revoke   # write
+pnpm seed:sync-permissions --grant-missing --roles R2                       # preview
+pnpm seed:sync-permissions --grant-missing --roles R2 --apply --no-revoke   # write
 ```
 
 It creates only the rows the catalog has and the DB lacks, grants them, and bumps
 `tokensValidFrom` for the affected staff (permissions ride the JWT, so a grant is invisible
 until the holder signs in again). Pass `--no-revoke` during trading hours — the grant still
-lands, it just waits for each person's next login. `--overlay-only` on the full seed is **not**
-an alternative: the R1 top-up sits outside that branch and runs anyway, and skipping step 1
-means the new row is never created.
+lands, it just waits for each person's next login.
 
 ### `apply-taxonomy` and the group tree
 

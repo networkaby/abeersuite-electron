@@ -111,7 +111,7 @@ const ROLES = [
     { id: "R3", label: "Counter Operator", color: "bg-blue-100 text-blue-600", isSystem: false, rank: 20, departmentId: "DEP-SALES" },
 ] as const;
 
-// The permission catalog is CODE-OWNED and shared with catalog-seed —
+// The permission catalog is CODE-OWNED and shared with sync-permissions —
 // single source: src/shared/lib/auth/permissionCatalog.ts (re-exported by ./lib/codeOwnedCatalog.ts). Add new permissions THERE.
 const PERMISSIONS = PERMISSION_CATALOG;
 
@@ -820,7 +820,7 @@ const ADMIN = {
 // SECTION 6 — DB constraints (XOR on Phone/Email ownership)
 // ════════════════════════════════════════════════════════════════════════════
 
-// Shared impl lives in ./lib/codeOwnedCatalog.ts (catalog-seed uses it too).
+// Shared impl lives in ./lib/codeOwnedCatalog.ts .
 const ensureXorCheck = (table: "Phone" | "Email", constraintName: string) => ensureXorCheckShared(pool, table, constraintName);
 // ════════════════════════════════════════════════════════════════════════════
 // MAIN
@@ -1203,12 +1203,8 @@ async function main() {
     await ensureXorCheck("Phone", "Phone_owner_xor");
     await ensureXorCheck("Email", "Email_owner_xor");
     console.log(`      ✓ Phone/Email XOR ownership CHECK ensured`);
-    // The portal-profile columns and their backfill, the same call the catalog
-    // seed makes through applyCodeOwnedCatalog(). It was imported here and never
-    // called, so a DB brought up by THIS seed skipped it — harmless on a fresh
-    // database, where Prisma creates the columns anyway, but it left the older-DB
-    // path (copy the social photo onto the Person, mark staff-entered contacts
-    // verified) depending on which seed happened to run. Idempotent either way.
+    // The portal-profile columns and their backfill (copy the social photo onto
+    // the Person, mark staff-entered contacts verified). Idempotent.
     await ensurePortalProfileColumns(pool);
     console.log(`      ✓ Portal profile columns ensured\n`);
 

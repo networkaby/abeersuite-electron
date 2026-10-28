@@ -7,7 +7,7 @@
  * database answers, so identical ids are what make a token or a voucher mean the
  * same thing on both.
  *
- * A seed breaks that quietly. `bootstrap-seed` and `catalog-seed` both mint
+ * A seed breaks that quietly. `bootstrap-seed` and `sync-permissions` both write
  * rows with autoincrement ids, so seeding a replica would create a *different* row
  * under an id Supabase has already given to someone else. The failure that follows
  * is not an error — it is a session resolving to the wrong person, or a voucher line
