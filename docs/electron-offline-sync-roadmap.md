@@ -430,9 +430,10 @@ office means the request runs here with `live`'s existing outage fallback. Three
    counter mode serves routes the counter build strips, and their writes must reach the
    office too — the till never writes Supabase directly while the office is reachable.
 
-The office authenticates the relayed request from the till's own session cookie: the
-cookie NAME is pinned in `src/auth.ts` (Auth.js keys the token on secret + name) and
-`counter.env` ships the office's `AUTH_SECRET` for this mode only. Anything saved at the
+The office authenticates the relayed request from the till's own counter key, not its
+session cookie (since 2026-10-13): the cookie never leaves the till, `counter.env` ships
+no `AUTH_SECRET`, and the till signs in as itself naming the cashier
+(`src/shared/lib/counter/relayKey.ts`, office half `src/shared/lib/auth/counterRelayAuth.ts`). Anything saved at the
 office, a relayed POS sale included, numbers in the common series (counter 1).
 
 ### 4.7 A damaged state file is never read as "no file" (2026-09-30)
