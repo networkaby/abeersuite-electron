@@ -38,6 +38,8 @@ export function inlineA4Styles(scope: string): string {
             display: flex;
             flex-direction: column;
         }
+        /* Narrow screen: shrink to fit (A4FitToScreen sets the var). Never on paper. */
+        @media screen { ${s}.a4-sheet { zoom: var(--a4-fit, 1); } }
         ${s}.a4-sheet > .pagefoot { margin-top: auto; }
         /* Second and later sheets start on a fresh page when printed, and are
            visually separated in the on-screen preview. */

@@ -2,7 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { ownsReceipt } from "@/modules/external/portal/portalDocAccess";
 import ReceiptPreview from "@/shared/components/print/ReceiptPreview";
-import PrintToolbar from "@/shared/components/print/PrintToolbar";
+import PortalDocViewer from "@/modules/external/portal/PortalDocViewer";
 import { getVoucherTemplate } from "@/shared/lib/print/voucherTemplate";
 import { buildVoucherReceiptSample } from "@/modules/accountancy/lib/voucherReceiptSample";
 
@@ -29,12 +29,8 @@ export default async function PortalReceiptPage({ params }: { params: Promise<{ 
     const template = await getVoucherTemplate(data.kind);
 
     return (
-        <ReceiptPreview
-            format="A4"
-            template={template}
-            sample={data.sample}
-            toolbar={<PrintToolbar autoPrint={false} />}
-            docTitle={data.docTitle}
-        />
+        <PortalDocViewer title={data.docTitle ?? "Receipt"} fileBase={data.docTitle || `Receipt ${uvId}`} kindLabel="Receipt">
+            <ReceiptPreview format="A4" template={template} sample={data.sample} previewMode previewFill />
+        </PortalDocViewer>
     );
 }
