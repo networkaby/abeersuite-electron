@@ -1,31 +1,27 @@
-# v1.16.15 [urgent]
+# v1.16.16
 
-Every counter should install this today. It brings the database changes for scheduled campaigns, post reminders and email templates, and a counter that has not updated will pause its sync once the office site goes live with them.
+Every counter should take this update. It brings a small database change for the new Tracking Codes settings, and the desktop app no longer carries any passwords or keys inside it — it fetches them from the office each time it starts.
 
 ## Database update — counters first
 
-- This version adds new columns (campaign schedule time, post reminder time) and new tables (email templates, email log, saved shop carts, email unsubscribe list), and removes the old stored account balance.
+- This version adds one new setting to the shop defaults (tracking codes) and one new table (the Google Business Profile connection).
 - Update every counter **before** the office site is deployed. A counter left on the old version stops syncing until it updates.
+- Once the office site is live, **close and reopen each counter once**, so it collects its full settings (backup, photo upload, courier, WhatsApp) from the office.
+
+## Desktop app
+
+- The installer now holds no passwords or keys. At every start the counter asks the office for them, and keeps a locked copy on that PC so it still starts and bills with the internet down. A key changed on the office reaches every counter at its next start.
+- AI product copy and the AI Setup "Test" button always run on the office now, so they use the office's keys and work the same from every counter.
 
 ## Campaigns
 
-- A campaign can now be **scheduled** for a later date and time instead of sending at once.
-- The **Scheduled** page shows everything due on every channel — WhatsApp, email and posts — with a new timeline view, and Refresh reloads the timeline too.
-- Due Reminders and Shop Ads now live under Campaigns.
-- Staff get a push reminder when a post is due to be shared, repeated until it is posted.
+- **Post to Google**: an Update post with a photo can now go to the shop's Google Business Profile by itself. Connect the listing once under Campaigns → Channels.
 
-## Email
+## Shop website and customer app
 
-- Customer documents can be emailed automatically, and **Send email** is back in the 3-dot menus.
-- Editable email templates for repairs, due reminders, abandoned carts, pending payments, welcome mails and sign-in / password-reset codes.
-- A failed email is retried on the next save.
-
-## Billing and payments
-
-- A customer's advance can pay the bill directly.
-- **Share UPI QR** sends a WhatsApp "Pay now" request with the QR as a photo, from the shop's number.
-- Money now shows the currency symbol set in Org Defaults, and thermal slips print the ₹ sign.
-
-## Behind the scenes
-
-- All scheduled jobs (messages, posts, reminders) now run from one timer, and backup failures are logged with their reason.
+- New **Settings → Tracking Codes** page for the shop's analytics and ad pixel ids.
+- The "Purchase" event is now sent only once an order is actually paid.
+- Customer app: My Bills shows each bill the way the Day Book prints it — a counter bill no longer says "Online Order".
+- Customer app: tap a bill to see its items, tax, total, paid and due right in the list, with **Download** and **Share** as a PDF or an image (needs app 2.2.3).
+- Customer app: a copied bill link now opens the bill inside the app, with a back button.
+- New Network Service logo and icons for the app, a public "Delete your account" page, and the app update link opens in Chrome again.
