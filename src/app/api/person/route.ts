@@ -211,14 +211,16 @@ export async function POST(req: Request) {
                 },
             });
 
+            // Staff-entered contacts count as verified; only a customer's own app add waits for OTP.
+            const now = new Date();
             for (let i = 0; i < phones.length; i++) {
                 await tx.phone.create({
-                    data: { phone: phones[i], personId: p.id, isPrimary: i === 0 },
+                    data: { phone: phones[i], personId: p.id, isPrimary: i === 0, verifiedAt: now },
                 });
             }
             for (let i = 0; i < emails.length; i++) {
                 await tx.email.create({
-                    data: { email: emails[i], personId: p.id, isPrimary: i === 0 },
+                    data: { email: emails[i], personId: p.id, isPrimary: i === 0, verifiedAt: now },
                 });
             }
 

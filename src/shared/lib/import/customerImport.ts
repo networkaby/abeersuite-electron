@@ -530,8 +530,10 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
             }
 
             // ── 3. Bulk-insert Phones, Emails, Accounts for every new row at once.
-            const phoneRows: Array<{ phone: string; personId: number | null; companyId: number | null; isPrimary: boolean }> = [];
-            const emailRows: Array<{ email: string; personId: number | null; companyId: number | null; isPrimary: boolean }> = [];
+            // Staff-imported contacts count as verified, like any staff add.
+            const importedAt = new Date();
+            const phoneRows: Array<{ phone: string; personId: number | null; companyId: number | null; isPrimary: boolean; verifiedAt: Date }> = [];
+            const emailRows: Array<{ email: string; personId: number | null; companyId: number | null; isPrimary: boolean; verifiedAt: Date }> = [];
             const accountRows: Array<{
                 personId: number | null;
                 companyId: number | null;
@@ -548,10 +550,10 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
                 companyId: number | null,
             ) => {
                 v.phones.forEach((phone, idx) =>
-                    phoneRows.push({ phone, personId, companyId, isPrimary: idx === 0 }),
+                    phoneRows.push({ phone, personId, companyId, isPrimary: idx === 0, verifiedAt: importedAt }),
                 );
                 v.emails.forEach((email, idx) =>
-                    emailRows.push({ email, personId, companyId, isPrimary: idx === 0 }),
+                    emailRows.push({ email, personId, companyId, isPrimary: idx === 0, verifiedAt: importedAt }),
                 );
                 accountRows.push({
                     personId,
@@ -639,6 +641,7 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
                                     personId: v.kind === "person" ? v.existingId! : null,
                                     companyId: v.kind === "company" ? v.existingId! : null,
                                     isPrimary: false,
+                                    verifiedAt: new Date(),
                                 })),
                             });
                         }
@@ -657,6 +660,7 @@ export async function runCustomerImport(req: CustomerImportRequest): Promise<Cus
                                     personId: v.kind === "person" ? v.existingId! : null,
                                     companyId: v.kind === "company" ? v.existingId! : null,
                                     isPrimary: false,
+                                    verifiedAt: new Date(),
                                 })),
                             });
                         }
