@@ -27,8 +27,10 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
  *               (typically made at the counter by mobile) is MERGED into the
  *               signed-in one: bills, ledger, points and contacts move here,
  *               the other row goes. The signed-in profile always survives so
- *               the session and its login stay valid. Companies and profiles
- *               the merge tool blocks are still refused — the shop's call.
+ *               the session and its login stay valid. A COMPANY's contact
+ *               moves onto the person and the person is linked to that
+ *               company instead (takeFromCompany). Profiles the merge tool
+ *               blocks are still refused — the shop's call.
  */
 
 const bodySchema = z.union([
@@ -48,17 +50,22 @@ async function absorbProfileHolding(
     customerId: number,
     identity: { phoneNormalized?: string | null; emailNormalized?: string | null },
 ): Promise<boolean> {
+    const select = { id: true, personId: true, companyId: true, isPrimary: true } as const;
     const row = identity.phoneNormalized
         ? await prisma.phone.findUnique({
             where: { phone: requireCanonicalPhone(identity.phoneNormalized) },
-            select: { personId: true },
+            select,
         })
         : identity.emailNormalized
             ? await prisma.email.findFirst({
                 where: { email: { equals: identity.emailNormalized, mode: "insensitive" } },
-                select: { personId: true },
+                select,
             })
             : null;
+    if (row?.companyId) {
+        await takeFromCompany(customerId, row.companyId, identity.phoneNormalized ? "phone" : "email", row);
+        return true;
+    }
     const otherId = row?.personId;
     if (!otherId || otherId === customerId) return false;
     try {
@@ -68,6 +75,43 @@ async function absorbProfileHolding(
         if (e instanceof MergeBlockedError) return false;
         throw e;
     }
+}
+
+/**
+ * A company cannot be merged into a person. The OTP-proved contact moves off
+ * the company onto the person (verified), the company's next contact becomes
+ * primary if this one was, and the person is linked to the company — so the
+ * company shows in their "Using: …" switch. The company keeps the number only
+ * through that linked person.
+ */
+async function takeFromCompany(
+    customerId: number,
+    companyId: number,
+    table: "phone" | "email",
+    row: { id: number; isPrimary: boolean },
+) {
+    await prisma.$transaction(async (tx) => {
+        const move = { personId: customerId, companyId: null, isPrimary: false, verifiedAt: new Date() };
+        if (table === "phone") await tx.phone.update({ where: { id: row.id }, data: move });
+        else await tx.email.update({ where: { id: row.id }, data: move });
+
+        if (row.isPrimary) {
+            // Unverified rows are never primary (contactWrite rule).
+            const where = { companyId, verifiedAt: { not: null } };
+            const next = table === "phone"
+                ? await tx.phone.findFirst({ where, orderBy: { id: "asc" }, select: { id: true } })
+                : await tx.email.findFirst({ where, orderBy: { id: "asc" }, select: { id: true } });
+            if (next && table === "phone") await tx.phone.update({ where: { id: next.id }, data: { isPrimary: true } });
+            if (next && table === "email") await tx.email.update({ where: { id: next.id }, data: { isPrimary: true } });
+        }
+
+        const link = await tx.personCompany.findFirst({ where: { personId: customerId, companyId }, select: { id: true, unlinkedAt: true } });
+        if (!link) {
+            await tx.personCompany.create({ data: { personId: customerId, companyId } });
+        } else if (link.unlinkedAt) {
+            await tx.personCompany.update({ where: { id: link.id }, data: { unlinkedAt: null, linkedAt: new Date() } });
+        }
+    });
 }
 
 export async function POST(req: Request) {
