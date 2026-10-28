@@ -1069,6 +1069,20 @@ export function usePosBilling(opts: {
         }
     }, [productSearchRef, setSnapshot]);
 
+    // The snapshot was read ONCE, at party pick — and its credit limit + balance are
+    // what the Checkout's credit gate trusts. A limit raised from Edit customer (its
+    // own re-read can beat the replica pull) or from the office, or a receipt taken
+    // elsewhere, left the open bill blocked with "No credit facility" until the
+    // customer was picked again. Re-read it quietly (no loader, cart untouched) when
+    // the books or the party move, like the Day Book does.
+    const snapshotAccountId = snapshot?.account?.id ?? null;
+    useRealtimeTopics(["ledger", "parties"], () => {
+        if (snapshotAccountId == null) return;
+        void axios.get<Snapshot>(`/api/pos/account-snapshot/${snapshotAccountId}`)
+            .then(({ data }) => setSnapshot((s) => (s?.account?.id === snapshotAccountId ? data : s)))
+            .catch(() => {});
+    }, snapshotAccountId != null);
+
     // Re-sync effective sale prices once, when a sale starts. A counter can sit
     // idle for hours; prices may have been re-frozen elsewhere meanwhile. This
     // hits the lightweight prices-only endpoint (no GST/cost cascade) and patches
