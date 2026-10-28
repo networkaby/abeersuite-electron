@@ -19,7 +19,7 @@ export default async function CustomerAppBillPage({ params }: { params: Promise<
         <>
             <MobileHeader title="Bill" back={`${APP}/bills`} actions={<AppDocActions fileBase={`Bill ${bill.reference}`} title="Bill" />} />
             <AppDocFit>
-                <CustomerBillSheet detailId={detailId} kind={bill.kind} embed />
+                <CustomerBillSheet detailId={detailId} kind={bill.kind} />
             </AppDocFit>
         </>
     );

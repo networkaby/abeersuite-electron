@@ -2,6 +2,7 @@ import { redirect, notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { ownedBill } from "@/modules/external/portal/portalDocAccess";
 import CustomerBillSheet from "@/modules/external/portal/CustomerBillSheet";
+import PortalDocViewer from "@/modules/external/portal/PortalDocViewer";
 
 // Customer-facing bill download — replaces the old direct link to
 // `/receipt/invoice/[id]` (a staff print surface that was unauthenticated
@@ -11,9 +12,8 @@ import CustomerBillSheet from "@/modules/external/portal/CustomerBillSheet";
 // account, or any company account linked to them — the same set
 // `/portal/orders` uses to list their orders) before it renders.
 //
-// A4, printed as its own kind the way the Day Book prints it (CustomerBillSheet), no
-// thermal/autoprint controls — those are staff-only knobs on
-// `/receipt/invoice/[id]`, which this page does not expose.
+// A4, printed as its own kind the way the Day Book prints it (CustomerBillSheet),
+// framed like the app's bill screen (PortalDocViewer) — no staff print bar.
 export default async function PortalInvoicePage({
     params,
 }: {
@@ -34,5 +34,9 @@ export default async function PortalInvoicePage({
     const bill = await ownedBill(customerId, detailId);
     if (!bill) notFound();
 
-    return <CustomerBillSheet detailId={detailId} kind={bill.kind} />;
+    return (
+        <PortalDocViewer title={`Bill ${bill.reference}`} fileBase={`Bill ${bill.reference}`} kindLabel="Bill">
+            <CustomerBillSheet detailId={detailId} kind={bill.kind} />
+        </PortalDocViewer>
+    );
 }
