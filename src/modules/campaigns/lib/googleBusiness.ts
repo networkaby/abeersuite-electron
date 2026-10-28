@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { lockSecret, unlockSecret, hasSharedSecret } from "@/shared/lib/ai/secretBox";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { mediaLink } from "@/modules/message/lib/customerMessages";
@@ -132,15 +133,20 @@ async function accessToken(): Promise<string> {
             t.error === "invalid_grant"
                 ? "Google access was taken back or has expired — connect again on Campaigns → Channels."
                 : `Google refused the access: ${t.error_description || t.error}`;
-        await noteGoogleError(why);
+        // Reached from GETs (the listing picker), which a counter never relays — so on a
+        // counter this would write from a read, possibly into its replica. The office notes it.
+        if (!IS_COUNTER_PC) await noteGoogleError(why);
         throw new GoogleError(why);
     }
     cachedToken = { token: t.access_token, until: Date.now() + ((t.expires_in ?? 3600) - 60) * 1000 };
     return t.access_token;
 }
 
+/** Best effort: a failed note must never replace the Google message the user should see. */
 const noteGoogleError = (lastError: string | null) =>
-    prisma.googleBusinessLink.updateMany({ where: { id: GOOGLE_LINK_ID }, data: { lastError } });
+    prisma.googleBusinessLink
+        .updateMany({ where: { id: GOOGLE_LINK_ID }, data: { lastError } })
+        .catch((e) => console.warn("[googleBusiness] could not note lastError:", e));
 
 async function googleApi<T>(url: string, init?: RequestInit): Promise<T> {
     const res = await fetch(url, {
