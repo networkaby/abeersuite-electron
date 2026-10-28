@@ -383,16 +383,22 @@ export default function MessageAlertPopup({ href = MESSAGES_HREF, mayOpen, banne
     };
 
     const [raising, setRaising] = useState<string | null>(null);
+    // The state disables the button only after a re-render; the ref stops a fast double click.
+    const raisingRef = useRef(false);
     const raiseTicket = async (a: Alert, kind: "help" | "deal") => {
-        if (!a.lastInId || raising) return;
+        if (!a.lastInId || raisingRef.current) return;
+        raisingRef.current = true;
         setRaising(a.phone);
         try {
-            const { data } = await axios.post<{ ticketId: number }>(`/api/messages/${a.lastInId}/ticket`, { kind });
-            toast.success(`${kind === "deal" ? "Deal" : "Help ticket"} #${data.ticketId} raised for ${a.name}`);
+            const { data } = await axios.post<{ ticketId: number; existing?: boolean }>(`/api/messages/${a.lastInId}/ticket`, { kind });
+            toast.success(data.existing
+                ? `${a.name}'s chat is already on ticket #${data.ticketId}`
+                : `${kind === "deal" ? "Deal" : "Help ticket"} #${data.ticketId} raised for ${a.name}`);
             void load();
         } catch (e) {
             toast.error(extractApiError(e, "Ticket not raised"));
         } finally {
+            raisingRef.current = false;
             setRaising(null);
         }
     };
