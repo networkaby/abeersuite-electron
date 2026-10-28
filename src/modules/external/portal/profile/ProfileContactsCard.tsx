@@ -27,6 +27,7 @@ import { usePortalAccountStore } from "@/store/external/portalAccountStore";
  * rules allow:
  *   Add     → saved unverified (the shop can still find you by it).
  *   Verify  → OTP to that contact; once proved it can be primary / sign in.
+ *             A contact on an older shop profile merges that profile in.
  *   Primary → verified rows only.
  *   Remove  → not the login contact, not the last verified one.
  * Every mutation route returns the whole profile, so one `setProfile` keeps
@@ -102,6 +103,13 @@ export default function ProfileContactsCard({ profile }: { profile: PortalProfil
             toast.success(ok);
             return true;
         } catch (e) {
+            // The contact sits on an older shop profile: proving it by OTP
+            // links that profile here, so go straight to the code.
+            if (axios.isAxiosError(e) && e.response?.data?.code === "VERIFY_TO_MERGE") {
+                toast.info(extractApiError(e, "Verify this contact to link it"));
+                setVerifying(newValue.trim());
+                return false;
+            }
             toast.error(extractApiError(e, "Something went wrong"));
             return false;
         } finally {
