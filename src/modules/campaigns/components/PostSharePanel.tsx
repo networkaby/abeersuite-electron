@@ -10,25 +10,34 @@ import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { putToSignedUrl } from "@/shared/lib/storage/signedUpload";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import {
+    FACEBOOK_PAGE_URL,
     GOOGLE_BUSINESS_URL,
     POST_MEDIA_TYPES,
     channelOf,
     checkPostMedia,
+    facebookAutoBlock,
     googleAutoBlock,
     postCaption,
     type PostRow,
 } from "@/modules/campaigns/lib/post";
 
+/** Channels that post through their API once connected: status route, button name, why one cannot go. */
+const AUTO: Record<string, { api: string; name: string; block: (p: PostRow) => string | null }> = {
+    GOOGLE_BUSINESS: { api: "google", name: "Google", block: googleAutoBlock },
+    FACEBOOK: { api: "facebook", name: "Facebook", block: facebookAutoBlock },
+};
+
 const when = (iso: string) => new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 
 /**
  * The photo and the "put it up" part of one saved post. Google Business Profile
- * posts itself (Post to Google) once connected on Campaigns → Channels; Share
- * prepares each channel by hand:
+ * and the Facebook Page post themselves (Post to Google / Facebook) once
+ * connected on Campaigns → Channels; Share prepares each channel by hand:
  *   • WhatsApp Channel / Status — the phone's share sheet with photo + caption
  *     (caption copied too, since WhatsApp can drop it); on a PC, download + copy.
  *   • Google Business Profile — copies the caption, downloads the photo and
  *     opens the Business Profile, where staff click Add update and paste.
+ *   • Facebook Page — the same: copies, downloads and opens the shop's page.
  * Staff then press Done for that channel, which keeps who and when.
  */
 export default function PostSharePanel({ post, onChanged }: { post: PostRow; onChanged: (p: PostRow) => void }) {
@@ -36,26 +45,28 @@ export default function PostSharePanel({ post, onChanged }: { post: PostRow; onC
     const fileInput = useRef<HTMLInputElement>(null);
     const caption = postCaption(post, COMPANY_DETAILS.sites.shop);
     const isVideo = post.mediaType?.startsWith("video/");
-    // Is the Google connection ready? Asked once; null while asking or when it fails.
-    const [googleReady, setGoogleReady] = useState<boolean | null>(null);
+    // Which API channels are connected? Asked once each; missing while asking or when it fails.
+    const [ready, setReady] = useState<Record<string, boolean>>({});
     useEffect(() => {
-        if (!post.channels.includes("GOOGLE_BUSINESS")) return;
-        axios
-            .get<{ ready: boolean }>("/api/campaigns/google")
-            .then(({ data }) => setGoogleReady(data.ready))
-            .catch(() => setGoogleReady(false));
+        for (const [channel, a] of Object.entries(AUTO)) {
+            if (!post.channels.includes(channel)) continue;
+            axios
+                .get<{ ready: boolean }>(`/api/campaigns/${a.api}`)
+                .then(({ data }) => setReady((r) => ({ ...r, [channel]: data.ready })))
+                .catch(() => setReady((r) => ({ ...r, [channel]: false })));
+        }
     }, [post.channels]);
-    const googleBlock = googleAutoBlock(post);
 
-    async function postToGoogle(again: boolean) {
-        if (again && !window.confirm("This post is already on Google. Post it there again?")) return;
-        setBusy("google");
+    async function postByApi(channel: string, again: boolean) {
+        const a = AUTO[channel];
+        if (again && !window.confirm(`This post is already on ${a.name}. Post it there again?`)) return;
+        setBusy(a.api);
         try {
-            const { data } = await axios.post<{ post: PostRow; url: string | null }>(`/api/campaigns/posts/${post.id}/google`, { again });
+            const { data } = await axios.post<{ post: PostRow; url: string | null }>(`/api/campaigns/posts/${post.id}/${a.api}`, { again });
             onChanged(data.post);
-            toast.success("Posted on Google Business Profile", data.url ? { action: { label: "View", onClick: () => window.open(data.url!, "_blank", "noopener") } } : undefined);
+            toast.success(`Posted on ${channelOf(channel)?.label ?? a.name}`, data.url ? { action: { label: "View", onClick: () => window.open(data.url!, "_blank", "noopener") } } : undefined);
         } catch (e) {
-            toast.error(extractApiError(e, "Google did not take the post"));
+            toast.error(extractApiError(e, `${a.name} did not take the post`));
         } finally {
             setBusy(null);
         }
@@ -122,10 +133,12 @@ export default function PostSharePanel({ post, onChanged }: { post: PostRow; onC
         setBusy(`share-${channel}`);
         const copied = await copyCaption();
         try {
-            if (channel === "GOOGLE_BUSINESS") {
+            if (channel === "GOOGLE_BUSINESS" || channel === "FACEBOOK") {
+                const google = channel === "GOOGLE_BUSINESS";
                 download();
-                window.open(GOOGLE_BUSINESS_URL, "_blank", "noopener");
-                toast.success(copied ? "Caption copied, photo downloading — click Add update on the profile and paste" : "Photo downloading — copy the caption from here");
+                window.open(google ? GOOGLE_BUSINESS_URL : COMPANY_DETAILS.social.facebook || FACEBOOK_PAGE_URL, "_blank", "noopener");
+                const where = google ? "click Add update on the profile and paste" : "create a post on the page and paste";
+                toast.success(copied ? `Caption copied, photo downloading — ${where}` : "Photo downloading — copy the caption from here");
                 return;
             }
             const file = await mediaFile();
@@ -228,6 +241,8 @@ export default function PostSharePanel({ post, onChanged }: { post: PostRow; onC
                     {post.channels.map((value) => {
                         const ch = channelOf(value);
                         const last = post.shares.find((s) => s.channel === value);
+                        const auto = AUTO[value] && ready[value] ? AUTO[value] : null;
+                        const block = auto?.block(post) ?? null;
                         return (
                             <div key={value} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2">
                                 <div className="min-w-0 flex-1">
@@ -240,25 +255,19 @@ export default function PostSharePanel({ post, onChanged }: { post: PostRow; onC
                                     </p>
                                 </div>
                                 <div className="flex flex-wrap gap-1.5">
-                                    {value === "GOOGLE_BUSINESS" && googleReady && (
+                                    {auto && (
                                         <Button
                                             type="button"
                                             size="sm"
-                                            disabled={busy !== null || !!googleBlock}
-                                            title={googleBlock ?? "Put it up on the listing now, through Google"}
-                                            onClick={() => postToGoogle(!!last)}
+                                            disabled={busy !== null || !!block}
+                                            title={block ?? `Put it up now, through ${auto.name}`}
+                                            onClick={() => postByApi(value, !!last)}
                                         >
-                                            <Send className="mr-1 h-3.5 w-3.5" /> {busy === "google" ? "Posting…" : last ? "Post again" : "Post to Google"}
+                                            <Send className="mr-1 h-3.5 w-3.5" /> {busy === auto.api ? "Posting…" : last ? "Post again" : `Post to ${auto.name}`}
                                         </Button>
                                     )}
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant={value === "GOOGLE_BUSINESS" && googleReady ? "outline" : "default"}
-                                        disabled={busy !== null}
-                                        onClick={() => share(value)}
-                                    >
-                                        {value === "GOOGLE_BUSINESS" ? <ExternalLink className="mr-1 h-3.5 w-3.5" /> : <Share2 className="mr-1 h-3.5 w-3.5" />}
+                                    <Button type="button" size="sm" variant={auto ? "outline" : "default"} disabled={busy !== null} onClick={() => share(value)}>
+                                        {AUTO[value] ? <ExternalLink className="mr-1 h-3.5 w-3.5" /> : <Share2 className="mr-1 h-3.5 w-3.5" />}
                                         {busy === `share-${value}` ? "Opening…" : "Share"}
                                     </Button>
                                     <Button type="button" size="sm" variant="outline" disabled={busy !== null} onClick={() => markDone(value)}>

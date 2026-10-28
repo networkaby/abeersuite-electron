@@ -39,3 +39,21 @@ CREATE TABLE "IncomingApi" (
 
     CONSTRAINT "IncomingApi_pkey" PRIMARY KEY ("id")
 );
+
+-- The shop's Facebook Page connection (one row), so posts go to Facebook by
+-- themselves. New table only: nothing existing changes.
+CREATE TABLE "FacebookPageLink" (
+    "id" INTEGER NOT NULL DEFAULT 1,
+    "userTokenEnc" TEXT NOT NULL,
+    "fbUserName" TEXT,
+    "pageId" TEXT,
+    "pageName" TEXT,
+    "pageTokenEnc" TEXT,
+    "connectedById" INTEGER,
+    "connectedByName" TEXT,
+    "lastError" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "FacebookPageLink_pkey" PRIMARY KEY ("id")
+);

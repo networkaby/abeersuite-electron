@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runDueReminders } from "@/shared/lib/whatsapp/dueReminders";
 import { runEmailReminders } from "@/shared/lib/email/emailReminders";
+import { runFacebookPosts } from "@/modules/campaigns/lib/facebookPosts";
 import { runPostReminders } from "@/modules/campaigns/lib/postReminders";
 import { runScheduledCampaigns } from "@/modules/campaigns/lib/sendCampaign";
 import { runGooglePosts } from "@/modules/campaigns/lib/googlePosts";
@@ -19,8 +20,9 @@ export const maxDuration = 300;
  * scheduled campaign whose time has come, side by side; each is
  * safe to repeat and decides for itself whether anything is due. One failing
  * does not stop the others — its error is logged and returned under its name.
- * Due posts go to Google Business Profile first, on their own, so the post
- * reminders that follow no longer count Google as waiting for a hand share.
+ * Due posts go to Google Business Profile and the Facebook Page first, on their
+ * own, so the post reminders that follow no longer count them as waiting for a
+ * hand share.
  * New and changed Google reviews are copied in for CRM → Reviews alongside.
  * Backup is not part of this: Vercel's nightly cron owns it.
  *
@@ -38,6 +40,12 @@ export async function GET(req: Request) {
     } catch (e) {
         console.error("[cron/communications] googlePosts failed:", e);
         out.googlePosts = { error: (e as Error)?.message ?? String(e) };
+    }
+    try {
+        out.facebookPosts = await runFacebookPosts();
+    } catch (e) {
+        console.error("[cron/communications] facebookPosts failed:", e);
+        out.facebookPosts = { error: (e as Error)?.message ?? String(e) };
     }
 
     const jobs = { googleReviews: syncGoogleReviews, dueReminders: runDueReminders, emailReminders: runEmailReminders, postReminders: runPostReminders, campaigns: runScheduledCampaigns };

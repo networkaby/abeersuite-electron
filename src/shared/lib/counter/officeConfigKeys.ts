@@ -64,6 +64,9 @@ const SUPER_ADMIN_KEYS = ["SUPER_ADMIN_EMAIL", "SUPER_ADMIN_PASSWORD"];
  *  on the counter and need the OAuth client. The redirect URL keeps sign-in on the office. */
 const GOOGLE_BUSINESS_KEYS = ["GOOGLE_BUSINESS_CLIENT_ID", "GOOGLE_BUSINESS_CLIENT_SECRET", "GOOGLE_BUSINESS_REDIRECT_URL"];
 
+/** Campaigns → Channels: the Facebook Page status and page picker are GETs too. */
+const FACEBOOK_KEYS = ["META_APP_ID", "META_APP_SECRET", "FACEBOOK_REDIRECT_URL"];
+
 /** Settings → WhatsApp Templates: approval status and test sends run on the counter. */
 const WHATSAPP_KEYS = ["META_WA_ACCESS_TOKEN", "META_WA_PHONE_NUMBER_ID", "META_WA_BUSINESS_ACCOUNT_ID"];
 
@@ -80,6 +83,7 @@ export const COUNTER_CONFIG_OPTIONAL: readonly string[] = [
     ...COURIER_KEYS,
     ...SUPER_ADMIN_KEYS,
     ...GOOGLE_BUSINESS_KEYS,
+    ...FACEBOOK_KEYS,
     ...WHATSAPP_KEYS,
     ...AI_KEYS,
 ];

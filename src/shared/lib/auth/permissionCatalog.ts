@@ -205,6 +205,7 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     // reaches every customer at once, so it is its own tick (wired in phase 2).
     { id: "campaigns:send", label: "Send campaigns", module: "campaigns", description: "Send a campaign to customers (app notification now, WhatsApp later). Writing and saving drafts rides the Campaigns sidebar link." },
     { id: "campaigns:google:connect", label: "Connect Google Business Profile", module: "campaigns", description: "Connect, change or disconnect the shop's Google Business Profile on Campaigns → Channels, so posts go to Google by themselves." },
+    { id: "campaigns:facebook:connect", label: "Connect Facebook Page", module: "campaigns", description: "Connect, change or disconnect the shop's Facebook Page on Campaigns → Channels, so posts go to Facebook by themselves." },
 
 
     // repair — the ticket resource (All Repair list + ticket page). View rides the

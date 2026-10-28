@@ -11,6 +11,8 @@ import { formatRupees } from "@/shared/lib/format/moneyInr";
  * Google Business Profile posts by itself once connected on Campaigns →
  * Channels (googleBusiness.ts) — Post to Google, or the communications job at
  * the scheduled time — and falls back to the same hand share when it cannot.
+ * A Facebook Page works the same way (facebookPage.ts): Post to Facebook, or
+ * the job, once the page is connected and picked on Channels.
  */
 
 export const POST_CHANNELS = [
@@ -38,7 +40,14 @@ export const POST_CHANNELS = [
         ready: true,
         hint: "Share from the company phone, WhatsApp Business app → My status (after Meta's coexistence approval).",
     },
-    { value: "FACEBOOK", label: "Facebook Page", short: "FB", mode: "AUTO", ready: false, hint: "Needs Meta's posting approval." },
+    {
+        value: "FACEBOOK",
+        label: "Facebook Page",
+        short: "FB",
+        mode: "AUTO",
+        ready: true,
+        hint: "Posts by itself once the page is connected on Campaigns → Channels. By hand: Share copies the text, saves the photo and opens the page.",
+    },
     { value: "INSTAGRAM", label: "Instagram", short: "IG", mode: "AUTO", ready: false, hint: "Needs Meta's posting approval." },
 ] as const;
 
@@ -74,6 +83,18 @@ export const GOOGLE_BUTTONS = [
 export function googleAutoBlock(p: { googleType: string; mediaType: string | null }): string | null {
     if (p.googleType !== "UPDATE") return "Only an Update posts by itself — share an Offer or Event by hand.";
     if (p.mediaType && !["image/jpeg", "image/png"].includes(p.mediaType)) return "Google takes a JPG or PNG photo here — share a video or WebP by hand.";
+    return null;
+}
+
+/** Where Share sends staff for Facebook — the shop's page, signed in as one of its admins. */
+export const FACEBOOK_PAGE_URL = "https://www.facebook.com/";
+
+/**
+ * Why a post cannot go to Facebook by itself, or null when it can. Facebook
+ * takes a JPG / PNG photo or an MP4 video (or none) — a WebP is shared by hand.
+ */
+export function facebookAutoBlock(p: { mediaType: string | null }): string | null {
+    if (p.mediaType === "image/webp") return "Facebook takes a JPG or PNG photo here — share a WebP by hand, or replace it.";
     return null;
 }
 

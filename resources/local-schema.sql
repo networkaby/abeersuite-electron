@@ -1173,6 +1173,41 @@ ALTER TABLE "GoogleBusinessLink" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(
 ALTER TABLE "GoogleBusinessLink" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "FacebookPageLink" (
+    "id" INTEGER NOT NULL DEFAULT 1,
+    "userTokenEnc" TEXT NOT NULL,
+    "fbUserName" TEXT,
+    "pageId" TEXT,
+    "pageName" TEXT,
+    "pageTokenEnc" TEXT,
+    "connectedById" INTEGER,
+    "connectedByName" TEXT,
+    "lastError" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "FacebookPageLink_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "FacebookPageLink" ADD COLUMN IF NOT EXISTS "id" INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE "FacebookPageLink" ADD COLUMN IF NOT EXISTS "userTokenEnc" TEXT NOT NULL;
+ALTER TABLE "FacebookPageLink" ADD COLUMN IF NOT EXISTS "fbUserName" TEXT;
+ALTER TABLE "FacebookPageLink" ALTER COLUMN "fbUserName" DROP NOT NULL;
+ALTER TABLE "FacebookPageLink" ADD COLUMN IF NOT EXISTS "pageId" TEXT;
+ALTER TABLE "FacebookPageLink" ALTER COLUMN "pageId" DROP NOT NULL;
+ALTER TABLE "FacebookPageLink" ADD COLUMN IF NOT EXISTS "pageName" TEXT;
+ALTER TABLE "FacebookPageLink" ALTER COLUMN "pageName" DROP NOT NULL;
+ALTER TABLE "FacebookPageLink" ADD COLUMN IF NOT EXISTS "pageTokenEnc" TEXT;
+ALTER TABLE "FacebookPageLink" ALTER COLUMN "pageTokenEnc" DROP NOT NULL;
+ALTER TABLE "FacebookPageLink" ADD COLUMN IF NOT EXISTS "connectedById" INTEGER;
+ALTER TABLE "FacebookPageLink" ALTER COLUMN "connectedById" DROP NOT NULL;
+ALTER TABLE "FacebookPageLink" ADD COLUMN IF NOT EXISTS "connectedByName" TEXT;
+ALTER TABLE "FacebookPageLink" ALTER COLUMN "connectedByName" DROP NOT NULL;
+ALTER TABLE "FacebookPageLink" ADD COLUMN IF NOT EXISTS "lastError" TEXT;
+ALTER TABLE "FacebookPageLink" ALTER COLUMN "lastError" DROP NOT NULL;
+ALTER TABLE "FacebookPageLink" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "FacebookPageLink" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "Coupon" (
     "id" SERIAL NOT NULL,
     "code" TEXT,
@@ -8530,6 +8565,13 @@ DO $$ BEGIN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "EmailTemplate";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "EmailTemplate"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('kind');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."FacebookPageLink"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "FacebookPageLink";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "FacebookPageLink"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;
 DO $$ BEGIN

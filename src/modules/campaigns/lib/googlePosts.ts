@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { GoogleError, googleReady, postToGoogle } from "@/modules/campaigns/lib/googleBusiness";
 import { googleAutoBlock } from "@/modules/campaigns/lib/post";
-import { recordShare } from "@/modules/campaigns/lib/postServer";
+import { claimPostFor, recordShare } from "@/modules/campaigns/lib/postServer";
 
 const GOOGLE = "GOOGLE_BUSINESS";
 const AUTO_NAME = "Auto (Google)";
@@ -29,10 +29,7 @@ const POST_FOR_GOOGLE = {
 export async function sendPostToGoogle(postId: number, by: { userId: number | null; name?: string }, again = false) {
     const post = await prisma.post.findUnique({ where: { id: postId }, select: POST_FOR_GOOGLE });
     if (!post) return null;
-    if (!post.channels.includes(GOOGLE)) throw new GoogleError("This post is not meant for Google — tick it under channels first.");
-    if (post.shares.length && !again) throw new GoogleError("Already posted on Google.");
-    const { count } = await prisma.post.updateMany({ where: { id: postId, updatedAt: post.updatedAt }, data: { updatedAt: new Date() } });
-    if (!count) throw new GoogleError("This post is being sent or was just changed — refresh and try again.");
+    await claimPostFor(post, GOOGLE, "Google", again, (m) => new GoogleError(m));
     const url = await postToGoogle(post);
     return { post: await recordShare(postId, GOOGLE, by.userId, by.name), url };
 }
