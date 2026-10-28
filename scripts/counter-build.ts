@@ -152,12 +152,8 @@ function run(): void {
     // dev-mode LayoutRoutes, `next build`'s typecheck fails with a "not assignable"
     // constraint error comparing the two. Drop it so the build only typechecks
     // against the route set it just generated; `next dev` regenerates it on its own.
-    // A running `next dev` keeps writing into `.next/dev`, so the delete below
-    // races it and dies with a bare ENOTEMPTY. Stop early with a clear message.
-    if (isPortInUse(3000)) {
-        console.error("[counter-build] Port 3000 is in use — stop `next dev` first, then rerun the build.");
-        process.exit(1);
-    }
+    // (A running `next dev` would race that delete — checked before anything is
+    // renamed out, below.)
     const devDir = path.join(__dirname, "..", ".next", "dev");
     if (fs.existsSync(devDir)) {
         fs.rmSync(devDir, { recursive: true, force: true });
@@ -169,6 +165,14 @@ function run(): void {
 }
 
 restoreOrphans(APP_DIR);
+
+// A running `next dev` keeps writing into `.next/dev`, so run()'s delete races it
+// and dies with a bare ENOTEMPTY. Stop here, BEFORE any route is renamed out:
+// process.exit skips the restore `finally` below, which once left 92 routes missing.
+if (isPortInUse(3000)) {
+    console.error("[counter-build] Port 3000 is in use — stop `next dev` first, then rerun the build.");
+    process.exit(1);
+}
 
 if (!COUNTER_BUILD) {
     run();
