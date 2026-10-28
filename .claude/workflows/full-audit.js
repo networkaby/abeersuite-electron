@@ -16,7 +16,7 @@ Repo: ${ROOT} (Windows). Branch: main (releases go out from main; dev is level w
 Stack: Next.js 16 App Router (NOT the Next.js in your training data - read node_modules/next/dist/docs/ if unsure), React 19, Prisma 7 (SPLIT schema in prisma/schema/*.prisma), NextAuth v5 beta, Zustand, shadcn/ui, Tailwind v4, Electron 43 desktop shell (electron/*.ts: main, serverManager, postgresManager, localDbProvisioner, backupManager, hardwareBridgeManager, replicaWipe).
 The app runs in variants: office (web/Supabase), counter (Electron with a local PostgreSQL replica that syncs to Supabase). CURRENT_DB=demo locally; live is production, never full-reset.
 Project rules live in AGENTS.md - read it. Also read docs/seeds.md. Key hard rules:
-- Seeds: personal-bootstrap.ts / pnpm prisma db seed = our config, upsert-only, safe on live. bootstrap-seed.ts = generic client setup. hard-clean.ts = remove dummy/helper data only. Every schema/permission/master-data change must update lib/codeOwnedCatalog.ts, data/personal.local.json + lib/personalSnapshot.ts, and a targeted apply-*.ts script; plus affected dummy-*.ts / hard-clean.ts arrays.
+- Seeds: catalog-seed.ts / pnpm prisma db seed = code-owned catalog + R1 top-up, safe on live; real config lives only in the DB (restore from backup). bootstrap-seed.ts = generic client setup. hard-clean.ts = remove dummy/helper data only. Every schema/permission/master-data change must update lib/codeOwnedCatalog.ts and a targeted apply-*.ts script; plus affected dummy-*.ts / hard-clean.ts arrays.
 - Anything read from Supabase/DB must be cached to save reading cost.
 - Protected accounting math paths (no behaviour change without approval): effectiveLedgerBalance, aggregateClosingAsOf, aggregateRange, netProfitLoss.
 - Never use getToken(); no TypeScript 'any'; match Prisma relation names exactly.
@@ -69,9 +69,9 @@ const DIMENSIONS = [
     prompt: `${CONTEXT}
 DIMENSION: Schema <-> seed <-> hard-clean coupling drift.
 For EACH model/enum/column in prisma/schema/*.prisma, verify the seeds in prisma/seeds/ honour the AGENTS.md rules:
-1. Does bootstrap-seed.ts / personal-bootstrap.ts (+ lib/codeOwnedCatalog.ts, lib/personalSnapshot.ts) seed every model/column it should (universal masters, RBAC/permissions, CoA, statuses)? Flag NOT-NULL columns with no default that no seed populates, and config tables missing from personalSnapshot.ts.
+1. Does bootstrap-seed.ts / catalog-seed.ts (+ lib/codeOwnedCatalog.ts) seed every model/column it should (universal masters, RBAC/permissions, CoA, statuses)? Flag NOT-NULL columns with no default that no seed populates.
 2. Do dummy-*.ts and helper-*.ts seeds still match current model/relation/field names? Flag any seed writing a renamed/removed field, or omitting a newly-required field.
-3. Does hard-clean.ts TRANSACTION_TABLES / INVENTORY_MASTERS / DUMMY_CONFIG_TABLES cover every dummy-only table? Flag any dummy-only table NOT wiped, and any bootstrap/personal-seeded master that hard-clean WOULD wrongly delete.
+3. Does hard-clean.ts TRANSACTION_TABLES / INVENTORY_MASTERS / DUMMY_CONFIG_TABLES cover every dummy-only table? Flag any dummy-only table NOT wiped, and any bootstrap-seeded master that hard-clean WOULD wrongly delete.
 4. Cross-check schema-touching commits since ${LAST_TAG} (git log ${LAST_TAG}..HEAD --stat -- prisma/) against seed + migration updates in the same range. Every schema change needs a migration under prisma/migrations.
 Report concrete drift only.`,
   },

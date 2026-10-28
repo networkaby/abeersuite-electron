@@ -7,7 +7,7 @@
   "asAt": "2026-03-31",
   "money": [
     {
-      "$comment": "`create` names the group a ledger is minted under when it does not exist. These five were made by a one-off script against the old database and never captured into personal.local.json, so a fresh install does not have them — the clean-room build is what exposed that. They should go into the next `pnpm seed:personal:capture` so the snapshot stops being incomplete."
+      "$comment": "`create` names the group a ledger is minted under when it does not exist. These five were made by a one-off script against the old database, so a fresh install does not have them — the clean-room build is what exposed that."
     },
     {
       "vyapar": "Cash",

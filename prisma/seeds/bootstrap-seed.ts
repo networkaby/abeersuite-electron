@@ -20,7 +20,7 @@
 // What this seeds (kept on hard-clean):
 //   • RBAC: 3 Roles — R1 Role-Admin (the only isSystem role), R2 Branch Manager,
 //     R3 Counter Operator. Their GRANTS are the owner's config and live in the
-//     personal snapshot, not here; this only guarantees the rows and their homes.
+//     database only, not here; this only guarantees the rows and their homes.
 //     130+ Permissions (incl. per-kind voucher gates — GL `finance:voucher:*`
 //     + inventory `inventory:voucher:*`, generated from voucherMatrix.ts)
 //   • Workflow: 9 Pipelines, 61 TicketStatuses, 5 WorkGroups, 48 status
@@ -44,8 +44,8 @@
 //
 // What this does NOT seed:
 //   • Brands → helper-brands.ts (`pnpm seed:helper-brands`)
-//   • Categories + Product groups (the HSN/GST spine) → the personal snapshot,
-//     applied by `pnpm prisma db seed`. Our real tree (6 categories, 102 groups)
+//   • Categories + Product groups (the HSN/GST spine) → the database only
+//     (a backup restores them). Our real tree (6 categories, 102 groups)
 //     was built by apply-taxonomy and then curated by hand, so it is config, not
 //     a generic master. The old helper-inventory-masters.ts seeded a rival
 //     taxonomy ("Computer Mice" / "Memory (RAM)" against our "Mouse" / "RAM")
@@ -92,7 +92,7 @@ const prisma = new PrismaClient({ adapter });
 // promotes them. See `PositionRole` and `authorizeStaff.ts`.
 //
 // The three roles this business runs on, captured from the live DB. Their GRANTS
-// are not seeded here — those are config and live in the personal snapshot; this
+// are not seeded here — those are config and live in the database only; this
 // only guarantees the rows exist with the right department homes. Any further role
 // is created from the Role Matrix UI.
 //
@@ -106,19 +106,19 @@ const ROLES = [
     // R2 / R3 are the two roles this business actually runs on, captured from the
     // live DB. Non-system, so they stay editable and deletable from the Role Matrix.
     // Their GRANTS are not seeded here — they are the owner's and live in the
-    // personal snapshot; this only guarantees the rows exist with the right home.
+    // database only; this only guarantees the rows exist with the right home.
     { id: "R2", label: "Branch Manager", color: "bg-blue-100 text-blue-600", isSystem: false, rank: 20, departmentId: "DEP-OP" },
     { id: "R3", label: "Counter Operator", color: "bg-blue-100 text-blue-600", isSystem: false, rank: 20, departmentId: "DEP-SALES" },
 ] as const;
 
-// The permission catalog is CODE-OWNED and shared with personal-bootstrap —
+// The permission catalog is CODE-OWNED and shared with catalog-seed —
 // single source: src/shared/lib/auth/permissionCatalog.ts (re-exported by ./lib/codeOwnedCatalog.ts). Add new permissions THERE.
 const PERMISSIONS = PERMISSION_CATALOG;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
     // R1 — Owner / Admin: every permission except system-only sentinels.
     // Only R1's grants are seeded. R2 / R3 exist as rows (see ROLES above) but
-    // their grants are the owner's config and come from the personal snapshot.
+    // their grants are the owner's config and live in the database only.
     R1: (PERMISSIONS as readonly { id: string; systemOnly?: boolean }[])
         .filter((p) => !p.systemOnly)
         .map((p) => p.id),
@@ -820,7 +820,7 @@ const ADMIN = {
 // SECTION 6 — DB constraints (XOR on Phone/Email ownership)
 // ════════════════════════════════════════════════════════════════════════════
 
-// Shared impl lives in ./lib/codeOwnedCatalog.ts (personal-bootstrap uses it too).
+// Shared impl lives in ./lib/codeOwnedCatalog.ts (catalog-seed uses it too).
 const ensureXorCheck = (table: "Phone" | "Email", constraintName: string) => ensureXorCheckShared(pool, table, constraintName);
 // ════════════════════════════════════════════════════════════════════════════
 // MAIN
@@ -1203,7 +1203,7 @@ async function main() {
     await ensureXorCheck("Phone", "Phone_owner_xor");
     await ensureXorCheck("Email", "Email_owner_xor");
     console.log(`      ✓ Phone/Email XOR ownership CHECK ensured`);
-    // The portal-profile columns and their backfill, the same call the personal
+    // The portal-profile columns and their backfill, the same call the catalog
     // seed makes through applyCodeOwnedCatalog(). It was imported here and never
     // called, so a DB brought up by THIS seed skipped it — harmless on a fresh
     // database, where Prisma creates the columns anyway, but it left the older-DB
@@ -1336,7 +1336,7 @@ async function main() {
     // ── Section 10: Inventory Warranty Term master ─────────────────────
     // Universal across trades (every business sells things with some warranty
     // window), so it lives in bootstrap — unlike brands (helper-brands.ts) and
-    // categories / product groups (the personal snapshot).
+    // categories / product groups (config, database only).
     // Duration is in days (0 = no fixed duration). InvWarrantyTerm.name is NOT
     // unique in the schema, so we idempotently match on name.
     console.log("[10/11] Inventory Warranty Term master");

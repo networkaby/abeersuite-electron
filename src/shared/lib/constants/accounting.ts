@@ -17,7 +17,7 @@ export const ACCOUNT_GROUPS = {
     UNSECURED_LOANS:   "Unsecured Loans",
     BNPL:              "BNPL A/c",
     WALLETS:           "Wallets",
-    // Already live as a real-config group (see personal.local.json) before
+    // Already live as a real-config group before
     // this constant existed — Usable Fund wires it in via this name.
     PAYMENT_GATEWAY:   "Payment Gateway",
     // The only two groups whose ledgers carry inventory items in a voucher.

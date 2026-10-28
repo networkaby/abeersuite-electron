@@ -4,20 +4,18 @@
 //
 //   • bootstrap-seed.ts   (generic new-client installer) — imports the
 //     permission list and seeds it alongside its generic demo world.
-//   • personal-bootstrap.ts (self-complete restore of YOUR config) — calls
-//     `applyCodeOwnedCatalog()` so a hard-reset DB gets everything the personal
-//     snapshot deliberately does NOT carry, without touching generic content.
+//   • catalog-seed.ts     (`pnpm prisma db seed`) — calls
+//     `applyCodeOwnedCatalog()` so any DB gets what the code owns, without
+//     touching config.
 //
-// This module owns the things the personal snapshot deliberately does NOT carry
-// (see the audit note in docs/seeds.md):
-//   1. The Permission catalog (definitions — grants live in the snapshot)
+// This module owns:
+//   1. The Permission catalog (definitions — grants live in the DB)
 //   2. VoucherSeries + BooksConfig (voucher numbering; seedVoucherSeries)
 //   3. The Phone/Email XOR CHECK constraints (raw DDL, not data)
 //   4. The EXISTENCE of the BackupConfig row. The schedule inside it is the
-//      owner's config and does ride the snapshot — but "a row is there at all"
-//      is an invariant the code must guarantee, because a missing row means no
-//      backups and says nothing about it. Created here with the schema defaults;
-//      the snapshot overlay re-asserts the real schedule right afterwards.
+//      owner's config — but "a row is there at all" is an invariant the code
+//      must guarantee, because a missing row means no backups and says nothing
+//      about it. Created here with the schema defaults.
 // Add new permissions in src/shared/lib/auth/permissionCatalog.ts (single source), never inline in either seed.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -81,7 +79,7 @@ export async function ensurePortalProfileColumns(pool: Pool) {
  * Apply everything code-owned to the DB: permission catalog (upsert + prune of
  * retired ids, keeping Work/WorkGroup-referenced ones), the Phone/Email XOR
  * constraints, and the voucher numbering series. Idempotent; deletes ONLY
- * permissions that no longer exist in code. Used by personal-bootstrap so it
+ * permissions that no longer exist in code. Used by catalog-seed so it
  * never needs the generic installer.
  */
 export async function applyCodeOwnedCatalog(prisma: PrismaClient, pool: Pool): Promise<{ permissions: number; pruned: number }> {
@@ -112,10 +110,8 @@ export async function applyCodeOwnedCatalog(prisma: PrismaClient, pool: Pool): P
     // The scheduled-backup row must EXIST from the first boot — `/api/cron/backup-due`
     // reads it hourly, and no row means no backup, silently, which nobody discovers
     // until the day they need one. Its existence is a code-owned invariant even though
-    // the schedule inside it is the owner's config (carried by the personal snapshot):
-    // this runs in Step 1 of personal-bootstrap, BEFORE the snapshot overlay and before
-    // the no-snapshot early return, so a fresh DB is covered whether or not a capture
-    // has happened yet.
+    // the schedule inside it is the owner's config: this runs in Step 1 of
+    // catalog-seed, so a fresh DB is covered.
     //
     // Create-only. The schema defaults (every weekday, hour 22 — daily 10 PM IST) are
     // the safe-not-clever fallback; an admin's edit from Settings → Backup & Restore

@@ -142,9 +142,7 @@ Read `docs/seeds.md` first. Current DB is **demo**.
 
 | Command | What it does | Safe on live? |
 | --- | --- | --- |
-| `pnpm prisma db seed` | Personal bootstrap — code-owned catalog + your captured config, upsert-only | yes |
-| `pnpm seed:personal` | Same script, called directly | yes |
-| `pnpm seed:personal:capture` | Captures your current UI config into `data/personal.local.json` | yes (read-only) |
+| `pnpm prisma db seed` | Catalog seed — code-owned permissions, constraints, voucher series + R1 top-up | yes |
 | `pnpm seed:generic` | Generic new-client demo world | **no** — fresh installs only |
 | `pnpm seed:apply-taxonomy` | Fills group + brand on the real catalog from product names (`--dry` previews) | yes (fills NULLs only) |
 | `pnpm seed:sync-permissions` | Creates catalog `Permission` rows the DB lacks, then grants one to roles (`--roles`) or takes it back (`--revoke-from`). Dry by default; `--apply` writes, `--no-revoke` spares sessions | yes (never deletes a `Permission`) |
@@ -215,7 +213,7 @@ reason — each described a **different business using our ids**. `helper-roles`
 upserted `R2` / `R3` as "Role-Service Engineer" / "Role-Counter / Cashier" in other
 departments and rewrote their grants every run; `helper-inventory-masters` seeded a
 rival taxonomy sharing exactly one name with ours. Roles, grants, department pools,
-categories and product groups all come from the personal snapshot now; see
+categories and product groups live only in the database (a backup restores them); see
 `docs/seeds.md`.
 
 ### `pnpm seed:purge-demo`
@@ -243,7 +241,7 @@ Work in `pnpm electron:dev` so the desktop shell exercises the change, not only 
 
 - Schema change → `pnpm sync:tables` and `pnpm db:local-schema`
 - Permission change → add it to `src/shared/lib/auth/permissionCatalog.ts` + `permissions.ts`, then `pnpm prisma db seed` (note: that also runs the R1 top-up — see `docs/seeds.md`)
-- Config / master-data change → `pnpm seed:personal:capture`, and update `permissionCatalog.ts` / `codeOwnedCatalog.ts` / `personal.local.json`
+- Config / master-data change → update `permissionCatalog.ts` / `codeOwnedCatalog.ts` when code owns it; otherwise it lives in the DB only
 - Behaviour / route / API change → update `PROJECT_BRAIN.md`, then `/sync-docs-with-code`
 
 **Step 3 — check the DB actually applies**
@@ -352,7 +350,6 @@ For a colour change, a label fix, a spacing tweak, a copy edit — **no schema, 
 | --- | --- |
 | `sync:tables` / `db:local-schema` | Both are generated from `prisma/schema/`. No schema change means no drift — and `precommit` runs the `--check` halves anyway, so a mistake here is caught, not missed |
 | `prisma db seed` | No config, catalog or permission changed |
-| `seed:personal:capture` | Nothing in the UI config changed |
 | `test:e2e` | A colour does not change behaviour. Run it anyway if the change touched layout, a form, or anything clickable |
 | `pg:fetch` | Already on the machine and version-pinned |
 | Step 9 smoke test | The gate plus a dev-window check is enough for a cosmetic change |

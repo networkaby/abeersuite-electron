@@ -13,11 +13,9 @@
 // catalog ↔ DB diff report.
 //
 // The documented cure is `pnpm prisma db seed`, and for one new nav link that is
-// far too big a hammer: Step 3 of personal-bootstrap tops R1 up with every
+// far too big a hammer: Step 2 of catalog-seed tops R1 up with every
 // non-systemOnly permission in the catalog (~109 grants at the time of writing)
 // and resurrects anything deliberately taken away from R1 in the Role Matrix.
-// `--overlay-only` is no escape — the top-up sits outside that branch, and
-// skipping Step 1 means the new row would never be created anyway.
 //
 // IT CARRIES NO DATA OF ITS OWN. The old `apply-permissions.ts` was deleted
 // because its hardcoded ADDITIONS list had become a third copy of the catalog
@@ -205,7 +203,7 @@ async function main(): Promise<void> {
     }
 
     // ── 2b. Every catalog permission the roles lack ─────────────────────────
-    // The full seed's R1 top-up (personal-bootstrap Step 3), without the rest of
+    // The full seed's R1 top-up (catalog-seed Step 2), without the rest of
     // the seed. Adds only — and resurrects anything deliberately taken away, so
     // read the dry-run list first.
     if (grantMissing) {

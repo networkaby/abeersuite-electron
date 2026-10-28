@@ -8,7 +8,7 @@
 //   • All Persons / Companies / Phones / Emails (test customers)
 //   • All party-linked Account rows (customer/company personal ledgers)
 //   • All InvProduct catalog + InvCategory/Group/Brand (InvBrand comes back from
-//     helper-brands.ts; categories + groups come back from the personal snapshot)
+//     helper-brands.ts; categories + groups come back only from a backup)
 //   • InvAttributeMaster rows (added via Configure → Attribute masters)
 //   • PortalCredentials
 //
@@ -16,8 +16,8 @@
 //   • Admin user (admin@networkservice.in)
 //   • R1 (Admin) role, all Permissions, R1's RolePermissions
 //     (NON-system roles — our R2 Branch Manager, R3 Counter Operator, and any
-//     admin-created role — are wiped here. Restore with `pnpm prisma db seed`:
-//     bootstrap re-creates the R2/R3 rows, the snapshot restores their grants.)
+//     admin-created role — are wiped here. Restore with `pnpm seed:generic`:
+//     bootstrap re-creates the R2/R3 rows; their grants come back only from a backup.)
 //   • Branches, Departments, UserPositions
 //   • Pipelines, TicketStatus, TicketWorker, transitions
 //   • AccountGroup tree + pure-GL Account chart
@@ -103,8 +103,8 @@ const TRANSACTION_TABLES = [
 // survive a hard-clean. InvBrand / InvCategory / InvProductGroup are wiped here.
 // Restore them with:
 //   • InvBrand                        → `pnpm seed:helper-brands`
-//   • InvCategory / InvProductGroup   → `pnpm prisma db seed` (the personal
-//     snapshot carries our real 6 categories + 102 groups). The old
+//   • InvCategory / InvProductGroup   → a database backup (no seed carries
+//     our real categories + groups). The old
 //     helper-inventory-masters.ts seeded a DIFFERENT taxonomy — "Computer Mice",
 //     "Memory (RAM)", "Surveillance Cameras" against our "Mouse", "RAM",
 //     "HD Dome" — so it was deleted rather than left to re-create a parallel tree.
@@ -165,9 +165,9 @@ async function main(): Promise<void> {
         `DELETE FROM "RolePermission" WHERE "roleId" IN (SELECT id FROM "Role" WHERE "isSystem" = false)`,
     );
     const delRoles = await pool.query(`DELETE FROM "Role" WHERE "isSystem" = false`);
-    // Department permission pools are config (241 rows in the personal snapshot);
+    // Department permission pools are config (no seed carries them — only a backup);
     // bootstrap seeds none, since DEP-ADMIN is all-access and carries no rows. Wipe
-    // them and let `pnpm prisma db seed` put ours back. Department rows themselves
+    // them; only a backup puts ours back. Department rows themselves
     // are bootstrap-seeded → preserved.
     const delPool = await pool.query(`DELETE FROM "DepartmentPermission"`);
     console.log(`      ✓ Deleted ${delRoles.rowCount} non-system role(s); R1 preserved · ${delPool.rowCount} department-pool entries cleared\n`);

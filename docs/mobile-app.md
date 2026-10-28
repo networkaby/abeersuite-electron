@@ -93,7 +93,7 @@ works.
 - The desktop sidebar reads `MODULE_SECTIONS`, not this module — no "Mobile App" link
   appears in the office menu, and `pageAccess.ts` locks only `/office` paths, so the
   phone app is untouched by it.
-- Seed: `personal.local.json` pools Mobile App on Management (`DEP-OP`). `DEP-ADMIN` is
+- Config: the live DB pools Mobile App on Management (`DEP-OP`). `DEP-ADMIN` is
   all-access and needs no row.
 - **Rolling out to live:** tick "Mobile App" on the live Departments page for the
   departments that should have it (do **not** reseed for this — a full seed re-adds
