@@ -31,23 +31,86 @@ Answer: `{ replyMode, rules, note, reviews: [{ id, reviewerName, stars, comment,
 
 ## 2. Write each reply
 
-House style (from the replies already live):
+Network Service, Abhayapuri — computers, laptops, CCTV, printers, A4 paper,
+accessories and repairs. Sound like the shop owner talking to a customer in
+Assam, not a company advert.
 
 ```
-Thank you, <Name>, for your <n>⭐ rating<and kind feedback, if they wrote a comment>. <One or two lines that answer what they actually said.> <Closing line>
+Thank you, <Name + honorific>! <One or two lines that answer what they actually said.> <Closing line>
 
 — Team Network Service
 ```
 
-- **Name**: write it in Title Case (`uttamkumar sarkar` → `Uttamkumar Sarkar`). Keep a nickname as it is (`STONER 69`). No name → "Thank you for your …".
-- **Answer the comment**: if they name a product, a staff member or a service (repair, CCTV, printer, laptop), mention it. Never invent a detail they did not write.
-- **Stars only, no comment**: keep it to 2 short lines.
-- **4–5★**: warm thanks + "Visit us again anytime!".
-- **3★**: thank them, ask what we could do better.
-- **1–2★**: say sorry first, no excuses, no arguing, never blame the customer; invite them to call or visit so we can fix it. No refund or free-service promises.
-- Plain, friendly English. One emoji at most (the ⭐). No hashtags, no links, no prices, no phone numbers unless `rules` gives one.
-- Each reply different — do not paste the same sentence into every review.
-- Under 600 characters.
+### Tone — local English of Assam
+
+| Avoid | Prefer |
+| --- | --- |
+| We are delighted to learn of your satisfaction. | Happy to know you are satisfied. |
+| We endeavour to provide exceptional assistance. | We always try to give proper support. |
+| We appreciate your valuable patronage. | Thank you for your support. |
+| We look forward to serving you in the future. | Hope to see you again soon. |
+
+### Name and honorific
+
+- Write the name in Title Case (`uttamkumar sarkar` → `Uttamkumar Sarkar`); keep a nickname as it is (`STONER 69`). No name → "Thank you for your …".
+- Add the honorific the owner uses, from the name pattern — **only when confident**:
+
+| Customer | Honorific |
+| --- | --- |
+| Muslim man | `bhai` |
+| Non-Muslim man | `da` / `dada` |
+| Hindu (Assamese) woman | `baideu` |
+| Muslim woman | `bubu` |
+| Bengali woman | `didi` |
+| Gender-neutral name (Mukuta, Jyoti), nickname, initials only, or any doubt | `Dear <Name>` or the name alone — no honorific |
+
+- A wrong honorific on a public reply is worse than none: when in doubt, fall back. Mark the honorific in the preview table so the owner can fix it.
+
+### Length
+
+- Stars only: 15–30 words. One-line comment: 20–40 words. Detailed comment: 35–60 words.
+- Complaint: as long as a sincere, practical reply needs. Always under 600 characters.
+
+### Match the review
+
+| Review | Approach |
+| --- | --- |
+| 4–5★, stars only | Brief thanks, no product claims |
+| Product / brand named | Mention that product or brand |
+| Repair | Acknowledge the repair work |
+| Price | Mention fair price / value |
+| After-sales | Thank them for their trust |
+| Photo shared | Thank them; mention the photo only if natural |
+| Local Guide | Acknowledge, no heavy flattery |
+| 4★ | Thank them, show we want to improve |
+| 3★ | Thank them, ask what we could do better |
+| 1–2★ | Say sorry first, no excuses, no arguing, never blame the customer; offer a practical way to fix it (call or visit). No refund or free-service promises |
+| Typo / unclear | Answer the likely meaning only when reasonably clear |
+
+Never invent a detail the customer did not write.
+
+### Local SEO — support, not the purpose
+
+Pick at most one or two keywords, only when they fit the review:
+
+- **CCTV**: CP PLUS CCTV, CCTV installation, security camera setup, DVR support, CCTV after-sales service.
+- **Computers**: computer accessories, desktop computers, laptop repairing, genuine computer parts, office computer setup.
+- **Printers & supplies**: printer sales and service, A4 paper, printing supplies, printer accessories.
+- **Location**: Abhayapuri, Bongaigaon district, Network Service — sometimes, not every reply; often none.
+
+Rotation rules:
+
+1. Not "Bongaigaon district" in every reply; not "CP PLUS CCTV" unless the review fits.
+2. Vary openings and closings — no fixed closing line, no sentence pasted across replies.
+3. Sometimes a product keyword, sometimes a service keyword, sometimes none.
+4. Never claim "authorised dealer"; never promise a product, warranty or installation the review does not support.
+5. One emoji at most. No hashtags, links, prices, or phone numbers unless `rules` gives one.
+
+### Checklist before showing
+
+Correct name spelling · honorific only when confident · natural Assam English ·
+matches the review and stars · keyword only if it fits · varied wording ·
+short and ready to send · no invented claims or forced SEO.
 
 ## 3. Show, then send
 
