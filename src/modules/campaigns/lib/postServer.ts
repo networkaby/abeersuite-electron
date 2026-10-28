@@ -90,6 +90,26 @@ export async function whatsappWaiting() {
 }
 
 /**
+ * Before an API post (Google, Facebook): the loaded post must be meant for
+ * `channel` and — unless `again` — not yet shared there (`shares` = its shares
+ * on that channel). It is claimed by moving its updatedAt in a guarded update,
+ * so a button racing the communications job (or a double click) sends it once.
+ * Throws `fail(reason)` with words staff can read.
+ */
+export async function claimPostFor(
+    post: { id: number; updatedAt: Date; channels: string[]; shares: unknown[] },
+    channel: string,
+    label: string,
+    again: boolean,
+    fail: (msg: string) => Error,
+): Promise<void> {
+    if (!post.channels.includes(channel)) throw fail(`This post is not meant for ${label} — tick it under channels first.`);
+    if (post.shares.length && !again) throw fail(`Already posted on ${label}.`);
+    const { count } = await prisma.post.updateMany({ where: { id: post.id, updatedAt: post.updatedAt }, data: { updatedAt: new Date() } });
+    if (!count) throw fail("This post is being sent or was just changed — refresh and try again.");
+}
+
+/**
  * Log that `userId` put the post up on `channel` (`byName` overrides the name —
  * "Auto (Google)" for the communications job); once every channel the post is
  * meant for has a share, it turns DONE. Shared by the office and the phone app.

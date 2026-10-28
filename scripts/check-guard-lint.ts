@@ -60,6 +60,8 @@ const GUARD_PATTERNS = [
     /\brequireDueRemindersPage\b/,
     /\brequireGoogleStatus\b/,
     /\brequireGoogleConnect\b/,
+    /\brequireFacebookStatus\b/,
+    /\brequireFacebookConnect\b/,
     // Reviews: named helpers — reviewsAccess.ts.
     /\brequireReviewsPage\b/,
     /\brequireReviewsReply\b/,

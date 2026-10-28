@@ -28,3 +28,15 @@ export const requireGoogleStatus = () =>
 
 /** Connecting, picking the listing and disconnecting Google — its own tick. */
 export const requireGoogleConnect = () => requirePermission(PERMISSIONS.CAMPAIGNS_GOOGLE_CONNECT);
+
+/** Reading the Facebook connection: the Channels page, or anyone who posts (Post to Facebook shows it). */
+export const requireFacebookStatus = () =>
+    requireAnyPermission(
+        sidebarChildPermissionId("campaigns", "channels"),
+        sidebarChildPermissionId("campaigns", "compose"),
+        sidebarChildPermissionId("campaigns", "queue-calendar"),
+        PERMISSIONS.CAMPAIGNS_FACEBOOK_CONNECT,
+    );
+
+/** Connecting, picking the page and disconnecting Facebook — its own tick. */
+export const requireFacebookConnect = () => requirePermission(PERMISSIONS.CAMPAIGNS_FACEBOOK_CONNECT);

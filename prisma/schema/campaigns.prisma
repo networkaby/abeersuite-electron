@@ -39,12 +39,12 @@ model Campaign {
 
 /// A regular post for everyone (owner, 2026-10-23: "separate … regular post"):
 /// written once, put up on several channels — WhatsApp Channel / Status, Google
-/// Business Profile, later Facebook / Instagram. A channel with no posting API
+/// Business Profile, Facebook Page, Instagram. A channel with no posting API
 /// (WhatsApp always; Google until its API access is approved) is shared by hand
 /// from a phone or browser and logged in PostShare. May belong to a campaign.
 ///
 /// `channels` the places it is meant for ("WA_CHANNEL", "WA_STATUS",
-/// "GOOGLE_BUSINESS"); `status` "DRAFT" | "SCHEDULED" | "DONE"; Google's own
+/// "GOOGLE_BUSINESS", "FACEBOOK", "INSTAGRAM"); `status` "DRAFT" | "SCHEDULED" | "DONE"; Google's own
 /// `googleType` "UPDATE" | "OFFER" | "EVENT" and `googleButton` ("SHOP", "CALL",
 /// "LEARN_MORE", "ORDER", "BOOK") ride along for when the API posts it.
 /// Media: one photo / MP4 in private R2 (chat bucket), key "posts/<id>/...".
@@ -105,6 +105,32 @@ model GoogleBusinessLink {
   connectedById   Int?
   connectedByName String?
   /// Last failure talking to Google (expired access, refused post), shown on Channels.
+  lastError       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+/// The shop's Facebook Page (and its linked Instagram) connection — one row (id 1), made by Campaigns →
+/// Channels → Connect with the shop's Meta app (META_APP_ID / _SECRET). Both
+/// tokens are locked with the shared AI_KEY_SECRET (secretBox), never plain:
+/// the long-lived user token lists the pages to pick from; the picked page's
+/// own token (no expiry) is what posts.
+model FacebookPageLink {
+  id              Int      @id @default(1)
+  userTokenEnc    String
+  /// The Facebook sign-in that allowed it — must be an admin of the page.
+  fbUserName      String?
+  /// Picked after connecting; posts go to this page with its own token.
+  pageId          String?
+  pageName        String?
+  pageTokenEnc    String?
+  /// The Instagram business account linked to that page — posted to with the
+  /// same page token. Null when the page has none linked.
+  igUserId        String?
+  igUsername      String?
+  connectedById   Int?
+  connectedByName String?
+  /// Last failure talking to Facebook (expired access, refused post), shown on Channels.
   lastError       String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

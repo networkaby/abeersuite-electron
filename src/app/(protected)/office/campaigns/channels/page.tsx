@@ -1,6 +1,7 @@
 import { Cable } from "lucide-react";
 import PlannedPage from "@/modules/campaigns/components/PlannedPage";
 import GoogleChannelCard from "@/modules/campaigns/components/GoogleChannelCard";
+import FacebookChannelCard from "@/modules/campaigns/components/FacebookChannelCard";
 import { PLANNED_PAGES } from "@/modules/campaigns/lib/plannedPages";
 
 const page = PLANNED_PAGES.channels;
@@ -10,6 +11,7 @@ export default function CampaignsChannelsPage() {
     return (
         <PlannedPage icon={Cable} {...page}>
             <GoogleChannelCard />
+            <FacebookChannelCard />
         </PlannedPage>
     );
 }
