@@ -143,6 +143,9 @@ export const PERMISSIONS = {
     // Customer Messages (CRM → Messages). View rides the sidebar link; REPLY gates
     // sending a WhatsApp reply — checked at the API, since each reply costs money.
     MESSAGES_REPLY: "messages:reply",
+    // Reviews (CRM → Reviews). View rides the sidebar link; REPLY gates the public
+    // answer on Google — everyone can read it, so it is its own tick.
+    REVIEWS_REPLY: "reviews:reply",
     // Campaigns — writing rides the sidebar link; SEND reaches every customer at once.
     CAMPAIGNS_SEND: "campaigns:send",
     CAMPAIGNS_GOOGLE_CONNECT: "campaigns:google:connect",

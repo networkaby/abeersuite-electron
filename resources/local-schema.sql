@@ -4647,6 +4647,50 @@ ALTER TABLE "DepartmentPermission" ADD COLUMN IF NOT EXISTS "departmentId" TEXT 
 ALTER TABLE "DepartmentPermission" ADD COLUMN IF NOT EXISTS "permissionId" TEXT NOT NULL;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "Review" (
+    "id" SERIAL NOT NULL,
+    "platform" TEXT NOT NULL,
+    "externalId" TEXT NOT NULL,
+    "reviewerName" TEXT,
+    "reviewerPhoto" TEXT,
+    "stars" INTEGER,
+    "comment" TEXT,
+    "reviewedAt" TIMESTAMP(3) NOT NULL,
+    "sourceUpdatedAt" TIMESTAMP(3) NOT NULL,
+    "replyText" TEXT,
+    "repliedAt" TIMESTAMP(3),
+    "repliedByName" TEXT,
+    "ticketId" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Review_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "platform" TEXT NOT NULL;
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "externalId" TEXT NOT NULL;
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "reviewerName" TEXT;
+ALTER TABLE "Review" ALTER COLUMN "reviewerName" DROP NOT NULL;
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "reviewerPhoto" TEXT;
+ALTER TABLE "Review" ALTER COLUMN "reviewerPhoto" DROP NOT NULL;
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "stars" INTEGER;
+ALTER TABLE "Review" ALTER COLUMN "stars" DROP NOT NULL;
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "comment" TEXT;
+ALTER TABLE "Review" ALTER COLUMN "comment" DROP NOT NULL;
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "reviewedAt" TIMESTAMP(3) NOT NULL;
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "sourceUpdatedAt" TIMESTAMP(3) NOT NULL;
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "replyText" TEXT;
+ALTER TABLE "Review" ALTER COLUMN "replyText" DROP NOT NULL;
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "repliedAt" TIMESTAMP(3);
+ALTER TABLE "Review" ALTER COLUMN "repliedAt" DROP NOT NULL;
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "repliedByName" TEXT;
+ALTER TABLE "Review" ALTER COLUMN "repliedByName" DROP NOT NULL;
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "ticketId" INTEGER;
+ALTER TABLE "Review" ALTER COLUMN "ticketId" DROP NOT NULL;
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "delivery_methods" (
     "id" SERIAL NOT NULL,
     "kind" TEXT NOT NULL,
@@ -6137,6 +6181,15 @@ CREATE INDEX IF NOT EXISTS "StaffPushDevice_userId_idx" ON "StaffPushDevice"("us
 
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "UserPermission_userId_permissionId_key" ON "UserPermission"("userId", "permissionId");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "Review_platform_reviewedAt_idx" ON "Review"("platform", "reviewedAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "Review_ticketId_idx" ON "Review"("ticketId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "Review_platform_externalId_key" ON "Review"("platform", "externalId");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "delivery_methods_kind_idx" ON "delivery_methods"("kind");
@@ -8842,6 +8895,13 @@ DO $$ BEGIN
     IF to_regclass('public."redemption_holds"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "redemption_holds";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "redemption_holds"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
+    IF to_regclass('public."Review"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "Review";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "Review"
             FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
     END IF;
 END $$;

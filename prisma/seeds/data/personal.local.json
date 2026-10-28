@@ -10856,6 +10856,14 @@
     },
     {
       "roleId": "R1",
+      "permissionId": "ui:sidebar:crm:reviews"
+    },
+    {
+      "roleId": "R1",
+      "permissionId": "reviews:reply"
+    },
+    {
+      "roleId": "R1",
       "permissionId": "mobile:posts:share"
     },
     {

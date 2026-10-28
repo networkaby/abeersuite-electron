@@ -60,6 +60,9 @@ const GUARD_PATTERNS = [
     /\brequireDueRemindersPage\b/,
     /\brequireGoogleStatus\b/,
     /\brequireGoogleConnect\b/,
+    // Reviews: named helpers — reviewsAccess.ts.
+    /\brequireReviewsPage\b/,
+    /\brequireReviewsReply\b/,
     // NOT a bare `auth()`: it answers "is anyone signed in", portal customers
     // included, and skips the released-counter stop. Staff routes use requireAuth().
     /\bverifyWebhookSignature\b/,

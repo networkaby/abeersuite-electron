@@ -219,6 +219,7 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     { id: "deals:edit", label: "Edit deals", module: "crm", description: "Edit a deal's title, value, source, priority, owner and follow-up; move it between pipeline stages." },
     { id: "deals:delete", label: "Delete deals", module: "crm", description: "Delete a deal from the CRM pipeline." },
     { id: "messages:reply", label: "Reply to customer messages", module: "crm", description: "Send a WhatsApp reply from CRM → Messages (only within 24 hours of the customer's last message). Viewing rides the Messages sidebar link." },
+    { id: "reviews:reply", label: "Reply to reviews", module: "crm", description: "Write, change or remove the shop's public reply to a Google review from CRM → Reviews, and refresh the list from Google. Viewing rides the Reviews sidebar link." },
     { id: "tasks:create", label: "Create tasks", module: "administration", description: "Add an internal work item on the Administration board (the New Task + quick action)." },
     { id: "tasks:edit", label: "Edit tasks", module: "administration", description: "Edit an internal work item's title, description, category, priority, assignee and due date; move it between stages." },
     { id: "tasks:delete", label: "Delete tasks", module: "administration", description: "Delete an internal work item from the Administration board." },

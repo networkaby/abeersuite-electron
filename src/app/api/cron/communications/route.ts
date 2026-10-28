@@ -4,6 +4,7 @@ import { runEmailReminders } from "@/shared/lib/email/emailReminders";
 import { runPostReminders } from "@/modules/campaigns/lib/postReminders";
 import { runScheduledCampaigns } from "@/modules/campaigns/lib/sendCampaign";
 import { runGooglePosts } from "@/modules/campaigns/lib/googlePosts";
+import { syncGoogleReviews } from "@/modules/reviews/lib/googleReviews";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ export const maxDuration = 300;
  * does not stop the others — its error is logged and returned under its name.
  * Due posts go to Google Business Profile first, on their own, so the post
  * reminders that follow no longer count Google as waiting for a hand share.
+ * New and changed Google reviews are copied in for CRM → Reviews alongside.
  * Backup is not part of this: Vercel's nightly cron owns it.
  *
  * CRON_SECRET is optional, as for /api/cron/due-reminders — blank counts as absent.
@@ -37,7 +39,7 @@ export async function GET(req: Request) {
         out.googlePosts = { error: (e as Error)?.message ?? String(e) };
     }
 
-    const jobs = { dueReminders: runDueReminders, emailReminders: runEmailReminders, postReminders: runPostReminders, campaigns: runScheduledCampaigns };
+    const jobs = { googleReviews: syncGoogleReviews, dueReminders: runDueReminders, emailReminders: runEmailReminders, postReminders: runPostReminders, campaigns: runScheduledCampaigns };
     const settled = await Promise.allSettled(Object.values(jobs).map((run) => run()));
     Object.keys(jobs).forEach((name, i) => {
         const r = settled[i];
