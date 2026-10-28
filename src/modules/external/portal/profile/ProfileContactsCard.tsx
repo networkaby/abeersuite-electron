@@ -25,8 +25,8 @@ import { usePortalAccountStore } from "@/store/external/portalAccountStore";
 /**
  * Mobiles & emails — one list, every row with its badges, and the actions the
  * rules allow:
- *   Add     → saved unverified (the shop can still find you by it).
- *   Verify  → OTP to that contact; once proved it can be primary / sign in.
+ *   Add     → OTP to that contact first; saved only once proved.
+ *   Verify  → an older unverified row (rare since 2026-10-28) proves itself.
  *             A contact on an older shop profile merges that profile in.
  *   Primary → verified rows only.
  *   Remove  → not the login contact, not the last verified one.
@@ -103,25 +103,11 @@ export default function ProfileContactsCard({ profile }: { profile: PortalProfil
             toast.success(ok);
             return true;
         } catch (e) {
-            // The contact sits on an older shop profile: proving it by OTP
-            // links that profile here, so go straight to the code.
-            if (axios.isAxiosError(e) && e.response?.data?.code === "VERIFY_TO_MERGE") {
-                toast.info(extractApiError(e, "Verify this contact to link it"));
-                setVerifying(newValue.trim());
-                return false;
-            }
             toast.error(extractApiError(e, "Something went wrong"));
             return false;
         } finally {
             setBusy(false);
         }
-    }
-
-    async function addPlain() {
-        const value = newValue.trim();
-        if (!value) return;
-        const ok = await run(() => axios.post("/api/portal/me/contacts", { value }), "Contact added — verify it when you like");
-        if (ok) { setNewValue(""); setAdding(false); }
     }
 
     /** Add + verify in one go: the OTP form sends the code, we save on the ticket. */
@@ -148,7 +134,7 @@ export default function ProfileContactsCard({ profile }: { profile: PortalProfil
                 <div>
                     <CardTitle className="text-base">Mobiles &amp; emails</CardTitle>
                     <CardDescription>
-                        Verified contacts can sign in and be primary. An unverified one still helps the shop find you at the counter.
+                        Each one is verified with a one-time code, so you can sign in with any of them.
                     </CardDescription>
                 </div>
                 <Button size="sm" onClick={() => setAdding(true)} disabled={busy}>
@@ -182,7 +168,7 @@ export default function ProfileContactsCard({ profile }: { profile: PortalProfil
                     <DialogHeader>
                         <DialogTitle>Add a mobile or email</DialogTitle>
                         <DialogDescription>
-                            Verify it now with a one-time code, or just save it and verify later.
+                            We will send a one-time code to it. It is saved once you type the code.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-1.5">
@@ -193,13 +179,10 @@ export default function ProfileContactsCard({ profile }: { profile: PortalProfil
                             onChange={(e) => setNewValue(e.target.value)}
                             placeholder="98765 43210 or you@example.com"
                             autoFocus
-                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addPlain(); } }}
+                            onKeyDown={(e) => { if (e.key === "Enter" && newValue.trim()) { e.preventDefault(); setVerifying(newValue.trim()); } }}
                         />
                     </div>
-                    <DialogFooter className="gap-2 sm:justify-between">
-                        <Button variant="ghost" disabled={busy || !newValue.trim()} onClick={() => void addPlain()}>
-                            Save without verifying
-                        </Button>
+                    <DialogFooter className="gap-2">
                         <Button disabled={busy || !newValue.trim()} onClick={() => setVerifying(newValue.trim())}>
                             <BadgeCheck className="size-4" /> Verify &amp; save
                         </Button>

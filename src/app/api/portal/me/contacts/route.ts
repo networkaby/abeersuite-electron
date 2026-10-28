@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { requirePortalAccountContext } from "@/shared/lib/auth/portalAuthGuard";
-import { isLikelyEmail, normalizeMobile10, normalizePortalEmail } from "@/shared/lib/auth/portalIdentifier";
 import { resolvePortalIdentity } from "@/shared/lib/auth/authorizePortalPasswordless";
 import { ContactConflictError, createEmail, createPhone, markEmailVerified, markPhoneVerified } from "@/modules/customer/lib/contactWrite";
 import { bindLoginChannel, findOwnEmail, findOwnPhone, loadPortalProfile } from "@/shared/lib/portal/portalProfile";
@@ -13,33 +12,24 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 /**
  * POST /api/portal/me/contacts — add a mobile/email to my own profile.
  *
- * Two shapes, one route:
- *   { value }  — plain add, saved UNVERIFIED. The shop can still find the
- *                customer by it at the counter, but it cannot be primary, sign
- *                in by OTP, or reset the password until verified.
- *   { token }  — an OTP ticket from /api/portal/otp/verify. The identity comes
- *                out of the ticket, never the body: it marks the matching own
- *                contact verified, or attaches it verified when it is new.
+ * Only after an OTP: the body is `{ token }`, a ticket from
+ * /api/portal/otp/verify, and the identity comes out of the ticket, never the
+ * body. It marks the matching own contact verified, or attaches it verified
+ * when it is new. A customer can never save an unverified contact (owner,
+ * 2026-10-28); staff-entered contacts are verified on entry.
  *
- * A value that already sits on ANOTHER customer's profile:
- *   { value } → refused with code VERIFY_TO_MERGE — prove it first.
- *   { token } → the OTP proved this person owns it, so the other profile
- *               (typically made at the counter by mobile) is MERGED into the
- *               signed-in one: bills, ledger, points and contacts move here,
- *               the other row goes. The signed-in profile always survives so
- *               the session and its login stay valid. A COMPANY's contact
- *               moves onto the person and the person is linked to that
- *               company instead (takeFromCompany). Profiles the merge tool
- *               blocks are still refused — the shop's call.
+ * A contact that already sits on ANOTHER customer's profile: the OTP proved
+ * this person owns it, so the other profile (typically made at the counter by
+ * mobile) is MERGED into the signed-in one: bills, ledger, points and contacts
+ * move here, the other row goes. The signed-in profile always survives so
+ * the session and its login stay valid. A COMPANY's contact moves onto the
+ * person and the person is linked to that company instead (takeFromCompany).
+ * Profiles the merge tool blocks are still refused — the shop's call.
  */
 
-const bodySchema = z.union([
-    z.object({ value: z.string().trim().min(3, "Enter a mobile number or email") }),
-    z.object({ token: z.string().min(1) }),
-]);
+const bodySchema = z.object({ token: z.string().min(1, "Verify the contact with a code first") });
 
 const ON_ANOTHER_PROFILE = "This contact is already on another customer's profile. Please ask the shop to sort it out.";
-const VERIFY_TO_MERGE = "This contact is already with the shop under another profile. Verify it with a code to link that profile to this account.";
 
 /**
  * The OTP proved `identity` is this customer's. If another active Person holds
@@ -123,65 +113,39 @@ export async function POST(req: Request) {
     if (error) return error;
 
     try {
-        if ("token" in data) {
-            const identity = await resolvePortalIdentity(data.token);
-            if (!identity) {
-                return NextResponse.json({ error: "Please verify the code again." }, { status: 401 });
-            }
-            // Held by another profile → merge it in first; the contact then
-            // arrives with it and the own-row branch below verifies it.
-            const phoneOwn = identity.phoneNormalized ? await findOwnPhone(customerId, identity.phoneNormalized) : null;
-            const emailOwn = identity.emailNormalized ? await findOwnEmail(customerId, identity.emailNormalized) : null;
-            if (!phoneOwn && !emailOwn) await absorbProfileHolding(customerId, identity);
+        const identity = await resolvePortalIdentity(data.token);
+        if (!identity) {
+            return NextResponse.json({ error: "Please verify the code again." }, { status: 401 });
+        }
+        // Held by another profile → merge it in first; the contact then
+        // arrives with it and the own-row branch below verifies it.
+        const phoneOwn = identity.phoneNormalized ? await findOwnPhone(customerId, identity.phoneNormalized) : null;
+        const emailOwn = identity.emailNormalized ? await findOwnEmail(customerId, identity.emailNormalized) : null;
+        if (!phoneOwn && !emailOwn) await absorbProfileHolding(customerId, identity);
 
-            if (identity.phoneNormalized) {
-                const own = await findOwnPhone(customerId, identity.phoneNormalized);
-                if (own) {
-                    if (!own.verifiedAt) await markPhoneVerified(own.id);
-                } else {
-                    await createPhone({ personId: customerId }, { value: identity.phoneNormalized });
-                }
-            } else if (identity.emailNormalized) {
-                const own = await findOwnEmail(customerId, identity.emailNormalized);
-                if (own) {
-                    if (!own.verifiedAt) await markEmailVerified(own.id);
-                } else {
-                    await createEmail({ personId: customerId }, { value: identity.emailNormalized });
-                }
-            }
-            await bindLoginChannel(customerId, identity);
-        } else {
-            const raw = data.value;
-            if (isLikelyEmail(raw)) {
-                const email = normalizePortalEmail(raw);
-                if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-                    return NextResponse.json({ error: "Enter a valid email address" }, { status: 400 });
-                }
-                if (await findOwnEmail(customerId, email)) {
-                    return NextResponse.json({ error: "That email is already on your profile" }, { status: 409 });
-                }
-                await createEmail({ personId: customerId }, { value: email, verified: false });
+        if (identity.phoneNormalized) {
+            const own = await findOwnPhone(customerId, identity.phoneNormalized);
+            if (own) {
+                if (!own.verifiedAt) await markPhoneVerified(own.id);
             } else {
-                const digits = normalizeMobile10(raw);
-                if (!digits) {
-                    return NextResponse.json({ error: "Enter a valid 10-digit mobile number" }, { status: 400 });
-                }
-                if (await findOwnPhone(customerId, digits)) {
-                    return NextResponse.json({ error: "That mobile is already on your profile" }, { status: 409 });
-                }
-                await createPhone({ personId: customerId }, { value: digits, verified: false });
+                await createPhone({ personId: customerId }, { value: identity.phoneNormalized });
+            }
+        } else if (identity.emailNormalized) {
+            const own = await findOwnEmail(customerId, identity.emailNormalized);
+            if (own) {
+                if (!own.verifiedAt) await markEmailVerified(own.id);
+            } else {
+                await createEmail({ personId: customerId }, { value: identity.emailNormalized });
             }
         }
+        await bindLoginChannel(customerId, identity);
 
         const profile = await loadPortalProfile(customerId, context!.active.accountId);
         return NextResponse.json(profile, { status: 201 });
     } catch (e) {
         if (e instanceof ContactConflictError) {
-            // A plain add can still be proved by OTP and merged; a proved one
-            // reaching here was blocked from merging.
-            return "token" in data
-                ? NextResponse.json({ error: ON_ANOTHER_PROFILE }, { status: 409 })
-                : NextResponse.json({ error: VERIFY_TO_MERGE, code: "VERIFY_TO_MERGE" }, { status: 409 });
+            // Proved by OTP, but the merge tool blocked taking the other profile.
+            return NextResponse.json({ error: ON_ANOTHER_PROFILE }, { status: 409 });
         }
         return handleApiError(e, "Failed to add the contact");
     }
