@@ -1,5 +1,5 @@
 // Payment-gateway-ledger particulars (ledgers under the "Payment Gateway"
-// group — already live as a real-config group, see personal.local.json).
+// group — already live as a real-config group).
 // Mirrors walletParticulars.ts's shape/pattern — no `limit`, a gateway
 // balance is a settlement balance, not a credit facility.
 

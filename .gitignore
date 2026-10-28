@@ -89,10 +89,6 @@ next-env.d.ts
 # Sentry Config File
 .env.sentry-build-plugin
 
-# Personal config snapshot (prisma/seeds/data/personal.local.json) is COMMITTED
-# on purpose — it is scrubbed of secrets (no password hashes; see
-# personalSnapshot.ts) and carries your real config for `pnpm seed:personal`.
-
 # Thermal relay local config (contains printer IP)
 tools/thermal-relay/config.json
 tools/thermal-relay/node_modules/

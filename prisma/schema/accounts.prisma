@@ -93,7 +93,7 @@ model Account {
 
   // Payment-gateway-ledger details — set only on ledgers under the
   // "Payment Gateway" group (already live as a real-config group before
-  // this column existed — see personal.local.json). Shape: { provider,
+  // this column existed). Shape: { provider,
   // fundTier, convertibility, feePct }. No `limit` — same reasoning as
   // Wallets. `fundTier` defaults to OTHER; `convertibility` defaults to
   // CONVERTIBLE. See fundTierOf() / netFundValue() in facilityLimit.ts.

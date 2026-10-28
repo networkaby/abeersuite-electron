@@ -34,8 +34,6 @@
     "seed:helper-brands": "tsx prisma/seeds/helper-brands.ts",
     "seed:helper-all": "pnpm seed:helper-brands && pnpm seed:check-docs",
     "seed:generic": "tsx prisma/seeds/bootstrap-seed.ts",
-    "seed:personal:capture": "tsx prisma/seeds/export-personal.ts",
-    "seed:personal": "tsx prisma/seeds/personal-bootstrap.ts",
     "seed:purge-vouchers": "tsx prisma/seeds/purge-vouchers.ts",
     "seed:purge-demo-contacts": "tsx prisma/seeds/purge-demo-contacts.ts",
     "seed:purge-demo-products": "tsx prisma/seeds/purge-demo-products.ts",

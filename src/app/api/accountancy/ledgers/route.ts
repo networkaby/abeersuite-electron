@@ -127,7 +127,7 @@ const emptyWallet = (w: z.infer<typeof walletJsonSchema>): boolean =>
     !w.provider && !w.fundTier && !w.convertibility && !w.feePct;
 
 // Payment-gateway-ledger particulars (Payment Gateway group — already live
-// as a real-config group, see personal.local.json).
+// as a real-config group).
 const gatewayJsonSchema = z.object({
     provider: z.string().trim().max(120).default(""),
     // Usable Fund fields — "" reads as OTHER / CONVERTIBLE. See gatewayParticulars.ts.

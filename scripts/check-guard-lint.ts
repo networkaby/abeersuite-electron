@@ -60,6 +60,9 @@ const GUARD_PATTERNS = [
     /\brequireDueRemindersPage\b/,
     /\brequireGoogleStatus\b/,
     /\brequireGoogleConnect\b/,
+    // Reviews: named helpers — reviewsAccess.ts.
+    /\brequireReviewsPage\b/,
+    /\brequireReviewsReply\b/,
     // NOT a bare `auth()`: it answers "is anyone signed in", portal customers
     // included, and skips the released-counter stop. Staff routes use requireAuth().
     /\bverifyWebhookSignature\b/,
@@ -72,6 +75,11 @@ const GUARD_PATTERNS = [
     // Meta's WhatsApp webhook: GET answers only the verify token typed into Meta's
     // form; POST is gated by verifyWebhookSignature (X-Hub-Signature-256).
     /\bMETA_WA_VERIFY_TOKEN\b/,
+    // Settings → Incoming API (incomingApi.ts): the same shared keys, read from the
+    // page with the old env vars still accepted — cron, call log, Shiprocket, the
+    // WhatsApp verify token, and the Cowork agent's /api/agent/* doors.
+    /\brequireIncomingKey\b/,
+    /\bincomingSecret\b/,
 ];
 
 const HANDLER_START = /^export\s+(?:async\s+)?(?:function|const)\s+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/gm;

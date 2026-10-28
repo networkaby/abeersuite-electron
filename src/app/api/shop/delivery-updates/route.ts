@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { shiprocketStatusToStage } from "@/modules/delivery/lib/shiprocketStatus";
 import { mirrorStageToOrder } from "@/modules/delivery/lib/mirrorOrderStage";
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
+import { requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
 
 // POST /api/shop/delivery-updates — carrier tracking callback (used by Shiprocket).
 //
@@ -27,12 +28,8 @@ type WebhookBody = {
 };
 
 export async function POST(req: Request) {
-    // Verify the shared secret when configured. When it's unset (dev), accept.
-    const expected = process.env.SHIPROCKET_WEBHOOK_TOKEN?.trim();
-    if (expected) {
-        const got = req.headers.get("x-api-key")?.trim();
-        if (got !== expected) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
-    }
+    // SHIPROCKET_WEBHOOK_TOKEN or the Shiprocket key on Settings → Incoming API. Open when neither is set (dev).
+    if (!(await requireIncomingKey(req, "SHIPROCKET"))) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
     try {
         const body = (await req.json().catch(() => ({}))) as WebhookBody;

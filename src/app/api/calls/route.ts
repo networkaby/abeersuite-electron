@@ -14,6 +14,7 @@ import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { Prisma } from "@/generated/prisma/client";
 import type { CallDirection } from "@/generated/prisma/client";
 import { splitExtensions } from "@/shared/lib/counter/idRange";
+import { requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
 
 // ── /api/calls ────────────────────────────────────────────────────────────────
 //
@@ -141,13 +142,9 @@ async function noteLosingPusher(
 }
 
 export async function POST(req: Request) {
-    // Shared-secret gate (mirrors src/app/api/shop/delivery-updates). Accept when
-    // the env is unset (dev), reject on mismatch.
-    const expected = process.env.CALLS_API_KEY?.trim();
-    if (expected) {
-        const got = req.headers.get("x-api-key")?.trim();
-        if (got !== expected) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
+    // Shared-secret gate: CALLS_API_KEY or the phone-system key on Settings →
+    // Incoming API. Open when neither is set (dev), as before.
+    if (!(await requireIncomingKey(req, "CALLS"))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
     const { data, error } = await validateRequest(req, callPayloadSchema);
     if (error) return error;

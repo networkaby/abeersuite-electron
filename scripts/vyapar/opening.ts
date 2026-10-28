@@ -105,7 +105,7 @@ async function main(): Promise<void> {
     const held = (await pool.query(
         `select (select count(*)::int from "InvProduct") p, (select count(*)::int from "Person") n,
                 (select count(*)::int from "UniversalVoucher") v, (select count(*)::int from "AccountGroup") g`)).rows[0];
-    if (Number(held.g) === 0) throw new Error("no AccountGroup rows — run the base seed first (prisma/seeds/personal-bootstrap.ts)");
+    if (Number(held.g) === 0) throw new Error("no AccountGroup rows — run the base seed first (pnpm seed:generic)");
     if (apply && (Number(held.p) > 0 || Number(held.n) > 0 || Number(held.v) > 0)) {
         throw new Error(`REFUSING: database already holds ${held.p} product(s), ${held.n} person(s), ${held.v} voucher(s).` +
             `\nThis builds an opening from empty. Drop and recreate the database, or use a fresh one.`);
@@ -289,8 +289,8 @@ async function main(): Promise<void> {
 
     // ── Write ───────────────────────────────────────────────────────────────
     // Clear every opening first, even in a database this file believes is empty.
-    // It is not: `personal.local.json` carries openingBalance on the ledgers it
-    // restores, so the base seed quietly re-seeded Counter 21's ₹25,109, the Vault's
+    // It was not: the retired personal snapshot carried openingBalance on the ledgers
+    // it restored, so the base seed quietly re-seeded Counter 21's ₹25,109, the Vault's
     // ₹9,503, Capital's ₹98,419 and Suspense's ₹1,825 — the exact figures this whole
     // route exists to remove, arriving through a different door. A snapshot is meant
     // to hold CONFIGURATION; an opening balance is a POSITION.

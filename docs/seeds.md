@@ -5,11 +5,9 @@ All seed scripts and their fixture data live under `prisma/seeds/`.
 ```
 prisma/seeds/
 ├─ bootstrap-seed.ts            GENERIC — new-client installer (run via `pnpm seed:generic`)
-├─ export-personal.ts           PERSONAL — reverse-create YOUR config snapshot from the live DB
-├─ personal-bootstrap.ts        PERSONAL — what `pnpm prisma db seed` runs: code-owned catalog + your snapshot (self-complete)
 ├─ helper-brands.ts             HELPER — trade-specific brand master (InvBrand)
 ├─ apply-taxonomy.ts            APPLY — classify group + brand on the real catalog from product names (`--dry` previews)
-├─ sync-permissions.ts          APPLY — bring Permission rows in line with the catalog + grant one to roles, without a full seed
+├─ sync-permissions.ts          PERMISSIONS — what `pnpm prisma db seed` runs (`--apply`): catalog rows the DB lacks + R1 top-up; also grants / revokes one id
 ├─ hard-clean.ts                CLEANER — wipes everything bootstrap doesn't seed
 ├─ purge-vouchers.ts            OPS — wipes only vouchers/JEs/invoices/payments
 ├─ purge-demo-contacts.ts       OPS — wipes contacts (+ transactions), keeps products + settings
@@ -18,11 +16,8 @@ prisma/seeds/
 │  ├─ purgeDemo.ts       SHARED — transaction table list + purge steps for the demo cleaners
 │  ├─ assertNotCounter.ts SHARED — refuse to run a destructive seed against a counter machine
 │  ├─ positionSeedSync.ts SHARED — upsert a position + its role-template links
-│  ├─ codeOwnedCatalog.ts SHARED — code-owned data both bootstraps use: XOR CHECK constraints, voucher series, and a re-export of the permission catalog. ADD NEW PERMISSIONS in src/shared/lib/auth/permissionCatalog.ts (the app reads it too).
-│  ├─ personalSnapshot.ts SHARED — export/import engine for the personal snapshot
-│  └─ personalSnapshotPath.ts SHARED — on-disk path of the snapshot (git-tracked in this private repo)
-└─ data/
-   └─ personal.local.json YOUR CONFIG — the captured snapshot personal-bootstrap replays
+│  ├─ codeOwnedCatalog.ts SHARED — code-owned helpers: XOR CHECK constraints, portal-profile columns, and a re-export of the permission catalog. ADD NEW PERMISSIONS in src/shared/lib/auth/permissionCatalog.ts (the app reads it too).
+└─ data/                 Vyapar opening-balance inputs (scripts/vyapar/)
 ```
 
 > **There are no `dummy-*` seeds any more.** The demo-data scripts (users, org-rich,
@@ -33,24 +28,31 @@ prisma/seeds/
 >
 > Every seed left in this folder is one you would actually run on a real install.
 
-## The official seed — `pnpm prisma db seed` = PERSONAL
+## The official seed — `pnpm prisma db seed` = SYNC-PERMISSIONS
 
-The Prisma seed wired in [`prisma.config.ts`](../prisma.config.ts) is the
-**personal bootstrap**, not the generic installer:
+The Prisma seed wired in [`prisma.config.ts`](../prisma.config.ts) is
+**`sync-permissions --apply`** — the same thing as `pnpm seed:sync-permissions --apply`:
 
 ```ts
-migrations: { seed: "pnpm exec tsx prisma/seeds/personal-bootstrap.ts" }
+migrations: { seed: "pnpm exec tsx prisma/seeds/sync-permissions.ts --apply" }
 ```
 
-```bash
-pnpm prisma db push       # 1. apply schema
-pnpm prisma db seed       # 2. personal bootstrap: code-owned catalog + your snapshot (upsert-only)
-```
+It creates (or relabels) every catalog `Permission` the DB lacks and gives **R1
+(Admin) every non-`systemOnly` permission** it does not hold. It never deletes a
+`Permission` (a DB row absent from the catalog is reported and left alone) and
+never touches config or transactions, so it is safe on the live DB. Extra flags
+pass through: `pnpm prisma db seed -- --no-revoke`.
 
-It is **non-destructive** (upsert-only; its only delete is pruning permissions
-retired from code), so re-running it on the live DB re-asserts your config
-without touching transactions. The dev loop is **capture → edit → seed** (see
-the Personal bootstrap section below).
+> **There is no personal snapshot any more** (retired 2026-10-28). The old
+> `personal-bootstrap.ts` / `export-personal.ts` / `data/personal.local.json`
+> captured our real config so a reset could rebuild it. A running org does not
+> reset — it **restores from a database backup** (Settings → Backup & Restore).
+> Real config (chart of accounts, RBAC grants, department pools, POS, templates,
+> categories / groups, pipelines, staff) now lives only in the database.
+
+> **`BackupConfig` row.** `/api/cron/backup-due` reads that row every hour to
+> decide whether a backup is due, so **a missing row means no backups, silently**.
+> `pnpm seed:generic` creates it on a fresh install; a running org already has it.
 
 ## `bootstrap-seed.ts` — OUR installer, not a generic one
 
@@ -66,7 +68,7 @@ values someone should tune later".
 Idempotent, and every write is create-only where an admin can edit the value, so
 a re-run never overwrites tuned settings. It seeds:
 
-- **RBAC** — **3 roles**: `R1` Role-Admin (the only `isSystem` role, homed in the all-access `DEP-ADMIN`), `R2` Branch Manager (`DEP-OP`), `R3` Counter Operator (`DEP-SALES`). Their **grants are not seeded here** — those are config and live in the personal snapshot; bootstrap only guarantees the rows and their department homes. Plus 130+ permissions, including a **per-kind voucher gate** for every hand-created voucher kind (GL `finance:voucher:<action>:<kind>`, inventory `inventory:voucher:<action>:<kind>`) generated from `src/shared/lib/auth/voucherMatrix.ts` so the mapping never drifts.
+- **RBAC** — **3 roles**: `R1` Role-Admin (the only `isSystem` role, homed in the all-access `DEP-ADMIN`), `R2` Branch Manager (`DEP-OP`), `R3` Counter Operator (`DEP-SALES`). Their **grants are not seeded here** — those are config and live only in the database; bootstrap only guarantees the rows and their department homes (bootstrap and `pnpm prisma db seed` grant R1 everything). Plus 130+ permissions, including a **per-kind voucher gate** for every hand-created voucher kind (GL `finance:voucher:<action>:<kind>`, inventory `inventory:voucher:<action>:<kind>`) generated from `src/shared/lib/auth/voucherMatrix.ts` so the mapping never drifts.
 - **Workflow** — 9 pipelines, 61 ticket statuses, 5 work groups, 48 status transitions. **No works and no ticket workers** (see below).
 - **Couriers** — our 6 real delivery methods, including Local delivery's per-neighbourhood pricing for the pincodes we serve (783384 Abhayapuri / Lengtisinga, 783380 Barpara), INDIA POST zone rates, and the Shiprocket / Shipway pickup pincode.
 - **Payment** — 4 gateways (Pay-on-delivery, Razorpay, PayU, Cashfree), each linked to its settlement ledger **by name**, plus the `Payment Gateway` account group and those four ledgers.
@@ -87,89 +89,7 @@ a re-run never overwrites tuned settings. It seeds:
 > `R2` as "Role-Service Engineer" and `R3` as "Role-Counter / Cashier" in other
 > departments, and rewrote their grants on every run — so running it would have
 > renamed two live roles and replaced permissions real staff depend on. Bootstrap
-> now carries the real `R2` / `R3` rows and the snapshot carries their grants.
-
-## Personal bootstrap — self-complete restore of YOUR install
-
-The personal bootstrap does **not** run the generic installer. It stands up a
-working install from two sources and nothing else:
-
-1. **Code-owned catalog** (`lib/codeOwnedCatalog.ts`, permission list in `src/shared/lib/auth/permissionCatalog.ts`) — the permission catalog
-   (upsert + prune of retired ids), the Phone/Email XOR CHECK constraints, the
-   voucher numbering series, and the **existence** of the `BackupConfig` row.
-   The things the snapshot deliberately never carries because they belong to
-   the code.
-2. **Your snapshot** (`data/personal.local.json`) — every piece of real config.
-3. **R1 top-up** — R1 (Admin) is granted any catalog permission it doesn't
-   already hold, so code-added permissions reach the admin role without waiting
-   for a re-capture.
-
-> **`BackupConfig` is split on purpose, and the split is the whole point.**
-> `/api/cron/backup-due` reads that row every hour to decide whether a backup is
-> due, so **a missing row means no backups, silently** — the failure says nothing
-> about itself until the day you need a restore. The *schedule* is your config and
-> rides the snapshot like any other setting; the *row existing at all* is a code
-> invariant, created in step 1 with the schema defaults (every weekday, hour 22 —
-> daily 10 PM IST). Step 1 runs **before** the snapshot overlay and before the
-> no-snapshot early return, so a fresh DB is covered whether or not a capture has
-> happened yet; step 2 then puts your real schedule back. Both halves are
-> create-only, so an admin's edit in Settings → Backup & Restore always survives.
-> (The old `apply-backup-config.ts`, which used to be the only thing that made this
-> row, is deleted — it is now redundant on every path except `--overlay-only`.)
-
-The dev loop — **capture → edit → seed**:
-
-```bash
-# 1. Capture — "reverse create" your snapshot from the live DB (READ-ONLY).
-#    Re-run any time you change settings in the UI.
-pnpm seed:personal:capture      # → prisma/seeds/data/personal.local.json
-
-# 2. (optional) Hand-edit the snapshot JSON.
-
-# 3. Seed — re-apply catalog + snapshot. Non-destructive; safe on the live DB.
-pnpm prisma db seed             # or: pnpm seed:personal
-pnpm seed:personal --overlay-only   # skip the catalog step; overlay only
-```
-
-After a **hard reset** (fresh DB before go-live): `pnpm prisma db push`, then
-`pnpm prisma db seed` — the client's full config comes back with zero generic
-demo clutter. Reset staff passwords after (new users get `changeme123`).
-
-**Scope — "everything except tickets, vouchers, customers, products".**
-
-| Included (config / structure / masters) | Excluded |
-|---|---|
-| Config singletons — `OrgDefaults`, `InvNamingConfig`, `LoyaltyConfig`, `CouponConfig`, `CreditLimitConfig`, `BooksConfig`, `BiGstPlanningConfig`, `OfflinePolicy`, `BackupConfig` (schedule only — `lastRunAt` is runtime state and is never exported) | `Ticket*` (tickets) |
-| Inventory/tax masters — `GstRate`, `InvUnit`, `InvWarrantyTerm`, `InvCategory`, `InvProductGroup`, `InvBrand`, `InvAttributeMaster`, `StrategyPoint`, `VoucherPrintTemplate` | `UniversalVoucher*` / journal / invoice / payment / stock-ledger (vouchers) |
-| Chart of accounts — `AccountGroup` + `Account` (+ its `AccountAlias` rows) **(GL ledgers only)** | `Person` / `Company` / `Phone` / `Email` / party ledgers (customers) |
-| Spend-tier ladders — `CustomerTierPeriod` + `CustomerTier` | `InvProduct*` (products) |
-| Org structure — `Branch`, `Department` | `Coupon` / `GiftCard` / `LoyaltyEarnRule` / `LoyaltyMilestone` (entangle products + customers — only the **config singletons** above are kept) |
-| RBAC — `Role`, `RolePermission`, `DepartmentPermission`, `Position`, `PositionRole`, staff `User` + `UserPosition` / `UserPermission` (Permission rows themselves stay code-owned — `src/shared/lib/auth/permissionCatalog.ts`) | |
-| POS setup — `PaymentGateway`, `PosCounter`, `PosCounterPaymentAccount`, `PosService` | |
-| Repair pipeline — `Pipeline`, `WorkGroup`, `Work`, `TicketStatus`, `TicketWorker`, status + worker transitions | |
-
-**How it stays portable.** The RBAC / org / pipeline layers use human-assigned
-**string ids** (`R1`, `DEP-ADMIN`, `PIPE-REPAIR` …) that survive a reseed
-unchanged, so their rows and join tables port by id. The Int-autoincrement
-models (accounts, GST, units, categories, counters, gateways) are referenced
-across the snapshot by their **natural key** (account name, GST label,
-counter branch+name …); the importer re-resolves each ref to the local id, so
-nothing breaks even on a fresh database.
-
-**Safety.** The overlay is **upsert-only** — it never deletes. Grants pointing
-at permissions no longer present in the current build are dropped (and reported);
-POS rails whose account/counter can't be resolved are skipped (and reported).
-
-**Secrets.** Staff **password hashes are never exported** — the snapshot is
-scrubbed, so it is safe to commit. A user *created* by the overlay gets the
-default password `changeme123` (change it after seeding, and it's reported in
-the run summary); existing users keep their own password untouched. The
-snapshot still carries your real GSTIN / org identity / tier amounts, so commit
-it only to a private repo.
-
-> **Maintenance.** When you add a config table to the schema, add it to
-> `lib/personalSnapshot.ts` (both `exportPersonal` and `importPersonal`) so the
-> personal snapshot stays complete — same commit as the schema change.
+> now carries the real `R2` / `R3` rows; their grants live in the database.
 
 ## Helper seed (trade-specific brands)
 
@@ -200,16 +120,15 @@ names differ. (It would *not* have corrupted tax data — measured against live,
 2 rows matched and both merely gained an HSN code, with 0 GST changes.)
 
 Our real taxonomy — **6 categories, 102 groups** — was built by `apply-taxonomy`
-and then curated by hand, so it is **config, not a generic master**. It lives in
-`data/personal.local.json` and is applied by `pnpm prisma db seed`.
+and then curated by hand, so it is **config, not a generic master**. It lives only in
+the database — a backup restores it.
 
 | Master | Restored by |
 |---|---|
 | `InvBrand` | `pnpm seed:helper-brands` |
-| `InvCategory`, `InvProductGroup` | `pnpm prisma db seed` (personal snapshot) |
+| `InvCategory`, `InvProductGroup` | a database backup (no seed carries them) |
 
-> Because these live only in the snapshot and not in `bootstrap-seed.ts`, they are
-> one more reason `personal-bootstrap` cannot retire yet.
+> A fresh install starts with no categories or groups; build them in the UI.
 
 ## Roles — where they come from
 
@@ -228,7 +147,7 @@ staff depend on.
 |---|---|
 | The `R1` / `R2` / `R3` **rows** and their department homes | `bootstrap-seed.ts` (captured from live) |
 | `R1`'s grants | `bootstrap-seed.ts` — every non-`systemOnly` permission |
-| `R2` / `R3` grants, and **department permission pools** (241 rows) | `data/personal.local.json`, via `pnpm prisma db seed` |
+| `R2` / `R3` grants, and **department permission pools** (241 rows) | the database only (restore from a backup) |
 
 Department pools matter because a role can never grant outside its department's
 pool — except the all-access `DEP-ADMIN`, which carries no rows because its pool is
@@ -243,15 +162,14 @@ These do just the one job.
 | Script | Purpose |
 |---|---|
 | `pnpm seed:apply-taxonomy` | Fills `group` + `brand` on the **real** catalog by matching product names. Two-pass (head-noun first, then anywhere) and only ever fills NULLs, so manual corrections survive. `--dry` previews. Re-run after a bulk import — see the note below. |
-| `pnpm seed:sync-permissions` | Creates the `Permission` rows the code-owned catalog has and the DB does not, and grants one to named roles (`--roles`) or takes it back (`--revoke-from`). **Dry by default — `--apply` writes.** Never deletes a `Permission`; a DB row absent from the catalog is reported and left alone. Carries no permission list of its own (it imports `PERMISSION_CATALOG`), so it cannot drift. Use it when a new `ui:sidebar:*` id appears and you do NOT want the R1 top-up a full seed brings. |
+| `pnpm seed:sync-permissions` | Creates the `Permission` rows the code-owned catalog has and the DB does not, and grants one to named roles (`--roles`) or takes it back (`--revoke-from`). **Dry by default — `--apply` writes.** Never deletes a `Permission`; a DB row absent from the catalog is reported and left alone. Carries no permission list of its own (it imports `PERMISSION_CATALOG`), so it cannot drift. Every `--apply` run (except a single `--grant` run) also tops R1 up with every grantable permission. |
 
 ### Shipping a permission
 
 There is **no `apply-permissions` script any more.** It existed to write a handful of
 rows without a full seed, but every row it wrote was already in
-`src/shared/lib/auth/permissionCatalog.ts` (re-exported by `lib/codeOwnedCatalog.ts`), and **both** seeds apply that catalog in full with the
-identical upsert (`bootstrap-seed.ts` line ~865, and `applyCodeOwnedCatalog()` for
-`pnpm prisma db seed`). Its `ADDITIONS` list had become a third copy of the same
+`src/shared/lib/auth/permissionCatalog.ts` (re-exported by `lib/codeOwnedCatalog.ts`), and `bootstrap-seed.ts` and `sync-permissions.ts` both apply
+that catalog in full. Its `ADDITIONS` list had become a third copy of the same
 data, guarded by nothing, and all 12 entries were finished work.
 
 The flow is now:
@@ -261,11 +179,10 @@ The flow is now:
    these two agree).
 2. `pnpm prisma db seed`.
 
-> **A full seed does one thing the old script did not: the R1 top-up.** Step 3 of
-> `personal-bootstrap.ts` grants R1 every non-`systemOnly` permission in the catalog.
-> R1 currently holds 177 of 286, so the next reseed will add roughly 108 grants — and
-> if a permission was deliberately removed from R1 in the Role Matrix, it comes back.
-> Decide which you want before reseeding. (`admin:bypass` is `systemOnly` and stays
+> **Every run also does the R1 top-up.** `sync-permissions` grants R1 every
+> non-`systemOnly` permission in the catalog (lower CRUD rungs implied by a held
+> higher one are skipped). If a permission was deliberately removed from R1 in the
+> Role Matrix, it comes back — run `pnpm seed:sync-permissions` (dry) first to see. (`admin:bypass` is `systemOnly` and stays
 > excluded.)
 
 **Some permissions are never typed by hand.** Adding a nav entry to `SETTINGS_NAV` /
@@ -294,26 +211,22 @@ back only that one permission from only those roles:
 pnpm seed:sync-permissions --grant ui:sidebar:settings:screen-size --revoke-from R2,R3 --apply
 ```
 
-The R1 top-up on its own, without a full seed — every non-`systemOnly` catalog permission
-the role lacks (lower CRUD rungs implied by a held higher one are skipped). It adds only,
-so anything deliberately taken away comes back: read the dry-run list first.
+The same top-up for another role — every non-`systemOnly` catalog permission it lacks
+(R1 is always included). It adds only, so read the dry-run list first.
 
 ```bash
-pnpm seed:sync-permissions --grant-missing --roles R1                       # preview
-pnpm seed:sync-permissions --grant-missing --roles R1 --apply --no-revoke   # write
+pnpm seed:sync-permissions --grant-missing --roles R2                       # preview
+pnpm seed:sync-permissions --grant-missing --roles R2 --apply --no-revoke   # write
 ```
 
 It creates only the rows the catalog has and the DB lacks, grants them, and bumps
 `tokensValidFrom` for the affected staff (permissions ride the JWT, so a grant is invisible
 until the holder signs in again). Pass `--no-revoke` during trading hours — the grant still
-lands, it just waits for each person's next login. `--overlay-only` on the full seed is **not**
-an alternative: the R1 top-up sits outside that branch and runs anyway, and skipping step 1
-means the new row is never created.
+lands, it just waits for each person's next login.
 
 ### `apply-taxonomy` and the group tree
 
-It is the only thing that classifies **products** — `bootstrap-seed.ts` and the
-personal snapshot both exclude products entirely, so nothing else does this job.
+It is the only thing that classifies **products** — no seed touches products, so nothing else does this job.
 
 **Brands are read live from `InvBrand`.** There is no brand list in the script. To
 match more products, add the brand in the app (or `helper-brands.ts`) and re-run.
@@ -381,8 +294,8 @@ pnpm seed:hard-clean
 - All party-linked Account rows
 - ShopCoupon, PortalCredentials
 - Payment gateways (`payment_gateways`, Settings → Payment Methods — operator config, bootstrap seeds none). Cleared with an explicit `DELETE` (not a `TRUNCATE … CASCADE`) so the `ON DELETE SET NULL` on `PosCounterPaymentAccount.gatewayId` fires: counter payment rails are **preserved**, just unlinked from the deleted gateways.
-- **Non-system roles** (every `Role` with `isSystem: false` — our `R2` Branch Manager, `R3` Counter Operator, and any admin-created role). Positions pointing at them are unlinked first (restrict FK), then the roles + their grants are deleted. `R1` (the only `isSystem` role) survives. Restore with `pnpm prisma db seed`: bootstrap re-creates the `R2` / `R3` rows, the snapshot restores their grants.
-- **Department permission pools** (`DepartmentPermission`) — config, not bootstrap (bootstrap seeds none; `DEP-ADMIN` is all-access with no rows), so they are cleared. Department rows themselves are bootstrap-seeded and survive. `pnpm prisma db seed` restores our 241 pool rows from the snapshot.
+- **Non-system roles** (every `Role` with `isSystem: false` — our `R2` Branch Manager, `R3` Counter Operator, and any admin-created role). Positions pointing at them are unlinked first (restrict FK), then the roles + their grants are deleted. `R1` (the only `isSystem` role) survives. Restore with `pnpm seed:generic` (re-creates the `R2` / `R3` rows); their grants must be set again in the Role Matrix, or restore a backup.
+- **Department permission pools** (`DepartmentPermission`) — config, not bootstrap (bootstrap seeds none; `DEP-ADMIN` is all-access with no rows), so they are cleared. Department rows themselves are bootstrap-seeded and survive. No seed restores them — set them again in Departments, or restore a backup.
 
 **Preserves** everything bootstrap-seed wrote, plus user-set config:
 - `R1` role + Permissions + R1's RolePermissions, Pipelines, Statuses, Branches, Departments
@@ -436,7 +349,7 @@ Re-enter contacts and products through the UI or the customer / product CSV impo
 
 | File | Consumed by |
 |---|---|
-| `data/personal.local.json` | `personal-bootstrap.ts` (written by `export-personal.ts`) |
+| `data/vyapar-*.json` | `scripts/vyapar/` (opening balances from Vyapar) |
 
 This folder is for seed **input**, not for scratch data. Keep it to files a seed actually
 reads — a stray 827 KB spreadsheet that nothing imported lived here for months. If a new
@@ -448,15 +361,13 @@ the script, and add the row above.
 | Change | Update |
 |---|---|
 | Add / rename / drop a column on a **Prisma model** | `bootstrap-seed.ts` — same commit as the schema change |
-| Add a new **permission** | `src/shared/lib/auth/permissionCatalog.ts` (definition — both seeds and the app import it) + mirror the constant in `src/shared/lib/constants/permissions.ts` + the grant in `data/personal.local.json`. Apply with `pnpm prisma db seed` — see "Shipping a permission" above, including what the R1 top-up does. |
-| Add a new role / pipeline / status / worker | `bootstrap-seed.ts` (generic) + `data/personal.local.json` (our config) |
+| Add a new **permission** | `src/shared/lib/auth/permissionCatalog.ts` (definition — both seeds and the app import it) + mirror the constant in `src/shared/lib/constants/permissions.ts` + the grant for other roles in the Role Matrix. Apply with `pnpm prisma db seed` — see "Shipping a permission" above, including what the R1 top-up does. |
+| Add a new role / pipeline / status / worker | `bootstrap-seed.ts` (generic) + the UI (our config) |
 | Add a new account group or default GL ledger | `bootstrap-seed.ts` |
 | Add a new tax / payment method / business invariant | `bootstrap-seed.ts` |
 | Add a new fixture data file | `prisma/seeds/data/<name>.ts`; document the consumer here |
 | Hard-clean must remove a new non-bootstrap table | extend `TRANSACTION_TABLES` / `INVENTORY_MASTERS` / `DUMMY_CONFIG_TABLES` in `hard-clean.ts` |
 | Data moves into bootstrap | **remove it from `INVENTORY_MASTERS` / `DUMMY_CONFIG_TABLES`** in `hard-clean.ts` — bootstrap data must survive a hard-clean |
-| Add a config table (settings / master / org / RBAC / workflow / POS) | add it to `lib/personalSnapshot.ts` (`exportPersonal` + `importPersonal`) so the personal snapshot stays complete |
-| HR & People (`StaffProfile`, `StaffSalary`) | captured in full as `staffProfiles` / `staffSalaries` (user by email, ledgers by name) — the owner's 2026-09-20 call is no exclusions; a snapshot older than version 3 simply carries none and seeds none |
 
 > **Schema-and-seed coupling rule:** any commit that changes `prisma/schema/*.prisma` must also update `bootstrap-seed.ts` in the same commit. It is now the single seed that describes the schema — if it drifts, a new install is broken and nobody finds out until go-live.
 
@@ -466,9 +377,7 @@ the script, and add the row above.
 |---|---|---|
 | `admin@networkservice.in` | R1 Admin (seeded by **bootstrap**) | `admin123` |
 
-Staff logins come from `data/personal.local.json` via `pnpm prisma db seed`. A user the
-overlay *creates* gets the default password `changeme123` (reported in the run summary) —
-change it after seeding. The old `tech@` / `front@` / `des@` demo logins are gone with the
+Staff logins live only in the database (Users page; a backup restores them). The old `tech@` / `front@` / `des@` demo logins are gone with the
 `dummy-users` seed.
 
 ## Schema invariants enforced by seeds

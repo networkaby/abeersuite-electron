@@ -40,7 +40,7 @@
  *   1. RESOLVED — all seven groups are live: Cash-in-Hand / Bank Accounts /
  *      Bank OD A/c / Credit Card were already live; BNPL A/c and Wallets are
  *      seeded by bootstrap-seed.ts; Payment Gateway was
- *      already a real-config group (personal.local.json) before this feature
+ *      already a real-config group before this feature
  *      existed. The bnplJson/walletJson/gatewayJson columns are pushed.
  *   2. RESOLVED — masters/ledgers page + EditLedgerDialog both have a
  *      "Usable Fund Tier" control for every group with a tier concept.

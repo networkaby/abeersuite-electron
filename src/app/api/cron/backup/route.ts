@@ -3,6 +3,7 @@ import { makeBackupFileName } from "@/shared/lib/backup/dropbox";
 import { libpqUrl, projectRefFromDbUrl } from "@/shared/lib/backup/dbUrl";
 import { backupAvailability } from "@/shared/lib/backup/availability";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+import { requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,9 +22,9 @@ export async function GET(req: Request) {
     // failing every night. Set it when the endpoint should be locked down; a blank
     // value is treated as absent so a half-filled env var cannot lock the scheduler
     // out by accident.
-    const cronSecret = process.env.CRON_SECRET?.trim();
-    if (cronSecret && req.headers.get("authorization") !== `Bearer ${cronSecret}`) {
-        console.error("[cron/backup] 401: Authorization header does not match CRON_SECRET.");
+    // Settings → Incoming API's cron-job.org key is accepted too (incomingApi.ts).
+    if (!(await requireIncomingKey(req, "CRON"))) {
+        console.error("[cron/backup] 401: Authorization header matches neither CRON_SECRET nor the Incoming API cron key.");
         return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 

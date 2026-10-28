@@ -14,10 +14,9 @@ export default defineConfig({
     // the schema is a FOLDER (prisma/schema/), and Prisma then looks for
     // migrations beside that folder rather than at prisma/migrations.
     path: "prisma/migrations",
-    // `pnpm prisma db seed` = PERSONAL bootstrap (code-owned catalog + your
-    // captured config; upsert-only, non-destructive). The generic new-client
-    // installer moved to `pnpm seed:generic` — run it only to build the demo
-    // world on a fresh install with no snapshot.
-    seed: "pnpm exec tsx prisma/seeds/personal-bootstrap.ts",
+    // `pnpm prisma db seed` = sync-permissions --apply: catalog permissions the
+    // DB lacks + R1 (Admin) top-up; safe on live. The generic new-client
+    // installer is `pnpm seed:generic`. A running org restores from a backup.
+    seed: "pnpm exec tsx prisma/seeds/sync-permissions.ts --apply",
   },
 });
