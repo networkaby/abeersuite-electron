@@ -50,21 +50,21 @@ Thank you, <Name + honorific>! <One or two lines that answer what they actually 
 | We appreciate your valuable patronage. | Thank you for your support. |
 | We look forward to serving you in the future. | Hope to see you again soon. |
 
-### Name and honorific
+### Name and honorific — match the customer's tone
 
-- Write the name in Title Case (`uttamkumar sarkar` → `Uttamkumar Sarkar`); keep a nickname as it is (`STONER 69`). No name → "Thank you for your …".
-- Add the honorific the owner uses, from the name pattern — **only when confident**:
+- Write the name in Title Case (`uttamkumar sarkar` → `Uttamkumar Sarkar`); keep a nickname as it is (`STONER 69`). Use the full name the customer shows — never cut it (`STORY STÃTÛS`, not `STORY ST`). No name → "Thank you for your …".
+- No strict rule — the address should feel natural for Assam and **match how the review is written**:
 
-| Customer | Honorific |
-| --- | --- |
-| Muslim man | `bhai` |
-| Non-Muslim man | `da` / `dada` |
-| Hindu (Assamese) woman | `baideu` |
-| Muslim woman | `bubu` |
-| Bengali woman | `didi` |
-| Gender-neutral name (Mukuta, Jyoti), nickname, initials only, or any doubt | `Dear <Name>` or the name alone — no honorific |
+| Review tone | Address | Reply style |
+| --- | --- | --- |
+| Formal, detailed, polite English | Name + `ji` / `sahab`, or the full name (`Ritendra ji`, `Nabir sahab`, `Dear Bedanti Sarma`) | Formal, respectful, no jokes |
+| Normal, short, friendly | `da` / `dada`, `bhai`, `baideu`, `didi`, `bubu`, or `ji` (`Raju da`, `Jakir bhai`, `Mira baideu`) | Warm, simple |
+| Light or funny (emojis, slang, typos like "god service") | Friendly — `bhai`, `da`, even a light word if the review sets that tone | Can be playful, never mocking |
 
-- A wrong honorific on a public reply is worse than none: when in doubt, fall back. Mark the honorific in the preview table so the owner can fix it.
+- In Assam `da`, `baideu` and `ji` are used for anyone, Muslim or not; `bhai`, `bubu` and `sahab` fit Muslim names naturally. Vary between them across replies so they don't all read the same.
+- Gender must be clear before a gendered word (`da`, `bhai`, `baideu`, `bubu`, `didi`, `sahab`). Gender-neutral name (Mukuta, Jyoti), nickname, initials, business name, or any doubt → `Dear <Name>` or the name alone.
+- Never a casual word (`boss`, `bro`) on a formal review, and never joke about a 1–3★ review or the customer's spelling.
+- Show the address in the preview table so the owner can change it.
 
 ### Length
 
