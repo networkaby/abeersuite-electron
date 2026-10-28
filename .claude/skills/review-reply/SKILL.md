@@ -132,6 +132,7 @@ curl -sS -X POST -H "x-api-key: $COWORK_API_KEY" -H "Content-Type: application/j
 ```
 
 Build the JSON with `jq -n --arg text "$REPLY" '{text:$text}'` so quotes and new lines are escaped.
+On Windows, write the JSON with ASCII escapes (`json.dumps(...)` default, `⭐` for ⭐, `—` for —) into a file and send it with `--data-binary @file`; read answers as UTF-8 (`sys.stdin.buffer.read().decode('utf-8')`). The cp1252 console otherwise breaks emojis — the broken ⭐/🙏 in some old live replies came from this.
 Add `"mode":"draft"` when unsure about a reply — it lands on CRM → Reviews for staff.
 
 Answer: `{ "result": "posted" }` or `{ "result": "draft", "reason": "..." }`.
