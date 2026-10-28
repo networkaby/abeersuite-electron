@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDateTime } from "@/shared/lib/format";
 import { extractApiError } from "@/shared/lib/api";
+import { putToSignedUrl } from "@/shared/lib/storage/signedUpload";
 import { useRealtimeTopics } from "@/shared/hooks";
 import CreatePersonDialog from "@/shared/components/CreatePersonDialog";
 import { cn } from "@/shared/lib/format/utils";
@@ -382,8 +383,7 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                     phone: thread.phone, name: file.name, type, size: file.size,
                 });
                 // Straight to R2 — the signed URL carries the permission.
-                const put = await fetch(data.putUrl, { method: "PUT", headers: { "Content-Type": type }, body: file });
-                if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+                await putToSignedUrl(data.putUrl, file, type);
                 media = { key: data.key, type, name: file.name, size: file.size };
             }
             await axios.post("/api/messages/reply", { phone: thread.phone, text, media });

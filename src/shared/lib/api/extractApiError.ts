@@ -1,6 +1,7 @@
 import axios from "axios";
 import { OFFLINE_READ_ONLY } from "@/shared/lib/prisma/offlineError";
 import type { CreditLimitDetail } from "@/shared/lib/accountancy/checkCreditLimit";
+import { StorageUploadError } from "@/shared/lib/storage/signedUpload";
 
 /**
  * Pull a server `{ error }` message off an axios error, falling back to `fallback`.
@@ -21,6 +22,8 @@ export function extractApiError(e: unknown, fallback = "Something went wrong"): 
     if (axios.isAxiosError(e) && e.code !== "ERR_CANCELED") {
         return e.response ? `${fallback} (${e.response.status})` : `${fallback} (no answer from the server)`;
     }
+    // A browser → R2 upload never reaches our server; its reason is already worded.
+    if (e instanceof StorageUploadError) return e.message;
     return fallback;
 }
 

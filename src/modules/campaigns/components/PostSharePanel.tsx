@@ -7,6 +7,7 @@ import { Check, Copy, Download, ExternalLink, ImagePlus, Send, Share2, Trash2 } 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
+import { putToSignedUrl } from "@/shared/lib/storage/signedUpload";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import {
     GOOGLE_BUSINESS_URL,
@@ -69,8 +70,7 @@ export default function PostSharePanel({ post, onChanged }: { post: PostRow; onC
                 name: file.name, type: file.type, size: file.size,
             });
             // Straight to R2 — the signed URL carries the permission.
-            const put = await fetch(data.putUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
-            if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+            await putToSignedUrl(data.putUrl, file, file.type);
             const saved = await axios.put<PostRow>(`/api/campaigns/posts/${post.id}/media`, {
                 key: data.key, type: file.type, name: file.name, size: file.size,
             });
