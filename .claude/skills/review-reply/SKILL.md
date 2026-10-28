@@ -63,7 +63,7 @@ Thank you, <Name + honorific>! <One or two lines that answer what they actually 
 
 - In Assam `da`, `baideu` and `ji` are used for anyone, Muslim or not; `bhai`, `bubu` and `sahab` fit Muslim names naturally. Vary between them across replies so they don't all read the same.
 - Gender must be clear before a gendered word (`da`, `bhai`, `baideu`, `bubu`, `didi`, `sahab`). Gender-neutral name (Mukuta, Jyoti), nickname, initials, business name, or any doubt → `Dear <Name>` or the name alone.
-- Never a casual word (`boss`, `bro`) on a formal review, and never joke about a 1–3★ review or the customer's spelling.
+- Casual words (`boss`, `bro`, `dost`) are fine on a joyful 4–5★ review when the customer wrote in that spirit. Never on a formal review, and never joke about a 1–3★ review or tease the customer's spelling.
 - Show the address in the preview table so the owner can change it.
 
 ### Length
@@ -105,6 +105,14 @@ Rotation rules:
 3. Sometimes a product keyword, sometimes a service keyword, sometimes none.
 4. Never claim "authorised dealer"; never promise a product, warranty or installation the review does not support.
 5. One emoji at most. No hashtags, links, prices, or phone numbers unless `rules` gives one.
+
+### Variety without losing quality
+
+- Before writing, read the last 20 live replies (`replied=yes&limit=20`) and don't reuse their opening or closing sentence.
+- Rotate openings: "Thank you, …!", "Dhanyabad, …!", "Many thanks, …", "So happy to read this, …", or start with what they said ("Glad the laptop is working fine, Rupam da!").
+- Rotate closings: "Hope to see you again soon.", "Always here for you.", "Come again anytime.", "Your support means a lot." — or no closing line on a very short reply.
+- Vary length and shape too: some replies one line, some two or three.
+- Quality stays fixed: correct name, answers what they wrote, no invented claims, no broken text (no "Reply:" labels, stray quotes or cut names).
 
 ### Checklist before showing
 
