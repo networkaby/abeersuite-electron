@@ -25,6 +25,7 @@ import { rupeesInWords } from "@/shared/lib/format/numberToWords";
 import { formatAmount } from "@/shared/lib/format/moneyInr";
 import type { ThermalReceiptSample } from "@/shared/components/print/ThermalReceiptPreview";
 import SetDocumentTitle from "@/shared/components/print/SetDocumentTitle";
+import A4FitToScreen from "@/shared/components/print/A4FitToScreen";
 import { A4_PREVIEW_SCOPE_CLASS, inlineA4Styles } from "@/shared/components/print/a4/a4Styles";
 import { DEPOSIT_SLIP_KINDS, fmtINR, JOURNAL_KINDS, MONEY_RECEIPT_KINDS, type A4ChromeProps } from "@/shared/components/print/a4/a4Shared";
 import { A4Footer, A4Header, A4SignOff } from "@/shared/components/print/a4/A4Chrome";
@@ -562,6 +563,7 @@ export default function A4InvoicePreview({
     return (
         <>
             <SetDocumentTitle title={docTitle ?? sample.reference} />
+            <A4FitToScreen />
             <style>{inlineA4Styles("")}</style>
             {toolbar}
             <InvoiceBody template={template} sample={sample} body={body} />
