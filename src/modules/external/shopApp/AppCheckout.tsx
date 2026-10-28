@@ -13,7 +13,7 @@ import { APP, appLoginPath } from "@/modules/external/shopApp/appPaths";
 import { INDIA_STATE_NAMES } from "@/modules/delivery/lib/deliveryMethodConfig";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { parseDigitsInput } from "@/shared/lib/format";
-import { SHOP_APP_HIDE_REWARDS } from "@/shared/lib/device/shopApp";
+import { SHOP_APP_PLAY_REVIEW } from "@/shared/lib/device/shopApp";
 
 const STEPS = ["Address", "Delivery", "Summary"] as const;
 
@@ -363,7 +363,7 @@ function CouponAndPoints({ c }: { c: ReturnType<typeof useShopCheckout> }) {
             {c.couponDiscount > 0 && c.tierPreview?.coupon?.droppedTier && (
                 <p className="text-xs text-muted-foreground">This coupon doesn&apos;t combine with the level discount — the better deal applies.</p>
             )}
-            {!SHOP_APP_HIDE_REWARDS && loyalty && loyalty.balance > 0 && (
+            {!SHOP_APP_PLAY_REVIEW && loyalty && loyalty.balance > 0 && (
                 <label className="flex items-center justify-between gap-3 text-sm">
                     <span>
                         Use my points

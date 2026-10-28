@@ -11,14 +11,14 @@ import { chromeLinkTo } from "@/shared/lib/device/openInChrome";
 import { LEGAL_LINKS } from "@/shared/lib/legal/legalContent";
 import { AppVersionLine } from "@/shared/components/AppUpdateBar";
 import { SHOP_APP_RELEASE } from "@/shared/lib/constants/appVersions";
-import { SHOP_APP_APK, SHOP_APP_HIDE_REWARDS, SHOP_APP_INSTALL, SHOP_APP_PLAY_URL, SHOP_NATIVE_UA } from "@/shared/lib/device/shopApp";
+import { SHOP_APP_APK, SHOP_APP_PLAY_REVIEW, SHOP_APP_INSTALL, SHOP_APP_PLAY_URL, SHOP_NATIVE_UA } from "@/shared/lib/device/shopApp";
 
 const ROW = "flex items-center gap-3 px-4 py-3.5 text-[15px] active:bg-muted";
 const CARD = "overflow-hidden rounded-2xl border border-border/70 bg-background divide-y divide-border/60";
 
 /** Every portal screen has an app screen of the same name: /portal/bills → /m-shop-app/bills. */
 const appHref = (portalHref: string) => `${APP}${portalHref.slice("/portal".length)}`;
-const SCREENS = PORTAL_NAV_ITEMS.filter((i) => i.href !== "/portal" && !(SHOP_APP_HIDE_REWARDS && i.href === "/portal/wallet"));
+const SCREENS = PORTAL_NAV_ITEMS.filter((i) => i.href !== "/portal" && !(SHOP_APP_PLAY_REVIEW && (i.href === "/portal/wallet" || i.href === "/portal/social")));
 /** The four most used, as tiles on top (as in Flipkart); the rest as a list. */
 const TILES = ["/portal/orders", "/portal/bills", "/portal/repairs", "/portal/wishlist"];
 

@@ -36,12 +36,26 @@ export const SHOP_APP_PLAY_URL = `https://play.google.com/store/apps/details?id=
  *  shows "item not found" to everyone outside the closed test. */
 export const SHOP_APP_ON_PLAY = false;
 
-/** Reward points and My Wallet stay out of the app for now: Google Play counts
- *  "rewards, points" as a financial feature, which only an Organization account
- *  may publish (rejected 2026-10-27). Turn back on once the account is converted
- *  with the D-U-N-S number, together with the Play "Financial features" answer.
- *  The website portal keeps both. */
-export const SHOP_APP_HIDE_REWARDS = true;
+/**
+ * PLAY REVIEW MODE — anything a Google Play reviewer could read as a financial
+ * or social feature is kept out of the APP while it is under review. Play
+ * rejected the first submission on 2026-10-27: "rewards, points" counts as a
+ * financial feature, which only an Organization account may publish, and ours
+ * is Personal until the D-U-N-S number arrives.
+ *
+ * Hidden while true (the website portal keeps every one of them):
+ *   - My Wallet (points + gift cards): off the Account list; /m-shop-app/wallet → Account
+ *   - "Use my points" at checkout (AppCheckout.tsx)
+ *   - My Bills: only the Bills tab; Ledger, Outstanding, "Balance due" and Pay by UPI go
+ *   - Social: off the Account list; /m-shop-app/social/* → Account
+ *
+ * UNDO — once the app is approved (and, for points, the account is an Organization):
+ *   1. Set this to false and deploy d_shop. Every spot above comes back; grep
+ *      SHOP_APP_PLAY_REVIEW to see them.
+ *   2. In Play Console → App content → Financial features, tick "Rewards, points…"
+ *      again (only after the Organization conversion) and send for review.
+ */
+export const SHOP_APP_PLAY_REVIEW = true;
 
 /** Status bar / splash colours — same page colours as the staff app. */
 export const SHOP_APP_THEME = { light: "#eff4fb", dark: "#101725" } as const;

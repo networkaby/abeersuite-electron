@@ -10,6 +10,7 @@ import { AMBER, GREEN, balanceClass, balanceText, settlementChip, upiDueLink } f
 import { indianFiscalYearStart } from "@/modules/accountancy/lib/period";
 import { businessTodayIso, endOfDayUtc, formatDate, startOfDayUtc, toDateOnlyUtc } from "@/shared/lib/format/formatDate";
 import { formatInr } from "@/shared/lib/format/moneyInr";
+import { SHOP_APP_PLAY_REVIEW } from "@/shared/lib/device/shopApp";
 
 type Tab = "bills" | "ledger" | "outstanding";
 const TABS: { id: Tab; label: string }[] = [
@@ -17,6 +18,8 @@ const TABS: { id: Tab; label: string }[] = [
     { id: "ledger", label: "Ledger" },
     { id: "outstanding", label: "Outstanding" },
 ];
+/** Play review mode shows the Bills tab alone (see SHOP_APP_PLAY_REVIEW). */
+const SHOWN_TABS = SHOP_APP_PLAY_REVIEW ? TABS.filter((t) => t.id === "bills") : TABS;
 const PAGE = 50;
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -32,7 +35,7 @@ export default async function CustomerAppBillsPage({
     searchParams: Promise<{ tab?: string; from?: string; to?: string; n?: string }>;
 }) {
     const sp = await searchParams;
-    const tab: Tab = TABS.some((t) => t.id === sp.tab) ? (sp.tab as Tab) : "bills";
+    const tab: Tab = SHOWN_TABS.some((t) => t.id === sp.tab) ? (sp.tab as Tab) : "bills";
     const { customerId, active } = await requireAppCustomerProfile(`${APP}/bills?tab=${tab}`);
     const todayIso = businessTodayIso();
     const fromIso = sp.from && ISO.test(sp.from) ? sp.from : toDateOnlyUtc(indianFiscalYearStart());
@@ -56,25 +59,31 @@ export default async function CustomerAppBillsPage({
         <>
             <MobileHeader title="My bills" back={`${APP}/account`} actions={<PortalProfileSwitch className="mr-1" />} />
 
-            <nav className="sticky top-[var(--m-header)] z-10 grid grid-cols-3 border-b bg-background text-sm">
-                {TABS.map((t) => (
-                    <Link
-                        key={t.id}
-                        href={href({ tab: t.id })}
-                        replace
-                        className={`-mb-px border-b-2 py-3 text-center ${t.id === tab ? "border-primary font-semibold text-primary" : "border-transparent text-muted-foreground"}`}
-                    >
-                        {t.label}
-                    </Link>
-                ))}
-            </nav>
+            {SHOWN_TABS.length > 1 && (
+                <nav className="sticky top-[var(--m-header)] z-10 grid grid-cols-3 border-b bg-background text-sm">
+                    {SHOWN_TABS.map((t) => (
+                        <Link
+                            key={t.id}
+                            href={href({ tab: t.id })}
+                            replace
+                            className={`-mb-px border-b-2 py-3 text-center ${t.id === tab ? "border-primary font-semibold text-primary" : "border-transparent text-muted-foreground"}`}
+                        >
+                            {t.label}
+                        </Link>
+                    ))}
+                </nav>
+            )}
 
             {statement && (
                 <>
                     <section className="flex items-end justify-between gap-3 bg-background px-4 py-4">
                         <div>
-                            <p className="text-xs text-muted-foreground">{statement.closing < -0.005 ? "Advance with us" : "Balance due"}</p>
-                            <p className={`text-2xl font-bold tabular-nums ${balanceClass(statement.closing)}`}>{formatInr(Math.abs(statement.closing))}</p>
+                            {!SHOP_APP_PLAY_REVIEW && (
+                                <>
+                                    <p className="text-xs text-muted-foreground">{statement.closing < -0.005 ? "Advance with us" : "Balance due"}</p>
+                                    <p className={`text-2xl font-bold tabular-nums ${balanceClass(statement.closing)}`}>{formatInr(Math.abs(statement.closing))}</p>
+                                </>
+                            )}
                             <p className="text-xs text-muted-foreground">
                                 {bills.length} {bills.length === 1 ? "bill" : "bills"} · bought {formatInr(bills.reduce((s, r) => s + r.total, 0))}
                             </p>
