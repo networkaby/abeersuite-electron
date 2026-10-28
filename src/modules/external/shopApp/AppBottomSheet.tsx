@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useSyncExternalStore, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 /**
@@ -8,6 +9,10 @@ import { X } from "lucide-react";
  * other pickers, the way shopping apps show them. Tap the dim area, ✕ or the
  * phone's Escape to close. `footer` stays pinned under the scrolling body
  * (Apply / Clear).
+ *
+ * Drawn on the page itself (a portal into <body>), so a sheet opened from the
+ * header — Download / Share on a bill — still covers the screen: the header's
+ * blur makes it the box a `fixed` child is placed in.
  */
 export default function AppBottomSheet({
     open,
@@ -37,7 +42,11 @@ export default function AppBottomSheet({
         };
     }, [open, onClose]);
 
-    return (
+    // The portal needs <body>, which the server render has not got.
+    const mounted = useSyncExternalStore(noSubscribe, () => true, () => false);
+    if (!mounted) return null;
+
+    return createPortal(
         <div className={`fixed inset-0 z-50 ${open ? "" : "pointer-events-none"}`} aria-hidden={!open}>
             <div className={`absolute inset-0 bg-black/40 transition-opacity ${open ? "opacity-100" : "opacity-0"}`} onClick={onClose} />
             <div
@@ -57,6 +66,9 @@ export default function AppBottomSheet({
                 <div className="flex-1 overflow-y-auto">{children}</div>
                 {footer && <div className="border-t p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">{footer}</div>}
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }
+
+const noSubscribe = () => () => {};

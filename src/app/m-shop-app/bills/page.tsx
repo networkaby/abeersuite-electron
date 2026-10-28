@@ -3,6 +3,7 @@ import { ChevronRight } from "lucide-react";
 import MobileHeader from "@/modules/mobile/components/MobileHeader";
 import PortalProfileSwitch from "@/modules/external/portal/PortalProfileSwitch";
 import AppPeriodPicker from "@/modules/external/shopApp/AppPeriodPicker";
+import AppBillRow from "@/modules/external/shopApp/AppBillRow";
 import { requireAppCustomerProfile } from "@/modules/external/shopApp/appSession";
 import { APP } from "@/modules/external/shopApp/appPaths";
 import { loadPortalOutstanding, loadPortalStatement, type PortalStatementRow } from "@/modules/external/portal/portalStatement";
@@ -26,8 +27,8 @@ const ISO = /^\d{4}-\d{2}-\d{2}$/;
 /**
  * My Bills in the app — every counter and shop bill, the ledger with its running
  * balance, and what is still pending, for the profile in use. Same numbers as
- * the portal (portalStatement.ts, cached a minute); a row opens the bill or the
- * receipt itself.
+ * the portal (portalStatement.ts, cached a minute). A bill opens in place on tap
+ * (AppBillRow); a receipt row opens the receipt itself.
  */
 export default async function CustomerAppBillsPage({
     searchParams,
@@ -179,8 +180,8 @@ function Wrap({ uvId, children }: { uvId: number | null; children: React.ReactNo
 
 function Row({ row: r, ledger }: { row: PortalStatementRow; ledger: boolean }) {
     const chip = settlementChip(r);
-    return (
-        <Wrap uvId={r.linkable ? r.uvId : null}>
+    const summary = (
+        <>
             <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{r.reference || r.label}</span>
                 <span className="block text-xs text-muted-foreground">
@@ -203,6 +204,9 @@ function Row({ row: r, ledger }: { row: PortalStatementRow; ledger: boolean }) {
                     </>
                 )}
             </span>
-        </Wrap>
+        </>
     );
+    // A bill opens in place (items, tax, total, Download / Share); the rest opens its page.
+    if (!ledger && r.kind === "bill" && r.linkable && r.uvId != null) return <AppBillRow uvId={r.uvId} summary={summary} />;
+    return <Wrap uvId={r.linkable ? r.uvId : null}>{summary}</Wrap>;
 }

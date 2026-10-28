@@ -96,7 +96,8 @@ export function isShopNativeRequest(userAgent: string, devCookie: string | undef
 }
 
 /** A website address that has its own screen in the app (inside the app only):
- *  an order page, a customer message's short link, the Social pages. Null for the rest. */
+ *  an order page, a customer message's short link, a bill or receipt, the Social
+ *  pages. Null for the rest. */
 export function appScreenFor(pathname: string): string | null {
     // The "Open in app" button: in a browser it offers the download, in the app it opens home.
     if (pathname === SHOP_APP_INSTALL) return SHOP_NATIVE_HOME;
@@ -104,6 +105,12 @@ export function appScreenFor(pathname: string): string | null {
     if (order) return `${SHOP_NATIVE_HOME}/order/${order[1]}`;
     const short = pathname.match(/^\/portal\/b\/([^/]+)$/);
     if (short) return `${SHOP_NATIVE_HOME}/b/${short[1]}`;
+    // A bill or receipt link someone copied from the app or the portal — without
+    // this the website page opens inside the app with no header and no way back.
+    const bill = pathname.match(/^\/portal\/orders\/(\d+)\/bill$/);
+    if (bill) return `${SHOP_NATIVE_HOME}/bill/${bill[1]}`;
+    const receipt = pathname.match(/^\/portal\/receipts\/(\d+)$/);
+    if (receipt) return `${SHOP_NATIVE_HOME}/receipt/${receipt[1]}`;
     // Social links inside the shared Social views (a friend's profile, back to Social).
     const social = pathname.match(/^\/portal\/social(\/view\/(user|person)\/\d+)?$/);
     if (social) return `${SHOP_NATIVE_HOME}/social${social[1] ?? ""}`;

@@ -19,6 +19,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NsPushPlugin.class);
         registerPlugin(NsGooglePlugin.class);
         registerPlugin(NsUpdatePlugin.class);
+        registerPlugin(NsFilePlugin.class);
         super.onCreate(savedInstanceState);
         markPlayBuild();
         NsMessagingService.ensureChannel(this);

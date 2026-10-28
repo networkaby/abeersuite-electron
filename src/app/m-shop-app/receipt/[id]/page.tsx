@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import MobileHeader from "@/modules/mobile/components/MobileHeader";
 import ReceiptPreview from "@/shared/components/print/ReceiptPreview";
 import AppDocFit from "@/modules/external/shopApp/AppDocFit";
-import AppShareLink from "@/modules/external/shopApp/AppShareLink";
+import AppDocActions from "@/modules/external/shopApp/AppDocActions";
 import { ownsReceipt } from "@/modules/external/portal/portalDocAccess";
 import { requireAppCustomer } from "@/modules/external/shopApp/appSession";
 import { APP } from "@/modules/external/shopApp/appPaths";
@@ -20,7 +20,7 @@ export default async function CustomerAppReceiptPage({ params }: { params: Promi
     const template = await getVoucherTemplate(data.kind);
     return (
         <>
-            <MobileHeader title={data.docTitle ?? "Receipt"} back={`${APP}/bills`} actions={<AppShareLink path={`/portal/receipts/${uvId}`} title="Receipt" />} />
+            <MobileHeader title={data.docTitle ?? "Receipt"} back={`${APP}/bills`} actions={<AppDocActions fileBase={data.docTitle || `Receipt ${uvId}`} title="Receipt" />} />
             <AppDocFit>
                 <ReceiptPreview format="A4" template={template} sample={data.sample} previewMode previewFill />
             </AppDocFit>

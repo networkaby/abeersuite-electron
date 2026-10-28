@@ -1,7 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { auth } from "@/auth";
-import { ownedBillPrintKind } from "@/modules/external/portal/portalDocAccess";
-import InvoiceReceipt from "@/shared/components/print/InvoiceReceipt";
+import { ownedBill } from "@/modules/external/portal/portalDocAccess";
+import CustomerBillSheet from "@/modules/external/portal/CustomerBillSheet";
 
 // Customer-facing bill download — replaces the old direct link to
 // `/receipt/invoice/[id]` (a staff print surface that was unauthenticated
@@ -11,7 +11,7 @@ import InvoiceReceipt from "@/shared/components/print/InvoiceReceipt";
 // account, or any company account linked to them — the same set
 // `/portal/orders` uses to list their orders) before it renders.
 //
-// Always the customer's own online invoice: A4, ONLINE_INVOICE kind, no
+// A4, printed as its own kind the way the Day Book prints it (CustomerBillSheet), no
 // thermal/autoprint controls — those are staff-only knobs on
 // `/receipt/invoice/[id]`, which this page does not expose.
 export default async function PortalInvoicePage({
@@ -31,15 +31,8 @@ export default async function PortalInvoicePage({
     if (!Number.isFinite(detailId)) notFound();
 
     // Ownership rule: portalDocAccess.ts (shared with the customer app).
-    const printKind = await ownedBillPrintKind(customerId, detailId);
-    if (!printKind) notFound();
+    const bill = await ownedBill(customerId, detailId);
+    if (!bill) notFound();
 
-    return (
-        <InvoiceReceipt
-            id={id}
-            kindParam={printKind}
-            paper="A4"
-            autoprint="0"
-        />
-    );
+    return <CustomerBillSheet detailId={detailId} kind={bill.kind} />;
 }

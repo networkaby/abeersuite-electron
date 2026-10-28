@@ -121,6 +121,7 @@
     "dotenv": "^17.4.2",
     "electron-updater": "^6.8.9",
     "firebase": "^12.16.0",
+    "html-to-image": "1.11.13",
     "jose": "^6.2.2",
     "jsbarcode": "^3.12.3",
     "lucide-react": "^1.8.0",

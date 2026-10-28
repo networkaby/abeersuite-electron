@@ -1,30 +1,26 @@
 import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { getPortalAccountOptions } from "@/shared/lib/auth/portalAccountContext";
+import { voucherDisplayNo } from "@/shared/lib/accountancy/uvNo";
 
 // Which customer documents a signed-in customer may open — one copy for the
 // portal's bill / receipt pages and the customer app's.
 
-// A sale prints as the customer's online invoice; a return, order or estimate
-// (reached from its WhatsApp / app message) prints with its own template.
-const OWN_TEMPLATE = new Set(["SALE_RETURN", "SALES_ORDER", "POS_ORDER", "ESTIMATE", "POS_ESTIMATE"]);
-function customerPrintKind(type: string | undefined): string {
-    return type && OWN_TEMPLATE.has(type) ? type : "ONLINE_INVOICE";
-}
-
 /**
- * A bill (VoucherDetail id) the customer owns, with the print kind it opens in —
- * or null. Owned when the bill is on one of the customer's ledgers, or — a cash
+ * A bill (VoucherDetail id) the customer owns — its voucher kind (POS, SALE,
+ * SALE_RETURN…; it prints as that kind, the same as in the Day Book) and its
+ * number — or null. Owned when the bill is on one of the customer's ledgers, or — a cash
  * bill at the counter that never touched a ledger — when it names the person or
  * one of their companies as the party (the same rule My Bills lists by).
  */
-export async function ownedBillPrintKind(customerId: number, detailId: number): Promise<string | null> {
+export async function ownedBill(customerId: number, detailId: number): Promise<{ kind: string; reference: string } | null> {
     const voucherRow = await prisma.voucherDetail.findUnique({
         where: { id: detailId },
         select: {
             partyType: true,
             partyId: true,
-            universalVoucher: { select: { partyAccountId: true, type: true } },
+            universalVoucherId: true,
+            universalVoucher: { select: { partyAccountId: true, type: true, voucherNo: true } },
         },
     });
     if (!voucherRow) return null;
@@ -36,7 +32,11 @@ export async function ownedBillPrintKind(customerId: number, detailId: number): 
             (o.accountType === "personal" && voucherRow.partyType === "customer" && voucherRow.partyId === customerId) ||
             (o.companyId != null && voucherRow.partyType === "company" && voucherRow.partyId === o.companyId)
     );
-    return owns ? customerPrintKind(voucherRow.universalVoucher?.type) : null;
+    if (!owns) return null;
+    return {
+        kind: voucherRow.universalVoucher?.type ?? "SALE",
+        reference: voucherDisplayNo(voucherRow.universalVoucher?.voucherNo, voucherRow.universalVoucherId),
+    };
 }
 
 /** A posted receipt / refund (UniversalVoucher id) received on one of the customer's ledgers. */
