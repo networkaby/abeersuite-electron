@@ -15,7 +15,7 @@ import {
     setWaUserBlocked,
     waMediaTypeFor,
 } from "@/shared/lib/whatsapp/metaTemplates";
-import { isR2Configured, presignR2, putR2 } from "@/shared/lib/storage/r2";
+import { deleteR2, isR2Configured, presignR2, putR2 } from "@/shared/lib/storage/r2";
 import {
     R2_MESSAGES_BUCKET,
     WA_KEEP_INBOUND_MAX_BYTES,
@@ -693,14 +693,29 @@ export function mediaLink(key: string | null, fileName?: string | null, download
     });
 }
 
+/** Is this number spam? One flag per NUMBER across calls and messages: a mark
+ *  on either side counts, so a new call or message arrives already hidden. */
+export async function isSpamNumber(phone: string): Promise<boolean> {
+    const [msg, call] = await Promise.all([
+        prisma.message.findFirst({ where: { phone, spam: true }, select: { id: true } }),
+        prisma.call.findFirst({ where: { phone, spam: true }, select: { id: true } }),
+    ]);
+    return !!(msg || call);
+}
+
 /**
- * Mark / clear a number as spam: hide its messages here, and block / unblock it
- * at Meta on every number of ours it has written to. A block Meta refuses (no
- * message in the last 24 hours) is retried when that number next writes in.
- * Returns how many of our numbers took the change, and Meta's first refusal.
+ * Mark / clear a number as spam — the one switch behind the Call Log, Messages
+ * and customer profile buttons. Marks every call and message of the number,
+ * blocks / unblocks it at Meta on every number of ours it has written to, and
+ * on marking deletes its kept files from R2 for good (Not Spam brings the
+ * messages back, not the files). A block Meta refuses (no message in the last
+ * 24 hours) is retried when that number next writes in.
  */
-export async function setNumberSpam(phone: string, spam: boolean): Promise<{ meta: number; metaError: string | null }> {
-    await prisma.message.updateMany({ where: { phone }, data: { spam } });
+export async function setNumberSpam(phone: string, spam: boolean): Promise<{ meta: number; metaError: string | null; filesDeleted: number }> {
+    await prisma.$transaction([
+        prisma.message.updateMany({ where: { phone }, data: { spam } }),
+        prisma.call.updateMany({ where: { phone }, data: { spam } }),
+    ]);
     const numbers = await prisma.message.findMany({
         where: { phone, direction: "IN", businessNumberId: { not: null } },
         distinct: ["businessNumberId"],
@@ -716,7 +731,29 @@ export async function setNumberSpam(phone: string, spam: boolean): Promise<{ met
             metaError ??= e instanceof Error ? e.message : String(e);
         }
     }
-    return { meta, metaError };
+    const filesDeleted = spam ? await deleteSpamFiles(phone) : 0;
+    return { meta, metaError, filesDeleted };
+}
+
+/** Delete a spam number's inbound files from R2 and clear the links; the
+ *  message line itself ("[image]") stays. A file R2 refuses is left linked. */
+export async function deleteSpamFiles(phone: string): Promise<number> {
+    if (!isR2Configured()) return 0;
+    const rows = await prisma.message.findMany({
+        where: { phone, spam: true, direction: "IN", mediaKey: { not: null } },
+        select: { id: true, mediaKey: true },
+    });
+    const done: number[] = [];
+    for (const r of rows) {
+        try {
+            await deleteR2(R2_MESSAGES_BUCKET, r.mediaKey!);
+            done.push(r.id);
+        } catch (e) {
+            console.error("[messages] spam file delete failed", r.mediaKey, e);
+        }
+    }
+    if (done.length) await prisma.message.updateMany({ where: { id: { in: done } }, data: { mediaKey: null } });
+    return done.length;
 }
 
 /** Store the customer messages in one webhook change. Duplicates (Meta retries) are skipped. */
@@ -736,9 +773,7 @@ export async function ingestInbound(
         // A supplier is blocked both ways: we never send them a bill, and what
         // they send is dropped — not stored, no inbox, no push, no auto-reply.
         if (await isSupplierAccount(owner?.accountId)) continue;
-        const spam = phone
-            ? !!(await prisma.message.findFirst({ where: { phone, spam: true }, select: { id: true } }))
-            : false;
+        const spam = phone ? await isSpamNumber(phone) : false;
 
         // A reply to one of our messages: carry its bill (and ticket) over.
         const repliedTo = m.context?.id

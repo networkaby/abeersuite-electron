@@ -39,7 +39,7 @@ function enc(s: string, keepSlash = false): string {
 export function presignR2(args: {
     bucket: string;
     key: string;
-    method: "GET" | "PUT";
+    method: "GET" | "PUT" | "DELETE";
     expiresSec?: number;
     contentType?: string;
     /** GET only: ask the browser to download under this name. */
@@ -93,4 +93,10 @@ export async function getR2Text(bucket: string, key: string): Promise<string | n
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`R2 read failed (${res.status}): ${(await res.text().catch(() => "")).slice(0, 200)}`);
     return res.text();
+}
+
+/** Server-side delete of one object. A missing object counts as deleted. */
+export async function deleteR2(bucket: string, key: string): Promise<void> {
+    const res = await fetch(presignR2({ bucket, key, method: "DELETE", expiresSec: 300 }), { method: "DELETE", signal: AbortSignal.timeout(10_000) });
+    if (!res.ok && res.status !== 404) throw new Error(`R2 delete failed (${res.status}): ${(await res.text().catch(() => "")).slice(0, 200)}`);
 }

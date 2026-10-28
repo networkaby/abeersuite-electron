@@ -4,6 +4,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { requireAuth } from "@/shared/lib/auth/permissions";
 import { validateRequest, handleApiError, parseIdParam } from "@/shared/lib/api";
 import { phoneMatchKey, phoneKeyVariants, readCallerNumber, normalizeDialedNumber } from "@/shared/lib/format";
+import { setNumberSpam } from "@/modules/message/lib/customerMessages";
 
 // PATCH /api/calls/[id] — Call Log triage actions. Open to any staff (matches
 // /api/help, /api/deals — the write itself only needs an authenticated staff
@@ -114,11 +115,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             await prisma.call.updateMany({ where: { id: { in: targetIds } }, data: { ticketId: data.ticketId } });
         }
 
-        // Spam toggles by number. If the call has no phone key (internal/unknown),
-        // fall back to flagging just this row.
+        // Spam toggles by number — calls, messages and the Meta block together
+        // (setNumberSpam). No phone key (internal/unknown): just this row.
         if (data.spam !== undefined) {
             if (call.phone) {
-                await prisma.call.updateMany({ where: { phone: call.phone }, data: { spam: data.spam } });
+                await setNumberSpam(call.phone, data.spam);
             } else {
                 await prisma.call.update({ where: { id }, data: { spam: data.spam } });
             }

@@ -8,7 +8,7 @@ import {
 } from "@/shared/lib/format";
 import { isMissedCall, MISSED_CALL_WHERE, parseMissedMode } from "@/shared/lib/calls";
 import { counterPopupScope, customerKey, customerSeenSince, lastContactByPhone } from "@/shared/lib/calls/followUp";
-import { ownersByPhone } from "@/modules/message/lib/customerMessages";
+import { isSpamNumber, ownersByPhone } from "@/modules/message/lib/customerMessages";
 
 import { publishChangeServer } from "@/shared/lib/realtime/serverPublish";
 import { Prisma } from "@/generated/prisma/client";
@@ -189,15 +189,9 @@ export async function POST(req: Request) {
 
         const createData = mapPayloadToCall(data, occurredAt, safeReceivedAt);
 
-        // Spam is a property of the NUMBER: inherit a prior spam flag so calls from
-        // an already-flagged number arrive pre-flagged (kept, hidden from CRM).
-        if (createData.phone) {
-            const flagged = await prisma.call.findFirst({
-                where: { phone: createData.phone, spam: true },
-                select: { id: true },
-            });
-            if (flagged) createData.spam = true;
-        }
+        // Spam is a property of the NUMBER (calls and messages alike): a number
+        // flagged anywhere arrives pre-flagged (kept, hidden from CRM).
+        if (createData.phone && (await isSpamNumber(createData.phone))) createData.spam = true;
 
         try {
             const created = await prisma.call.create({ data: createData, select: { id: true } });
