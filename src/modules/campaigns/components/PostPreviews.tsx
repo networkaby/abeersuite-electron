@@ -21,6 +21,8 @@ export type PreviewItem = {
   src: string | null;
   /** How many photos go out — more than one shows the carousel dots. */
   count: number;
+  /** Every photo, in order, where the app shows them together (Facebook's grid). */
+  srcs?: string[];
   text: string;
   /** datetime-local string, or "" for a draft. */
   time: string;
@@ -141,12 +143,46 @@ function Facebook({ it }: { it: PreviewItem }) {
         <Ellipsis className="h-4 w-4 text-neutral-500" />
       </div>
       <Clamp text={it.text} lines={3} more="See more" className="px-3 py-2" />
-      {it.src && <Photo it={it} />}
+      {(it.srcs?.length ?? 0) > 1 ? <FacebookGrid srcs={it.srcs!} /> : it.src && <Photo it={it} />}
       <div className="flex justify-around border-t py-2 text-xs font-medium text-neutral-600">
         <span className="flex items-center gap-1"><ThumbsUp className="h-4 w-4" /> Like</span>
         <span className="flex items-center gap-1"><MessageCircle className="h-4 w-4" /> Comment</span>
         <span className="flex items-center gap-1"><Share2 className="h-4 w-4" /> Share</span>
       </div>
+    </div>
+  );
+}
+
+/**
+ * How the Facebook feed lays out several photos: 2 side by side, 3 as one
+ * wide on top and two below, 4 as a 2×2 square, 5 or more as two on top and
+ * three below with "+N" on the last. Facebook also leans on each photo's own
+ * shape, so the app can differ a little; the order and the count match.
+ */
+function FacebookGrid({ srcs }: { srcs: string[] }) {
+  const n = srcs.length;
+  const cell = (src: string, i: number, className = "", more = 0) => (
+    <div key={`${src}-${i}`} className={`relative overflow-hidden bg-neutral-200 ${className}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- a local or signed preview */}
+      <img src={src} alt="" className="size-full object-cover" />
+      {more > 0 && <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-2xl font-semibold text-white">+{more}</span>}
+    </div>
+  );
+  if (n === 2) return <div className="grid aspect-square grid-cols-2 gap-0.5">{srcs.map((s, i) => cell(s, i))}</div>;
+  if (n === 3)
+    return (
+      <div className="grid aspect-square grid-cols-2 grid-rows-2 gap-0.5">
+        {cell(srcs[0], 0, "col-span-2")}
+        {cell(srcs[1], 1)}
+        {cell(srcs[2], 2)}
+      </div>
+    );
+  if (n === 4) return <div className="grid aspect-square grid-cols-2 grid-rows-2 gap-0.5">{srcs.map((s, i) => cell(s, i))}</div>;
+  return (
+    <div className="grid aspect-square grid-cols-6 grid-rows-2 gap-0.5">
+      {cell(srcs[0], 0, "col-span-3")}
+      {cell(srcs[1], 1, "col-span-3")}
+      {srcs.slice(2, 5).map((s, i) => cell(s, i + 2, "col-span-2", i === 2 ? n - 5 : 0))}
     </div>
   );
 }

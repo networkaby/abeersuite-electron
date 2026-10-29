@@ -279,6 +279,12 @@ export default function PostPlatformCards({
                     : previewSrc) ??
                 null),
             count: post ? picked.length : preShown.length || 1,
+            srcs: post
+              ? picked.flatMap((k) => {
+                  const u = post.photoLinks?.[k]?.url;
+                  return u ? [u] : [];
+                })
+              : preOwn.map((f) => pendingUrls[pending.indexOf(f)]).filter(Boolean),
             text,
             time,
             button:
