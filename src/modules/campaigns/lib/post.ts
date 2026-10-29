@@ -67,11 +67,27 @@ export const POST_CHANNELS = [
     },
     {
         value: "INSTAGRAM",
-        label: "Instagram",
+        label: "Instagram feed",
         short: "IG",
         mode: "AUTO",
         ready: true,
-        hint: "Posts by itself through the Facebook connection on Campaigns → Channels (needs a JPG photo or an MP4). By hand: Share opens Instagram.",
+        hint: "1 JPG photo, or 2–10 photos / MP4s as a swipeable carousel. Posts by itself through the Facebook connection. By hand: Share opens Instagram.",
+    },
+    {
+        value: "INSTAGRAM_STORY",
+        label: "Instagram story",
+        short: "IG story",
+        mode: "AUTO",
+        ready: true,
+        hint: "Up to 10 upright JPG photos or MP4s, each its own story in order, gone after 24 hours; no caption. Posts by itself through the Facebook connection.",
+    },
+    {
+        value: "INSTAGRAM_REEL",
+        label: "Instagram reel",
+        short: "IG reel",
+        mode: "AUTO",
+        ready: true,
+        hint: "One upright MP4 with a caption; also shown on the profile grid. Posts by itself through the Facebook connection.",
     },
 ] as const;
 
@@ -171,9 +187,26 @@ export const INSTAGRAM_URL = "https://www.instagram.com/";
  * needs a photo or video (no text-only post), and its API takes a JPG photo
  * (no PNG / WebP) or an MP4, which goes up as a Reel.
  */
-export function instagramAutoBlock(p: { mediaType: string | null }): string | null {
-    if (!p.mediaType) return "Instagram needs a photo or video — add one, or share by hand.";
-    if (p.mediaType !== "image/jpeg" && p.mediaType !== "video/mp4") return "Instagram takes a JPG photo or an MP4 here — share a PNG or WebP by hand, or replace it.";
+export function instagramAutoBlock(p: { mediaType: string | null; mediaSize?: number | null; photos?: { type: string; size: number }[]; caption?: string }): string | null {
+    const items = p.photos?.length ? p.photos : p.mediaType ? [{ type: p.mediaType, size: p.mediaSize ?? 0 }] : [];
+    if (!items.length) return "Instagram needs a photo or video — add one, or share by hand.";
+    if (items.some((f) => f.type !== "image/jpeg" && f.type !== "video/mp4")) return "Instagram takes JPG photos or MP4s here — Fit or Adjust makes a JPG; share a PNG or WebP by hand.";
+    if (p.caption && hashtagCount(p.caption) > INSTAGRAM_HASHTAGS_MAX) return `Instagram allows ${INSTAGRAM_HASHTAGS_MAX} hashtags at most — this caption has ${hashtagCount(p.caption)}.`;
+    return null;
+}
+
+/** Instagram story: each item a JPG or MP4. */
+export function instagramStoryBlock(p: { mediaType: string | null; mediaSize?: number | null; photos?: { type: string; size: number }[] }): string | null {
+    const items = p.photos?.length ? p.photos : p.mediaType ? [{ type: p.mediaType, size: p.mediaSize ?? 0 }] : [];
+    if (!items.length) return "A story needs a photo or a video.";
+    if (items.some((f) => f.type !== "image/jpeg" && f.type !== "video/mp4")) return "An Instagram story takes JPG photos or MP4s — Fit or Adjust makes a JPG.";
+    return null;
+}
+
+/** Instagram reel: one MP4, caption within the hashtag cap. */
+export function instagramReelBlock(p: { mediaType: string | null; caption?: string }): string | null {
+    if (p.mediaType !== "video/mp4") return "A reel needs one MP4 video — upload it on the reel's card.";
+    if (p.caption && hashtagCount(p.caption) > INSTAGRAM_HASHTAGS_MAX) return `Instagram allows ${INSTAGRAM_HASHTAGS_MAX} hashtags at most — this caption has ${hashtagCount(p.caption)}.`;
     return null;
 }
 
@@ -193,6 +226,8 @@ export const CHANNEL_SPECS: Record<PostChannel, { textMax: number; photosMax: nu
     FACEBOOK_STORY: { textMax: 0, photosMax: 10, ratio: [9, 16], ratioLabel: "upright 9:16" },
     FACEBOOK_REEL: { textMax: 2200, photosMax: 1, ratio: [9, 16], ratioLabel: "upright 9:16 video" },
     INSTAGRAM: { textMax: 2200, photosMax: 10, ratio: [4, 5], ratioLabel: "portrait 4:5" },
+    INSTAGRAM_STORY: { textMax: 0, photosMax: 10, ratio: [9, 16], ratioLabel: "upright 9:16" },
+    INSTAGRAM_REEL: { textMax: 2200, photosMax: 1, ratio: [9, 16], ratioLabel: "upright 9:16 video" },
 };
 
 /**
@@ -200,7 +235,7 @@ export const CHANNEL_SPECS: Record<PostChannel, { textMax: number; photosMax: nu
  * media"): Google posts photos only (our sender), a reel is one video, the
  * rest take photos or videos. Pick lists, Upload, defaults and previews follow it.
  */
-export const CHANNEL_MEDIA: Record<string, "photo" | "video" | "any"> = { GOOGLE_BUSINESS: "photo", FACEBOOK_REEL: "video" };
+export const CHANNEL_MEDIA: Record<string, "photo" | "video" | "any"> = { GOOGLE_BUSINESS: "photo", FACEBOOK_REEL: "video", INSTAGRAM_REEL: "video" };
 export const takesMedia = (channel: string, type: string | null | undefined) => {
     const kind = CHANNEL_MEDIA[channel] ?? "any";
     if (!type) return false;
@@ -217,7 +252,26 @@ export const mediaNoun = (channel: string, many = false) => {
  * Channels whose text gets the post's hashtags under it (owner, 2026-10-29).
  * Google treats them as spam and WhatsApp has no use for them.
  */
-export const HASHTAG_CHANNELS: readonly string[] = ["INSTAGRAM", "FACEBOOK", "FACEBOOK_REEL"];
+export const HASHTAG_CHANNELS: readonly string[] = ["INSTAGRAM", "INSTAGRAM_REEL", "FACEBOOK", "FACEBOOK_REEL"];
+
+/** Instagram allows at most this many hashtags in one caption. */
+export const INSTAGRAM_HASHTAGS_MAX = 30;
+export const hashtagCount = (text: string) => text.match(/#[^\s#]+/g)?.length ?? 0;
+
+const INSTAGRAM_CHANNELS = ["INSTAGRAM", "INSTAGRAM_STORY", "INSTAGRAM_REEL"];
+
+/**
+ * The words that really go out on a channel, link included the way that
+ * channel takes it: Google none (its button carries it), Instagram "Link in
+ * bio" (links are not clickable there), a story no text at all, the rest the
+ * shop address. Senders, Share and the previews all use it.
+ */
+export function channelText(channel: string, caption: string, link: string | null, shopSite: string): string {
+    if (CHANNEL_SPECS[channel as PostChannel]?.textMax === 0) return "";
+    if (channel === "GOOGLE_BUSINESS" || !link) return caption;
+    if (INSTAGRAM_CHANNELS.includes(channel)) return `${caption}\n\n🔗 Link in bio`;
+    return `${caption}\n\n${shopSite}${link}`;
+}
 
 /** A channel's text with the hashtags under it, where that channel takes them. */
 export function withHashtags(text: string, hashtags: string | null | undefined, channel: string): string {

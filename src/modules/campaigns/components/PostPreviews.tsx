@@ -108,9 +108,13 @@ function Frame({ it }: { it: PreviewItem }) {
     case "WA_STATUS":
       return <WaStatus it={it} />;
     case "FACEBOOK_STORY":
-      return <FacebookStory it={it} />;
+      return <Story it={it} />;
     case "FACEBOOK_REEL":
-      return <FacebookReel it={it} />;
+      return <Reel it={it} />;
+    case "INSTAGRAM_STORY":
+      return <Story it={it} ig />;
+    case "INSTAGRAM_REEL":
+      return <Reel it={it} ig />;
     default:
       return <WaChannel it={it} />;
   }
@@ -240,7 +244,7 @@ function Instagram({ it }: { it: PreviewItem }) {
         <p className="flex-1 truncate font-semibold">{HANDLE}</p>
         <Ellipsis className="h-4 w-4" />
       </div>
-      <Photo it={it} />
+      <Carousel it={it} />
       <div className="flex items-center gap-3 px-3 pt-2.5">
         <Heart className="h-5 w-5" />
         <MessageCircle className="h-5 w-5" />
@@ -323,7 +327,7 @@ const STORY_MS = 5000;
  * bar at the bottom. Plays through the stories and loops; tap the left or
  * right half to go back or on, like the app.
  */
-function FacebookStory({ it }: { it: PreviewItem }) {
+function Story({ it, ig = false }: { it: PreviewItem; ig?: boolean }) {
   const items = it.media?.length ? it.media : it.src ? [{ src: it.src, video: !!it.video }] : [];
   const [at, setAt] = useState(0);
   const i = items.length ? at % items.length : 0;
@@ -383,17 +387,17 @@ function FacebookStory({ it }: { it: PreviewItem }) {
         </div>
         <style>{"@keyframes story-fill { from { width: 0% } to { width: 100% } }"}</style>
         <div className="mt-2 flex items-center gap-1.5 text-[11px]">
-          <Avatar size={26} />
-          <span className="font-semibold">{NAME}</span>
-          <span className="opacity-75">{it.time ? stamp(it.time, "clock") : "Just now"}</span>
+          <Ring on={ig}><Avatar size={26} /></Ring>
+          <span className="font-semibold">{ig ? HANDLE : NAME}</span>
+          <span className="opacity-75">{it.time ? stamp(it.time, "clock") : ig ? "1m" : "Just now"}</span>
           <span className="flex-1" />
           <Ellipsis className="h-4 w-4" />
         </div>
       </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-2 bg-gradient-to-t from-black/55 to-transparent px-2 pt-6 pb-2">
-        <span className="flex-1 rounded-full border border-white/70 px-3 py-1 text-[10px] text-white/80">Send message…</span>
-        <ThumbsUp className="h-4 w-4" />
-        <Heart className="h-4 w-4" />
+        <span className="flex-1 rounded-full border border-white/70 px-3 py-1 text-[10px] text-white/80">{ig ? "Send message" : "Send message…"}</span>
+        {ig ? <Heart className="h-4 w-4" /> : <ThumbsUp className="h-4 w-4" />}
+        {ig ? <Send className="h-4 w-4" /> : <Heart className="h-4 w-4" />}
       </div>
     </div>
   );
@@ -403,7 +407,7 @@ function FacebookStory({ it }: { it: PreviewItem }) {
  * The Page's reel, as Facebook shows it: a full 9:16 video, the Page with
  * Follow and the caption at the bottom left, Like / Comment / Share down the right.
  */
-function FacebookReel({ it }: { it: PreviewItem }) {
+function Reel({ it, ig = false }: { it: PreviewItem; ig?: boolean }) {
   return (
     <div className="relative mx-auto w-[220px] overflow-hidden rounded-xl bg-black text-white" style={{ aspectRatio: "9 / 16" }}>
       {it.src && it.video ? (
@@ -413,17 +417,62 @@ function FacebookReel({ it }: { it: PreviewItem }) {
       )}
       <p className="absolute top-2 left-3 text-sm font-semibold">Reels</p>
       <div className="absolute right-2 bottom-16 flex flex-col items-center gap-3 text-[10px]">
-        <span className="flex flex-col items-center"><ThumbsUp className="h-5 w-5" />Like</span>
-        <span className="flex flex-col items-center"><MessageCircle className="h-5 w-5" />Comment</span>
-        <span className="flex flex-col items-center"><Share2 className="h-5 w-5" />Share</span>
+        {ig ? (
+          <>
+            <Heart className="h-5 w-5" />
+            <MessageCircle className="h-5 w-5" />
+            <Send className="h-5 w-5" />
+            <Ellipsis className="h-5 w-5" />
+          </>
+        ) : (
+          <>
+            <span className="flex flex-col items-center"><ThumbsUp className="h-5 w-5" />Like</span>
+            <span className="flex flex-col items-center"><MessageCircle className="h-5 w-5" />Comment</span>
+            <span className="flex flex-col items-center"><Share2 className="h-5 w-5" />Share</span>
+          </>
+        )}
       </div>
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pt-8 pb-3 text-[11px]">
         <div className="flex items-center gap-1.5">
-          <Avatar size={24} />
-          <span className="font-semibold">{NAME}</span>
+          <Ring on={ig}><Avatar size={24} /></Ring>
+          <span className="font-semibold">{ig ? HANDLE : NAME}</span>
           <span className="rounded border border-white/80 px-1.5 text-[10px]">Follow</span>
         </div>
         <Clamp text={it.text} lines={2} more="…more" className="mt-1.5 pr-10" />
+      </div>
+    </div>
+  );
+}
+
+/** Instagram's gradient ring round the avatar. */
+function Ring({ on, children }: { on: boolean; children: React.ReactNode }) {
+  return on ? <span className="rounded-full bg-gradient-to-tr from-amber-400 via-pink-500 to-purple-600 p-[2px]">{children}</span> : <>{children}</>;
+}
+
+/**
+ * Instagram's carousel: one item at a time in the feed's 4:5, "1/3" at the
+ * top right and dots under it; tap the right or left half to swipe on or back.
+ */
+function Carousel({ it }: { it: PreviewItem }) {
+  const items = it.media?.length ? it.media : it.src ? [{ src: it.src, video: !!it.video }] : [];
+  const [at, setAt] = useState(0);
+  if (items.length < 2) return <Photo it={it} />;
+  const i = at % items.length;
+  const [w, h] = CHANNEL_SPECS[it.channel as PostChannel]?.ratio ?? [4, 5];
+  return (
+    <div>
+      <div className="relative w-full bg-neutral-200 select-none" style={{ aspectRatio: `${w} / ${h}` }}>
+        <Media it={{ ...it, src: items[i].src, video: items[i].video }} className="size-full object-cover" />
+        <span className="absolute top-2 right-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-white">
+          {i + 1}/{items.length}
+        </span>
+        <button type="button" aria-label="Previous photo" className="absolute inset-y-0 left-0 w-1/3" onClick={() => setAt((n) => (n - 1 + items.length) % items.length)} />
+        <button type="button" aria-label="Next photo" className="absolute inset-y-0 right-0 w-2/3" onClick={() => setAt((n) => (n + 1) % items.length)} />
+      </div>
+      <div className="flex justify-center gap-1 pt-2">
+        {items.map((_, n) => (
+          <span key={n} className={`size-1.5 rounded-full ${n === i ? "bg-blue-500" : "bg-neutral-300"}`} />
+        ))}
       </div>
     </div>
   );

@@ -22,6 +22,9 @@ import {
     facebookStoryBlock,
     googleAutoBlock,
     instagramAutoBlock,
+    instagramReelBlock,
+    instagramStoryBlock,
+    channelText,
     postCaption,
     type PostRow,
 } from "@/modules/campaigns/lib/post";
@@ -35,6 +38,8 @@ const AUTO: Record<string, { api: string; status: string; readyKey: string; name
     FACEBOOK: { api: "facebook", status: "facebook", readyKey: "ready", name: "Facebook", block: facebookAutoBlock },
     FACEBOOK_STORY: { api: "facebook", status: "facebook", readyKey: "ready", name: "Facebook story", block: facebookStoryBlock },
     FACEBOOK_REEL: { api: "facebook", status: "facebook", readyKey: "ready", name: "Facebook reel", block: facebookReelBlock },
+    INSTAGRAM_STORY: { api: "instagram", status: "facebook", readyKey: "instagramReady", name: "Instagram story", block: instagramStoryBlock },
+    INSTAGRAM_REEL: { api: "instagram", status: "facebook", readyKey: "instagramReady", name: "Instagram reel", block: instagramReelBlock },
     // Instagram rides the Facebook connection.
     INSTAGRAM: { api: "instagram", status: "facebook", readyKey: "instagramReady", name: "Instagram", block: instagramAutoBlock },
 };
@@ -63,9 +68,8 @@ export default function PostSharePanel({ post, onChanged, only }: { post: PostRo
     const fileInput = useRef<HTMLInputElement>(null);
     const extraInput = useRef<HTMLInputElement>(null);
     const copyOf = (channel: string) => channelPost(post, channel);
-    // Google gets no link in the text (it rejects web addresses there); the button carries it.
-    const textOf = (channel: string) =>
-        postCaption({ caption: copyOf(channel).caption, link: channel === "GOOGLE_BUSINESS" ? null : post.link }, COMPANY_DETAILS.sites.shop);
+    // The same words the sender posts: Google no link, Instagram "Link in bio", a story none.
+    const textOf = (channel: string) => channelText(channel, copyOf(channel).caption, post.link, COMPANY_DETAILS.sites.shop);
     const caption = postCaption(post, COMPANY_DETAILS.sites.shop);
     const isVideo = post.mediaType?.startsWith("video/");
     // Which API channels are connected? Asked once each; missing while asking or when it fails.
@@ -85,7 +89,7 @@ export default function PostSharePanel({ post, onChanged, only }: { post: PostRo
         if (again && !window.confirm(`This post is already on ${a.name}. Post it there again?`)) return;
         setBusy(a.api);
         try {
-            const { data } = await axios.post<{ post: PostRow; url: string | null; note?: string | null }>(`/api/campaigns/posts/${post.id}/${a.api}`, { again, ...(a.api === "facebook" ? { channel } : {}) });
+            const { data } = await axios.post<{ post: PostRow; url: string | null; note?: string | null }>(`/api/campaigns/posts/${post.id}/${a.api}`, { again, ...(a.api === "facebook" || a.api === "instagram" ? { channel } : {}) });
             onChanged(data.post);
             if (data.note) toast.warning(data.note);
             else toast.success(`Posted on ${channelOf(channel)?.label ?? a.name}`, data.url ? { action: { label: "View", onClick: () => window.open(data.url!, "_blank", "noopener") } } : undefined);
@@ -200,7 +204,7 @@ export default function PostSharePanel({ post, onChanged, only }: { post: PostRo
                         const last = post.shares.find((s) => s.channel === value);
                         const cp = copyOf(value);
                         const auto = AUTO[value] && ready[value] ? AUTO[value] : null;
-                        const block = auto?.block({ ...post, mediaType: cp.photos[0]?.type ?? null, mediaSize: cp.photos[0]?.size ?? null, photos: cp.photos }) ?? null;
+                        const block = auto?.block({ ...post, mediaType: cp.photos[0]?.type ?? null, mediaSize: cp.photos[0]?.size ?? null, photos: cp.photos, caption: cp.caption }) ?? null;
                         return (
                             <div key={value} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2">
                                 <div className="min-w-0 flex-1">

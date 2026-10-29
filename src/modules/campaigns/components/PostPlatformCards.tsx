@@ -29,6 +29,9 @@ import {
   ratioFits,
   withHashtags,
   hasPhoneNumber,
+  channelText,
+  hashtagCount,
+  INSTAGRAM_HASHTAGS_MAX,
   CHANNEL_MEDIA,
   mediaNoun,
   takesMedia,
@@ -53,6 +56,8 @@ const ORDER = [
   "FACEBOOK_STORY",
   "FACEBOOK_REEL",
   "INSTAGRAM",
+  "INSTAGRAM_STORY",
+  "INSTAGRAM_REEL",
   "WA_CHANNEL",
   "WA_STATUS",
 ];
@@ -312,11 +317,11 @@ export default function PostPlatformCards({
                 : previewSrc
                   ? [{ src: previewSrc, video: false }]
                   : [];
-          const sendsAll = c === "FACEBOOK" || c === "FACEBOOK_STORY";
+          // The ones whose sender posts every item: feed grid, carousel, stories in order.
+          const sendsAll = ["FACEBOOK", "FACEBOOK_STORY", "INSTAGRAM", "INSTAGRAM_STORY"].includes(c);
           // Only what this platform carries: no photos in a reel, no videos on Google.
           const usable = media.filter((m) => (m.video ? CHANNEL_MEDIA[c] !== "photo" : CHANNEL_MEDIA[c] !== "video"));
           const shown = sendsAll ? usable : usable.slice(0, 1);
-          const linkOut = master.link && c !== "GOOGLE_BUSINESS" && spec.textMax > 0 ? `\n\n${SHOP_SITE}${master.link}` : "";
           previews.push({
             channel: c,
             label: ch.label,
@@ -325,7 +330,7 @@ export default function PostPlatformCards({
             count: shown.length || 1,
             srcs: shown.filter((m) => !m.video).map((m) => m.src),
             media: shown,
-            text: spec.textMax > 0 ? text + linkOut : "",
+            text: channelText(c, text, master.link || null, SHOP_SITE),
             time,
             button:
               GOOGLE_BUTTONS.find((b) => b.value === google.button)?.label ??
@@ -432,6 +437,14 @@ export default function PostPlatformCards({
                             {master.hashtags.match(/#[^\s#]+/g)?.length}.
                           </p>
                         )}
+                    {(c === "INSTAGRAM" || c === "INSTAGRAM_REEL") && hashtagCount(text) > INSTAGRAM_HASHTAGS_MAX && (
+                      <p className="text-xs font-medium text-destructive">
+                        Instagram allows {INSTAGRAM_HASHTAGS_MAX} hashtags at most — this has {hashtagCount(text)}.
+                      </p>
+                    )}
+                    {(c === "INSTAGRAM" || c === "INSTAGRAM_REEL") && master.link && (
+                      <p className="text-xs text-foreground/70">Links do not work on Instagram — the caption says &quot;🔗 Link in bio&quot; instead.</p>
+                    )}
                     {c === "GOOGLE_BUSINESS" && hasPhoneNumber(text) && (
                       <p className="flex items-center gap-1 text-xs font-medium text-amber-700">
                         <AlertTriangle className="h-3.5 w-3.5 shrink-0" />{" "}
