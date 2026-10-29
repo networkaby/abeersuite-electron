@@ -162,13 +162,15 @@ export function BankReconciliationPage() {
     const { data, loading, refreshing, error, reload } = useApiResource<ReconPayload>(url);
     useRealtimeTopics(["ledger"], () => { if (url) reload(); });
 
-    // Start the period at the lock the first time a ledger loads — that is
-    // where the work is. The user can widen it afterwards.
+    // Start the period at the lock each time a ledger loads — that is where
+    // the work is — whether it is newer or older than the current From (no
+    // lock → fiscal-year start). The user can widen it afterwards.
     // Applied while rendering, so the first paint of a ledger is already at its lock.
     const [lockAppliedFor, setLockAppliedFor] = useState<number | null>(null);
     if (data && lockAppliedFor !== data.account.id) {
         setLockAppliedFor(data.account.id);
-        if (data.account.lock && data.account.lock > from) setFrom(data.account.lock);
+        const start = data.account.lock ?? formatDateInput(indianFiscalYearStart());
+        if (start !== from) setFrom(start);
         setSelSt(new Set()); setSelGl(new Set());
     }
 
