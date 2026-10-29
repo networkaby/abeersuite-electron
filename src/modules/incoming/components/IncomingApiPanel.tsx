@@ -11,12 +11,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import {
     INCOMING_APIS,
-    coworkPostMode,
-    coworkPostRules,
-    coworkReplyMode,
-    coworkRules,
-    type CoworkPostMode,
-    type CoworkReplyMode,
+    googlePostMode,
+    googlePostRules,
+    googleReplyMode,
+    googleRules,
+    type GooglePostMode,
+    type GoogleReplyMode,
     type IncomingId,
 } from "@/modules/incoming/lib/incomingCatalog";
 
@@ -49,9 +49,9 @@ export function IncomingApiPanel() {
     const [busy, setBusy] = useState<string | null>(null);
     const [shownKey, setShownKey] = useState<{ id: IncomingId; key: string } | null>(null);
     const [pasted, setPasted] = useState<Partial<Record<IncomingId, string>>>({});
-    const [mode, setMode] = useState<CoworkReplyMode>("DRAFT");
+    const [mode, setMode] = useState<GoogleReplyMode>("DRAFT");
     const [rules, setRules] = useState("");
-    const [postMode, setPostMode] = useState<CoworkPostMode>("DRAFT");
+    const [postMode, setPostMode] = useState<GooglePostMode>("DRAFT");
     const [postRules, setPostRules] = useState("");
 
     useEffect(() => {
@@ -59,11 +59,11 @@ export function IncomingApiPanel() {
             .get<Status>("/api/settings/incoming-api")
             .then(({ data }) => {
                 setStatus(data);
-                const cowork = data.rows.find((r) => r.id === "COWORK")?.settings ?? {};
-                setMode(coworkReplyMode(cowork));
-                setRules(coworkRules(cowork));
-                setPostMode(coworkPostMode(cowork));
-                setPostRules(coworkPostRules(cowork));
+                const google = data.rows.find((r) => r.id === "COWORK")?.settings ?? {};
+                setMode(googleReplyMode(google));
+                setRules(googleRules(google));
+                setPostMode(googlePostMode(google));
+                setPostRules(googlePostRules(google));
             })
             .catch((e) => toast.error(extractApiError(e, "Could not load Incoming API")));
     }, []);
@@ -208,11 +208,11 @@ export function IncomingApiPanel() {
                                     ))}
                                 </div>
                                 <p className="mt-1 text-xs text-muted-foreground">1–2 star reviews are always kept as a draft, whatever this says.</p>
-                                <label className="mt-3 block text-sm font-medium" htmlFor="cowork-rules">
-                                    Reply rules (Cowork reads these with the reviews)
+                                <label className="mt-3 block text-sm font-medium" htmlFor="google-rules">
+                                    Reply rules (the caller reads these with the reviews)
                                 </label>
                                 <Textarea
-                                    id="cowork-rules"
+                                    id="google-rules"
                                     className="mt-1"
                                     rows={8}
                                     maxLength={20_000}
@@ -245,11 +245,11 @@ export function IncomingApiPanel() {
                                 <p className="mt-1 text-xs text-muted-foreground">
                                     Draft posts keep the agent&apos;s planned time; open one on Campaigns → Queue and save it to schedule. The agent can change or delete only its own posts, and only before any channel has them.
                                 </p>
-                                <label className="mt-3 block text-sm font-medium" htmlFor="cowork-post-rules">
-                                    Post rules (Cowork reads these with the queue)
+                                <label className="mt-3 block text-sm font-medium" htmlFor="google-post-rules">
+                                    Post rules (the caller reads these with the queue)
                                 </label>
                                 <Textarea
-                                    id="cowork-post-rules"
+                                    id="google-post-rules"
                                     className="mt-1"
                                     rows={6}
                                     maxLength={20_000}

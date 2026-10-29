@@ -25,7 +25,7 @@ import { loadPost, postMediaKey } from "@/modules/campaigns/lib/postServer";
  *   - No frame given: channels sharing a shape share one copy; a photo already
  *     in shape is used as it is; the cut keeps the busiest part ("attention").
  *   - A frame (`crop`, from the Adjust editor) or a focus point (`focus`, from
- *     the editor or the Cowork agent) for one channel: exactly that part.
+ *     the editor or the Google Business API caller) for one channel: exactly that part.
  *
  * Every copy remembers where it came from (`from`, `crop`), so Adjust reopens
  * on the same photo and frame. A copy no channel uses any more is dropped from
@@ -160,7 +160,7 @@ function setChannelPhotos(variants: PostVariants, channel: string, photos: strin
 /**
  * Give one channel a photo already on the post (`key`): its only photo, or —
  * `add` — after the ones it has, up to its count. For a photo uploaded from a
- * platform card, or the Cowork agent's photo for one channel.
+ * platform card, or the Google Business API caller's photo for one channel.
  */
 export async function giveChannelPhoto(postId: number, channel: string, key: string, add = false) {
     const spec = CHANNEL_SPECS[channel as PostChannel];
@@ -175,7 +175,7 @@ export async function giveChannelPhoto(postId: number, channel: string, key: str
 }
 
 /**
- * Store a photo the server already holds (the Cowork agent's upload or its
+ * Store a photo the server already holds (the Google Business API caller's upload or its
  * link) under the post: as the main photo, or `extra` beside it.
  */
 export async function attachPostPhoto(postId: number, file: { bytes: ArrayBuffer; type: string; name: string }, extra: boolean) {

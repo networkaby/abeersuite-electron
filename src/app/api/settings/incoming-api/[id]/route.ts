@@ -13,7 +13,7 @@ import { INCOMING_APIS, type IncomingId } from "@/modules/incoming/lib/incomingC
 //   { generate: true }                  make a new key; answered ONCE as { key }
 //   { secret: "…" }                     keep a pasted secret (Meta's app secret)
 //   { secret: "" }                      forget the page's secret (the env var counts again)
-//   { settings: { replyMode, rules, postMode, postRules } }  Cowork only (sent whole)
+//   { settings: { replyMode, rules, postMode, postRules } }  Google Business API only (sent whole)
 
 const schema = z.object({
     enabled: z.boolean().optional(),
@@ -38,7 +38,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;
     if (data.generate && !def.canGenerate) return NextResponse.json({ error: "This secret comes from the other side — paste it." }, { status: 400 });
-    if (data.settings && id !== "COWORK") return NextResponse.json({ error: "Only the Cowork agent has settings." }, { status: 400 });
+    if (data.settings && id !== "COWORK") return NextResponse.json({ error: "Only the Google Business API has settings." }, { status: 400 });
     const secret = data.generate ? newKey() : data.secret;
     if (secret && !hasSharedSecret()) return NextResponse.json({ error: "AI_KEY_SECRET is not set on this server — it locks saved secrets." }, { status: 503 });
     if (secret !== undefined && secret !== "" && secret.length < 8) return NextResponse.json({ error: "A secret needs at least 8 characters." }, { status: 400 });

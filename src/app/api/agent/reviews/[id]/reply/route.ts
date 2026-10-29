@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { incomingSettings, requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
-import { coworkReplyMode } from "@/modules/incoming/lib/incomingCatalog";
+import { googleReplyMode } from "@/modules/incoming/lib/incomingCatalog";
 import { GoogleError } from "@/modules/campaigns/lib/googleBusiness";
 import { replyGoogleReview, saveReviewDraft } from "@/modules/reviews/lib/googleReviews";
 
@@ -29,7 +29,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         const reason =
             review.stars != null && review.stars <= 2
                 ? "1–2 star review: always checked by staff"
-                : coworkReplyMode(await incomingSettings("COWORK")) === "DRAFT"
+                : googleReplyMode(await incomingSettings("COWORK")) === "DRAFT"
                   ? "Reply mode is Draft on Settings → Incoming API"
                   : data.mode === "draft"
                     ? "Agent asked for a draft"

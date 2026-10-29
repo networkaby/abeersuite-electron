@@ -2,7 +2,7 @@
 //
 // Owner, 2026-10-28: "a new page incoming api … a secret also set there, other
 // setting like draft/post toggle also there, all incoming api". One row per
-// caller (Cowork agent, cron-job.org, phone system call log, Shiprocket, Meta
+// caller (Google Business API, cron-job.org, phone system call log, Shiprocket, Meta
 // WhatsApp), managed on Settings → Incoming API. The secret is locked with the
 // shared AI_KEY_SECRET (secretBox), never stored plain. A caller that had an env
 // var before (CRON_SECRET, CALLS_API_KEY, …) still accepts it as well, so
@@ -11,7 +11,7 @@
 /// `id` the caller ("COWORK", "CRON", "CALLS", "SHIPROCKET", "META_WA_VERIFY",
 /// "META_WA_APP"). `enabled` false shuts the caller out, env var included.
 /// `secretHint` the last 4 characters, for the page. `settings` caller-specific
-/// (Cowork: { replyMode: "DRAFT" | "POST", rules }).
+/// (Google Business API: { replyMode: "DRAFT" | "POST", rules }).
 model IncomingApi {
   id            String    @id
   enabled       Boolean   @default(true)

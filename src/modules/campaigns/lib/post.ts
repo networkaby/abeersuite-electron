@@ -183,7 +183,7 @@ export type PostPhoto = {
 export type PhotoCrop = { x: number; y: number; w: number; h: number };
 
 const fraction = z.number().min(0).max(1);
-/** A frame on a photo, as the Adjust editor and the Cowork agent send it. */
+/** A frame on a photo, as the Adjust editor and the Google Business API caller send it. */
 export const photoCropSchema = z.object({ x: fraction, y: fraction, w: z.number().gt(0).max(1), h: z.number().gt(0).max(1) });
 /** The important point of a photo, fractions across and down. */
 export const photoFocusSchema = z.object({ x: fraction, y: fraction });

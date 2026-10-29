@@ -23,7 +23,7 @@ export type IncomingDef = {
 
 export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
     COWORK: {
-        label: "Cowork agent",
+        label: "Google Business API",
         about: "Reads Google reviews and writes the shop's reply, and makes social posts (text per channel, photos, time). Replies and posts follow the settings below; 1–2 star reviews are always saved as Draft for staff to check.",
         howSent: "Header  x-api-key: <key>",
         envVar: null,
@@ -87,12 +87,12 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
     },
 };
 
-/** Cowork's reply mode: DRAFT waits for staff; POST goes live (except 1–2 stars). */
-export type CoworkReplyMode = "DRAFT" | "POST";
-export const coworkReplyMode = (s: Record<string, unknown>): CoworkReplyMode => (s.replyMode === "POST" ? "POST" : "DRAFT");
-export const coworkRules = (s: Record<string, unknown>): string => (typeof s.rules === "string" ? s.rules : "");
+/** Google Business API reply mode: DRAFT waits for staff; POST goes live (except 1–2 stars). */
+export type GoogleReplyMode = "DRAFT" | "POST";
+export const googleReplyMode = (s: Record<string, unknown>): GoogleReplyMode => (s.replyMode === "POST" ? "POST" : "DRAFT");
+export const googleRules = (s: Record<string, unknown>): string => (typeof s.rules === "string" ? s.rules : "");
 
-/** Cowork's posts: DRAFT waits for staff to check and schedule; SCHEDULE lets its times stand, and the post goes out by itself. */
-export type CoworkPostMode = "DRAFT" | "SCHEDULE";
-export const coworkPostMode = (s: Record<string, unknown>): CoworkPostMode => (s.postMode === "SCHEDULE" ? "SCHEDULE" : "DRAFT");
-export const coworkPostRules = (s: Record<string, unknown>): string => (typeof s.postRules === "string" ? s.postRules : "");
+/** Google Business API posts: DRAFT waits for staff to check and schedule; SCHEDULE lets its times stand, and the post goes out by itself. */
+export type GooglePostMode = "DRAFT" | "SCHEDULE";
+export const googlePostMode = (s: Record<string, unknown>): GooglePostMode => (s.postMode === "SCHEDULE" ? "SCHEDULE" : "DRAFT");
+export const googlePostRules = (s: Record<string, unknown>): string => (typeof s.postRules === "string" ? s.postRules : "");

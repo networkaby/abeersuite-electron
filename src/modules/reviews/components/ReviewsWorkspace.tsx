@@ -22,7 +22,7 @@ type Review = {
     replyText: string | null;
     repliedAt: string | null;
     repliedByName: string | null;
-    /** An agent's reply waiting for staff (Cowork in Draft mode, or 1–2 stars). */
+    /** An agent's reply waiting for staff (the Google Business API in Draft mode, or 1–2 stars). */
     draftText: string | null;
     draftByName: string | null;
     draftedAt: string | null;

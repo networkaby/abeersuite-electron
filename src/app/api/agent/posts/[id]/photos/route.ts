@@ -8,7 +8,7 @@ import { PhotoFitError, attachPostPhoto, fitPostPhoto, giveChannelPhoto } from "
 import { ownOpenPost } from "@/modules/campaigns/lib/agentPosts";
 
 /**
- * POST /api/agent/posts/:id/photos — the Cowork agent adds a photo (or MP4) to
+ * POST /api/agent/posts/:id/photos — the Google Business API caller adds a photo (or MP4) to
  * one of its own posts. Either multipart form-data (`file`, plus the fields
  * below as text) or JSON with `url` — an https link the server reads once.
  *   channel  give it to that channel only (its copy's photos, in order)

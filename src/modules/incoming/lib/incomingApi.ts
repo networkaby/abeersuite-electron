@@ -15,7 +15,7 @@ import { INCOMING_APIS, type IncomingId } from "@/modules/incoming/lib/incomingC
  *   - the old env var too (CRON_SECRET, …), so a caller set up before this page
  *     keeps working — Vercel's own nightly backup cron can only send CRON_SECRET;
  *   - neither set → the caller's old rule: open for the legacy callers (as
- *     before), always shut for the Cowork agent, which never had an env var.
+ *     before), always shut for the Google Business API caller, which never had an env var.
  * Switched off on the page → shut, env var included.
  */
 

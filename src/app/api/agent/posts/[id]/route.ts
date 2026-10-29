@@ -7,7 +7,7 @@ import { loadPost } from "@/modules/campaigns/lib/postServer";
 import { agentPostMode, agentStatus, ownOpenPost, readAgentPost } from "@/modules/campaigns/lib/agentPosts";
 
 /**
- * PATCH  /api/agent/posts/:id — the Cowork agent rewrites one of its own posts
+ * PATCH  /api/agent/posts/:id — the Google Business API caller rewrites one of its own posts
  *        (the whole post, as POST ../ takes it), until any channel has it.
  * DELETE /api/agent/posts/:id — removes one of its own posts, on the same rule.
  */

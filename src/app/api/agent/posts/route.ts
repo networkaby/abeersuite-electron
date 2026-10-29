@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError } from "@/shared/lib/api";
 import { incomingSettings, requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
-import { coworkPostMode, coworkPostRules } from "@/modules/incoming/lib/incomingCatalog";
+import { googlePostMode, googlePostRules } from "@/modules/incoming/lib/incomingCatalog";
 import { CHANNEL_SPECS, GOOGLE_BUTTONS, GOOGLE_POST_TYPES, POST_CHANNELS, POST_SELECT, newPostSchema } from "@/modules/campaigns/lib/post";
 import { copyProductPhoto, loadPost, withMediaLinks } from "@/modules/campaigns/lib/postServer";
 import { AGENT_NAME, agentStatus, readAgentPost } from "@/modules/campaigns/lib/agentPosts";
 
 /**
- * GET  /api/agent/posts — for the Cowork agent (x-api-key = the Cowork key on
+ * GET  /api/agent/posts — for the Google Business API caller (x-api-key = the Google Business API key on
  *      Settings → Incoming API): the post mode and rules set there, every
  *      channel's limits and best photo shape, and the queue (drafts and
  *      scheduled, soonest first, then the last 20 done) so it plans around it.
@@ -29,8 +29,8 @@ export async function GET(req: Request) {
             incomingSettings("COWORK"),
         ]);
         return NextResponse.json({
-            mode: coworkPostMode(settings),
-            rules: coworkPostRules(settings),
+            mode: googlePostMode(settings),
+            rules: googlePostRules(settings),
             note: "Draft mode: your posts wait for staff to schedule. Change or delete only your own posts, before any channel has them.",
             channels: POST_CHANNELS.filter((c) => c.ready).map((c) => ({
                 value: c.value,
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     if (error) return error;
     const { fromProductId, ...fields } = data;
     try {
-        const mode = coworkPostMode(await incomingSettings("COWORK"));
+        const mode = googlePostMode(await incomingSettings("COWORK"));
         const row = await prisma.post.create({
             data: { ...fields, status: agentStatus(mode, fields.status as "DRAFT" | "SCHEDULED", asked), createdById: null, createdByName: AGENT_NAME },
             select: { id: true },

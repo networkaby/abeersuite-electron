@@ -7,7 +7,7 @@ import { PhotoFitError, fitPostPhoto } from "@/modules/campaigns/lib/postPhotoFi
 import { ownOpenPost } from "@/modules/campaigns/lib/agentPosts";
 
 /**
- * POST /api/agent/posts/:id/photos/fit — the Cowork agent looks at a photo and
+ * POST /api/agent/posts/:id/photos/fit — the Google Business API caller looks at a photo and
  * says where the important part is; the server cuts it (our own sharp, free)
  * in the channel's shape and makes it that channel's photo.
  *   { channel, focus: { x, y }, zoom?, key? }   focus as fractions (0–1) across / down

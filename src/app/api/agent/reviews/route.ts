@@ -3,10 +3,10 @@ import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError } from "@/shared/lib/api";
 import { incomingSettings, requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
-import { coworkReplyMode, coworkRules } from "@/modules/incoming/lib/incomingCatalog";
+import { googleReplyMode, googleRules } from "@/modules/incoming/lib/incomingCatalog";
 
-// GET /api/agent/reviews?replied=no|yes|all&limit=50 — for the Cowork agent
-// (x-api-key = the Cowork key on Settings → Incoming API). Our saved copy of the
+// GET /api/agent/reviews?replied=no|yes|all&limit=50 — for the Google Business API caller
+// (x-api-key = the Google Business API key on Settings → Incoming API). Our saved copy of the
 // shop's reviews, newest first, plus the reply rules and mode set on that page.
 // Default: only reviews with no reply yet.
 
@@ -30,8 +30,8 @@ export async function GET(req: Request) {
             incomingSettings("COWORK"),
         ]);
         return NextResponse.json({
-            replyMode: coworkReplyMode(settings),
-            rules: coworkRules(settings),
+            replyMode: googleReplyMode(settings),
+            rules: googleRules(settings),
             note: "1–2 star reviews are always saved as a draft for staff, whatever the mode.",
             reviews: rows,
         });

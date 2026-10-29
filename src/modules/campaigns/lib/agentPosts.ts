@@ -3,25 +3,25 @@ import { NextResponse } from "next/server";
 import type { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { incomingSettings } from "@/modules/incoming/lib/incomingApi";
-import { coworkPostMode, type CoworkPostMode } from "@/modules/incoming/lib/incomingCatalog";
+import { googlePostMode, type GooglePostMode } from "@/modules/incoming/lib/incomingCatalog";
 
 /**
  * The Cowork agent's side of Campaigns → Posts (/api/agent/posts…). Same key as
- * its review replies (Settings → Incoming API → Cowork agent). Its posts carry
+ * its review replies (Settings → Incoming API → Google Business API). Its posts carry
  * no staff id and the name below, so the queue shows who made them and the
  * agent can only change its own — and only until any channel has them.
  */
 
 export const AGENT_NAME = "Cowork agent";
 
-export const agentPostMode = async (): Promise<CoworkPostMode> => coworkPostMode(await incomingSettings("COWORK"));
+export const agentPostMode = async (): Promise<GooglePostMode> => googlePostMode(await incomingSettings("COWORK"));
 
 /**
  * The status the agent's post may take. Mode Draft: always DRAFT, its times
  * kept as the plan (no job picks a draft). Mode Schedule: what the times say,
  * unless the agent itself asked for a draft.
  */
-export function agentStatus(mode: CoworkPostMode, parsed: "DRAFT" | "SCHEDULED", asked: unknown): "DRAFT" | "SCHEDULED" {
+export function agentStatus(mode: GooglePostMode, parsed: "DRAFT" | "SCHEDULED", asked: unknown): "DRAFT" | "SCHEDULED" {
     return mode === "DRAFT" || asked === "DRAFT" ? "DRAFT" : parsed;
 }
 
