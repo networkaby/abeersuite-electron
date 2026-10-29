@@ -174,6 +174,17 @@ export async function closeConversation(phone: string, reason: "STAFF" | "CUSTOM
     // That row is what takes the chat off the popup, and it also ends a pending
     // "Send menu" (the latest conversation is no longer AFTER_TEMPLATE).
     if (!done && reason === "STAFF") {
+        // Already closed by staff / the customer since their last message — a
+        // second press has nothing new to record.
+        const [lastIn, lastClose] = await Promise.all([
+            prisma.message.findFirst({ where: { phone, direction: "IN" }, orderBy: { occurredAt: "desc" }, select: { occurredAt: true } }),
+            prisma.messageConversation.findFirst({
+                where: { phone, closedReason: { in: ["STAFF", "CUSTOMER"] } },
+                orderBy: { closedAt: "desc" },
+                select: { closedAt: true },
+            }),
+        ]);
+        if (lastClose?.closedAt && (!lastIn || lastClose.closedAt >= lastIn.occurredAt)) return true;
         const at = new Date();
         await prisma.messageConversation.create({
             data: { phone, startedAt: at, lastMessageAt: at, closedAt: at, closedReason: "STAFF", closedByUserId: userId ?? null },
