@@ -4,6 +4,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, parseIdParam, validateRequest } from "@/shared/lib/api";
 import { checkPostMedia, type PostPhoto } from "@/modules/campaigns/lib/post";
 import { loadPost, postMediaPrefix, postMediaResponse } from "@/modules/campaigns/lib/postServer";
+import { EXTRA_MEDIA_MAX as EXTRA_MAX } from "@/modules/campaigns/lib/postPhotoFit";
 import { requirePostsPage } from "@/modules/campaigns/lib/campaignAccess";
 
 /**
@@ -26,8 +27,6 @@ const schema = z.object({
     extra: z.boolean().optional(),
 });
 
-/** At most this many photos per post besides the main one (Instagram's carousel is 10). */
-const EXTRA_MAX = 9;
 
 const notFound = () => NextResponse.json({ error: "Post not found" }, { status: 404 });
 

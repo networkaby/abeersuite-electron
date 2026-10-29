@@ -13,13 +13,20 @@ import { INCOMING_APIS, type IncomingId } from "@/modules/incoming/lib/incomingC
 //   { generate: true }                  make a new key; answered ONCE as { key }
 //   { secret: "…" }                     keep a pasted secret (Meta's app secret)
 //   { secret: "" }                      forget the page's secret (the env var counts again)
-//   { settings: { replyMode, rules } }  Cowork only
+//   { settings: { replyMode, rules, postMode, postRules } }  Cowork only (sent whole)
 
 const schema = z.object({
     enabled: z.boolean().optional(),
     generate: z.literal(true).optional(),
     secret: z.string().trim().max(500).optional(),
-    settings: z.object({ replyMode: z.enum(["DRAFT", "POST"]), rules: z.string().max(20_000) }).optional(),
+    settings: z
+        .object({
+            replyMode: z.enum(["DRAFT", "POST"]),
+            rules: z.string().max(20_000),
+            postMode: z.enum(["DRAFT", "SCHEDULE"]).default("DRAFT"),
+            postRules: z.string().max(20_000).default(""),
+        })
+        .optional(),
 });
 
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {

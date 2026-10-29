@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, RotateCcw, SlidersHorizontal } from "lucide-react";
+import { AlertTriangle, Crop, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +15,8 @@ export type CopyForm = { caption: string | null; scheduledAt: string | null; pho
  * One card per ticked channel (owner, 2026-10-29): the same idea written its
  * own way — text (to that channel's limit), time, and which photos (up to its
  * count, with a warning when a photo is not its best shape). Untouched, a
- * channel follows the main post; "Same as main" puts it back.
+ * channel follows the main post; "Same as main" puts it back. With a saved
+ * photo, Fit cuts it to the channel's shape (one channel, or all at once).
  */
 export default function PostChannelCopies({
     channels,
@@ -23,23 +24,45 @@ export default function PostChannelCopies({
     onChange,
     main,
     post,
+    onFit,
 }: {
     channels: string[];
     copies: Record<string, CopyForm>;
     onChange: (channel: string, copy: CopyForm | null) => void;
     main: { caption: string; scheduledAt: string };
     post: PostRow | null;
+    /** Cut the main photo to shape — `channels`, or every ticked one. */
+    onFit: (channels?: string[]) => Promise<void>;
 }) {
+    const [fitting, setFitting] = useState<string | null>(null);
     // Each photo's size once its preview loads, for the shape warning.
     const [dims, setDims] = useState<Record<string, [number, number]>>({});
     const photos = post ? postPhotos(post) : [];
     const mainKeys = photos.slice(0, 1).map((f) => f.key);
+    const canFit = !!post && !!photos[0]?.type.startsWith("image/");
+    const fit = async (id: string, channels?: string[]) => {
+        setFitting(id);
+        try {
+            await onFit(channels);
+        } finally {
+            setFitting(null);
+        }
+    };
 
     if (!channels.length) return null;
     return (
         <div className="space-y-2">
-            <Label>Per channel</Label>
-            <p className="text-xs text-muted-foreground">Each channel follows the main post until you customise it — its own words, time and photos.</p>
+            <div className="flex flex-wrap items-center gap-2">
+                <Label className="flex-1">Per channel</Label>
+                {canFit && (
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs" disabled={fitting !== null} onClick={() => fit("all")}>
+                        <Crop className="mr-1 h-3.5 w-3.5" /> {fitting === "all" ? "Fitting…" : "Fit photo for every channel"}
+                    </Button>
+                )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+                Each channel follows the main post until you customise it — its own words, time and photos. Fit cuts the main photo to each channel&apos;s best shape.
+            </p>
             {channels.map((c) => {
                 const spec = CHANNEL_SPECS[c as PostChannel];
                 const copy = copies[c] ?? null;
@@ -60,6 +83,11 @@ export default function PostChannelCopies({
                                 {spec.textMax} chars · {spec.photosMax === 1 ? "1 photo" : `up to ${spec.photosMax} photos`} · best {spec.ratioLabel}
                             </span>
                             <span className="flex-1" />
+                            {canFit && (
+                                <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" disabled={fitting !== null} onClick={() => fit(c, [c])}>
+                                    <Crop className="mr-1 h-3.5 w-3.5" /> {fitting === c ? "Fitting…" : `Fit ${spec.ratio.join(":")}`}
+                                </Button>
+                            )}
                             {copy ? (
                                 <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onChange(c, null)}>
                                     <RotateCcw className="mr-1 h-3.5 w-3.5" /> Same as main
@@ -134,12 +162,12 @@ export default function PostChannelCopies({
                                             <p className="text-xs text-muted-foreground">No photos yet — add them under Photo &amp; share below.</p>
                                         )
                                     ) : (
-                                        <p className="text-xs text-muted-foreground">Save the post first, then pick its photos here.</p>
+                                        <p className="text-xs text-muted-foreground">Photos added above can be picked here after saving.</p>
                                     )}
                                     {offShape.length > 0 && (
                                         <p className="flex items-center gap-1 text-xs text-amber-700">
                                             <AlertTriangle className="h-3.5 w-3.5" />
-                                            {offShape.length === 1 ? "A picked photo is" : `${offShape.length} picked photos are`} not {spec.ratioLabel} — it still shares, but may be cropped.
+                                            {offShape.length === 1 ? "A picked photo is" : `${offShape.length} picked photos are`} not {spec.ratioLabel} — it still shares, but may be cropped. Fit makes a copy in shape.
                                         </p>
                                     )}
                                 </div>

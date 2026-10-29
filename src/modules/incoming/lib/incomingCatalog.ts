@@ -24,12 +24,20 @@ export type IncomingDef = {
 export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
     COWORK: {
         label: "Cowork agent",
-        about: "Reads Google reviews and writes the shop's reply. Replies follow the Draft / Post setting below; 1–2 star reviews are always saved as Draft for staff to check.",
+        about: "Reads Google reviews and writes the shop's reply, and makes social posts (text per channel, photos, time). Replies and posts follow the settings below; 1–2 star reviews are always saved as Draft for staff to check.",
         howSent: "Header  x-api-key: <key>",
         envVar: null,
         closedWhenUnset: true,
         canGenerate: true,
-        paths: ["GET /api/agent/reviews", "POST /api/agent/reviews/{id}/reply"],
+        paths: [
+            "GET /api/agent/reviews",
+            "POST /api/agent/reviews/{id}/reply",
+            "GET /api/agent/posts",
+            "POST /api/agent/posts",
+            "PATCH /api/agent/posts/{id}",
+            "DELETE /api/agent/posts/{id}",
+            "POST /api/agent/posts/{id}/photos",
+        ],
     },
     CRON: {
         label: "cron-job.org (timed jobs)",
@@ -82,3 +90,8 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
 export type CoworkReplyMode = "DRAFT" | "POST";
 export const coworkReplyMode = (s: Record<string, unknown>): CoworkReplyMode => (s.replyMode === "POST" ? "POST" : "DRAFT");
 export const coworkRules = (s: Record<string, unknown>): string => (typeof s.rules === "string" ? s.rules : "");
+
+/** Cowork's posts: DRAFT waits for staff to check and schedule; SCHEDULE lets its times stand, and the post goes out by itself. */
+export type CoworkPostMode = "DRAFT" | "SCHEDULE";
+export const coworkPostMode = (s: Record<string, unknown>): CoworkPostMode => (s.postMode === "SCHEDULE" ? "SCHEDULE" : "DRAFT");
+export const coworkPostRules = (s: Record<string, unknown>): string => (typeof s.postRules === "string" ? s.postRules : "");

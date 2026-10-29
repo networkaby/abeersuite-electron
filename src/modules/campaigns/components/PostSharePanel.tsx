@@ -7,7 +7,7 @@ import { Check, Copy, Download, ExternalLink, ImagePlus, Plus, Send, Share2, Tra
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
-import { putToSignedUrl } from "@/shared/lib/storage/signedUpload";
+import { uploadPostFile } from "@/modules/campaigns/lib/postUpload";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import {
     FACEBOOK_PAGE_URL,
@@ -92,15 +92,7 @@ export default function PostSharePanel({ post, onChanged }: { post: PostRow; onC
         if (bad) return toast.error(bad);
         setBusy("upload");
         try {
-            const { data } = await axios.post<{ key: string; putUrl: string }>(`/api/campaigns/posts/${post.id}/media/upload-url`, {
-                name: file.name, type: file.type, size: file.size,
-            });
-            // Straight to R2 — the signed URL carries the permission.
-            await putToSignedUrl(data.putUrl, file, file.type);
-            const saved = await axios.put<PostRow>(`/api/campaigns/posts/${post.id}/media`, {
-                key: data.key, type: file.type, name: file.name, size: file.size, extra,
-            });
-            onChanged(saved.data);
+            onChanged(await uploadPostFile(post.id, file, extra));
             toast.success("Photo added");
         } catch (e) {
             toast.error(extractApiError(e, "Upload failed"));

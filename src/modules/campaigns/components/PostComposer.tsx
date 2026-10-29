@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
-import { Package, SquarePen, Trash2, X } from "lucide-react";
+import { ImagePlus, Package, SquarePen, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,8 @@ import {
     GOOGLE_POST_TYPES,
     POST_CAPTION_MAX,
     POST_CHANNELS,
+    POST_MEDIA_TYPES,
+    checkPostMedia,
     productPostCaption,
     type PostInput,
     type PostProduct,
@@ -28,6 +30,7 @@ import PostSharePanel from "./PostSharePanel";
 import PostProductPicker, { loadPostProducts } from "./PostProductPicker";
 import PostChannelCopies, { type CopyForm } from "./PostChannelCopies";
 import { toLocalInput } from "@/modules/campaigns/lib/campaign";
+import { fitPostPhoto, uploadPostFile } from "@/modules/campaigns/lib/postUpload";
 
 type Form = Omit<PostInput, "link" | "scheduledAt" | "variants"> & { link: string; scheduledAt: string; variants: Record<string, CopyForm> };
 
@@ -54,8 +57,11 @@ const pill = (on: boolean) =>
     `rounded-lg border px-3 py-1.5 text-sm ${on ? "border-primary bg-primary/10 font-medium" : "text-muted-foreground hover:bg-muted/50"}`;
 
 /**
- * Write one post for several channels. Save first; then the photo and the
- * per-channel Share / Done appear below. A time puts it on the calendar as
+ * Write one post for several channels. Photos can be picked before the first
+ * save — they upload on Save, and "Fit for each channel" then cuts the main one
+ * to every channel's shape; per-channel Share / Done appear below once saved.
+ * Instagram cannot go out without a photo, so a timed post refuses to save
+ * without one. A time puts it on the calendar as
  * Scheduled; no time keeps it a draft to share whenever. A new post can start
  * from a shop product (`startProductId`, or "From a product"): its text and link
  * fill in, and saving copies its photo in.
@@ -77,6 +83,12 @@ export default function PostComposer({
     const [saving, setSaving] = useState(false);
     const [picking, setPicking] = useState(false);
     const [fromProduct, setFromProduct] = useState<PostProduct | null>(null);
+    // A new post's photos, held until the first save; the first is the main one.
+    const [pending, setPending] = useState<File[]>([]);
+    const [fitOnSave, setFitOnSave] = useState(true);
+    const photoInput = useRef<HTMLInputElement>(null);
+    const previews = useMemo(() => pending.map((f) => URL.createObjectURL(f)), [pending]);
+    useEffect(() => () => previews.forEach((u) => URL.revokeObjectURL(u)), [previews]);
 
     useEffect(() => {
         if (postId === null) return;
@@ -121,7 +133,42 @@ export default function PostComposer({
         set("channels", form.channels.includes(v) ? form.channels.filter((c) => c !== v) : [...form.channels, v]);
     const google = form.channels.includes("GOOGLE_BUSINESS");
 
+    function addPhotos(files: FileList | null) {
+        for (const f of Array.from(files ?? [])) {
+            const bad = checkPostMedia(f.type, f.size);
+            if (bad) toast.error(`${f.name}: ${bad}`);
+            else setPending((list) => [...list, f].slice(0, 10));
+        }
+    }
+
+    /** After Fit: the post's new photos, and each fitted channel's pick, without touching unsaved words. */
+    async function fit(channels?: string[]) {
+        if (!post) return;
+        try {
+            const r = await fitPostPhoto(post.id, channels);
+            setPost(r.post);
+            setForm((f) => {
+                const variants = { ...f.variants };
+                for (const c of Object.keys(r.fitted)) {
+                    const photos = r.post.variants[c]?.photos ?? null;
+                    variants[c] = { ...(variants[c] ?? { caption: null, scheduledAt: null }), photos };
+                }
+                return { ...f, variants };
+            });
+            toast.success(Object.keys(r.fitted).length > 1 ? "Photo fitted for each channel" : "Photo fitted");
+        } catch (e) {
+            toast.error(extractApiError(e, "Could not fit the photo"));
+        }
+    }
+
+    const hasPhoto = !!post?.mediaKey || pending.length > 0 || !!fromProduct?.imageUrl;
+    const timed = !!form.scheduledAt || Object.values(form.variants).some((v) => v.scheduledAt);
+
     async function save() {
+        if (timed && form.channels.includes("INSTAGRAM") && !hasPhoto) {
+            toast.error("Instagram needs a photo — add one, or untick Instagram, before scheduling.");
+            return;
+        }
         setSaving(true);
         const variants = Object.fromEntries(
             Object.entries(form.variants)
@@ -141,13 +188,30 @@ export default function PostComposer({
                 setForm(fromRow(r.data));
                 toast.success("Post saved");
             } else {
+                // Photos picked here win over the product's own.
                 const r = await axios.post<PostRow & { photoNote?: string | null }>("/api/campaigns/posts", {
                     ...body,
-                    fromProductId: fromProduct?.id ?? null,
+                    fromProductId: pending.length ? null : (fromProduct?.id ?? null),
                 });
-                if (r.data.photoNote) toast.warning(`Post saved. ${r.data.photoNote}`);
-                else toast.success(fromProduct ? "Post saved with the product photo — share it below" : "Post saved — add the photo and share it below");
-                router.replace(`/office/campaigns/posts/${r.data.id}`);
+                const id = r.data.id;
+                let note = r.data.photoNote ?? null;
+                let main = pending.length ? pending[0].type : r.data.mediaKey ? "image/" : null;
+                try {
+                    for (const [i, f] of pending.entries()) await uploadPostFile(id, f, i > 0);
+                } catch (e) {
+                    note = extractApiError(e, "A photo did not upload — add it below.");
+                    main = null;
+                }
+                if (fitOnSave && main?.startsWith("image/") && !note) {
+                    try {
+                        await fitPostPhoto(id);
+                    } catch (e) {
+                        note = extractApiError(e, "Could not fit the photo — use Fit on each channel.");
+                    }
+                }
+                if (note) toast.warning(`Post saved. ${note}`);
+                else toast.success(main ? "Post saved with its photo — share it below" : "Post saved — add the photo and share it below");
+                router.replace(`/office/campaigns/posts/${id}`);
             }
         } catch (e) {
             toast.error(extractApiError(e, "Failed to save the post"));
@@ -190,7 +254,7 @@ export default function PostComposer({
                                             <span className="min-w-0 flex-1 truncate">
                                                 From <span className="font-medium">{fromProduct.name}</span>
                                                 <span className="text-muted-foreground">
-                                                    {fromProduct.imageUrl ? " — its photo is added when you save" : " — it has no photo; add one after saving"}
+                                                    {pending.length ? " — your photos are used instead of its own" : fromProduct.imageUrl ? " — its photo is added when you save" : " — it has no photo; add one below"}
                                                 </span>
                                             </span>
                                             <Button variant="ghost" size="sm" onClick={() => setPicking(true)}>
@@ -289,11 +353,63 @@ export default function PostComposer({
                                 </div>
                             )}
 
+                            {!post && (
+                                <div className="space-y-1.5">
+                                    <Label>Photos</Label>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {pending.map((f, i) => (
+                                            <div key={previews[i]} className="group relative size-20 overflow-hidden rounded-md border bg-muted" title={f.name}>
+                                                {f.type.startsWith("video/") ? (
+                                                    <span className="flex size-full items-center justify-center text-xs">Video</span>
+                                                ) : (
+                                                    // eslint-disable-next-line @next/next/no-img-element -- a local preview of a file not yet uploaded
+                                                    <img src={previews[i]} alt={f.name} className="size-full object-cover" />
+                                                )}
+                                                {i === 0 && <span className="absolute bottom-0 left-0 rounded-tr bg-primary px-1 text-[10px] text-primary-foreground">Main</span>}
+                                                <button
+                                                    type="button"
+                                                    aria-label="Remove this photo"
+                                                    onClick={() => setPending((list) => list.filter((_, j) => j !== i))}
+                                                    className="absolute top-0 right-0 rounded-bl bg-black/60 p-0.5 text-white"
+                                                >
+                                                    <X className="h-3 w-3" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                        <button
+                                            type="button"
+                                            onClick={() => photoInput.current?.click()}
+                                            className="flex size-20 flex-col items-center justify-center gap-1 rounded-md border border-dashed text-xs text-muted-foreground hover:bg-muted/50"
+                                        >
+                                            <ImagePlus className="h-5 w-5" />
+                                            {pending.length ? "More" : "Add photo"}
+                                        </button>
+                                        <input
+                                            ref={photoInput}
+                                            type="file"
+                                            multiple
+                                            accept={POST_MEDIA_TYPES.join(",")}
+                                            className="hidden"
+                                            onChange={(e) => {
+                                                addPhotos(e.target.files);
+                                                e.target.value = "";
+                                            }}
+                                        />
+                                    </div>
+                                    <label className="flex items-center gap-2 text-sm">
+                                        <input type="checkbox" checked={fitOnSave} onChange={(e) => setFitOnSave(e.target.checked)} />
+                                        Fit the main photo for each channel on save (Google 4:3, Facebook 1:1, Status 9:16, Instagram 4:5)
+                                    </label>
+                                    <p className="text-xs text-muted-foreground">JPG, PNG or WebP, or an MP4 up to 16 MB. The first one is the main photo; they upload when you save.</p>
+                                </div>
+                            )}
+
                             <PostChannelCopies
                                 channels={form.channels}
                                 copies={form.variants}
                                 main={{ caption: form.caption, scheduledAt: form.scheduledAt }}
                                 post={post}
+                                onFit={fit}
                                 onChange={(c, copy) =>
                                     setForm((f) => {
                                         const variants = { ...f.variants };
@@ -324,7 +440,7 @@ export default function PostComposer({
                                     )}
                                 </div>
                                 <Button onClick={save} disabled={saving}>
-                                    {saving ? "Saving…" : form.scheduledAt || Object.values(form.variants).some((v) => v.scheduledAt) ? "Save & schedule" : "Save"}
+                                    {saving ? "Saving…" : timed ? "Save & schedule" : "Save"}
                                 </Button>
                             </div>
                         </section>
@@ -335,7 +451,7 @@ export default function PostComposer({
                                 <PostSharePanel post={post} onChanged={setPost} />
                             </section>
                         ) : (
-                            <p className="text-xs text-muted-foreground">Save the post first, then add the photo and share it.</p>
+                            <p className="text-xs text-muted-foreground">After saving, each channel&apos;s Share and Post buttons appear here.</p>
                         )}
                     </>
                 )}

@@ -9,7 +9,16 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
-import { INCOMING_APIS, coworkReplyMode, coworkRules, type CoworkReplyMode, type IncomingId } from "@/modules/incoming/lib/incomingCatalog";
+import {
+    INCOMING_APIS,
+    coworkPostMode,
+    coworkPostRules,
+    coworkReplyMode,
+    coworkRules,
+    type CoworkPostMode,
+    type CoworkReplyMode,
+    type IncomingId,
+} from "@/modules/incoming/lib/incomingCatalog";
 
 type Row = {
     id: IncomingId;
@@ -42,6 +51,8 @@ export function IncomingApiPanel() {
     const [pasted, setPasted] = useState<Partial<Record<IncomingId, string>>>({});
     const [mode, setMode] = useState<CoworkReplyMode>("DRAFT");
     const [rules, setRules] = useState("");
+    const [postMode, setPostMode] = useState<CoworkPostMode>("DRAFT");
+    const [postRules, setPostRules] = useState("");
 
     useEffect(() => {
         axios
@@ -51,6 +62,8 @@ export function IncomingApiPanel() {
                 const cowork = data.rows.find((r) => r.id === "COWORK")?.settings ?? {};
                 setMode(coworkReplyMode(cowork));
                 setRules(coworkRules(cowork));
+                setPostMode(coworkPostMode(cowork));
+                setPostRules(coworkPostRules(cowork));
             })
             .catch((e) => toast.error(extractApiError(e, "Could not load Incoming API")));
     }, []);
@@ -211,9 +224,46 @@ export function IncomingApiPanel() {
                                     size="sm"
                                     className="mt-2"
                                     disabled={busy === r.id}
-                                    onClick={() => void save(r.id, { settings: { replyMode: mode, rules } }, "Review reply settings saved")}
+                                    onClick={() => void save(r.id, { settings: { replyMode: mode, rules, postMode, postRules } }, "Review reply settings saved")}
                                 >
                                     Save reply settings
+                                </Button>
+
+                                <h3 className="mt-6 text-sm font-semibold">Social posts</h3>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    {(
+                                        [
+                                            ["DRAFT", "Draft — staff check and schedule every post"],
+                                            ["SCHEDULE", "Schedule — its times stand; posts go out by themselves"],
+                                        ] as const
+                                    ).map(([v, label]) => (
+                                        <Button key={v} size="sm" variant={postMode === v ? "default" : "outline"} onClick={() => setPostMode(v)}>
+                                            {label}
+                                        </Button>
+                                    ))}
+                                </div>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    Draft posts keep the agent&apos;s planned time; open one on Campaigns → Queue and save it to schedule. The agent can change or delete only its own posts, and only before any channel has them.
+                                </p>
+                                <label className="mt-3 block text-sm font-medium" htmlFor="cowork-post-rules">
+                                    Post rules (Cowork reads these with the queue)
+                                </label>
+                                <Textarea
+                                    id="cowork-post-rules"
+                                    className="mt-1"
+                                    rows={6}
+                                    maxLength={20_000}
+                                    value={postRules}
+                                    onChange={(e) => setPostRules(e.target.value)}
+                                    placeholder="Shop name, tone, how many posts a week, best times, what never to post…"
+                                />
+                                <Button
+                                    size="sm"
+                                    className="mt-2"
+                                    disabled={busy === r.id}
+                                    onClick={() => void save(r.id, { settings: { replyMode: mode, rules, postMode, postRules } }, "Post settings saved")}
+                                >
+                                    Save post settings
                                 </Button>
                             </div>
                         )}
