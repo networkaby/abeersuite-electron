@@ -58,6 +58,9 @@ model Post {
   caption       String
   /// A shop page the post links to ("/shop/hp-15s"), never another site.
   link          String?
+  /// Hashtags typed once ("#Abhayapuri #CCTV"), added under the text on
+  /// HASHTAG_CHANNELS only (Instagram, Facebook) — post.ts `channelPost`.
+  hashtags      String?
   channels      String[]
   status        String      @default("DRAFT")
   scheduledAt   DateTime?

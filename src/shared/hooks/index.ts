@@ -34,3 +34,4 @@ export { useCanOpenPage } from "./useCanOpenPage";
 export { useWaSendStates, sendOnWhatsApp, type WaSendStates, type WaSendTarget } from "./useWhatsAppSend";
 export { useSessionState, useLocalState, useSessionScroll } from "./useSessionState";
 export { useDraggableFab } from "./useDraggableFab";
+export { useObjectUrls } from "./useObjectUrls";

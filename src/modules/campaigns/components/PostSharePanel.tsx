@@ -51,8 +51,10 @@ const when = (iso: string) => new Date(iso).toLocaleString("en-IN", { day: "nume
  *     copy and open the profile.
  * Each channel shares its own copy (text and photos, post.ts `channelPost`).
  * Staff then press Done for that channel, which keeps who and when.
+ * `only` = one platform's actions alone, for its own card in the editor (no
+ * photo column, no main text — those live in the Master block).
  */
-export default function PostSharePanel({ post, onChanged }: { post: PostRow; onChanged: (p: PostRow) => void }) {
+export default function PostSharePanel({ post, onChanged, only }: { post: PostRow; onChanged: (p: PostRow) => void; only?: string }) {
     const [busy, setBusy] = useState<string | null>(null);
     const fileInput = useRef<HTMLInputElement>(null);
     const extraInput = useRef<HTMLInputElement>(null);
@@ -64,13 +66,13 @@ export default function PostSharePanel({ post, onChanged }: { post: PostRow; onC
     const [ready, setReady] = useState<Record<string, boolean>>({});
     useEffect(() => {
         for (const [channel, a] of Object.entries(AUTO)) {
-            if (!post.channels.includes(channel)) continue;
+            if (!post.channels.includes(channel) || (only && channel !== only)) continue;
             axios
                 .get<Record<string, unknown>>(`/api/campaigns/${a.status}`)
                 .then(({ data }) => setReady((r) => ({ ...r, [channel]: data[a.readyKey] === true })))
                 .catch(() => setReady((r) => ({ ...r, [channel]: false })));
         }
-    }, [post.channels]);
+    }, [post.channels, only]);
 
     async function postByApi(channel: string, again: boolean) {
         const a = AUTO[channel];
@@ -185,6 +187,66 @@ export default function PostSharePanel({ post, onChanged }: { post: PostRow; onC
             setBusy(null);
         }
     }
+
+    const row = (value: string) => {
+                        const ch = channelOf(value);
+                        const last = post.shares.find((s) => s.channel === value);
+                        const cp = copyOf(value);
+                        const auto = AUTO[value] && ready[value] ? AUTO[value] : null;
+                        const block = auto?.block({ ...post, mediaType: cp.photos[0]?.type ?? null }) ?? null;
+                        return (
+                            <div key={value} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2">
+                                <div className="min-w-0 flex-1">
+                                    <p className="flex items-center gap-1.5 text-sm font-medium">
+                                        {last && <Check className="h-4 w-4 text-emerald-600" />}
+                                        {ch?.label ?? value}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {last ? `Posted ${when(last.sharedAt)}${last.sharedByName ? ` by ${last.sharedByName}` : ""}` : ch?.hint}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {cp.custom ? "Own copy" : "Main post"}
+                                        {cp.scheduledAt ? ` · ${when(cp.scheduledAt.toISOString())}` : " · any time"}
+                                        {` · ${cp.photos.length} photo${cp.photos.length === 1 ? "" : "s"}`}
+                                    </p>
+                                    {cp.custom && <p className="mt-1 line-clamp-2 text-xs whitespace-pre-line">{cp.caption}</p>}
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {cp.custom && (
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="ghost"
+                                            aria-label="Copy this channel's text"
+                                            onClick={async () => ((await copyCaption(textOf(value))) ? toast.success("Text copied") : toast.error("Could not copy"))}
+                                        >
+                                            <Copy className="h-3.5 w-3.5" />
+                                        </Button>
+                                    )}
+                                    {auto && (
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            disabled={busy !== null || !!block}
+                                            title={block ?? `Put it up now, through ${auto.name}`}
+                                            onClick={() => postByApi(value, !!last)}
+                                        >
+                                            <Send className="mr-1 h-3.5 w-3.5" /> {busy === auto.api ? "Posting…" : last ? "Post again" : `Post to ${auto.name}`}
+                                        </Button>
+                                    )}
+                                    <Button type="button" size="sm" variant={auto ? "outline" : "default"} disabled={busy !== null} onClick={() => share(value)}>
+                                        {value === "GOOGLE_BUSINESS" || value === "FACEBOOK" ? <ExternalLink className="mr-1 h-3.5 w-3.5" /> : <Share2 className="mr-1 h-3.5 w-3.5" />}
+                                        {busy === `share-${value}` ? "Opening…" : "Share"}
+                                    </Button>
+                                    <Button type="button" size="sm" variant="outline" disabled={busy !== null} onClick={() => markDone(value)}>
+                                        <Check className="mr-1 h-3.5 w-3.5" /> {last ? "Posted again" : "Done"}
+                                    </Button>
+                                </div>
+                            </div>
+                        );
+    };
+
+    if (only) return post.channels.includes(only) ? row(only) : null;
 
     return (
         <div className="grid gap-4 rounded-xl border p-4 sm:grid-cols-[160px_1fr]">
@@ -301,63 +363,7 @@ export default function PostSharePanel({ post, onChanged }: { post: PostRow; onC
                 </div>
 
                 <div className="space-y-1.5">
-                    {post.channels.map((value) => {
-                        const ch = channelOf(value);
-                        const last = post.shares.find((s) => s.channel === value);
-                        const cp = copyOf(value);
-                        const auto = AUTO[value] && ready[value] ? AUTO[value] : null;
-                        const block = auto?.block({ ...post, mediaType: cp.photos[0]?.type ?? null }) ?? null;
-                        return (
-                            <div key={value} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2">
-                                <div className="min-w-0 flex-1">
-                                    <p className="flex items-center gap-1.5 text-sm font-medium">
-                                        {last && <Check className="h-4 w-4 text-emerald-600" />}
-                                        {ch?.label ?? value}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">
-                                        {last ? `Posted ${when(last.sharedAt)}${last.sharedByName ? ` by ${last.sharedByName}` : ""}` : ch?.hint}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">
-                                        {cp.custom ? "Own copy" : "Main post"}
-                                        {cp.scheduledAt ? ` · ${when(cp.scheduledAt.toISOString())}` : " · any time"}
-                                        {` · ${cp.photos.length} photo${cp.photos.length === 1 ? "" : "s"}`}
-                                    </p>
-                                    {cp.custom && <p className="mt-1 line-clamp-2 text-xs whitespace-pre-line">{cp.caption}</p>}
-                                </div>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {cp.custom && (
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            variant="ghost"
-                                            aria-label="Copy this channel's text"
-                                            onClick={async () => ((await copyCaption(textOf(value))) ? toast.success("Text copied") : toast.error("Could not copy"))}
-                                        >
-                                            <Copy className="h-3.5 w-3.5" />
-                                        </Button>
-                                    )}
-                                    {auto && (
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            disabled={busy !== null || !!block}
-                                            title={block ?? `Put it up now, through ${auto.name}`}
-                                            onClick={() => postByApi(value, !!last)}
-                                        >
-                                            <Send className="mr-1 h-3.5 w-3.5" /> {busy === auto.api ? "Posting…" : last ? "Post again" : `Post to ${auto.name}`}
-                                        </Button>
-                                    )}
-                                    <Button type="button" size="sm" variant={auto ? "outline" : "default"} disabled={busy !== null} onClick={() => share(value)}>
-                                        {value === "GOOGLE_BUSINESS" || value === "FACEBOOK" ? <ExternalLink className="mr-1 h-3.5 w-3.5" /> : <Share2 className="mr-1 h-3.5 w-3.5" />}
-                                        {busy === `share-${value}` ? "Opening…" : "Share"}
-                                    </Button>
-                                    <Button type="button" size="sm" variant="outline" disabled={busy !== null} onClick={() => markDone(value)}>
-                                        <Check className="mr-1 h-3.5 w-3.5" /> {last ? "Posted again" : "Done"}
-                                    </Button>
-                                </div>
-                            </div>
-                        );
-                    })}
+                    {post.channels.map(row)}
                 </div>
             </div>
         </div>

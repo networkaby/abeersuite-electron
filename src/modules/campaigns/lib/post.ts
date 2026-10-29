@@ -134,6 +134,18 @@ export const CHANNEL_SPECS: Record<PostChannel, { textMax: number; photosMax: nu
     INSTAGRAM: { textMax: 2200, photosMax: 10, ratio: [4, 5], ratioLabel: "portrait 4:5" },
 };
 
+/**
+ * Channels whose text gets the post's hashtags under it (owner, 2026-10-29).
+ * Google treats them as spam and WhatsApp has no use for them.
+ */
+export const HASHTAG_CHANNELS: readonly string[] = ["INSTAGRAM", "FACEBOOK"];
+
+/** A channel's text with the hashtags under it, where that channel takes them. */
+export function withHashtags(text: string, hashtags: string | null | undefined, channel: string): string {
+    const tags = hashtags?.trim();
+    return tags && HASHTAG_CHANNELS.includes(channel) ? `${text}\n\n${tags}` : text;
+}
+
 /** The main text's own cap — the roomiest channel; each channel's copy is held to its own limit. */
 export const POST_CAPTION_MAX = Math.max(...Object.values(CHANNEL_SPECS).map((s) => s.textMax));
 
@@ -157,6 +169,7 @@ export type PostVariants = Partial<Record<string, PostVariant>>;
 
 type VariantSource = {
     caption: string;
+    hashtags?: string | null;
     scheduledAt: Date | string | null;
     mediaKey: string | null;
     mediaType: string | null;
@@ -187,7 +200,7 @@ export function channelPost(p: VariantSource, channel: string) {
     const all = postPhotos(p);
     const photos = v?.photos ? v.photos.flatMap((k) => all.filter((f) => f.key === k)) : all.slice(0, 1);
     return {
-        caption: v?.caption ?? p.caption,
+        caption: withHashtags(v?.caption ?? p.caption, p.hashtags, channel),
         scheduledAt: channelTime(p, channel),
         photos: photos.slice(0, CHANNEL_SPECS[channel as PostChannel]?.photosMax ?? 1),
         /** Own words or photos (a copy with only its own time still reads as the main post). */
@@ -228,6 +241,13 @@ export const postSchema = z
         .max(300)
         .refine((v) => v === "" || (v.startsWith("/") && !v.startsWith("//")), "Use a shop page path, like /shop")
         .transform((v) => v || null),
+    // "#Abhayapuri #CCTV" — under the text on HASHTAG_CHANNELS only.
+    hashtags: z
+        .string()
+        .trim()
+        .max(500)
+        .default("")
+        .transform((v) => v || null),
     channels: z.array(z.enum(READY_CHANNELS)).min(1, "Pick at least one channel"),
     // Null = no time set (a draft, or "share now").
     scheduledAt: z
@@ -244,7 +264,7 @@ export const postSchema = z
     .superRefine((p, ctx) => {
         // Each channel's text must fit that channel — the main text included where a channel follows it.
         for (const c of p.channels) {
-            const text = p.variants[c]?.caption ?? p.caption;
+            const text = withHashtags(p.variants[c]?.caption ?? p.caption, p.hashtags, c);
             const max = CHANNEL_SPECS[c].textMax;
             if (text.length > max) {
                 ctx.addIssue({ code: "custom", path: ["variants", c], message: `${channelOf(c)?.label} takes ${max} characters — write a shorter copy for it (now ${text.length}).` });
@@ -314,6 +334,7 @@ export const POST_SELECT = {
     id: true,
     caption: true,
     link: true,
+    hashtags: true,
     channels: true,
     status: true,
     scheduledAt: true,
@@ -337,6 +358,7 @@ export type PostRow = {
     id: number;
     caption: string;
     link: string | null;
+    hashtags: string | null;
     channels: string[];
     status: string;
     scheduledAt: string | null;

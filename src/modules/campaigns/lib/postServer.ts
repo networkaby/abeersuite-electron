@@ -75,6 +75,7 @@ export async function copyProductPhoto(postId: number, productId: number): Promi
 /** The fields a channel's own copy is worked out from (post.ts `channelPost`). */
 export const COPY_SELECT = {
     caption: true,
+    hashtags: true,
     scheduledAt: true,
     mediaKey: true,
     mediaType: true,
