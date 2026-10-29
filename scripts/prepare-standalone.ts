@@ -318,9 +318,14 @@ async function main() {
     console.log("[prepare-standalone] Materialising Next's server-externalised packages...");
     const externalSeeds = dereferenceServerExternals(standaloneDir);
 
-    const dropImageOptimiser = imagesUnoptimized(standaloneDir);
+    // Our own server code (campaigns' postPhotoFit) imports sharp, which Next then
+    // externalises into .next/node_modules — its @img/* deps must ship too.
+    const appUsesSharp = listPackages(path.join(standaloneDir, ".next", "node_modules")).some((pkg) =>
+        path.basename(pkg.path).startsWith("sharp")
+    );
+    const dropImageOptimiser = imagesUnoptimized(standaloneDir) && !appUsesSharp;
     if (!dropImageOptimiser) {
-        console.log("[prepare-standalone] images.unoptimized is not set — keeping sharp for Next's image optimiser.");
+        console.log("[prepare-standalone] sharp is load-bearing (image optimiser or app code) — keeping sharp and @img/*.");
     }
 
     console.log("[prepare-standalone] Hoisting pnpm-symlinked dependencies into real directories...");
