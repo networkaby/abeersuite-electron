@@ -283,7 +283,7 @@ export default function PostPlatformCards({
                 : previewSrc
                   ? [{ src: previewSrc, video: false }]
                   : [];
-          const sendsAll = c === "FACEBOOK";
+          const sendsAll = c === "FACEBOOK" || c === "FACEBOOK_STORY";
           const shown = sendsAll ? media : media.slice(0, 1);
           const linkOut = master.link && c !== "GOOGLE_BUSINESS" && spec.textMax > 0 ? `\n\n${SHOP_SITE}${master.link}` : "";
           previews.push({

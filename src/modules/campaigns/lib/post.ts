@@ -55,7 +55,7 @@ export const POST_CHANNELS = [
         short: "FB story",
         mode: "AUTO",
         ready: true,
-        hint: "One upright photo or short video, gone after 24 hours; no caption. Posts by itself through the Facebook connection.",
+        hint: "Up to 10 upright photos or short videos, each its own story in order, gone after 24 hours; no caption. Posts by itself through the Facebook connection.",
     },
     {
         value: "FACEBOOK_REEL",
@@ -138,14 +138,18 @@ export function facebookAutoBlock(p: { mediaType: string | null; mediaSize?: num
 }
 
 /**
- * Why a post cannot go to the Facebook Page story by itself, or null: one JPG
- * / PNG photo (under 4 MB) or one MP4 video.
+ * Why a post cannot go to the Facebook Page story by itself, or null: each of
+ * its items a JPG / PNG photo (under 4 MB) or an MP4 video.
  */
-export function facebookStoryBlock(p: { mediaType: string | null; mediaSize?: number | null }): string | null {
-    if (!p.mediaType) return "A story needs a photo or a video.";
-    if (p.mediaType.startsWith("video/")) return p.mediaType === "video/mp4" ? null : "A story video must be an MP4.";
-    if (!["image/jpeg", "image/png"].includes(p.mediaType)) return "A story takes a JPG or PNG photo — Fit or Adjust makes one.";
-    if (p.mediaSize && p.mediaSize > FACEBOOK_PHOTO_MAX_BYTES) return "A story photo must be under 4 MB — Fit or Adjust makes a smaller copy.";
+export function facebookStoryBlock(p: { mediaType: string | null; mediaSize?: number | null; photos?: { type: string; size: number }[] }): string | null {
+    const items = p.photos?.length ? p.photos : p.mediaType ? [{ type: p.mediaType, size: p.mediaSize ?? 0 }] : [];
+    if (!items.length) return "A story needs a photo or a video.";
+    for (const f of items) {
+        if (f.type.startsWith("video/")) {
+            if (f.type !== "video/mp4") return "A story video must be an MP4.";
+        } else if (!["image/jpeg", "image/png"].includes(f.type)) return "A story takes JPG or PNG photos — Fit or Adjust makes one.";
+        else if (f.size > FACEBOOK_PHOTO_MAX_BYTES) return "A story photo must be under 4 MB — Fit or Adjust makes a smaller copy.";
+    }
     return null;
 }
 
@@ -185,7 +189,8 @@ export const CHANNEL_SPECS: Record<PostChannel, { textMax: number; photosMax: nu
     WA_STATUS: { textMax: 700, photosMax: 10, ratio: [9, 16], ratioLabel: "upright 9:16" },
     FACEBOOK: { textMax: 5000, photosMax: 10, ratio: [1, 1], ratioLabel: "square 1:1" },
     // A story shows no caption — textMax 0 means "no text here".
-    FACEBOOK_STORY: { textMax: 0, photosMax: 1, ratio: [9, 16], ratioLabel: "upright 9:16" },
+    // Each photo / video is its own story, posted in order.
+    FACEBOOK_STORY: { textMax: 0, photosMax: 10, ratio: [9, 16], ratioLabel: "upright 9:16" },
     FACEBOOK_REEL: { textMax: 2200, photosMax: 1, ratio: [9, 16], ratioLabel: "upright 9:16 video" },
     INSTAGRAM: { textMax: 2200, photosMax: 10, ratio: [4, 5], ratioLabel: "portrait 4:5" },
 };

@@ -303,29 +303,44 @@ async function hostedVideo(edge: string, pageId: string, token: string, fileUrl:
 }
 
 /**
- * Put one photo or video up as the Page's story (24 hours, no caption).
- * Returns the story's link when Facebook gives one.
+ * Put the Page's stories up (24 hours each, no caption): every photo / video
+ * of the channel's copy, in order, each its own story. Stops at the first
+ * failure: none up → throws; some up → returns how many, with the reason, so
+ * the share is still logged and a retry never posts the first ones twice.
  */
-export async function postStoryToFacebook(p: { mediaKey: string | null; mediaType: string | null; mediaSize?: number | null }): Promise<string | null> {
+export async function postStoryToFacebook(p: {
+    mediaKey: string | null;
+    mediaType: string | null;
+    mediaSize?: number | null;
+    photos?: { key: string; type: string; size: number }[];
+}): Promise<{ url: string | null; note: string | null }> {
     const block = facebookStoryBlock(p);
     if (block) throw new FacebookError(block);
+    const items = p.photos?.length ? p.photos : p.mediaKey && p.mediaType ? [{ key: p.mediaKey, type: p.mediaType, size: p.mediaSize ?? 0 }] : [];
     const { pageId, token } = await pageAccess();
-    const url = mediaLink(p.mediaKey);
-    if (!url) throw new FacebookError("File storage (R2) is not set up on this server, so Facebook cannot fetch the story.");
-    try {
-        let postId: string | undefined;
-        if (p.mediaType?.startsWith("video/")) {
-            postId = (await hostedVideo("video_stories", pageId, token, url, {})).post_id;
-        } else {
-            const photo = await graph<{ id: string }>(`/${pageId}/photos`, { method: "POST", params: { url, published: "false", access_token: token } });
-            postId = (await graph<{ post_id?: string }>(`/${pageId}/photo_stories`, { method: "POST", params: { photo_id: photo.id, access_token: token } })).post_id;
+    let first: string | null = null;
+    let done = 0;
+    for (const f of items) {
+        try {
+            const url = mediaLink(f.key);
+            if (!url) throw new FacebookError("File storage (R2) is not set up on this server, so Facebook cannot fetch the story.");
+            let postId: string | undefined;
+            if (f.type.startsWith("video/")) {
+                postId = (await hostedVideo("video_stories", pageId, token, url, {})).post_id;
+            } else {
+                const photo = await graph<{ id: string }>(`/${pageId}/photos`, { method: "POST", params: { url, published: "false", access_token: token } });
+                postId = (await graph<{ post_id?: string }>(`/${pageId}/photo_stories`, { method: "POST", params: { photo_id: photo.id, access_token: token } })).post_id;
+            }
+            first ??= postId ? `https://www.facebook.com/${postId}` : null;
+            done++;
+        } catch (e) {
+            if (e instanceof FacebookError) await noteFacebookError(e.message);
+            if (!done) throw e;
+            return { url: first, note: `${done} of ${items.length} stories went up; story ${done + 1} failed: ${(e as Error).message} Share the rest by hand.` };
         }
-        await noteFacebookError(null);
-        return postId ? `https://www.facebook.com/${postId}` : null;
-    } catch (e) {
-        if (e instanceof FacebookError) await noteFacebookError(e.message);
-        throw e;
     }
+    await noteFacebookError(null);
+    return { url: first, note: null };
 }
 
 /** Put one MP4 up as a Page reel with its caption. Returns the reel's link. */

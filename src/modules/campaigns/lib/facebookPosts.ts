@@ -13,10 +13,11 @@ const AUTO_NAME = "Auto (Facebook)";
  * share line; this says how each goes up and what stops it going by itself.
  */
 type Copy = ReturnType<typeof asChannelCopy<Parameters<typeof asChannelCopy>[0]>>;
-const FACEBOOK_CHANNELS: Record<string, { send: (p: Copy) => Promise<string | null>; block: (p: Copy) => string | null }> = {
-    FACEBOOK: { send: (p) => postToFacebook(p as never), block: (p) => facebookAutoBlock(p) },
+const plain = (url: string | null) => ({ url, note: null as string | null });
+const FACEBOOK_CHANNELS: Record<string, { send: (p: Copy) => Promise<{ url: string | null; note: string | null }>; block: (p: Copy) => string | null }> = {
+    FACEBOOK: { send: async (p) => plain(await postToFacebook(p as never)), block: (p) => facebookAutoBlock(p) },
     FACEBOOK_STORY: { send: (p) => postStoryToFacebook(p), block: (p) => facebookStoryBlock(p) },
-    FACEBOOK_REEL: { send: (p) => postReelToFacebook(p as never), block: (p) => facebookReelBlock(p) },
+    FACEBOOK_REEL: { send: async (p) => plain(await postReelToFacebook(p as never)), block: (p) => facebookReelBlock(p) },
 };
 export const isFacebookChannel = (c: string) => c in FACEBOOK_CHANNELS;
 
@@ -43,8 +44,9 @@ export async function sendPostToFacebook(postId: number, by: { userId: number | 
     });
     if (!post) return null;
     await claimPostFor(post, channel, channelOf(channel)?.label ?? "Facebook", again, (m) => new FacebookError(m));
-    const url = await how.send(asChannelCopy(post, channel));
-    return { post: await recordShare(postId, channel, by.userId, by.name), url };
+    // Some stories up and one failed still counts as shared — a retry would post the first ones twice.
+    const { url, note } = await how.send(asChannelCopy(post, channel));
+    return { post: await recordShare(postId, channel, by.userId, by.name), url, note };
 }
 
 export type FacebookPostsResult = { sent: number; failed: { id: number; error: string }[]; skipped?: string };

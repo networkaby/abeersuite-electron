@@ -85,9 +85,10 @@ export default function PostSharePanel({ post, onChanged, only }: { post: PostRo
         if (again && !window.confirm(`This post is already on ${a.name}. Post it there again?`)) return;
         setBusy(a.api);
         try {
-            const { data } = await axios.post<{ post: PostRow; url: string | null }>(`/api/campaigns/posts/${post.id}/${a.api}`, { again, ...(a.api === "facebook" ? { channel } : {}) });
+            const { data } = await axios.post<{ post: PostRow; url: string | null; note?: string | null }>(`/api/campaigns/posts/${post.id}/${a.api}`, { again, ...(a.api === "facebook" ? { channel } : {}) });
             onChanged(data.post);
-            toast.success(`Posted on ${channelOf(channel)?.label ?? a.name}`, data.url ? { action: { label: "View", onClick: () => window.open(data.url!, "_blank", "noopener") } } : undefined);
+            if (data.note) toast.warning(data.note);
+            else toast.success(`Posted on ${channelOf(channel)?.label ?? a.name}`, data.url ? { action: { label: "View", onClick: () => window.open(data.url!, "_blank", "noopener") } } : undefined);
         } catch (e) {
             toast.error(extractApiError(e, `${a.name} did not take the post`));
         } finally {

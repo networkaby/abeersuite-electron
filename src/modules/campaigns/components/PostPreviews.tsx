@@ -300,7 +300,14 @@ function FacebookStory({ it }: { it: PreviewItem }) {
         <span className="absolute inset-0 flex items-center justify-center text-xs text-white/60">No photo or video</span>
       )}
       <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/55 to-transparent px-2 pt-2 pb-8">
-        <div className="h-0.5 rounded bg-white/40"><div className="h-full w-1/4 rounded bg-white" /></div>
+        {/* One part per story, the first one playing. */}
+        <div className="flex gap-0.5">
+          {Array.from({ length: Math.max(1, it.count) }, (_, i) => (
+            <div key={i} className="h-0.5 flex-1 rounded bg-white/40">
+              {i === 0 && <div className="h-full w-1/3 rounded bg-white" />}
+            </div>
+          ))}
+        </div>
         <div className="mt-2 flex items-center gap-1.5 text-[11px]">
           <Avatar size={26} />
           <span className="font-semibold">{NAME}</span>
