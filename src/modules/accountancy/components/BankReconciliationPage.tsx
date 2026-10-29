@@ -23,7 +23,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import axios from "axios";
 import { toast } from "sonner";
-import { CheckCircle2, ChevronDown, ChevronUp, Link2, Loader2, Lock, RefreshCw, Sparkles, Trash2, Unlink, Upload, Wand2 } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Link2, Loader2, Lock, RefreshCw, Sparkles, Trash2, Unlink, Upload, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { fmt } from "@/shared/lib/format/moneyInr";
@@ -123,6 +123,7 @@ export function BankReconciliationPage() {
     const [savedView, changeView] = useLocalState<ViewMode>("recon.view", "merged");
     const view: ViewMode = savedView === "split" ? "split" : "merged";
     const [statsPref, setStatsPref] = useLocalState<"on" | "off">("recon.stats", "on");
+    const [uploadsPref, setUploadsPref] = useLocalState<"open" | "closed">("recon.uploads", "closed");
     const showStats = statsPref !== "off";
     const toggleStats = () => setStatsPref(showStats ? "off" : "on");
     const [selSt, setSelSt] = useState<Set<number>>(new Set());
@@ -859,11 +860,23 @@ export function BankReconciliationPage() {
                     </div>
                     )}
 
-                    {/* Uploads */}
+                    {/* Uploads — folded to one line by default; open list scrolls inside a fixed height. */}
                     {data.imports.length > 0 && (
                         <div className="border-t bg-card px-6 py-2">
-                            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Uploads</div>
-                            <div className="flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                className="flex w-full items-center gap-1 text-left text-[11px] text-muted-foreground hover:text-foreground"
+                                aria-expanded={uploadsPref === "open"}
+                                onClick={() => setUploadsPref(uploadsPref === "open" ? "closed" : "open")}
+                            >
+                                {uploadsPref === "open" ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                <span className="font-semibold uppercase tracking-wide">Uploads ({data.imports.length})</span>
+                                {uploadsPref !== "open" && (
+                                    <span className="truncate">· latest: {data.imports[0].fileName} · {formatDate(data.imports[0].createdAt)}</span>
+                                )}
+                            </button>
+                            {uploadsPref === "open" && (
+                            <div className="mt-1 flex max-h-24 flex-wrap gap-2 overflow-y-auto">
                                 {data.imports.map((imp) => (
                                     <div key={imp.id} className="flex items-center gap-2 rounded-md border px-2 py-1 text-xs">
                                         <span className="font-medium" title={imp.fileName}>{imp.fileName.length > 28 ? `${imp.fileName.slice(0, 26)}…` : imp.fileName}</span>
@@ -877,6 +890,7 @@ export function BankReconciliationPage() {
                                     </div>
                                 ))}
                             </div>
+                            )}
                         </div>
                     )}
                 </div>
