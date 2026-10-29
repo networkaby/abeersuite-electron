@@ -29,6 +29,9 @@ import {
   ratioFits,
   withHashtags,
   hasPhoneNumber,
+  HASHTAG_BEST,
+  HASHTAG_CHANNELS,
+  variantEmpty,
   channelText,
   hashtagCount,
   INSTAGRAM_HASHTAGS_MAX,
@@ -47,6 +50,8 @@ export type CopyForm = {
   caption: string | null;
   scheduledAt: string | null;
   photos: string[] | null;
+  /** Own hashtags ("" = none here); null / missing = Master's. */
+  hashtags?: string | null;
 };
 
 /** Cards in the order people look at them: the networks that post by themselves first. */
@@ -235,21 +240,12 @@ export default function PostPlatformCards({
             ...(copy ?? { caption: null, scheduledAt: null, photos: null }),
             ...patch,
           };
-          onChange(
-            c,
-            next.caption === null &&
-              next.scheduledAt === null &&
-              next.photos === null
-              ? null
-              : next,
-          );
+          onChange(c, variantEmpty(next) ? null : next);
         };
         const ownText = copy?.caption != null;
-        const text = withHashtags(
-          copy?.caption ?? master.caption,
-          master.hashtags,
-          c,
-        );
+        const ownTags = copy?.hashtags != null;
+        const tags = copy?.hashtags ?? master.hashtags;
+        const text = withHashtags(copy?.caption ?? master.caption, tags, c);
         const tooLong = text.length > spec.textMax;
         const ownTime = copy?.scheduledAt != null;
         const time = copy?.scheduledAt ?? master.scheduledAt;
@@ -417,26 +413,14 @@ export default function PostPlatformCards({
                           "No main text — write it in Master, or Change to write this platform's own."}
                       </p>
                     )}
-                    {ownText &&
-                      master.hashtags.trim() &&
-                      text !== copy!.caption && (
-                        <p className="text-xs text-foreground/70">
-                          Master hashtags are added under it.
-                        </p>
-                      )}
+                    {ownText && tags.trim() && HASHTAG_CHANNELS.includes(c) && (
+                      <p className="text-xs text-foreground/70">The hashtags below are added under it.</p>
+                    )}
                     {tooLong && (
                       <p className="text-xs font-medium text-destructive">
                         Too long here — change it to a shorter copy.
                       </p>
                     )}
-                      {c === "FACEBOOK" &&
-                        (master.hashtags.match(/#[^\s#]+/g)?.length ?? 0) >
-                          3 && (
-                          <p className="text-xs text-foreground/70">
-                            Facebook works best with 1–3 hashtags; Master has{" "}
-                            {master.hashtags.match(/#[^\s#]+/g)?.length}.
-                          </p>
-                        )}
                     {(c === "INSTAGRAM" || c === "INSTAGRAM_REEL") && hashtagCount(text) > INSTAGRAM_HASHTAGS_MAX && (
                       <p className="text-xs font-medium text-destructive">
                         Instagram allows {INSTAGRAM_HASHTAGS_MAX} hashtags at most — this has {hashtagCount(text)}.
@@ -460,6 +444,36 @@ export default function PostPlatformCards({
                     )}
                   </Row>
                   )}
+                  {HASHTAG_CHANNELS.includes(c) &&
+                    (() => {
+                      const n = hashtagCount(tags);
+                      const [lo, hi] = HASHTAG_BEST[c] ?? [1, 5];
+                      return (
+                        <Row
+                          label="Hashtags"
+                          own={ownTags}
+                          note={`${n} · best ${lo}–${hi}`}
+                          warn={n > hi}
+                          onChange={() => set({ hashtags: master.hashtags })}
+                          onReset={() => set({ hashtags: null })}
+                        >
+                          {ownTags ? (
+                            <Input
+                              value={copy!.hashtags ?? ""}
+                              placeholder="Own hashtags — leave empty for none here"
+                              onChange={(e) => set({ hashtags: e.target.value })}
+                            />
+                          ) : (
+                            <p className={`text-sm ${tags.trim() ? "text-blue-700" : "text-muted-foreground"}`}>
+                              {tags.trim() || "None — add them in Master, or Change to give this platform its own."}
+                            </p>
+                          )}
+                          {n > hi && (
+                            <p className="text-xs text-amber-700">More than {hi} can look like spam here — Change to a shorter set for {ch.label}.</p>
+                          )}
+                        </Row>
+                      );
+                    })()}
                 </div>
 
                 <div className="space-y-3">

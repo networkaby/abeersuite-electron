@@ -22,7 +22,7 @@ import PostPlatformCards, { type CopyForm } from "./PostPlatformCards";
 import PostMaterials from "./PostMaterials";
 import { toLocalInput } from "@/modules/campaigns/lib/campaign";
 import { fitPostPhoto, uploadPostFile } from "@/modules/campaigns/lib/postUpload";
-import { takesMedia } from "@/modules/campaigns/lib/post";
+import { takesMedia, variantEmpty } from "@/modules/campaigns/lib/post";
 
 type Form = Omit<PostInput, "caption" | "link" | "hashtags" | "scheduledAt" | "variants"> & { caption: string; link: string; hashtags: string; scheduledAt: string; variants: Record<string, CopyForm> };
 
@@ -40,7 +40,7 @@ const fromRow = (p: PostRow): Form => ({
     campaignId: p.campaignId,
     status: p.status === "SCHEDULED" ? "SCHEDULED" : "DRAFT",
     variants: Object.fromEntries(
-        Object.entries(p.variants).flatMap(([c, v]) => (v ? [[c, { caption: v.caption, scheduledAt: v.scheduledAt ? toLocalInput(v.scheduledAt) : null, photos: v.photos }]] : [])),
+        Object.entries(p.variants).flatMap(([c, v]) => (v ? [[c, { caption: v.caption, scheduledAt: v.scheduledAt ? toLocalInput(v.scheduledAt) : null, photos: v.photos, hashtags: v.hashtags ?? null }]] : [])),
     ),
 });
 
@@ -133,7 +133,7 @@ export default function PostComposer({
             for (const c of channels) {
                 const photos = row.variants[c]?.photos ?? null;
                 const v = { ...(variants[c] ?? { caption: null, scheduledAt: null }), photos };
-                if (v.caption === null && v.scheduledAt === null && v.photos === null) delete variants[c];
+                if (variantEmpty(v)) delete variants[c];
                 else variants[c] = v;
             }
             return { ...f, variants };
@@ -175,7 +175,7 @@ export default function PostComposer({
         const variants = Object.fromEntries(
             Object.entries(form.variants)
                 .filter(([c]) => (form.channels as string[]).includes(c))
-                .map(([c, v]) => [c, { caption: v.caption?.trim() || null, scheduledAt: iso(v.scheduledAt), photos: v.photos }]),
+                .map(([c, v]) => [c, { caption: v.caption?.trim() || null, scheduledAt: iso(v.scheduledAt), photos: v.photos, hashtags: v.hashtags === null || v.hashtags === undefined ? null : v.hashtags.trim() }]),
         );
         const body = {
             ...form,

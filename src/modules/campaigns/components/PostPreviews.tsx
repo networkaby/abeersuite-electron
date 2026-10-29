@@ -164,12 +164,29 @@ function Photo({ it }: { it: PreviewItem }) {
 }
 
 /** Text cut off where the app cuts it, with its own "more" word. */
-function Clamp({ text, lines, more, className = "" }: { text: string; lines: number; more: string; className?: string }) {
+function Clamp({ text, lines, more, className = "", tags }: { text: string; lines: number; more: string; className?: string; tags?: string }) {
   const long = text.split("\n").length > lines || text.length > lines * 45;
   return (
     <div className={className}>
       <p className="whitespace-pre-line break-words" style={{ display: "-webkit-box", WebkitLineClamp: lines, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-        {text || <span className="opacity-50">No text</span>}
+        {text ? (
+          tags ? (
+            // Hashtags drawn the way the app draws them (its own colour / weight).
+            text.split(/(#[^\s#]+)/g).map((part, i) =>
+              part.startsWith("#") ? (
+                <span key={i} className={tags}>
+                  {part}
+                </span>
+              ) : (
+                part
+              ),
+            )
+          ) : (
+            text
+          )
+        ) : (
+          <span className="opacity-50">No text</span>
+        )}
       </p>
       {long && <span className="font-medium opacity-60">{more}</span>}
     </div>
@@ -189,7 +206,7 @@ function Facebook({ it }: { it: PreviewItem }) {
         </div>
         <Ellipsis className="h-4 w-4 text-neutral-500" />
       </div>
-      <Clamp text={it.text} lines={3} more="See more" className="px-3 py-2" />
+      <Clamp text={it.text} lines={3} more="See more" className="px-3 py-2" tags="font-medium text-[#1877f2]" />
       {(it.srcs?.length ?? 0) > 1 ? <FacebookGrid srcs={it.srcs!} /> : it.src && <Photo it={it} />}
       <div className="flex justify-around border-t py-2 text-xs font-medium text-neutral-600">
         <span className="flex items-center gap-1"><ThumbsUp className="h-4 w-4" /> Like</span>
@@ -252,7 +269,7 @@ function Instagram({ it }: { it: PreviewItem }) {
         <span className="flex-1" />
         <Bookmark className="h-5 w-5" />
       </div>
-      <Clamp text={`${HANDLE}  ${it.text}`} lines={2} more="more" className="px-3 pt-1.5 pb-3" />
+      <Clamp text={`${HANDLE}  ${it.text}`} lines={2} more="more" className="px-3 pt-1.5 pb-3" tags="text-[#00376b]" />
     </div>
   );
 }
@@ -438,7 +455,7 @@ function Reel({ it, ig = false }: { it: PreviewItem; ig?: boolean }) {
           <span className="font-semibold">{ig ? HANDLE : NAME}</span>
           <span className="rounded border border-white/80 px-1.5 text-[10px]">Follow</span>
         </div>
-        <Clamp text={it.text} lines={2} more="…more" className="mt-1.5 pr-10" />
+        <Clamp text={it.text} lines={2} more="…more" className="mt-1.5 pr-10" tags="font-semibold" />
       </div>
     </div>
   );

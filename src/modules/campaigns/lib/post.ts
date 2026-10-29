@@ -254,6 +254,9 @@ export const mediaNoun = (channel: string, many = false) => {
  */
 export const HASHTAG_CHANNELS: readonly string[] = ["INSTAGRAM", "INSTAGRAM_REEL", "FACEBOOK", "FACEBOOK_REEL"];
 
+/** How many hashtags work best on each hashtag channel — advice shown on its card. */
+export const HASHTAG_BEST: Record<string, [number, number]> = { INSTAGRAM: [3, 8], INSTAGRAM_REEL: [3, 5], FACEBOOK: [1, 3], FACEBOOK_REEL: [2, 4] };
+
 /** Instagram allows at most this many hashtags in one caption. */
 export const INSTAGRAM_HASHTAGS_MAX = 30;
 export const hashtagCount = (text: string) => text.match(/#[^\s#]+/g)?.length ?? 0;
@@ -315,7 +318,23 @@ export const photoFocusSchema = z.object({ x: fraction, y: fraction });
  * `caption` its text, `scheduledAt` its time (ISO), `photos` its main photo
  * (otherwise the keys, in order, from the main photo and `extraMedia`).
  */
-export type PostVariant = { caption: string | null; scheduledAt: string | null; photos: string[] | null };
+export type PostVariant = {
+    caption: string | null;
+    scheduledAt: string | null;
+    photos: string[] | null;
+    /** This channel's own hashtags ("" = none here); null / missing = Master's. */
+    hashtags?: string | null;
+};
+
+/** A copy with nothing of its own — the channel just follows Master, so it needs no entry. */
+export const variantEmpty = (v: Partial<PostVariant> | null | undefined) =>
+    !v || ((v.caption ?? null) === null && (v.scheduledAt ?? null) === null && (v.photos ?? null) === null && (v.hashtags ?? null) === null);
+
+/** The hashtags that go out on a channel: its own when it has them, else Master's. */
+export const channelHashtags = (p: { hashtags?: string | null; variants: unknown }, channel: string) => {
+    const own = variantOf(p, channel)?.hashtags;
+    return own ?? p.hashtags ?? null;
+};
 export type PostVariants = Partial<Record<string, PostVariant>>;
 
 type VariantSource = {
@@ -351,11 +370,11 @@ export function channelPost(p: VariantSource, channel: string) {
     const all = postPhotos(p);
     const photos = v?.photos ? v.photos.flatMap((k) => all.filter((f) => f.key === k)) : all.slice(0, 1);
     return {
-        caption: withHashtags(v?.caption ?? p.caption, p.hashtags, channel),
+        caption: withHashtags(v?.caption ?? p.caption, channelHashtags(p, channel), channel),
         scheduledAt: channelTime(p, channel),
         photos: photos.slice(0, CHANNEL_SPECS[channel as PostChannel]?.photosMax ?? 1),
         /** Own words or photos (a copy with only its own time still reads as the main post). */
-        custom: v?.caption != null || v?.photos != null,
+        custom: v?.caption != null || v?.photos != null || v?.hashtags != null,
     };
 }
 
@@ -380,6 +399,8 @@ const variantSchema = z.object({
     caption: z.string().trim().min(1).max(POST_CAPTION_MAX).nullable(),
     scheduledAt: z.string().datetime({ offset: true }).nullable(),
     photos: z.array(z.string().min(1).max(300)).max(10).nullable(),
+    // "" = no hashtags on this channel; null = Master's.
+    hashtags: z.string().trim().max(500).nullable().default(null),
 });
 
 export const postSchema = z
@@ -421,7 +442,7 @@ export const postSchema = z
                 ctx.addIssue({ code: "custom", path: ["caption"], message: `Write the main text, or ${channelOf(c)?.label}'s own text.` });
                 continue;
             }
-            const text = withHashtags(p.variants[c]?.caption ?? p.caption, p.hashtags, c);
+            const text = withHashtags(p.variants[c]?.caption ?? p.caption, p.variants[c]?.hashtags ?? p.hashtags, c);
             const max = CHANNEL_SPECS[c].textMax;
             if (text.length > max) {
                 ctx.addIssue({ code: "custom", path: ["variants", c], message: `${channelOf(c)?.label} takes ${max} characters — write a shorter copy for it (now ${text.length}).` });
@@ -443,10 +464,10 @@ function normaliseVariants<T extends { channels: string[]; scheduledAt: Date | n
     const variants: Record<string, PostVariant> = {};
     for (const c of p.channels) {
         // A channel following the main time keeps it even when another copy is earlier.
-        const v = p.variants[c] ?? { caption: null, scheduledAt: null, photos: null };
+        const v = p.variants[c] ?? { caption: null, scheduledAt: null, photos: null, hashtags: null };
         const t = timeOf(c);
         const own: PostVariant = { ...v, scheduledAt: t && new Date(t).getTime() !== first?.getTime() ? new Date(t).toISOString() : null };
-        if (own.caption !== null || own.scheduledAt !== null || own.photos !== null) variants[c] = own;
+        if (!variantEmpty(own)) variants[c] = own;
     }
     return { ...p, scheduledAt: first, status: first ? "SCHEDULED" : "DRAFT", variants };
 }

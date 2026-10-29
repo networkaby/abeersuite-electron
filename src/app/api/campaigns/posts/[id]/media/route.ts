@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, parseIdParam, validateRequest } from "@/shared/lib/api";
-import { checkPostMedia, type PostPhoto, type PostVariants } from "@/modules/campaigns/lib/post";
+import { checkPostMedia, variantEmpty, type PostPhoto, type PostVariants } from "@/modules/campaigns/lib/post";
 import { loadPost, postMediaPrefix, postMediaResponse } from "@/modules/campaigns/lib/postServer";
 import { EXTRA_MEDIA_MAX as EXTRA_MAX, giveChannelPhoto, originalsOf } from "@/modules/campaigns/lib/postPhotoFit";
 import { requirePostsPage } from "@/modules/campaigns/lib/campaignAccess";
@@ -118,7 +118,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         for (const [c, v] of Object.entries(variants)) {
             if (!v?.photos || !v.photos.every((k) => fitOfOld.has(k))) continue;
             const left = { ...v, photos: null };
-            if (left.caption === null && left.scheduledAt === null) delete variants[c];
+            if (variantEmpty(left)) delete variants[c];
             else variants[c] = left;
         }
         await prisma.post.update({

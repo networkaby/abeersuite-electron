@@ -52,6 +52,7 @@ curl -sS -X POST -H "x-api-key: $COWORK_API_KEY" -H "content-type: application/j
   }'
 ```
 
+- `hashtags` (top level) go under the text on Instagram feed / reel and Facebook feed / reel only; a channel's own set: `variants.<CHANNEL>.hashtags` (`""` = none there). Best counts: Instagram 3–8 (max 30), IG reel 3–5, Facebook 1–3, FB reel 2–4.
 - `link` is a shop page path (`/shop`, `/<product-path>`), never another site.
 - `fromProductId` instead of a photo copies that shop product's photo in.
 - Send `"status": "DRAFT"` to keep it a draft even in Schedule mode.

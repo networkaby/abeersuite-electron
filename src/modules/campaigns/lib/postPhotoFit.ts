@@ -13,6 +13,7 @@ import {
     type PostChannel,
     type PostPhoto,
     type PostVariants,
+    variantEmpty,
 } from "@/modules/campaigns/lib/post";
 import { loadPost, postMediaKey } from "@/modules/campaigns/lib/postServer";
 
@@ -202,7 +203,7 @@ export async function fitChannelPhotos(postId: number, channel: string, keys: st
 /** One channel's photos (null = the main photo), dropping a copy left with nothing of its own. */
 function setChannelPhotos(variants: PostVariants, channel: string, photos: string[] | null) {
     const v = { ...(variants[channel] ?? { caption: null, scheduledAt: null }), photos };
-    if (v.caption === null && v.scheduledAt === null && v.photos === null) delete variants[channel];
+    if (variantEmpty(v)) delete variants[channel];
     else variants[channel] = v;
 }
 
