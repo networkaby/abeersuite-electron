@@ -273,10 +273,19 @@ function readLabelledRows(rows: string[][]): Map<string, string> {
     for (const cells of rows) {
         const joined = cells.map((c) => c ?? "").join("\t");
         // "Label :\tvalue" or "Label : value" — split at the first colon.
+        // No colon (Bandhan CSV: "Account Number,2010…") — first filled cell is
+        // the label, the rest is the value.
         const idx = joined.indexOf(":");
-        if (idx <= 0) continue;
-        const label = norm(joined.slice(0, idx));
-        const value = joined.slice(idx + 1).replace(/\t/g, " ").trim();
+        let label: string, value: string;
+        if (idx > 0) {
+            label = norm(joined.slice(0, idx));
+            value = joined.slice(idx + 1).replace(/\t/g, " ").trim();
+        } else {
+            const filled = cells.map((c) => (c ?? "").trim()).filter(Boolean);
+            if (filled.length < 2) continue;
+            label = norm(filled[0]);
+            value = filled.slice(1).join(" ");
+        }
         if (label && value && !out.has(label)) out.set(label, value);
     }
     return out;
