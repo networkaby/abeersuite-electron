@@ -196,6 +196,24 @@ export const CHANNEL_SPECS: Record<PostChannel, { textMax: number; photosMax: nu
 };
 
 /**
+ * What each channel can carry (owner, 2026-10-30: "don't show irrelevant
+ * media"): Google posts photos only (our sender), a reel is one video, the
+ * rest take photos or videos. Pick lists, Upload, defaults and previews follow it.
+ */
+export const CHANNEL_MEDIA: Record<string, "photo" | "video" | "any"> = { GOOGLE_BUSINESS: "photo", FACEBOOK_REEL: "video" };
+export const takesMedia = (channel: string, type: string | null | undefined) => {
+    const kind = CHANNEL_MEDIA[channel] ?? "any";
+    if (!type) return false;
+    return kind === "any" ? type.startsWith("image/") || type.startsWith("video/") : type.startsWith(kind === "photo" ? "image/" : "video/");
+};
+/** "photo" / "video" / "photo or video", for the cards' words. */
+export const mediaNoun = (channel: string, many = false) => {
+    const kind = CHANNEL_MEDIA[channel] ?? "any";
+    const w = kind === "video" ? "video" : kind === "photo" ? "photo" : "photo";
+    return many ? `${w}s` : w;
+};
+
+/**
  * Channels whose text gets the post's hashtags under it (owner, 2026-10-29).
  * Google treats them as spam and WhatsApp has no use for them.
  */

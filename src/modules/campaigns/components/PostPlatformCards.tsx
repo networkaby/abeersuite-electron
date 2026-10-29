@@ -29,6 +29,9 @@ import {
   ratioFits,
   withHashtags,
   hasPhoneNumber,
+  CHANNEL_MEDIA,
+  mediaNoun,
+  takesMedia,
   FACEBOOK_PHOTO_MAX_BYTES,
   FACEBOOK_PNG_SOFT_BYTES,
   type PhotoCrop,
@@ -269,7 +272,7 @@ export default function PostPlatformCards({
                   shown?.from === srcPhoto.key ? (shown.crop ?? null) : null,
               }
             : null;
-        const originals = photos.filter((f) => !f.from || !photos.some((o) => o.key === f.from));
+        const originals = photos.filter((f) => (!f.from || !photos.some((o) => o.key === f.from)) && takesMedia(c, f.type));
         /** Where an original sits in this platform's picks — itself, or a copy cut from it. */
         const pickedAt = (key: string) => picked.findIndex((k) => k === key || photos.find((f) => f.key === k)?.from === key);
         const togglePhoto = (key: string) => {
@@ -280,11 +283,13 @@ export default function PostPlatformCards({
           set({ photos: [...picked, key] });
         };
         // Before the first save: this platform's own pick of Master photos (several where it takes several).
-        const preOwn = (prePick[c] ?? []).filter((f) => pending.includes(f));
-        const preShown = preOwn.length ? preOwn : pending.slice(0, 1);
+        const usablePending = pending.filter((f) => takesMedia(c, f.type));
+        const preOwn = (prePick[c] ?? []).filter((f) => usablePending.includes(f));
+        // Follows the main photo when it can carry it; a video-only platform starts on the first video.
+        const preShown = preOwn.length ? preOwn : usablePending.slice(0, 1);
         const prePickToggle = (f: File) => {
           if (spec.photosMax === 1) {
-            onPrePick(c, f === pending[0] ? null : [f]);
+            onPrePick(c, f === pending[0] && takesMedia(c, f.type) ? null : [f]);
             return;
           }
           const next = preShown.includes(f) ? preShown.filter((x) => x !== f) : [...preShown, f].slice(0, spec.photosMax);
@@ -308,7 +313,9 @@ export default function PostPlatformCards({
                   ? [{ src: previewSrc, video: false }]
                   : [];
           const sendsAll = c === "FACEBOOK" || c === "FACEBOOK_STORY";
-          const shown = sendsAll ? media : media.slice(0, 1);
+          // Only what this platform carries: no photos in a reel, no videos on Google.
+          const usable = media.filter((m) => (m.video ? CHANNEL_MEDIA[c] !== "photo" : CHANNEL_MEDIA[c] !== "video"));
+          const shown = sendsAll ? usable : usable.slice(0, 1);
           const linkOut = master.link && c !== "GOOGLE_BUSINESS" && spec.textMax > 0 ? `\n\n${SHOP_SITE}${master.link}` : "";
           previews.push({
             channel: c,
@@ -355,8 +362,8 @@ export default function PostPlatformCards({
               <span className="min-w-0 flex-1 truncate text-xs text-foreground/70">
                 {spec.textMax ? `${spec.textMax} chars · ` : "no caption · "}
                 {spec.photosMax === 1
-                  ? "1 photo"
-                  : `up to ${spec.photosMax} photos`}{" "}
+                  ? `1 ${mediaNoun(c)}`
+                  : `up to ${spec.photosMax} ${mediaNoun(c, true)}`}{" "}
                 · best {spec.ratioLabel}
                 {ch.mode === "AUTO" || c === "GOOGLE_BUSINESS"
                   ? " · posts by itself once connected"
@@ -559,18 +566,24 @@ export default function PostPlatformCards({
                               main: f.key === post.mediaKey,
                               pick: () => togglePhoto(f.key),
                             }))
-                          : pending.map((f, i) => ({
-                              id: pendingUrls[i] ?? String(i),
-                              name: f.name,
-                              src: pendingUrls[i] ?? null,
-                              video: f.type.startsWith("video/"),
-                              at: preShown.indexOf(f),
-                              main: i === 0,
-                              pick: () => prePickToggle(f),
-                            }));
+                          : pending.flatMap((f, i) =>
+                              takesMedia(c, f.type)
+                                ? [
+                                    {
+                                      id: pendingUrls[i] ?? String(i),
+                                      name: f.name,
+                                      src: pendingUrls[i] ?? null,
+                                      video: f.type.startsWith("video/"),
+                                      at: preShown.indexOf(f),
+                                      main: i === 0,
+                                      pick: () => prePickToggle(f),
+                                    },
+                                  ]
+                                : [],
+                            );
                         const count = tiles.filter((t) => t.at >= 0).length;
                         const full = spec.photosMax > 1 && count >= spec.photosMax;
-                        if (!tiles.length && !(!post && previewSrc))
+                        if (!tiles.length && (CHANNEL_MEDIA[c] === "video" || !(!post && previewSrc)))
                           return (
                             <p className="text-sm text-muted-foreground">
                               {c === "FACEBOOK_REEL"
@@ -625,7 +638,9 @@ export default function PostPlatformCards({
                             <p className="text-xs text-foreground/70">
                               {spec.photosMax > 1
                                 ? `${count} of up to ${spec.photosMax} ticked — the number is their order. Each is cut to ${spec.ratioLabel}${post ? "" : " on save"}.`
-                                : `${ch.label} takes 1 photo — click another to swap. Cut to ${spec.ratioLabel}${post ? "" : " on save"}.`}
+                                : CHANNEL_MEDIA[c] === "video"
+                                  ? `${ch.label} takes 1 video — click another to swap.`
+                                  : `${ch.label} takes 1 ${mediaNoun(c)} — click another to swap. Cut to ${spec.ratioLabel}${post ? "" : " on save"}.`}
                             </p>
                           </div>
                         );
@@ -743,7 +758,13 @@ export default function PostPlatformCards({
       <input
         ref={fileBox}
         type="file"
-        accept="image/jpeg,image/png,image/webp,video/mp4"
+        accept={
+          uploadFor && CHANNEL_MEDIA[uploadFor] === "video"
+            ? "video/mp4"
+            : uploadFor && CHANNEL_MEDIA[uploadFor] === "photo"
+              ? "image/jpeg,image/png,image/webp"
+              : "image/jpeg,image/png,image/webp,video/mp4"
+        }
         className="hidden"
         onChange={async (e) => {
           const f = e.target.files?.[0];

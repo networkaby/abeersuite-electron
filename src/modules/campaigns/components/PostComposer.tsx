@@ -22,6 +22,7 @@ import PostPlatformCards, { type CopyForm } from "./PostPlatformCards";
 import PostMaterials from "./PostMaterials";
 import { toLocalInput } from "@/modules/campaigns/lib/campaign";
 import { fitPostPhoto, uploadPostFile } from "@/modules/campaigns/lib/postUpload";
+import { takesMedia } from "@/modules/campaigns/lib/post";
 
 type Form = Omit<PostInput, "caption" | "link" | "hashtags" | "scheduledAt" | "variants"> & { caption: string; link: string; hashtags: string; scheduledAt: string; variants: Record<string, CopyForm> };
 
@@ -210,7 +211,14 @@ export default function PostComposer({
                     main = null;
                 }
                 // Channels with a photo of their own keep it; the rest get the main one fitted.
-                const keysOf = (c: string) => (prePick[c] ?? []).flatMap((f) => (keyOf.has(f) ? [keyOf.get(f)!] : []));
+                const ownMedia = (c: string) => {
+                    const mine = (prePick[c] ?? []).filter((f) => pending.includes(f));
+                    if (mine.length) return mine;
+                    // The main photo is not something this platform carries (a reel and a photo): its first usable one.
+                    const first = pending.find((f) => takesMedia(c, f.type));
+                    return pending[0] && !takesMedia(c, pending[0].type) && first ? [first] : [];
+                };
+                const keysOf = (c: string) => ownMedia(c).flatMap((f) => (keyOf.has(f) ? [keyOf.get(f)!] : []));
                 const picked = form.channels.filter((c) => !cardFiles[c] && keysOf(c).length > 0);
                 const toFit = form.channels.filter((c) => !cardFiles[c] && !picked.includes(c));
                 if (fitOnSave && main?.startsWith("image/") && !note && toFit.length) {
