@@ -86,13 +86,14 @@ export const COPY_SELECT = {
 } as const;
 
 /**
- * The post as one network's API gets it: that channel's text and its first
- * photo in the main-photo fields the senders read (they post one photo).
+ * The post as one network's API gets it: that channel's text, its first photo
+ * in the main-photo fields the one-photo senders read, and every photo it has
+ * (`photos`) for those that post several (Facebook).
  */
 export function asChannelCopy<T extends Parameters<typeof channelPost>[0]>(post: T, channel: string): T {
     const cp = channelPost(post, channel);
     const photo = cp.photos[0] ?? null;
-    return { ...post, caption: cp.caption, mediaKey: photo?.key ?? null, mediaType: photo?.type ?? null, mediaSize: photo?.size ?? null };
+    return { ...post, caption: cp.caption, mediaKey: photo?.key ?? null, mediaType: photo?.type ?? null, mediaSize: photo?.size ?? null, photos: cp.photos };
 }
 
 /** Has this channel's own time come? A copy may run later than the post's first time. */

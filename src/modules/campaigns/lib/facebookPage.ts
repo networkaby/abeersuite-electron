@@ -216,7 +216,18 @@ export async function pageAccess(): Promise<{ pageId: string; token: string; igU
     return { pageId: row.pageId, token, igUserId: row.igUserId };
 }
 
-type PostForFacebook = { caption: string; link: string | null; mediaKey: string | null; mediaType: string | null };
+/** A feed post holds at most this many photos. */
+const FACEBOOK_PHOTOS_MAX = 10;
+
+type PostForFacebook = {
+    caption: string;
+    link: string | null;
+    mediaKey: string | null;
+    mediaType: string | null;
+    mediaSize?: number | null;
+    /** Every photo this channel's copy has; 2–10 photos go out as one post. */
+    photos?: { key: string; type: string; size: number }[];
+};
 
 /**
  * Put one post up on the page: the caption with its shop link, and the photo or
@@ -232,7 +243,22 @@ export async function postToFacebook(p: PostForFacebook): Promise<string | null>
     const shop = COMPANY_DETAILS.sites.shop;
     const text = postCaption(p, shop);
     let call: { path: string; params: Record<string, string> };
-    if (p.mediaKey) {
+    const many = (p.photos ?? []).filter((f) => f.type.startsWith("image/"));
+    if (many.length > 1) {
+        // Several photos, one post: each goes up hidden first (Facebook keeps a
+        // hidden one a day), then a feed post carries them all.
+        const ids: string[] = [];
+        for (const f of many.slice(0, FACEBOOK_PHOTOS_MAX)) {
+            const url = mediaLink(f.key);
+            if (!url) throw new FacebookError("File storage (R2) is not set up on this server, so Facebook cannot fetch the photos.");
+            const up = await graph<{ id: string }>(`/${pageId}/photos`, { method: "POST", params: { url, published: "false", access_token: token } });
+            ids.push(up.id);
+        }
+        call = {
+            path: `/${pageId}/feed`,
+            params: { message: text, ...Object.fromEntries(ids.map((id, i) => [`attached_media[${i}]`, JSON.stringify({ media_fbid: id })])) },
+        };
+    } else if (p.mediaKey) {
         const url = mediaLink(p.mediaKey);
         if (!url) throw new FacebookError("File storage (R2) is not set up on this server, so Facebook cannot fetch the photo.");
         call = p.mediaType?.startsWith("video/")

@@ -43,7 +43,7 @@ export const POST_CHANNELS = [
     },
     {
         value: "FACEBOOK",
-        label: "Facebook Page",
+        label: "Facebook Page feed",
         short: "FB",
         mode: "AUTO",
         ready: true,
@@ -112,10 +112,16 @@ export const FACEBOOK_PAGE_URL = "https://www.facebook.com/";
  * Why a post cannot go to Facebook by itself, or null when it can. Facebook
  * takes a JPG / PNG photo or an MP4 video (or none) — a WebP is shared by hand.
  */
-export function facebookAutoBlock(p: { mediaType: string | null }): string | null {
-    if (p.mediaType === "image/webp") return "Facebook takes a JPG or PNG photo here — share a WebP by hand, or replace it.";
+export function facebookAutoBlock(p: { mediaType: string | null; mediaSize?: number | null; photos?: { type: string; size: number }[] }): string | null {
+    const files = p.photos?.length ? p.photos : p.mediaType ? [{ type: p.mediaType, size: p.mediaSize ?? 0 }] : [];
+    if (files.some((f) => f.type === "image/webp")) return "Facebook takes a JPG or PNG photo here — share a WebP by hand, or replace it.";
+    if (files.some((f) => f.type.startsWith("image/") && f.size > FACEBOOK_PHOTO_MAX_BYTES)) return "Facebook takes photos up to 4 MB — use Fit or Adjust to make a smaller copy.";
     return null;
 }
+
+/** Facebook's own Page docs: photos under 4 MB; a PNG over 1 MB can come out blurry. */
+export const FACEBOOK_PHOTO_MAX_BYTES = 4 * 1024 * 1024;
+export const FACEBOOK_PNG_SOFT_BYTES = 1024 * 1024;
 
 /** Where Share sends staff for Instagram — the shop's profile. */
 export const INSTAGRAM_URL = "https://www.instagram.com/";

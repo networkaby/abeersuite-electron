@@ -28,7 +28,7 @@ import {
  * Channels that post through their API once connected: the post route, the
  * status route and its "ready" field, the button name, why one cannot go.
  */
-const AUTO: Record<string, { api: string; status: string; readyKey: string; name: string; block: (p: PostRow) => string | null }> = {
+const AUTO: Record<string, { api: string; status: string; readyKey: string; name: string; block: (p: PostRow & { photos?: { type: string; size: number }[] }) => string | null }> = {
     GOOGLE_BUSINESS: { api: "google", status: "google", readyKey: "ready", name: "Google", block: googleAutoBlock },
     FACEBOOK: { api: "facebook", status: "facebook", readyKey: "ready", name: "Facebook", block: facebookAutoBlock },
     // Instagram rides the Facebook connection.
@@ -195,7 +195,7 @@ export default function PostSharePanel({ post, onChanged, only }: { post: PostRo
                         const last = post.shares.find((s) => s.channel === value);
                         const cp = copyOf(value);
                         const auto = AUTO[value] && ready[value] ? AUTO[value] : null;
-                        const block = auto?.block({ ...post, mediaType: cp.photos[0]?.type ?? null, mediaSize: cp.photos[0]?.size ?? null }) ?? null;
+                        const block = auto?.block({ ...post, mediaType: cp.photos[0]?.type ?? null, mediaSize: cp.photos[0]?.size ?? null, photos: cp.photos }) ?? null;
                         return (
                             <div key={value} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2">
                                 <div className="min-w-0 flex-1">

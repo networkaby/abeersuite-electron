@@ -26,6 +26,8 @@ import {
   ratioFits,
   withHashtags,
   hasPhoneNumber,
+  FACEBOOK_PHOTO_MAX_BYTES,
+  FACEBOOK_PNG_SOFT_BYTES,
   type PhotoCrop,
   type PostChannel,
   type PostRow,
@@ -258,7 +260,9 @@ export default function PostPlatformCards({
             src: post
               ? (savedSrc && post.photoLinks?.[savedSrc.key]?.url) || null
               : (cardSrc(c) ??
-                (chosen ? pendingUrls[pending.indexOf(chosen)] : previewSrc) ??
+                  (chosen
+                    ? pendingUrls[pending.indexOf(chosen)]
+                    : previewSrc) ??
                 null),
             count: post ? picked.length : 1,
             text,
@@ -350,6 +354,14 @@ export default function PostPlatformCards({
                         Too long here — change it to a shorter copy.
                       </p>
                     )}
+                      {c === "FACEBOOK" &&
+                        (master.hashtags.match(/#[^\s#]+/g)?.length ?? 0) >
+                          3 && (
+                          <p className="text-xs text-foreground/70">
+                            Facebook works best with 1–3 hashtags; Master has{" "}
+                            {master.hashtags.match(/#[^\s#]+/g)?.length}.
+                          </p>
+                        )}
                     {c === "GOOGLE_BUSINESS" && hasPhoneNumber(text) && (
                       <p className="flex items-center gap-1 text-xs font-medium text-amber-700">
                         <AlertTriangle className="h-3.5 w-3.5 shrink-0" />{" "}
@@ -540,7 +552,8 @@ export default function PostPlatformCards({
                                 {chosen
                                   ? "Its own pick from Master"
                                   : "Main photo"}{" "}
-                                as {spec.ratioLabel}. Cut to this shape on save
+                                  as {spec.ratioLabel}. Cut to this shape on
+                                  save
                                 {chosen
                                   ? ""
                                   : ' when "Fit for each channel" is ticked'}
@@ -628,11 +641,49 @@ export default function PostPlatformCards({
                         {spec.photosMax}.
                       </p>
                     )}
+                      {c === "FACEBOOK" &&
+                        (() => {
+                          const files = picked.flatMap((k) =>
+                            photos.filter((f) => f.key === k),
+                          );
+                          const big = files.filter(
+                            (f) =>
+                              f.type.startsWith("image/") &&
+                              f.size > FACEBOOK_PHOTO_MAX_BYTES,
+                          );
+                          const softPng = files.filter(
+                            (f) =>
+                              f.type === "image/png" &&
+                              f.size > FACEBOOK_PNG_SOFT_BYTES &&
+                              f.size <= FACEBOOK_PHOTO_MAX_BYTES,
+                          );
+                          return (
+                            <>
+                              {big.length > 0 && (
+                                <p className="flex items-center gap-1 text-xs font-medium text-destructive">
+                                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />{" "}
+                                  {big.length === 1
+                                    ? "A photo is"
+                                    : `${big.length} photos are`}{" "}
+                                  over 4 MB — Facebook may refuse it. Adjust or
+                                  Fit makes a smaller JPG.
+                                </p>
+                              )}
+                              {softPng.length > 0 && (
+                                <p className="flex items-center gap-1 text-xs text-amber-700">
+                                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />{" "}
+                                  A PNG over 1 MB can look blurry on Facebook —
+                                  Fit or Adjust saves a JPG.
+                                </p>
+                              )}
+                            </>
+                          );
+                        })()}
                     {offShape.length > 0 && (
                       <p className="flex items-center gap-1 text-xs text-amber-700">
                         <AlertTriangle className="h-3.5 w-3.5" /> Not{" "}
-                        {spec.ratioLabel} — may be cropped. Fit makes a copy in
-                        shape.
+                          {spec.ratioLabel} — may be cropped. Fit makes a copy
+                          in shape.
                       </p>
                     )}
                   </Row>

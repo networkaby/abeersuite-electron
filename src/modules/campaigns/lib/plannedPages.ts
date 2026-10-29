@@ -138,7 +138,7 @@ export const PLANNED_PAGES: Record<string, { title: string; description: string;
                 { title: "WhatsApp Channel", sub: "No API — share from an admin's phone", right: "Working" },
                 { title: "Google Business Profile", sub: "Posts by itself once connected above", right: "Working" },
                 { title: "WhatsApp Status", sub: "Company phone, after Meta's coexistence approval", right: "Waiting on Meta" },
-                { title: "Facebook Page", sub: "Posts by itself once connected above", right: "Working" },
+                { title: "Facebook Page feed", sub: "Posts by itself once connected above", right: "Working" },
                 { title: "Instagram", sub: "Posts by itself through the Facebook connection above (linked business account)", right: "Working" },
                 { title: "Threads, YouTube Shorts, Telegram", right: "Later" },
             ] },
