@@ -19,6 +19,8 @@ export type PreviewItem = {
   channel: string;
   label: string;
   src: string | null;
+  /** The first item is a video (story, reel, or a feed video). */
+  video?: boolean;
   /** How many photos go out — more than one shows the carousel dots. */
   count: number;
   /** Every photo, in order, where the app shows them together (Facebook's grid). */
@@ -78,6 +80,10 @@ function Frame({ it }: { it: PreviewItem }) {
       return <Google it={it} />;
     case "WA_STATUS":
       return <WaStatus it={it} />;
+    case "FACEBOOK_STORY":
+      return <FacebookStory it={it} />;
+    case "FACEBOOK_REEL":
+      return <FacebookReel it={it} />;
     default:
       return <WaChannel it={it} />;
   }
@@ -96,14 +102,24 @@ function Avatar({ size = 32 }: { size?: number }) {
   );
 }
 
+/** The post's first photo or video. */
+function Media({ it, className }: { it: PreviewItem; className: string }) {
+  if (!it.src) return null;
+  return it.video ? (
+    <video src={it.src} className={className} muted autoPlay loop playsInline />
+  ) : (
+    // eslint-disable-next-line @next/next/no-img-element -- a local or signed preview
+    <img src={it.src} alt="" className={className} />
+  );
+}
+
 /** The photo cut to the platform's shape, as the app crops it. */
 function Photo({ it }: { it: PreviewItem }) {
   const [w, h] = CHANNEL_SPECS[it.channel as PostChannel]?.ratio ?? [1, 1];
   return (
     <div className="relative w-full bg-neutral-200" style={{ aspectRatio: `${w} / ${h}` }}>
       {it.src ? (
-        // eslint-disable-next-line @next/next/no-img-element -- a local or signed preview
-        <img src={it.src} alt="" className="size-full object-cover" />
+        <Media it={it} className="size-full object-cover" />
       ) : (
         <span className="flex size-full items-center justify-center text-xs text-neutral-500">No photo</span>
       )}
@@ -234,10 +250,7 @@ function Google({ it }: { it: PreviewItem }) {
 function WaStatus({ it }: { it: PreviewItem }) {
   return (
     <div className="relative mx-auto w-[220px] overflow-hidden rounded-xl bg-black text-white" style={{ aspectRatio: "9 / 16" }}>
-      {it.src && (
-        // eslint-disable-next-line @next/next/no-img-element -- a local or signed preview
-        <img src={it.src} alt="" className="absolute inset-0 size-full object-contain" />
-      )}
+      <Media it={it} className="absolute inset-0 size-full object-contain" />
       <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/60 to-transparent px-2 pt-2 pb-6">
         <div className="h-0.5 rounded bg-white/50"><div className="h-full w-1/3 rounded bg-white" /></div>
         <div className="mt-2 flex items-center gap-1.5 text-[11px]">
@@ -269,6 +282,67 @@ function WaChannel({ it }: { it: PreviewItem }) {
         <span className="mt-auto flex h-7 w-7 items-center justify-center rounded-full bg-white/80 text-neutral-500">
           <Forward className="h-3.5 w-3.5" />
         </span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The Page's story, as Facebook shows it: full screen 9:16, the progress bar,
+ * the Page's name and time, no caption, and the reply bar at the bottom.
+ */
+function FacebookStory({ it }: { it: PreviewItem }) {
+  return (
+    <div className="relative mx-auto w-[220px] overflow-hidden rounded-xl bg-neutral-900 text-white" style={{ aspectRatio: "9 / 16" }}>
+      {it.src ? (
+        <Media it={it} className="absolute inset-0 size-full object-cover" />
+      ) : (
+        <span className="absolute inset-0 flex items-center justify-center text-xs text-white/60">No photo or video</span>
+      )}
+      <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/55 to-transparent px-2 pt-2 pb-8">
+        <div className="h-0.5 rounded bg-white/40"><div className="h-full w-1/4 rounded bg-white" /></div>
+        <div className="mt-2 flex items-center gap-1.5 text-[11px]">
+          <Avatar size={26} />
+          <span className="font-semibold">{NAME}</span>
+          <span className="opacity-75">{it.time ? stamp(it.time, "clock") : "Just now"}</span>
+          <span className="flex-1" />
+          <Ellipsis className="h-4 w-4" />
+        </div>
+      </div>
+      <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-gradient-to-t from-black/55 to-transparent px-2 pt-6 pb-2">
+        <span className="flex-1 rounded-full border border-white/70 px-3 py-1 text-[10px] text-white/80">Send message…</span>
+        <ThumbsUp className="h-4 w-4" />
+        <Heart className="h-4 w-4" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The Page's reel, as Facebook shows it: a full 9:16 video, the Page with
+ * Follow and the caption at the bottom left, Like / Comment / Share down the right.
+ */
+function FacebookReel({ it }: { it: PreviewItem }) {
+  return (
+    <div className="relative mx-auto w-[220px] overflow-hidden rounded-xl bg-black text-white" style={{ aspectRatio: "9 / 16" }}>
+      {it.src && it.video ? (
+        <Media it={it} className="absolute inset-0 size-full object-cover" />
+      ) : (
+        <span className="absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-white/60">A reel needs one upright MP4 video</span>
+      )}
+      <p className="absolute top-2 left-3 text-sm font-semibold">Reels</p>
+      <div className="absolute right-2 bottom-16 flex flex-col items-center gap-3 text-[10px]">
+        <span className="flex flex-col items-center"><ThumbsUp className="h-5 w-5" />Like</span>
+        <span className="flex flex-col items-center"><MessageCircle className="h-5 w-5" />Comment</span>
+        <span className="flex flex-col items-center"><Share2 className="h-5 w-5" />Share</span>
+      </div>
+      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pt-8 pb-3 text-[11px]">
+        <div className="flex items-center gap-1.5">
+          <Avatar size={24} />
+          <span className="font-semibold">{NAME}</span>
+          <span className="rounded border border-white/80 px-1.5 text-[10px]">Follow</span>
+        </div>
+        <Clamp text={it.text} lines={2} more="…more" className="mt-1.5 pr-10" />
       </div>
     </div>
   );

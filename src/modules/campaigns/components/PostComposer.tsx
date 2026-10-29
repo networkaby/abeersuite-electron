@@ -301,7 +301,7 @@ export default function PostComposer({
                             channels={form.channels}
                             onToggle={(c) => toggle(c as Form["channels"][number])}
                             copies={form.variants}
-                            master={{ caption: form.caption, hashtags: form.hashtags, scheduledAt: form.scheduledAt }}
+                            master={{ caption: form.caption, hashtags: form.hashtags, scheduledAt: form.scheduledAt, link: form.link.trim() }}
                             post={post}
                             onFit={fit}
                             onPostChanged={setPost}

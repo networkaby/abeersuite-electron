@@ -17,6 +17,9 @@ import { Textarea } from "@/components/ui/textarea";
 import PostSharePanel from "./PostSharePanel";
 import PhotoAdjustDialog from "./PhotoAdjustDialog";
 import PostPreviews, { type PreviewItem } from "./PostPreviews";
+import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
+
+const SHOP_SITE = COMPANY_DETAILS.sites.shop;
 import {
   CHANNEL_SPECS,
   GOOGLE_BUTTONS,
@@ -98,7 +101,7 @@ export default function PostPlatformCards({
   onToggle: (channel: string) => void;
   copies: Record<string, CopyForm>;
   onChange: (channel: string, copy: CopyForm | null) => void;
-  master: { caption: string; hashtags: string; scheduledAt: string };
+  master: { caption: string; hashtags: string; scheduledAt: string; link: string };
   post: PostRow | null;
   /** Cut a photo to shape — every ticked channel, or `channels`; with `crop`, that frame for one. */
   onFit: (opts?: {
@@ -264,28 +267,33 @@ export default function PostPlatformCards({
           onPrePick(c, next.length === 1 && next[0] === pending[0] ? null : next);
         };
         if (on) {
-          const chosen = preOwn[0] ?? null;
-          const savedSrc = picked
-            .map((k) => photos.find((f) => f.key === k))
-            .find((f) => f && !f.type.startsWith("video/"));
+          // What this platform's sender really sends: its photos (or video), and
+          // the shop link where it adds one — Google never (its button carries it),
+          // a story has no text. Instagram and the one-photo platforms send the first only.
+          const media = post
+            ? picked.flatMap((k) => {
+                const f = photos.find((x) => x.key === k);
+                const u = f && post.photoLinks?.[k]?.url;
+                return f && u ? [{ src: u, video: f.type.startsWith("video/") }] : [];
+              })
+            : cardSrc(c)
+              ? [{ src: cardSrc(c)!, video: cardFiles[c]?.type.startsWith("video/") ?? false }]
+              : preShown.length
+                ? preShown.map((f) => ({ src: pendingUrls[pending.indexOf(f)], video: f.type.startsWith("video/") }))
+                : previewSrc
+                  ? [{ src: previewSrc, video: false }]
+                  : [];
+          const sendsAll = c === "FACEBOOK";
+          const shown = sendsAll ? media : media.slice(0, 1);
+          const linkOut = master.link && c !== "GOOGLE_BUSINESS" && spec.textMax > 0 ? `\n\n${SHOP_SITE}${master.link}` : "";
           previews.push({
             channel: c,
             label: ch.label,
-            src: post
-              ? (savedSrc && post.photoLinks?.[savedSrc.key]?.url) || null
-              : (cardSrc(c) ??
-                  (chosen
-                    ? pendingUrls[pending.indexOf(chosen)]
-                    : previewSrc) ??
-                null),
-            count: post ? picked.length : preShown.length || 1,
-            srcs: post
-              ? picked.flatMap((k) => {
-                  const u = post.photoLinks?.[k]?.url;
-                  return u ? [u] : [];
-                })
-              : preOwn.map((f) => pendingUrls[pending.indexOf(f)]).filter(Boolean),
-            text,
+            src: shown[0]?.src ?? null,
+            video: shown[0]?.video ?? false,
+            count: shown.length || 1,
+            srcs: shown.filter((m) => !m.video).map((m) => m.src),
+            text: spec.textMax > 0 ? text + linkOut : "",
             time,
             button:
               GOOGLE_BUTTONS.find((b) => b.value === google.button)?.label ??
