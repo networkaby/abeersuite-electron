@@ -80,7 +80,8 @@ export default function PostComposer({
     const [form, setForm] = useState<Form>(() => ({ ...blank, scheduledAt: toLocalInput(startAt) }));
     const [campaigns, setCampaigns] = useState<{ value: number; label: string }[]>([]);
     const [loading, setLoading] = useState(postId !== null);
-    const [saving, setSaving] = useState(false);
+    // false, or what the Save button says while it works ("Saving…", "Uploading photos…", "Fitting photos…").
+    const [saving, setSaving] = useState<string | false>(false);
     const [picking, setPicking] = useState(false);
     const [fromProduct, setFromProduct] = useState<PostProduct | null>(null);
     // A new post's photos, held until the first save; the first is the main one.
@@ -169,7 +170,7 @@ export default function PostComposer({
             toast.error("Instagram needs a photo — add one, or untick Instagram, before scheduling.");
             return;
         }
-        setSaving(true);
+        setSaving("Saving…");
         const variants = Object.fromEntries(
             Object.entries(form.variants)
                 .filter(([c]) => (form.channels as string[]).includes(c))
@@ -196,6 +197,7 @@ export default function PostComposer({
                 const id = r.data.id;
                 let note = r.data.photoNote ?? null;
                 let main = pending.length ? pending[0].type : r.data.mediaKey ? "image/" : null;
+                if (pending.length) setSaving("Uploading photos…");
                 try {
                     for (const [i, f] of pending.entries()) await uploadPostFile(id, f, i > 0);
                 } catch (e) {
@@ -203,6 +205,7 @@ export default function PostComposer({
                     main = null;
                 }
                 if (fitOnSave && main?.startsWith("image/") && !note) {
+                    setSaving("Fitting photos for each channel…");
                     try {
                         await fitPostPhoto(id);
                     } catch (e) {
@@ -439,8 +442,8 @@ export default function PostComposer({
                                         </Button>
                                     )}
                                 </div>
-                                <Button onClick={save} disabled={saving}>
-                                    {saving ? "Saving…" : timed ? "Save & schedule" : "Save"}
+                                <Button onClick={save} disabled={!!saving}>
+                                    {saving || (timed ? "Save & schedule" : "Save")}
                                 </Button>
                             </div>
                         </section>
