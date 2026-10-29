@@ -9,7 +9,7 @@
 // the lock, running-balance breaks, an account-number mismatch — before the
 // same rows are saved for real. Nothing is written until "Save".
 
-import { useEffect, useMemo, useState, useEffectEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, FileText, Loader2, Upload } from "lucide-react";
@@ -82,6 +82,8 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
     const [grid, setGrid] = useState<string[][]>([]);
     const [acCell, setAcCell] = useState<CellPos | null>(null);
     const [skipAcNo, setSkipAcNo] = useState(false);
+    const [dragging, setDragging] = useState(false);
+    const fileRef = useRef<HTMLInputElement>(null);
     const [refDraft, setRefDraft] = useState<string | null>(null);
 
     // Reset when closed so the next upload starts clean.
@@ -239,31 +241,55 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
 
     return (
         <Dialog open={open} onOpenChange={(o) => { if (!o && !saving) onClose(); }}>
-            <DialogContent className="flex max-h-[92vh] w-[90vw] max-w-none flex-col sm:max-w-[90vw] gap-0 overflow-hidden p-0">
+            <DialogContent className={`flex max-h-[92vh] max-w-none flex-col gap-0 overflow-hidden p-0 ${parsed ? "w-[90vw] sm:max-w-[90vw]" : "w-[92vw] sm:max-w-lg"}`}>
                 <div className="border-b px-5 py-3">
                     <DialogTitle className="text-base font-semibold">Upload bank statement — {accountName}</DialogTitle>
                     <DialogDescription className="text-xs text-muted-foreground">
-                        CSV, tab-separated text or Excel, as the bank gives it. PDF statements are not read — download the CSV or Excel form instead.
-                        {lock && <> Lines dated before the lock ({formatDate(lock)}) are not saved.</>}
+                        Nothing is saved until you check the preview and press Save.
                     </DialogDescription>
                 </div>
 
                 <div className="flex-1 space-y-4 overflow-auto px-5 py-4">
-                    <div className="flex flex-wrap items-end gap-3">
-                        <div className="space-y-1">
-                            <Label htmlFor="bank-stmt-file">Statement file</Label>
-                            <Input id="bank-stmt-file" type="file" accept=".csv,.txt,.tsv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                onChange={(e) => void handleFile(e.target.files?.[0] ?? null)} />
-                        </div>
-                        {reading && <span className="flex items-center gap-1 text-xs text-muted-foreground"><Loader2 size={12} className="animate-spin" /> reading…</span>}
-                        {parsed && parsed.headerRowIndex >= 0 && (
-                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                <FileText size={12} />
-                                {parsed.profile === "generic" ? "Layout not recognised — check the column mapping" : `Recognised: ${parsed.profile}`}
-                                {" · "}{parsed.dataRows.length} rows
+                    <input ref={fileRef} id="bank-stmt-file" type="file" className="hidden"
+                        accept=".csv,.txt,.tsv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        onChange={(e) => { void handleFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+                    {!file ? (
+                        // Empty state: one big drop zone — drag the file in or click to choose.
+                        <label htmlFor="bank-stmt-file"
+                            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                            onDragLeave={() => setDragging(false)}
+                            onDrop={(e) => { e.preventDefault(); setDragging(false); void handleFile(e.dataTransfer.files?.[0] ?? null); }}
+                            className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-6 py-10 text-center transition-colors ${dragging ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/60 hover:bg-muted/40"}`}>
+                            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary"><Upload size={22} /></span>
+                            <span className="text-sm font-medium">Drop the bank statement here</span>
+                            <span className="text-xs text-muted-foreground">or <span className="font-medium text-primary underline-offset-2 hover:underline">click to choose a file</span></span>
+                            <span className="mt-1 flex flex-wrap justify-center gap-1.5">
+                                {["CSV", "XLS", "XLSX", "TXT"].map((t) => <span key={t} className="rounded border bg-card px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">{t}</span>)}
                             </span>
-                        )}
-                    </div>
+                        </label>
+                    ) : (
+                        <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 px-3 py-2">
+                            <FileText size={18} className="shrink-0 text-primary" />
+                            <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-medium" title={file.name}>{file.name}</div>
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    {reading
+                                        ? <><Loader2 size={12} className="animate-spin" /> reading…</>
+                                        : parsed && parsed.headerRowIndex >= 0
+                                            ? <>{parsed.profile === "generic" ? "Layout not recognised — check the columns below" : `Recognised: ${parsed.profile}`} · {parsed.dataRows.length} rows</>
+                                            : "Could not read a table from this file"}
+                                </div>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={saving}>Change file</Button>
+                        </div>
+                    )}
+                    {!file && (
+                        <ul className="space-y-1 text-xs text-muted-foreground">
+                            <li>• Download the statement from net banking as <b>CSV or Excel</b>, as the bank gives it. PDF is not read.</li>
+                            {lock && <li>• Lines dated before the lock (<b>{formatDate(lock)}</b>) are skipped.</li>}
+                            <li>• Lines already uploaded are skipped, so an overlapping period is safe.</li>
+                        </ul>
+                    )}
 
                     {parsed && parsed.headerRowIndex >= 0 && (
                         <>
