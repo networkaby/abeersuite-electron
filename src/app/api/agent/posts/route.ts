@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError } from "@/shared/lib/api";
-import { incomingSettings } from "@/modules/incoming/lib/incomingApi";
+import { incomingSettings, requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
 import { coworkPostMode, coworkPostRules } from "@/modules/incoming/lib/incomingCatalog";
 import { CHANNEL_SPECS, GOOGLE_BUTTONS, GOOGLE_POST_TYPES, POST_CHANNELS, POST_SELECT, newPostSchema } from "@/modules/campaigns/lib/post";
 import { copyProductPhoto, loadPost, withMediaLinks } from "@/modules/campaigns/lib/postServer";
-import { AGENT_NAME, agentGate, agentStatus, readAgentPost } from "@/modules/campaigns/lib/agentPosts";
+import { AGENT_NAME, agentStatus, readAgentPost } from "@/modules/campaigns/lib/agentPosts";
 
 /**
  * GET  /api/agent/posts — for the Cowork agent (x-api-key = the Cowork key on
@@ -21,8 +21,7 @@ import { AGENT_NAME, agentGate, agentStatus, readAgentPost } from "@/modules/cam
  */
 
 export async function GET(req: Request) {
-    const denied = await agentGate(req);
-    if (denied) return denied;
+    if (!(await requireIncomingKey(req, "COWORK"))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     try {
         const [open, done, settings] = await Promise.all([
             prisma.post.findMany({ where: { status: { not: "DONE" } }, select: POST_SELECT, orderBy: [{ scheduledAt: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }], take: 100 }),
@@ -49,8 +48,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-    const denied = await agentGate(req);
-    if (denied) return denied;
+    if (!(await requireIncomingKey(req, "COWORK"))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     const { data, asked, error } = await readAgentPost(req, newPostSchema);
     if (error) return error;
     const { fromProductId, ...fields } = data;

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
+import { requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, parseIdParam } from "@/shared/lib/api";
 import { postSchema } from "@/modules/campaigns/lib/post";
 import { loadPost } from "@/modules/campaigns/lib/postServer";
-import { agentGate, agentPostMode, agentStatus, ownOpenPost, readAgentPost } from "@/modules/campaigns/lib/agentPosts";
+import { agentPostMode, agentStatus, ownOpenPost, readAgentPost } from "@/modules/campaigns/lib/agentPosts";
 
 /**
  * PATCH  /api/agent/posts/:id — the Cowork agent rewrites one of its own posts
@@ -12,8 +13,7 @@ import { agentGate, agentPostMode, agentStatus, ownOpenPost, readAgentPost } fro
  */
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const denied = await agentGate(req);
-    if (denied) return denied;
+    if (!(await requireIncomingKey(req, "COWORK"))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     const { id, error: idError } = await parseIdParam(params);
     if (idError) return idError;
     const own = await ownOpenPost(id);
@@ -30,8 +30,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const denied = await agentGate(req);
-    if (denied) return denied;
+    if (!(await requireIncomingKey(req, "COWORK"))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     const { id, error: idError } = await parseIdParam(params);
     if (idError) return idError;
     const own = await ownOpenPost(id);

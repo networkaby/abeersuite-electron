@@ -2,7 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import type { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
-import { incomingSettings, requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
+import { incomingSettings } from "@/modules/incoming/lib/incomingApi";
 import { coworkPostMode, type CoworkPostMode } from "@/modules/incoming/lib/incomingCatalog";
 
 /**
@@ -13,11 +13,6 @@ import { coworkPostMode, type CoworkPostMode } from "@/modules/incoming/lib/inco
  */
 
 export const AGENT_NAME = "Cowork agent";
-
-/** null = let in; otherwise the 401 to send. */
-export async function agentGate(req: Request): Promise<NextResponse | null> {
-    return (await requireIncomingKey(req, "COWORK")) ? null : NextResponse.json({ error: "unauthorized" }, { status: 401 });
-}
 
 export const agentPostMode = async (): Promise<CoworkPostMode> => coworkPostMode(await incomingSettings("COWORK"));
 

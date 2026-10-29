@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
+import { requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
 import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, parseIdParam } from "@/shared/lib/api";
 import { CHANNEL_SPECS, POST_MEDIA_MAX_BYTES, type PostChannel, type PostVariants } from "@/modules/campaigns/lib/post";
 import { loadPost } from "@/modules/campaigns/lib/postServer";
 import { PhotoFitError, attachPostPhoto, fitPostPhoto } from "@/modules/campaigns/lib/postPhotoFit";
-import { agentGate, ownOpenPost } from "@/modules/campaigns/lib/agentPosts";
+import { ownOpenPost } from "@/modules/campaigns/lib/agentPosts";
 
 /**
  * POST /api/agent/posts/:id/photos — the Cowork agent adds a photo (or MP4) to
@@ -53,8 +54,7 @@ async function readBody(req: Request): Promise<{ file: { bytes: ArrayBuffer; typ
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const denied = await agentGate(req);
-    if (denied) return denied;
+    if (!(await requireIncomingKey(req, "COWORK"))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     const { id, error: idError } = await parseIdParam(params);
     if (idError) return idError;
     const own = await ownOpenPost(id);
