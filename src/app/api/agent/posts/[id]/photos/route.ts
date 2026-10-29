@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
 import { z } from "zod";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, parseIdParam } from "@/shared/lib/api";
-import { CHANNEL_SPECS, POST_MEDIA_MAX_BYTES, type PostChannel, type PostVariants } from "@/modules/campaigns/lib/post";
+import { CHANNEL_SPECS, POST_MEDIA_MAX_BYTES } from "@/modules/campaigns/lib/post";
 import { loadPost } from "@/modules/campaigns/lib/postServer";
-import { PhotoFitError, attachPostPhoto, fitPostPhoto } from "@/modules/campaigns/lib/postPhotoFit";
+import { PhotoFitError, attachPostPhoto, fitPostPhoto, giveChannelPhoto } from "@/modules/campaigns/lib/postPhotoFit";
 import { ownOpenPost } from "@/modules/campaigns/lib/agentPosts";
 
 /**
@@ -65,16 +64,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const { file, opts } = body;
         const photo = await attachPostPhoto(id, file, opts.extra ?? !!opts.channel);
 
-        if (opts.channel) {
-            const row = await prisma.post.findUnique({ where: { id }, select: { variants: true, mediaKey: true } });
-            const variants = { ...((row?.variants ?? {}) as PostVariants) };
-            const v = variants[opts.channel] ?? { caption: null, scheduledAt: null, photos: null };
-            const max = CHANNEL_SPECS[opts.channel as PostChannel].photosMax;
-            // Its first own photo replaces "the main photo"; later ones add on.
-            const photos = photo.key === row?.mediaKey ? v.photos : [...(v.photos ?? []), photo.key].slice(-max);
-            variants[opts.channel] = { ...v, photos };
-            await prisma.post.update({ where: { id }, data: { variants } });
-        }
+        // Its first own photo replaces "the main photo"; later ones add on.
+        if (opts.channel) await giveChannelPhoto(id, opts.channel, photo.key, true);
         if (opts.fit) return NextResponse.json(await fitPostPhoto(id));
         return NextResponse.json({ post: await loadPost(id) });
     } catch (e) {

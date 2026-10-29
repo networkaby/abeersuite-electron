@@ -168,7 +168,25 @@ export function ratioFits(channel: string, w: number, h: number): boolean {
 }
 
 /** One photo / video of a post in R2, under "posts/<id>/". */
-export type PostPhoto = { key: string; type: string; name: string; size: number };
+export type PostPhoto = {
+    key: string;
+    type: string;
+    name: string;
+    size: number;
+    /** A cut copy (Fit / Adjust): the photo it was cut from … */
+    from?: string;
+    /** … and the part kept, as fractions of that photo (null = the automatic cut). */
+    crop?: PhotoCrop | null;
+};
+
+/** A frame on a photo, each value a fraction (0–1) of its width or height. */
+export type PhotoCrop = { x: number; y: number; w: number; h: number };
+
+const fraction = z.number().min(0).max(1);
+/** A frame on a photo, as the Adjust editor and the Cowork agent send it. */
+export const photoCropSchema = z.object({ x: fraction, y: fraction, w: z.number().gt(0).max(1), h: z.number().gt(0).max(1) });
+/** The important point of a photo, fractions across and down. */
+export const photoFocusSchema = z.object({ x: fraction, y: fraction });
 
 /**
  * A channel's own copy of the post. Any field left null follows the main post:
@@ -244,7 +262,8 @@ const variantSchema = z.object({
 
 export const postSchema = z
     .object({
-    caption: z.string().trim().min(1, "Write the post").max(POST_CAPTION_MAX),
+    // May be empty when every ticked channel has words of its own (owner, 2026-10-29).
+    caption: z.string().trim().max(POST_CAPTION_MAX).default(""),
     // A page on the shop site, never another site.
     link: z
         .string()
@@ -275,6 +294,10 @@ export const postSchema = z
     .superRefine((p, ctx) => {
         // Each channel's text must fit that channel — the main text included where a channel follows it.
         for (const c of p.channels) {
+            if (!(p.variants[c]?.caption ?? p.caption)) {
+                ctx.addIssue({ code: "custom", path: ["caption"], message: `Write the main text, or ${channelOf(c)?.label}'s own text.` });
+                continue;
+            }
             const text = withHashtags(p.variants[c]?.caption ?? p.caption, p.hashtags, c);
             const max = CHANNEL_SPECS[c].textMax;
             if (text.length > max) {

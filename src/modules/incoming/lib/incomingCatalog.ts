@@ -37,6 +37,7 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
             "PATCH /api/agent/posts/{id}",
             "DELETE /api/agent/posts/{id}",
             "POST /api/agent/posts/{id}/photos",
+            "POST /api/agent/posts/{id}/photos/fit",
         ],
     },
     CRON: {

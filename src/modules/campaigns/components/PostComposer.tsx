@@ -11,6 +11,7 @@ import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import {
     productPostCaption,
+    type PhotoCrop,
     type PostInput,
     type PostProduct,
     type PostRow,
@@ -22,7 +23,7 @@ import PostMaterials from "./PostMaterials";
 import { toLocalInput } from "@/modules/campaigns/lib/campaign";
 import { fitPostPhoto, uploadPostFile } from "@/modules/campaigns/lib/postUpload";
 
-type Form = Omit<PostInput, "link" | "hashtags" | "scheduledAt" | "variants"> & { link: string; hashtags: string; scheduledAt: string; variants: Record<string, CopyForm> };
+type Form = Omit<PostInput, "caption" | "link" | "hashtags" | "scheduledAt" | "variants"> & { caption: string; link: string; hashtags: string; scheduledAt: string; variants: Record<string, CopyForm> };
 
 const blank: Form = { caption: "", link: "", hashtags: "", channels: ["WA_CHANNEL", "GOOGLE_BUSINESS"], scheduledAt: "", googleType: "UPDATE", googleButton: "SHOP", campaignId: null, status: "DRAFT", variants: {} };
 
@@ -76,6 +77,10 @@ export default function PostComposer({
     // A new post's photos, held until the first save; the first is the main one.
     const [pending, setPending] = useState<File[]>([]);
     const [fitOnSave, setFitOnSave] = useState(true);
+    // A new post's photo for one platform only (its card's Upload), held until the first save.
+    const [cardFiles, setCardFiles] = useState<Record<string, File>>({});
+    // A new post: which Master photo a platform takes instead of the main one, held until the first save.
+    const [prePick, setPrePick] = useState<Record<string, File>>({});
 
     useEffect(() => {
         if (postId === null) return;
@@ -119,31 +124,49 @@ export default function PostComposer({
     const toggle = (v: Form["channels"][number]) =>
         set("channels", form.channels.includes(v) ? form.channels.filter((c) => c !== v) : [...form.channels, v]);
 
-    /** After Fit: the post's new photos, and each fitted channel's pick, without touching unsaved words. */
-    async function fit(channels?: string[]) {
+    /** The server changed some channels' photos: take the post, and those channels' picks, without touching unsaved words. */
+    function tookPhotos(row: PostRow, channels: string[]) {
+        setPost(row);
+        setForm((f) => {
+            const variants = { ...f.variants };
+            for (const c of channels) {
+                const photos = row.variants[c]?.photos ?? null;
+                const v = { ...(variants[c] ?? { caption: null, scheduledAt: null }), photos };
+                if (v.caption === null && v.scheduledAt === null && v.photos === null) delete variants[c];
+                else variants[c] = v;
+            }
+            return { ...f, variants };
+        });
+    }
+
+    /** Fit (every channel, or some) or Adjust (one channel, a frame) — the cut is made on the server. */
+    async function fit(opts: { channels?: string[]; key?: string; crop?: PhotoCrop | null } = {}) {
         if (!post) return;
         try {
-            const r = await fitPostPhoto(post.id, channels);
-            setPost(r.post);
-            setForm((f) => {
-                const variants = { ...f.variants };
-                for (const c of Object.keys(r.fitted)) {
-                    const photos = r.post.variants[c]?.photos ?? null;
-                    variants[c] = { ...(variants[c] ?? { caption: null, scheduledAt: null }), photos };
-                }
-                return { ...f, variants };
-            });
-            toast.success(Object.keys(r.fitted).length > 1 ? "Photo fitted for each channel" : "Photo fitted");
+            const r = await fitPostPhoto(post.id, opts);
+            tookPhotos(r.post, Object.keys(r.fitted));
+            toast.success(opts.crop ? "Photo cut to your frame" : Object.keys(r.fitted).length > 1 ? "Photo fitted for each channel" : "Photo fitted");
         } catch (e) {
             toast.error(extractApiError(e, "Could not fit the photo"));
         }
     }
 
-    const hasPhoto = !!post?.mediaKey || pending.length > 0 || !!fromProduct?.imageUrl;
+    /** A platform card's own photo: held until the first save, uploaded at once after. */
+    async function cardUpload(channel: string, file: File) {
+        if (!post) return setCardFiles((m) => ({ ...m, [channel]: file }));
+        try {
+            tookPhotos(await uploadPostFile(post.id, file, true, channel), [channel]);
+            toast.success("Photo added for this platform");
+        } catch (e) {
+            toast.error(extractApiError(e, "Upload failed"));
+        }
+    }
+
+    const hasPhoto = (c: string) => !!post?.mediaKey || pending.length > 0 || !!fromProduct?.imageUrl || !!cardFiles[c];
     const timed = !!form.scheduledAt || Object.values(form.variants).some((v) => v.scheduledAt);
 
     async function save() {
-        if (timed && form.channels.includes("INSTAGRAM") && !hasPhoto) {
+        if (timed && form.channels.includes("INSTAGRAM") && !hasPhoto("INSTAGRAM")) {
             toast.error("Instagram needs a photo — add one, or untick Instagram, before scheduling.");
             return;
         }
@@ -175,18 +198,43 @@ export default function PostComposer({
                 let note = r.data.photoNote ?? null;
                 let main = pending.length ? pending[0].type : r.data.mediaKey ? "image/" : null;
                 if (pending.length) setSaving("Uploading photos…");
+                const keyOf = new Map<File, string>();
                 try {
-                    for (const [i, f] of pending.entries()) await uploadPostFile(id, f, i > 0);
+                    for (const [i, f] of pending.entries()) {
+                        const row = await uploadPostFile(id, f, i > 0);
+                        const k = i === 0 ? row.mediaKey : row.extraMedia[row.extraMedia.length - 1]?.key;
+                        if (k) keyOf.set(f, k);
+                    }
                 } catch (e) {
                     note = extractApiError(e, "A photo did not upload — add it below.");
                     main = null;
                 }
-                if (fitOnSave && main?.startsWith("image/") && !note) {
+                // Channels with a photo of their own keep it; the rest get the main one fitted.
+                const picked = form.channels.filter((c) => !cardFiles[c] && prePick[c] && pending.includes(prePick[c]) && keyOf.has(prePick[c]));
+                const toFit = form.channels.filter((c) => !cardFiles[c] && !picked.includes(c));
+                if (fitOnSave && main?.startsWith("image/") && !note && toFit.length) {
                     setSaving("Fitting photos for each channel…");
                     try {
-                        await fitPostPhoto(id);
+                        await fitPostPhoto(id, { channels: toFit });
                     } catch (e) {
                         note = extractApiError(e, "Could not fit the photo — use Fit on each channel.");
+                    }
+                }
+                // A platform that picked another Master photo gets that one, cut to its shape.
+                for (const c of picked) {
+                    try {
+                        await fitPostPhoto(id, { channels: [c], key: keyOf.get(prePick[c]) });
+                    } catch (e) {
+                        note = extractApiError(e, "A platform's picked photo could not be fitted — pick it again on its card.");
+                    }
+                }
+                const own = Object.entries(cardFiles).filter(([c]) => (form.channels as string[]).includes(c));
+                if (own.length) setSaving("Uploading platform photos…");
+                for (const [c, f] of own) {
+                    try {
+                        await uploadPostFile(id, f, true, c);
+                    } catch (e) {
+                        note = extractApiError(e, "A platform's photo did not upload — add it on its card.");
                     }
                 }
                 if (note) toast.warning(`Post saved. ${note}`);
@@ -258,6 +306,11 @@ export default function PostComposer({
                             post={post}
                             onFit={fit}
                             onPostChanged={setPost}
+                            onUpload={cardUpload}
+                            cardFiles={cardFiles}
+                            onDropCardFile={(c) => setCardFiles(({ [c]: _drop, ...rest }) => rest)}
+                            prePick={prePick}
+                            onPrePick={(c, f) => setPrePick(({ [c]: _old, ...rest }) => (f ? { ...rest, [c]: f } : rest))}
                             pending={pending}
                             productImage={fromProduct?.imageUrl ?? null}
                             google={{ type: form.googleType, button: form.googleButton ?? null }}

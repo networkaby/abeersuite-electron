@@ -1,13 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useObjectUrls } from "@/shared/hooks";
-import { AlertTriangle, Crop, Pencil, RotateCcw } from "lucide-react";
+import {
+  AlertTriangle,
+  Crop,
+  Pencil,
+  RotateCcw,
+  Upload,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import PostSharePanel from "./PostSharePanel";
+import PhotoAdjustDialog from "./PhotoAdjustDialog";
 import {
   CHANNEL_SPECS,
   GOOGLE_BUTTONS,
@@ -17,6 +25,7 @@ import {
   ratioFits,
   withHashtags,
   hasPhoneNumber,
+  type PhotoCrop,
   type PostChannel,
   type PostRow,
 } from "@/modules/campaigns/lib/post";
@@ -72,6 +81,11 @@ export default function PostPlatformCards({
   onPostChanged,
   pending,
   productImage,
+  onUpload,
+  cardFiles,
+  onDropCardFile,
+  prePick,
+  onPrePick,
 }: {
   channels: string[];
   onToggle: (channel: string) => void;
@@ -79,8 +93,12 @@ export default function PostPlatformCards({
   onChange: (channel: string, copy: CopyForm | null) => void;
   master: { caption: string; hashtags: string; scheduledAt: string };
   post: PostRow | null;
-  /** Cut the main photo to shape — `channels`, or every ticked one. */
-  onFit: (channels?: string[]) => Promise<void>;
+  /** Cut a photo to shape — every ticked channel, or `channels`; with `crop`, that frame for one. */
+  onFit: (opts?: {
+    channels?: string[];
+    key?: string;
+    crop?: PhotoCrop | null;
+  }) => Promise<void>;
   google: { type: string; button: string | null };
   onGoogle: (patch: { type?: string; button?: string | null }) => void;
   onPostChanged: (p: PostRow) => void;
@@ -88,6 +106,14 @@ export default function PostPlatformCards({
   pending: File[];
   /** The shop product's photo a new post starts from, when no photo was picked. */
   productImage: string | null;
+  /** A photo for one platform only, from its card. */
+  onUpload: (channel: string, file: File) => Promise<void>;
+  /** Before the first save: each card's own photo, waiting. */
+  cardFiles: Record<string, File>;
+  onDropCardFile: (channel: string) => void;
+  /** Before the first save: the Master photo a platform takes instead of the main one. */
+  prePick: Record<string, File>;
+  onPrePick: (channel: string, file: File | null) => void;
 }) {
   const [fitting, setFitting] = useState<string | null>(null);
   const [picking, setPicking] = useState<string | null>(null);
@@ -102,14 +128,37 @@ export default function PostPlatformCards({
     [firstPending],
   );
   const previewSrc = useObjectUrls(firstList)[0] ?? productImage;
-  const fit = async (id: string, list?: string[]) => {
+  // Every Master photo waiting for the first save, previewed (same links as Master's strip).
+  const pendingUrls = useObjectUrls(pending);
+  const fit = async (id: string, opts?: { channels?: string[] }) => {
     setFitting(id);
     try {
-      await onFit(list);
+      await onFit(opts);
     } finally {
       setFitting(null);
     }
   };
+  // Each card's own waiting photo, previewed.
+  const cardList = useMemo(
+    () => ORDER.flatMap((c) => (cardFiles[c] ? [cardFiles[c]] : [])),
+    [cardFiles],
+  );
+  const cardUrls = useObjectUrls(cardList);
+  const cardSrc = (c: string) => {
+    const i = ORDER.filter((x) => cardFiles[x]).indexOf(c);
+    return i >= 0 ? cardUrls[i] : null;
+  };
+  // One hidden file box shared by every card's Upload.
+  const fileBox = useRef<HTMLInputElement>(null);
+  const [uploadFor, setUploadFor] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<string | null>(null);
+  // The Adjust editor: which card, from which photo, with the last frame.
+  const [adjusting, setAdjusting] = useState<{
+    channel: string;
+    src: string;
+    url: string;
+    crop: PhotoCrop | null;
+  } | null>(null);
 
   return (
     <>
@@ -162,6 +211,25 @@ export default function PostPlatformCards({
         const offShape = picked.filter(
           (k) => dims[k] && !ratioFits(c, ...dims[k]),
         );
+        const shownKey = picked[0];
+        const shown = photos.find((f) => f.key === shownKey);
+        const srcKey =
+          shown?.from && photos.some((f) => f.key === shown.from)
+            ? shown.from
+            : shownKey;
+        const srcPhoto = photos.find((f) => f.key === srcKey);
+        const adjustFrom =
+          post &&
+          srcPhoto &&
+          srcPhoto.type.startsWith("image/") &&
+          post.photoLinks?.[srcPhoto.key]?.url
+            ? {
+                src: srcPhoto.key,
+                url: post.photoLinks[srcPhoto.key].url as string,
+                crop:
+                  shown?.from === srcPhoto.key ? (shown.crop ?? null) : null,
+              }
+            : null;
         const togglePhoto = (key: string) => {
           const next = picked.includes(key)
             ? picked.filter((k) => k !== key)
@@ -234,7 +302,8 @@ export default function PostPlatformCards({
                       <p
                         className={`line-clamp-6 rounded-md border bg-muted/30 p-2 text-sm leading-snug whitespace-pre-line ${text ? "" : "text-muted-foreground"}`}
                       >
-                        {text || "Write the main text in Master."}
+                        {text ||
+                          "No main text — write it in Master, or Change to write this platform's own."}
                       </p>
                     )}
                     {ownText &&
@@ -251,11 +320,16 @@ export default function PostPlatformCards({
                     )}
                     {c === "GOOGLE_BUSINESS" && hasPhoneNumber(text) && (
                       <p className="flex items-center gap-1 text-xs font-medium text-amber-700">
-                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> Google may reject a post with a phone number in it — remove it and pick the Call now button.
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />{" "}
+                        Google may reject a post with a phone number in it —
+                        remove it and pick the Call now button.
                       </p>
                     )}
                     {c === "GOOGLE_BUSINESS" && (
-                      <p className="text-xs text-foreground/70">No shop link in the text here — Google rejects web addresses in posts. The button carries it.</p>
+                      <p className="text-xs text-foreground/70">
+                        No shop link in the text here — Google rejects web
+                        addresses in posts. The button carries it.
+                      </p>
                     )}
                   </Row>
                 </div>
@@ -291,55 +365,167 @@ export default function PostPlatformCards({
 
                   <Row
                     label="Photo"
-                    own={ownPhotos}
-                    changeLabel={post && photos.length ? "Pick" : undefined}
+                    own={
+                      ownPhotos ||
+                      !!cardFiles[c] ||
+                      (!post && !!prePick[c] && pending.includes(prePick[c]))
+                    }
+                    changeLabel={
+                      (post ? photos.length : pending.length) > 1
+                        ? "Pick"
+                        : null
+                    }
                     onChange={() => setPicking(picking === c ? null : c)}
-                    onReset={() => set({ photos: null })}
+                    onReset={() => {
+                      set({ photos: null });
+                      onPrePick(c, null);
+                    }}
                     extra={
-                      canFit ? (
+                      <>
+                        {adjustFrom && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-xs"
+                            disabled={fitting !== null}
+                            onClick={() =>
+                              setAdjusting({ channel: c, ...adjustFrom })
+                            }
+                          >
+                            <Crop className="mr-1 h-3 w-3" /> Adjust{" "}
+                            {spec.ratio.join(":")}
+                          </Button>
+                        )}
                         <Button
                           type="button"
                           size="sm"
                           variant="ghost"
                           className="h-6 px-2 text-xs"
-                          disabled={fitting !== null}
-                          onClick={() => fit(c, [c])}
+                          disabled={uploading !== null}
+                          onClick={() => {
+                            setUploadFor(c);
+                            fileBox.current?.click();
+                          }}
                         >
-                          <Crop className="mr-1 h-3 w-3" />{" "}
-                          {fitting === c
-                            ? "Fitting…"
-                            : `Fit ${spec.ratio.join(":")}`}
+                          <Upload className="mr-1 h-3 w-3" />{" "}
+                          {uploading === c ? "Uploading…" : "Upload"}
                         </Button>
-                      ) : null
+                      </>
                     }
                   >
-                    {!post ? (
-                      previewSrc ? (
-                        <div className="flex items-end gap-3">
-                          <div
-                            className="h-32 shrink-0 overflow-hidden rounded-md border bg-muted"
-                            style={{
-                              aspectRatio: `${spec.ratio[0]} / ${spec.ratio[1]}`,
-                            }}
+                    {!post && cardSrc(c) ? (
+                      <div className="flex items-end gap-3">
+                        <div
+                          className="relative h-32 shrink-0 overflow-hidden rounded-md border bg-muted"
+                          style={{
+                            aspectRatio: `${spec.ratio[0]} / ${spec.ratio[1]}`,
+                          }}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element -- a local preview */}
+                          <img
+                            src={cardSrc(c)!}
+                            alt={`${ch.label} photo`}
+                            className="size-full object-cover"
+                          />
+                          <button
+                            type="button"
+                            aria-label="Remove this platform's photo"
+                            onClick={() => onDropCardFile(c)}
+                            className="absolute top-0 right-0 rounded-bl bg-black/60 p-0.5 text-white"
                           >
-                            {/* eslint-disable-next-line @next/next/no-img-element -- a local preview or the product's photo */}
-                            <img
-                              src={previewSrc}
-                              alt={`${ch.label} preview`}
-                              className="size-full object-cover"
-                            />
-                          </div>
-                          <p className="text-xs text-foreground/70">
-                            Main photo as {spec.ratioLabel}. Cut to this shape
-                            on save when &quot;Fit for each channel&quot; is
-                            ticked.
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <p className="text-xs text-foreground/70">
+                          {ch.label}&apos;s own photo — uploads on save. After
+                          saving, Adjust lets you frame it.
+                        </p>
+                      </div>
+                    ) : !post ? (
+                      picking === c && pending.length > 1 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {pending.map((f, i) => {
+                            const sel =
+                              (prePick[c] && pending.includes(prePick[c])
+                                ? prePick[c]
+                                : pending[0]) === f;
+                            return (
+                              <button
+                                key={pendingUrls[i] ?? i}
+                                type="button"
+                                aria-pressed={sel}
+                                title={f.name}
+                                onClick={() => {
+                                  onPrePick(c, i === 0 ? null : f);
+                                  setPicking(null);
+                                }}
+                                className={`relative size-16 shrink-0 overflow-hidden rounded-md border-2 bg-muted ${sel ? "border-primary" : "border-transparent opacity-60 hover:opacity-100"}`}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element -- a local preview */}
+                                <img
+                                  src={pendingUrls[i]}
+                                  alt={f.name}
+                                  className="size-full object-cover"
+                                />
+                                {i === 0 && (
+                                  <span className="absolute bottom-0 left-0 rounded-tr bg-primary px-1 text-[10px] text-primary-foreground">
+                                    Main
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                          <p className="w-full text-xs text-foreground/70">
+                            Click the photo {ch.label} should use.
                           </p>
                         </div>
                       ) : (
-                        <p className="text-sm text-muted-foreground">
-                          No photo yet — add one in Master
-                          {c === "INSTAGRAM" ? " (Instagram needs one)" : ""}.
-                        </p>
+                        (() => {
+                          const chosen =
+                            prePick[c] && pending.includes(prePick[c])
+                              ? prePick[c]
+                              : null;
+                          const src = chosen
+                            ? pendingUrls[pending.indexOf(chosen)]
+                            : previewSrc;
+                          return src ? (
+                            <div className="flex items-end gap-3">
+                              <div
+                                className="h-32 shrink-0 overflow-hidden rounded-md border bg-muted"
+                                style={{
+                                  aspectRatio: `${spec.ratio[0]} / ${spec.ratio[1]}`,
+                                }}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element -- a local preview or the product's photo */}
+                                <img
+                                  src={src}
+                                  alt={`${ch.label} preview`}
+                                  className="size-full object-cover"
+                                />
+                              </div>
+                              <p className="text-xs text-foreground/70">
+                                {chosen
+                                  ? "Its own pick from Master"
+                                  : "Main photo"}{" "}
+                                as {spec.ratioLabel}. Cut to this shape on save
+                                {chosen
+                                  ? ""
+                                  : ' when "Fit for each channel" is ticked'}
+                                ; Adjust it after saving.
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">
+                              No photo yet — add one in Master, or Upload one
+                              just for {ch.label}
+                              {c === "INSTAGRAM"
+                                ? " (Instagram needs one)"
+                                : ""}
+                              .
+                            </p>
+                          );
+                        })()
                       )
                     ) : (
                       <div className="flex flex-wrap gap-1.5">
@@ -404,7 +590,7 @@ export default function PostPlatformCards({
                         )}
                       </div>
                     )}
-                    {picking === c && (
+                    {picking === c && post && (
                       <p className="text-xs text-foreground/70">
                         Click photos to pick them for {ch.label}, up to{" "}
                         {spec.photosMax}.
@@ -481,6 +667,37 @@ export default function PostPlatformCards({
           </section>
         );
       })}
+      <input
+        ref={fileBox}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,video/mp4"
+        className="hidden"
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (!f || !uploadFor) return;
+          setUploading(uploadFor);
+          try {
+            await onUpload(uploadFor, f);
+          } finally {
+            setUploading(null);
+          }
+        }}
+      />
+      {adjusting && (
+        <PhotoAdjustDialog
+          key={`${adjusting.channel}-${adjusting.src}`}
+          open
+          onOpenChange={(o) => !o && setAdjusting(null)}
+          src={adjusting.url}
+          ratio={CHANNEL_SPECS[adjusting.channel as PostChannel].ratio}
+          title={`Frame the photo for ${POST_CHANNELS.find((x) => x.value === adjusting.channel)?.label ?? adjusting.channel}`}
+          initial={adjusting.crop}
+          onSave={(crop) =>
+            onFit({ channels: [adjusting.channel], key: adjusting.src, crop })
+          }
+        />
+      )}
     </>
   );
 }
@@ -501,7 +718,8 @@ function Row({
   own: boolean;
   note?: string;
   warn?: boolean;
-  changeLabel?: string;
+  /** null = nothing to change to: no button. */
+  changeLabel?: string | null;
   onChange: () => void;
   onReset: () => void;
   extra?: React.ReactNode;
@@ -535,7 +753,7 @@ function Row({
           >
             <RotateCcw className="mr-1 h-3 w-3" /> Reset
           </Button>
-        ) : (
+        ) : changeLabel === null ? null : (
           <Button
             type="button"
             size="sm"

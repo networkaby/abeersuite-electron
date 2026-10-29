@@ -4,7 +4,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, parseIdParam, validateRequest } from "@/shared/lib/api";
 import { checkPostMedia, type PostPhoto, type PostVariants } from "@/modules/campaigns/lib/post";
 import { loadPost, postMediaPrefix, postMediaResponse } from "@/modules/campaigns/lib/postServer";
-import { EXTRA_MEDIA_MAX as EXTRA_MAX } from "@/modules/campaigns/lib/postPhotoFit";
+import { EXTRA_MEDIA_MAX as EXTRA_MAX, giveChannelPhoto } from "@/modules/campaigns/lib/postPhotoFit";
 import { requirePostsPage } from "@/modules/campaigns/lib/campaignAccess";
 
 /**
@@ -14,7 +14,8 @@ import { requirePostsPage } from "@/modules/campaigns/lib/campaignAccess";
  *        `?key=` picks one of the post's photos; none = the main one.
  * PUT    /api/campaigns/posts/:id/media — attach the file the browser just
  *        uploaded (via ./upload-url): as the main photo, or `extra` adds it to
- *        the photos channel copies can pick from.
+ *        the photos channel copies can pick from; `channel` (a platform card's
+ *        own upload) also makes it that channel's photo.
  * PATCH  /api/campaigns/posts/:id/media { main: key } — make one of the post's
  *        other photos the main one; the old main joins the others, first.
  *        Every channel that follows the main photo gets the new one.
@@ -28,6 +29,7 @@ const schema = z.object({
     name: z.string().trim().min(1).max(200),
     size: z.number().int().positive(),
     extra: z.boolean().optional(),
+    channel: z.string().min(1).max(40).optional(),
 });
 
 
@@ -55,7 +57,21 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     if (bad) return NextResponse.json({ error: bad }, { status: 400 });
 
     try {
-        const { extra, ...file } = data;
+        const { extra, channel, ...file } = data;
+        if (channel) {
+            const row = await prisma.post.findUnique({ where: { id }, select: { extraMedia: true, mediaKey: true } });
+            if (!row) return notFound();
+            const list = row.extraMedia as PostPhoto[];
+            // With no main photo yet, the card's photo becomes the main one too.
+            if (!row.mediaKey) {
+                await prisma.post.update({ where: { id }, data: { mediaKey: file.key, mediaType: file.type, mediaName: file.name, mediaSize: file.size } });
+            } else {
+                if (list.length >= EXTRA_MAX) return NextResponse.json({ error: `A post holds ${EXTRA_MAX + 1} photos at most.` }, { status: 400 });
+                await prisma.post.update({ where: { id }, data: { extraMedia: [...list, file] } });
+            }
+            await giveChannelPhoto(id, channel, file.key);
+            return NextResponse.json(await loadPost(id));
+        }
         if (extra) {
             const row = await prisma.post.findUnique({ where: { id }, select: { extraMedia: true } });
             if (!row) return notFound();
@@ -97,7 +113,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             : [];
         // A channel left on a Fit copy of the old main ("phone-4x5.jpg") follows the new main again.
         const base = (row.mediaName ?? "").replace(/\.[^.]+$/, "").slice(0, 40); // as postPhotoFit names them
-        const fitOfOld = new Set(extras.filter((f) => base && f.name.startsWith(`${base}-`) && /^\d+x\d+\.jpg$/.test(f.name.slice(base.length + 1))).map((f) => f.key));
+        const fitOfOld = new Set(extras.filter((f) => f.from === row.mediaKey || (base && f.name.startsWith(`${base}-`) && /^\d+x\d+\.jpg$/.test(f.name.slice(base.length + 1)))).map((f) => f.key));
         const variants = { ...((row.variants ?? {}) as PostVariants) };
         for (const [c, v] of Object.entries(variants)) {
             if (!v?.photos || !v.photos.every((k) => fitOfOld.has(k))) continue;

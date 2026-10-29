@@ -74,6 +74,30 @@ curl -sS -X POST -H "x-api-key: $COWORK_API_KEY" \
 - Instagram needs a photo or MP4. Never schedule Instagram without one.
 - Only real photos for work done at site — never an AI image presented as real work.
 
+### Frame a photo for one channel (free — the cut is ours)
+
+Look at the photo (`post.photoLinks[key].url`) and say where the important
+part is, as fractions across (`x`) and down (`y`), 0–1. The server cuts it in
+that channel's shape around that point and makes it the channel's photo.
+
+```bash
+curl -sS -X POST -H "x-api-key: $COWORK_API_KEY" -H "content-type: application/json" \
+  "$ABEERSUITE_URL/api/agent/posts/<id>/photos/fit" \
+  -d '{"channel":"GOOGLE_BUSINESS","focus":{"x":0.42,"y":0.55},"zoom":1.2}'
+```
+
+- `zoom` 1 = the biggest frame that fits (default), up to 5 to go in closer.
+- Or the exact frame: `"crop":{"x":0.1,"y":0.2,"w":0.6,"h":0.45}`.
+- `key` picks which of the post's photos (default the main one).
+- `{"fit":"all"}` = the automatic cut for every channel.
+- Keep text, faces and the product inside the frame. Google shows exactly 4:3.
+
+### A channel without the main text
+
+Every channel can stand on its own: leave `caption` empty and give each
+ticked channel its own `variants.<CHANNEL>.caption`. A channel with neither is
+refused.
+
 ## 4. Change or remove
 
 `PATCH /api/agent/posts/<id>` (the whole post, as in step 2) and
