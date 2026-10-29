@@ -132,6 +132,30 @@ export default function PostMaterials({
     }
   }
 
+  /** Make photo `i` the main one — every platform that follows Master gets it. */
+  async function makeMain(i: number) {
+    if (i === 0 && mainIsFirst) return;
+    if (!post)
+      return onPending([pending[i], ...pending.filter((_, j) => j !== i)]);
+    setBusy(true);
+    try {
+      onPostChanged(
+        (
+          await axios.patch<PostRow>(`/api/campaigns/posts/${post.id}/media`, {
+            main: tiles[i].id,
+          })
+        ).data,
+      );
+      toast.success(
+        "Main photo changed — use Fit photo for every platform to cut it for each.",
+      );
+    } catch (e) {
+      toast.error(extractApiError(e, "Failed to change the main photo"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function removeAt(i: number) {
     if (!post) return onPending(pending.filter((_, j) => j !== i));
     setBusy(true);
@@ -158,12 +182,15 @@ export default function PostMaterials({
   return (
     <section
       className="overflow-hidden rounded-xl border text-card-foreground shadow-sm"
-      style={{ background: "color-mix(in oklab, var(--m-campaigns) 4%, var(--muted))" }}
+      style={{
+        background: "color-mix(in oklab, var(--m-campaigns) 4%, var(--muted))",
+      }}
     >
       <div
         className="flex flex-wrap items-center gap-2 border-b px-4 py-2.5"
         style={{
-          background: "color-mix(in oklab, var(--m-campaigns) 12%, var(--card))",
+          background:
+            "color-mix(in oklab, var(--m-campaigns) 12%, var(--card))",
         }}
       >
         <h2 className="flex-1 text-sm font-semibold">1 · Master</h2>
@@ -216,7 +243,11 @@ export default function PostMaterials({
                 onCheckedChange={() => onToggleChannel(c.value)}
               />
               {c.label}
-              {!c.ready && <span className="text-xs text-muted-foreground">· needs approval</span>}
+              {!c.ready && (
+                <span className="text-xs text-muted-foreground">
+                  · needs approval
+                </span>
+              )}
             </label>
           ))}
         </div>
@@ -227,7 +258,8 @@ export default function PostMaterials({
               <div className="flex justify-between">
                 <Label htmlFor="post-caption">Main text</Label>
                 <span className="text-xs text-muted-foreground">
-                  {caption.length}/{POST_CAPTION_MAX} · every channel uses it unless given its own
+                  {caption.length}/{POST_CAPTION_MAX} · every channel uses it
+                  unless given its own
                 </span>
               </div>
               <Textarea
@@ -242,7 +274,9 @@ export default function PostMaterials({
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="post-hashtags">Hashtags · Instagram &amp; Facebook only</Label>
+                <Label htmlFor="post-hashtags">
+                  Hashtags · Instagram &amp; Facebook only
+                </Label>
                 <Input
                   id="post-hashtags"
                   className="bg-card"
@@ -271,7 +305,8 @@ export default function PostMaterials({
               <div className="flex justify-between">
                 <Label>Photos</Label>
                 <span className="text-xs text-muted-foreground">
-                  {tiles.length}/{PHOTOS_MAX} · click to view · first is the main
+                  {tiles.length}/{PHOTOS_MAX} · click to view · first is the
+                  main
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -293,13 +328,28 @@ export default function PostMaterials({
                         </span>
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element -- a local preview or a signed private R2 link
-                        <img src={t.src} alt={t.name} className="size-full object-cover" />
+                        <img
+                          src={t.src}
+                          alt={t.name}
+                          className="size-full object-cover"
+                        />
                       )}
                     </button>
-                    {i === 0 && mainIsFirst && (
+                    {i === 0 && mainIsFirst ? (
                       <span className="pointer-events-none absolute bottom-0 left-0 rounded-tr bg-primary px-1 text-[10px] text-primary-foreground">
                         Main
                       </span>
+                    ) : (
+                      !t.video && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void makeMain(i)}
+                          className="absolute bottom-0 left-0 rounded-tr bg-black/60 px-1 text-[10px] text-white hover:bg-primary"
+                        >
+                          Make main
+                        </button>
+                      )
                     )}
                     <button
                       type="button"
@@ -337,12 +387,20 @@ export default function PostMaterials({
               </div>
               {!post && (
                 <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={fitOnSave} onChange={(e) => onFitOnSave(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={fitOnSave}
+                    onChange={(e) => onFitOnSave(e.target.checked)}
+                  />
                   Fit for each channel on save
-                  <span className="text-xs text-muted-foreground">(Google 4:3 · FB 1:1 · Status 9:16 · IG 4:5)</span>
+                  <span className="text-xs text-muted-foreground">
+                    (Google 4:3 · FB 1:1 · Status 9:16 · IG 4:5)
+                  </span>
                 </label>
               )}
-              <p className="text-xs text-muted-foreground">JPG, PNG, WebP or MP4 up to 16 MB.</p>
+              <p className="text-xs text-muted-foreground">
+                JPG, PNG, WebP or MP4 up to 16 MB.
+              </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -373,28 +431,68 @@ export default function PostMaterials({
         </div>
       </div>
 
-      <Dialog open={viewing !== null} onOpenChange={(o) => !o && setViewing(null)}>
+      <Dialog
+        open={viewing !== null}
+        onOpenChange={(o) => !o && setViewing(null)}
+      >
         <DialogContent className="max-w-3xl">
           <DialogTitle className="truncate text-sm">
-            {shown ? `${shown.name}${viewing === 0 && mainIsFirst ? " · main photo" : ""}` : "Photo"}
+            {shown
+              ? `${shown.name}${viewing === 0 && mainIsFirst ? " · main photo" : ""}`
+              : "Photo"}
           </DialogTitle>
           {shown &&
             (shown.video ? (
-              <video src={shown.src} className="max-h-[75vh] w-full rounded-md bg-black object-contain" controls playsInline />
+              <video
+                src={shown.src}
+                className="max-h-[75vh] w-full rounded-md bg-black object-contain"
+                controls
+                playsInline
+              />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element -- a local preview or a signed private R2 link
-              <img src={shown.src} alt={shown.name} className="max-h-[75vh] w-full rounded-md bg-muted object-contain" />
+              <img
+                src={shown.src}
+                alt={shown.name}
+                className="max-h-[75vh] w-full rounded-md bg-muted object-contain"
+              />
             ))}
           {tiles.length > 1 && (
             <div className="flex justify-between">
-              <Button variant="outline" size="sm" onClick={() => setViewing((v) => ((v ?? 0) - 1 + tiles.length) % tiles.length)}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setViewing(
+                    (v) => ((v ?? 0) - 1 + tiles.length) % tiles.length,
+                  )
+                }
+              >
                 ← Previous
               </Button>
               <span className="self-center text-xs text-muted-foreground">
                 {(viewing ?? 0) + 1} / {tiles.length}
               </span>
-              <Button variant="outline" size="sm" onClick={() => setViewing((v) => ((v ?? 0) + 1) % tiles.length)}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setViewing((v) => ((v ?? 0) + 1) % tiles.length)}
+              >
                 Next →
+              </Button>
+            </div>
+          )}
+          {shown && !shown.video && !(viewing === 0 && mainIsFirst) && (
+            <div className="flex justify-center">
+              <Button
+                size="sm"
+                disabled={busy}
+                onClick={() => {
+                  void makeMain(viewing!);
+                  setViewing(0);
+                }}
+              >
+                Make this the main photo
               </Button>
             </div>
           )}

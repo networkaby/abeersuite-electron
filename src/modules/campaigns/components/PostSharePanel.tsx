@@ -59,7 +59,9 @@ export default function PostSharePanel({ post, onChanged, only }: { post: PostRo
     const fileInput = useRef<HTMLInputElement>(null);
     const extraInput = useRef<HTMLInputElement>(null);
     const copyOf = (channel: string) => channelPost(post, channel);
-    const textOf = (channel: string) => postCaption({ caption: copyOf(channel).caption, link: post.link }, COMPANY_DETAILS.sites.shop);
+    // Google gets no link in the text (it rejects web addresses there); the button carries it.
+    const textOf = (channel: string) =>
+        postCaption({ caption: copyOf(channel).caption, link: channel === "GOOGLE_BUSINESS" ? null : post.link }, COMPANY_DETAILS.sites.shop);
     const caption = postCaption(post, COMPANY_DETAILS.sites.shop);
     const isVideo = post.mediaType?.startsWith("video/");
     // Which API channels are connected? Asked once each; missing while asking or when it fails.
@@ -193,7 +195,7 @@ export default function PostSharePanel({ post, onChanged, only }: { post: PostRo
                         const last = post.shares.find((s) => s.channel === value);
                         const cp = copyOf(value);
                         const auto = AUTO[value] && ready[value] ? AUTO[value] : null;
-                        const block = auto?.block({ ...post, mediaType: cp.photos[0]?.type ?? null }) ?? null;
+                        const block = auto?.block({ ...post, mediaType: cp.photos[0]?.type ?? null, mediaSize: cp.photos[0]?.size ?? null }) ?? null;
                         return (
                             <div key={value} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2">
                                 <div className="min-w-0 flex-1">

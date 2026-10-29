@@ -88,11 +88,22 @@ export const GOOGLE_BUTTONS = [
  * needs a title and dates the post does not hold, and Google takes no video or
  * WebP here — those stay "share by hand".
  */
-export function googleAutoBlock(p: { googleType: string; mediaType: string | null }): string | null {
+export function googleAutoBlock(p: { googleType: string; mediaType: string | null; mediaSize?: number | null }): string | null {
     if (p.googleType !== "UPDATE") return "Only an Update posts by itself — share an Offer or Event by hand.";
     if (p.mediaType && !["image/jpeg", "image/png"].includes(p.mediaType)) return "Google takes a JPG or PNG photo here — share a video or WebP by hand.";
+    if (p.mediaSize && p.mediaSize > GOOGLE_PHOTO_MAX_BYTES) return "Google takes a photo up to 5 MB — use Fit to make a smaller copy.";
     return null;
 }
+
+/** Google's own cap on a post photo. */
+export const GOOGLE_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Does the text carry a phone number? Google may reject a post that does —
+ * the Call now button dials the listing's own number instead. Indian mobile
+ * and landline shapes, with or without +91 / 0 and spaces or dashes.
+ */
+export const hasPhoneNumber = (text: string) => /(?:\+91[\s-]?|\b0)?\b(?:[6-9]\d{4}[\s-]?\d{5}|0?\d{2,4}[\s-]\d{6,8})\b/.test(text);
 
 /** Where Share sends staff for Facebook — the shop's page, signed in as one of its admins. */
 export const FACEBOOK_PAGE_URL = "https://www.facebook.com/";

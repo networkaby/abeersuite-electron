@@ -4,7 +4,7 @@ import { IS_COUNTER_PC } from "@/shared/lib/prisma/counterMode";
 import { lockSecret, unlockSecret, hasSharedSecret } from "@/shared/lib/ai/secretBox";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { mediaLink } from "@/modules/message/lib/customerMessages";
-import { googleAutoBlock, postCaption } from "@/modules/campaigns/lib/post";
+import { googleAutoBlock } from "@/modules/campaigns/lib/post";
 
 /**
  * Google Business Profile — posting a Post to the shop's listing through
@@ -217,6 +217,7 @@ type PostForGoogle = {
     googleButton: string | null;
     mediaKey: string | null;
     mediaType: string | null;
+    mediaSize?: number | null;
 };
 
 /**
@@ -234,7 +235,9 @@ export async function postToGoogle(p: PostForGoogle): Promise<string | null> {
     const body: Record<string, unknown> = {
         languageCode: "en-IN",
         topicType: "STANDARD",
-        summary: postCaption(p, shop),
+        // No link in the text — Google rejects posts with a web address in
+        // them; the post's shop page rides on the button instead.
+        summary: p.caption,
     };
     if (p.googleButton) {
         // Call now dials the listing's own number; every other button opens the post's shop page.

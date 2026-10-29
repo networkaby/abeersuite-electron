@@ -16,6 +16,7 @@ import {
   postPhotos,
   ratioFits,
   withHashtags,
+  hasPhoneNumber,
   type PostChannel,
   type PostRow,
 } from "@/modules/campaigns/lib/post";
@@ -247,6 +248,14 @@ export default function PostPlatformCards({
                       <p className="text-xs font-medium text-destructive">
                         Too long here — change it to a shorter copy.
                       </p>
+                    )}
+                    {c === "GOOGLE_BUSINESS" && hasPhoneNumber(text) && (
+                      <p className="flex items-center gap-1 text-xs font-medium text-amber-700">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> Google may reject a post with a phone number in it — remove it and pick the Call now button.
+                      </p>
+                    )}
+                    {c === "GOOGLE_BUSINESS" && (
+                      <p className="text-xs text-foreground/70">No shop link in the text here — Google rejects web addresses in posts. The button carries it.</p>
                     )}
                   </Row>
                 </div>

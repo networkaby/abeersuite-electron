@@ -92,7 +92,7 @@ export const COPY_SELECT = {
 export function asChannelCopy<T extends Parameters<typeof channelPost>[0]>(post: T, channel: string): T {
     const cp = channelPost(post, channel);
     const photo = cp.photos[0] ?? null;
-    return { ...post, caption: cp.caption, mediaKey: photo?.key ?? null, mediaType: photo?.type ?? null };
+    return { ...post, caption: cp.caption, mediaKey: photo?.key ?? null, mediaType: photo?.type ?? null, mediaSize: photo?.size ?? null };
 }
 
 /** Has this channel's own time come? A copy may run later than the post's first time. */

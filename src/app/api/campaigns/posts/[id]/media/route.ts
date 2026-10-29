@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, parseIdParam, validateRequest } from "@/shared/lib/api";
-import { checkPostMedia, type PostPhoto } from "@/modules/campaigns/lib/post";
+import { checkPostMedia, type PostPhoto, type PostVariants } from "@/modules/campaigns/lib/post";
 import { loadPost, postMediaPrefix, postMediaResponse } from "@/modules/campaigns/lib/postServer";
 import { EXTRA_MEDIA_MAX as EXTRA_MAX } from "@/modules/campaigns/lib/postPhotoFit";
 import { requirePostsPage } from "@/modules/campaigns/lib/campaignAccess";
@@ -15,6 +15,9 @@ import { requirePostsPage } from "@/modules/campaigns/lib/campaignAccess";
  * PUT    /api/campaigns/posts/:id/media — attach the file the browser just
  *        uploaded (via ./upload-url): as the main photo, or `extra` adds it to
  *        the photos channel copies can pick from.
+ * PATCH  /api/campaigns/posts/:id/media { main: key } — make one of the post's
+ *        other photos the main one; the old main joins the others, first.
+ *        Every channel that follows the main photo gets the new one.
  * DELETE /api/campaigns/posts/:id/media — take the main file off, or `?key=`
  *        one extra photo. The R2 object stays.
  */
@@ -69,6 +72,50 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         return NextResponse.json(await loadPost(id));
     } catch (e) {
         return handleApiError(e, "Failed to attach the file");
+    }
+}
+
+const mainSchema = z.object({ main: z.string().trim().min(1).max(300) });
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+    const { response } = await requirePostsPage();
+    if (response) return response;
+    const { id, error: idError } = await parseIdParam(params);
+    if (idError) return idError;
+    const { data, error } = await validateRequest(req, mainSchema);
+    if (error) return error;
+
+    try {
+        const row = await prisma.post.findUnique({ where: { id }, select: { mediaKey: true, mediaType: true, mediaName: true, mediaSize: true, extraMedia: true, variants: true } });
+        if (!row) return notFound();
+        if (row.mediaKey === data.main) return NextResponse.json(await loadPost(id));
+        const extras = row.extraMedia as PostPhoto[];
+        const next = extras.find((f) => f.key === data.main);
+        if (!next) return NextResponse.json({ error: "That photo is not on this post." }, { status: 400 });
+        const oldMain: PostPhoto[] = row.mediaKey
+            ? [{ key: row.mediaKey, type: row.mediaType ?? "", name: row.mediaName ?? "photo", size: row.mediaSize ?? 0 }]
+            : [];
+        // A channel left on a Fit copy of the old main ("phone-4x5.jpg") follows the new main again.
+        const base = (row.mediaName ?? "").replace(/\.[^.]+$/, "").slice(0, 40); // as postPhotoFit names them
+        const fitOfOld = new Set(extras.filter((f) => base && f.name.startsWith(`${base}-`) && /^\d+x\d+\.jpg$/.test(f.name.slice(base.length + 1))).map((f) => f.key));
+        const variants = { ...((row.variants ?? {}) as PostVariants) };
+        for (const [c, v] of Object.entries(variants)) {
+            if (!v?.photos || !v.photos.every((k) => fitOfOld.has(k))) continue;
+            const left = { ...v, photos: null };
+            if (left.caption === null && left.scheduledAt === null) delete variants[c];
+            else variants[c] = left;
+        }
+        await prisma.post.update({
+            where: { id },
+            data: {
+                mediaKey: next.key, mediaType: next.type, mediaName: next.name, mediaSize: next.size,
+                extraMedia: [...oldMain, ...extras.filter((f) => f.key !== next.key)],
+                variants,
+            },
+        });
+        return NextResponse.json(await loadPost(id));
+    } catch (e) {
+        return handleApiError(e, "Failed to change the main photo");
     }
 }
 
