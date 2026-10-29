@@ -45,6 +45,18 @@ function mappingKey(accountId: number) { return `bank-recon:mapping:${accountId}
  *  layout the parser cannot read. Per ledger, like the column mapping. */
 function acCellKey(accountId: number) { return `bank-recon:acno-cell:${accountId}`; }
 type CellPos = { row: number; col: number };
+/** {row 11, col 1} ↔ "B12", as Excel names it. */
+function cellRef(p: CellPos) {
+    let n = p.col + 1, letters = "";
+    while (n > 0) { letters = String.fromCharCode(65 + ((n - 1) % 26)) + letters; n = Math.floor((n - 1) / 26); }
+    return `${letters}${p.row + 1}`;
+}
+function parseCellRef(v: string): CellPos | null {
+    const m = /^([A-Z]{1,3})(\d{1,5})$/.exec(v.trim().toUpperCase());
+    if (!m) return null;
+    const col = [...m[1]].reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+    return { row: Number(m[2]) - 1, col };
+}
 const cellText = (grid: string[][], p: CellPos) => String(grid[p.row]?.[p.col] ?? "").trim();
 /** Looks like an account number: mostly digits (bank masks/underscores allowed), 8+ of them. */
 const looksLikeAcNo = (v: string) => /^[\s_\-xX*0-9]+$/.test(v) && v.replace(/\D/g, "").length >= 8;
@@ -70,11 +82,12 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
     const [grid, setGrid] = useState<string[][]>([]);
     const [acCell, setAcCell] = useState<CellPos | null>(null);
     const [skipAcNo, setSkipAcNo] = useState(false);
+    const [refDraft, setRefDraft] = useState("");
 
     // Reset when closed so the next upload starts clean.
     if (useValueChange(open) && !open) {
         setFile(null); setParsed(null); setFileHash(""); setMapping({}); setReport(null); setReportError(null); setForce(false);
-        setGrid([]); setAcCell(null); setSkipAcNo(false);
+        setGrid([]); setAcCell(null); setSkipAcNo(false); setRefDraft("");
     }
 
     const rows = useMemo(() => {
@@ -93,6 +106,17 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
     // Account number: what the parser read, else the cell the user picked.
     const pickedAcNo = acCell ? cleanAccountNumber(cellText(grid, acCell)) : null;
     const accountNo = parsed?.meta.bankAccountNumber ?? pickedAcNo;
+    // Where the number sits, shown as "B12" — the picked cell, or the cell the parser read it from.
+    const acRef = useMemo(() => {
+        if (acCell) return cellRef(acCell);
+        const read = parsed?.meta.bankAccountNumber;
+        if (!read || !parsed) return null;
+        for (let row = 0; row < parsed.headerRowIndex; row++) {
+            const col = (grid[row] ?? []).findIndex((c) => String(c ?? "").includes(read));
+            if (col >= 0) return cellRef({ row, col });
+        }
+        return null;
+    }, [acCell, parsed, grid]);
     const acCandidates = useMemo(() => {
         if (!parsed || parsed.headerRowIndex < 0 || parsed.meta.bankAccountNumber) return [];
         const out: Array<CellPos & { label: string; value: string }> = [];
@@ -247,7 +271,7 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
                             {/* Statement particulars the bank printed above the table. */}
                             {(accountNo || parsed.meta.ifsc || parsed.meta.fromDate || parsed.meta.openingBalance != null) && (
                                 <div className="flex flex-wrap gap-x-5 gap-y-1 rounded-md border bg-muted/30 px-3 py-2 text-xs">
-                                    {accountNo && <span>A/c …{accountNo.slice(-6)}{!parsed.meta.bankAccountNumber && " (picked)"}</span>}
+                                    {accountNo && <span>A/c {accountNo}{acRef && <span className="text-muted-foreground"> · cell {acRef}</span>}{!parsed.meta.bankAccountNumber && " (picked)"}</span>}
                                     {parsed.meta.ifsc && <span>IFSC {parsed.meta.ifsc}</span>}
                                     {parsed.meta.fromDate && <span>{formatDate(parsed.meta.fromDate)} → {parsed.meta.toDate ? formatDate(parsed.meta.toDate) : "…"}</span>}
                                     {parsed.meta.openingBalance != null && <span>Opening {fmt(parsed.meta.openingBalance)}</span>}
@@ -268,11 +292,25 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
                                                     className={`rounded border px-2 py-0.5 ${on ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-muted"}`}
                                                     onClick={() => { setAcCell(on ? null : { row: c.row, col: c.col }); setSkipAcNo(false); }}>
                                                     {c.label && <span className="opacity-70">{c.label}: </span>}<span className="font-mono">{c.value}</span>
-                                                    <span className="ml-1 opacity-50">row {c.row + 1}</span>
+                                                    <span className="ml-1 opacity-50">{cellRef(c)}</span>
                                                 </button>
                                             );
                                         })}
                                         {acCandidates.length === 0 && <span className="text-muted-foreground">No number-like cell above the table.</span>}
+                                        <span className="flex items-center gap-1 text-muted-foreground">
+                                            or type the cell
+                                            <Input value={refDraft} placeholder="B12" className="h-6 w-16 px-1 text-xs uppercase"
+                                                onChange={(e) => setRefDraft(e.target.value)}
+                                                onBlur={() => {
+                                                    if (!refDraft.trim()) return;
+                                                    const pos = parseCellRef(refDraft);
+                                                    if (!pos || pos.row >= parsed.headerRowIndex || !cleanAccountNumber(cellText(grid, pos))) {
+                                                        toast.error(`No account number in cell ${refDraft.toUpperCase()}.`);
+                                                        return;
+                                                    }
+                                                    setAcCell(pos); setSkipAcNo(false); setRefDraft("");
+                                                }} />
+                                        </span>
                                     </div>
                                     {!accountNo && (
                                         <label className="mt-1.5 flex items-center gap-1.5 text-muted-foreground">
