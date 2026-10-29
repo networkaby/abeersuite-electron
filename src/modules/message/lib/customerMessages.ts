@@ -169,21 +169,16 @@ export async function closeConversation(phone: string, reason: "STAFF" | "CUSTOM
         data: { closedAt: new Date(), closedReason: reason, closedByUserId: userId ?? null },
     });
     let done = count > 0;
-    // Nothing open, but the latest conversation is a quiet AFTER_TEMPLATE one:
-    // staff's Close still counts — it is what takes the message off the popup.
+    // Nothing open (timed out, after-template, or never started) — staff's Close
+    // still means "no reply needed": record an empty STAFF-closed conversation.
+    // That row is what takes the chat off the popup, and it also ends a pending
+    // "Send menu" (the latest conversation is no longer AFTER_TEMPLATE).
     if (!done && reason === "STAFF") {
-        const quiet = await prisma.messageConversation.findFirst({
-            where: { phone },
-            orderBy: { startedAt: "desc" },
-            select: { id: true, closedReason: true },
+        const at = new Date();
+        await prisma.messageConversation.create({
+            data: { phone, startedAt: at, lastMessageAt: at, closedAt: at, closedReason: "STAFF", closedByUserId: userId ?? null },
         });
-        if (quiet?.closedReason === "AFTER_TEMPLATE") {
-            await prisma.messageConversation.update({
-                where: { id: quiet.id },
-                data: { closedAt: new Date(), closedReason: "STAFF", closedByUserId: userId ?? null },
-            });
-            done = true;
-        }
+        done = true;
     }
     if (done) void publishChangeServer(["messages"]);
     return done;

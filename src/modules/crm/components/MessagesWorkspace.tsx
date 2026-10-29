@@ -455,7 +455,7 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
         if (!thread) return;
         try {
             await axios.post("/api/messages/conversation", { phone: thread.phone, action: "close" });
-            toast.success("Conversation closed — the customer's next message starts a new one");
+            toast.success("Closed — no reply needed. The customer's next message starts a new conversation");
             void loadThread(thread.phone);
             void loadList(1);
         } catch (e) {
@@ -757,13 +757,13 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                                 <ListOrdered className="mr-1 size-3.5" /> Send menu
                                             </Button>
                                         )}
-                                        {canReply && (thread.conversation || thread.afterTemplate) && (
+                                        {canReply && (
                                             <Button
                                                 size="sm"
                                                 variant="outline"
                                                 className="h-8 px-2 text-xs"
                                                 onClick={() => void closeConversation()}
-                                                title="End this conversation — the customer's next message starts a new one and is asked again"
+                                                title="No reply needed — takes this chat off the new-message popup and ends any open conversation"
                                             >
                                                 <X className="mr-1 size-3.5" /> Close
                                             </Button>
