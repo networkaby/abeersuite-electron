@@ -1,25 +1,34 @@
-# v1.16.17
+# v1.16.18
 
-A small fixes update for every counter. No database change — install it whenever the counter is free.
+An office and marketing update. Counters can take it whenever they are free — billing on the counter does not change. The new database tables are office-only, so a counter's sync does not pause for this one.
 
-## Billing (POS)
+## Google reviews
 
-- When the office raises a customer's credit limit, the open bill on the counter now picks it up straight away — no need to clear and re-select the customer.
+- New **Reviews** page in the office: see the shop's Google reviews and reply to them without leaving AbeerSuite.
+- A posted reply is locked — press **Edit** to change it or remove it, so a reply is never changed by a stray click.
+- A review no longer opens a ticket on its own; the reviewer is not treated as a contact or a lead.
 
-## App updates
+## Campaigns and posts
 
-- While an update downloads, the counter now shows how many MB have come down.
-- A download that keeps crawling for 3 minutes is stopped and tried again later, instead of hanging forever.
+- A post can now go to the shop's **Facebook Page** and **Instagram** by itself. Connect them once from the Channels screen with the Facebook login.
+- Each channel can get its own copy of a post — its own text, its own time and its own photos — so Google, Facebook and Instagram each get a version that suits them.
 
-## Counter setup
+## WhatsApp and messages
 
-- Counters now receive the Google Business settings and backup settings from the office, so those features work on the counter too.
+- **Mark Spam** now blocks the number at WhatsApp as well, and **Not Spam** unblocks it. Spam is marked once per number across calls and messages, and its files are not kept.
+- Messages from suppliers no longer land in the customer inbox.
+- A double click, or two staff pressing at the same time, no longer raises two tickets for one chat.
 
-## Customer app
+## Customers and contacts
 
-- When a customer proves a mobile number or email with an OTP and that number already belongs to a profile made at the counter, the two profiles are joined into one — their old bills and points come along.
-- If that number was saved on a company, it moves to the person and the person is linked to that company.
+- Phone numbers and emails typed in by staff are treated as verified.
+- In the customer app, a customer's own new mobile or email is saved only after they confirm it with an OTP.
+- Customers opening a bill or receipt link now see a clean, app-like view that also reads well on a computer.
 
-## Marketing
+## Printing
 
-- When Google refuses the sign-in for campaigns, the screen now says so clearly instead of showing a confusing database error.
+- A4 bills shrink to fit a phone screen when viewed, and still print at true A4 size on paper.
+
+## Settings
+
+- New **Incoming API** page lists the key of every outside service that talks to AbeerSuite, in one place.
