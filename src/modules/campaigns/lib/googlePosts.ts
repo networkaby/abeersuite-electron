@@ -2,20 +2,18 @@ import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { GoogleError, googleReady, postToGoogle } from "@/modules/campaigns/lib/googleBusiness";
 import { googleAutoBlock } from "@/modules/campaigns/lib/post";
-import { claimPostFor, recordShare } from "@/modules/campaigns/lib/postServer";
+import { COPY_SELECT, asChannelCopy, channelDue, claimPostFor, recordShare } from "@/modules/campaigns/lib/postServer";
 
 const GOOGLE = "GOOGLE_BUSINESS";
 const AUTO_NAME = "Auto (Google)";
 
 const POST_FOR_GOOGLE = {
     id: true,
-    caption: true,
     link: true,
     channels: true,
     googleType: true,
     googleButton: true,
-    mediaKey: true,
-    mediaType: true,
+    ...COPY_SELECT,
     updatedAt: true,
     shares: { where: { channel: GOOGLE }, select: { id: true }, take: 1 },
 } as const;
@@ -30,7 +28,7 @@ export async function sendPostToGoogle(postId: number, by: { userId: number | nu
     const post = await prisma.post.findUnique({ where: { id: postId }, select: POST_FOR_GOOGLE });
     if (!post) return null;
     await claimPostFor(post, GOOGLE, "Google", again, (m) => new GoogleError(m));
-    const url = await postToGoogle(post);
+    const url = await postToGoogle(asChannelCopy(post, GOOGLE));
     return { post: await recordShare(postId, GOOGLE, by.userId, by.name), url };
 }
 
@@ -45,13 +43,14 @@ export async function runGooglePosts(now = new Date()): Promise<GooglePostsResul
     if (!(await googleReady())) return { sent: 0, failed: [], skipped: "Google Business Profile not connected" };
     const due = await prisma.post.findMany({
         where: { status: "SCHEDULED", scheduledAt: { lte: now }, channels: { has: GOOGLE }, shares: { none: { channel: GOOGLE } } },
-        select: { id: true, googleType: true, mediaType: true, createdById: true },
+        select: { ...POST_FOR_GOOGLE, createdById: true },
         orderBy: { scheduledAt: "asc" },
-        take: 20,
+        take: 50,
     });
     const out: GooglePostsResult = { sent: 0, failed: [] };
     for (const p of due) {
-        if (googleAutoBlock(p)) continue;
+        // The Google copy may have its own, later time.
+        if (!channelDue(p, GOOGLE, now) || googleAutoBlock(asChannelCopy(p, GOOGLE))) continue;
         try {
             await sendPostToGoogle(p.id, { userId: p.createdById, name: AUTO_NAME });
             out.sent++;

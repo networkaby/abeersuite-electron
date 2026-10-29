@@ -4,7 +4,7 @@ import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { mediaLink } from "@/modules/message/lib/customerMessages";
 import { instagramAutoBlock, postCaption } from "@/modules/campaigns/lib/post";
 import { FacebookError, graph, noteFacebookError, pageAccess, facebookSetupProblem, FACEBOOK_LINK_ID } from "@/modules/campaigns/lib/facebookPage";
-import { claimPostFor, recordShare } from "@/modules/campaigns/lib/postServer";
+import { COPY_SELECT, asChannelCopy, channelDue, claimPostFor, recordShare } from "@/modules/campaigns/lib/postServer";
 
 /**
  * Instagram — the business account linked to the connected Facebook Page,
@@ -66,11 +66,9 @@ async function waitUntilProcessed(containerId: string, token: string) {
 
 const POST_FOR_INSTAGRAM = {
     id: true,
-    caption: true,
+    ...COPY_SELECT,
     link: true,
     channels: true,
-    mediaKey: true,
-    mediaType: true,
     updatedAt: true,
     shares: { where: { channel: INSTAGRAM }, select: { id: true }, take: 1 },
 } as const;
@@ -80,7 +78,7 @@ export async function sendPostToInstagram(postId: number, by: { userId: number |
     const post = await prisma.post.findUnique({ where: { id: postId }, select: POST_FOR_INSTAGRAM });
     if (!post) return null;
     await claimPostFor(post, INSTAGRAM, "Instagram", again, (m) => new FacebookError(m));
-    const url = await postToInstagram(post);
+    const url = await postToInstagram(asChannelCopy(post, INSTAGRAM));
     return { post: await recordShare(postId, INSTAGRAM, by.userId, by.name), url };
 }
 
@@ -102,14 +100,14 @@ export async function runInstagramPosts(now = new Date()): Promise<InstagramPost
     if (!(await instagramReady())) return { sent: 0, failed: [], skipped: "Instagram not linked" };
     const due = await prisma.post.findMany({
         where: { status: "SCHEDULED", scheduledAt: { lte: now }, channels: { has: INSTAGRAM }, shares: { none: { channel: INSTAGRAM } } },
-        select: { id: true, mediaType: true, createdById: true },
+        select: { id: true, ...COPY_SELECT, createdById: true },
         orderBy: { scheduledAt: "asc" },
         // Each may wait for a video — keep one ring short.
         take: 5,
     });
     const out: InstagramPostsResult = { sent: 0, failed: [] };
     for (const p of due) {
-        if (instagramAutoBlock(p)) continue;
+        if (!channelDue(p, INSTAGRAM, now) || instagramAutoBlock(asChannelCopy(p, INSTAGRAM))) continue;
         try {
             await sendPostToInstagram(p.id, { userId: p.createdById, name: AUTO_NAME });
             out.sent++;

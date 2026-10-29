@@ -26,11 +26,12 @@ import {
 import CampaignsHeader from "./CampaignsHeader";
 import PostSharePanel from "./PostSharePanel";
 import PostProductPicker, { loadPostProducts } from "./PostProductPicker";
+import PostChannelCopies, { type CopyForm } from "./PostChannelCopies";
 import { toLocalInput } from "@/modules/campaigns/lib/campaign";
 
-type Form = Omit<PostInput, "link" | "scheduledAt"> & { link: string; scheduledAt: string };
+type Form = Omit<PostInput, "link" | "scheduledAt" | "variants"> & { link: string; scheduledAt: string; variants: Record<string, CopyForm> };
 
-const blank: Form = { caption: "", link: "", channels: ["WA_CHANNEL", "GOOGLE_BUSINESS"], scheduledAt: "", googleType: "UPDATE", googleButton: "SHOP", campaignId: null, status: "DRAFT" };
+const blank: Form = { caption: "", link: "", channels: ["WA_CHANNEL", "GOOGLE_BUSINESS"], scheduledAt: "", googleType: "UPDATE", googleButton: "SHOP", campaignId: null, status: "DRAFT", variants: {} };
 
 
 const fromRow = (p: PostRow): Form => ({
@@ -42,7 +43,12 @@ const fromRow = (p: PostRow): Form => ({
     googleButton: p.googleButton,
     campaignId: p.campaignId,
     status: p.status === "SCHEDULED" ? "SCHEDULED" : "DRAFT",
+    variants: Object.fromEntries(
+        Object.entries(p.variants).flatMap(([c, v]) => (v ? [[c, { caption: v.caption, scheduledAt: v.scheduledAt ? toLocalInput(v.scheduledAt) : null, photos: v.photos }]] : [])),
+    ),
 });
+
+const iso = (local: string | null) => (local ? new Date(local).toISOString() : null);
 
 const pill = (on: boolean) =>
     `rounded-lg border px-3 py-1.5 text-sm ${on ? "border-primary bg-primary/10 font-medium" : "text-muted-foreground hover:bg-muted/50"}`;
@@ -117,15 +123,22 @@ export default function PostComposer({
 
     async function save() {
         setSaving(true);
+        const variants = Object.fromEntries(
+            Object.entries(form.variants)
+                .filter(([c]) => (form.channels as string[]).includes(c))
+                .map(([c, v]) => [c, { caption: v.caption?.trim() || null, scheduledAt: iso(v.scheduledAt), photos: v.photos }]),
+        );
         const body = {
             ...form,
-            scheduledAt: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : null,
-            status: form.scheduledAt ? "SCHEDULED" : "DRAFT",
+            variants,
+            scheduledAt: iso(form.scheduledAt),
+            status: form.scheduledAt || Object.values(variants).some((v) => v.scheduledAt) ? "SCHEDULED" : "DRAFT",
         };
         try {
             if (post) {
                 const r = await axios.patch<PostRow>(`/api/campaigns/posts/${post.id}`, body);
                 setPost(r.data);
+                setForm(fromRow(r.data));
                 toast.success("Post saved");
             } else {
                 const r = await axios.post<PostRow & { photoNote?: string | null }>("/api/campaigns/posts", {
@@ -161,7 +174,7 @@ export default function PostComposer({
                 <CampaignsHeader
                     icon={SquarePen}
                     title={post ? "Edit post" : "New post"}
-                    description="Write once for every channel. WhatsApp and Google are shared by hand for now — Share gets everything ready."
+                    description="Write the idea once, then shape it per channel — its own words, time and photos. Share gets each one ready."
                 />
 
                 {loading ? (
@@ -219,7 +232,7 @@ export default function PostComposer({
 
                             <div className="space-y-1.5">
                                 <div className="flex justify-between">
-                                    <Label htmlFor="post-caption">Post</Label>
+                                    <Label htmlFor="post-caption">Post — main text</Label>
                                     <span className="text-xs text-muted-foreground">
                                         {form.caption.length}/{POST_CAPTION_MAX}
                                     </span>
@@ -241,9 +254,9 @@ export default function PostComposer({
                                     <p className="text-xs text-muted-foreground">A page on the shop site; it goes at the end of the post.</p>
                                 </div>
                                 <div className="space-y-1.5">
-                                    <Label htmlFor="post-when">When (optional)</Label>
+                                    <Label htmlFor="post-when">When (optional) — main time</Label>
                                     <Input id="post-when" type="datetime-local" value={form.scheduledAt} onChange={(e) => set("scheduledAt", e.target.value)} />
-                                    <p className="text-xs text-muted-foreground">With a time it shows on the calendar as Scheduled. Empty = a draft to share any time.</p>
+                                    <p className="text-xs text-muted-foreground">With a time it shows on the calendar as Scheduled. A channel can have its own time below; this box then shows the earliest one.</p>
                                 </div>
                             </div>
 
@@ -276,6 +289,21 @@ export default function PostComposer({
                                 </div>
                             )}
 
+                            <PostChannelCopies
+                                channels={form.channels}
+                                copies={form.variants}
+                                main={{ caption: form.caption, scheduledAt: form.scheduledAt }}
+                                post={post}
+                                onChange={(c, copy) =>
+                                    setForm((f) => {
+                                        const variants = { ...f.variants };
+                                        if (copy) variants[c] = copy;
+                                        else delete variants[c];
+                                        return { ...f, variants };
+                                    })
+                                }
+                            />
+
                             <div className="space-y-1.5">
                                 <Label>Part of a campaign (optional)</Label>
                                 <SearchableSelect<number>
@@ -296,7 +324,7 @@ export default function PostComposer({
                                     )}
                                 </div>
                                 <Button onClick={save} disabled={saving}>
-                                    {saving ? "Saving…" : form.scheduledAt ? "Save & schedule" : "Save"}
+                                    {saving ? "Saving…" : form.scheduledAt || Object.values(form.variants).some((v) => v.scheduledAt) ? "Save & schedule" : "Save"}
                                 </Button>
                             </div>
                         </section>

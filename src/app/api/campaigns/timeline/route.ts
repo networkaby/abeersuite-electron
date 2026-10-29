@@ -4,7 +4,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { requireScheduledPage } from "@/modules/campaigns/lib/campaignAccess";
 import { getReminderSettings, previewDueReminders, remindersBetween } from "@/shared/lib/whatsapp/dueReminders";
 import { EMAIL_TEMPLATE_LABEL, isEmailKind } from "@/shared/lib/email/emailTemplates";
-import { channelOf } from "@/modules/campaigns/lib/post";
+import { channelTime, channelOf } from "@/modules/campaigns/lib/post";
 
 /**
  * GET /api/campaigns/timeline?from=YYYY-MM-DD&days=3 — Campaigns → Scheduled's
@@ -56,8 +56,9 @@ export async function GET(req: Request) {
                 select: { id: true, name: true, title: true, status: true, scheduledAt: true, sentAt: true },
             }),
             prisma.post.findMany({
-                where: { status: "SCHEDULED", scheduledAt: { gte: from, lt: to } },
-                select: { id: true, caption: true, channels: true, scheduledAt: true, shares: { select: { channel: true } } },
+                // scheduledAt is the first channel's time; a later channel copy may still fall in range.
+                where: { status: "SCHEDULED", scheduledAt: { lt: to } },
+                select: { id: true, caption: true, channels: true, scheduledAt: true, variants: true, shares: { select: { channel: true } } },
             }),
             prisma.postShare.findMany({
                 where: { sharedAt: { gte: from, lt: to } },
@@ -83,13 +84,16 @@ export async function GET(req: Request) {
                 title: c.title, detail: `Campaign · ${c.name}`, href: "/office/campaigns",
             })),
             ...posts.flatMap((p) => {
-                const left = p.channels.filter((ch) => !p.shares.some((s) => s.channel === ch));
-                return left.length
-                    ? [{
-                          id: `p${p.id}`, at: p.scheduledAt!.toISOString(), channel: "SOCIAL" as const, state: "due" as const,
-                          title: p.caption, detail: `Share on ${left.map((ch) => channelOf(ch)?.label ?? ch).join(", ")}`, href: `/office/campaigns/posts/${p.id}`,
-                      }]
-                    : [];
+                // One marker per time: channels sharing a time go together, a copy with its own time stands alone.
+                const byTime = new Map<number, string[]>();
+                for (const ch of p.channels.filter((c) => !p.shares.some((s) => s.channel === c))) {
+                    const at = channelTime(p, ch);
+                    if (at && at >= from && at < to) byTime.set(at.getTime(), [...(byTime.get(at.getTime()) ?? []), ch]);
+                }
+                return [...byTime].map(([at, left]) => ({
+                    id: `p${p.id}-${at}`, at: new Date(at).toISOString(), channel: "SOCIAL" as const, state: "due" as const,
+                    title: p.caption, detail: `Share on ${left.map((ch) => channelOf(ch)?.label ?? ch).join(", ")}`, href: `/office/campaigns/posts/${p.id}`,
+                }));
             }),
             ...shares.map((s) => ({
                 id: `s${s.id}`, at: s.sharedAt.toISOString(), channel: "SOCIAL" as const, state: "sent" as const,

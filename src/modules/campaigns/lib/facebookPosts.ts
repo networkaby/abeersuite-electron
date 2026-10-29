@@ -2,18 +2,16 @@ import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { FacebookError, facebookReady, postToFacebook } from "@/modules/campaigns/lib/facebookPage";
 import { facebookAutoBlock } from "@/modules/campaigns/lib/post";
-import { claimPostFor, recordShare } from "@/modules/campaigns/lib/postServer";
+import { COPY_SELECT, asChannelCopy, channelDue, claimPostFor, recordShare } from "@/modules/campaigns/lib/postServer";
 
 const FACEBOOK = "FACEBOOK";
 const AUTO_NAME = "Auto (Facebook)";
 
 const POST_FOR_FACEBOOK = {
     id: true,
-    caption: true,
+    ...COPY_SELECT,
     link: true,
     channels: true,
-    mediaKey: true,
-    mediaType: true,
     updatedAt: true,
     shares: { where: { channel: FACEBOOK }, select: { id: true }, take: 1 },
 } as const;
@@ -28,7 +26,7 @@ export async function sendPostToFacebook(postId: number, by: { userId: number | 
     const post = await prisma.post.findUnique({ where: { id: postId }, select: POST_FOR_FACEBOOK });
     if (!post) return null;
     await claimPostFor(post, FACEBOOK, "Facebook", again, (m) => new FacebookError(m));
-    const url = await postToFacebook(post);
+    const url = await postToFacebook(asChannelCopy(post, FACEBOOK));
     return { post: await recordShare(postId, FACEBOOK, by.userId, by.name), url };
 }
 
@@ -43,13 +41,13 @@ export async function runFacebookPosts(now = new Date()): Promise<FacebookPostsR
     if (!(await facebookReady())) return { sent: 0, failed: [], skipped: "Facebook Page not connected" };
     const due = await prisma.post.findMany({
         where: { status: "SCHEDULED", scheduledAt: { lte: now }, channels: { has: FACEBOOK }, shares: { none: { channel: FACEBOOK } } },
-        select: { id: true, mediaType: true, createdById: true },
+        select: { id: true, ...COPY_SELECT, createdById: true },
         orderBy: { scheduledAt: "asc" },
-        take: 20,
+        take: 50,
     });
     const out: FacebookPostsResult = { sent: 0, failed: [] };
     for (const p of due) {
-        if (facebookAutoBlock(p)) continue;
+        if (!channelDue(p, FACEBOOK, now) || facebookAutoBlock(asChannelCopy(p, FACEBOOK))) continue;
         try {
             await sendPostToFacebook(p.id, { userId: p.createdById, name: AUTO_NAME });
             out.sent++;
