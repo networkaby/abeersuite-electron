@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useObjectUrls } from "@/shared/hooks";
 import {
   AlertTriangle,
@@ -130,7 +130,28 @@ export default function PostPlatformCards({
   foot?: React.ReactNode;
 }) {
   const [fitting, setFitting] = useState<string | null>(null);
-  const [picking, setPicking] = useState<string | null>(null);
+  // The platform whose card is in view — the preview beside the cards shows that one only.
+  const [active, setActive] = useState<string | null>(null);
+  const cardEls = useRef(new Map<string, HTMLElement>());
+  useEffect(() => {
+    const seen = new Map<string, number>();
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) seen.set((e.target as HTMLElement).dataset.channel ?? "", e.isIntersecting ? e.intersectionRect.height : 0);
+        const best = [...seen].filter(([c]) => channels.includes(c)).sort((a, b) => b[1] - a[1])[0];
+        if (best && best[1] > 0) setActive(best[0]);
+      },
+      // A card counts while it crosses the upper middle of the screen.
+      { rootMargin: "-25% 0px -45% 0px", threshold: [0, 0.25, 0.5, 0.75, 1] },
+    );
+    for (const el of cardEls.current.values()) io.observe(el);
+    return () => io.disconnect();
+  }, [channels]);
+  const shownChannel = active && channels.includes(active) ? active : (ORDER.find((c) => channels.includes(c)) ?? null);
+  const showCard = (c: string) => {
+    setActive(c);
+    cardEls.current.get(c)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   // Each photo's size once its thumbnail loads, for the shape warning.
   const [dims, setDims] = useState<Record<string, [number, number]>>({});
   const photos = post ? postPhotos(post) : [];
@@ -248,11 +269,15 @@ export default function PostPlatformCards({
                   shown?.from === srcPhoto.key ? (shown.crop ?? null) : null,
               }
             : null;
+        const originals = photos.filter((f) => !f.from || !photos.some((o) => o.key === f.from));
+        /** Where an original sits in this platform's picks — itself, or a copy cut from it. */
+        const pickedAt = (key: string) => picked.findIndex((k) => k === key || photos.find((f) => f.key === k)?.from === key);
         const togglePhoto = (key: string) => {
-          const next = picked.includes(key)
-            ? picked.filter((k) => k !== key)
-            : [...picked, key];
-          set({ photos: next.slice(-spec.photosMax) });
+          const at = pickedAt(key);
+          if (at >= 0) return set({ photos: picked.filter((_, i) => i !== at) });
+          if (spec.photosMax === 1) return set({ photos: [key] });
+          if (picked.length >= spec.photosMax) return;
+          set({ photos: [...picked, key] });
         };
         // Before the first save: this platform's own pick of Master photos (several where it takes several).
         const preOwn = (prePick[c] ?? []).filter((f) => pending.includes(f));
@@ -260,7 +285,6 @@ export default function PostPlatformCards({
         const prePickToggle = (f: File) => {
           if (spec.photosMax === 1) {
             onPrePick(c, f === pending[0] ? null : [f]);
-            setPicking(null);
             return;
           }
           const next = preShown.includes(f) ? preShown.filter((x) => x !== f) : [...preShown, f].slice(0, spec.photosMax);
@@ -293,6 +317,7 @@ export default function PostPlatformCards({
             video: shown[0]?.video ?? false,
             count: shown.length || 1,
             srcs: shown.filter((m) => !m.video).map((m) => m.src),
+            media: shown,
             text: spec.textMax > 0 ? text + linkOut : "",
             time,
             button:
@@ -304,7 +329,12 @@ export default function PostPlatformCards({
         return (
           <section
             key={c}
-            className={`overflow-hidden rounded-xl border text-card-foreground shadow-sm ${on ? (tooLong ? "border-destructive bg-card" : "bg-card") : "bg-muted/40"}`}
+            data-channel={c}
+            ref={(el) => {
+              if (el) cardEls.current.set(c, el);
+              else cardEls.current.delete(c);
+            }}
+            className={`scroll-mt-4 overflow-hidden rounded-xl border text-card-foreground shadow-sm transition-shadow ${on ? (tooLong ? "border-destructive bg-card" : "bg-card") : "bg-muted/40"} ${on && shownChannel === c ? "ring-2 ring-primary/60" : ""}`}
           >
             <div
               className="flex items-center gap-3 border-b px-4 py-2.5"
@@ -448,12 +478,8 @@ export default function PostPlatformCards({
                       !!cardFiles[c] ||
                       (!post && preOwn.length > 0)
                     }
-                    changeLabel={
-                      (post ? photos.length : pending.length) > 1
-                        ? "Pick"
-                        : null
-                    }
-                    onChange={() => setPicking(picking === c ? null : c)}
+                    changeLabel={null}
+                    onChange={() => undefined}
                     onReset={() => {
                       set({ photos: null });
                       onPrePick(c, null);
@@ -520,70 +546,32 @@ export default function PostPlatformCards({
                           saving, Adjust lets you frame it.
                         </p>
                       </div>
-                    ) : !post ? (
-                      picking === c && pending.length > 1 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {pending.map((f, i) => {
-                            const at = preShown.indexOf(f);
-                            return (
-                              <button
-                                key={pendingUrls[i] ?? i}
-                                type="button"
-                                aria-pressed={at >= 0}
-                                title={f.name}
-                                onClick={() => prePickToggle(f)}
-                                className={`relative size-16 shrink-0 overflow-hidden rounded-md border-2 bg-muted ${at >= 0 ? "border-primary" : "border-transparent opacity-60 hover:opacity-100"}`}
-                              >
-                                {/* eslint-disable-next-line @next/next/no-img-element -- a local preview */}
-                                <img src={pendingUrls[i]} alt={f.name} className="size-full object-cover" />
-                                {i === 0 && (
-                                  <span className="absolute bottom-0 left-0 rounded-tr bg-primary px-1 text-[10px] text-primary-foreground">Main</span>
-                                )}
-                                {at >= 0 && spec.photosMax > 1 && (
-                                  <span className="absolute top-0.5 left-0.5 rounded bg-primary px-1 text-[10px] text-primary-foreground">{at + 1}</span>
-                                )}
-                              </button>
-                            );
-                          })}
-                          <div className="flex w-full items-center justify-between gap-2">
-                            <p className="text-xs text-foreground/70">
-                              {spec.photosMax > 1
-                                ? `Click photos for ${ch.label}, up to ${spec.photosMax}; the number is their order.`
-                                : `Click the photo ${ch.label} should use.`}
-                            </p>
-                            {spec.photosMax > 1 && (
-                              <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setPicking(null)}>
-                                Done
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        (() => {
-                          const srcs = preShown.length ? preShown.map((f) => pendingUrls[pending.indexOf(f)]) : previewSrc ? [previewSrc] : [];
-                          return srcs.length ? (
-                            <div className="space-y-1">
-                              <div className="flex flex-wrap items-end gap-2">
-                                {srcs.map((src, i) => (
-                                  <div
-                                    key={`${src}-${i}`}
-                                    className={`relative shrink-0 overflow-hidden rounded-md border bg-muted ${srcs.length > 1 ? "h-24" : "h-32"}`}
-                                    style={{ aspectRatio: `${spec.ratio[0]} / ${spec.ratio[1]}` }}
-                                  >
-                                    {/* eslint-disable-next-line @next/next/no-img-element -- a local preview or the product's photo */}
-                                    <img src={src} alt={`${ch.label} photo ${i + 1}`} className="size-full object-cover" />
-                                    {srcs.length > 1 && (
-                                      <span className="absolute top-0.5 left-0.5 rounded bg-primary px-1 text-[10px] text-primary-foreground">{i + 1}</span>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                              <p className="text-xs text-foreground/70">
-                                {preOwn.length ? (preOwn.length > 1 ? `${preOwn.length} photos, its own pick` : "Its own pick from Master") : "Main photo"} as {spec.ratioLabel}. Cut to this
-                                shape on save{preOwn.length ? "" : ' when "Fit for each channel" is ticked'}; Adjust after saving.
-                              </p>
-                            </div>
-                          ) : (
+                    ) : (
+                      (() => {
+                        // Every photo in Master, ticked where this platform uses it (order = number).
+                        const tiles = post
+                          ? originals.map((f) => ({
+                              id: f.key,
+                              name: f.name,
+                              src: post.photoLinks?.[f.key]?.url ?? null,
+                              video: f.type.startsWith("video/"),
+                              at: pickedAt(f.key),
+                              main: f.key === post.mediaKey,
+                              pick: () => togglePhoto(f.key),
+                            }))
+                          : pending.map((f, i) => ({
+                              id: pendingUrls[i] ?? String(i),
+                              name: f.name,
+                              src: pendingUrls[i] ?? null,
+                              video: f.type.startsWith("video/"),
+                              at: preShown.indexOf(f),
+                              main: i === 0,
+                              pick: () => prePickToggle(f),
+                            }));
+                        const count = tiles.filter((t) => t.at >= 0).length;
+                        const full = spec.photosMax > 1 && count >= spec.photosMax;
+                        if (!tiles.length && !(!post && previewSrc))
+                          return (
                             <p className="text-sm text-muted-foreground">
                               {c === "FACEBOOK_REEL"
                                 ? "No video yet — Upload one upright MP4 just for the reel"
@@ -591,76 +579,57 @@ export default function PostPlatformCards({
                               {c === "INSTAGRAM" ? " (Instagram needs one)" : ""}.
                             </p>
                           );
-                        })()
-                      )
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {(picking === c
-                          ? photos.map((f) => f.key)
-                          : picked
-                        ).map((k) => {
-                          const f = photos.find((p) => p.key === k);
-                          if (!f) return null;
-                          const sel = picked.includes(k);
-                          const link = post.photoLinks?.[k]?.url;
-                          return (
-                            <button
-                              key={k}
-                              type="button"
-                              disabled={picking !== c}
-                              aria-pressed={sel}
-                              onClick={() => togglePhoto(k)}
-                              title={f.name}
-                              className={`relative shrink-0 overflow-hidden rounded-md border-2 bg-muted ${picking === c ? "size-16" : "h-32"} ${sel ? "border-primary" : "border-transparent opacity-50"}`}
-                              style={
-                                picking === c
-                                  ? undefined
-                                  : {
-                                      aspectRatio: `${spec.ratio[0]} / ${spec.ratio[1]}`,
-                                    }
-                              }
-                            >
-                              {link && !f.type.startsWith("video/") ? (
-                                // eslint-disable-next-line @next/next/no-img-element -- a signed private R2 link
-                                <img
-                                  src={link}
-                                  alt={f.name}
-                                  className="size-full object-cover"
-                                  onLoad={(e) => {
-                                    const {
-                                      naturalWidth: w,
-                                      naturalHeight: h,
-                                    } = e.currentTarget;
-                                    setDims((d) =>
-                                      d[k] ? d : { ...d, [k]: [w, h] },
-                                    );
-                                  }}
-                                />
-                              ) : (
-                                <span className="flex size-full items-center justify-center bg-muted text-[10px]">
-                                  Video
-                                </span>
-                              )}
-                              {sel && picked.length > 1 && (
-                                <span className="absolute top-0.5 left-0.5 rounded bg-primary px-1 text-[10px] text-primary-foreground">
-                                  {picked.indexOf(k) + 1}
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })}
-                        {!picked.length && picking !== c && (
-                          <p className="text-sm text-muted-foreground">
-                            No photo — add one in Master.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                    {picking === c && post && (
-                      <p className="text-xs text-foreground/70">
-                        Click photos to pick them for {ch.label}, up to{" "}
-                        {spec.photosMax}.
-                      </p>
+                        if (!tiles.length)
+                          return <p className="text-xs text-foreground/70">The shop product&apos;s photo, cut to {spec.ratioLabel} on save.</p>;
+                        return (
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap gap-1.5">
+                              {tiles.map((t) => {
+                                const sel = t.at >= 0;
+                                return (
+                                  <button
+                                    key={t.id}
+                                    type="button"
+                                    aria-pressed={sel}
+                                    title={t.name}
+                                    disabled={!sel && full}
+                                    onClick={t.pick}
+                                    className={`relative size-16 shrink-0 overflow-hidden rounded-md border-2 bg-muted ${sel ? "border-primary" : "border-transparent opacity-50 hover:opacity-100"} disabled:cursor-not-allowed disabled:opacity-25`}
+                                  >
+                                    {t.src && !t.video ? (
+                                      // eslint-disable-next-line @next/next/no-img-element -- a local preview or a signed private R2 link
+                                      <img
+                                        src={t.src}
+                                        alt={t.name}
+                                        className="size-full object-cover"
+                                        onLoad={(e) => {
+                                          const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
+                                          setDims((d) => (d[t.id] ? d : { ...d, [t.id]: [w, h] }));
+                                        }}
+                                      />
+                                    ) : (
+                                      <span className="flex size-full items-center justify-center text-[10px]">Video</span>
+                                    )}
+                                    {sel && (
+                                      <span className="absolute top-0.5 left-0.5 rounded bg-primary px-1 text-[10px] text-primary-foreground">
+                                        {spec.photosMax > 1 ? t.at + 1 : "✓"}
+                                      </span>
+                                    )}
+                                    {t.main && (
+                                      <span className="absolute bottom-0 left-0 rounded-tr bg-black/60 px-1 text-[10px] text-white">Main</span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <p className="text-xs text-foreground/70">
+                              {spec.photosMax > 1
+                                ? `${count} of up to ${spec.photosMax} ticked — the number is their order. Each is cut to ${spec.ratioLabel}${post ? "" : " on save"}.`
+                                : `${ch.label} takes 1 photo — click another to swap. Cut to ${spec.ratioLabel}${post ? "" : " on save"}.`}
+                            </p>
+                          </div>
+                        );
+                      })()
                     )}
                       {c === "FACEBOOK" &&
                         (() => {
@@ -805,7 +774,7 @@ export default function PostPlatformCards({
       {foot}
       </div>
       <aside className="min-w-0 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-6rem)] xl:self-start xl:overflow-y-auto">
-        <PostPreviews items={previews} />
+        <PostPreviews items={previews} active={shownChannel} onPick={showCard} />
       </aside>
     </div>
   );

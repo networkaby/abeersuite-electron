@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   Bookmark,
   Ellipsis,
@@ -25,6 +26,8 @@ export type PreviewItem = {
   count: number;
   /** Every photo, in order, where the app shows them together (Facebook's grid). */
   srcs?: string[];
+  /** Every photo / video, in order, where the app plays them one after another (stories). */
+  media?: { src: string; video: boolean }[];
   text: string;
   /** datetime-local string, or "" for a draft. */
   time: string;
@@ -49,22 +52,46 @@ const stamp = (local: string, style: "short" | "clock") => {
  * no platform offers a preview API — so shape, crop and where the text cuts
  * off match; the apps' own pixels may differ.
  */
-export default function PostPreviews({ items }: { items: PreviewItem[] }) {
+export default function PostPreviews({
+  items,
+  active,
+  onPick,
+}: {
+  items: PreviewItem[];
+  /** The platform whose card is in view; only its preview shows, so it never sits beside the wrong card. */
+  active: string | null;
+  /** A tab clicked — show that platform and bring its card into view. */
+  onPick: (channel: string) => void;
+}) {
+  const it = items.find((x) => x.channel === active) ?? items[0];
   return (
     <section className="rounded-xl border bg-muted/40 text-card-foreground shadow-sm">
-      <h2 className="border-b px-4 py-2.5 text-sm font-semibold">Post previews</h2>
-      <div className="space-y-5 p-3">
-        {items.length === 0 && (
+      <h2 className="border-b px-4 py-2.5 text-sm font-semibold">
+        Post preview{it ? <span className="font-normal text-muted-foreground"> · {it.label}</span> : null}
+      </h2>
+      {items.length > 1 && (
+        <div className="flex flex-wrap gap-1 border-b p-2">
+          {items.map((x) => (
+            <button
+              key={x.channel}
+              type="button"
+              aria-pressed={x.channel === it?.channel}
+              onClick={() => onPick(x.channel)}
+              className={`rounded-md border px-2 py-0.5 text-xs ${x.channel === it?.channel ? "border-primary bg-primary/10 font-medium" : "bg-card text-muted-foreground hover:bg-muted/50"}`}
+            >
+              {x.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="p-3">
+        {it ? (
+          <Frame key={it.channel} it={it} />
+        ) : (
           <p className="py-6 text-center text-sm text-muted-foreground">
             Switch a platform on to see how it looks there.
           </p>
         )}
-        {items.map((it) => (
-          <div key={it.channel} className="space-y-1.5">
-            <p className="text-xs font-medium text-muted-foreground">{it.label}</p>
-            <Frame it={it} />
-          </div>
-        ))}
       </div>
     </section>
   );
@@ -287,27 +314,74 @@ function WaChannel({ it }: { it: PreviewItem }) {
   );
 }
 
+/** How long a photo story stays up before the next, as Facebook plays them. */
+const STORY_MS = 5000;
+
 /**
- * The Page's story, as Facebook shows it: full screen 9:16, the progress bar,
- * the Page's name and time, no caption, and the reply bar at the bottom.
+ * The Page's story, as Facebook shows it: full screen 9:16, one bar part per
+ * story filling as it plays, the Page's name and time, no caption, the reply
+ * bar at the bottom. Plays through the stories and loops; tap the left or
+ * right half to go back or on, like the app.
  */
 function FacebookStory({ it }: { it: PreviewItem }) {
+  const items = it.media?.length ? it.media : it.src ? [{ src: it.src, video: !!it.video }] : [];
+  const [at, setAt] = useState(0);
+  const i = items.length ? at % items.length : 0;
+  const cur = items[i];
+  useEffect(() => {
+    if (items.length < 2 || cur?.video) return;
+    const t = setTimeout(() => setAt((n) => n + 1), STORY_MS);
+    return () => clearTimeout(t);
+  }, [at, items.length, cur?.video]);
+  const go = (step: number) => setAt((n) => (n + step + items.length) % Math.max(1, items.length));
   return (
-    <div className="relative mx-auto w-[220px] overflow-hidden rounded-xl bg-neutral-900 text-white" style={{ aspectRatio: "9 / 16" }}>
-      {it.src ? (
-        <Media it={it} className="absolute inset-0 size-full object-cover" />
+    <div className="relative mx-auto w-[220px] overflow-hidden rounded-xl bg-neutral-900 text-white select-none" style={{ aspectRatio: "9 / 16" }}>
+      {cur ? (
+        cur.video ? (
+          <video
+            key={`${cur.src}-${at}`}
+            src={cur.src}
+            className="absolute inset-0 size-full object-cover"
+            muted
+            autoPlay
+            playsInline
+            onEnded={() => items.length > 1 && go(1)}
+            loop={items.length < 2}
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element -- a local or signed preview
+          <img key={`${cur.src}-${at}`} src={cur.src} alt="" className="absolute inset-0 size-full object-cover" />
+        )
       ) : (
         <span className="absolute inset-0 flex items-center justify-center text-xs text-white/60">No photo or video</span>
       )}
-      <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/55 to-transparent px-2 pt-2 pb-8">
-        {/* One part per story, the first one playing. */}
+      {items.length > 1 && (
+        <>
+          <button type="button" aria-label="Previous story" className="absolute inset-y-0 left-0 w-1/3" onClick={() => go(-1)} />
+          <button type="button" aria-label="Next story" className="absolute inset-y-0 right-0 w-2/3" onClick={() => go(1)} />
+        </>
+      )}
+      <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/55 to-transparent px-2 pt-2 pb-8">
+        {/* One part per story: done ones full, the playing one filling. */}
         <div className="flex gap-0.5">
-          {Array.from({ length: Math.max(1, it.count) }, (_, i) => (
-            <div key={i} className="h-0.5 flex-1 rounded bg-white/40">
-              {i === 0 && <div className="h-full w-1/3 rounded bg-white" />}
+          {Array.from({ length: Math.max(1, items.length) }, (_, n) => (
+            <div key={n} className="h-0.5 flex-1 overflow-hidden rounded bg-white/40">
+              {n < i && <div className="h-full w-full bg-white" />}
+              {n === i && (
+                <div
+                  key={at}
+                  className="h-full bg-white"
+                  style={
+                    items.length > 1 && !cur?.video
+                      ? { animation: `story-fill ${STORY_MS}ms linear forwards` }
+                      : { width: "100%" }
+                  }
+                />
+              )}
             </div>
           ))}
         </div>
+        <style>{"@keyframes story-fill { from { width: 0% } to { width: 100% } }"}</style>
         <div className="mt-2 flex items-center gap-1.5 text-[11px]">
           <Avatar size={26} />
           <span className="font-semibold">{NAME}</span>
@@ -316,7 +390,7 @@ function FacebookStory({ it }: { it: PreviewItem }) {
           <Ellipsis className="h-4 w-4" />
         </div>
       </div>
-      <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-gradient-to-t from-black/55 to-transparent px-2 pt-6 pb-2">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-2 bg-gradient-to-t from-black/55 to-transparent px-2 pt-6 pb-2">
         <span className="flex-1 rounded-full border border-white/70 px-3 py-1 text-[10px] text-white/80">Send message…</span>
         <ThumbsUp className="h-4 w-4" />
         <Heart className="h-4 w-4" />
