@@ -6,7 +6,7 @@ import { R2_MESSAGES_BUCKET } from "@/shared/lib/constants/whatsapp";
 import { isR2Configured, putR2 } from "@/shared/lib/storage/r2";
 import { buildUrl, isCloudinaryUrl } from "@/shared/lib/cloudinaryImage";
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
-import { POST_SELECT, checkPostMedia, pendingChannels } from "@/modules/campaigns/lib/post";
+import { POST_SELECT, channelPost, checkPostMedia, pendingChannels, postPhotos, type PostPhoto, type PostVariants } from "@/modules/campaigns/lib/post";
 import { PHONE_POST_CHANNELS } from "@/modules/mobile/lib/mobilePosts";
 
 /**
@@ -21,9 +21,19 @@ export function postMediaKey(postId: number, fileName: string): string {
     return `${postMediaPrefix(postId)}${Date.now().toString(36)}-${safe}`;
 }
 
-/** Adds the view and download links a post's file needs on screen. */
-export function withMediaLinks<T extends { mediaKey: string | null; mediaName: string | null }>(row: T) {
-    return { ...row, mediaUrl: mediaLink(row.mediaKey), mediaDownloadUrl: mediaLink(row.mediaKey, row.mediaName, true) };
+/** Adds the view and download links a post's files need on screen — the main one, and every photo by key. */
+export function withMediaLinks<T extends { mediaKey: string | null; mediaType: string | null; mediaName: string | null; mediaSize: number | null; extraMedia: unknown; variants: unknown }>(row: T) {
+    const photoLinks = Object.fromEntries(
+        postPhotos(row).map((f) => [f.key, { url: mediaLink(f.key), downloadUrl: mediaLink(f.key, f.name, true) }]),
+    );
+    return {
+        ...row,
+        extraMedia: postPhotos({ ...row, mediaKey: null }) as PostPhoto[],
+        variants: (row.variants ?? {}) as PostVariants,
+        mediaUrl: mediaLink(row.mediaKey),
+        mediaDownloadUrl: mediaLink(row.mediaKey, row.mediaName, true),
+        photoLinks,
+    };
 }
 
 /**
@@ -86,7 +96,9 @@ export async function whatsappWaiting() {
     });
     const posts = rows.filter((p) => pendingChannels(p).some((c) => (PHONE_POST_CHANNELS as readonly string[]).includes(c))).map(withMediaLinks);
     const now = Date.now();
-    return { posts, due: posts.filter((p) => p.scheduledAt && p.scheduledAt.getTime() <= now).length };
+    const isDue = (p: (typeof posts)[number]) =>
+        pendingChannels(p).some((c) => (PHONE_POST_CHANNELS as readonly string[]).includes(c) && (channelPost(p, c).scheduledAt?.getTime() ?? Infinity) <= now);
+    return { posts, due: posts.filter(isDue).length };
 }
 
 /**
@@ -111,14 +123,16 @@ export async function recordShare(postId: number, channel: string, userId: numbe
  * staff app's native share) needs the bytes, and the R2 bucket's CORS lets a
  * page show a signed link but not read it from script.
  */
-export async function postMediaResponse(postId: number): Promise<NextResponse> {
-    const p = await prisma.post.findUnique({ where: { id: postId }, select: { mediaKey: true, mediaType: true } });
-    if (!p?.mediaKey) return NextResponse.json({ error: "This post has no photo or video." }, { status: 404 });
-    const link = mediaLink(p.mediaKey);
+export async function postMediaResponse(postId: number, key?: string | null): Promise<NextResponse> {
+    const p = await prisma.post.findUnique({ where: { id: postId }, select: { mediaKey: true, mediaType: true, mediaName: true, mediaSize: true, extraMedia: true } });
+    // The main photo, or one of the post's own photos by key — never another post's file.
+    const file = p && (key ? postPhotos(p).find((f) => f.key === key) : postPhotos(p)[0]);
+    if (!file) return NextResponse.json({ error: "This post has no such photo or video." }, { status: 404 });
+    const link = mediaLink(file.key);
     if (!link) return NextResponse.json({ error: "File storage (R2) is not set up on this server." }, { status: 503 });
-    const file = await fetch(link);
-    if (!file.ok || !file.body) return NextResponse.json({ error: `Could not read the file (${file.status})` }, { status: 502 });
-    return new NextResponse(file.body, {
-        headers: { "Content-Type": p.mediaType ?? "application/octet-stream", "Cache-Control": "private, max-age=300" },
+    const res = await fetch(link);
+    if (!res.ok || !res.body) return NextResponse.json({ error: `Could not read the file (${res.status})` }, { status: 502 });
+    return new NextResponse(res.body, {
+        headers: { "Content-Type": file.type || "application/octet-stream", "Cache-Control": "private, max-age=300" },
     });
 }

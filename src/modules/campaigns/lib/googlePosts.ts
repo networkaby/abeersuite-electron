@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { GoogleError, googleReady, postToGoogle } from "@/modules/campaigns/lib/googleBusiness";
-import { googleAutoBlock } from "@/modules/campaigns/lib/post";
+import { channelPost, googleAutoBlock } from "@/modules/campaigns/lib/post";
 import { recordShare } from "@/modules/campaigns/lib/postServer";
 
 const GOOGLE = "GOOGLE_BUSINESS";
@@ -14,8 +14,13 @@ const POST_FOR_GOOGLE = {
     channels: true,
     googleType: true,
     googleButton: true,
+    scheduledAt: true,
     mediaKey: true,
     mediaType: true,
+    mediaName: true,
+    mediaSize: true,
+    extraMedia: true,
+    variants: true,
     updatedAt: true,
     shares: { where: { channel: GOOGLE }, select: { id: true }, take: 1 },
 } as const;
@@ -33,8 +38,15 @@ export async function sendPostToGoogle(postId: number, by: { userId: number | nu
     if (post.shares.length && !again) throw new GoogleError("Already posted on Google.");
     const { count } = await prisma.post.updateMany({ where: { id: postId, updatedAt: post.updatedAt }, data: { updatedAt: new Date() } });
     if (!count) throw new GoogleError("This post is being sent or was just changed — refresh and try again.");
-    const url = await postToGoogle(post);
+    const url = await postToGoogle(googleCopy(post));
     return { post: await recordShare(postId, GOOGLE, by.userId, by.name), url };
+}
+
+/** The post as Google gets it: the Google copy's text and its first photo. */
+function googleCopy<T extends Parameters<typeof channelPost>[0] & { link: string | null; googleType: string; googleButton: string | null }>(post: T) {
+    const g = channelPost(post, GOOGLE);
+    const photo = g.photos[0] ?? null;
+    return { ...post, caption: g.caption, mediaKey: photo?.key ?? null, mediaType: photo?.type ?? null };
 }
 
 export type GooglePostsResult = { sent: number; failed: { id: number; error: string }[]; skipped?: string };
@@ -48,13 +60,15 @@ export async function runGooglePosts(now = new Date()): Promise<GooglePostsResul
     if (!(await googleReady())) return { sent: 0, failed: [], skipped: "Google Business Profile not connected" };
     const due = await prisma.post.findMany({
         where: { status: "SCHEDULED", scheduledAt: { lte: now }, channels: { has: GOOGLE }, shares: { none: { channel: GOOGLE } } },
-        select: { id: true, googleType: true, mediaType: true, createdById: true },
+        select: { ...POST_FOR_GOOGLE, createdById: true },
         orderBy: { scheduledAt: "asc" },
-        take: 20,
+        take: 50,
     });
     const out: GooglePostsResult = { sent: 0, failed: [] };
     for (const p of due) {
-        if (googleAutoBlock(p)) continue;
+        // The Google copy may have its own, later time.
+        if ((channelPost(p, GOOGLE).scheduledAt?.getTime() ?? Infinity) > now.getTime()) continue;
+        if (googleAutoBlock(googleCopy(p))) continue;
         try {
             await sendPostToGoogle(p.id, { userId: p.createdById, name: AUTO_NAME });
             out.sent++;

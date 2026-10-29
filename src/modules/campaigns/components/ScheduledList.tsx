@@ -331,7 +331,7 @@ export default function ScheduledList() {
                                 ) : (
                                     <ul>
                                         {data.posts.map((p) => (
-                                            <li key={p.id} className={row}>
+                                            <li key={`${p.id}-${p.scheduledAt}`} className={row}>
                                                 <span className="w-40 shrink-0 tabular-nums">{when(p.scheduledAt)}</span>
                                                 {dueNow(p.scheduledAt) && (
                                                     <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900 dark:text-amber-100">Due now</span>

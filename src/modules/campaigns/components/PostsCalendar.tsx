@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Check } from "lucide-react";
-import { channelOf, pendingChannels, type PostRow } from "@/modules/campaigns/lib/post";
+import { channelOf, channelTime, pendingChannels, type PostRow } from "@/modules/campaigns/lib/post";
 
 /** The hours the grid shows — the shop's working day with a margin either side. */
 export const CALENDAR_FIRST_HOUR = 7;
@@ -34,8 +34,26 @@ const TONE: Record<Tone, string> = {
     upcoming: "bg-violet-100 text-violet-900 dark:bg-violet-500/15 dark:text-violet-200",
 };
 
-const toneOf = (p: PostRow, at: Date, now: number): Tone =>
-    p.status === "DONE" ? "done" : at.getTime() <= now ? "missed" : "upcoming";
+const toneOf = (p: PostRow, channels: string[], at: Date, now: number): Tone =>
+    channels.every((c) => !pendingChannels(p).includes(c)) ? "done" : at.getTime() <= now ? "missed" : "upcoming";
+
+/**
+ * Where a post sits on the grid: one place per time — channels sharing a time
+ * together, a channel copy with its own time apart. A post with no time sits
+ * at its first share once done (postTime), else nowhere.
+ */
+export function postSlots(p: PostRow): { at: Date; channels: string[] }[] {
+    if (!p.scheduledAt) {
+        const at = postTime(p);
+        return at ? [{ at, channels: p.channels }] : [];
+    }
+    const byTime = new Map<number, string[]>();
+    for (const c of p.channels) {
+        const at = channelTime(p, c)!.getTime();
+        byTime.set(at, [...(byTime.get(at) ?? []), c]);
+    }
+    return [...byTime].map(([at, channels]) => ({ at: new Date(at), channels }));
+}
 
 const hourLabel = (h: number) => `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? "am" : "pm"}`;
 
@@ -53,16 +71,15 @@ export default function PostsCalendar({ posts, start, now }: { posts: PostRow[];
     const today = new Date(now).toDateString();
 
     // Bucket each dated post into its day + hour row.
-    const cells = new Map<string, { post: PostRow; at: Date }[]>();
-    for (const post of posts) {
-        const at = postTime(post);
-        if (!at) continue;
+    const cells = new Map<string, { post: PostRow; at: Date; channels: string[] }[]>();
+    for (const post of posts)
+        for (const { at, channels } of postSlots(post)) {
         const day = Math.floor((new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime() - start.getTime()) / DAY_MS);
         if (day < 0 || day > 6) continue;
         const hour = Math.min(Math.max(at.getHours(), CALENDAR_FIRST_HOUR), CALENDAR_LAST_HOUR);
         const key = `${day}:${hour}`;
-        cells.set(key, [...(cells.get(key) ?? []), { post, at }]);
-    }
+        cells.set(key, [...(cells.get(key) ?? []), { post, at, channels }]);
+        }
 
     const nowDate = new Date(now);
     return (
@@ -97,20 +114,20 @@ export default function PostsCalendar({ posts, start, now }: { posts: PostRow[];
                                         />
                                     )}
                                     <div className="flex flex-col gap-1">
-                                        {items.map(({ post, at }) => {
+                                        {items.map(({ post, at, channels }) => {
                                             const waiting = pendingChannels(post);
                                             return (
                                                 <Link
-                                                    key={post.id}
+                                                    key={`${post.id}-${at.getTime()}`}
                                                     href={`/office/campaigns/posts/${post.id}`}
-                                                    className={`block rounded-md px-1.5 py-1 text-[11px] leading-tight hover:opacity-80 ${TONE[toneOf(post, at, now)]}`}
+                                                    className={`block rounded-md px-1.5 py-1 text-[11px] leading-tight hover:opacity-80 ${TONE[toneOf(post, channels, at, now)]}`}
                                                     title={post.caption}
                                                 >
                                                     <span className="block truncate font-medium">
                                                         {at.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })} · {post.caption}
                                                     </span>
                                                     <span className="flex flex-wrap gap-x-1.5">
-                                                        {post.channels.map((c) => (
+                                                        {channels.map((c) => (
                                                             <span key={c} className="inline-flex items-center gap-0.5">
                                                                 {!waiting.includes(c) && <Check size={10} />}
                                                                 {channelOf(c)?.short ?? c}

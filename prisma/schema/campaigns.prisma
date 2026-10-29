@@ -47,7 +47,12 @@ model Campaign {
 /// "GOOGLE_BUSINESS"); `status` "DRAFT" | "SCHEDULED" | "DONE"; Google's own
 /// `googleType` "UPDATE" | "OFFER" | "EVENT" and `googleButton` ("SHOP", "CALL",
 /// "LEARN_MORE", "ORDER", "BOOK") ride along for when the API posts it.
-/// Media: one photo / MP4 in private R2 (chat bucket), key "posts/<id>/...".
+/// Media: the main photo / MP4 in private R2 (chat bucket), key "posts/<id>/...";
+/// `extraMedia` more of them ([{ key, type, name, size }]) for channels that take
+/// several or other photos.
+/// `variants` a channel's own copy (owner, 2026-10-29), { "<channel>": { caption,
+/// scheduledAt, photos } } — a null field follows the main post (post.ts
+/// `channelPost`). `scheduledAt` is always the earliest channel's time.
 model Post {
   id            Int         @id @default(autoincrement())
   caption       String
@@ -64,6 +69,8 @@ model Post {
   mediaType     String?
   mediaName     String?
   mediaSize     Int?
+  extraMedia    Json        @default("[]")
+  variants      Json        @default("{}")
   campaignId    Int?
   campaign      Campaign?   @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   createdById   Int?

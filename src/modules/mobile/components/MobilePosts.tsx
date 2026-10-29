@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Check, Send } from "lucide-react";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
-import { channelOf, pendingChannels, postCaption, type PostRow } from "@/modules/campaigns/lib/post";
+import { channelOf, channelPost, pendingChannels, postCaption, type PostRow } from "@/modules/campaigns/lib/post";
 import { PHONE_POST_CHANNELS, WHATSAPP_PACKAGES } from "@/modules/mobile/lib/mobilePosts";
 import MobileHeader from "./MobileHeader";
 
@@ -19,8 +19,8 @@ const nativeShare = (): NativeShare | null =>
 const when = (iso: string) => new Date(iso).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 
 /** The file as base64, read through our own site (the bucket refuses a script read). */
-async function fileBase64(postId: number): Promise<{ data: string; type: string } | null> {
-    const res = await fetch(`/api/mobile/posts/${postId}/media`);
+async function fileBase64(postId: number, key: string): Promise<{ data: string; type: string } | null> {
+    const res = await fetch(`/api/mobile/posts/${postId}/media?key=${encodeURIComponent(key)}`);
     if (!res.ok) return null;
     const blob = await res.blob();
     const data = await new Promise<string>((resolve, reject) => {
@@ -35,7 +35,8 @@ async function fileBase64(postId: number): Promise<{ data: string; type: string 
 /**
  * Phone app: posts waiting for WhatsApp (Channel / Status). What is pending
  * shows the moment the screen opens — no timer, no alert (owner, 2026-10-23).
- * Share opens WhatsApp with the photo and caption (the caption is copied too,
+ * Share opens WhatsApp with that channel's own copy — its photo and caption
+ * (post.ts `channelPost`; the caption is copied too,
  * since WhatsApp can drop it); the person picks our Channel or My status, sends,
  * comes back and presses Done — which keeps who and when.
  */
@@ -59,20 +60,27 @@ export default function MobilePosts() {
     }, []);
     useEffect(load, [load]);
 
-    async function share(post: PostRow) {
-        const text = postCaption(post, COMPANY_DETAILS.sites.shop);
-        setBusy(`share-${post.id}`);
+    async function share(post: PostRow, channel: string) {
+        const cp = channelPost(post, channel);
+        const text = postCaption({ caption: cp.caption, link: post.link }, COMPANY_DETAILS.sites.shop);
+        setBusy(`share-${post.id}-${channel}`);
         try {
             await navigator.clipboard?.writeText(text).catch(() => {});
-            const file = post.mediaKey ? await fileBase64(post.id) : null;
             const native = nativeShare();
             if (native) {
-                await native.share({ text, data: file?.data, mimeType: file?.type ?? post.mediaType ?? undefined, fileName: post.mediaName ?? "post", packages: [...WHATSAPP_PACKAGES] });
+                // The app's share add-on takes one file: the copy's first photo.
+                const first = cp.photos[0];
+                const file = first ? await fileBase64(post.id, first.key) : null;
+                await native.share({ text, data: file?.data, mimeType: file?.type ?? first?.type, fileName: first?.name ?? "post", packages: [...WHATSAPP_PACKAGES] });
                 return;
             }
-            // Phone Chrome (no app): the browser's own share sheet.
-            const blob = file ? await (await fetch(`data:${file.type};base64,${file.data}`)).blob() : null;
-            const files = blob ? [new File([blob], post.mediaName ?? "post", { type: file!.type })] : [];
+            // Phone Chrome (no app): the browser's own share sheet, every photo of the copy.
+            const files = await Promise.all(
+                cp.photos.map(async (f) => {
+                    const res = await fetch(`/api/mobile/posts/${post.id}/media?key=${encodeURIComponent(f.key)}`);
+                    return new File([await res.blob()], f.name, { type: f.type });
+                }),
+            );
             const payload = files.length ? { files, text } : { text };
             if (navigator.share && (!navigator.canShare || navigator.canShare(payload))) await navigator.share(payload);
             else toast.message("Caption copied — open WhatsApp and paste it");
@@ -118,7 +126,7 @@ export default function MobilePosts() {
                 ) : (
                     posts.map((p) => {
                         const waiting = pendingChannels(p).filter((c) => (PHONE_POST_CHANNELS as readonly string[]).includes(c));
-                        const due = !!p.scheduledAt && new Date(p.scheduledAt).getTime() <= now;
+                        const due = waiting.some((c) => (channelPost(p, c).scheduledAt?.getTime() ?? Infinity) <= now);
                         const expanded = open === p.id;
                         return (
                             <section key={p.id} className={`overflow-hidden rounded-2xl border bg-card shadow-sm ${due ? "border-amber-400" : ""}`}>
@@ -147,31 +155,43 @@ export default function MobilePosts() {
                                                 // eslint-disable-next-line @next/next/no-img-element -- a signed private R2 link
                                                 <img src={p.mediaUrl} alt="" className="w-full rounded-xl bg-muted object-contain" />
                                             ))}
-                                        <p className="whitespace-pre-line rounded-xl bg-muted/60 p-3 text-sm">{postCaption(p, COMPANY_DETAILS.sites.shop)}</p>
-                                        <button
-                                            type="button"
-                                            disabled={busy !== null}
-                                            onClick={() => share(p)}
-                                            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 font-semibold text-white active:scale-[.98] disabled:opacity-60"
-                                        >
-                                            <Send className="size-5" /> {busy === `share-${p.id}` ? "Opening WhatsApp…" : "Share to WhatsApp"}
-                                        </button>
-                                        <p className="text-xs text-muted-foreground">
-                                            In WhatsApp pick {waiting.map((c) => (c === "WA_STATUS" ? "My status" : "our Channel")).join(" or ")} and send. Then come back and press Done.
-                                        </p>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {waiting.map((c) => (
-                                                <button
-                                                    key={c}
-                                                    type="button"
-                                                    disabled={busy !== null}
-                                                    onClick={() => markDone(p, c)}
-                                                    className="flex h-11 items-center justify-center gap-1.5 rounded-xl border text-sm font-medium active:bg-muted disabled:opacity-60"
-                                                >
-                                                    <Check className="size-4" /> Done · {channelOf(c)?.short ?? c}
-                                                </button>
-                                            ))}
-                                        </div>
+                                        {waiting.map((c) => {
+                                            const cp = channelPost(p, c);
+                                            return (
+                                                <div key={c} className="space-y-2 rounded-xl border p-3">
+                                                    <p className="text-sm font-semibold">
+                                                        {channelOf(c)?.label ?? c}
+                                                        <span className="font-normal text-muted-foreground">
+                                                            {cp.scheduledAt ? ` · ${when(cp.scheduledAt.toISOString())}` : " · any time"}
+                                                        </span>
+                                                    </p>
+                                                    <p className="whitespace-pre-line rounded-xl bg-muted/60 p-3 text-sm">
+                                                        {postCaption({ caption: cp.caption, link: p.link }, COMPANY_DETAILS.sites.shop)}
+                                                    </p>
+                                                    <div className="grid grid-cols-[1fr_auto] gap-2">
+                                                        <button
+                                                            type="button"
+                                                            disabled={busy !== null}
+                                                            onClick={() => share(p, c)}
+                                                            className="flex h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 font-semibold text-white active:scale-[.98] disabled:opacity-60"
+                                                        >
+                                                            <Send className="size-5" /> {busy === `share-${p.id}-${c}` ? "Opening WhatsApp…" : "Share to WhatsApp"}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            disabled={busy !== null}
+                                                            onClick={() => markDone(p, c)}
+                                                            className="flex h-12 items-center justify-center gap-1.5 rounded-xl border px-3 text-sm font-medium active:bg-muted disabled:opacity-60"
+                                                        >
+                                                            <Check className="size-4" /> Done
+                                                        </button>
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        In WhatsApp pick {c === "WA_STATUS" ? "My status" : "our Channel"} and send. Then come back and press Done.
+                                                    </p>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </section>

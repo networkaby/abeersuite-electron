@@ -2,12 +2,13 @@ import "server-only";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { pushNoticesToStaff } from "@/shared/lib/push/staffPush";
 import { POST_REMINDER_EVERY_MIN } from "@/shared/lib/constants/campaigns";
-import { channelOf } from "@/modules/campaigns/lib/post";
+import { channelOf, channelPost } from "@/modules/campaigns/lib/post";
 
 export type PostReminderResult = { due: number; devices: number };
 
 /**
- * Posts whose time has come and that still have a channel to share — staff are
+ * Posts with a channel whose own time has come (a channel copy may run later
+ * than the post's first time) that is still to share — staff are
  * pushed one notice per post, then again every POST_REMINDER_EVERY_MIN until it
  * is shared on all its channels (or unscheduled). The gap is the app's, not the
  * ring's: each post is claimed by moving `lastRemindedAt` in a guarded update
@@ -19,14 +20,14 @@ export async function runPostReminders(now = new Date()): Promise<PostReminderRe
     const remindable = { OR: [{ lastRemindedAt: null }, { lastRemindedAt: { lte: gapStart } }] };
     const posts = await prisma.post.findMany({
         where: { status: "SCHEDULED", scheduledAt: { lte: now }, ...remindable },
-        select: { id: true, caption: true, channels: true, shares: { select: { channel: true } } },
+        select: { id: true, caption: true, channels: true, scheduledAt: true, variants: true, mediaKey: true, mediaType: true, mediaName: true, mediaSize: true, extraMedia: true, shares: { select: { channel: true } } },
         orderBy: { scheduledAt: "asc" },
         take: 50,
     });
 
     const due: { id: number; caption: string; pending: string[] }[] = [];
     for (const p of posts) {
-        const pending = p.channels.filter((c) => !p.shares.some((s) => s.channel === c));
+        const pending = p.channels.filter((c) => !p.shares.some((s) => s.channel === c) && (channelPost(p, c).scheduledAt?.getTime() ?? Infinity) <= now.getTime());
         if (!pending.length) continue;
         const { count } = await prisma.post.updateMany({ where: { id: p.id, ...remindable }, data: { lastRemindedAt: now } });
         if (count) due.push({ id: p.id, caption: p.caption, pending });

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError } from "@/shared/lib/api";
 import { requireScheduledPage } from "@/modules/campaigns/lib/campaignAccess";
+import { channelTime } from "@/modules/campaigns/lib/post";
 import { previewDueReminders, remindersSentToday } from "@/shared/lib/whatsapp/dueReminders";
 import { previewEmailReminders } from "@/shared/lib/email/emailReminders";
 import { EMAIL_TEMPLATE_LABEL, isEmailKind } from "@/shared/lib/email/emailTemplates";
@@ -44,7 +45,7 @@ export async function GET() {
             }),
             prisma.post.findMany({
                 where: { status: "SCHEDULED", scheduledAt: { not: null } },
-                select: { id: true, caption: true, channels: true, scheduledAt: true, shares: { select: { channel: true } } },
+                select: { id: true, caption: true, channels: true, scheduledAt: true, variants: true, shares: { select: { channel: true } } },
                 orderBy: { scheduledAt: "asc" },
                 take: 100,
             }),
@@ -60,9 +61,17 @@ export async function GET() {
             emails: emails.map((e) => ({ ...e, label: EMAIL_TEMPLATE_LABEL[e.kind] })),
             emailsSent: emailsSent.map((e) => ({ ...e, label: isEmailKind(e.kind) ? EMAIL_TEMPLATE_LABEL[e.kind] : e.kind })),
             campaigns,
+            // One line per time: a channel copy with its own time gets its own line.
             posts: posts
-                .map((p) => ({ id: p.id, caption: p.caption, scheduledAt: p.scheduledAt, channels: p.channels.filter((c) => !p.shares.some((s) => s.channel === c)) }))
-                .filter((p) => p.channels.length),
+                .flatMap((p) => {
+                    const byTime = new Map<number, string[]>();
+                    for (const c of p.channels.filter((c) => !p.shares.some((s) => s.channel === c))) {
+                        const at = channelTime(p, c)!.getTime();
+                        byTime.set(at, [...(byTime.get(at) ?? []), c]);
+                    }
+                    return [...byTime].map(([at, channels]) => ({ id: p.id, caption: p.caption, scheduledAt: new Date(at), channels }));
+                })
+                .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime()),
             shares: shares.map((s) => ({ id: s.id, channel: s.channel, sharedAt: s.sharedAt, by: s.sharedByName, postId: s.post.id, caption: s.post.caption })),
         });
     } catch (e) {

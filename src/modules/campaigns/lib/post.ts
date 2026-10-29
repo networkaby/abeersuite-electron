@@ -77,8 +77,80 @@ export function googleAutoBlock(p: { googleType: string; mediaType: string | nul
     return null;
 }
 
-/** Google allows 1,500 characters; WhatsApp more — the stricter one wins. */
-export const POST_CAPTION_MAX = 1500;
+/**
+ * What each channel takes (owner, 2026-10-29: "same idea, written differently
+ * per platform"): text limit, how many photos, and the photo shape that looks
+ * best. A per-channel copy is checked against its own channel; the ratio is
+ * only advice — a photo of another shape still shares, with a warning.
+ */
+export const CHANNEL_SPECS: Record<PostChannel, { textMax: number; photosMax: number; ratio: [number, number]; ratioLabel: string }> = {
+    WA_CHANNEL: { textMax: 4096, photosMax: 10, ratio: [1, 1], ratioLabel: "square 1:1" },
+    GOOGLE_BUSINESS: { textMax: 1500, photosMax: 1, ratio: [4, 3], ratioLabel: "wide 4:3" },
+    WA_STATUS: { textMax: 700, photosMax: 10, ratio: [9, 16], ratioLabel: "upright 9:16" },
+    FACEBOOK: { textMax: 5000, photosMax: 10, ratio: [1, 1], ratioLabel: "square 1:1" },
+    INSTAGRAM: { textMax: 2200, photosMax: 10, ratio: [4, 5], ratioLabel: "portrait 4:5" },
+};
+
+/** The main text's own cap — the roomiest channel; each channel's copy is held to its own limit. */
+export const POST_CAPTION_MAX = Math.max(...Object.values(CHANNEL_SPECS).map((s) => s.textMax));
+
+/** Is a w×h photo close enough (±6%) to the channel's best shape? */
+export function ratioFits(channel: string, w: number, h: number): boolean {
+    const spec = CHANNEL_SPECS[channel as PostChannel];
+    if (!spec || !w || !h) return true;
+    return Math.abs(w / h / (spec.ratio[0] / spec.ratio[1]) - 1) <= 0.06;
+}
+
+/** One photo / video of a post in R2, under "posts/<id>/". */
+export type PostPhoto = { key: string; type: string; name: string; size: number };
+
+/**
+ * A channel's own copy of the post. Any field left null follows the main post:
+ * `caption` its text, `scheduledAt` its time (ISO), `photos` its main photo
+ * (otherwise the keys, in order, from the main photo and `extraMedia`).
+ */
+export type PostVariant = { caption: string | null; scheduledAt: string | null; photos: string[] | null };
+export type PostVariants = Partial<Record<string, PostVariant>>;
+
+type VariantSource = {
+    caption: string;
+    scheduledAt: Date | string | null;
+    mediaKey: string | null;
+    mediaType: string | null;
+    mediaName: string | null;
+    mediaSize: number | null;
+    extraMedia: unknown;
+    variants: unknown;
+};
+
+/** Every photo of a post: the main one first, then the extras. */
+export function postPhotos(p: Pick<VariantSource, "mediaKey" | "mediaType" | "mediaName" | "mediaSize" | "extraMedia">): PostPhoto[] {
+    const main = p.mediaKey ? [{ key: p.mediaKey, type: p.mediaType ?? "", name: p.mediaName ?? "post", size: p.mediaSize ?? 0 }] : [];
+    return [...main, ...((Array.isArray(p.extraMedia) ? p.extraMedia : []) as PostPhoto[])];
+}
+
+export const variantOf = (p: { variants: unknown }, channel: string): PostVariant | null =>
+    ((p.variants ?? {}) as PostVariants)[channel] ?? null;
+
+/** When one channel's copy goes out: its own time, else the post's. */
+export function channelTime(p: { scheduledAt: Date | string | null; variants: unknown }, channel: string): Date | null {
+    const at = variantOf(p, channel)?.scheduledAt ?? p.scheduledAt;
+    return at ? new Date(at) : null;
+}
+
+/** What actually goes out on one channel: its text, time and photos, falling back to the main post. */
+export function channelPost(p: VariantSource, channel: string) {
+    const v = variantOf(p, channel);
+    const all = postPhotos(p);
+    const photos = v?.photos ? v.photos.flatMap((k) => all.filter((f) => f.key === k)) : all.slice(0, 1);
+    return {
+        caption: v?.caption ?? p.caption,
+        scheduledAt: channelTime(p, channel),
+        photos: photos.slice(0, CHANNEL_SPECS[channel as PostChannel]?.photosMax ?? 1),
+        /** Own words or photos (a copy with only its own time still reads as the main post). */
+        custom: v?.caption != null || v?.photos != null,
+    };
+}
 
 export const POST_STATUSES = [
     { value: "DRAFT", label: "Draft" },
@@ -97,7 +169,14 @@ export function checkPostMedia(type: string, size: number): string | null {
     return null;
 }
 
-export const postSchema = z.object({
+const variantSchema = z.object({
+    caption: z.string().trim().min(1).max(POST_CAPTION_MAX).nullable(),
+    scheduledAt: z.string().datetime({ offset: true }).nullable(),
+    photos: z.array(z.string().min(1).max(300)).max(10).nullable(),
+});
+
+export const postSchema = z
+    .object({
     caption: z.string().trim().min(1, "Write the post").max(POST_CAPTION_MAX),
     // A page on the shop site, never another site.
     link: z
@@ -117,12 +196,45 @@ export const postSchema = z.object({
     googleButton: z.enum(GOOGLE_BUTTONS.map((b) => b.value) as [string, ...string[]]).nullable(),
     campaignId: z.number().int().positive().nullable(),
     status: z.enum(["DRAFT", "SCHEDULED"]),
-});
+    variants: z.partialRecord(z.enum(READY_CHANNELS), variantSchema).default({}),
+    })
+    .superRefine((p, ctx) => {
+        // Each channel's text must fit that channel — the main text included where a channel follows it.
+        for (const c of p.channels) {
+            const text = p.variants[c]?.caption ?? p.caption;
+            const max = CHANNEL_SPECS[c].textMax;
+            if (text.length > max) {
+                ctx.addIssue({ code: "custom", path: ["variants", c], message: `${channelOf(c)?.label} takes ${max} characters — write a shorter copy for it (now ${text.length}).` });
+            }
+        }
+    })
+    .transform(normaliseVariants);
+
+/**
+ * Store a post so plain queries still work: `scheduledAt` becomes the earliest
+ * channel time (what the jobs, calendar and queue sort and filter on), each
+ * channel keeps its own time only when it differs from that, a copy with nothing of its
+ * own is dropped, copies for unticked channels go, and any time makes it SCHEDULED.
+ */
+function normaliseVariants<T extends { channels: string[]; scheduledAt: Date | null; status: string; variants: Partial<Record<string, PostVariant>> }>(p: T): T {
+    const timeOf = (c: string) => p.variants[c]?.scheduledAt ?? p.scheduledAt?.toISOString() ?? null;
+    const times = p.channels.map(timeOf).filter((t): t is string => !!t).map((t) => new Date(t).getTime());
+    const first = times.length ? new Date(Math.min(...times)) : null;
+    const variants: Record<string, PostVariant> = {};
+    for (const c of p.channels) {
+        // A channel following the main time keeps it even when another copy is earlier.
+        const v = p.variants[c] ?? { caption: null, scheduledAt: null, photos: null };
+        const t = timeOf(c);
+        const own: PostVariant = { ...v, scheduledAt: t && new Date(t).getTime() !== first?.getTime() ? new Date(t).toISOString() : null };
+        if (own.caption !== null || own.scheduledAt !== null || own.photos !== null) variants[c] = own;
+    }
+    return { ...p, scheduledAt: first, status: first ? "SCHEDULED" : "DRAFT", variants };
+}
 
 export type PostInput = z.input<typeof postSchema>;
 
 /** A new post may start from a shop product: on save its main photo is copied in. */
-export const newPostSchema = postSchema.extend({ fromProductId: z.number().int().positive().nullish() });
+export const newPostSchema = postSchema.and(z.object({ fromProductId: z.number().int().positive().nullish() }));
 
 /** A shop product as the "From a product" picker lists it (GET /api/campaigns/posts/products). */
 export type PostProduct = {
@@ -168,6 +280,8 @@ export const POST_SELECT = {
     mediaType: true,
     mediaName: true,
     mediaSize: true,
+    extraMedia: true,
+    variants: true,
     campaignId: true,
     campaign: { select: { id: true, name: true } },
     createdByName: true,
@@ -189,6 +303,9 @@ export type PostRow = {
     mediaType: string | null;
     mediaName: string | null;
     mediaSize: number | null;
+    /** Photos beyond the main one, for channel copies that take more or other photos. */
+    extraMedia: PostPhoto[];
+    variants: PostVariants;
     campaignId: number | null;
     campaign: { id: number; name: string } | null;
     createdByName: string | null;
@@ -198,6 +315,8 @@ export type PostRow = {
     /** Signed links to the file: to show it, and to download it. */
     mediaUrl?: string | null;
     mediaDownloadUrl?: string | null;
+    /** View / download links of every photo (main + extras), by key. */
+    photoLinks?: Record<string, { url: string | null; downloadUrl: string | null }>;
 };
 
 /** Channels of a post still waiting to be shared. */
