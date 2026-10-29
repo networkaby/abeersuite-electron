@@ -23,11 +23,11 @@ export async function uploadPostFile(postId: number, file: File, extra = false, 
 /**
  * Cut a post's photo (`key`, default the main one) to each channel's shape —
  * every ticked channel, or just `channels`; with `crop` (the Adjust frame),
- * exactly that part for one channel.
+ * exactly that part for one channel; with `keys`, several photos for one channel.
  */
 export async function fitPostPhoto(
     postId: number,
-    opts: { channels?: string[]; key?: string; crop?: PhotoCrop | null } = {},
+    opts: { channels?: string[]; key?: string; keys?: string[]; crop?: PhotoCrop | null } = {},
 ): Promise<{ post: PostRow; fitted: Record<string, string> }> {
     return (await axios.post<{ post: PostRow; fitted: Record<string, string> }>(`/api/campaigns/posts/${postId}/media/fit`, opts)).data;
 }

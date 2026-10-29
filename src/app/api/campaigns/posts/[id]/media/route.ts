@@ -4,7 +4,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, parseIdParam, validateRequest } from "@/shared/lib/api";
 import { checkPostMedia, type PostPhoto, type PostVariants } from "@/modules/campaigns/lib/post";
 import { loadPost, postMediaPrefix, postMediaResponse } from "@/modules/campaigns/lib/postServer";
-import { EXTRA_MEDIA_MAX as EXTRA_MAX, giveChannelPhoto } from "@/modules/campaigns/lib/postPhotoFit";
+import { EXTRA_MEDIA_MAX as EXTRA_MAX, giveChannelPhoto, originalsOf } from "@/modules/campaigns/lib/postPhotoFit";
 import { requirePostsPage } from "@/modules/campaigns/lib/campaignAccess";
 
 /**
@@ -66,7 +66,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
             if (!row.mediaKey) {
                 await prisma.post.update({ where: { id }, data: { mediaKey: file.key, mediaType: file.type, mediaName: file.name, mediaSize: file.size } });
             } else {
-                if (list.length >= EXTRA_MAX) return NextResponse.json({ error: `A post holds ${EXTRA_MAX + 1} photos at most.` }, { status: 400 });
+                if (originalsOf(list).length >= EXTRA_MAX) return NextResponse.json({ error: `A post holds ${EXTRA_MAX + 1} photos at most.` }, { status: 400 });
                 await prisma.post.update({ where: { id }, data: { extraMedia: [...list, file] } });
             }
             await giveChannelPhoto(id, channel, file.key);
@@ -76,7 +76,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
             const row = await prisma.post.findUnique({ where: { id }, select: { extraMedia: true } });
             if (!row) return notFound();
             const list = row.extraMedia as PostPhoto[];
-            if (list.length >= EXTRA_MAX) return NextResponse.json({ error: `A post holds ${EXTRA_MAX + 1} photos at most.` }, { status: 400 });
+            if (originalsOf(list).length >= EXTRA_MAX) return NextResponse.json({ error: `A post holds ${EXTRA_MAX + 1} photos at most.` }, { status: 400 });
             await prisma.post.update({ where: { id }, data: { extraMedia: [...list, file] } });
             return NextResponse.json(await loadPost(id));
         }

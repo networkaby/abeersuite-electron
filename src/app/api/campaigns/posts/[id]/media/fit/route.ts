@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { handleApiError, parseIdParam, validateRequest } from "@/shared/lib/api";
 import { requirePostsPage } from "@/modules/campaigns/lib/campaignAccess";
-import { PhotoFitError, fitPostPhoto } from "@/modules/campaigns/lib/postPhotoFit";
+import { PhotoFitError, fitChannelPhotos, fitPostPhoto } from "@/modules/campaigns/lib/postPhotoFit";
 import { photoCropSchema, photoFocusSchema } from "@/modules/campaigns/lib/post";
 
 // POST /api/campaigns/posts/:id/media/fit { key?, channels?, crop?, focus?, zoom? }
@@ -18,6 +18,8 @@ const schema = z.object({
     crop: photoCropSchema.nullish(),
     focus: photoFocusSchema.nullish(),
     zoom: z.number().min(1).max(5).nullish(),
+    // Several photos for one channel, in order (Facebook feed's multi-photo post).
+    keys: z.array(z.string().min(1).max(300)).min(1).max(10).nullish(),
 });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -28,6 +30,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;
     try {
+        if (data.keys) {
+            if (data.channels?.length !== 1) return NextResponse.json({ error: "Several photos are for one channel at a time." }, { status: 400 });
+            return NextResponse.json(await fitChannelPhotos(id, data.channels[0], data.keys));
+        }
         return NextResponse.json(await fitPostPhoto(id, { sourceKey: data.key, channels: data.channels, crop: data.crop, focus: data.focus, zoom: data.zoom }));
     } catch (e) {
         if (e instanceof PhotoFitError) return NextResponse.json({ error: e.message }, { status: 400 });

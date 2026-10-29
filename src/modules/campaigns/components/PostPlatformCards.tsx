@@ -119,8 +119,9 @@ export default function PostPlatformCards({
   cardFiles: Record<string, File>;
   onDropCardFile: (channel: string) => void;
   /** Before the first save: the Master photo a platform takes instead of the main one. */
-  prePick: Record<string, File>;
-  onPrePick: (channel: string, file: File | null) => void;
+  prePick: Record<string, File[]>;
+  /** null = follow Master's main photo again. */
+  onPrePick: (channel: string, files: File[] | null) => void;
   /** Above the cards and below them, in the same column — the previews sit beside all of it. */
   head?: React.ReactNode;
   foot?: React.ReactNode;
@@ -250,9 +251,20 @@ export default function PostPlatformCards({
             : [...picked, key];
           set({ photos: next.slice(-spec.photosMax) });
         };
+        // Before the first save: this platform's own pick of Master photos (several where it takes several).
+        const preOwn = (prePick[c] ?? []).filter((f) => pending.includes(f));
+        const preShown = preOwn.length ? preOwn : pending.slice(0, 1);
+        const prePickToggle = (f: File) => {
+          if (spec.photosMax === 1) {
+            onPrePick(c, f === pending[0] ? null : [f]);
+            setPicking(null);
+            return;
+          }
+          const next = preShown.includes(f) ? preShown.filter((x) => x !== f) : [...preShown, f].slice(0, spec.photosMax);
+          onPrePick(c, next.length === 1 && next[0] === pending[0] ? null : next);
+        };
         if (on) {
-          const chosen =
-            prePick[c] && pending.includes(prePick[c]) ? prePick[c] : null;
+          const chosen = preOwn[0] ?? null;
           const savedSrc = picked
             .map((k) => photos.find((f) => f.key === k))
             .find((f) => f && !f.type.startsWith("video/"));
@@ -266,7 +278,7 @@ export default function PostPlatformCards({
                     ? pendingUrls[pending.indexOf(chosen)]
                     : previewSrc) ??
                 null),
-            count: post ? picked.length : 1,
+            count: post ? picked.length : preShown.length || 1,
             text,
             time,
             button:
@@ -420,7 +432,7 @@ export default function PostPlatformCards({
                     own={
                       ownPhotos ||
                       !!cardFiles[c] ||
-                      (!post && !!prePick[c] && pending.includes(prePick[c]))
+                      (!post && preOwn.length > 0)
                     }
                     changeLabel={
                       (post ? photos.length : pending.length) > 1
@@ -498,74 +510,63 @@ export default function PostPlatformCards({
                       picking === c && pending.length > 1 ? (
                         <div className="flex flex-wrap gap-1.5">
                           {pending.map((f, i) => {
-                            const sel =
-                              (prePick[c] && pending.includes(prePick[c])
-                                ? prePick[c]
-                                : pending[0]) === f;
+                            const at = preShown.indexOf(f);
                             return (
                               <button
                                 key={pendingUrls[i] ?? i}
                                 type="button"
-                                aria-pressed={sel}
+                                aria-pressed={at >= 0}
                                 title={f.name}
-                                onClick={() => {
-                                  onPrePick(c, i === 0 ? null : f);
-                                  setPicking(null);
-                                }}
-                                className={`relative size-16 shrink-0 overflow-hidden rounded-md border-2 bg-muted ${sel ? "border-primary" : "border-transparent opacity-60 hover:opacity-100"}`}
+                                onClick={() => prePickToggle(f)}
+                                className={`relative size-16 shrink-0 overflow-hidden rounded-md border-2 bg-muted ${at >= 0 ? "border-primary" : "border-transparent opacity-60 hover:opacity-100"}`}
                               >
                                 {/* eslint-disable-next-line @next/next/no-img-element -- a local preview */}
-                                <img
-                                  src={pendingUrls[i]}
-                                  alt={f.name}
-                                  className="size-full object-cover"
-                                />
+                                <img src={pendingUrls[i]} alt={f.name} className="size-full object-cover" />
                                 {i === 0 && (
-                                  <span className="absolute bottom-0 left-0 rounded-tr bg-primary px-1 text-[10px] text-primary-foreground">
-                                    Main
-                                  </span>
+                                  <span className="absolute bottom-0 left-0 rounded-tr bg-primary px-1 text-[10px] text-primary-foreground">Main</span>
+                                )}
+                                {at >= 0 && spec.photosMax > 1 && (
+                                  <span className="absolute top-0.5 left-0.5 rounded bg-primary px-1 text-[10px] text-primary-foreground">{at + 1}</span>
                                 )}
                               </button>
                             );
                           })}
-                          <p className="w-full text-xs text-foreground/70">
-                            Click the photo {ch.label} should use.
-                          </p>
+                          <div className="flex w-full items-center justify-between gap-2">
+                            <p className="text-xs text-foreground/70">
+                              {spec.photosMax > 1
+                                ? `Click photos for ${ch.label}, up to ${spec.photosMax}; the number is their order.`
+                                : `Click the photo ${ch.label} should use.`}
+                            </p>
+                            {spec.photosMax > 1 && (
+                              <Button type="button" size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => setPicking(null)}>
+                                Done
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       ) : (
                         (() => {
-                          const chosen =
-                            prePick[c] && pending.includes(prePick[c])
-                              ? prePick[c]
-                              : null;
-                          const src = chosen
-                            ? pendingUrls[pending.indexOf(chosen)]
-                            : previewSrc;
-                          return src ? (
-                            <div className="flex items-end gap-3">
-                              <div
-                                className="h-32 shrink-0 overflow-hidden rounded-md border bg-muted"
-                                style={{
-                                  aspectRatio: `${spec.ratio[0]} / ${spec.ratio[1]}`,
-                                }}
-                              >
-                                {/* eslint-disable-next-line @next/next/no-img-element -- a local preview or the product's photo */}
-                                <img
-                                  src={src}
-                                  alt={`${ch.label} preview`}
-                                  className="size-full object-cover"
-                                />
+                          const srcs = preShown.length ? preShown.map((f) => pendingUrls[pending.indexOf(f)]) : previewSrc ? [previewSrc] : [];
+                          return srcs.length ? (
+                            <div className="space-y-1">
+                              <div className="flex flex-wrap items-end gap-2">
+                                {srcs.map((src, i) => (
+                                  <div
+                                    key={`${src}-${i}`}
+                                    className={`relative shrink-0 overflow-hidden rounded-md border bg-muted ${srcs.length > 1 ? "h-24" : "h-32"}`}
+                                    style={{ aspectRatio: `${spec.ratio[0]} / ${spec.ratio[1]}` }}
+                                  >
+                                    {/* eslint-disable-next-line @next/next/no-img-element -- a local preview or the product's photo */}
+                                    <img src={src} alt={`${ch.label} photo ${i + 1}`} className="size-full object-cover" />
+                                    {srcs.length > 1 && (
+                                      <span className="absolute top-0.5 left-0.5 rounded bg-primary px-1 text-[10px] text-primary-foreground">{i + 1}</span>
+                                    )}
+                                  </div>
+                                ))}
                               </div>
                               <p className="text-xs text-foreground/70">
-                                {chosen
-                                  ? "Its own pick from Master"
-                                  : "Main photo"}{" "}
-                                  as {spec.ratioLabel}. Cut to this shape on
-                                  save
-                                {chosen
-                                  ? ""
-                                  : ' when "Fit for each channel" is ticked'}
-                                ; Adjust it after saving.
+                                {preOwn.length ? (preOwn.length > 1 ? `${preOwn.length} photos, its own pick` : "Its own pick from Master") : "Main photo"} as {spec.ratioLabel}. Cut to this
+                                shape on save{preOwn.length ? "" : ' when "Fit for each channel" is ticked'}; Adjust after saving.
                               </p>
                             </div>
                           ) : (
@@ -573,10 +574,7 @@ export default function PostPlatformCards({
                               {c === "FACEBOOK_REEL"
                                 ? "No video yet — Upload one upright MP4 just for the reel"
                                 : `No photo yet — add one in Master, or Upload one just for ${ch.label}`}
-                              {c === "INSTAGRAM"
-                                ? " (Instagram needs one)"
-                                : ""}
-                              .
+                              {c === "INSTAGRAM" ? " (Instagram needs one)" : ""}.
                             </p>
                           );
                         })()

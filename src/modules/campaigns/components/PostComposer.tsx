@@ -80,7 +80,7 @@ export default function PostComposer({
     // A new post's photo for one platform only (its card's Upload), held until the first save.
     const [cardFiles, setCardFiles] = useState<Record<string, File>>({});
     // A new post: which Master photo a platform takes instead of the main one, held until the first save.
-    const [prePick, setPrePick] = useState<Record<string, File>>({});
+    const [prePick, setPrePick] = useState<Record<string, File[]>>({});
 
     useEffect(() => {
         if (postId === null) return;
@@ -210,7 +210,8 @@ export default function PostComposer({
                     main = null;
                 }
                 // Channels with a photo of their own keep it; the rest get the main one fitted.
-                const picked = form.channels.filter((c) => !cardFiles[c] && prePick[c] && pending.includes(prePick[c]) && keyOf.has(prePick[c]));
+                const keysOf = (c: string) => (prePick[c] ?? []).flatMap((f) => (keyOf.has(f) ? [keyOf.get(f)!] : []));
+                const picked = form.channels.filter((c) => !cardFiles[c] && keysOf(c).length > 0);
                 const toFit = form.channels.filter((c) => !cardFiles[c] && !picked.includes(c));
                 if (fitOnSave && main?.startsWith("image/") && !note && toFit.length) {
                     setSaving("Fitting photos for each channel…");
@@ -223,7 +224,7 @@ export default function PostComposer({
                 // A platform that picked another Master photo gets that one, cut to its shape.
                 for (const c of picked) {
                     try {
-                        await fitPostPhoto(id, { channels: [c], key: keyOf.get(prePick[c]) });
+                        await fitPostPhoto(id, { channels: [c], keys: keysOf(c) });
                     } catch (e) {
                         note = extractApiError(e, "A platform's picked photo could not be fitted — pick it again on its card.");
                     }
@@ -308,7 +309,7 @@ export default function PostComposer({
                             cardFiles={cardFiles}
                             onDropCardFile={(c) => setCardFiles(({ [c]: _drop, ...rest }) => rest)}
                             prePick={prePick}
-                            onPrePick={(c, f) => setPrePick(({ [c]: _old, ...rest }) => (f ? { ...rest, [c]: f } : rest))}
+                            onPrePick={(c, files) => setPrePick(({ [c]: _old, ...rest }) => (files ? { ...rest, [c]: files } : rest))}
                             pending={pending}
                             productImage={fromProduct?.imageUrl ?? null}
                             google={{ type: form.googleType, button: form.googleButton ?? null }}

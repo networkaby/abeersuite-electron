@@ -84,6 +84,76 @@ function withoutOrphans(extras: PostPhoto[], variants: PostVariants, mainKey: st
     return extras.filter((f) => !f.from || used.has(f.key));
 }
 
+/** Photos people added (not Fit / Adjust copies) — what the photo cap counts. */
+export const originalsOf = (list: PostPhoto[]) => list.filter((f) => !f.from);
+
+type FitPost = { mediaKey: string | null; extraMedia: unknown; variants: unknown; channels: string[]; mediaType: string | null; mediaName: string | null; mediaSize: number | null };
+
+async function loadForFit(postId: number) {
+    if (!isR2Configured()) throw new PhotoFitError("File storage (R2) is not set up on this server.");
+    const post = await prisma.post.findUnique({
+        where: { id: postId },
+        select: { channels: true, mediaKey: true, mediaType: true, mediaName: true, mediaSize: true, extraMedia: true, variants: true },
+    });
+    if (!post) throw new PhotoFitError("Post not found.");
+    return post;
+}
+
+/**
+ * The cutter for one post: reads each source once, makes a copy of it in a
+ * channel's shape (or hands back the source when it already fits and no frame
+ * is asked), and keeps every new copy in `extras`. Auto cuts of the same photo
+ * and shape are shared between channels.
+ */
+function cutter(postId: number, extras: PostPhoto[]) {
+    const read = new Map<string, Promise<{ bytes: Buffer; w: number; h: number }>>();
+    const made = new Map<string, string>(); // `${source}:${shape}` → key, auto cuts only
+    const load = (key: string) => {
+        let p = read.get(key);
+        if (!p) {
+            p = (async () => {
+                const bytes = await readPhoto(key);
+                const meta = await sharp(bytes).rotate().metadata();
+                const [w, h] = meta.autoOrient ? [meta.autoOrient.width, meta.autoOrient.height] : [meta.width ?? 0, meta.height ?? 0];
+                if (!w || !h) throw new PhotoFitError("Could not read the photo's size.");
+                return { bytes, w, h };
+            })();
+            read.set(key, p);
+        }
+        return p;
+    };
+    return async function cut(source: PostPhoto, channel: string, frame: { crop?: PhotoCrop | null; focus?: { x: number; y: number } | null; zoom?: number | null } = {}) {
+        if (!source.type.startsWith("image/")) throw new PhotoFitError("A video cannot be cut to shape — pick a photo.");
+        const spec = CHANNEL_SPECS[channel as PostChannel];
+        const { bytes, w, h } = await load(source.key);
+        const crop = frame.crop ?? (frame.focus ? cropAround(frame.focus, spec.ratio, w, h, frame.zoom ?? 1) : null);
+        if (!crop && ratioFits(channel, w, h)) return source.key;
+        const shape = `${spec.ratio[0]}x${spec.ratio[1]}`;
+        const shared = crop ? undefined : made.get(`${source.key}:${shape}`);
+        if (shared) return shared;
+        const img = sharp(bytes).rotate();
+        const out = await (crop ? img.extract(cropPixels(crop, spec.ratio, w, h)).resize(sizeFor(spec.ratio)) : img.resize({ ...sizeFor(spec.ratio), fit: "cover", position: sharp.strategy.attention }))
+            .jpeg({ quality: 85, mozjpeg: true })
+            .toBuffer();
+        const name = `${source.name.replace(/\.[^.]+$/, "").slice(0, 40) || "photo"}-${shape}.jpg`;
+        const bad = checkPostMedia("image/jpeg", out.byteLength);
+        if (bad) throw new PhotoFitError(bad);
+        const key = postMediaKey(postId, name);
+        await putR2(R2_MESSAGES_BUCKET, key, out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer, "image/jpeg");
+        extras.push({ key, type: "image/jpeg", name, size: out.byteLength, from: source.key, crop });
+        if (!crop) made.set(`${source.key}:${shape}`, key);
+        return key;
+    };
+}
+
+async function saveFit(postId: number, post: FitPost, extras: PostPhoto[], picks: Record<string, string[]>) {
+    const variants = { ...((post.variants ?? {}) as PostVariants) };
+    for (const [c, keys] of Object.entries(picks)) setChannelPhotos(variants, c, keys.length === 1 && keys[0] === post.mediaKey ? null : keys);
+    const kept = withoutOrphans(extras, variants, post.mediaKey);
+    await prisma.post.update({ where: { id: postId }, data: { extraMedia: kept, variants } });
+    return loadPost(postId);
+}
+
 /**
  * Fit `sourceKey` (default: the main photo) for `channels` (default: every
  * ticked one), or — with `crop` / `focus` — cut exactly that part for one
@@ -93,61 +163,40 @@ export async function fitPostPhoto(
     postId: number,
     opts: { sourceKey?: string | null; channels?: string[] | null; crop?: PhotoCrop | null; focus?: { x: number; y: number } | null; zoom?: number | null } = {},
 ) {
-    if (!isR2Configured()) throw new PhotoFitError("File storage (R2) is not set up on this server.");
-    const post = await prisma.post.findUnique({
-        where: { id: postId },
-        select: { channels: true, mediaKey: true, mediaType: true, mediaName: true, mediaSize: true, extraMedia: true, variants: true },
-    });
-    if (!post) throw new PhotoFitError("Post not found.");
+    const post = await loadForFit(postId);
     const all = postPhotos(post);
     const source = opts.sourceKey ? all.find((f) => f.key === opts.sourceKey) : all[0];
     if (!source) throw new PhotoFitError("Add a photo to the post first.");
-    if (!source.type.startsWith("image/")) throw new PhotoFitError("A video cannot be cut to shape — pick a photo.");
     const channels = (opts.channels?.length ? opts.channels : post.channels).filter((c) => post.channels.includes(c) && c in CHANNEL_SPECS);
     if (!channels.length) throw new PhotoFitError("Tick the channels first.");
-    const framed = !!(opts.crop || opts.focus);
-    if (framed && channels.length !== 1) throw new PhotoFitError("A frame or focus point is for one channel at a time.");
-
-    const bytes = await readPhoto(source.key);
-    const meta = await sharp(bytes).rotate().metadata();
-    const [w, h] = meta.autoOrient ? [meta.autoOrient.width, meta.autoOrient.height] : [meta.width ?? 0, meta.height ?? 0];
-    if (!w || !h) throw new PhotoFitError("Could not read the photo's size.");
+    if ((opts.crop || opts.focus) && channels.length !== 1) throw new PhotoFitError("A frame or focus point is for one channel at a time.");
 
     const extras = (Array.isArray(post.extraMedia) ? post.extraMedia : []) as PostPhoto[];
-    const made = new Map<string, string>(); // "4x5" → key, auto cuts only
-    const pick: Record<string, string> = {};
-    const base = source.name.replace(/\.[^.]+$/, "").slice(0, 40) || "photo";
-    for (const c of channels) {
-        const spec = CHANNEL_SPECS[c as PostChannel];
-        const crop = opts.crop ?? (opts.focus ? cropAround(opts.focus, spec.ratio, w, h, opts.zoom ?? 1) : null);
-        if (!crop && ratioFits(c, w, h)) {
-            pick[c] = source.key;
-            continue;
-        }
-        const shape = `${spec.ratio[0]}x${spec.ratio[1]}`;
-        let key = crop ? undefined : made.get(shape);
-        if (!key) {
-            const img = sharp(bytes).rotate();
-            const out = await (crop ? img.extract(cropPixels(crop, spec.ratio, w, h)).resize(sizeFor(spec.ratio)) : img.resize({ ...sizeFor(spec.ratio), fit: "cover", position: sharp.strategy.attention }))
-                .jpeg({ quality: 85, mozjpeg: true })
-                .toBuffer();
-            const name = `${base}-${shape}.jpg`;
-            const bad = checkPostMedia("image/jpeg", out.byteLength);
-            if (bad) throw new PhotoFitError(bad);
-            key = postMediaKey(postId, name);
-            await putR2(R2_MESSAGES_BUCKET, key, out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer, "image/jpeg");
-            extras.push({ key, type: "image/jpeg", name, size: out.byteLength, from: source.key, crop });
-            if (!crop) made.set(shape, key);
-        }
-        pick[c] = key;
-    }
+    const cut = cutter(postId, extras);
+    const picks: Record<string, string[]> = {};
+    for (const c of channels) picks[c] = [await cut(source, c, opts)];
+    const row = await saveFit(postId, post, extras, picks);
+    return { post: row, fitted: Object.fromEntries(Object.entries(picks).map(([c, k]) => [c, k[0]])) };
+}
 
-    const variants = { ...((post.variants ?? {}) as PostVariants) };
-    for (const [c, key] of Object.entries(pick)) setChannelPhotos(variants, c, key === post.mediaKey ? null : [key]);
-    const kept = withoutOrphans(extras, variants, post.mediaKey);
-    if (kept.length > EXTRA_MEDIA_MAX) throw new PhotoFitError(`A post holds ${EXTRA_MEDIA_MAX + 1} photos at most — remove some first.`);
-    await prisma.post.update({ where: { id: postId }, data: { extraMedia: kept, variants } });
-    return { post: await loadPost(postId), fitted: pick };
+/**
+ * One channel takes several of the post's photos (`keys`, in order — the
+ * Facebook feed's multi-photo post): each cut to its shape (videos kept as
+ * they are), up to the channel's count.
+ */
+export async function fitChannelPhotos(postId: number, channel: string, keys: string[]) {
+    const spec = CHANNEL_SPECS[channel as PostChannel];
+    if (!spec) throw new PhotoFitError("Unknown channel.");
+    const post = await loadForFit(postId);
+    const all = postPhotos(post);
+    const sources = keys.flatMap((k) => all.filter((f) => f.key === k)).slice(0, spec.photosMax);
+    if (!sources.length) throw new PhotoFitError("Those photos are not on this post.");
+    const extras = (Array.isArray(post.extraMedia) ? post.extraMedia : []) as PostPhoto[];
+    const cut = cutter(postId, extras);
+    const out: string[] = [];
+    for (const f of sources) out.push(f.type.startsWith("image/") ? await cut(f, channel) : f.key);
+    const row = await saveFit(postId, post, extras, { [channel]: out });
+    return { post: row, fitted: { [channel]: out[0] } };
 }
 
 /** One channel's photos (null = the main photo), dropping a copy left with nothing of its own. */
@@ -186,7 +235,7 @@ export async function attachPostPhoto(postId: number, file: { bytes: ArrayBuffer
     if (!row) throw new PhotoFitError("Post not found.");
     const list = (Array.isArray(row.extraMedia) ? row.extraMedia : []) as PostPhoto[];
     const asExtra = extra && !!row.mediaKey;
-    if (asExtra && list.length >= EXTRA_MEDIA_MAX) throw new PhotoFitError(`A post holds ${EXTRA_MEDIA_MAX + 1} photos at most.`);
+    if (asExtra && originalsOf(list).length >= EXTRA_MEDIA_MAX) throw new PhotoFitError(`A post holds ${EXTRA_MEDIA_MAX + 1} photos at most.`);
     const key = postMediaKey(postId, file.name);
     await putR2(R2_MESSAGES_BUCKET, key, file.bytes, file.type);
     const photo: PostPhoto = { key, type: file.type, name: file.name, size: file.bytes.byteLength };
