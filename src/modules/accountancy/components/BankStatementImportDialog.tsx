@@ -22,7 +22,7 @@ import { formatDate } from "@/shared/lib/format/formatDate";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { readTabularFile } from "@/shared/lib/import/spreadsheetRead";
 import {
-    IGNORE_FIELD, STATEMENT_FIELD_LABELS, checkContinuity, normaliseStatementRows, orderStatementRows, parseStatementGrid,
+    IGNORE_FIELD, STATEMENT_FIELD_LABELS, checkContinuity, cleanAccountNumber, normaliseStatementRows, orderStatementRows, parseStatementGrid,
     type FieldChoice, type ParsedStatement, type StatementField, type StatementRow,
 } from "@/shared/lib/import/bankStatement";
 import { useValueChange } from "@/shared/hooks/useValueChange";
@@ -41,6 +41,13 @@ interface Report {
 const FIELD_ORDER: StatementField[] = ["date", "valueDate", "narration", "reference", "withdrawal", "deposit", "balance", "amount", "drcr"];
 
 function mappingKey(accountId: number) { return `bank-recon:mapping:${accountId}`; }
+/** The header cell the user once picked as the account number — for a bank whose
+ *  layout the parser cannot read. Per ledger, like the column mapping. */
+function acCellKey(accountId: number) { return `bank-recon:acno-cell:${accountId}`; }
+type CellPos = { row: number; col: number };
+const cellText = (grid: string[][], p: CellPos) => String(grid[p.row]?.[p.col] ?? "").trim();
+/** Looks like an account number: mostly digits (bank masks/underscores allowed), 8+ of them. */
+const looksLikeAcNo = (v: string) => /^[\s_\-xX*0-9]+$/.test(v) && v.replace(/\D/g, "").length >= 8;
 
 export function BankStatementImportDialog({ accountId, accountName, lock, open, onClose, onImported }: {
     accountId: number;
@@ -60,10 +67,14 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
     const [checking, setChecking] = useState(false);
     const [saving, setSaving] = useState(false);
     const [force, setForce] = useState(false);
+    const [grid, setGrid] = useState<string[][]>([]);
+    const [acCell, setAcCell] = useState<CellPos | null>(null);
+    const [skipAcNo, setSkipAcNo] = useState(false);
 
     // Reset when closed so the next upload starts clean.
     if (useValueChange(open) && !open) {
         setFile(null); setParsed(null); setFileHash(""); setMapping({}); setReport(null); setReportError(null); setForce(false);
+        setGrid([]); setAcCell(null); setSkipAcNo(false);
     }
 
     const rows = useMemo(() => {
@@ -79,6 +90,21 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
         [rows.rows, parsed?.meta.openingBalance],
     );
 
+    // Account number: what the parser read, else the cell the user picked.
+    const pickedAcNo = acCell ? cleanAccountNumber(cellText(grid, acCell)) : null;
+    const accountNo = parsed?.meta.bankAccountNumber ?? pickedAcNo;
+    const acCandidates = useMemo(() => {
+        if (!parsed || parsed.headerRowIndex < 0 || parsed.meta.bankAccountNumber) return [];
+        const out: Array<CellPos & { label: string; value: string }> = [];
+        grid.slice(0, parsed.headerRowIndex).forEach((cells, row) => cells.forEach((c, col) => {
+            const value = String(c ?? "").trim();
+            if (!looksLikeAcNo(value)) return;
+            const label = cells.slice(0, col).map((x) => String(x ?? "").trim()).filter(Boolean).join(" ");
+            out.push({ row, col, label, value });
+        }));
+        return out;
+    }, [grid, parsed]);
+
     const mapped = new Set(Object.values(mapping));
     const hasDate = mapped.has("date") || mapped.has("valueDate");
     const hasAmount = mapped.has("withdrawal") || mapped.has("deposit") || mapped.has("amount");
@@ -87,6 +113,7 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
 
     async function handleFile(f: File | null) {
         setFile(f); setParsed(null); setReport(null); setReportError(null); setForce(false);
+        setGrid([]); setAcCell(null); setSkipAcNo(false);
         if (!f) return;
         setReading(true);
         try {
@@ -94,6 +121,17 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
             const p = parseStatementGrid(tab.grid);
             setFileHash(tab.sha1);
             setParsed(p);
+            setGrid(tab.grid);
+            // No account number read → reuse the cell picked for this ledger last time.
+            if (!p.meta.bankAccountNumber) {
+                try {
+                    const saved = localStorage.getItem(acCellKey(accountId));
+                    if (saved) {
+                        const pos = JSON.parse(saved) as CellPos;
+                        if (pos.row < p.headerRowIndex && cleanAccountNumber(cellText(tab.grid, pos))) setAcCell(pos);
+                    }
+                } catch { /* per-viewer convenience only */ }
+            }
             if (p.headerRowIndex < 0) {
                 toast.error("Could not find the table in this file — no row with a date and an amount or balance column.");
                 return;
@@ -123,7 +161,7 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
             fileName: file?.name ?? "statement",
             fileHash,
             profile: parsed?.profile ?? "generic",
-            meta: parsed?.meta ?? {},
+            meta: { ...(parsed?.meta ?? {}), bankAccountNumber: accountNo },
             rows: rows.rows,
             dryRun,
             force,
@@ -151,7 +189,7 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
     useEffect(() => {
         const t = setTimeout(() => recheck(), 250);
         return () => clearTimeout(t);
-    }, [rows.rows, force, mappingOk]);
+    }, [rows.rows, force, mappingOk, accountNo]);
 
     async function save() {
         setSaving(true);
@@ -159,6 +197,9 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
             const r = await axios.post<Report>(`/api/accountancy/bank-reconciliation/${accountId}/imports`, payload(false));
             if (parsed?.profile === "generic") {
                 try { localStorage.setItem(mappingKey(accountId), JSON.stringify(mapping)); } catch { /* optional */ }
+            }
+            if (acCell && pickedAcNo) {
+                try { localStorage.setItem(acCellKey(accountId), JSON.stringify(acCell)); } catch { /* optional */ }
             }
             toast.success(`${r.data.inserted} line(s) saved${r.data.skipped ? `, ${r.data.skipped} already on file` : ""}${r.data.beforeLock ? `, ${r.data.beforeLock} before the lock` : ""}.`);
             onImported();
@@ -171,7 +212,7 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
     }
 
     const preview = rows.rows.slice(0, 12);
-    const canSave = !!report && report.inserted > 0 && !reportError && !saving && (continuity.breaks.length === 0 || force);
+    const canSave = !!report && report.inserted > 0 && !reportError && !saving && (continuity.breaks.length === 0 || force) && (!!accountNo || skipAcNo);
 
     return (
         <Dialog open={open} onOpenChange={(o) => { if (!o && !saving) onClose(); }}>
@@ -204,12 +245,41 @@ export function BankStatementImportDialog({ accountId, accountName, lock, open, 
                     {parsed && parsed.headerRowIndex >= 0 && (
                         <>
                             {/* Statement particulars the bank printed above the table. */}
-                            {(parsed.meta.bankAccountNumber || parsed.meta.ifsc || parsed.meta.fromDate || parsed.meta.openingBalance != null) && (
+                            {(accountNo || parsed.meta.ifsc || parsed.meta.fromDate || parsed.meta.openingBalance != null) && (
                                 <div className="flex flex-wrap gap-x-5 gap-y-1 rounded-md border bg-muted/30 px-3 py-2 text-xs">
-                                    {parsed.meta.bankAccountNumber && <span>A/c …{parsed.meta.bankAccountNumber.slice(-6)}</span>}
+                                    {accountNo && <span>A/c …{accountNo.slice(-6)}{!parsed.meta.bankAccountNumber && " (picked)"}</span>}
                                     {parsed.meta.ifsc && <span>IFSC {parsed.meta.ifsc}</span>}
                                     {parsed.meta.fromDate && <span>{formatDate(parsed.meta.fromDate)} → {parsed.meta.toDate ? formatDate(parsed.meta.toDate) : "…"}</span>}
                                     {parsed.meta.openingBalance != null && <span>Opening {fmt(parsed.meta.openingBalance)}</span>}
+                                </div>
+                            )}
+
+                            {/* Account number not read from this layout — pick its cell once; remembered for this ledger. */}
+                            {!parsed.meta.bankAccountNumber && (
+                                <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs dark:border-amber-800 dark:bg-amber-950/40">
+                                    <div className="mb-1.5 flex items-center gap-1 font-medium text-amber-900 dark:text-amber-100">
+                                        <AlertTriangle size={12} /> Account number not found in this file. Click the cell that holds it — it is remembered for this ledger.
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {acCandidates.map((c) => {
+                                            const on = acCell?.row === c.row && acCell?.col === c.col;
+                                            return (
+                                                <button key={`${c.row}:${c.col}`} type="button"
+                                                    className={`rounded border px-2 py-0.5 ${on ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-muted"}`}
+                                                    onClick={() => { setAcCell(on ? null : { row: c.row, col: c.col }); setSkipAcNo(false); }}>
+                                                    {c.label && <span className="opacity-70">{c.label}: </span>}<span className="font-mono">{c.value}</span>
+                                                    <span className="ml-1 opacity-50">row {c.row + 1}</span>
+                                                </button>
+                                            );
+                                        })}
+                                        {acCandidates.length === 0 && <span className="text-muted-foreground">No number-like cell above the table.</span>}
+                                    </div>
+                                    {!accountNo && (
+                                        <label className="mt-1.5 flex items-center gap-1.5 text-muted-foreground">
+                                            <input type="checkbox" checked={skipAcNo} onChange={(e) => setSkipAcNo(e.target.checked)} />
+                                            Upload without checking the account number
+                                        </label>
+                                    )}
                                 </div>
                             )}
 
