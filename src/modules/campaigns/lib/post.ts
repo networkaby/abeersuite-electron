@@ -50,6 +50,22 @@ export const POST_CHANNELS = [
         hint: "Posts by itself once the page is connected on Campaigns → Channels. By hand: Share copies the text, saves the photo and opens the page.",
     },
     {
+        value: "FACEBOOK_STORY",
+        label: "Facebook Page story",
+        short: "FB story",
+        mode: "AUTO",
+        ready: true,
+        hint: "One upright photo or short video, gone after 24 hours; no caption. Posts by itself through the Facebook connection.",
+    },
+    {
+        value: "FACEBOOK_REEL",
+        label: "Facebook Page reel",
+        short: "FB reel",
+        mode: "AUTO",
+        ready: true,
+        hint: "One upright MP4 video with a short caption. Posts by itself through the Facebook connection.",
+    },
+    {
         value: "INSTAGRAM",
         label: "Instagram",
         short: "IG",
@@ -115,7 +131,27 @@ export const FACEBOOK_PAGE_URL = "https://www.facebook.com/";
 export function facebookAutoBlock(p: { mediaType: string | null; mediaSize?: number | null; photos?: { type: string; size: number }[] }): string | null {
     const files = p.photos?.length ? p.photos : p.mediaType ? [{ type: p.mediaType, size: p.mediaSize ?? 0 }] : [];
     if (files.some((f) => f.type === "image/webp")) return "Facebook takes a JPG or PNG photo here — share a WebP by hand, or replace it.";
+    if (files.length > 1 && files.some((f) => f.type.startsWith("video/")))
+        return "Facebook's feed takes several photos or one video, not both — pick one, or share the mix by hand.";
     if (files.some((f) => f.type.startsWith("image/") && f.size > FACEBOOK_PHOTO_MAX_BYTES)) return "Facebook takes photos up to 4 MB — use Fit or Adjust to make a smaller copy.";
+    return null;
+}
+
+/**
+ * Why a post cannot go to the Facebook Page story by itself, or null: one JPG
+ * / PNG photo (under 4 MB) or one MP4 video.
+ */
+export function facebookStoryBlock(p: { mediaType: string | null; mediaSize?: number | null }): string | null {
+    if (!p.mediaType) return "A story needs a photo or a video.";
+    if (p.mediaType.startsWith("video/")) return p.mediaType === "video/mp4" ? null : "A story video must be an MP4.";
+    if (!["image/jpeg", "image/png"].includes(p.mediaType)) return "A story takes a JPG or PNG photo — Fit or Adjust makes one.";
+    if (p.mediaSize && p.mediaSize > FACEBOOK_PHOTO_MAX_BYTES) return "A story photo must be under 4 MB — Fit or Adjust makes a smaller copy.";
+    return null;
+}
+
+/** Why a post cannot go to the Facebook Page reels by itself, or null: one MP4 video. */
+export function facebookReelBlock(p: { mediaType: string | null }): string | null {
+    if (p.mediaType !== "video/mp4") return "A reel needs one MP4 video — upload it on the reel's card.";
     return null;
 }
 
@@ -148,6 +184,9 @@ export const CHANNEL_SPECS: Record<PostChannel, { textMax: number; photosMax: nu
     GOOGLE_BUSINESS: { textMax: 1500, photosMax: 1, ratio: [4, 3], ratioLabel: "wide 4:3" },
     WA_STATUS: { textMax: 700, photosMax: 10, ratio: [9, 16], ratioLabel: "upright 9:16" },
     FACEBOOK: { textMax: 5000, photosMax: 10, ratio: [1, 1], ratioLabel: "square 1:1" },
+    // A story shows no caption — textMax 0 means "no text here".
+    FACEBOOK_STORY: { textMax: 0, photosMax: 1, ratio: [9, 16], ratioLabel: "upright 9:16" },
+    FACEBOOK_REEL: { textMax: 2200, photosMax: 1, ratio: [9, 16], ratioLabel: "upright 9:16 video" },
     INSTAGRAM: { textMax: 2200, photosMax: 10, ratio: [4, 5], ratioLabel: "portrait 4:5" },
 };
 
@@ -155,7 +194,7 @@ export const CHANNEL_SPECS: Record<PostChannel, { textMax: number; photosMax: nu
  * Channels whose text gets the post's hashtags under it (owner, 2026-10-29).
  * Google treats them as spam and WhatsApp has no use for them.
  */
-export const HASHTAG_CHANNELS: readonly string[] = ["INSTAGRAM", "FACEBOOK"];
+export const HASHTAG_CHANNELS: readonly string[] = ["INSTAGRAM", "FACEBOOK", "FACEBOOK_REEL"];
 
 /** A channel's text with the hashtags under it, where that channel takes them. */
 export function withHashtags(text: string, hashtags: string | null | undefined, channel: string): string {
@@ -300,6 +339,7 @@ export const postSchema = z
     .superRefine((p, ctx) => {
         // Each channel's text must fit that channel — the main text included where a channel follows it.
         for (const c of p.channels) {
+            if (CHANNEL_SPECS[c].textMax === 0) continue;
             if (!(p.variants[c]?.caption ?? p.caption)) {
                 ctx.addIssue({ code: "custom", path: ["caption"], message: `Write the main text, or ${channelOf(c)?.label}'s own text.` });
                 continue;

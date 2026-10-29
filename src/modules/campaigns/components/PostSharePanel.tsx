@@ -18,6 +18,8 @@ import {
     channelPost,
     checkPostMedia,
     facebookAutoBlock,
+    facebookReelBlock,
+    facebookStoryBlock,
     googleAutoBlock,
     instagramAutoBlock,
     postCaption,
@@ -31,6 +33,8 @@ import {
 const AUTO: Record<string, { api: string; status: string; readyKey: string; name: string; block: (p: PostRow & { photos?: { type: string; size: number }[] }) => string | null }> = {
     GOOGLE_BUSINESS: { api: "google", status: "google", readyKey: "ready", name: "Google", block: googleAutoBlock },
     FACEBOOK: { api: "facebook", status: "facebook", readyKey: "ready", name: "Facebook", block: facebookAutoBlock },
+    FACEBOOK_STORY: { api: "facebook", status: "facebook", readyKey: "ready", name: "Facebook story", block: facebookStoryBlock },
+    FACEBOOK_REEL: { api: "facebook", status: "facebook", readyKey: "ready", name: "Facebook reel", block: facebookReelBlock },
     // Instagram rides the Facebook connection.
     INSTAGRAM: { api: "instagram", status: "facebook", readyKey: "instagramReady", name: "Instagram", block: instagramAutoBlock },
 };
@@ -81,7 +85,7 @@ export default function PostSharePanel({ post, onChanged, only }: { post: PostRo
         if (again && !window.confirm(`This post is already on ${a.name}. Post it there again?`)) return;
         setBusy(a.api);
         try {
-            const { data } = await axios.post<{ post: PostRow; url: string | null }>(`/api/campaigns/posts/${post.id}/${a.api}`, { again });
+            const { data } = await axios.post<{ post: PostRow; url: string | null }>(`/api/campaigns/posts/${post.id}/${a.api}`, { again, ...(a.api === "facebook" ? { channel } : {}) });
             onChanged(data.post);
             toast.success(`Posted on ${channelOf(channel)?.label ?? a.name}`, data.url ? { action: { label: "View", onClick: () => window.open(data.url!, "_blank", "noopener") } } : undefined);
         } catch (e) {

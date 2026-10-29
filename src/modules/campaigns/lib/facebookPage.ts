@@ -3,7 +3,7 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { lockSecret, unlockSecret, hasSharedSecret } from "@/shared/lib/ai/secretBox";
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { mediaLink } from "@/modules/message/lib/customerMessages";
-import { facebookAutoBlock, postCaption } from "@/modules/campaigns/lib/post";
+import { facebookAutoBlock, facebookReelBlock, facebookStoryBlock, postCaption } from "@/modules/campaigns/lib/post";
 
 /**
  * Facebook Page — posting a Post to the shop's page through Meta's Graph API,
@@ -274,6 +274,74 @@ export async function postToFacebook(p: PostForFacebook): Promise<string | null>
         await noteFacebookError(null);
         const id = made.post_id ?? made.id;
         return id ? `https://www.facebook.com/${id}` : null;
+    } catch (e) {
+        if (e instanceof FacebookError) await noteFacebookError(e.message);
+        throw e;
+    }
+}
+
+/**
+ * A video Facebook fetches itself (`file_url`) through its resumable upload
+ * host: start on the page's `edge` (video_reels / video_stories), point the
+ * upload host at our signed link, then finish with `finish` params.
+ */
+async function hostedVideo(edge: string, pageId: string, token: string, fileUrl: string, finish: Record<string, string>) {
+    const start = await graph<{ video_id: string; upload_url?: string }>(`/${pageId}/${edge}`, {
+        method: "POST",
+        params: { upload_phase: "start", access_token: token },
+    });
+    const res = await fetch(start.upload_url ?? `https://rupload.facebook.com/video-upload/v21.0/${start.video_id}`, {
+        method: "POST",
+        headers: { Authorization: `OAuth ${token}`, file_url: fileUrl },
+    });
+    const up = (await res.json().catch(() => ({}))) as { success?: boolean; error?: { message?: string } };
+    if (!res.ok || up.success === false) throw new FacebookError(`Facebook did not take the video: ${up.error?.message ?? `HTTP ${res.status}`}`);
+    return graph<{ success?: boolean; post_id?: string; id?: string }>(`/${pageId}/${edge}`, {
+        method: "POST",
+        params: { upload_phase: "finish", video_id: start.video_id, access_token: token, ...finish },
+    }).then((r) => ({ ...r, videoId: start.video_id }));
+}
+
+/**
+ * Put one photo or video up as the Page's story (24 hours, no caption).
+ * Returns the story's link when Facebook gives one.
+ */
+export async function postStoryToFacebook(p: { mediaKey: string | null; mediaType: string | null; mediaSize?: number | null }): Promise<string | null> {
+    const block = facebookStoryBlock(p);
+    if (block) throw new FacebookError(block);
+    const { pageId, token } = await pageAccess();
+    const url = mediaLink(p.mediaKey);
+    if (!url) throw new FacebookError("File storage (R2) is not set up on this server, so Facebook cannot fetch the story.");
+    try {
+        let postId: string | undefined;
+        if (p.mediaType?.startsWith("video/")) {
+            postId = (await hostedVideo("video_stories", pageId, token, url, {})).post_id;
+        } else {
+            const photo = await graph<{ id: string }>(`/${pageId}/photos`, { method: "POST", params: { url, published: "false", access_token: token } });
+            postId = (await graph<{ post_id?: string }>(`/${pageId}/photo_stories`, { method: "POST", params: { photo_id: photo.id, access_token: token } })).post_id;
+        }
+        await noteFacebookError(null);
+        return postId ? `https://www.facebook.com/${postId}` : null;
+    } catch (e) {
+        if (e instanceof FacebookError) await noteFacebookError(e.message);
+        throw e;
+    }
+}
+
+/** Put one MP4 up as a Page reel with its caption. Returns the reel's link. */
+export async function postReelToFacebook(p: { caption: string; link: string | null; mediaKey: string | null; mediaType: string | null }): Promise<string | null> {
+    const block = facebookReelBlock(p);
+    if (block) throw new FacebookError(block);
+    const { pageId, token } = await pageAccess();
+    const url = mediaLink(p.mediaKey);
+    if (!url) throw new FacebookError("File storage (R2) is not set up on this server, so Facebook cannot fetch the video.");
+    try {
+        const done = await hostedVideo("video_reels", pageId, token, url, {
+            video_state: "PUBLISHED",
+            description: postCaption(p, COMPANY_DETAILS.sites.shop),
+        });
+        await noteFacebookError(null);
+        return `https://www.facebook.com/reel/${done.videoId}`;
     } catch (e) {
         if (e instanceof FacebookError) await noteFacebookError(e.message);
         throw e;

@@ -44,6 +44,8 @@ export type CopyForm = {
 const ORDER = [
   "GOOGLE_BUSINESS",
   "FACEBOOK",
+  "FACEBOOK_STORY",
+  "FACEBOOK_REEL",
   "INSTAGRAM",
   "WA_CHANNEL",
   "WA_STATUS",
@@ -295,7 +297,7 @@ export default function PostPlatformCards({
                 {ch.label}
               </h2>
               <span className="min-w-0 flex-1 truncate text-xs text-foreground/70">
-                {spec.textMax} chars ·{" "}
+                {spec.textMax ? `${spec.textMax} chars · ` : "no caption · "}
                 {spec.photosMax === 1
                   ? "1 photo"
                   : `up to ${spec.photosMax} photos`}{" "}
@@ -320,6 +322,11 @@ export default function PostPlatformCards({
             {on && (
               <div className="grid gap-4 p-4 text-sm lg:grid-cols-2">
                 <div className="space-y-3">
+                  {spec.textMax === 0 ? (
+                    <p className="text-sm text-foreground/70">
+                      A story shows no caption — just the photo or video, for 24 hours.
+                    </p>
+                  ) : (
                   <Row
                     label="Text"
                     own={ownText}
@@ -376,6 +383,7 @@ export default function PostPlatformCards({
                       </p>
                     )}
                   </Row>
+                  )}
                 </div>
 
                 <div className="space-y-3">
@@ -408,7 +416,7 @@ export default function PostPlatformCards({
                   </Row>
 
                   <Row
-                    label="Photo"
+                    label={c === "FACEBOOK_REEL" ? "Video" : c === "FACEBOOK_STORY" ? "Photo or video" : "Photo"}
                     own={
                       ownPhotos ||
                       !!cardFiles[c] ||
@@ -562,8 +570,9 @@ export default function PostPlatformCards({
                             </div>
                           ) : (
                             <p className="text-sm text-muted-foreground">
-                              No photo yet — add one in Master, or Upload one
-                              just for {ch.label}
+                              {c === "FACEBOOK_REEL"
+                                ? "No video yet — Upload one upright MP4 just for the reel"
+                                : `No photo yet — add one in Master, or Upload one just for ${ch.label}`}
                               {c === "INSTAGRAM"
                                 ? " (Instagram needs one)"
                                 : ""}
