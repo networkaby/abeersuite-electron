@@ -262,7 +262,7 @@ export default function PostComposer({
 
     return (
         <ScrollArea className="h-full" type="always">
-            <div className="mx-auto max-w-6xl space-y-5 px-6 pt-4 pb-10">
+            <div className="mx-auto max-w-7xl space-y-5 px-6 pt-4 pb-10">
                 <CampaignsHeader
                     icon={SquarePen}
                     title={post ? "Edit post" : "New post"}
@@ -272,8 +272,8 @@ export default function PostComposer({
                 {loading ? (
                     <p className="py-10 text-center text-sm text-muted-foreground">Loading…</p>
                 ) : (
-                    <>
-                        <PostMaterials
+                        <PostPlatformCards
+                            head={<PostMaterials
                             caption={form.caption}
                             link={form.link}
                             onCaption={(v) => set("caption", v)}
@@ -296,9 +296,7 @@ export default function PostComposer({
                             campaigns={campaigns}
                             campaignId={form.campaignId ?? null}
                             onCampaign={(v) => set("campaignId", v)}
-                        />
-
-                        <PostPlatformCards
+                        />}
                             channels={form.channels}
                             onToggle={(c) => toggle(c as Form["channels"][number])}
                             copies={form.variants}
@@ -329,9 +327,7 @@ export default function PostComposer({
                                     return { ...f, variants };
                                 })
                             }
-                        />
-
-                        <section className="rounded-xl border bg-card p-4 text-card-foreground shadow-sm">
+                            foot={<section className="rounded-xl border bg-card p-4 text-card-foreground shadow-sm">
                             <div className="flex flex-wrap justify-between gap-2">
                                 <div>
                                     {post && (
@@ -344,9 +340,8 @@ export default function PostComposer({
                                     {saving || (timed ? "Save & schedule" : "Save")}
                                 </Button>
                             </div>
-                        </section>
-
-                    </>
+                        </section>}
+                        />
                 )}
             </div>
             <PostProductPicker open={picking} onOpenChange={setPicking} onPick={pickProduct} />

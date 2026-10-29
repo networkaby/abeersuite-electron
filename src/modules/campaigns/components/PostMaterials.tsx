@@ -181,13 +181,13 @@ export default function PostMaterials({
 
   return (
     <section
-      className="overflow-hidden rounded-xl border text-card-foreground shadow-sm"
+      className="rounded-xl border text-card-foreground shadow-sm"
       style={{
         background: "color-mix(in oklab, var(--m-campaigns) 4%, var(--muted))",
       }}
     >
       <div
-        className="flex flex-wrap items-center gap-2 border-b px-4 py-2.5"
+        className="flex flex-wrap items-center gap-2 rounded-t-xl border-b px-4 py-2.5"
         style={{
           background:
             "color-mix(in oklab, var(--m-campaigns) 12%, var(--card))",

@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import PostSharePanel from "./PostSharePanel";
 import PhotoAdjustDialog from "./PhotoAdjustDialog";
+import PostPreviews, { type PreviewItem } from "./PostPreviews";
 import {
   CHANNEL_SPECS,
   GOOGLE_BUTTONS,
@@ -86,6 +87,8 @@ export default function PostPlatformCards({
   onDropCardFile,
   prePick,
   onPrePick,
+  head,
+  foot,
 }: {
   channels: string[];
   onToggle: (channel: string) => void;
@@ -114,6 +117,9 @@ export default function PostPlatformCards({
   /** Before the first save: the Master photo a platform takes instead of the main one. */
   prePick: Record<string, File>;
   onPrePick: (channel: string, file: File | null) => void;
+  /** Above the cards and below them, in the same column — the previews sit beside all of it. */
+  head?: React.ReactNode;
+  foot?: React.ReactNode;
 }) {
   const [fitting, setFitting] = useState<string | null>(null);
   const [picking, setPicking] = useState<string | null>(null);
@@ -159,9 +165,13 @@ export default function PostPlatformCards({
     url: string;
     crop: PhotoCrop | null;
   } | null>(null);
+  // What each "on" platform will show, for the previews beside the cards.
+  const previews: PreviewItem[] = [];
 
   return (
-    <>
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="min-w-0 space-y-5">
+      {head}
       {canFit && (
         <div className="-mb-2 flex justify-end">
           <Button
@@ -236,6 +246,28 @@ export default function PostPlatformCards({
             : [...picked, key];
           set({ photos: next.slice(-spec.photosMax) });
         };
+        if (on) {
+          const chosen =
+            prePick[c] && pending.includes(prePick[c]) ? prePick[c] : null;
+          const savedSrc = picked
+            .map((k) => photos.find((f) => f.key === k))
+            .find((f) => f && !f.type.startsWith("video/"));
+          previews.push({
+            channel: c,
+            label: ch.label,
+            src: post
+              ? (savedSrc && post.photoLinks?.[savedSrc.key]?.url) || null
+              : (cardSrc(c) ??
+                (chosen ? pendingUrls[pending.indexOf(chosen)] : previewSrc) ??
+                null),
+            count: post ? picked.length : 1,
+            text,
+            time,
+            button:
+              GOOGLE_BUTTONS.find((b) => b.value === google.button)?.label ??
+              null,
+          });
+        }
 
         return (
           <section
@@ -698,7 +730,12 @@ export default function PostPlatformCards({
           }
         />
       )}
-    </>
+      {foot}
+      </div>
+      <aside className="min-w-0 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-6rem)] xl:self-start xl:overflow-y-auto">
+        <PostPreviews items={previews} />
+      </aside>
+    </div>
   );
 }
 
