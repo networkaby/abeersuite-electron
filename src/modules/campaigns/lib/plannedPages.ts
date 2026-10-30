@@ -112,22 +112,4 @@ export const PLANNED_PAGES: Record<string, { title: string; description: string;
             ] },
         ],
     },
-    reports: {
-        title: "Reports",
-        description: "What each channel, campaign and post brought in.",
-        sections: [
-            { heading: "By channel, last 30 days", rows: [
-                { title: "Google Business Profile", sub: "Views, calls, direction requests", right: "[#]" },
-                { title: "WhatsApp Channel", sub: "Followers, views", right: "[#]" },
-                { title: "App notifications", sub: "Reached, tapped", right: "[#]" },
-                { title: "Newsletter", sub: "Opens, clicks", right: "[#]" },
-            ] },
-            { heading: "Money", rows: [
-                { title: "Coupon use per campaign", right: "[#]" },
-                { title: "Sales from tracked links and coupons", right: "₹[amount]" },
-                { title: "Message cost (WhatsApp, SMS)", right: "₹[amount]" },
-                { title: "Ad spend (Meta, Google) — read only", right: "Later" },
-            ] },
-        ],
-    },
 };

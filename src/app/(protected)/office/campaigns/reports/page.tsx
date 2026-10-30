@@ -1,10 +1,7 @@
-import { ChartNoAxesCombined } from "lucide-react";
-import PlannedPage from "@/modules/campaigns/components/PlannedPage";
-import { PLANNED_PAGES } from "@/modules/campaigns/lib/plannedPages";
+import CampaignsReports from "@/modules/campaigns/components/CampaignsReports";
 
-const page = PLANNED_PAGES.reports;
-export const metadata = { title: page.title };
+export const metadata = { title: "Reports" };
 
 export default function CampaignsReportsPage() {
-    return <PlannedPage icon={ChartNoAxesCombined} {...page} />;
+    return <CampaignsReports />;
 }

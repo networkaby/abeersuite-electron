@@ -16,7 +16,7 @@ const AREAS = [
     { title: "Newsletter", text: "Email to subscribers.", href: "/office/campaigns/newsletter", live: false },
     { title: "Automations", text: "Review requests, birthdays, win-back and more.", href: "/office/campaigns/automations", live: false },
     { title: "Segments & Consent", text: "Who gets what, and who said no.", href: "/office/campaigns/segments", live: false },
-    { title: "Reports", text: "What each channel brought in.", href: "/office/campaigns/reports", live: false },
+    { title: "Reports", text: "Posts per channel, campaign results and coupon use.", href: "/office/campaigns/reports", live: true },
     { title: "Channels", text: "Connect Google and Facebook / Instagram.", href: "/office/campaigns/channels", live: true },
 ];
 
