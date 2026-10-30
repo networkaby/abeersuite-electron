@@ -510,7 +510,8 @@ export async function importStatement(accountId: number, userId: number, input: 
     if (stNo && account.bank.accountNumber) {
         if (!sameAccountNumber(stNo, account.bank.accountNumber)) {
             throw new BankReconError(
-                `This statement is for account …${stNo.slice(-6)}, but the ledger "${account.name}" is …${account.bank.accountNumber.slice(-6)}.`,
+                // Full numbers: the check compares 10 digits, so a 6-digit tail can look identical.
+                `This statement is for account ${stNo}, but the ledger "${account.name}" has ${account.bank.accountNumber} in its bank particulars. Correct the ledger if that is a typo.`,
             );
         }
     } else if (stNo && !account.bank.accountNumber) {

@@ -331,6 +331,16 @@ const PROFILES: Profile[] = [
         },
         mapping: (headers) => Object.fromEntries(headers.map((h) => [h, autoSuggestStatementField(h)])),
     },
+    {
+        id: "bandhan-csv",
+        label: "Bandhan Bank (statement download)",
+        matches: (headers) => {
+            const n = headers.map(norm);
+            return n.includes("transactiondate") && n.includes("valuedate") && n.includes("description")
+                && n.some((h) => h.startsWith("amount")) && n.includes("crdr") && n.some((h) => h.startsWith("balance"));
+        },
+        mapping: (headers) => Object.fromEntries(headers.map((h) => [h, autoSuggestStatementField(h)])),
+    },
 ];
 
 /**
