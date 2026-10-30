@@ -482,7 +482,8 @@ export const postSchema = z
  * Store a post so plain queries still work: `scheduledAt` becomes the earliest
  * channel time (what the jobs, calendar and queue sort and filter on), each
  * channel keeps its own time only when it differs from that, a copy with nothing of its
- * own is dropped, copies for unticked channels go. SCHEDULED only when asked for
+ * own is dropped; a switched-off channel keeps its copy as it is (owner,
+ * 2026-10-30: off = "keep pending", never lost on save). SCHEDULED only when asked for
  * and it has a time; otherwise DRAFT, times kept as the plan.
  */
 function normaliseVariants<T extends { channels: string[]; scheduledAt: Date | null; status: string; variants: Partial<Record<string, PostVariant>> }>(p: T): T {
@@ -496,6 +497,10 @@ function normaliseVariants<T extends { channels: string[]; scheduledAt: Date | n
         const t = timeOf(c);
         const own: PostVariant = { ...v, scheduledAt: t && new Date(t).getTime() !== first?.getTime() ? new Date(t).toISOString() : null };
         if (!variantEmpty(own)) variants[c] = own;
+    }
+    // Switched-off channels: their own copy waits, untouched, for when they are switched on again.
+    for (const [c, v] of Object.entries(p.variants)) {
+        if (!p.channels.includes(c) && v && !variantEmpty(v)) variants[c] = v;
     }
     // A time alone never schedules (owner, 2026-10-30: "Save as draft" keeps the
     // whole set to continue later): SCHEDULED only when asked for and timed.

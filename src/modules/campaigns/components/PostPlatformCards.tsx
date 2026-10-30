@@ -387,7 +387,7 @@ export default function PostPlatformCards({
               <span
                 className={`text-xs font-medium ${on ? "text-primary" : "text-muted-foreground"}`}
               >
-                {on ? "On" : "Off"}
+                {on ? "On" : copy ? "Off · its own copy kept" : "Off"}
               </span>
               <Switch
                 checked={on}

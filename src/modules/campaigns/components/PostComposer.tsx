@@ -186,9 +186,8 @@ export default function PostComposer({
         }
         setSaving("Saving…");
         const variants = Object.fromEntries(
-            Object.entries(form.variants)
-                .filter(([c]) => (form.channels as string[]).includes(c))
-                .map(([c, v]) => [c, { caption: v.caption?.trim() || null, scheduledAt: iso(v.scheduledAt), photos: v.photos, hashtags: v.hashtags === null || v.hashtags === undefined ? null : v.hashtags.trim(), background: v.background ?? null, coverMs: v.coverMs ?? null, alt: v.alt?.trim() || null }]),
+            // Every platform's own copy, switched on or off — off only means "not now".
+            Object.entries(form.variants).map(([c, v]) => [c, { caption: v.caption?.trim() || null, scheduledAt: iso(v.scheduledAt), photos: v.photos, hashtags: v.hashtags === null || v.hashtags === undefined ? null : v.hashtags.trim(), background: v.background ?? null, coverMs: v.coverMs ?? null, alt: v.alt?.trim() || null }]),
         );
         const body = {
             ...form,
