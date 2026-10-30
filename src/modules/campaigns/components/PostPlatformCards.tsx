@@ -29,6 +29,7 @@ import {
   ratioFits,
   withHashtags,
   hasPhoneNumber,
+  STATUS_BACKGROUNDS,
   HASHTAG_BEST,
   HASHTAG_CHANNELS,
   variantEmpty,
@@ -52,6 +53,8 @@ export type CopyForm = {
   photos: string[] | null;
   /** Own hashtags ("" = none here); null / missing = Master's. */
   hashtags?: string | null;
+  /** WhatsApp text status background. */
+  background?: string | null;
 };
 
 /** Cards in the order people look at them: the networks that post by themselves first. */
@@ -314,7 +317,7 @@ export default function PostPlatformCards({
                   ? [{ src: previewSrc, video: false }]
                   : [];
           // The ones whose sender posts every item: feed grid, carousel, stories in order.
-          const sendsAll = ["FACEBOOK", "FACEBOOK_STORY", "INSTAGRAM", "INSTAGRAM_STORY"].includes(c);
+          const sendsAll = ["FACEBOOK", "FACEBOOK_STORY", "INSTAGRAM", "INSTAGRAM_STORY", "WA_CHANNEL", "WA_STATUS"].includes(c);
           // Only what this platform carries: no photos in a reel, no videos on Google.
           const usable = media.filter((m) => (m.video ? CHANNEL_MEDIA[c] !== "photo" : CHANNEL_MEDIA[c] !== "video"));
           const shown = sendsAll ? usable : usable.slice(0, 1);
@@ -326,6 +329,7 @@ export default function PostPlatformCards({
             count: shown.length || 1,
             srcs: shown.filter((m) => !m.video).map((m) => m.src),
             media: shown,
+            background: copy?.background ?? null,
             text: channelText(c, text, master.link || null, SHOP_SITE),
             time,
             button:
@@ -400,11 +404,20 @@ export default function PostPlatformCards({
                     onReset={() => set({ caption: null })}
                   >
                     {ownText ? (
-                      <Textarea
-                        rows={4}
-                        value={copy!.caption!}
-                        onChange={(e) => set({ caption: e.target.value })}
-                      />
+                      <>
+                        {(c === "WA_CHANNEL" || c === "WA_STATUS") && (
+                          <WaFormatBar
+                            target={`copy-text-${c}`}
+                            onChange={(v) => set({ caption: v })}
+                          />
+                        )}
+                        <Textarea
+                          id={`copy-text-${c}`}
+                          rows={4}
+                          value={copy!.caption!}
+                          onChange={(e) => set({ caption: e.target.value })}
+                        />
+                      </>
                     ) : (
                       <p
                         className={`line-clamp-6 rounded-md border bg-muted/30 p-2 text-sm leading-snug whitespace-pre-line ${text ? "" : "text-muted-foreground"}`}
@@ -436,7 +449,26 @@ export default function PostPlatformCards({
                         remove it and pick the Call now button.
                       </p>
                     )}
-                    {c === "GOOGLE_BUSINESS" && (
+                    {c === "WA_STATUS" && !(post ? picked.length : preShown.length || cardSrc(c)) && (
+                    <div className="space-y-1">
+                      <span className="text-sm font-semibold">Text status colour</span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {STATUS_BACKGROUNDS.map((bg) => (
+                          <button
+                            key={bg}
+                            type="button"
+                            aria-label={`Background ${bg}`}
+                            aria-pressed={(copy?.background ?? STATUS_BACKGROUNDS[0]) === bg}
+                            onClick={() => set({ background: bg === STATUS_BACKGROUNDS[0] ? null : bg })}
+                            className={`size-7 rounded-full border-2 ${(copy?.background ?? STATUS_BACKGROUNDS[0]) === bg ? "border-foreground" : "border-transparent"}`}
+                            style={{ background: bg }}
+                          />
+                        ))}
+                      </div>
+                      <p className="text-xs text-foreground/70">No photo: this goes out as a text status on this colour. Pick the same colour in WhatsApp when you post it.</p>
+                    </div>
+                  )}
+                  {c === "GOOGLE_BUSINESS" && (
                       <p className="text-xs text-foreground/70">
                         No shop link in the text here — Google rejects web
                         addresses in posts. The button carries it.
@@ -506,7 +538,7 @@ export default function PostPlatformCards({
                   </Row>
 
                   <Row
-                    label={c === "FACEBOOK_REEL" ? "Video" : c === "FACEBOOK_STORY" ? "Photo or video" : "Photo"}
+                    label={c === "FACEBOOK_REEL" || c === "INSTAGRAM_REEL" ? "Video" : c.endsWith("_STORY") || c === "WA_STATUS" ? "Photo or video" : "Photo"}
                     own={
                       ownPhotos ||
                       !!cardFiles[c] ||
@@ -892,6 +924,48 @@ function Row({
         )}
       </div>
       {children}
+    </div>
+  );
+}
+
+/**
+ * WhatsApp's formatting marks for the selected words (owner, 2026-10-30):
+ * *bold*, _italic_, ~strike~. Works on the platform's own text box by id.
+ */
+function WaFormatBar({ target, onChange }: { target: string; onChange: (value: string) => void }) {
+  const wrap = (mark: string) => {
+    const el = document.getElementById(target) as HTMLTextAreaElement | null;
+    if (!el) return;
+    const { selectionStart: a, selectionEnd: b, value } = el;
+    const picked = value.slice(a, b) || "text";
+    onChange(value.slice(0, a) + mark + picked + mark + value.slice(b));
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(a + 1, a + 1 + picked.length);
+    });
+  };
+  return (
+    <div className="flex items-center gap-1">
+      {(
+        [
+          ["*", "B", "font-bold", "Bold"],
+          ["_", "I", "italic", "Italic"],
+          ["~", "S", "line-through", "Strike"],
+        ] as const
+      ).map(([mark, label, style, name]) => (
+        <button
+          key={mark}
+          type="button"
+          aria-label={name}
+          title={`${name} — WhatsApp shows ${mark}text${mark} as ${name.toLowerCase()}`}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => wrap(mark)}
+          className={`h-6 w-7 rounded border bg-card text-xs ${style} hover:bg-muted`}
+        >
+          {label}
+        </button>
+      ))}
+      <span className="text-[11px] text-foreground/60">WhatsApp formatting</span>
     </div>
   );
 }

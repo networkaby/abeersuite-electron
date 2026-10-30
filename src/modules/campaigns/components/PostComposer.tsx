@@ -40,7 +40,7 @@ const fromRow = (p: PostRow): Form => ({
     campaignId: p.campaignId,
     status: p.status === "SCHEDULED" ? "SCHEDULED" : "DRAFT",
     variants: Object.fromEntries(
-        Object.entries(p.variants).flatMap(([c, v]) => (v ? [[c, { caption: v.caption, scheduledAt: v.scheduledAt ? toLocalInput(v.scheduledAt) : null, photos: v.photos, hashtags: v.hashtags ?? null }]] : [])),
+        Object.entries(p.variants).flatMap(([c, v]) => (v ? [[c, { caption: v.caption, scheduledAt: v.scheduledAt ? toLocalInput(v.scheduledAt) : null, photos: v.photos, hashtags: v.hashtags ?? null, background: v.background ?? null }]] : [])),
     ),
 });
 
@@ -175,7 +175,7 @@ export default function PostComposer({
         const variants = Object.fromEntries(
             Object.entries(form.variants)
                 .filter(([c]) => (form.channels as string[]).includes(c))
-                .map(([c, v]) => [c, { caption: v.caption?.trim() || null, scheduledAt: iso(v.scheduledAt), photos: v.photos, hashtags: v.hashtags === null || v.hashtags === undefined ? null : v.hashtags.trim() }]),
+                .map(([c, v]) => [c, { caption: v.caption?.trim() || null, scheduledAt: iso(v.scheduledAt), photos: v.photos, hashtags: v.hashtags === null || v.hashtags === undefined ? null : v.hashtags.trim(), background: v.background ?? null }]),
         );
         const body = {
             ...form,

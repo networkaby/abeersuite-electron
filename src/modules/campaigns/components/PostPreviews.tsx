@@ -28,6 +28,8 @@ export type PreviewItem = {
   srcs?: string[];
   /** Every photo / video, in order, where the app plays them one after another (stories). */
   media?: { src: string; video: boolean }[];
+  /** WhatsApp text status (no photo): its background colour. */
+  background?: string | null;
   text: string;
   /** datetime-local string, or "" for a draft. */
   time: string;
@@ -164,13 +166,15 @@ function Photo({ it }: { it: PreviewItem }) {
 }
 
 /** Text cut off where the app cuts it, with its own "more" word. */
-function Clamp({ text, lines, more, className = "", tags }: { text: string; lines: number; more: string; className?: string; tags?: string }) {
+function Clamp({ text, lines, more, className = "", tags, wa = false }: { text: string; lines: number; more: string; className?: string; tags?: string; wa?: boolean }) {
   const long = text.split("\n").length > lines || text.length > lines * 45;
   return (
     <div className={className}>
       <p className="whitespace-pre-line break-words" style={{ display: "-webkit-box", WebkitLineClamp: lines, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
         {text ? (
-          tags ? (
+          wa ? (
+            <WaText text={text} />
+          ) : tags ? (
             // Hashtags drawn the way the app draws them (its own colour / weight).
             text.split(/(#[^\s#]+)/g).map((part, i) =>
               part.startsWith("#") ? (
@@ -296,35 +300,39 @@ function Google({ it }: { it: PreviewItem }) {
 }
 
 function WaStatus({ it }: { it: PreviewItem }) {
-  return (
-    <div className="relative mx-auto w-[220px] overflow-hidden rounded-xl bg-black text-white" style={{ aspectRatio: "9 / 16" }}>
-      <Media it={it} className="absolute inset-0 size-full object-contain" />
-      <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-black/60 to-transparent px-2 pt-2 pb-6">
-        <div className="h-0.5 rounded bg-white/50"><div className="h-full w-1/3 rounded bg-white" /></div>
-        <div className="mt-2 flex items-center gap-1.5 text-[11px]">
-          <Avatar size={24} />
-          <span className="font-medium">{NAME}</span>
-          <span className="opacity-70">{stamp(it.time, "clock")}</span>
-        </div>
-      </div>
-      {it.text && (
-        <Clamp text={it.text} lines={3} more="" className="absolute inset-x-0 bottom-0 bg-black/55 px-3 py-2 text-center text-[11px]" />
-      )}
-    </div>
-  );
+  return <Story it={it} wa />;
 }
 
 function WaChannel({ it }: { it: PreviewItem }) {
+  const items = it.media?.length ? it.media : it.src ? [{ src: it.src, video: !!it.video }] : [];
+  const link = it.text.match(/https?:\/\/\S+/)?.[0] ?? null;
   return (
     <div className="rounded-lg border p-3" style={{ background: "#efeae2" }}>
       <div className="flex items-start gap-1.5">
         <div className="max-w-[90%] overflow-hidden rounded-lg bg-white p-1 text-[13px] text-neutral-900 shadow-sm">
-          {it.src && (
-            <div className="overflow-hidden rounded-md">
-              <Photo it={it} />
+          {items.length > 1 ? (
+            <WaAlbum items={items} />
+          ) : (
+            it.src && (
+              <div className="overflow-hidden rounded-md">
+                <Photo it={it} />
+              </div>
+            )
+          )}
+          {link && !items.length && (
+            // With no photo, WhatsApp shows the link's preview card above the text.
+            <div className="mb-1 overflow-hidden rounded-md bg-neutral-100 text-[11px]">
+              <div className="flex items-center gap-2 p-2">
+                <Avatar size={36} />
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{NAME}</p>
+                  <p className="line-clamp-2 text-neutral-600">{COMPANY_DETAILS.tagline}</p>
+                  <p className="truncate text-neutral-500">{new URL(link).host}</p>
+                </div>
+              </div>
             </div>
           )}
-          <Clamp text={it.text} lines={14} more="Read more" className="px-1.5 pt-1" />
+          <Clamp text={it.text} lines={14} more="Read more" className="px-1.5 pt-1" wa />
           <p className="px-1.5 text-right text-[10px] text-neutral-500">{stamp(it.time, "clock")}</p>
         </div>
         <span className="mt-auto flex h-7 w-7 items-center justify-center rounded-full bg-white/80 text-neutral-500">
@@ -332,6 +340,44 @@ function WaChannel({ it }: { it: PreviewItem }) {
         </span>
       </div>
     </div>
+  );
+}
+
+/** WhatsApp's album: two side by side, three as one over two, four or more as 2×2 with "+N". */
+function WaAlbum({ items }: { items: { src: string; video: boolean }[] }) {
+  const show = items.slice(0, 4);
+  const more = items.length - 4;
+  return (
+    <div className={`grid gap-0.5 overflow-hidden rounded-md ${show.length === 2 ? "grid-cols-2" : "grid-cols-2 grid-rows-2"}`} style={{ aspectRatio: show.length === 2 ? "2 / 1" : "1 / 1" }}>
+      {show.map((m, i) => (
+        <div key={`${m.src}-${i}`} className={`relative overflow-hidden bg-neutral-200 ${show.length === 3 && i === 0 ? "col-span-2" : ""}`}>
+          {m.video ? (
+            <video src={m.src} className="size-full object-cover" muted playsInline />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element -- a local or signed preview
+            <img src={m.src} alt="" className="size-full object-cover" />
+          )}
+          {i === 3 && more > 0 && <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-xl font-semibold text-white">+{more}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** WhatsApp's formatting: *bold*, _italic_, ~strike~, ```mono```, and links in blue. */
+function WaText({ text }: { text: string }) {
+  const parts = text.split(/(\*[^*\n]+\*|_[^_\n]+_|~[^~\n]+~|```[^`]+```|https?:\/\/\S+)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (/^\*[^*]+\*$/.test(part)) return <strong key={i}>{part.slice(1, -1)}</strong>;
+        if (/^_[^_]+_$/.test(part)) return <em key={i}>{part.slice(1, -1)}</em>;
+        if (/^~[^~]+~$/.test(part)) return <s key={i}>{part.slice(1, -1)}</s>;
+        if (/^```[^`]+```$/.test(part)) return <code key={i} className="font-mono">{part.slice(3, -3)}</code>;
+        if (/^https?:\/\//.test(part)) return <span key={i} className="text-[#027eb5] underline">{part}</span>;
+        return part;
+      })}
+    </>
   );
 }
 
@@ -344,7 +390,7 @@ const STORY_MS = 5000;
  * bar at the bottom. Plays through the stories and loops; tap the left or
  * right half to go back or on, like the app.
  */
-function Story({ it, ig = false }: { it: PreviewItem; ig?: boolean }) {
+function Story({ it, ig = false, wa = false }: { it: PreviewItem; ig?: boolean; wa?: boolean }) {
   const items = it.media?.length ? it.media : it.src ? [{ src: it.src, video: !!it.video }] : [];
   const [at, setAt] = useState(0);
   const i = items.length ? at % items.length : 0;
@@ -371,10 +417,18 @@ function Story({ it, ig = false }: { it: PreviewItem; ig?: boolean }) {
           />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element -- a local or signed preview
-          <img key={`${cur.src}-${at}`} src={cur.src} alt="" className="absolute inset-0 size-full object-cover" />
+          <img key={`${cur.src}-${at}`} src={cur.src} alt="" className={`absolute inset-0 size-full ${wa ? "object-contain" : "object-cover"}`} />
         )
+      ) : wa && it.text ? (
+        // A text status: the words on its colour, as WhatsApp draws it.
+        <div className="absolute inset-0 flex items-center justify-center p-5 text-center text-lg leading-snug font-medium" style={{ background: it.background ?? "#0b8a5f" }}>
+          <Clamp text={it.text} lines={8} more="" wa />
+        </div>
       ) : (
         <span className="absolute inset-0 flex items-center justify-center text-xs text-white/60">No photo or video</span>
+      )}
+      {wa && cur && it.text && (
+        <Clamp text={it.text} lines={3} more="" wa className="pointer-events-none absolute inset-x-0 bottom-9 bg-black/55 px-3 py-2 text-center text-[11px]" />
       )}
       {items.length > 1 && (
         <>
@@ -412,9 +466,15 @@ function Story({ it, ig = false }: { it: PreviewItem; ig?: boolean }) {
         </div>
       </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-2 bg-gradient-to-t from-black/55 to-transparent px-2 pt-6 pb-2">
-        <span className="flex-1 rounded-full border border-white/70 px-3 py-1 text-[10px] text-white/80">{ig ? "Send message" : "Send message…"}</span>
-        {ig ? <Heart className="h-4 w-4" /> : <ThumbsUp className="h-4 w-4" />}
-        {ig ? <Send className="h-4 w-4" /> : <Heart className="h-4 w-4" />}
+        {wa ? (
+          <span className="flex-1 text-center text-[11px] text-white/85">⌃ Reply</span>
+        ) : (
+          <>
+            <span className="flex-1 rounded-full border border-white/70 px-3 py-1 text-[10px] text-white/80">{ig ? "Send message" : "Send message…"}</span>
+            {ig ? <Heart className="h-4 w-4" /> : <ThumbsUp className="h-4 w-4" />}
+            {ig ? <Send className="h-4 w-4" /> : <Heart className="h-4 w-4" />}
+          </>
+        )}
       </div>
     </div>
   );

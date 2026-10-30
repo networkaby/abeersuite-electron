@@ -23,7 +23,7 @@ export const POST_CHANNELS = [
         short: "Channel",
         mode: "PHONE",
         ready: true,
-        hint: "Share from any channel admin's phone and pick our channel.",
+        hint: "On a channel admin's phone: Share → pick our channel → Send. Several photos go as an album. WhatsApp has no posting API — press Done after.",
     },
     {
         value: "GOOGLE_BUSINESS",
@@ -39,7 +39,7 @@ export const POST_CHANNELS = [
         short: "Status",
         mode: "PHONE",
         ready: true,
-        hint: "Share from the company phone, WhatsApp Business app → My status (after Meta's coexistence approval).",
+        hint: "On the company phone: Share → My status → Send; each photo is its own status, in order. No photo: Share copies the text — post it as a text status. Press Done after.",
     },
     {
         value: "FACEBOOK",
@@ -324,11 +324,17 @@ export type PostVariant = {
     photos: string[] | null;
     /** This channel's own hashtags ("" = none here); null / missing = Master's. */
     hashtags?: string | null;
+    /** WhatsApp Status with no photo: the text status's background (STATUS_BACKGROUNDS). */
+    background?: string | null;
 };
+
+/** WhatsApp's text-status colours (a few of its own), for a Status with no photo. */
+export const STATUS_BACKGROUNDS = ["#0b8a5f", "#1f6feb", "#7c3aed", "#d9480f", "#c2255c", "#343a40"] as const;
 
 /** A copy with nothing of its own — the channel just follows Master, so it needs no entry. */
 export const variantEmpty = (v: Partial<PostVariant> | null | undefined) =>
-    !v || ((v.caption ?? null) === null && (v.scheduledAt ?? null) === null && (v.photos ?? null) === null && (v.hashtags ?? null) === null);
+    !v ||
+    ((v.caption ?? null) === null && (v.scheduledAt ?? null) === null && (v.photos ?? null) === null && (v.hashtags ?? null) === null && (v.background ?? null) === null);
 
 /** The hashtags that go out on a channel: its own when it has them, else Master's. */
 export const channelHashtags = (p: { hashtags?: string | null; variants: unknown }, channel: string) => {
@@ -401,6 +407,7 @@ const variantSchema = z.object({
     photos: z.array(z.string().min(1).max(300)).max(10).nullable(),
     // "" = no hashtags on this channel; null = Master's.
     hashtags: z.string().trim().max(500).nullable().default(null),
+    background: z.string().regex(/^#[0-9a-f]{6}$/i).nullable().default(null),
 });
 
 export const postSchema = z
@@ -464,7 +471,7 @@ function normaliseVariants<T extends { channels: string[]; scheduledAt: Date | n
     const variants: Record<string, PostVariant> = {};
     for (const c of p.channels) {
         // A channel following the main time keeps it even when another copy is earlier.
-        const v = p.variants[c] ?? { caption: null, scheduledAt: null, photos: null, hashtags: null };
+        const v = p.variants[c] ?? { caption: null, scheduledAt: null, photos: null, hashtags: null, background: null };
         const t = timeOf(c);
         const own: PostVariant = { ...v, scheduledAt: t && new Date(t).getTime() !== first?.getTime() ? new Date(t).toISOString() : null };
         if (!variantEmpty(own)) variants[c] = own;
