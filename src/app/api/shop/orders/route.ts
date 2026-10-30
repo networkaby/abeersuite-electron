@@ -15,6 +15,7 @@ import { resolvePayOnDelivery } from "@/shared/lib/payments/payOnDeliveryMethod"
 import { loadDeliveryMethod, type ShiprocketConfig } from "@/modules/delivery/lib/deliveryMethods";
 import { chargeableUnitGrams } from "@/modules/delivery/lib/chargeableWeight";
 import { sourceCounterId } from "@/shared/lib/counter/sourceCounter";
+import { saveAddress } from "@/shared/lib/address/personAddressServer";
 
 const DEFAULT_ITEM_WEIGHT_GRAMS = 500;
 
@@ -52,6 +53,8 @@ const createOrderSchema = z.object({
     // Loyalty points the customer wants to burn (server clamps + validates;
     // the invoice conversion burns the lots when it posts).
     redeemPoints: z.coerce.number().int().min(0).optional(),
+    // The saved address checkout started from (PersonAddress id); absent = typed new.
+    addressId: z.coerce.number().int().positive().optional(),
 });
 
 export async function POST(req: Request) {
@@ -401,6 +404,27 @@ export async function POST(req: Request) {
             paymentMethod: isCod ? "COD" : "ONLINE",
             status: t.order?.legacyStatus,
         };
+
+        // The address shipped to goes back into the customer's address book —
+        // onto the row they picked (their edits included) or as a new row — and
+        // becomes "last used", so the next checkout opens on it. Never fails the order.
+        try {
+            const book = {
+                name: shippingAddress.name,
+                phone: shippingAddress.phone,
+                line1: shippingAddress.line1,
+                line2: shippingAddress.line2 ?? null,
+                locality: shippingAddress.locality ?? null,
+                neighbourhood: shippingAddress.neighbourhood ?? null,
+                city: shippingAddress.city,
+                state: shippingAddress.state,
+                pincode: shippingAddress.pincode,
+            };
+            const saved = data.addressId ? await saveAddress(customerId, data.addressId, book, { used: true }) : null;
+            if (!saved) await saveAddress(customerId, null, book, { used: true });
+        } catch (e) {
+            console.error("[shop/orders] address book save failed", e);
+        }
 
         await createSystemInboxNotifications({
             roleIds: ["R1", "R2"],

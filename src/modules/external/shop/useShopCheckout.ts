@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { useShopCartStore } from "@/store/external/shopCartStore";
 import { usePortalAccountStore } from "@/store/external/portalAccountStore";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { useValueChange } from "@/shared/hooks/useValueChange";
+import { isDeliverable, type AddressRow } from "@/shared/lib/address/address";
 
 /**
  * Everything a checkout knows and does — the address with its pincode lookups
@@ -65,6 +66,59 @@ export function useShopCheckout({ onPlaced }: { onPlaced: (orderId: number) => v
 
     const [address, setAddress] = useState(EMPTY_ADDRESS);
     const setField = (k: keyof typeof EMPTY_ADDRESS) => (v: string) => setAddress((a) => ({ ...a, [k]: v }));
+
+    // The customer's address book. Checkout opens on the last one used (else the
+    // main one) as "Deliver to …"; Change lists the rest + a new one. Whatever is
+    // shipped to is saved back to that row (or as a new row) by the order route.
+    const profile = usePortalAccountStore((s) => s.profile);
+    const [savedAddresses, setSavedAddresses] = useState<AddressRow[] | null>(null);
+    const [addressId, setAddressId] = useState<number | null>(null);
+    // The full form shows for a new address, or one missing what delivery needs.
+    const [addressOpen, setAddressOpen] = useState(true);
+    // The PIN a saved address brought in — its locality is kept, not re-guessed.
+    const filledPin = useRef<string | null>(null);
+    const fillFrom = (row: AddressRow | null) => {
+        const me = { name: profile?.name ?? "", phone: profile?.phones.find((p) => p.isPrimary)?.value ?? profile?.phones[0]?.value ?? "" };
+        setAddressId(row?.id ?? null);
+        filledPin.current = row?.pincode ?? null;
+        setAddress(
+            row
+                ? {
+                      name: row.name || me.name,
+                      phone: row.phone || me.phone,
+                      line1: row.line1,
+                      line2: row.line2 ?? "",
+                      pincode: row.pincode ?? "",
+                      locality: row.locality ?? "",
+                      neighbourhood: row.neighbourhood ?? "",
+                      city: row.city ?? "",
+                      state: row.state ?? "",
+                  }
+                : { ...EMPTY_ADDRESS, ...me },
+        );
+        setAddressOpen(!row || !isDeliverable(row));
+    };
+    const signedIn = !!activeAccountId;
+    useEffect(() => {
+        if (!signedIn || savedAddresses) return;
+        let cancelled = false;
+        axios
+            .get<{ addresses: AddressRow[] }>("/api/portal/addresses")
+            .then(({ data }) => {
+                if (cancelled) return;
+                setSavedAddresses(data.addresses);
+                const used = data.addresses.filter((a) => a.lastUsedAt).sort((a, b) => +new Date(b.lastUsedAt!) - +new Date(a.lastUsedAt!));
+                fillFrom(used[0] ?? data.addresses.find((a) => a.isPrimary) ?? data.addresses[0] ?? null);
+            })
+            .catch(() => !cancelled && setSavedAddresses([]));
+        return () => {
+            cancelled = true;
+        };
+        // Once per sign-in; fillFrom reads the profile at that moment on purpose.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [signedIn, savedAddresses]);
+    /** Change → a saved address (id) or a blank new one (null). */
+    const pickAddress = (id: number | null) => fillFrom(savedAddresses?.find((a) => a.id === id) ?? null);
 
     // Live courier quote for the entered pincode + cart.
     const [options, setOptions] = useState<ShippingOption[]>([]);
@@ -147,8 +201,9 @@ export function useShopCheckout({ onPlaced }: { onPlaced: (orderId: number) => v
                         city: r.data.city || a.city,
                         state: r.data.state || a.state,
                         // Reset the locality when the pincode changes; auto-pick when
-                        // there's only one so the customer needn't choose.
-                        locality: locs.length === 1 ? locs[0] : "",
+                        // there's only one so the customer needn't choose. A saved
+                        // address keeps its own (it may be one of our coverage areas).
+                        locality: filledPin.current === address.pincode && a.locality ? a.locality : locs.length === 1 ? locs[0] : "",
                     }));
                     setPincodeInfo(r.data.city && r.data.state ? `${r.data.city}, ${r.data.state}` : "");
                 } else {
@@ -360,6 +415,8 @@ export function useShopCheckout({ onPlaced }: { onPlaced: (orderId: number) => v
             const { data: order } = await axios.post<{ id: number }>("/api/shop/orders", {
                 lines,
                 accountId: activeAccountId,
+                // The saved address this went to (edits are saved onto it); none = a new one.
+                addressId: addressId ?? undefined,
                 shippingAddress: {
                     name: address.name.trim(),
                     phone: address.phone.trim(),
@@ -411,6 +468,11 @@ export function useShopCheckout({ onPlaced }: { onPlaced: (orderId: number) => v
         setPayChoice,
         address,
         setField,
+        savedAddresses,
+        addressId,
+        pickAddress,
+        addressOpen,
+        setAddressOpen,
         pincodeValid,
         pincodeInfo,
         localityOptions,

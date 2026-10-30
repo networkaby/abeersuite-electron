@@ -16,9 +16,11 @@ import { Badge } from "@/components/ui/badge";
 import { Lock, ShieldCheck, Loader2, Truck, CreditCard, HandCoins } from "lucide-react";
 import PortalProfileSwitch from "@/modules/external/portal/PortalProfileSwitch";
 import { useShopCheckout } from "@/modules/external/shop/useShopCheckout";
+import CheckoutAddressPicker from "@/modules/external/shop/CheckoutAddressPicker";
 
 export default function ShopCheckoutPage() {
     const router = useRouter();
+    const checkout = useShopCheckout({ onPlaced: (id) => router.push(`/shop/order/${id}`) });
     const {
         lines,
         byId,
@@ -70,7 +72,7 @@ export default function ShopCheckoutPage() {
         canPlace,
         submit,
         requestedRedeemPts,
-    } = useShopCheckout({ onPlaced: (id) => router.push(`/shop/order/${id}`) });
+    } = checkout;
 
     if (lines.length === 0) {
         return (
@@ -118,6 +120,10 @@ export default function ShopCheckoutPage() {
                             <CardTitle className="text-lg">Delivery address</CardTitle>
                         </CardHeader>
                         <CardContent className="grid gap-4 sm:grid-cols-2">
+                            <div className="sm:col-span-2 empty:hidden">
+                                <CheckoutAddressPicker c={checkout} />
+                            </div>
+                            {checkout.addressOpen && (<>
                             <div className="grid gap-2">
                                 <Label>Full name</Label>
                                 <Input value={address.name} onChange={(e) => setField("name")(e.target.value)} />
@@ -198,6 +204,7 @@ export default function ShopCheckoutPage() {
                                     </SelectContent>
                                 </Select>
                             </div>
+                            </>)}
                         </CardContent>
                     </Card>
 

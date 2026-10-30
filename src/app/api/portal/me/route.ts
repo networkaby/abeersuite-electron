@@ -7,14 +7,13 @@ import { loadPortalProfile } from "@/shared/lib/portal/portalProfile";
 
 /**
  * GET  /api/portal/me — the signed-in customer's own profile (see PortalProfile).
- * PATCH /api/portal/me — name / address / photo. The customer owns these now;
+ * PATCH /api/portal/me — name / photo (addresses: /api/portal/addresses). The customer owns these now;
  * staff can still change them from the office. A rename also renames the
  * personal Account, which is the name that prints on bills.
  */
 
 const patchSchema = z.object({
     name: z.string().trim().min(2, "Enter your name").max(120).optional(),
-    address: z.string().trim().max(500).nullable().optional(),
     /** Cloudinary URL from /api/portal/upload-signature; empty string clears. */
     avatarUrl: z.string().trim().url("Enter a valid image URL").nullable().optional().or(z.literal("")),
 });
@@ -46,7 +45,6 @@ export async function PATCH(req: Request) {
                 where: { id: customerId },
                 data: {
                     ...(data.name !== undefined && { name: data.name }),
-                    ...(data.address !== undefined && { address: data.address || null }),
                     ...(data.avatarUrl !== undefined && { avatarUrl: data.avatarUrl || null }),
                 },
             });

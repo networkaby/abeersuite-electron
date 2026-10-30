@@ -10,6 +10,7 @@ import { parseAliasInput, formatAliasInput } from "@/modules/accountancy/lib/acc
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import AddressBook from "@/shared/components/address/AddressBook";
 
 // verifiedAt: null = a portal self-add the customer has not proved by OTP yet.
 // Optional because some callers' row types predate the field.
@@ -47,7 +48,6 @@ interface Props {
 
 export default function PersonProfileEdit({ profile, onSaved }: Props) {
     const [name, setName] = useState(profile.name);
-    const [address, setAddress] = useState(profile.address ?? "");
     const [aliases, setAliases] = useState(() => formatAliasInput(profile.aliases));
     const [phones, setPhones] = useState<PhoneRow[]>(profile.phones);
     const [emails, setEmails] = useState<EmailRow[]>(profile.emails);
@@ -58,7 +58,6 @@ export default function PersonProfileEdit({ profile, onSaved }: Props) {
     const [newEmail, setNewEmail] = useState("");
 
     const dirty = name !== profile.name
-        || address !== (profile.address ?? "")
         || aliases !== formatAliasInput(profile.aliases);
 
     // Derived — recomputed on each render, no extra state needed.
@@ -73,7 +72,6 @@ export default function PersonProfileEdit({ profile, onSaved }: Props) {
             await Promise.all([
                 axios.put(`/api/person/${profile.id}`, {
                     name: name.trim(),
-                    address: address.trim() || null,
                 }),
                 axios.patch(`/api/accountancy/ledgers/${profile.accountId}`, {
                     aliases: parseAliasInput(aliases),
@@ -173,15 +171,17 @@ export default function PersonProfileEdit({ profile, onSaved }: Props) {
                         placeholder="Alternate names to find this customer by"
                     />
                 </div>
-                <div className="space-y-1.5">
-                    <Label htmlFor="pe-address">Address</Label>
-                    <Input id="pe-address" value={address} onChange={e => setAddress(e.target.value)} placeholder="Address" />
-                </div>
                 {dirty && (
                     <Button size="sm" onClick={() => void saveBasic()} disabled={saving}>
                         {saving ? "Saving…" : "Save changes"}
                     </Button>
                 )}
+            </div>
+
+            {/* ── Addresses ── the main one is what bills print (Person.address). */}
+            <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Addresses</p>
+                <AddressBook apiBase={`/api/person/${profile.id}/addresses`} emptyText="No address added." onChanged={onSaved} />
             </div>
 
             {/* ── Phones ── */}

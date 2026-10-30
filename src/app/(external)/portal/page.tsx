@@ -6,6 +6,7 @@ import PortalPushCard from "@/modules/external/pwa/PortalPushCard";
 import {
     ArrowRight,
     Heart,
+    MapPin,
     Percent,
     ShoppingBag,
     Ticket,
@@ -39,6 +40,7 @@ export default async function PortalHomePage() {
                 <PortalCard href="/portal/wallet" icon={Wallet} title="My Wallet" desc="Check wallet balance and transactions." />
                 <PortalCard href="/portal/wishlist" icon={Heart} title="Wishlist" desc="Saved items ready to buy." />
                 <PortalCard href="/portal/profile" icon={UserRound} title="My Profile" desc="Photo, details, contacts and the profile you shop with." />
+                <PortalCard href="/portal/addresses" icon={MapPin} title="Addresses" desc="Where we deliver — add, edit, pick at checkout." />
             </section>
         </main>
     );

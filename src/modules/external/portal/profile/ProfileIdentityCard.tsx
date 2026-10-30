@@ -1,6 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import { Camera, Check, MapPin, Pencil, Trash2, X } from "lucide-react";
@@ -8,15 +10,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import UserAvatar from "@/shared/components/UserAvatar";
 import { extractApiError } from "@/shared/lib/api";
 import { uploadImageToCloudinary } from "@/shared/lib/uploadToCloudinary";
 import type { PortalProfile } from "@/shared/lib/portal/portalProfileTypes";
 import { usePortalAccountStore } from "@/store/external/portalAccountStore";
+import { APP } from "@/modules/external/shopApp/appPaths";
 
 /**
- * Who you are — photo, name, address. The photo is the customer's one profile
+ * Who you are — photo, name, main address (edited on the Addresses page). The photo is the customer's one profile
  * picture: it is also their Social DP. Edits are optimistic and roll back on
  * failure, so the page never blanks while saving.
  */
@@ -26,10 +28,11 @@ export default function ProfileIdentityCard({ profile }: { profile: PortalProfil
     const [uploading, setUploading] = useState(false);
     const [editing, setEditing] = useState(false);
     const [name, setName] = useState(profile.name);
-    const [address, setAddress] = useState(profile.address ?? "");
+    // The app has its own copy of every portal screen.
+    const addressesHref = usePathname().startsWith(APP) ? `${APP}/addresses` : "/portal/addresses";
     const [saving, setSaving] = useState(false);
 
-    async function patch(body: Partial<Pick<PortalProfile, "name" | "address" | "avatarUrl">>, okMessage: string) {
+    async function patch(body: Partial<Pick<PortalProfile, "name" | "avatarUrl">>, okMessage: string) {
         const before = profile;
         setProfile({ ...profile, ...body });
         try {
@@ -62,14 +65,13 @@ export default function ProfileIdentityCard({ profile }: { profile: PortalProfil
     async function saveDetails() {
         if (name.trim().length < 2) { toast.error("Enter your name"); return; }
         setSaving(true);
-        const ok = await patch({ name: name.trim(), address: address.trim() || null }, "Details saved");
+        const ok = await patch({ name: name.trim() }, "Details saved");
         setSaving(false);
         if (ok) setEditing(false);
     }
 
     function cancelEdit() {
         setName(profile.name);
-        setAddress(profile.address ?? "");
         setEditing(false);
     }
 
@@ -106,17 +108,13 @@ export default function ProfileIdentityCard({ profile }: { profile: PortalProfil
                         </button>
                     </div>
 
-                    {/* Name / address */}
+                    {/* Name / main address */}
                     <div className="min-w-0 flex-1 sm:pb-1">
                         {editing ? (
                             <div className="space-y-3">
                                 <div className="space-y-1.5">
                                     <Label htmlFor="profile-name">Your name</Label>
                                     <Input id="profile-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} autoFocus />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="profile-address">Address</Label>
-                                    <Textarea id="profile-address" value={address} onChange={(e) => setAddress(e.target.value)} rows={2} maxLength={500} placeholder="House / street, area, city, PIN" />
                                 </div>
                                 <div className="flex gap-2">
                                     <Button size="sm" onClick={() => void saveDetails()} disabled={saving}>
@@ -131,14 +129,14 @@ export default function ProfileIdentityCard({ profile }: { profile: PortalProfil
                             <div className="flex flex-wrap items-start justify-between gap-3">
                                 <div className="min-w-0">
                                     <h2 className="truncate text-xl font-semibold tracking-tight">{profile.name}</h2>
-                                    <p className="mt-1 flex items-start gap-1.5 text-sm text-muted-foreground">
+                                    <Link href={addressesHref} className="mt-1 flex items-start gap-1.5 text-sm text-muted-foreground hover:underline">
                                         <MapPin className="mt-0.5 size-3.5 shrink-0" />
                                         {profile.address ? (
                                             <span className="whitespace-pre-line">{profile.address}</span>
                                         ) : (
                                             <span className="italic">No address yet — add one for faster checkout.</span>
                                         )}
-                                    </p>
+                                    </Link>
                                     {profile.social ? (
                                         <p className="mt-1 text-xs text-muted-foreground">Social: @{profile.social.handle}</p>
                                     ) : null}

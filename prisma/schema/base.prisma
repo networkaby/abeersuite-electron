@@ -90,6 +90,7 @@ model Person {
   owner               Position?               @relation("PersonOwnerPosition", fields: [ownerPositionId], references: [id])
   phones              Phone[]
   emails              Email[]
+  addresses           PersonAddress[]
 
   // Neither the Person↔Company converter nor the duplicate merge (both at
   // /office/settings/customer-tools) leaves a trace here: the Account, contacts,
@@ -306,4 +307,41 @@ model Email {
   /// Backs the watermark pull: "anything since <ts>?" must not scan the table
   /// to answer no.
   @@index([updatedAt])
+}
+
+/// A customer's address book — Amazon-style. Staff add the first one in the
+/// office (it becomes `isPrimary`); the customer adds, edits and picks any of
+/// them on the portal and at checkout. `Person.address` stays the plain text
+/// that bills, prints and POS read: saving the primary row rewrites it, so
+/// nothing that reads it changes. One primary per person is enforced in code
+/// (shared/lib/address/personAddress.ts), not by an index — a replica could not
+/// carry a partial unique index.
+model PersonAddress {
+  id            Int       @id @default(autoincrement())
+  personId      Int
+  person        Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  /// "Home", "Office", "Shop" … — free text, optional.
+  label         String?
+  /// Who receives a parcel here; blank = the customer.
+  name          String?
+  phone         String?
+  line1         String
+  line2         String?
+  landmark      String?
+  locality      String?
+  /// Our local delivery coverage area (Settings → Local delivery), if any.
+  neighbourhood String?
+  city          String?
+  state         String?
+  pincode       String?
+  isPrimary     Boolean   @default(false)
+  /// Set when an order ships here — checkout opens on the latest one.
+  lastUsedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  /// See Phone.updatedAt — the counters sync edits on it.
+  updatedAt     DateTime  @default(now()) @updatedAt
+
+  @@index([personId])
+  @@index([updatedAt])
+  @@index([pincode])
 }

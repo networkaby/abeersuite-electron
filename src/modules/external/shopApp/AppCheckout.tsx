@@ -8,6 +8,7 @@ import { Check, CreditCard, HandCoins, Loader2, MapPin, Truck } from "lucide-rea
 import MobileHeader from "@/modules/mobile/components/MobileHeader";
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import PortalProfileSwitch from "@/modules/external/portal/PortalProfileSwitch";
+import CheckoutAddressPicker from "@/modules/external/shop/CheckoutAddressPicker";
 import { useShopCheckout } from "@/modules/external/shop/useShopCheckout";
 import { APP, appLoginPath } from "@/modules/external/shopApp/appPaths";
 import { INDIA_STATE_NAMES } from "@/modules/delivery/lib/deliveryMethodConfig";
@@ -101,6 +102,8 @@ export default function AppCheckout() {
                             </div>
                             <PortalProfileSwitch />
                         </section>
+                        <CheckoutAddressPicker c={c} />
+                        {c.addressOpen && (
                         <section className="grid grid-cols-2 gap-3">
                             <div className="col-span-2">
                                 <label className={label}>Full name</label>
@@ -183,6 +186,7 @@ export default function AppCheckout() {
                                 </select>
                             </div>
                         </section>
+                        )}
                     </>
                 )}
 

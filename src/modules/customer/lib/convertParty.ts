@@ -637,6 +637,14 @@ export async function mergeParty(
 
         await tx.phone.updateMany({ where: loserPhoneOwnerWhere, data: phoneMoveData });
         await tx.email.updateMany({ where: loserPhoneOwnerWhere, data: emailMoveData });
+        // The address book moves too; the winner keeps its own primary if it has one.
+        if (kind === "person") {
+            const winnerHasPrimaryAddress = await tx.personAddress.count({ where: { personId: winnerId, isPrimary: true } });
+            await tx.personAddress.updateMany({
+                where: { personId: loserId },
+                data: { personId: winnerId, ...(winnerHasPrimaryAddress > 0 ? { isPrimary: false } : {}) },
+            });
+        }
 
         // 3b. Guarantee at-most-one-primary per contact kind on the winner
         // after the move (fixes the case where loser had multiple primaries

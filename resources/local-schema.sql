@@ -955,6 +955,57 @@ ALTER TABLE "Email" ADD COLUMN IF NOT EXISTS "verifiedAt" TIMESTAMP(3);
 ALTER TABLE "Email" ALTER COLUMN "verifiedAt" DROP NOT NULL;
 
 -- CreateTable
+CREATE TABLE IF NOT EXISTS "PersonAddress" (
+    "id" SERIAL NOT NULL,
+    "personId" INTEGER NOT NULL,
+    "label" TEXT,
+    "name" TEXT,
+    "phone" TEXT,
+    "line1" TEXT NOT NULL,
+    "line2" TEXT,
+    "landmark" TEXT,
+    "locality" TEXT,
+    "neighbourhood" TEXT,
+    "city" TEXT,
+    "state" TEXT,
+    "pincode" TEXT,
+    "isPrimary" BOOLEAN NOT NULL DEFAULT false,
+    "lastUsedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PersonAddress_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "PersonAddress" ADD COLUMN IF NOT EXISTS "id" SERIAL NOT NULL;
+ALTER TABLE "PersonAddress" ADD COLUMN IF NOT EXISTS "personId" INTEGER NOT NULL;
+ALTER TABLE "PersonAddress" ADD COLUMN IF NOT EXISTS "label" TEXT;
+ALTER TABLE "PersonAddress" ALTER COLUMN "label" DROP NOT NULL;
+ALTER TABLE "PersonAddress" ADD COLUMN IF NOT EXISTS "name" TEXT;
+ALTER TABLE "PersonAddress" ALTER COLUMN "name" DROP NOT NULL;
+ALTER TABLE "PersonAddress" ADD COLUMN IF NOT EXISTS "phone" TEXT;
+ALTER TABLE "PersonAddress" ALTER COLUMN "phone" DROP NOT NULL;
+ALTER TABLE "PersonAddress" ADD COLUMN IF NOT EXISTS "line1" TEXT NOT NULL;
+ALTER TABLE "PersonAddress" ADD COLUMN IF NOT EXISTS "line2" TEXT;
+ALTER TABLE "PersonAddress" ALTER COLUMN "line2" DROP NOT NULL;
+ALTER TABLE "PersonAddress" ADD COLUMN IF NOT EXISTS "landmark" TEXT;
+ALTER TABLE "PersonAddress" ALTER COLUMN "landmark" DROP NOT NULL;
+ALTER TABLE "PersonAddress" ADD COLUMN IF NOT EXISTS "locality" TEXT;
+ALTER TABLE "PersonAddress" ALTER COLUMN "locality" DROP NOT NULL;
+ALTER TABLE "PersonAddress" ADD COLUMN IF NOT EXISTS "neighbourhood" TEXT;
+ALTER TABLE "PersonAddress" ALTER COLUMN "neighbourhood" DROP NOT NULL;
+ALTER TABLE "PersonAddress" ADD COLUMN IF NOT EXISTS "city" TEXT;
+ALTER TABLE "PersonAddress" ALTER COLUMN "city" DROP NOT NULL;
+ALTER TABLE "PersonAddress" ADD COLUMN IF NOT EXISTS "state" TEXT;
+ALTER TABLE "PersonAddress" ALTER COLUMN "state" DROP NOT NULL;
+ALTER TABLE "PersonAddress" ADD COLUMN IF NOT EXISTS "pincode" TEXT;
+ALTER TABLE "PersonAddress" ALTER COLUMN "pincode" DROP NOT NULL;
+ALTER TABLE "PersonAddress" ADD COLUMN IF NOT EXISTS "isPrimary" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "PersonAddress" ADD COLUMN IF NOT EXISTS "lastUsedAt" TIMESTAMP(3);
+ALTER TABLE "PersonAddress" ALTER COLUMN "lastUsedAt" DROP NOT NULL;
+ALTER TABLE "PersonAddress" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "PersonAddress" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- CreateTable
 CREATE TABLE IF NOT EXISTS "Call" (
     "id" SERIAL NOT NULL,
     "direction" "CallDirection" NOT NULL,
@@ -5617,6 +5668,15 @@ CREATE INDEX IF NOT EXISTS "Email_companyId_idx" ON "Email"("companyId");
 CREATE INDEX IF NOT EXISTS "Email_updatedAt_idx" ON "Email"("updatedAt");
 
 -- CreateIndex
+CREATE INDEX IF NOT EXISTS "PersonAddress_personId_idx" ON "PersonAddress"("personId");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "PersonAddress_updatedAt_idx" ON "PersonAddress"("updatedAt");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "PersonAddress_pincode_idx" ON "PersonAddress"("pincode");
+
+-- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "Call_raw_key" ON "Call"("raw");
 
 -- CreateIndex
@@ -6569,6 +6629,13 @@ END $$;
 -- AddForeignKey
 DO $$ BEGIN
     ALTER TABLE "Email" ADD CONSTRAINT "Email_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- AddForeignKey
+DO $$ BEGIN
+    ALTER TABLE "PersonAddress" ADD CONSTRAINT "PersonAddress_personId_fkey" FOREIGN KEY ("personId") REFERENCES "Person"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;

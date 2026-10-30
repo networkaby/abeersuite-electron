@@ -1,4 +1,4 @@
-import { Heart, LayoutDashboard, Percent, Receipt, ShoppingBag, Ticket, UserRound, Users, Wallet } from "lucide-react";
+import { Heart, LayoutDashboard, MapPin, Percent, Receipt, ShoppingBag, Ticket, UserRound, Users, Wallet } from "lucide-react";
 
 /** Every portal screen — the portal sidebar and the customer app's Account tab
  *  both list from here, so a new screen shows up in both. */
@@ -12,4 +12,5 @@ export const PORTAL_NAV_ITEMS = [
     { href: "/portal/wallet", label: "My Wallet", icon: Wallet },
     { href: "/portal/wishlist", label: "Wishlist", icon: Heart },
     { href: "/portal/profile", label: "My Profile", icon: UserRound },
+    { href: "/portal/addresses", label: "Addresses", icon: MapPin },
 ] as const;
