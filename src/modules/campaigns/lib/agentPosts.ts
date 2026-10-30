@@ -25,8 +25,12 @@ export function agentStatus(mode: GooglePostMode, parsed: "DRAFT" | "SCHEDULED",
     return mode === "DRAFT" || asked === "DRAFT" ? "DRAFT" : parsed;
 }
 
-/** What the agent may leave out of a post; the office editor always sends these. */
-const POST_DEFAULTS = { link: "", scheduledAt: null, googleType: "UPDATE", googleButton: null, campaignId: null, status: "DRAFT", variants: {} };
+/**
+ * What the agent may leave out of a post; the office editor always sends these.
+ * Status SCHEDULED by default: a timed agent post is scheduled unless it asks
+ * for a draft — agentStatus still keeps everything a draft in Draft mode.
+ */
+const POST_DEFAULTS = { link: "", scheduledAt: null, googleType: "UPDATE", googleButton: null, campaignId: null, status: "SCHEDULED", variants: {} };
 
 /**
  * Read the agent's post body against the office schema (`postSchema` /

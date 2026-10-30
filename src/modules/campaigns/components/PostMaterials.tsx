@@ -417,7 +417,7 @@ export default function PostMaterials({
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="post-when">Schedule time · empty = draft</Label>
+                <Label htmlFor="post-when">Schedule time · goes out once you press Schedule</Label>
                 <Input
                   id="post-when"
                   type="datetime-local"

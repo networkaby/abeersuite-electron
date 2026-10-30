@@ -482,7 +482,8 @@ export const postSchema = z
  * Store a post so plain queries still work: `scheduledAt` becomes the earliest
  * channel time (what the jobs, calendar and queue sort and filter on), each
  * channel keeps its own time only when it differs from that, a copy with nothing of its
- * own is dropped, copies for unticked channels go, and any time makes it SCHEDULED.
+ * own is dropped, copies for unticked channels go. SCHEDULED only when asked for
+ * and it has a time; otherwise DRAFT, times kept as the plan.
  */
 function normaliseVariants<T extends { channels: string[]; scheduledAt: Date | null; status: string; variants: Partial<Record<string, PostVariant>> }>(p: T): T {
     const timeOf = (c: string) => p.variants[c]?.scheduledAt ?? p.scheduledAt?.toISOString() ?? null;
@@ -496,7 +497,9 @@ function normaliseVariants<T extends { channels: string[]; scheduledAt: Date | n
         const own: PostVariant = { ...v, scheduledAt: t && new Date(t).getTime() !== first?.getTime() ? new Date(t).toISOString() : null };
         if (!variantEmpty(own)) variants[c] = own;
     }
-    return { ...p, scheduledAt: first, status: first ? "SCHEDULED" : "DRAFT", variants };
+    // A time alone never schedules (owner, 2026-10-30: "Save as draft" keeps the
+    // whole set to continue later): SCHEDULED only when asked for and timed.
+    return { ...p, scheduledAt: first, status: p.status === "SCHEDULED" && first ? "SCHEDULED" : "DRAFT", variants };
 }
 
 export type PostInput = z.input<typeof postSchema>;
