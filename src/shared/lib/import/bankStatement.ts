@@ -364,18 +364,24 @@ export function parseStatementGrid(grid: string[][]): ParsedStatement {
     // a computer generated statement…") and blank spacer rows fall away. A row
     // whose date is blank but sits between dated rows is a wrapped narration —
     // glue it to the previous row rather than lose the text.
+    // Wrapped text is held until the next dated row proves it sat between two —
+    // otherwise a footer of single-cell lines (Bandhan's disclaimer) lands on the last row.
     const dataRows: string[][] = [];
+    const narrCol = headers.findIndex((h) => mapping[h] === "narration");
+    let pending: string[] = [];
     for (let i = headerRowIndex + 1; i < clean.length; i++) {
         const cells = clean[i];
         if (cells.every((c) => c.trim() === "")) continue;
         const dated = dateCol >= 0 && parseStatementDate(cells[dateCol]) !== null;
-        if (dated) { dataRows.push(cells); continue; }
-        const prev = dataRows[dataRows.length - 1];
-        const nonEmpty = cells.filter((c) => c.trim() !== "");
-        if (prev && nonEmpty.length === 1 && i < clean.length - 1) {
-            const narrCol = headers.findIndex((h) => mapping[h] === "narration");
-            if (narrCol >= 0) prev[narrCol] = `${prev[narrCol] ?? ""} ${nonEmpty[0].trim()}`.trim();
+        if (dated) {
+            const prev = dataRows[dataRows.length - 1];
+            if (prev && narrCol >= 0 && pending.length) prev[narrCol] = [prev[narrCol] ?? "", ...pending].join(" ").trim();
+            pending = [];
+            dataRows.push(cells);
+            continue;
         }
+        const nonEmpty = cells.filter((c) => c.trim() !== "");
+        if (dataRows.length && nonEmpty.length === 1) pending.push(nonEmpty[0].trim());
     }
 
     const meta = extractStatementMeta(clean.slice(0, headerRowIndex));
