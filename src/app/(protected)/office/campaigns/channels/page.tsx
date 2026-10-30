@@ -1,17 +1,25 @@
 import { Cable } from "lucide-react";
-import PlannedPage from "@/modules/campaigns/components/PlannedPage";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import CampaignsHeader from "@/modules/campaigns/components/CampaignsHeader";
 import GoogleChannelCard from "@/modules/campaigns/components/GoogleChannelCard";
 import FacebookChannelCard from "@/modules/campaigns/components/FacebookChannelCard";
-import { PLANNED_PAGES } from "@/modules/campaigns/lib/plannedPages";
+import WhatsAppChannelCard from "@/modules/campaigns/components/WhatsAppChannelCard";
 
-const page = PLANNED_PAGES.channels;
-export const metadata = { title: page.title };
+export const metadata = { title: "Channels" };
 
 export default function CampaignsChannelsPage() {
     return (
-        <PlannedPage icon={Cable} {...page}>
-            <GoogleChannelCard />
-            <FacebookChannelCard />
-        </PlannedPage>
+        <ScrollArea className="h-full" type="always">
+            <div className="mx-auto max-w-5xl space-y-4 px-6 pt-4 pb-10">
+                <CampaignsHeader
+                    icon={Cable}
+                    title="Channels"
+                    description="Connect each account once. Connected channels post by themselves; the rest are shared by hand."
+                />
+                <GoogleChannelCard />
+                <FacebookChannelCard />
+                <WhatsAppChannelCard />
+            </div>
+        </ScrollArea>
     );
 }

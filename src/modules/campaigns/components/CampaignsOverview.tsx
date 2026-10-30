@@ -10,14 +10,14 @@ import CampaignsHeader from "./CampaignsHeader";
 
 /** Where each part of Campaigns lives — the map of the module, live parts first. */
 const AREAS = [
-    { title: "Posts", text: "WhatsApp Channel, Google Business Profile, Status — write once, share each.", href: "/office/campaigns/posts", live: true },
+    { title: "Posts", text: "Google, Facebook, Instagram, WhatsApp Channel and Status — write once, share each.", href: "/office/campaigns/posts", live: true },
     { title: "Campaigns", text: "An offer or greeting with a coupon, sent as an app notification.", href: "/office/campaigns", live: true },
     { title: "Broadcast", text: "App, WhatsApp, SMS and email to each customer.", href: "/office/campaigns/broadcast", live: false },
     { title: "Newsletter", text: "Email to subscribers.", href: "/office/campaigns/newsletter", live: false },
     { title: "Automations", text: "Review requests, birthdays, win-back and more.", href: "/office/campaigns/automations", live: false },
     { title: "Segments & Consent", text: "Who gets what, and who said no.", href: "/office/campaigns/segments", live: false },
     { title: "Reports", text: "What each channel brought in.", href: "/office/campaigns/reports", live: false },
-    { title: "Channels", text: "Accounts, approvals, queue slots.", href: "/office/campaigns/channels", live: false },
+    { title: "Channels", text: "Connect Google and Facebook / Instagram.", href: "/office/campaigns/channels", live: true },
 ];
 
 /** The module's front page: what needs sharing now, what is coming, and the map. */

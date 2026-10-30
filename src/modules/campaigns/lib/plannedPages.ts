@@ -130,24 +130,4 @@ export const PLANNED_PAGES: Record<string, { title: string; description: string;
             ] },
         ],
     },
-    channels: {
-        title: "Channels",
-        description: "Connect each account once. Auto channels post by themselves; the rest are shared by hand.",
-        sections: [
-            { heading: "Posting", rows: [
-                { title: "WhatsApp Channel", sub: "No API — share from an admin's phone", right: "Working" },
-                { title: "Google Business Profile", sub: "Posts by itself once connected above", right: "Working" },
-                { title: "WhatsApp Status", sub: "Company phone, after Meta's coexistence approval", right: "Waiting on Meta" },
-                { title: "Facebook Page feed", sub: "Posts by itself once connected above", right: "Working" },
-                { title: "Instagram", sub: "Posts by itself through the Facebook connection above (linked business account)", right: "Working" },
-                { title: "Threads, YouTube Shorts, Telegram", right: "Later" },
-            ] },
-            { heading: "Settings", rows: [
-                { title: "Queue slots", sub: "Mon–Sat 10:00 am and 6:00 pm" },
-                { title: "Who approves broadcasts", sub: "Owner" },
-                { title: "Bill line and counter display", sub: "Show a campaign's offer on bills and the DQ11 screen" },
-                { title: "Ad tracking", sub: "Meta Pixel / Conversions API, Google tag, store sales" },
-            ] },
-        ],
-    },
 };
