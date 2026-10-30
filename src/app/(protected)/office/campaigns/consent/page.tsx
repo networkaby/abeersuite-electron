@@ -1,10 +1,7 @@
-import { BellOff } from "lucide-react";
-import PlannedPage from "@/modules/campaigns/components/PlannedPage";
-import { PLANNED_PAGES } from "@/modules/campaigns/lib/plannedPages";
+import CampaignsConsent from "@/modules/campaigns/components/CampaignsConsent";
 
-const page = PLANNED_PAGES.consent;
-export const metadata = { title: page.title };
+export const metadata = { title: "Consent" };
 
 export default function CampaignsConsentPage() {
-    return <PlannedPage icon={BellOff} {...page} />;
+    return <CampaignsConsent />;
 }

@@ -206,6 +206,7 @@ export const PERMISSION_CATALOG: PermissionSeed[] = [
     { id: "campaigns:send", label: "Send campaigns", module: "campaigns", description: "Send a campaign to customers (app notification now, WhatsApp later). Writing and saving drafts rides the Campaigns sidebar link." },
     { id: "campaigns:google:connect", label: "Connect Google Business Profile", module: "campaigns", description: "Connect, change or disconnect the shop's Google Business Profile on Campaigns → Channels, so posts go to Google by themselves." },
     { id: "campaigns:facebook:connect", label: "Connect Facebook Page / Instagram", module: "campaigns", description: "Connect, change or disconnect the shop's Facebook Page (and the Instagram business account linked to it) on Campaigns → Channels, so posts go to Facebook and Instagram by themselves." },
+    { id: "campaigns:consent:edit", label: "Re-subscribe an email", module: "campaigns", description: "On Campaigns → Consent, take an address off the email unsubscribe list — only when the customer asks to get offer emails again." },
 
 
     // repair — the ticket resource (All Repair list + ticket page). View rides the

@@ -95,21 +95,4 @@ export const PLANNED_PAGES: Record<string, { title: string; description: string;
             ] },
         ],
     },
-    consent: {
-        title: "Consent",
-        description: "Each customer's yes or no per channel, opt-outs, quiet hours and how often we may message.",
-        sections: [
-            { heading: "Per customer", note: "Kept as a record (DPDP Act 2023)", rows: [
-                { title: "WhatsApp offers", sub: "Opted out by replying STOP", right: "No" },
-                { title: "Email offers", sub: "Unsubscribe link", right: "Yes" },
-                { title: "SMS offers", sub: "National DND list checked", right: "—" },
-                { title: "App notifications", sub: "Phone setting", right: "Yes" },
-            ] },
-            { heading: "Rules", rows: [
-                { title: "Quiet hours", sub: "No marketing 9 pm – 9 am", right: "On" },
-                { title: "Weekly cap", sub: "At most [N] marketing messages per customer", right: "[N]" },
-                { title: "Bills and service messages", sub: "Always allowed — they are not marketing" },
-            ] },
-        ],
-    },
 };

@@ -150,6 +150,7 @@ export const PERMISSIONS = {
     CAMPAIGNS_SEND: "campaigns:send",
     CAMPAIGNS_GOOGLE_CONNECT: "campaigns:google:connect",
     CAMPAIGNS_FACEBOOK_CONNECT: "campaigns:facebook:connect",
+    CAMPAIGNS_CONSENT_EDIT: "campaigns:consent:edit",
     // Gate for the "More +" quick action (opens the all-create-actions dialog).
     // Behaves like a create action — its own tick in the role's Quick Actions.
     QUICK_ACTIONS_MORE: "quick-actions:more",

@@ -40,3 +40,9 @@ export const requireFacebookStatus = () =>
 
 /** Connecting, picking the page and disconnecting Facebook — its own tick. */
 export const requireFacebookConnect = () => requirePermission(PERMISSIONS.CAMPAIGNS_FACEBOOK_CONNECT);
+
+/** Reading the Consent page: its own sidebar tick. */
+export const requireConsentPage = () => requireAnyPermission(sidebarChildPermissionId("campaigns", "consent"));
+
+/** Taking an address off the email unsubscribe list — its own tick. */
+export const requireConsentEdit = () => requirePermission(PERMISSIONS.CAMPAIGNS_CONSENT_EDIT);
