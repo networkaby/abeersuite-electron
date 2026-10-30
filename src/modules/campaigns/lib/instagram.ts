@@ -30,7 +30,18 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const VIDEO_WAIT_MS = 90_000;
 
 type Item = { key: string; type: string; size: number };
-type PostForInstagram = { caption: string; link: string | null; mediaKey: string | null; mediaType: string | null; mediaSize?: number | null; photos?: Item[] };
+type PostForInstagram = {
+    caption: string;
+    link: string | null;
+    mediaKey: string | null;
+    mediaType: string | null;
+    mediaSize?: number | null;
+    photos?: Item[];
+    /** Reel cover: ms into the video. */
+    coverMs?: number | null;
+    /** Photos' description (alt text). */
+    alt?: string | null;
+};
 
 const itemsOf = (p: PostForInstagram): Item[] =>
     p.photos?.length ? p.photos : p.mediaKey && p.mediaType ? [{ key: p.mediaKey, type: p.mediaType, size: p.mediaSize ?? 0 }] : [];
@@ -86,11 +97,17 @@ export async function postToInstagram(p: PostForInstagram): Promise<string | nul
     return guarded(async () => {
         if (items.length === 1) {
             const [one] = items;
-            const id = await container(igUserId, token, one, one.type.startsWith("video/") ? { media_type: "REELS", caption } : { caption });
+            const id = await container(igUserId, token, one, one.type.startsWith("video/") ? { media_type: "REELS", caption } : { caption, ...(p.alt ? { alt_text: p.alt } : {}) });
             return publish(igUserId, token, id);
         }
         const children: string[] = [];
-        for (const f of items) children.push(await container(igUserId, token, f, { is_carousel_item: "true", ...(f.type.startsWith("video/") ? { media_type: "VIDEO" } : {}) }));
+        for (const f of items)
+            children.push(
+                await container(igUserId, token, f, {
+                    is_carousel_item: "true",
+                    ...(f.type.startsWith("video/") ? { media_type: "VIDEO" } : p.alt ? { alt_text: p.alt } : {}),
+                }),
+            );
         const parent = await graph<{ id: string }>(`/${igUserId}/media`, {
             method: "POST",
             params: { media_type: "CAROUSEL", children: children.join(","), caption, access_token: token },
@@ -133,7 +150,18 @@ export async function postReelToInstagram(p: PostForInstagram): Promise<string |
     const { token, igUserId } = await account();
     const caption = channelText("INSTAGRAM_REEL", p.caption, p.link, COMPANY_DETAILS.sites.shop);
     const [video] = itemsOf(p);
-    return guarded(async () => publish(igUserId, token, await container(igUserId, token, video, { media_type: "REELS", caption, share_to_feed: "true" })));
+    return guarded(async () =>
+        publish(
+            igUserId,
+            token,
+            await container(igUserId, token, video, {
+                media_type: "REELS",
+                caption,
+                share_to_feed: "true",
+                ...(p.coverMs != null ? { thumb_offset: String(p.coverMs) } : {}),
+            }),
+        ),
+    );
 }
 
 async function waitUntilProcessed(containerId: string, token: string) {

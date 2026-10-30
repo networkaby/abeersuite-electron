@@ -326,6 +326,24 @@ export type PostVariant = {
     hashtags?: string | null;
     /** WhatsApp Status with no photo: the text status's background (STATUS_BACKGROUNDS). */
     background?: string | null;
+    /** Instagram reel: the moment (ms into the video) its cover picture is taken from. */
+    coverMs?: number | null;
+    /** Facebook / Instagram feed: the photos' description for people using screen readers. */
+    alt?: string | null;
+};
+
+/**
+ * What a video may run to on each channel (seconds) — shown as a warning on
+ * the card (the browser reads the length; the server cannot). Reels under 3 s
+ * are refused; past the top they are not shown as reels; stories past 60 s
+ * are refused or cut, as WhatsApp cuts a long status.
+ */
+export const VIDEO_SECONDS: Record<string, [number, number]> = {
+    FACEBOOK_REEL: [3, 90],
+    INSTAGRAM_REEL: [3, 90],
+    FACEBOOK_STORY: [1, 60],
+    INSTAGRAM_STORY: [1, 60],
+    WA_STATUS: [1, 60],
 };
 
 /** WhatsApp's text-status colours (a few of its own), for a Status with no photo. */
@@ -334,7 +352,7 @@ export const STATUS_BACKGROUNDS = ["#0b8a5f", "#1f6feb", "#7c3aed", "#d9480f", "
 /** A copy with nothing of its own — the channel just follows Master, so it needs no entry. */
 export const variantEmpty = (v: Partial<PostVariant> | null | undefined) =>
     !v ||
-    ((v.caption ?? null) === null && (v.scheduledAt ?? null) === null && (v.photos ?? null) === null && (v.hashtags ?? null) === null && (v.background ?? null) === null);
+    ((v.caption ?? null) === null && (v.scheduledAt ?? null) === null && (v.photos ?? null) === null && (v.hashtags ?? null) === null && (v.background ?? null) === null && (v.coverMs ?? null) === null && (v.alt ?? null) === null);
 
 /** The hashtags that go out on a channel: its own when it has them, else Master's. */
 export const channelHashtags = (p: { hashtags?: string | null; variants: unknown }, channel: string) => {
@@ -408,6 +426,8 @@ const variantSchema = z.object({
     // "" = no hashtags on this channel; null = Master's.
     hashtags: z.string().trim().max(500).nullable().default(null),
     background: z.string().regex(/^#[0-9a-f]{6}$/i).nullable().default(null),
+    coverMs: z.number().int().min(0).max(15 * 60_000).nullable().default(null),
+    alt: z.string().trim().max(1000).nullable().default(null),
 });
 
 export const postSchema = z
@@ -471,7 +491,7 @@ function normaliseVariants<T extends { channels: string[]; scheduledAt: Date | n
     const variants: Record<string, PostVariant> = {};
     for (const c of p.channels) {
         // A channel following the main time keeps it even when another copy is earlier.
-        const v = p.variants[c] ?? { caption: null, scheduledAt: null, photos: null, hashtags: null, background: null };
+        const v = p.variants[c] ?? { caption: null, scheduledAt: null, photos: null, hashtags: null, background: null, coverMs: null, alt: null };
         const t = timeOf(c);
         const own: PostVariant = { ...v, scheduledAt: t && new Date(t).getTime() !== first?.getTime() ? new Date(t).toISOString() : null };
         if (!variantEmpty(own)) variants[c] = own;

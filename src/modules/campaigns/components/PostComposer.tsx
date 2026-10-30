@@ -40,7 +40,7 @@ const fromRow = (p: PostRow): Form => ({
     campaignId: p.campaignId,
     status: p.status === "SCHEDULED" ? "SCHEDULED" : "DRAFT",
     variants: Object.fromEntries(
-        Object.entries(p.variants).flatMap(([c, v]) => (v ? [[c, { caption: v.caption, scheduledAt: v.scheduledAt ? toLocalInput(v.scheduledAt) : null, photos: v.photos, hashtags: v.hashtags ?? null, background: v.background ?? null }]] : [])),
+        Object.entries(p.variants).flatMap(([c, v]) => (v ? [[c, { caption: v.caption, scheduledAt: v.scheduledAt ? toLocalInput(v.scheduledAt) : null, photos: v.photos, hashtags: v.hashtags ?? null, background: v.background ?? null, coverMs: v.coverMs ?? null, alt: v.alt ?? null }]] : [])),
     ),
 });
 
@@ -175,7 +175,7 @@ export default function PostComposer({
         const variants = Object.fromEntries(
             Object.entries(form.variants)
                 .filter(([c]) => (form.channels as string[]).includes(c))
-                .map(([c, v]) => [c, { caption: v.caption?.trim() || null, scheduledAt: iso(v.scheduledAt), photos: v.photos, hashtags: v.hashtags === null || v.hashtags === undefined ? null : v.hashtags.trim(), background: v.background ?? null }]),
+                .map(([c, v]) => [c, { caption: v.caption?.trim() || null, scheduledAt: iso(v.scheduledAt), photos: v.photos, hashtags: v.hashtags === null || v.hashtags === undefined ? null : v.hashtags.trim(), background: v.background ?? null, coverMs: v.coverMs ?? null, alt: v.alt?.trim() || null }]),
         );
         const body = {
             ...form,
@@ -336,14 +336,19 @@ export default function PostComposer({
                                     return { ...f, variants };
                                 })
                             }
-                            foot={<section className="rounded-xl border bg-card p-4 text-card-foreground shadow-sm">
-                            <div className="flex flex-wrap justify-between gap-2">
-                                <div>
+                            foot={<section className="sticky bottom-2 z-20 rounded-xl border bg-card/95 px-4 py-3 text-card-foreground shadow-lg backdrop-blur">
+                            {/* Always in reach, however long the page (owner, 2026-10-30). */}
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-3">
                                     {post && (
                                         <Button variant="ghost" className="text-destructive" onClick={remove}>
                                             <Trash2 className="mr-1.5 h-4 w-4" /> Delete
                                         </Button>
                                     )}
+                                    <span className="text-xs text-muted-foreground">
+                                        {form.channels.length} platform{form.channels.length === 1 ? "" : "s"} ·{" "}
+                                        {timed ? "goes out at its time" : "draft — no time yet"}
+                                    </span>
                                 </div>
                                 <Button onClick={save} disabled={!!saving}>
                                     {saving || (timed ? "Save & schedule" : "Save")}

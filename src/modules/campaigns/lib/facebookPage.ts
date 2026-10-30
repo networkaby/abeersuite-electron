@@ -227,6 +227,8 @@ type PostForFacebook = {
     mediaSize?: number | null;
     /** Every photo this channel's copy has; 2–10 photos go out as one post. */
     photos?: { key: string; type: string; size: number }[];
+    /** Photos' description (alt text). */
+    alt?: string | null;
 };
 
 /**
@@ -251,7 +253,10 @@ export async function postToFacebook(p: PostForFacebook): Promise<string | null>
         for (const f of many.slice(0, FACEBOOK_PHOTOS_MAX)) {
             const url = mediaLink(f.key);
             if (!url) throw new FacebookError("File storage (R2) is not set up on this server, so Facebook cannot fetch the photos.");
-            const up = await graph<{ id: string }>(`/${pageId}/photos`, { method: "POST", params: { url, published: "false", access_token: token } });
+            const up = await graph<{ id: string }>(`/${pageId}/photos`, {
+                method: "POST",
+                params: { url, published: "false", ...(p.alt ? { alt_text_custom: p.alt } : {}), access_token: token },
+            });
             ids.push(up.id);
         }
         call = {
@@ -263,7 +268,7 @@ export async function postToFacebook(p: PostForFacebook): Promise<string | null>
         if (!url) throw new FacebookError("File storage (R2) is not set up on this server, so Facebook cannot fetch the photo.");
         call = p.mediaType?.startsWith("video/")
             ? { path: `/${pageId}/videos`, params: { file_url: url, description: text } }
-            : { path: `/${pageId}/photos`, params: { url, caption: text } };
+            : { path: `/${pageId}/photos`, params: { url, caption: text, ...(p.alt ? { alt_text_custom: p.alt } : {}) } };
     } else {
         // A text post: the link field gives the shop page its preview card.
         call = { path: `/${pageId}/feed`, params: { message: text, ...(p.link ? { link: `${shop}${p.link}` } : {}) } };

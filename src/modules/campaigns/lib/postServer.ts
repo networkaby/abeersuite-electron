@@ -6,7 +6,7 @@ import { R2_MESSAGES_BUCKET } from "@/shared/lib/constants/whatsapp";
 import { isR2Configured, putR2 } from "@/shared/lib/storage/r2";
 import { buildUrl, isCloudinaryUrl } from "@/shared/lib/cloudinaryImage";
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
-import { POST_SELECT, channelPost, checkPostMedia, pendingChannels, postPhotos, type PostPhoto, type PostVariants } from "@/modules/campaigns/lib/post";
+import { POST_SELECT, channelPost, variantOf, checkPostMedia, pendingChannels, postPhotos, type PostPhoto, type PostVariants } from "@/modules/campaigns/lib/post";
 import { PHONE_POST_CHANNELS } from "@/modules/mobile/lib/mobilePosts";
 
 /**
@@ -93,7 +93,17 @@ export const COPY_SELECT = {
 export function asChannelCopy<T extends Parameters<typeof channelPost>[0]>(post: T, channel: string): T {
     const cp = channelPost(post, channel);
     const photo = cp.photos[0] ?? null;
-    return { ...post, caption: cp.caption, mediaKey: photo?.key ?? null, mediaType: photo?.type ?? null, mediaSize: photo?.size ?? null, photos: cp.photos };
+    const v = variantOf(post, channel);
+    return {
+        ...post,
+        caption: cp.caption,
+        mediaKey: photo?.key ?? null,
+        mediaType: photo?.type ?? null,
+        mediaSize: photo?.size ?? null,
+        photos: cp.photos,
+        coverMs: v?.coverMs ?? null,
+        alt: v?.alt ?? null,
+    };
 }
 
 /** Has this channel's own time come? A copy may run later than the post's first time. */

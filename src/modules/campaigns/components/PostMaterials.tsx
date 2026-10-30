@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useObjectUrls } from "@/shared/hooks";
 import axios from "axios";
 import { toast } from "sonner";
@@ -155,6 +155,18 @@ export default function PostMaterials({
       setBusy(false);
     }
   }
+
+  // Photos chosen before the page finished loading never reached `add` (the
+  // box was there, its handler not yet) — pick them up once it is ready.
+  useEffect(() => {
+    const box = input.current;
+    if (box?.files?.length) {
+      void add(box.files);
+      box.value = "";
+    }
+    // Once, on the first ready render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function removeAt(i: number) {
     if (!post) return onPending(pending.filter((_, j) => j !== i));

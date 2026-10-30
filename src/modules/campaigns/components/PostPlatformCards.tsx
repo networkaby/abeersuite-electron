@@ -29,6 +29,7 @@ import {
   ratioFits,
   withHashtags,
   hasPhoneNumber,
+  VIDEO_SECONDS,
   STATUS_BACKGROUNDS,
   HASHTAG_BEST,
   HASHTAG_CHANNELS,
@@ -55,6 +56,10 @@ export type CopyForm = {
   hashtags?: string | null;
   /** WhatsApp text status background. */
   background?: string | null;
+  /** Instagram reel cover moment, ms. */
+  coverMs?: number | null;
+  /** Photo description (alt text), Facebook / Instagram feed. */
+  alt?: string | null;
 };
 
 /** Cards in the order people look at them: the networks that post by themselves first. */
@@ -146,6 +151,10 @@ export default function PostPlatformCards({
   foot?: React.ReactNode;
 }) {
   const [fitting, setFitting] = useState<string | null>(null);
+  // Which card has its photo list open (Pick); closed cards show only what they use.
+  const [picking, setPicking] = useState<string | null>(null);
+  // Each card's first video, as its preview shows it — for the length / shape checks and the reel cover.
+  const videoOf: Record<string, string | null> = {};
   // The platform whose card is in view — the preview beside the cards shows that one only.
   const [active, setActive] = useState<string | null>(null);
   const cardEls = useRef(new Map<string, HTMLElement>());
@@ -321,6 +330,7 @@ export default function PostPlatformCards({
           // Only what this platform carries: no photos in a reel, no videos on Google.
           const usable = media.filter((m) => (m.video ? CHANNEL_MEDIA[c] !== "photo" : CHANNEL_MEDIA[c] !== "video"));
           const shown = sendsAll ? usable : usable.slice(0, 1);
+          videoOf[c] = shown.find((m) => m.video)?.src ?? null;
           previews.push({
             channel: c,
             label: ch.label,
@@ -449,7 +459,23 @@ export default function PostPlatformCards({
                         remove it and pick the Call now button.
                       </p>
                     )}
-                    {c === "WA_STATUS" && !(post ? picked.length : preShown.length || cardSrc(c)) && (
+                    {videoOf[c] && <VideoCheck src={videoOf[c]!} channel={c} ratio={spec.ratio} />}
+                  {c === "INSTAGRAM_REEL" && videoOf[c] && (
+                    <CoverPick src={videoOf[c]!} value={copy?.coverMs ?? null} onChange={(ms) => set({ coverMs: ms })} />
+                  )}
+                  {(c === "FACEBOOK" || c === "INSTAGRAM") && (
+                    <div className="space-y-1">
+                      <span className="text-sm font-semibold">Photo description</span>
+                      <Input
+                        value={copy?.alt ?? ""}
+                        maxLength={1000}
+                        placeholder="e.g. CP Plus 4-camera CCTV kit on the shop counter"
+                        onChange={(e) => set({ alt: e.target.value || null })}
+                      />
+                      <p className="text-xs text-foreground/70">Read out to people who cannot see the photo; also helps the post show up. Used for every photo here.</p>
+                    </div>
+                  )}
+                  {c === "WA_STATUS" && !(post ? picked.length : preShown.length || cardSrc(c)) && (
                     <div className="space-y-1">
                       <span className="text-sm font-semibold">Text status colour</span>
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -552,6 +578,17 @@ export default function PostPlatformCards({
                     }}
                     extra={
                       <>
+                        {(post ? originals.length : usablePending.length) > 1 && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={picking === c ? "secondary" : "ghost"}
+                            className="h-6 px-2 text-xs"
+                            onClick={() => setPicking(picking === c ? null : c)}
+                          >
+                            {picking === c ? "Done" : "Pick"}
+                          </Button>
+                        )}
                         {adjustFrom && (
                           <Button
                             type="button"
@@ -641,6 +678,7 @@ export default function PostPlatformCards({
                                 : [],
                             );
                         const count = tiles.filter((t) => t.at >= 0).length;
+                        const shownTiles = picking === c ? tiles : tiles.filter((t) => t.at >= 0);
                         const full = spec.photosMax > 1 && count >= spec.photosMax;
                         if (!tiles.length && (CHANNEL_MEDIA[c] === "video" || !(!post && previewSrc)))
                           return (
@@ -656,7 +694,7 @@ export default function PostPlatformCards({
                         return (
                           <div className="space-y-1">
                             <div className="flex flex-wrap gap-1.5">
-                              {tiles.map((t) => {
+                              {shownTiles.map((t) => {
                                 const sel = t.at >= 0;
                                 return (
                                   <button
@@ -966,6 +1004,85 @@ function WaFormatBar({ target, onChange }: { target: string; onChange: (value: s
         </button>
       ))}
       <span className="text-[11px] text-foreground/60">WhatsApp formatting</span>
+    </div>
+  );
+}
+
+/**
+ * What the browser can read of a video — length and shape — against what the
+ * channel takes (VIDEO_SECONDS, its ratio). Warnings only: the server cannot
+ * read a video's length, so Facebook / Instagram would refuse it at posting.
+ */
+function VideoCheck({ src, channel, ratio }: { src: string; channel: string; ratio: [number, number] }) {
+  const [meta, setMeta] = useState<{ s: number; w: number; h: number } | null>(null);
+  const range = VIDEO_SECONDS[channel];
+  const notes: string[] = [];
+  if (meta && range) {
+    if (meta.s < range[0]) notes.push(`The video is ${meta.s.toFixed(1)} s — at least ${range[0]} s is needed here.`);
+    if (meta.s > range[1]) notes.push(`The video is ${Math.round(meta.s)} s — keep it to ${range[1]} s here, or it is refused or cut.`);
+  }
+  if (meta && meta.w && meta.h && Math.abs(meta.w / meta.h / (ratio[0] / ratio[1]) - 1) > 0.06)
+    notes.push(`The video is ${meta.w}×${meta.h}, not ${ratio.join(":")} — it shows with bars or cropped.`);
+  return (
+    <>
+      <video
+        src={src}
+        preload="metadata"
+        muted
+        className="hidden"
+        onLoadedMetadata={(e) => setMeta({ s: e.currentTarget.duration, w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight })}
+      />
+      {meta && (
+        <p className={`text-xs ${notes.length ? "font-medium text-amber-700" : "text-foreground/70"}`}>
+          {notes.length ? notes.join(" ") : `Video ${Math.round(meta.s)} s · ${meta.w}×${meta.h} — fine here.`}
+        </p>
+      )}
+    </>
+  );
+}
+
+/**
+ * The Instagram reel's cover picture: a frame of the video, picked with the
+ * slider (Instagram's thumb_offset). Untouched, Instagram picks one itself.
+ */
+function CoverPick({ src, value, onChange }: { src: string; value: number | null; onChange: (ms: number | null) => void }) {
+  const [length, setLength] = useState(0);
+  const ms = value ?? 0;
+  return (
+    <div className="space-y-1">
+      <span className="text-sm font-semibold">Cover picture</span>
+      <div className="flex items-center gap-3">
+        <video
+          src={`${src}#t=${ms / 1000}`}
+          key={ms}
+          preload="metadata"
+          muted
+          playsInline
+          className="h-28 shrink-0 rounded-md border bg-black object-cover"
+          style={{ aspectRatio: "9 / 16" }}
+          onLoadedMetadata={(e) => setLength(e.currentTarget.duration)}
+        />
+        <div className="min-w-0 flex-1 space-y-1">
+          <input
+            type="range"
+            min={0}
+            max={Math.max(0, Math.floor(length * 1000))}
+            step={100}
+            value={ms}
+            onChange={(e) => onChange(Number(e.target.value))}
+            className="w-full"
+            aria-label="Cover moment"
+          />
+          <p className="text-xs text-foreground/70">
+            {value == null ? "Instagram picks the cover itself — slide to choose a moment." : `Cover from ${(ms / 1000).toFixed(1)} s.`}
+            {value != null && (
+              <button type="button" className="ml-2 underline" onClick={() => onChange(null)}>
+                Let Instagram pick
+              </button>
+            )}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
