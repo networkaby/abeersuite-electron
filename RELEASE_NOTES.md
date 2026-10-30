@@ -1,34 +1,30 @@
-# v1.16.18
+# v1.16.19 [urgent]
 
-An office and marketing update. Counters can take it whenever they are free — billing on the counter does not change. The new database tables are office-only, so a counter's sync does not pause for this one.
+An office and marketing update that every counter must take today. This version adds one new database column (hashtags on social posts). Counters sync that table, so each counter must update **before** the office site goes live with it. Until a counter updates, its sync pauses. Billing on the counter itself does not change.
 
-## Google reviews
+## Social posts
 
-- New **Reviews** page in the office: see the shop's Google reviews and reply to them without leaving AbeerSuite.
-- A posted reply is locked — press **Edit** to change it or remove it, so a reply is never changed by a stray click.
-- A review no longer opens a ticket on its own; the reviewer is not treated as a contact or a lead.
+- The post editor now has a Master block plus one card per platform. Each platform keeps its own text, photos and hashtags. Switching a platform off no longer loses its copy.
+- A preview next to the editor shows exactly what Google, Facebook, Instagram and WhatsApp will each receive.
+- Facebook Page feed, story and reel each have their own channel. You can post several photos at once and make several stories from one post.
+- Instagram supports feed carousels, stories and reels, with a reel cover and alt text.
+- WhatsApp Channel and Status support photo albums, text formatting and text-only status.
+- Each platform can have its own photo crop, and each platform shows only the media it can carry. Videos are checked before saving.
+- Hashtags are typed once and get added on Instagram and Facebook.
+- **Save as draft** and **Schedule** are now two separate buttons, and the Save button shows when it is uploading or fitting photos.
 
-## Campaigns and posts
+## Campaigns
 
-- A post can now go to the shop's **Facebook Page** and **Instagram** by itself. Connect them once from the Channels screen with the Facebook login.
-- Each channel can get its own copy of a post — its own text, its own time and its own photos — so Google, Facebook and Instagram each get a version that suits them.
+- The Channels page shows only the connections that really exist.
+- The Reports page shows real numbers.
+- The Consent page shows real customer opt-outs.
 
-## WhatsApp and messages
+## Bank reconciliation
 
-- **Mark Spam** now blocks the number at WhatsApp as well, and **Not Spam** unblocks it. Spam is marked once per number across calls and messages, and its files are not kept.
-- Messages from suppliers no longer land in the customer inbox.
-- A double click, or two staff pressing at the same time, no longer raises two tickets for one chat.
+- The statement upload opens as a small drop zone, and the Uploads list folds to one line.
+- If a bank's statement layout hides the account number, you can pick or type the cell yourself (Bandhan CSV is now read correctly).
+- The From date follows the selected ledger's lock date.
 
-## Customers and contacts
+## Messages
 
-- Phone numbers and emails typed in by staff are treated as verified.
-- In the customer app, a customer's own new mobile or email is saved only after they confirm it with an OTP.
-- Customers opening a bill or receipt link now see a clean, app-like view that also reads well on a computer.
-
-## Printing
-
-- A4 bills shrink to fit a phone screen when viewed, and still print at true A4 size on paper.
-
-## Settings
-
-- New **Incoming API** page lists the key of every outside service that talks to AbeerSuite, in one place.
+- Close now shows on every chat and also clears the popup after the 2-hour timeout.
