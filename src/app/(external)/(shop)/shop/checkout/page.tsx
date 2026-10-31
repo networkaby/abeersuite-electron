@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { INDIA_STATE_NAMES } from "@/modules/delivery/lib/deliveryMethodConfig";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { productPath } from "@/shared/lib/shop/productPublic";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +16,7 @@ import { Lock, ShieldCheck, Loader2, Truck, CreditCard, HandCoins } from "lucide
 import PortalProfileSwitch from "@/modules/external/portal/PortalProfileSwitch";
 import { useShopCheckout } from "@/modules/external/shop/useShopCheckout";
 import CheckoutAddressPicker from "@/modules/external/shop/CheckoutAddressPicker";
+import AddressForm from "@/shared/components/address/AddressForm";
 
 export default function ShopCheckoutPage() {
     const router = useRouter();
@@ -35,6 +35,7 @@ export default function ShopCheckoutPage() {
         payChoice,
         setPayChoice,
         address,
+        setAddress,
         setField,
         pincodeValid,
         pincodeInfo,
@@ -123,88 +124,22 @@ export default function ShopCheckoutPage() {
                             <div className="sm:col-span-2 empty:hidden">
                                 <CheckoutAddressPicker c={checkout} />
                             </div>
-                            {checkout.addressOpen && (<>
-                            <div className="grid gap-2">
-                                <Label>Full name</Label>
-                                <Input value={address.name} onChange={(e) => setField("name")(e.target.value)} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label>Phone</Label>
-                                <Input value={address.phone} onChange={(e) => setField("phone")(e.target.value)} inputMode="tel" />
-                            </div>
-                            <div className="grid gap-2 sm:col-span-2">
-                                <Label>Address line 1</Label>
-                                <Input value={address.line1} onChange={(e) => setField("line1")(e.target.value)} />
-                            </div>
-                            <div className="grid gap-2 sm:col-span-2">
-                                <Label>Address line 2 (optional)</Label>
-                                <Input value={address.line2} onChange={(e) => setField("line2")(e.target.value)} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label>Pincode</Label>
-                                <Input
-                                    value={address.pincode}
-                                    onChange={(e) => setField("pincode")(e.target.value.replace(/\D/gu, "").slice(0, 6))}
-                                    inputMode="numeric"
-                                    placeholder="6-digit — city & state auto-fill"
-                                />
-                                {pincodeInfo ? <p className="text-xs text-muted-foreground">{pincodeInfo}</p> : null}
-                            </div>
-                            <div className="grid gap-2">
-                                <Label>Locality / area</Label>
-                                <Select
-                                    value={address.locality || "__none__"}
-                                    onValueChange={onLocalityChange}
-                                    disabled={localityOptions.length === 0}
-                                >
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder={localityOptions.length ? "Select locality" : "Enter pincode first"} />
-                                    </SelectTrigger>
-                                    <SelectContent className="max-h-72">
-                                        <SelectItem value="__none__">Not listed / other</SelectItem>
-                                        {localityOptions.map((l) => (
-                                            <SelectItem key={l} value={l}>{l}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            {hasCoverage ? (
-                                <div className="grid gap-2 sm:col-span-2">
-                                    <Label>Neighbourhood (for local delivery)</Label>
-                                    <Select value={address.neighbourhood || "__none__"} onValueChange={onNeighbourhoodChange}>
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="Select your neighbourhood" />
-                                        </SelectTrigger>
-                                        <SelectContent className="max-h-72">
-                                            <SelectItem value="__none__">Not my area</SelectItem>
-                                            {neighbourhoodOptions.map((n) => (
-                                                <SelectItem key={n} value={n}>{n}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <p className="text-xs text-muted-foreground">
-                                        We deliver locally here — pick your neighbourhood to see the local delivery option.
-                                    </p>
+                            {checkout.addressOpen && (
+                                <div className="sm:col-span-2">
+                                    <AddressForm
+                                        value={address}
+                                        onChange={setAddress}
+                                        showRecipient
+                                        showLabelChips={false}
+                                        pincodeInfo={pincodeInfo}
+                                        localityOptions={localityOptions}
+                                        neighbourhoodOptions={neighbourhoodOptions}
+                                        hasCoverage={hasCoverage}
+                                        onLocalityChange={onLocalityChange}
+                                        onNeighbourhoodChange={onNeighbourhoodChange}
+                                    />
                                 </div>
-                            ) : null}
-                            <div className="grid gap-2">
-                                <Label>City</Label>
-                                <Input value={address.city} onChange={(e) => setField("city")(e.target.value)} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label>State</Label>
-                                <Select value={address.state} onValueChange={(v) => setField("state")(v)}>
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Select state" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {INDIA_STATE_NAMES.map((s) => (
-                                            <SelectItem key={s} value={s}>{s}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            </>)}
+                            )}
                         </CardContent>
                     </Card>
 

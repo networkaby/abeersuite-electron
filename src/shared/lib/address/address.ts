@@ -56,7 +56,7 @@ export const addressSchema = z.object({
     label: opt(30),
     name: opt(120),
     phone: opt(20),
-    line1: z.string().trim().min(1, "Enter house / building or street").max(200),
+    line1: z.string().trim().min(1, "Enter address line 1").max(200),
     line2: opt(200),
     landmark: opt(120),
     locality: opt(120),
@@ -73,7 +73,16 @@ export const addressSchema = z.object({
 export type AddressInput = z.input<typeof addressSchema>;
 export type AddressData = z.output<typeof addressSchema>;
 
-type Parts = Pick<AddressRow, "line1" | "line2" | "landmark" | "locality" | "neighbourhood" | "city" | "state" | "pincode">;
+export type Parts = {
+    line1: string;
+    line2?: string | null;
+    landmark?: string | null;
+    locality?: string | null;
+    neighbourhood?: string | null;
+    city?: string | null;
+    state?: string | null;
+    pincode?: string | null;
+};
 
 /** The whole address on one line — what Person.address (bills, POS) carries. */
 export function formatAddress(a: Parts): string {

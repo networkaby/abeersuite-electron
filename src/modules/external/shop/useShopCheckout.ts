@@ -7,6 +7,7 @@ import { usePortalAccountStore } from "@/store/external/portalAccountStore";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 import { isDeliverable, type AddressRow } from "@/shared/lib/address/address";
+import { EMPTY_ADDRESS_DRAFT, type AddressDraft } from "@/shared/components/address/AddressForm";
 
 /**
  * Everything a checkout knows and does — the address with its pincode lookups
@@ -31,7 +32,7 @@ export type ShippingOption = {
     hidden?: boolean;
 };
 
-const EMPTY_ADDRESS = { name: "", phone: "", line1: "", line2: "", pincode: "", locality: "", neighbourhood: "", city: "", state: "" };
+const EMPTY_ADDRESS: AddressDraft = { ...EMPTY_ADDRESS_DRAFT };
 
 export type BenefitPreview = {
     tierPct: number; tierLabel: string | null; discountPaise: number;
@@ -64,8 +65,8 @@ export function useShopCheckout({ onPlaced }: { onPlaced: (orderId: number) => v
     // The selected payment rail: "cod" or an online gateway's provider id.
     const [payChoice, setPayChoice] = useState<string>("cod");
 
-    const [address, setAddress] = useState(EMPTY_ADDRESS);
-    const setField = (k: keyof typeof EMPTY_ADDRESS) => (v: string) => setAddress((a) => ({ ...a, [k]: v }));
+    const [address, setAddress] = useState<AddressDraft>(EMPTY_ADDRESS);
+    const setField = (k: keyof AddressDraft) => (v: string) => setAddress((a) => ({ ...a, [k]: v }));
 
     // The customer's address book. Checkout opens on the last one used (else the
     // main one) as "Deliver to …"; Change lists the rest + a new one. Whatever is
@@ -84,10 +85,13 @@ export function useShopCheckout({ onPlaced }: { onPlaced: (orderId: number) => v
         setAddress(
             row
                 ? {
+                      ...EMPTY_ADDRESS,
+                      label: row.label ?? "",
                       name: row.name || me.name,
                       phone: row.phone || me.phone,
                       line1: row.line1,
                       line2: row.line2 ?? "",
+                      landmark: row.landmark ?? "",
                       pincode: row.pincode ?? "",
                       locality: row.locality ?? "",
                       neighbourhood: row.neighbourhood ?? "",
@@ -422,6 +426,7 @@ export function useShopCheckout({ onPlaced }: { onPlaced: (orderId: number) => v
                     phone: address.phone.trim(),
                     line1: address.line1.trim(),
                     line2: address.line2.trim() || null,
+                    landmark: address.landmark.trim() || null,
                     locality: address.locality.trim() || null,
                     neighbourhood: address.neighbourhood.trim() || null,
                     city: address.city.trim(),
@@ -467,6 +472,7 @@ export function useShopCheckout({ onPlaced }: { onPlaced: (orderId: number) => v
         payChoice,
         setPayChoice,
         address,
+        setAddress,
         setField,
         savedAddresses,
         addressId,

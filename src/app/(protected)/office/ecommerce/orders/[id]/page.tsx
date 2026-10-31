@@ -5,6 +5,7 @@ import axios from "axios";
 import Link from "next/link";
 import { GatedLink } from "@/shared/components/GatedLink";
 import { useParams } from "next/navigation";
+import { formatAddress } from "@/shared/lib/address/address";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -584,14 +585,7 @@ export default function EcommerceOrderDetailPage() {
                             </h2>
                             <p className="font-medium">{addr.name ?? order.shippingName ?? "—"}</p>
                             {addr.phone && <p className="text-muted-foreground">{addr.phone}</p>}
-                            <p className="text-muted-foreground">
-                                {[addr.line1, addr.line2, addr.neighbourhood, addr.locality]
-                                    .filter(Boolean)
-                                    .join(", ")}
-                            </p>
-                            <p className="text-muted-foreground">
-                                {[addr.city, addr.state, addr.pincode].filter(Boolean).join(", ")}
-                            </p>
+                            <p className="text-muted-foreground">{formatAddress(addr as any)}</p>
                         </div>
                     ) : null}
 

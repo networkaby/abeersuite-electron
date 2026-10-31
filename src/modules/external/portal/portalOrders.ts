@@ -3,6 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { getPortalAccountOptions } from "@/shared/lib/auth/portalAccountContext";
 import { DELIVERY_STAGE_LABEL } from "@/modules/delivery/lib/shiprocketStatus";
+import { formatAddress } from "@/shared/lib/address/address";
 import type { PortalOrderDto } from "@/modules/external/portal/portalOrderTypes";
 
 const GATEWAY_LABEL: Record<string, string> = {
@@ -152,12 +153,7 @@ export async function loadPortalOrders(customerId: number, onlyOrderId?: number)
         const o = t.order!;
         const addr = (o.shippingAddress ?? {}) as AddrJson;
         const delivery = deliveryByOrder.get(t.id);
-        const address = [
-            [addr.line1, addr.line2, addr.neighbourhood, addr.locality].filter(Boolean).join(", "),
-            [addr.city, addr.state, addr.pincode].filter(Boolean).join(", "),
-        ]
-            .filter(Boolean)
-            .join(" · ");
+        const address = formatAddress(addr as any);
         return {
             id: t.id,
             createdAt: t.createdAt.toISOString(),

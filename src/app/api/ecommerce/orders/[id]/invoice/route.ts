@@ -7,6 +7,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { requestBusinessDate } from "@/shared/lib/api/requestBusinessDate";
 import { resolveProductTax } from "@/modules/inventory/lib/gstResolver";
 import { stateCodeForName } from "@/shared/lib/gst/indianStates";
+import { formatAddress } from "@/shared/lib/address/address";
 import { syncVoucherLinks } from "@/modules/accountancy/lib/voucherLinks";
 import { invNextRef, calcLineTotals, calcVoucherTotals, resolveShippingGstRate } from "@/modules/inventory/lib/stock";
 import { engineCreateSpine, enginePost, voucherDebitTotal } from "@/modules/accountancy/lib/transactionEngine";
@@ -306,9 +307,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         const partyName = t.order.shippingName || t.account?.name || "Customer";
         const partyType = t.account?.personId ? "customer" : t.account?.companyId ? "company" : null;
         const partyId = t.account?.personId ?? t.account?.companyId ?? null;
-        const partyAddress = [addr.line1, addr.line2, addr.city, addr.state, addr.pincode]
-            .filter((x) => typeof x === "string" && x.trim())
-            .join(", ");
+        const partyAddress = formatAddress(addr as any);
         const placeOfSupply = stateCodeForName(typeof addr.state === "string" ? addr.state : null) ?? null;
 
         // Seller = the online channel's branch (Head Office), falling back to the

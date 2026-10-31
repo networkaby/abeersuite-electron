@@ -9,11 +9,11 @@ import MobileHeader from "@/modules/mobile/components/MobileHeader";
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import PortalProfileSwitch from "@/modules/external/portal/PortalProfileSwitch";
 import CheckoutAddressPicker from "@/modules/external/shop/CheckoutAddressPicker";
+import AddressForm from "@/shared/components/address/AddressForm";
+import { formatAddress } from "@/shared/lib/address/address";
 import { useShopCheckout } from "@/modules/external/shop/useShopCheckout";
 import { APP, appLoginPath } from "@/modules/external/shopApp/appPaths";
-import { INDIA_STATE_NAMES } from "@/modules/delivery/lib/deliveryMethodConfig";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
-import { parseDigitsInput } from "@/shared/lib/format";
 import { SHOP_APP_PLAY_REVIEW } from "@/shared/lib/device/shopApp";
 
 const STEPS = ["Address", "Delivery", "Summary"] as const;
@@ -104,88 +104,20 @@ export default function AppCheckout() {
                         </section>
                         <CheckoutAddressPicker c={c} />
                         {c.addressOpen && (
-                        <section className="grid grid-cols-2 gap-3">
-                            <div className="col-span-2">
-                                <label className={label}>Full name</label>
-                                <input className={field} value={a.name} onChange={(e) => c.setField("name")(e.target.value)} autoComplete="name" />
-                            </div>
-                            <div className="col-span-2">
-                                <label className={label}>Mobile number</label>
-                                <input
-                                    className={field}
-                                    value={a.phone}
-                                    onChange={(e) => c.setField("phone")(parseDigitsInput(e.target.value).slice(0, 10))}
-                                    inputMode="tel"
-                                    autoComplete="tel-national"
+                            <section className="rounded-xl border bg-background p-3">
+                                <AddressForm
+                                    value={a}
+                                    onChange={c.setAddress}
+                                    showRecipient
+                                    showLabelChips={false}
+                                    pincodeInfo={c.pincodeInfo}
+                                    localityOptions={c.localityOptions}
+                                    neighbourhoodOptions={c.neighbourhoodOptions}
+                                    hasCoverage={c.hasCoverage}
+                                    onLocalityChange={c.onLocalityChange}
+                                    onNeighbourhoodChange={c.onNeighbourhoodChange}
                                 />
-                            </div>
-                            <div>
-                                <label className={label}>Pincode</label>
-                                <input
-                                    className={field}
-                                    value={a.pincode}
-                                    onChange={(e) => c.setField("pincode")(parseDigitsInput(e.target.value).slice(0, 6))}
-                                    inputMode="numeric"
-                                    autoComplete="postal-code"
-                                />
-                            </div>
-                            <div className="flex items-end pb-3 text-xs text-muted-foreground">
-                                {c.pincodeInfo && (
-                                    <span className="flex items-center gap-1">
-                                        <MapPin className="size-3.5" /> {c.pincodeInfo}
-                                    </span>
-                                )}
-                            </div>
-                            <div className="col-span-2">
-                                <label className={label}>House no., building, street</label>
-                                <input className={field} value={a.line1} onChange={(e) => c.setField("line1")(e.target.value)} autoComplete="address-line1" />
-                            </div>
-                            <div className="col-span-2">
-                                <label className={label}>Landmark (optional)</label>
-                                <input className={field} value={a.line2} onChange={(e) => c.setField("line2")(e.target.value)} autoComplete="address-line2" />
-                            </div>
-                            {c.localityOptions.length > 0 && (
-                                <div className="col-span-2">
-                                    <label className={label}>Locality / area</label>
-                                    <select className={field} value={a.locality || "__none__"} onChange={(e) => c.onLocalityChange(e.target.value)}>
-                                        <option value="__none__">Not listed / other</option>
-                                        {c.localityOptions.map((l) => (
-                                            <option key={l} value={l}>
-                                                {l}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
-                            {c.hasCoverage && (
-                                <div className="col-span-2">
-                                    <label className={label}>Neighbourhood — for our local delivery</label>
-                                    <select className={field} value={a.neighbourhood || "__none__"} onChange={(e) => c.onNeighbourhoodChange(e.target.value)}>
-                                        <option value="__none__">Not my area</option>
-                                        {c.neighbourhoodOptions.map((n) => (
-                                            <option key={n} value={n}>
-                                                {n}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
-                            <div>
-                                <label className={label}>City</label>
-                                <input className={field} value={a.city} onChange={(e) => c.setField("city")(e.target.value)} autoComplete="address-level2" />
-                            </div>
-                            <div>
-                                <label className={label}>State</label>
-                                <select className={field} value={a.state} onChange={(e) => c.setField("state")(e.target.value)}>
-                                    <option value="">Select</option>
-                                    {INDIA_STATE_NAMES.map((s) => (
-                                        <option key={s} value={s}>
-                                            {s}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        </section>
+                            </section>
                         )}
                     </>
                 )}
@@ -254,9 +186,7 @@ export default function AppCheckout() {
                             <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                     <p className="font-medium">Deliver to {a.name}</p>
-                                    <p className="text-muted-foreground">
-                                        {[a.line1, a.line2, a.neighbourhood, a.locality, a.city, a.state, a.pincode].filter(Boolean).join(", ")}
-                                    </p>
+                                    <p className="text-muted-foreground">{formatAddress(a)}</p>
                                     <p className="text-muted-foreground">{a.phone}</p>
                                 </div>
                                 <button type="button" onClick={() => setStep(0)} className="shrink-0 text-sm font-medium text-primary">

@@ -55,7 +55,7 @@ export default function AddressBook({
 
     async function save() {
         if (!draft.line1.trim()) {
-            toast.error("Enter house / building or street");
+            toast.error("Enter address line 1");
             return;
         }
         setSaving(true);
