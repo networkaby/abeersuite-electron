@@ -83,6 +83,13 @@ function waNumber(raw: string | null | undefined): string {
     return d;
 }
 
+// /api/pos/upi-request statuses → plain words. "failed" carries Meta's own error.
+const UPI_SEND_REASON: Record<string, string> = {
+    "no-mobile": "the mobile number is not a valid Indian number",
+    disabled: "the UPI payment request template is off or not approved (Settings → WhatsApp Templates)",
+    "not-configured": "WhatsApp API is not set up on the server",
+};
+
 // Keep only a positive decimal (no `input type="number"`, per house rule).
 function sanitizeAmount(raw: string): string {
     const cleaned = raw.replace(/[^0-9.]/g, "");
@@ -222,9 +229,11 @@ export function PaymentLinkDialog({
     // from the shop's number (QR-free: its Pay now button opens the UPI app). Only
     // if that cannot go — template not approved, API not set up, send failed —
     // fall back to the paste flow below, so the counter never gets stuck.
-    async function sendViaApi() {
+    // Returns null when sent, else the reason it could not go (shown to the cashier).
+    async function sendViaApi(): Promise<string | null> {
         const vpa = ctx.upiVpa?.trim();
-        if (!waNum || !vpa) return false;
+        if (!waNum) return "no mobile number on this customer";
+        if (!vpa) return "no UPI ID set for this counter";
         setSharing(true);
         try {
             const res = await fetch("/api/pos/upi-request", {
@@ -232,24 +241,26 @@ export function PaymentLinkDialog({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ phone: waNum, vpa, amount, note: billRef ?? "", partyName }),
             });
-            const j = (await res.json().catch(() => null)) as { status?: string } | null;
+            if (res.status === 403) return "your role lacks the \"Send UPI request\" tick (sign in again after it is given)";
+            const j = (await res.json().catch(() => null)) as { status?: string; error?: string | null } | null;
             if (j?.status === "sent") {
                 toast.success(`Payment request sent to ${partyName || "the customer"} on WhatsApp`);
-                return true;
+                return null;
             }
-            return false;
+            return UPI_SEND_REASON[j?.status ?? ""] ?? j?.error ?? `server answered ${res.status}`;
         } catch {
-            return false;
+            return "no connection to the server";
         } finally {
             setSharing(false);
         }
     }
 
     async function onWhatsAppClick() {
-        if (await sendViaApi()) return;
+        const reason = await sendViaApi();
+        if (reason === null) return;
         // Chrome keeps a click's user activation for ~5s, so the clipboard + open
         // below still work after the fetch.
-        if (waNum) toast.message("Couldn't send from the shop's number — opening WhatsApp Web");
+        toast.warning(`Couldn't send from the shop's number: ${reason}. Opening WhatsApp Web.`, { duration: 8000 });
         sendOnWhatsApp();
     }
 

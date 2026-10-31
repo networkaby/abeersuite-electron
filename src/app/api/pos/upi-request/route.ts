@@ -56,5 +56,5 @@ export async function POST(req: Request) {
         summary: `UPI payment request · ${withCurrency(amountText)}`,
     });
     if (wa.status === "failed") console.error("[upi-request] WhatsApp send failed", wa.error);
-    return NextResponse.json({ status: wa.status });
+    return NextResponse.json({ status: wa.status, error: wa.error ?? null });
 }
