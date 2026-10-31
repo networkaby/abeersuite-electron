@@ -28,12 +28,15 @@ export default function WelcomeChoiceModal() {
     const flagged = searchParams.get("welcome") === "1";
     const user = session?.user as { kind?: string; name?: string } | undefined;
     const isCustomer = user?.kind === "customer";
+    const isCheckout = pathname === "/shop/checkout" || pathname.startsWith("/shop/checkout/");
 
     // Open once when the flag arrives (render-time adjust, not an effect).
     const [handled, setHandled] = useState(false);
     if (flagged && isCustomer && !handled) {
         setHandled(true);
-        setOpen(true);
+        if (!isCheckout) {
+            setOpen(true);
+        }
     }
 
     useEffect(() => {

@@ -96,8 +96,7 @@ export default function PortalSetPasswordFlow({
                 router.push("/login");
                 return;
             }
-            router.push(returnTo);
-            router.refresh();
+            window.location.assign(returnTo);
         } catch {
             setError("Could not save your password. Please try again.");
         } finally {

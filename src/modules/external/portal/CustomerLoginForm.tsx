@@ -5,7 +5,7 @@ import { isSafeLandingPage } from "@/shared/lib/appModeCore";
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useSyncExternalStore } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { FileText, KeyRound, MessageSquareLock, ShieldCheck, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,15 +66,19 @@ function GoogleIcon() {
  * creates the account; Google shows only on an APK carrying the native sheet).
  */
 export default function CustomerLoginForm({ app = false }: { app?: boolean }) {
-    const router = useRouter();
     const searchParams = useSearchParams();
     const rawCallback = searchParams.get("callbackUrl") ?? "";
     const hasCallback = isSafeLandingPage(rawCallback);
     // No return page, or a shop page: land there with the shop-or-portal popup
     // (WelcomeChoiceModal). A deep link (bill, wallet…) goes straight through.
+    const isCheckout = rawCallback === "/shop/checkout" || rawCallback.startsWith("/shop/checkout/") || rawCallback.startsWith("/shop/checkout?");
+    const isDeepPortal = rawCallback.startsWith("/portal/");
+    const isOfficeOrStaff = rawCallback.startsWith("/office") || rawCallback.startsWith("/staff") || rawCallback.startsWith("/api");
+    const shouldShowWelcome = !isCheckout && !isDeepPortal && !isOfficeOrStaff;
+
     const callbackUrl = !hasCallback
         ? (app ? `${SHOP_NATIVE_HOME}/account` : "/portal?welcome=1")
-        : rawCallback === "/shop" || rawCallback.startsWith("/shop/") || rawCallback.startsWith("/shop?")
+        : shouldShowWelcome
           ? `${rawCallback}${rawCallback.includes("?") ? "&" : "?"}welcome=1`
           : rawCallback;
 
@@ -88,8 +92,7 @@ export default function CustomerLoginForm({ app = false }: { app?: boolean }) {
     const [loading, setLoading] = useState(false);
 
     const goToPortal = () => {
-        router.push(callbackUrl);
-        router.refresh();
+        window.location.assign(callbackUrl);
     };
 
     const passwordless = usePortalPasswordlessSignIn(goToPortal);
