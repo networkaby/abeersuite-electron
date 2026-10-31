@@ -441,7 +441,7 @@ export function PosVoucherSection({
                     <div className="overflow-hidden rounded-lg border border-border bg-card">
                         <div className="border-b border-border bg-muted/40 px-3 py-2">
                             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">POS Shift &amp; Till</p>
-                            <p className="mt-0.5 text-[11px] text-muted-foreground">Operator actions on their own counter — start/end their shift (open implies close) and drop cash to the safe. Oversight (manage, view other branches) is a separate management concern.</p>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">Operator actions on their own counter — start/end their shift (open implies close), drop cash to the safe, and send a customer a UPI payment request on WhatsApp. Oversight (manage, view other branches) is a separate management concern.</p>
                         </div>
                         <div className="flex flex-wrap gap-1.5 px-3 py-2.5">
                             {POS_OPERATOR_SHIFT_CHIPS.map((chip) => {

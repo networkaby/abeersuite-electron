@@ -50,6 +50,7 @@ export const POS_COLUMN_GROUPS: MatrixColumnGroup[] = POS_ACTIONS
 export const POS_OPERATOR_SHIFT_CHIPS: { label: string; ids: string[] }[] = [
     { label: "Start / End shift", ids: ["pos:shift:open", "pos:shift:close"] },
     { label: "Cash drop", ids: ["pos:shift:drop"] },
+    { label: "Send UPI request", ids: ["pos:upi-request:send"] },
 ];
 export const POS_BLOCK_SHIFT_IDS = POS_OPERATOR_SHIFT_CHIPS.flatMap((c) => c.ids);
 
