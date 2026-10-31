@@ -64,6 +64,7 @@ const MAX_CACHED_VIEWS = 8;
  *  delete tombstone (mirrors the POS product cache's own MAX_AGE_MS). */
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const SEARCH_DEBOUNCE_MS = 350;
+const TICKET_MODELS: readonly string[] = ["Ticket", "TicketDeal", "TicketHelp", "TicketRepair", "TicketLog"];
 /** After the board's own save on a replica-reading till, how long to wait for the
  *  worker's `sync:applied` before reading anyway (its realtime link may be down). */
 const OWN_WRITE_FALLBACK_MS = 6_000;
@@ -210,6 +211,8 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
 
     const checkedAtRef = useRef<string | null>(null);
     const rowsRef       = useRef<T[]>([]);
+    const syncingRef    = useRef(false);
+    const nextCursorRef = useRef<number | null>(null);
     // The caller rebuilds `sort` every render; afterOwnWrite reads the latest through
     // this rather than carrying it in a dependency list.
     const sortRef = useRef(sort);
@@ -217,6 +220,7 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
     useLayoutEffect(() => {
         rowsRef.current = rows;
         sortRef.current = sort;
+        nextCursorRef.current = nextCursor;
     });
     const forceNext  = useRef(false);
 
@@ -251,14 +255,58 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
         setTick((t) => t + 1);
     }, []);
 
-    /** A soft nudge — re-runs the normal cache→delta path, so a realtime signal
-     *  costs only what actually changed, not a full re-pull. */
-    const refresh = useCallback(() => {
-        setTick((t) => t + 1);
-    }, []);
+    /**
+     * Top up what is already on screen — the live path (matches useDayBook).
+     *
+     * `reload` starts over, which is right for the user pressing Refresh and
+     * wrong for a ticket/deal updated elsewhere or right after this tab's own save:
+     * that would flip `loading` to true and blank out the board.
+     *
+     * `syncNow` pulls a DELTA against the copy in hand (`since: checkedAt`) and
+     * merges it silently by id. It deliberately does NOT touch `loading`, so
+     * the screen stays stable and completely flicker-free.
+     */
+    const syncNow = useCallback(() => {
+        const checkedAt = checkedAtRef.current;
+        if (!checkedAt || rowsRef.current.length === 0) { reload(); return; }
+        if (syncingRef.current) return;
+
+        syncingRef.current = true;
+        void (async () => {
+            try {
+                const res = await fetchTickets<T>(apiPath, query, search, { since: checkedAt });
+                const fresh = res.mode === "page" ? res
+                    : res.overflow ? await fetchTickets<T>(apiPath, query, search)
+                    : null;
+                if (fresh) {
+                    if (fresh.mode !== "page") return;
+                    const sorted = applyPins([...fresh.rows]).sort(sortRef.current);
+                    setRows(sorted);
+                    setNextCursor(fresh.nextCursor);
+                    checkedAtRef.current = fresh.computedAt;
+                    setStale(false);
+                    if (cacheable) await writeCachedView(key, sorted, fresh.nextCursor, fresh.computedAt);
+                } else if (res.mode === "delta") {
+                    const byId = new Map(rowsRef.current.map((r) => [r.id, r]));
+                    for (const r of res.rows) byId.set(r.id, r);
+                    const merged = applyPins([...byId.values()]).sort(sortRef.current);
+                    setRows(merged);
+                    checkedAtRef.current = res.computedAt;
+                    setStale(false);
+                    if (cacheable) await writeCachedView(key, merged, nextCursorRef.current, res.computedAt);
+                }
+            } catch {
+                // A missed nudge is not an error worth showing — the rows on
+                // screen are still the rows we last read, and Refresh is there.
+            } finally {
+                syncingRef.current = false;
+            }
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` + `search` are query's identity
+    }, [key, search, cacheable, reload, applyPins]);
 
     /** The board's OWN write just succeeded. Off a counter, or on a till whose writes
-     *  are held until its replica has the rows (v_live), that is a plain `reload`. On a
+     *  are held until its replica has the rows (v_live), that is a silent `syncNow`. On a
      *  till reading its replica while writing live the row is still in flight: reading
      *  now would show the old state — snapping an optimistic move back — and stamp the
      *  cache past the row. So nothing is read until the worker's `sync:applied`, which
@@ -286,16 +334,16 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
                 setRows((rs) => rs.map((r) => (r.id === row.id ? row : r)).sort(sortRef.current));
             }
         }
-        if (!getReadsGoLocal() || getWritesHeldUntilApplied()) { reload(); return; }
+        if (!getReadsGoLocal() || getWritesHeldUntilApplied()) { syncNow(); return; }
         clearOwnWriteWait();
         const onApplied = () => clearOwnWriteWait();
-        const timer = setTimeout(() => { clearOwnWriteWait(); reload(); }, OWN_WRITE_FALLBACK_MS);
+        const timer = setTimeout(() => { clearOwnWriteWait(); syncNow(); }, OWN_WRITE_FALLBACK_MS);
         window.addEventListener(SYNC_APPLIED_EVENT, onApplied);
         ownWriteWait.current = () => {
             clearTimeout(timer);
             window.removeEventListener(SYNC_APPLIED_EVENT, onApplied);
         };
-    }, [reload, clearOwnWriteWait]);
+    }, [syncNow, clearOwnWriteWait]);
 
     useEffect(() => {
         let cancelled = false;
@@ -371,7 +419,9 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
     // A change anywhere that touches this board's topic re-checks it live — see
     // the module doc's REALTIME section. Coalesced and hidden-tab-safe already
     // (useRealtimeTopics), so this costs nothing on a quiet board.
-    useRealtimeTopics(["tickets"], refresh);
+    // Like useDayBook, realtime delta sync tops up what is on screen silently
+    // without resetting `loading` or wiping the UI with a spinner.
+    useRealtimeTopics(["tickets"], syncNow, true, TICKET_MODELS);
 
     const loadMore = useCallback(() => {
         if (nextCursor == null || loadingMore) return;
@@ -402,6 +452,6 @@ export function useTicketsDelta<T extends TicketRow>(query: TicketsQuery, option
         setRows: setRows as Dispatch<SetStateAction<T[]>>,
         loading, loadingMore,
         hasMore: nextCursor != null,
-        error, stale, loadMore, reload, afterOwnWrite,
+        error, stale, loadMore, reload, syncNow, afterOwnWrite,
     };
 }

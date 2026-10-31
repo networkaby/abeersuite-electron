@@ -58,6 +58,8 @@ const GUARD_PATTERNS = [
     /\brequirePostsPage\b/,
     /\brequireScheduledPage\b/,
     /\brequireDueRemindersPage\b/,
+    /\brequireConsentPage\b/,
+    /\brequireConsentEdit\b/,
     /\brequireGoogleStatus\b/,
     /\brequireGoogleConnect\b/,
     /\brequireFacebookStatus\b/,

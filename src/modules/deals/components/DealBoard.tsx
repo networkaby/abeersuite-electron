@@ -65,7 +65,7 @@ export default function DealBoard({
                             </div>
                         )}
                         <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-                            {loading ? (
+                            {loading && deals.length === 0 ? (
                                 <p className="px-1 py-4 text-center text-xs text-muted-foreground">Loading…</p>
                             ) : items.length === 0 ? (
                                 <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed py-8 text-xs text-muted-foreground">

@@ -22,6 +22,7 @@ import { formatDate, formatDateTime } from "@/shared/lib/format";
 import type { DealDetailDto, DealStage, DealActivityKind } from "../lib/types";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { useValueChange } from "@/shared/hooks/useValueChange";
+import { partyProfileHref } from "@/shared/lib/parties";
 
 const ACTIVITY_KINDS: { kind: Exclude<DealActivityKind, "SYSTEM">; label: string; icon: typeof StickyNote }[] = [
     { kind: "NOTE", label: "Note", icon: StickyNote },
@@ -164,11 +165,11 @@ export default function DealDetailDialog({
                                 <div className="text-xs text-muted-foreground">Customer</div>
                                 <div className="mt-1">
                                     {deal.person ? (
-                                        <GatedLink whenLocked="text" href={`/office/customers/person/${deal.person.id}`} className="inline-flex items-center gap-1 text-primary hover:underline">
+                                        <GatedLink whenLocked="text" href={partyProfileHref("person", deal.person.id) ?? "#"} className="inline-flex items-center gap-1 text-primary hover:underline">
                                             {deal.person.name} <ExternalLink className="size-3" />
                                         </GatedLink>
                                     ) : deal.company ? (
-                                        <GatedLink whenLocked="text" href={`/office/customers/companies/${deal.company.id}`} className="inline-flex items-center gap-1 text-primary hover:underline">
+                                        <GatedLink whenLocked="text" href={partyProfileHref("company", deal.company.id) ?? "#"} className="inline-flex items-center gap-1 text-primary hover:underline">
                                             {deal.company.name} <ExternalLink className="size-3" />
                                         </GatedLink>
                                     ) : (

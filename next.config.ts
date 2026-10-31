@@ -130,6 +130,9 @@ const nextConfig: NextConfig = {
       { source: "/office/tickets/:path*", destination: "/office/repairing/tickets/:path*", permanent: false },
       { source: "/office/companies", destination: "/office/customers/companies", permanent: false },
       { source: "/office/companies/:path*", destination: "/office/customers/companies/:path*", permanent: false },
+      // Compat: legacy person / company detail URLs -> explorer with query param
+      { source: "/office/customers/person/:id(\\d+)", destination: "/office/customers/all?personId=:id", permanent: false },
+      { source: "/office/customers/companies/:id(\\d+)", destination: "/office/customers/all?companyId=:id", permanent: false },
       { source: "/office/dashboard", destination: "/office/repairing", permanent: false },
       // Compat: legacy /office/tally URLs (renamed to /office/accountancy 2026-05-07)
       { source: "/office/tally", destination: "/office/accountancy", permanent: false },

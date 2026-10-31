@@ -8928,6 +8928,13 @@ DO $$ BEGIN
     END IF;
 END $$;
 DO $$ BEGIN
+    IF to_regclass('public."PersonAddress"') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS "_outbox_capture" ON "PersonAddress";
+        CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "PersonAddress"
+            FOR EACH ROW EXECUTE FUNCTION _outbox_capture('id');
+    END IF;
+END $$;
+DO $$ BEGIN
     IF to_regclass('public."PersonCompany"') IS NOT NULL THEN
         DROP TRIGGER IF EXISTS "_outbox_capture" ON "PersonCompany";
         CREATE TRIGGER "_outbox_capture" AFTER INSERT OR UPDATE ON "PersonCompany"
