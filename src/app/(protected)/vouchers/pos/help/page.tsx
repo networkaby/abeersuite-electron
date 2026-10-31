@@ -4,6 +4,7 @@
 // register stays lean.
 
 import { BookOpen, Keyboard, HandCoins, BadgeIndianRupee, Trash2, ArrowUpDown, CircleHelp } from "lucide-react";
+import { PosHelpBackButton } from "@/modules/pos/components/PosHelpBackButton";
 
 const SHORTCUTS: { keys: string; label: string; notes: string }[] = [
     { keys: "/", label: "Product search", notes: "Focus the scan box — type name / scan barcode. In checkout, fills the rest of the bill into the focused payment line." },
@@ -37,6 +38,7 @@ export default function PosHelpPage() {
     return (
         <div className="mx-auto max-w-3xl space-y-4 p-6">
             <header className="space-y-1">
+                <PosHelpBackButton />
                 <h1 className="flex items-center gap-2 font-heading text-xl font-semibold">
                     <CircleHelp size={20} className="text-primary" />
                     POS Counter Help

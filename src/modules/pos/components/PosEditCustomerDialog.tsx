@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Star, Trash2 } from "lucide-react";
 import AddressBook from "@/shared/components/address/AddressBook";
+import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
 import CustomerGroupCard from "@/modules/customer/components/CustomerGroupCard";
 import AccountCreditLimitCard from "@/modules/customer/components/AccountCreditLimitCard";
 import CustomerEmergencyPasswordResetCard from "@/modules/customer/components/CustomerEmergencyPasswordResetCard";
@@ -57,6 +58,8 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
 
     const [form, setForm] = useState<Form>({ name: "", address: "", gstin: "", email: "" });
     // Phones as loaded (to diff on save) and as edited, main first.
+    // A person's linked companies — the office's link panel, saved on its own.
+    const [companyLinks, setCompanyLinks] = useState<React.ComponentProps<typeof CustomerLinkPanel>["links"]>([]);
     const [savedPhones, setSavedPhones] = useState<{ id: number; value: string }[]>([]);
     const [phones, setPhones] = useState<PhoneRow[]>([]);
     // The primary email row — a change edits that row, an empty one adds.
@@ -85,6 +88,7 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
                     ? (data.emails ?? []).map((e: { id: number; email: string }) => ({ id: e.id, value: e.email }))
                     : data.contactRows?.emails ?? [];
                 setCreditLimit(data.creditLimit ?? null);
+                setCompanyLinks(data.companies ?? []);
                 setGroupId(data.customerGroupId ?? null);
                 setSavedPhones(phones);
                 setPhones(phones.length ? phones.map((p) => phoneRowOf(p.id, p.value)) : [phoneRowOf(null, "")]);
@@ -126,6 +130,15 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
                 ? { ...s, party: { ...s.party, address } }
                 : s);
         }).catch(() => {});
+    };
+
+    // A link changes the panel's company list, so re-read the snapshot too.
+    const refreshLinks = () => {
+        void axios.get(base).then(({ data }) => setCompanyLinks(data.companies ?? [])).catch(() => {});
+        if (accountId == null) return;
+        void axios.get<Snapshot>(`/api/pos/account-snapshot/${accountId}`)
+            .then(({ data }) => setSnapshot((s) => (s?.account?.id === accountId ? data : s)))
+            .catch(() => {});
     };
 
     const setPhone = (key: number, value: string) =>
@@ -222,7 +235,7 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
                     </TabsList>
                 )}
                 <TabsContent value="details">
-                <form onSubmit={onSubmit} className="space-y-3">
+                <form id="pec-form" onSubmit={onSubmit} className="space-y-3">
                     <div className="space-y-1">
                         <Label htmlFor="pec-name">Name</Label>
                         <Input id="pec-name" value={form.name} onChange={set("name")} disabled={loading} autoFocus />
@@ -264,13 +277,7 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
                             <Input id="pec-gstin" value={form.gstin} onChange={set("gstin")} disabled={loading} className="font-mono uppercase" maxLength={15} />
                         </div>
                     </div>
-                    {isPerson ? (
-                        <div className="space-y-1">
-                            <Label>Addresses</Label>
-                            {/* Saves on its own; the main one is what bills print. */}
-                            {!loading && <AddressBook apiBase={`${base}/addresses`} emptyText="No address added." onChanged={refreshAddress} />}
-                        </div>
-                    ) : (
+                    {!isPerson && (
                     <div className="space-y-1">
                         <Label htmlFor="pec-address">Address</Label>
                         <textarea
@@ -283,11 +290,22 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
                         />
                     </div>
                     )}
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
-                        <Button type="submit" disabled={saving || loading}>{saving ? "Saving…" : "Save"}</Button>
-                    </DialogFooter>
                 </form>
+                {/* Outside the form: these panels' own buttons would otherwise submit it.
+                    Each saves on its own; the main address is what bills print. */}
+                {isPerson && !loading && (
+                    <div className="mt-3 space-y-3">
+                        <div className="space-y-1">
+                            <Label>Addresses</Label>
+                            <AddressBook apiBase={`${base}/addresses`} emptyText="No address added." onChanged={refreshAddress} />
+                        </div>
+                        <CustomerLinkPanel customerId={party.id} links={companyLinks} onChanged={refreshLinks} />
+                    </div>
+                )}
+                <DialogFooter className="mt-3">
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+                    <Button type="submit" form="pec-form" disabled={saving || loading}>{saving ? "Saving…" : "Save"}</Button>
+                </DialogFooter>
                 </TabsContent>
                 <TabsContent value="advanced" className="grid items-start gap-3 md:grid-cols-2">
                     {canCredit && !loading && (

@@ -376,6 +376,7 @@ export function PosReturnDialog({
                         <div className="space-y-3">
                             {!pickedCustomer ? (
                                 <PartySearchAndCreate
+                                    exactPhoneOnly
                                     onPicked={onCustomerPicked}
                                     partyGroup="Sundry Debtors"
                                     autoFocus

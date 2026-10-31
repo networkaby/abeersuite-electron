@@ -184,6 +184,7 @@ export function PosTopBar({
                 changeMode ? "ring-2 ring-blue-500/60 focus-within:ring-blue-400" : ""
             }`}>
                 <PartySearchAndCreate
+                    exactPhoneOnly
                     ref={partySearchRef}
                     onPicked={onPartyPicked}
                     locked={!changeMode && locked}

@@ -112,7 +112,21 @@ export type PartySearchAndCreateProps = {
      * where suppliers are almost always companies.
      */
     defaultToCompany?: boolean;
+    /**
+     * A full mobile number (10+ digits, nothing else) shows only the party that
+     * owns that exact number — no near misses — so the counter never bills the
+     * wrong person; no owner leaves just "New customer". Compared on the last
+     * 10 digits, so +91 / 0 prefixes match. POS pickers set it.
+     */
+    exactPhoneOnly?: boolean;
 };
+
+/** The last 10 digits of a query that is only a phone number, else null. */
+function fullMobileOf(q: string): string | null {
+    if (!/^[+\d\s-]+$/.test(q)) return null;
+    const d = q.replace(/\D/g, "");
+    return d.length >= 10 ? d.slice(-10) : null;
+}
 
 // ── Validators ──────────────────────────────────────────────────────────────
 
@@ -173,7 +187,7 @@ export const PartySearchAndCreate = forwardRef<
     {
         onPicked, locked = false, autoFocus = false, placeholder, footerSlot, className,
         onDialogOpenChange, partyGroup = null, allowIncludeOther = false, allowCompanyCreate = true,
-        defaultToCompany = false, initialQuery = "",
+        defaultToCompany = false, initialQuery = "", exactPhoneOnly = false,
     },
     ref,
 ) {
@@ -208,7 +222,15 @@ export const PartySearchAndCreate = forwardRef<
     }, [isFocused, query, locked, partyGroup, parties]);
 
     // activeHits: use the browse list when the query is empty, search hits otherwise.
-    const activeHits = query.trim() ? hits : browseHits;
+    const fullMobile = exactPhoneOnly ? fullMobileOf(query.trim()) : null;
+    const exactPhoneHits = useMemo<PartyHit[] | null>(() => {
+        if (!fullMobile) return null;
+        return parties
+            .filter((p) => (!effectiveGroup || p.accountGroup === effectiveGroup)
+                && p.phones.some((ph) => ph.replace(/\D/g, "").slice(-10) === fullMobile))
+            .map(toPartyHit);
+    }, [fullMobile, parties, effectiveGroup]);
+    const activeHits = !query.trim() ? browseHits : (exactPhoneHits ?? hits);
 
     // Flatten hits into the navigable list, expanding each person's linked
     // companies into their own selectable sub-rows. A company that is already a

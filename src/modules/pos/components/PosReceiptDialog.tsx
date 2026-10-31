@@ -176,6 +176,7 @@ export function PosReceiptDialog({
                             </div>
                         ) : (
                             <PartySearchAndCreate
+                                exactPhoneOnly
                                 ref={partyRef}
                                 onPicked={onPicked}
                                 partyGroup="Sundry Debtors"
