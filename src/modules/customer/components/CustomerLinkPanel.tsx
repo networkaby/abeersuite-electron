@@ -8,6 +8,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { extractApiError } from "@/shared/lib/api";
+import { invalidateParties } from "@/shared/lib/parties";
 
 interface LinkedCompany {
     id: number;
@@ -27,14 +28,18 @@ const fieldClass = "flex-1";
 export default function CustomerLinkPanel({ customerId, links, onChanged }: Props) {
     const [showSearch, setShowSearch] = useState(false);
     const [query, setQuery] = useState("");
+    const [searchedQuery, setSearchedQuery] = useState("");
     const [results, setResults] = useState<{ id: number; name: string; phone: string | null }[]>([]);
     const [searching, setSearching] = useState(false);
+    const [creating, setCreating] = useState(false);
 
     const search = async () => {
-        if (!query.trim()) return;
+        const q = query.trim();
+        if (!q) return;
         setSearching(true);
+        setSearchedQuery(q);
         try {
-            const res = await axios.get(`/api/companies?q=${encodeURIComponent(query)}`);
+            const res = await axios.get(`/api/companies?q=${encodeURIComponent(q)}`);
             setResults(res.data);
         } catch {
             toast.error("Search failed");
@@ -46,9 +51,11 @@ export default function CustomerLinkPanel({ customerId, links, onChanged }: Prop
     const link = async (companyId: number, companyName: string) => {
         try {
             await axios.post(`/api/companies/${companyId}/links`, { personId: customerId });
+            void invalidateParties();
             toast.success(`Linked to ${companyName}`);
             setShowSearch(false);
             setQuery("");
+            setSearchedQuery("");
             setResults([]);
             onChanged();
         } catch (e: unknown) {
@@ -59,10 +66,33 @@ export default function CustomerLinkPanel({ customerId, links, onChanged }: Prop
     const unlink = async (companyId: number) => {
         try {
             await axios.delete(`/api/companies/${companyId}/links?personId=${customerId}`);
+            void invalidateParties();
             toast.success("Unlinked");
             onChanged();
         } catch {
             toast.error("Failed to unlink");
+        }
+    };
+
+    const createAndLink = async () => {
+        const name = (searchedQuery || query).trim();
+        if (!name) return;
+        setCreating(true);
+        try {
+            const res = await axios.post<{ id: number; name: string }>("/api/companies", { name });
+            const newCompany = res.data;
+            await axios.post(`/api/companies/${newCompany.id}/links`, { personId: customerId });
+            void invalidateParties();
+            toast.success(`Created and linked to ${newCompany.name || name}`);
+            setShowSearch(false);
+            setQuery("");
+            setSearchedQuery("");
+            setResults([]);
+            onChanged();
+        } catch (e: unknown) {
+            toast.error(extractApiError(e, "Failed to create company"));
+        } finally {
+            setCreating(false);
         }
     };
 
@@ -80,7 +110,7 @@ export default function CustomerLinkPanel({ customerId, links, onChanged }: Prop
                         </Link>
                         {lc.company.phone && <span className="text-xs text-muted-foreground">· {lc.company.phone}</span>}
                     </div>
-                    <Button onClick={() => unlink(lc.company.id)} variant="ghost" size="icon-xs" className="text-muted-foreground/65 hover:text-destructive">
+                    <Button type="button" onClick={() => unlink(lc.company.id)} variant="ghost" size="icon-xs" className="text-muted-foreground/65 hover:text-destructive">
                         <X size={14} />
                     </Button>
                 </div>
@@ -92,20 +122,31 @@ export default function CustomerLinkPanel({ customerId, links, onChanged }: Prop
                         <Input
                             value={query}
                             onChange={e => setQuery(e.target.value)}
-                            onKeyDown={e => e.key === "Enter" && search()}
+                            onKeyDown={e => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    if (searchedQuery && searchedQuery === query.trim() && results.length === 0) {
+                                        void createAndLink();
+                                    } else {
+                                        void search();
+                                    }
+                                }
+                            }}
                             placeholder="Search company..."
                             className={fieldClass}
                             autoFocus
                         />
                         <Button
+                            type="button"
                             onClick={search}
-                            disabled={searching}
+                            disabled={searching || creating}
                             size="sm"
                         >
                             {searching ? "..." : "Search"}
                         </Button>
                         <Button
-                            onClick={() => { setShowSearch(false); setResults([]); }}
+                            type="button"
+                            onClick={() => { setShowSearch(false); setResults([]); setSearchedQuery(""); }}
                             variant="ghost"
                             size="icon-sm"
                             className="text-muted-foreground hover:text-foreground"
@@ -116,6 +157,7 @@ export default function CustomerLinkPanel({ customerId, links, onChanged }: Prop
                     {results.map(r => (
                         <Button
                             key={r.id}
+                            type="button"
                             onClick={() => link(r.id, r.name)}
                             variant="outline"
                             className="h-auto w-full justify-start gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
@@ -125,12 +167,39 @@ export default function CustomerLinkPanel({ customerId, links, onChanged }: Prop
                             {r.phone && <span className="text-xs text-muted-foreground">· {r.phone}</span>}
                         </Button>
                     ))}
-                    {results.length === 0 && query && !searching && (
-                        <p className="text-xs text-muted-foreground text-center py-1">No companies found.</p>
+                    {searchedQuery && !searching && results.length === 0 && (
+                        <div className="space-y-2 py-1 text-center">
+                            <p className="text-xs text-muted-foreground">No companies found.</p>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={creating}
+                                onClick={createAndLink}
+                                className="w-full gap-1.5 text-xs font-medium"
+                            >
+                                <Plus size={13} />
+                                {creating ? "Creating…" : `Create company "${searchedQuery}" and link`}
+                            </Button>
+                        </div>
+                    )}
+                    {searchedQuery && !searching && results.length > 0 && (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={creating}
+                            onClick={createAndLink}
+                            className="h-auto w-full justify-start gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
+                        >
+                            <Plus size={13} />
+                            {creating ? "Creating…" : `Create company "${searchedQuery}" and link`}
+                        </Button>
                     )}
                 </div>
             ) : (
                 <Button
+                    type="button"
                     onClick={() => setShowSearch(true)}
                     variant="link"
                     size="xs"
