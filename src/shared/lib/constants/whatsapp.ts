@@ -17,8 +17,8 @@ export const WA_CONVERSATION_NUMBER_ID: string | null = null;
 
 /** Meta app (loginapi) and its "AbeerSuite coexistence" Embedded Signup setup —
  *  the Connect-number button on WhatsApp Templates. Public ids, not secrets. */
-export const META_APP_ID = "2392613611266946";
-export const META_WA_SIGNUP_CONFIG_ID = "1061577020211736";
+export const META_APP_ID = process.env.META_APP_ID?.trim() || "";
+export const META_WA_SIGNUP_CONFIG_ID = process.env.META_WA_SIGNUP_CONFIG_ID?.trim() || "1061577020211736";
 
 /** Cloudflare R2 bucket for WhatsApp chat attachments (private; signed links
  *  only). Account id + keys live in .env: CLOUDFLARE_ACCOUNT_ID,

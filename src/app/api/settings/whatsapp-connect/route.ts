@@ -29,6 +29,16 @@ async function graph(path: string, token: string, body?: Record<string, unknown>
     return json;
 }
 
+export async function GET() {
+    const { response } = await requirePermission("settings:manage");
+    if (response) return response;
+
+    return NextResponse.json({
+        appId: process.env.META_APP_ID?.trim() || META_APP_ID,
+        configId: process.env.META_WA_SIGNUP_CONFIG_ID?.trim() || "1061577020211736",
+    });
+}
+
 export async function POST(req: Request) {
     const { response } = await requirePermission("settings:manage");
     if (response) return response;

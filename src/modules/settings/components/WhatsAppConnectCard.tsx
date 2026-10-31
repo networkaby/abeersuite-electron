@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Loader2, Smartphone } from "lucide-react";
 import { extractApiError } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
-import { META_APP_ID, META_WA_SIGNUP_CONFIG_ID } from "@/shared/lib/constants/whatsapp";
+
 
 /**
  * Connect a second number that stays on the WhatsApp Business app (Meta
@@ -24,14 +24,14 @@ declare global {
     interface Window { FB?: FbSdk; fbAsyncInit?: () => void }
 }
 
-const APP_ID = META_APP_ID;
-const CONFIG_ID = META_WA_SIGNUP_CONFIG_ID;
 
-function loadSdk(): Promise<FbSdk> {
+
+
+function loadSdk(appId: string): Promise<FbSdk> {
     if (window.FB) return Promise.resolve(window.FB);
     return new Promise((resolve, reject) => {
         window.fbAsyncInit = () => {
-            window.FB!.init({ appId: APP_ID, autoLogAppEvents: true, xfbml: false, version: "v23.0" });
+            window.FB!.init({ appId, autoLogAppEvents: true, xfbml: false, version: "v23.0" });
             resolve(window.FB!);
         };
         const s = document.createElement("script");
@@ -66,13 +66,15 @@ export function WhatsAppConnectCard() {
     }, []);
 
     async function start() {
-        if (!APP_ID || !CONFIG_ID) {
-            toast.error("Meta signup ids missing in constants/whatsapp.ts");
-            return;
-        }
         setBusy(true);
         try {
-            const FB = await loadSdk();
+            const { data: config } = await axios.get<{ appId?: string; configId?: string }>("/api/settings/whatsapp-connect");
+            if (!config?.appId || !config?.configId) {
+                toast.error("Meta signup credentials not configured in Vercel / server settings");
+                setBusy(false);
+                return;
+            }
+            const FB = await loadSdk(config.appId);
             FB.login(
                 (r) => {
                     const code = r.authResponse?.code;
@@ -81,6 +83,7 @@ export function WhatsAppConnectCard() {
                         setBusy(false);
                         if (code) toast.error("Meta did not return the number — try again");
                         return;
+            
                     }
                     axios
                         .post("/api/settings/whatsapp-connect", { code, phoneNumberId, wabaId })
@@ -89,7 +92,7 @@ export function WhatsAppConnectCard() {
                         .finally(() => setBusy(false));
                 },
                 {
-                    config_id: CONFIG_ID,
+                    config_id: config.configId,
                     response_type: "code",
                     override_default_response_type: true,
                     extras: { setup: {}, featureType: "whatsapp_business_app_onboarding", sessionInfoVersion: "3" },
