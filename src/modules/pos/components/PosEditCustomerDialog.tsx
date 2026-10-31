@@ -3,9 +3,9 @@
 // Fix a customer's spelling, addresses or contacts from the counter without leaving
 // the bill. Every phone row shows (add / edit / remove / make main); a person's
 // addresses use the office's own AddressBook, a company keeps its one address box. Details is open to every cashier (same as the office's party PUT);
-// Advanced carries the office's own credit-limit, group and password-reset cards behind
-// the same Role ticks the office uses (customers:edit, users:edit) — the APIs
-// check them again. Saves through the office party endpoints, so the GSTIN ↔
+// Advanced carries the office's own credit-limit and group cards behind
+// the same Role tick the office uses (customers:edit) — the APIs
+// check it again. Saves through the office party endpoints, so the GSTIN ↔
 // state check and the "parties" realtime refresh (the counter's party search
 // list) come along for free.
 
@@ -24,7 +24,6 @@ import AddressBook from "@/shared/components/address/AddressBook";
 import CustomerLinkPanel from "@/modules/customer/components/CustomerLinkPanel";
 import CustomerGroupCard from "@/modules/customer/components/CustomerGroupCard";
 import AccountCreditLimitCard from "@/modules/customer/components/AccountCreditLimitCard";
-import CustomerEmergencyPasswordResetCard from "@/modules/customer/components/CustomerEmergencyPasswordResetCard";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
 import { extractApiError } from "@/shared/lib/api";
@@ -49,8 +48,6 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
     const { data: session } = useSession();
     const perms = (session?.user as { permissions?: string[] } | undefined)?.permissions ?? [];
     const canCredit = accountId != null && hasPermissionWithScope(perms, PERMISSIONS.CUSTOMERS_EDIT);
-    // The portal login is a person's — a company has none.
-    const canPassword = party.kind === "person" && hasPermissionWithScope(perms, PERMISSIONS.USERS_EDIT);
     const [creditLimit, setCreditLimit] = useState<string | number | null>(null);
     const [groupId, setGroupId] = useState<number | null>(null);
     const isPerson = party.kind === "person";
@@ -223,12 +220,12 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+            <DialogContent className="max-h-[90vh] overflow-y-auto overflow-x-hidden sm:max-w-3xl">
                 <DialogHeader>
                     <DialogTitle>Edit customer</DialogTitle>
                 </DialogHeader>
                 <Tabs defaultValue="details">
-                {(canCredit || canPassword) && (
+                {canCredit && (
                     <TabsList className="w-full">
                         <TabsTrigger value="details" className="flex-1">Details</TabsTrigger>
                         <TabsTrigger value="advanced" className="flex-1">Advanced</TabsTrigger>
@@ -251,6 +248,7 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
                                     value={row.value}
                                     onChange={(e) => setPhone(row.key, e.target.value)}
                                     disabled={loading}
+                                    className="flex-1"
                                 />
                                 <Button type="button" variant="ghost" size="icon-xs" disabled={loading || i === 0}
                                     onClick={() => makeMain(row.key)} title={i === 0 ? "Main number" : "Make main"}>
@@ -307,28 +305,24 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
                     <Button type="submit" form="pec-form" disabled={saving || loading}>{saving ? "Saving…" : "Save"}</Button>
                 </DialogFooter>
                 </TabsContent>
-                <TabsContent value="advanced" className="grid items-start gap-3 md:grid-cols-2">
+                <TabsContent value="advanced" className="min-h-[460px] grid items-start gap-3 md:grid-cols-2">
                     {canCredit && !loading && (
-                        <AccountCreditLimitCard
-                            key={`cl-${accountId}`}
-                            accountId={accountId!}
-                            initialLimit={creditLimit}
-                            canEdit
-                            onSaved={refreshAdvanced}
-                        />
+                        <>
+                            <AccountCreditLimitCard
+                                key={`cl-${accountId}`}
+                                accountId={accountId!}
+                                initialLimit={creditLimit}
+                                canEdit
+                                onSaved={refreshAdvanced}
+                            />
+                            <CustomerGroupCard
+                                key={`cg-${party.kind}-${party.id}`}
+                                party={{ kind: party.kind, id: party.id }}
+                                initialGroupId={groupId}
+                                onSaved={refreshAdvanced}
+                            />
+                        </>
                     )}
-                    {/* Right column — group and password are short; credit limit runs tall. */}
-                    <div className="space-y-3">
-                    {canCredit && !loading && (
-                        <CustomerGroupCard
-                            key={`cg-${party.kind}-${party.id}`}
-                            party={{ kind: party.kind, id: party.id }}
-                            initialGroupId={groupId}
-                            onSaved={refreshAdvanced}
-                        />
-                    )}
-                    {canPassword && <CustomerEmergencyPasswordResetCard customerId={party.id} />}
-                    </div>
                 </TabsContent>
                 </Tabs>
             </DialogContent>
