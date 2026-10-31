@@ -1,7 +1,8 @@
 "use client";
 
-// Fix a customer's spelling, address or contact from the counter without leaving
-// the bill. Details is open to every cashier (same as the office's party PUT);
+// Fix a customer's spelling, addresses or contacts from the counter without leaving
+// the bill. Every phone row shows (add / edit / remove / make main); a person's
+// addresses use the office's own AddressBook, a company keeps its one address box. Details is open to every cashier (same as the office's party PUT);
 // Advanced carries the office's own credit-limit, group and password-reset cards behind
 // the same Role ticks the office uses (customers:edit, users:edit) — the APIs
 // check them again. Saves through the office party endpoints, so the GSTIN ↔
@@ -18,6 +19,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Star, Trash2 } from "lucide-react";
+import AddressBook from "@/shared/components/address/AddressBook";
 import CustomerGroupCard from "@/modules/customer/components/CustomerGroupCard";
 import AccountCreditLimitCard from "@/modules/customer/components/AccountCreditLimitCard";
 import CustomerEmergencyPasswordResetCard from "@/modules/customer/components/CustomerEmergencyPasswordResetCard";
@@ -29,7 +32,11 @@ import { type Snapshot } from "@/modules/pos/lib/posDraftTypes";
 
 type Party = Snapshot["party"];
 type Contact = { id: number; value: string } | null;
-type Form = { name: string; address: string; gstin: string; phone: string; email: string };
+type Form = { name: string; address: string; gstin: string; email: string };
+// id null = a row added here, not saved yet. The first row is the main one.
+type PhoneRow = { id: number | null; value: string; key: number };
+let phoneKey = 0;
+const phoneRowOf = (id: number | null, value: string): PhoneRow => ({ id, value, key: ++phoneKey });
 
 export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: {
     party: Party;
@@ -45,11 +52,14 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
     const canPassword = party.kind === "person" && hasPermissionWithScope(perms, PERMISSIONS.USERS_EDIT);
     const [creditLimit, setCreditLimit] = useState<string | number | null>(null);
     const [groupId, setGroupId] = useState<number | null>(null);
+    const isPerson = party.kind === "person";
     const base = party.kind === "person" ? `/api/person/${party.id}` : `/api/companies/${party.id}`;
 
-    const [form, setForm] = useState<Form>({ name: "", address: "", gstin: "", phone: "", email: "" });
-    // The primary phone / email rows — a change edits that row, an empty one adds.
-    const [phoneRow, setPhoneRow] = useState<Contact>(null);
+    const [form, setForm] = useState<Form>({ name: "", address: "", gstin: "", email: "" });
+    // Phones as loaded (to diff on save) and as edited, main first.
+    const [savedPhones, setSavedPhones] = useState<{ id: number; value: string }[]>([]);
+    const [phones, setPhones] = useState<PhoneRow[]>([]);
+    // The primary email row — a change edits that row, an empty one adds.
     const [emailRow, setEmailRow] = useState<Contact>(null);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -61,7 +71,8 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
     const loadFor = open ? JSON.stringify([base, party.kind, party.name, party.address, party.gstin]) : null;
     if (useValueChange(loadFor, null) && loadFor !== null) {
         setLoading(true);
-        setForm({ name: party.name, address: party.address ?? "", gstin: party.gstin ?? "", phone: "", email: "" });
+        setForm({ name: party.name, address: party.address ?? "", gstin: party.gstin ?? "", email: "" });
+        setPhones([]);
     }
     useEffect(() => {
         if (!open) return;
@@ -75,13 +86,13 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
                     : data.contactRows?.emails ?? [];
                 setCreditLimit(data.creditLimit ?? null);
                 setGroupId(data.customerGroupId ?? null);
-                setPhoneRow(phones[0] ?? null);
+                setSavedPhones(phones);
+                setPhones(phones.length ? phones.map((p) => phoneRowOf(p.id, p.value)) : [phoneRowOf(null, "")]);
                 setEmailRow(emails[0] ?? null);
                 setForm({
                     name: data.name ?? party.name,
                     address: data.address ?? "",
                     gstin: data.gstin ?? "",
-                    phone: phones[0]?.value ?? "",
                     email: emails[0]?.value ?? "",
                 });
             })
@@ -105,6 +116,55 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
     const set = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
         setForm((f) => ({ ...f, [k]: e.target.value }));
 
+    // The person's main address may have changed in the address book — bills print
+    // Person.address, so re-read it and patch the panel.
+    const refreshAddress = () => {
+        void axios.get(base).then(({ data }) => {
+            const address = data.address ?? null;
+            setForm((f) => ({ ...f, address: address ?? "" }));
+            setSnapshot((s) => s && s.party.id === party.id && s.party.kind === party.kind
+                ? { ...s, party: { ...s.party, address } }
+                : s);
+        }).catch(() => {});
+    };
+
+    const setPhone = (key: number, value: string) =>
+        setPhones((rows) => rows.map((r) => (r.key === key ? { ...r, value } : r)));
+    const removePhone = (row: PhoneRow) => {
+        if (row.id != null && !window.confirm(`Remove ${row.value || "this number"} from the customer?`)) return;
+        setPhones((rows) => {
+            const next = rows.filter((r) => r.key !== row.key);
+            return next.length ? next : [phoneRowOf(null, "")];
+        });
+    };
+    const makeMain = (key: number) =>
+        setPhones((rows) => [...rows.filter((r) => r.key === key), ...rows.filter((r) => r.key !== key)]);
+
+    // Deletes first (frees a number moved between rows), then edits and adds, and
+    // last marks the first row main if it is not already. Returns the main number.
+    const savePhones = async () => {
+        const kept = phones.filter((r) => r.value.trim());
+        const keptIds = new Set(kept.map((r) => r.id).filter((id): id is number => id != null));
+        for (const old of savedPhones) {
+            if (!keptIds.has(old.id)) await axios.delete(`${base}/phones/${old.id}`);
+        }
+        const ids: number[] = [];
+        for (const row of kept) {
+            const v = row.value.trim();
+            if (row.id == null) {
+                const { data } = await axios.post<{ id: number }>(`${base}/phones`, { value: v, isPrimary: false });
+                ids.push(data.id);
+            } else {
+                if (v !== savedPhones.find((p) => p.id === row.id)?.value) await axios.patch(`${base}/phones/${row.id}`, { value: v });
+                ids.push(row.id);
+            }
+        }
+        if (ids.length && ids[0] !== savedPhones.find((p) => keptIds.has(p.id))?.id) {
+            await axios.patch(`${base}/phones/${ids[0]}`, { isPrimary: true });
+        }
+        return kept[0]?.value.trim() ?? null;
+    };
+
     const saveContact = async (kind: "phones" | "emails", row: Contact, value: string) => {
         const v = value.trim();
         if (v === (row?.value ?? "")) return;
@@ -119,8 +179,11 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
         if (!name) { toast.error("Name is required"); return; }
         setSaving(true);
         try {
-            await axios.put(base, { name, address: form.address.trim() || null, gstin: form.gstin.trim().toUpperCase() });
-            await saveContact("phones", phoneRow, form.phone);
+            // A person's address lives in the address book, which saves on its own.
+            await axios.put(base, isPerson
+                ? { name, gstin: form.gstin.trim().toUpperCase() }
+                : { name, address: form.address.trim() || null, gstin: form.gstin.trim().toUpperCase() });
+            const mainPhone = await savePhones();
             await saveContact("emails", emailRow, form.email);
             // Patch the panel in place — the bill keeps its cart and customer.
             setSnapshot((s) => s && s.party.id === party.id && s.party.kind === party.kind
@@ -129,9 +192,9 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
                     party: {
                         ...s.party,
                         name,
-                        address: form.address.trim() || null,
+                        ...(isPerson ? {} : { address: form.address.trim() || null }),
                         gstin: form.gstin.trim().toUpperCase() || null,
-                        phone: form.phone.trim() || s.party.phone,
+                        phone: mainPhone || s.party.phone,
                         email: form.email.trim() || null,
                     },
                 }
@@ -164,11 +227,34 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
                         <Label htmlFor="pec-name">Name</Label>
                         <Input id="pec-name" value={form.name} onChange={set("name")} disabled={loading} autoFocus />
                     </div>
-                    <div className="grid gap-2 sm:grid-cols-3">
-                        <div className="space-y-1">
-                            <Label htmlFor="pec-phone">Phone</Label>
-                            <Input id="pec-phone" type="tel" inputMode="tel" value={form.phone} onChange={set("phone")} disabled={loading} />
-                        </div>
+                    <div className="space-y-1">
+                        <Label>Phones</Label>
+                        {phones.map((row, i) => (
+                            <div key={row.key} className="flex items-center gap-1">
+                                <Input
+                                    type="tel"
+                                    inputMode="tel"
+                                    aria-label={i === 0 ? "Main phone" : "Phone"}
+                                    value={row.value}
+                                    onChange={(e) => setPhone(row.key, e.target.value)}
+                                    disabled={loading}
+                                />
+                                <Button type="button" variant="ghost" size="icon-xs" disabled={loading || i === 0}
+                                    onClick={() => makeMain(row.key)} title={i === 0 ? "Main number" : "Make main"}>
+                                    <Star className={i === 0 ? "size-4 fill-amber-400 text-amber-500" : "size-4"} />
+                                </Button>
+                                <Button type="button" variant="ghost" size="icon-xs" disabled={loading}
+                                    onClick={() => removePhone(row)} title="Remove number">
+                                    <Trash2 className="size-4" />
+                                </Button>
+                            </div>
+                        ))}
+                        <Button type="button" variant="outline" size="sm" disabled={loading}
+                            onClick={() => setPhones((rows) => [...rows, phoneRowOf(null, "")])}>
+                            <Plus className="size-4" /> Add phone
+                        </Button>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
                         <div className="space-y-1">
                             <Label htmlFor="pec-email">Email</Label>
                             <Input id="pec-email" type="email" value={form.email} onChange={set("email")} disabled={loading} />
@@ -178,6 +264,13 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
                             <Input id="pec-gstin" value={form.gstin} onChange={set("gstin")} disabled={loading} className="font-mono uppercase" maxLength={15} />
                         </div>
                     </div>
+                    {isPerson ? (
+                        <div className="space-y-1">
+                            <Label>Addresses</Label>
+                            {/* Saves on its own; the main one is what bills print. */}
+                            {!loading && <AddressBook apiBase={`${base}/addresses`} emptyText="No address added." onChanged={refreshAddress} />}
+                        </div>
+                    ) : (
                     <div className="space-y-1">
                         <Label htmlFor="pec-address">Address</Label>
                         <textarea
@@ -189,6 +282,7 @@ export function PosEditCustomerDialog({ party, accountId, open, onOpenChange }: 
                             className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                         />
                     </div>
+                    )}
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
                         <Button type="submit" disabled={saving || loading}>{saving ? "Saving…" : "Save"}</Button>
