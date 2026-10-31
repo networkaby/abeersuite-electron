@@ -205,6 +205,7 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
     const [threadLoading, setThreadLoading] = useState(false);
     const [draft, setDraft] = useState("");
     const [sending, setSending] = useState(false);
+    const [closing, setClosing] = useState(false);
     // A photo / file picked with the paperclip; the draft becomes its caption.
     const [attach, setAttach] = useState<File | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
@@ -452,7 +453,8 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
     }, [thread]);
 
     const closeConversation = async () => {
-        if (!thread) return;
+        if (!thread || closing) return;
+        setClosing(true);
         try {
             await axios.post("/api/messages/conversation", { phone: thread.phone, action: "close" });
             toast.success("Closed — no reply needed. The customer's next message starts a new conversation");
@@ -460,6 +462,8 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
             void loadList(1);
         } catch (e) {
             toast.error(extractApiError(e, "Could not close the conversation"));
+        } finally {
+            setClosing(false);
         }
     };
 
@@ -763,9 +767,10 @@ export default function MessagesWorkspace({ canReply, canTicket, customers = tru
                                                 variant="outline"
                                                 className="h-8 px-2 text-xs"
                                                 onClick={() => void closeConversation()}
+                                                disabled={closing}
                                                 title="No reply needed — takes this chat off the new-message popup and ends any open conversation"
                                             >
-                                                <X className="mr-1 size-3.5" /> Close
+                                                <X className="mr-1 size-3.5" /> {closing ? "Closing..." : "Close"}
                                             </Button>
                                         )}
                                         <Button size="sm" variant="ghost" className="size-8 p-0" onClick={toggleSpam} title={thread.spam ? "Not spam" : "Mark this number spam"}>

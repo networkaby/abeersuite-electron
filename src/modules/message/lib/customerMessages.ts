@@ -184,7 +184,10 @@ export async function closeConversation(phone: string, reason: "STAFF" | "CUSTOM
                 select: { closedAt: true },
             }),
         ]);
-        if (lastClose?.closedAt && (!lastIn || lastClose.closedAt >= lastIn.occurredAt)) return true;
+        if (lastClose?.closedAt && (!lastIn || lastClose.closedAt >= lastIn.occurredAt)) {
+            void publishChangeServer(["messages"]);
+            return true;
+        }
         const at = new Date();
         await prisma.messageConversation.create({
             data: { phone, startedAt: at, lastMessageAt: at, closedAt: at, closedReason: "STAFF", closedByUserId: userId ?? null },
