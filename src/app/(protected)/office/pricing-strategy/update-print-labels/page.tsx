@@ -379,8 +379,13 @@ const numOrNull = (s: string): number | null => {
     return isFinite(v) ? v : null;
 };
 
-const inRange = (val: number | null, lo: number | null, hi: number | null): boolean =>
-    val != null && (lo == null || val >= lo) && (hi == null || val <= hi);
+// min ≤ max → keep inside [min, max]. min > max → keep OUTSIDE the middle:
+// at most max OR at least min (e.g. max 10, min 80 → 0–10 and 80–100).
+const inRange = (val: number | null, lo: number | null, hi: number | null): boolean => {
+    if (val == null) return false;
+    if (lo != null && hi != null && lo > hi) return val <= hi || val >= lo;
+    return (lo == null || val >= lo) && (hi == null || val <= hi);
+};
 
 // The price of the voice marked SELLING (Strategy / Computed / Sale Price),
 // before the barcode/MRP cap — what the row is set to sell at.
@@ -1273,7 +1278,10 @@ export default function GeneratePage() {
         return (
             <div className={`rounded-md border px-2 py-1.5 ${active ? "border-primary/40 bg-primary/5" : "border-transparent"}`}>
                 <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-[11px] font-medium text-muted-foreground">{label}</span>
+                    <span className="truncate text-[11px] font-medium text-muted-foreground" title="min more than max = everything OUTSIDE (≤ max or ≥ min)">
+                        {label}
+                        {lo != null && hi != null && lo > hi ? <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] text-amber-800 dark:bg-amber-950 dark:text-amber-200">outside</span> : null}
+                    </span>
                     <span className="flex shrink-0 items-center gap-1">
                         {active ? resetBtn(key) : null}
                         {box("min")}
@@ -1286,7 +1294,9 @@ export default function GeneratePage() {
                         min={b.lo}
                         max={b.hi}
                         step={b.step}
-                        value={[Math.max(b.lo, Math.min(b.hi, lo ?? b.lo)), Math.max(b.lo, Math.min(b.hi, hi ?? b.hi))]}
+                        // Crossed (min > max = "outside") — the slider cannot show that; it shows
+                        // the excluded middle, and dragging it sets a normal range again.
+                        value={[Math.max(b.lo, Math.min(b.hi, Math.min(lo ?? b.lo, hi ?? b.hi))), Math.max(b.lo, Math.min(b.hi, Math.max(lo ?? b.lo, hi ?? b.hi)))]}
                         onValueChange={([a, z]) => {
                             // A thumb at the end of the track means "no limit" on that side.
                             setRange(key, "min", a <= b.lo ? "" : String(a));
