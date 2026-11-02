@@ -86,7 +86,7 @@ export function invProductToAdmin(
         groupName: p.group?.name ?? null,
         shopCategory: p.shopCategory,
         savedSalePricePaise: p.savedSalePricePaise,
-        barcodePricePaise: bands ? barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands) : null,
+        barcodePricePaise: bands ? barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands, p.barcodeManualPaise) : null,
         codes: p.codes ?? [],
         photoChecklist: readPhotoChecklist(p.photoChecklistJson),
     };

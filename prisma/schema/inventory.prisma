@@ -353,6 +353,11 @@ model InvProduct {
   /// materializes into effectiveSalePricePaise when effectiveSalePriceSource = SAVED.
   /// Written by Edit Product, Item Import, and the Update & Print Labels "Sale Price" column.
   savedSalePricePaise      Int?
+  /// Manual barcode (tag) price override, paise. null = auto-derive from
+  /// savedSalePricePaise + MRP via the barcode bands. When set it wins
+  /// everywhere (labels, POS cap, shop) and a Sale Price change never resets it;
+  /// only the "reset" on Update & Print Labels clears it. MRP-capped on save.
+  barcodeManualPaise       Int?
   /// When savedSalePricePaise was last frozen — drives the printed barcode date code.
   salePriceFrozenAt        DateTime?
   /// After-tax profit (paise) decided at freeze time — basis for the drift /

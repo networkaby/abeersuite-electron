@@ -67,6 +67,8 @@ export interface PricingItem {
     daysSinceLastSale:    number | null;
     /** Saved human sale price (paise). null = not set. Source of the barcode. */
     savedSalePricePaise:  number | null;
+    /** Hand-set barcode tag (paise). null = auto from saved price + MRP. Always wins. */
+    barcodeManualPaise:   number | null;
     /** Which source materializes the effective price: "STRATEGY" | "COMPUTED" | "SAVED". */
     effectiveSalePriceSource: string;
     /** ISO timestamp the sale price was last frozen, or null. */

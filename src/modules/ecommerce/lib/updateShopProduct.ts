@@ -85,7 +85,7 @@ export async function updateShopProduct(
             where: { id: pid },
             select: {
                 name: true, sku: true, imageUrl: true, galleryJson: true,
-                shopDescription: true, shopCategory: true, stock: true, savedSalePricePaise: true,
+                shopDescription: true, shopCategory: true, stock: true, savedSalePricePaise: true, barcodeManualPaise: true,
                 mrpPaise: true, effectiveSalePricePaise: true, slug: true,
                 groupId: true, brandId: true, allowBackorder: true, weightGrams: true,
             },

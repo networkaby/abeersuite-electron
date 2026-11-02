@@ -1,6 +1,6 @@
 // ── barcodePrice ─────────────────────────────────────────────────────────────
-// The printed barcode (tag) price is DERIVED from the saved sale price, not
-// stored. A band-based buffer is added to the sale price to leave headroom on
+// The printed barcode (tag) price is DERIVED from the saved sale price unless
+// InvProduct.barcodeManualPaise holds a hand-set override (that always wins). A band-based buffer is added to the sale price to leave headroom on
 // the printed label; the buffered value is rounded to the nearest 10, then a
 // per-band "hint" digit is set as the units digit (silently encoding which band
 // applied to staff). MRP cap: when MRP is tight the barcode floors to MRP
@@ -80,7 +80,10 @@ export function barcodeTagPaise(
     savedPaise: number | null | undefined,
     mrpPaise: number | null | undefined,
     bands: BarcodeBand[] = DEFAULT_BARCODE_BANDS,
+    /** InvProduct.barcodeManualPaise — a hand-set tag always wins. */
+    manualPaise: number | null | undefined = null,
 ): number | null {
+    if (manualPaise != null) return manualPaise;
     if (savedPaise == null) return null;
     const v = barcodePrice(savedPaise / 100, mrpPaise != null ? mrpPaise / 100 : null, bands).value;
     return v == null ? null : Math.round(v * 100);

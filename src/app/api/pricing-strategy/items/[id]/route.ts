@@ -36,6 +36,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             };
         }
 
+        // Manual barcode: never above MRP (the MRP in this same patch, else the stored one).
+        let barcodePatch: Record<string, unknown> = {};
+        if (data.barcodeManualPaise !== undefined) {
+            let v = data.barcodeManualPaise;
+            if (v != null) {
+                const mrp = data.mrpPaise !== undefined
+                    ? data.mrpPaise
+                    : (await prisma.invProduct.findUnique({ where: { id }, select: { mrpPaise: true } }))?.mrpPaise;
+                if (mrp != null && mrp > 0 && v > mrp) v = mrp;
+            }
+            barcodePatch = { barcodeManualPaise: v };
+        }
+
         const row = await prisma.invProduct.update({
             where: { id },
             data: {
@@ -43,6 +56,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(data.marginPercent   !== undefined ? { marginPercent: data.marginPercent != null ? data.marginPercent.toString() : null } : {}),
                 ...(data.mrpPaise        !== undefined ? { mrpPaise:      data.mrpPaise } : {}),
                 ...openingPatch,
+                ...barcodePatch,
             },
             select: {
                 id:               true,
@@ -50,6 +64,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 marginPercent:    true,
                 effectiveSalePricePaise:       true,
                 mrpPaise:         true,
+                barcodeManualPaise: true,
                 openingRate:      true,
                 openingStock:     true,
                 openingValue:     true,

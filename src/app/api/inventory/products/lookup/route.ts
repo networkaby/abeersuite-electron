@@ -52,6 +52,7 @@ const PRODUCT_SELECT = {
     lowStockThreshold: true,
     effectiveSalePricePaise: true,
     mrpPaise:          true,
+    barcodeManualPaise: true,
     savedSalePricePaise: true,
     requireSaleNote:   true,
     imageUrl:          true,
@@ -112,7 +113,7 @@ async function enrichProducts(products: ProductRow[], barcodeBands: ReturnType<t
             redeemCapPct: capMap.get(p.id) ?? null,
             // Printed barcode tag (paise) derived from saved price + MRP — the
             // public price snapshotted on POS lines for the customer ladder.
-            barcodePricePaise: barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, barcodeBands),
+            barcodePricePaise: barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, barcodeBands, p.barcodeManualPaise),
             // O2C available-to-sell = on-hand − reserved (null when untracked).
             availableToSell: p.stock == null ? null : p.stock - (p.reserved ?? 0),
         };

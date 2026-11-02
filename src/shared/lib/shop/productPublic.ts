@@ -163,7 +163,7 @@ export function invProductToPublic(
         // supplied, else the materialized effectiveSalePricePaise. Exposed under the
         // stable shop field name `pricePaise` so the storefront UI is unchanged.
         pricePaise:
-            (bands ? barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands) : null) ??
+            (bands ? barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands, p.barcodeManualPaise) : null) ??
             p.effectiveSalePricePaise ??
             0,
         mrpPaise: p.mrpPaise,

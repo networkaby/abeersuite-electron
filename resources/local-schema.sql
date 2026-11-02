@@ -2809,6 +2809,7 @@ CREATE TABLE IF NOT EXISTS "InvProduct" (
     "marginPercent" DECIMAL(6,2),
     "effectiveSalePriceSource" "EffectiveSalePriceSource" NOT NULL DEFAULT 'STRATEGY',
     "savedSalePricePaise" INTEGER,
+    "barcodeManualPaise" INTEGER,
     "salePriceFrozenAt" TIMESTAMP(3),
     "savedProfitPaise" INTEGER,
     "openingStock" DECIMAL(10,3),
@@ -2895,6 +2896,8 @@ ALTER TABLE "InvProduct" ALTER COLUMN "marginPercent" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "effectiveSalePriceSource" "EffectiveSalePriceSource" NOT NULL DEFAULT 'STRATEGY';
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "savedSalePricePaise" INTEGER;
 ALTER TABLE "InvProduct" ALTER COLUMN "savedSalePricePaise" DROP NOT NULL;
+ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "barcodeManualPaise" INTEGER;
+ALTER TABLE "InvProduct" ALTER COLUMN "barcodeManualPaise" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "salePriceFrozenAt" TIMESTAMP(3);
 ALTER TABLE "InvProduct" ALTER COLUMN "salePriceFrozenAt" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "savedProfitPaise" INTEGER;

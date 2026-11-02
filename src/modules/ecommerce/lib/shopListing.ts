@@ -20,6 +20,7 @@ export type ShopListingInput = {
     allowBackorder: boolean;
     weightGrams: number | null;
     savedSalePricePaise: number | null;
+    barcodeManualPaise?: number | null;
     mrpPaise: number | null;
     effectiveSalePricePaise: number | null;
     slug: string | null;
@@ -48,7 +49,7 @@ export function resolveShopListing(
     opts: { explicitListed?: boolean; bands: BarcodeBand[]; rules?: ShopPublishRules }
 ): ShopListingDecision {
     const shopPrice =
-        barcodeTagPaise(m.savedSalePricePaise, m.mrpPaise, opts.bands) ??
+        barcodeTagPaise(m.savedSalePricePaise, m.mrpPaise, opts.bands, m.barcodeManualPaise) ??
         m.effectiveSalePricePaise ??
         0;
     const q = shopQualification(

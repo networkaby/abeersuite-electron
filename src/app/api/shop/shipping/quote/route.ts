@@ -57,7 +57,7 @@ export async function POST(req: Request) {
             const p = byId.get(l.productId);
             if (!p) return NextResponse.json({ error: `Unknown product ${l.productId}` }, { status: 400 });
             const unitPricePaise =
-                barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands) ?? p.effectiveSalePricePaise ?? 0;
+                barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands, p.barcodeManualPaise) ?? p.effectiveSalePricePaise ?? 0;
             subtotalPaise += unitPricePaise * l.quantity;
             // Couriers bill on max(actual, volumetric) — use the chargeable weight.
             weightGrams += chargeableUnitGrams(p, fallbackWeight) * l.quantity;

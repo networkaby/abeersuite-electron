@@ -17,8 +17,10 @@
  * barcode price and MRP (cap not shown as its own column — see Barcode).
  *
  * EDITABLE + persisted (PATCH /api/pricing-strategy/items/[id]): Computed price
- *   (typed; Margin % is derived from it, read-only) →
- * marginPercent, MRP → mrpPaise, Method → costMethod. Everything else (name,
+ *   (typed; Margin % is derived from it, read-only) → marginPercent, Barcode
+ *   (own input; blank = auto from Sale Price, else manual/violet and never reset
+ *   by a Sale Price change) → barcodeManualPaise,
+ * MRP → mrpPaise, Method → costMethod. Everything else (name,
  * taxonomy, stock, cost, GST, Strategy voice, days-since-sale, barcode) is
  * read-only/derived. Cost is GST-inclusive; because cost_incl × (1+margin) equals
  * the engine's cost_excl × (1+margin) × (1+gst), the Computed voice matches POS.
@@ -153,6 +155,7 @@ type Row = {
     baseSource: SaleSource; // last-saved sale source, for dirty detection
     savedAt: string;        // ISO date the Sale Price was last frozen → barcode date code
     savedProfit: string;    // decided profit ₹ frozen at last save → basis for the profit-gap filter
+    barcodeManual: string;  // hand-set barcode ₹ (InvProduct.barcodeManualPaise); "" = auto from Sale Price
 };
 
 // ── Map the engine's PricingItem → a table Row ────────────────────────────────
@@ -211,6 +214,7 @@ function itemToRow(it: PricingItem): Row {
         baseSource: voiceFromDb(it.effectiveSalePriceSource),
         savedAt: it.salePriceFrozenAt ? it.salePriceFrozenAt.slice(0, 10) : "",
         savedProfit: it.savedProfitPaise != null ? (it.savedProfitPaise / 100).toFixed(2) : "",
+        barcodeManual: it.barcodeManualPaise != null ? (it.barcodeManualPaise / 100).toFixed(2) : "",
     };
 }
 
@@ -291,6 +295,19 @@ function barcodePrice(
     return barcodePriceCore(price, mrp, ACTIVE_BARCODE_BANDS);
 }
 
+// The row's printed barcode: the hand-set one when present (never reset by a
+// Sale Price change), else derived from the Sale Price + MRP. Every barcode
+// read on this page goes through here so the manual value is honoured.
+function rowBarcode(r: Row): { value: number | null; hint: string; capped: boolean; manual: boolean } {
+    const m = numOrNull(r.mrp);
+    const mrp = m != null && m > 0 ? m : null;
+    const manual = numOrNull(r.barcodeManual);
+    if (manual != null) return { value: manual, hint: "", capped: mrp != null && manual >= mrp, manual: true };
+    const sp = numOrNull(r.salePrice);
+    if (sp == null) return { value: null, hint: "", capped: false, manual: false };
+    return { ...barcodePrice(sp, mrp), manual: false };
+}
+
 // ── Sort ──────────────────────────────────────────────────────────────────────
 
 type SortKey = "name" | "brand" | "category" | "group" | "stock" | "cost" | "strategy" | "computed" | "saved" | "barcode";
@@ -309,14 +326,7 @@ function sortVal(r: Row, key: SortKey): number | string {
         case "strategy": return strategyRupees(r) ?? -Infinity;
         case "computed": return priceWithMargin(r.costIncl, r.margin) ?? -Infinity;
         case "saved": { const v = parseFloat(r.salePrice); return isFinite(v) ? v : -Infinity; }
-        case "barcode": {
-            const v = parseFloat(r.salePrice);
-            const sp = isFinite(v) ? v : null;
-            if (sp == null) return -Infinity;
-            const mn = parseFloat(r.mrp);
-            const mrp = isFinite(mn) && mn > 0 ? mn : null;
-            return barcodePrice(sp, mrp).value ?? -Infinity;
-        }
+        case "barcode": return rowBarcode(r).value ?? -Infinity;
     }
 }
 
@@ -360,10 +370,8 @@ function applicableSalePrice(r: Row): number | null {
     if (chosen == null) return null;
     let val = chosen;
     const m = numOrNull(r.mrp);
-    if (saved != null) {
-        const bc = barcodePrice(saved, m != null && m > 0 ? m : null).value;
-        if (bc != null) val = Math.min(val, bc);
-    }
+    const bc = rowBarcode(r).value;
+    if (bc != null) val = Math.min(val, bc);
     if (m != null && m > 0) val = Math.min(val, m);
     return val;
 }
@@ -371,10 +379,7 @@ function applicableSalePrice(r: Row): number | null {
 // Barcode capped = the printed barcode was clamped to MRP (MRP is squeezing the
 // barcode's headroom). The sale price itself may still be healthy.
 function barcodeCapped(r: Row): boolean {
-    const sp = numOrNull(r.salePrice);
-    if (sp == null) return false;
-    const m = numOrNull(r.mrp);
-    return barcodePrice(sp, m != null && m > 0 ? m : null).capped;
+    return rowBarcode(r).capped;
 }
 
 // Sale price capped = the selling voice itself had to be held down by the
@@ -438,8 +443,7 @@ function rangeVal(r: Row, key: RangeKey): number | null {
 function barcodeShrinkPct(r: Row): number | null {
     const saved = numOrNull(r.salePrice);
     if (saved == null) return null;
-    const m = numOrNull(r.mrp);
-    const bc = barcodePrice(saved, m != null && m > 0 ? m : null).value;
+    const bc = rowBarcode(r).value;
     if (bc == null || bc === 0) return null;
     const live =
         r.saleSource === "STRATEGY" ? strategyRupees(r)
@@ -486,7 +490,7 @@ const ProfitSub = ({ p }: { p: { amt: number; pct: number | null } | null }) =>
         </span>
     );
 
-type RowPersistPatch = { marginPercent?: number | null; mrpPaise?: number | null; costMethod?: string };
+type RowPersistPatch = { marginPercent?: number | null; mrpPaise?: number | null; costMethod?: string; barcodeManualPaise?: number | null };
 
 // Memoized row — only re-renders when its own `r`, `selected`, or column
 // visibility (`hidden`) changes. With ~hundreds of rows this keeps typing in one
@@ -518,7 +522,10 @@ const ProductRow = memo(function ProductRow({
     const savedPrice = isFinite(savedNum) ? savedNum : null;
     const mrpNum = parseFloat(r.mrp);
     const mrp = isFinite(mrpNum) && mrpNum > 0 ? mrpNum : null;
-    const bc = savedPrice != null ? barcodePrice(savedPrice, mrp) : null;
+    const bc = rowBarcode(r);
+    // What the barcode would be with no manual value — reset target + "same as auto" check.
+    const autoBc = savedPrice != null ? barcodePrice(savedPrice, mrp).value : null;
+    const [bcAtFocus, setBcAtFocus] = useState(r.barcodeManual);
     const dateCode = secretDateCode(r.savedAt);
     const stratProfit = profitOf(strategyPrice, r.costIncl, r.gst);
     const myProfit = profitOf(myPrice, r.costIncl, r.gst);
@@ -685,25 +692,49 @@ const ProductRow = memo(function ProductRow({
             ) : null}
 
             {show("barcode") ? (
-                <TableCell className={`text-right ${COL_TINT.barcode}`}>
-                    {bc == null || bc.value == null ? (
-                        <span className="text-xs text-muted-foreground">—</span>
-                    ) : (
-                        <span className="inline-flex items-baseline justify-end gap-1">
-                            <span
-                                className={`text-sm font-mono font-semibold ${bc.capped ? "text-amber-600" : ""} ${bc.hint === "m" ? "underline decoration-2 underline-offset-2" : ""}`}
-                                title={bc.capped ? (bc.hint === "m" ? "Capped at MRP exactly (no markup room)" : "Capped at MRP — no markup room") : undefined}
+                <TableCell className={`text-right align-top ${COL_TINT.barcode}`}>
+                    {/* Own input. Blank / equal to auto = auto (follows Sale Price).
+                        Anything else is MANUAL: violet, and a Sale Price change never touches it. */}
+                    <div className="flex items-center justify-end gap-1">
+                        {bc.manual ? (
+                            <button
+                                type="button"
+                                className="text-[10px] text-violet-700 underline dark:text-violet-300"
+                                title={autoBc != null ? `Back to auto (₹${autoBc.toFixed(2)})` : "Back to auto"}
+                                onClick={() => { onUpdate(r.id, { barcodeManual: "" }); onPersist(r.id, { barcodeManualPaise: null }); }}
                             >
-                                {rupee(bc.value)}
-                                {bc.hint && bc.hint !== "m" ? <span className="ml-1 text-[10px] text-muted-foreground">·{bc.hint}</span> : null}
+                                auto
+                            </button>
+                        ) : null}
+                        <Input
+                            type="text"
+                            inputMode="decimal"
+                            value={bc.manual ? r.barcodeManual : bc.value != null ? bc.value.toFixed(2) : ""}
+                            placeholder="—"
+                            title={bc.manual ? "Manual barcode — Sale Price changes will not change it" : "Auto from Sale Price — type to set your own"}
+                            onFocus={() => setBcAtFocus(r.barcodeManual)}
+                            onChange={(e) => onUpdate(r.id, { barcodeManual: parseDecimalInput(e.target.value) })}
+                            onBlur={() => {
+                                let v = numOrNull(r.barcodeManual);
+                                if (v != null && mrp != null && v > mrp) v = mrp; // never above MRP
+                                if (v != null && v <= 0) v = null;
+                                if (v != null && autoBc != null && Math.abs(v - autoBc) < 0.005) v = null; // same as auto
+                                const next = v != null ? v.toFixed(2) : "";
+                                if (next !== r.barcodeManual) onUpdate(r.id, { barcodeManual: next });
+                                if (next !== bcAtFocus) onPersist(r.id, { barcodeManualPaise: v != null ? Math.round(v * 100) : null });
+                            }}
+                            className={`h-7 w-24 text-right text-sm font-mono font-semibold ${bc.manual ? "border-violet-500 bg-violet-50 text-violet-800 dark:bg-violet-950 dark:text-violet-200" : ""} ${bc.capped ? "text-amber-600" : ""} ${bc.hint === "m" ? "underline decoration-2 underline-offset-2" : ""}`}
+                        />
+                    </div>
+                    <div className="mt-0.5 flex justify-end gap-1 text-[10px] text-muted-foreground">
+                        {bc.manual ? <span className="text-violet-700 dark:text-violet-300">manual</span> : null}
+                        {bc.hint && bc.hint !== "m" ? <span>·{bc.hint}</span> : null}
+                        {dateCode ? (
+                            <span className="rounded bg-muted px-1 font-mono" title={`Barcode date code — frozen ${r.savedAt} (MM + 10-day third)`}>
+                                {dateCode}
                             </span>
-                            {dateCode ? (
-                                <span className="rounded bg-muted px-1 text-[10px] font-mono text-muted-foreground" title={`Barcode date code — frozen ${r.savedAt} (MM + 10-day third)`}>
-                                    {dateCode}
-                                </span>
-                            ) : null}
-                        </span>
-                    )}
+                        ) : null}
+                    </div>
                 </TableCell>
             ) : null}
 
@@ -771,7 +802,7 @@ export default function GeneratePage() {
     // change alters the cost basis (cost method) so derived voices stay accurate.
     const persist = useCallback(async (
         id: number,
-        patch: { marginPercent?: number | null; mrpPaise?: number | null; costMethod?: string },
+        patch: RowPersistPatch,
         opts?: { reload?: boolean },
     ) => {
         if (id < 0) return;
@@ -1316,7 +1347,7 @@ export default function GeneratePage() {
                             {show("sale") ? <SortHeader k="saved" label="Sale Price" align="right" firstDir="desc" title="Manual — you type this price" className={`${SORT_TH} ${COL_TINT.sale}`} {...sortProps} /> : null}
                             {show("selling") ? <TableHead className={`text-right text-xs ${COL_TINT.selling}`}>Selling</TableHead> : null}
                             {show("mrp") ? <TableHead className={`text-right text-xs ${COL_TINT.mrp}`}>MRP</TableHead> : null}
-                            {show("barcode") ? <SortHeader k="barcode" label="Barcode" align="right" firstDir="desc" title="Edit Sale Price to change" className={`${SORT_TH} ${COL_TINT.barcode}`} {...sortProps} /> : null}
+                            {show("barcode") ? <SortHeader k="barcode" label="Barcode" align="right" firstDir="desc" title="Auto from Sale Price; type to set a manual barcode" className={`${SORT_TH} ${COL_TINT.barcode}`} {...sortProps} /> : null}
                             <TableHead className="w-8" />
                         </TableRow>
                     </TableHeader>

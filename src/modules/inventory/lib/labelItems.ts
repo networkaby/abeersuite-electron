@@ -104,14 +104,15 @@ export function nameFitScale(name: string, availableMm: number, fontSizePt: numb
 }
 
 /**
- * Engine item → label. The printed price is the barcode price (the band-buffered,
- * MRP-capped tag), falling back to the saved sale price, then to the price that
+ * Engine item → label. The printed price is the barcode price (the hand-set
+ * barcodeManualPaise if any, else the band-buffered, MRP-capped tag), falling back to the saved sale price, then to the price that
  * currently sells — so a product nobody has frozen yet still prints a real price.
  */
 export function pricingItemToLabelItem(it: PricingItem, bands: BarcodeBand[], copies: number): Item {
     const saved = it.savedSalePricePaise != null ? it.savedSalePricePaise / 100 : null;
     const mrp = it.mrpPaise != null ? it.mrpPaise / 100 : null;
-    const tag = saved != null ? barcodePrice(saved, mrp != null && mrp > 0 ? mrp : null, bands).value : null;
+    const tag = it.barcodeManualPaise != null ? it.barcodeManualPaise / 100
+        : saved != null ? barcodePrice(saved, mrp != null && mrp > 0 ? mrp : null, bands).value : null;
     const effective = it.effectiveSalePricePaise != null ? it.effectiveSalePricePaise / 100 : null;
     const price = tag ?? saved ?? effective;
     return {

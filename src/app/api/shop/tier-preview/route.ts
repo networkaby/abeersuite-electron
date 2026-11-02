@@ -60,7 +60,7 @@ export async function POST(req: Request) {
         for (const l of data.lines) {
             const p = byId.get(l.productId);
             const unitPricePaise = p
-                ? barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands) ?? p.effectiveSalePricePaise
+                ? barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands, p.barcodeManualPaise) ?? p.effectiveSalePricePaise
                 : null;
             if (p && unitPricePaise != null) {
                 lines.push({ productId: l.productId, quantity: l.quantity, unitPricePaise });

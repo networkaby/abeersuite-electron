@@ -55,6 +55,8 @@ export const pricingItemUpdateSchema = z
         costMethod:       costMethodEnum.nullable().optional(),
         marginPercent:    z.number().gte(-100).lte(10_000).nullable().optional(),
         mrpPaise:         z.number().int().min(0).nullable().optional(),
+        /** Manual barcode tag price. null = back to auto (derived). MRP-capped server-side. */
+        barcodeManualPaise: z.number().int().min(1).nullable().optional(),
         openingRatePaise: z.number().int().min(0).nullable().optional(),
     });
 

@@ -52,7 +52,7 @@ export async function POST(req: Request) {
             const p = byId.get(l.productId);
             if (!p) continue;
             const unitPricePaise =
-                barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands) ?? p.effectiveSalePricePaise ?? 0;
+                barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands, p.barcodeManualPaise) ?? p.effectiveSalePricePaise ?? 0;
             subtotalPaise += unitPricePaise * l.quantity;
             weightGrams += chargeableUnitGrams(p, fallbackWeight) * l.quantity;
         }

@@ -96,7 +96,7 @@ export async function POST(req: Request) {
             // Charge the barcode tag (what the storefront shows), falling back to
             // the effective price when there's no saved sale price.
             const unitPricePaise = p
-                ? barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands) ?? p.effectiveSalePricePaise
+                ? barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands, p.barcodeManualPaise) ?? p.effectiveSalePricePaise
                 : null;
             if (!p || unitPricePaise == null) {
                 return NextResponse.json({ error: `Unknown product ${l.productId}` }, { status: 400 });
