@@ -55,7 +55,7 @@ export const pricingItemUpdateSchema = z
         costMethod:       costMethodEnum.nullable().optional(),
         marginPercent:    z.number().gte(-100).lte(10_000).nullable().optional(),
         mrpPaise:         z.number().int().min(0).nullable().optional(),
-        /** Manual barcode tag price. null = back to auto (derived). MRP-capped server-side. */
+        /** Hand-typed barcode price (saved, MRP-capped). null = save the AUTO barcode from the Sale Price instead. */
         barcodeManualPaise: z.number().int().min(1).nullable().optional(),
         openingRatePaise: z.number().int().min(0).nullable().optional(),
     });
@@ -83,6 +83,12 @@ export const salePriceSaveSchema = z.object({
 });
 
 export type SalePriceSaveInput = z.infer<typeof salePriceSaveSchema>;
+
+// "Update barcode" on Update prices: save the AUTO barcode (bands on the saved
+// Sale Price, MRP-capped) for these products — price + date + gap together.
+export const barcodePriceSaveSchema = z.object({
+    ids: z.array(z.number().int().positive()).min(1).max(2000),
+});
 
 // ── Strategy points (additive-margin model) ───────────────────────────────
 // The single org-wide points configuration. GET and PUT share this grouped

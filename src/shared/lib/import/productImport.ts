@@ -3,6 +3,7 @@ import { productOpeningValue, syncProductCacheFromOpening } from "@/modules/inve
 import { recomputeProductStock } from "@/modules/inventory/lib/stockMovement";
 import { syncMainCollections } from "@/modules/inventory/lib/productCollections";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
+import { rebaseBarcodeGap, saveAutoBarcodes } from "@/modules/pricing-strategy/lib/barcodeStore";
 import { systemBranchId } from "@/shared/lib/org/systemBranch";
 import * as Sentry from "@sentry/nextjs";
 import { PRODUCT_IMPORT_FIELDS, type ProductImportField } from "./productImportFields";
@@ -558,9 +559,8 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
     // Default Prisma tx timeout (5s) is far too low for thousand-row imports;
     // bump to 10 minutes.
     //
-    // One freeze timestamp for the whole batch — every row whose imported Sale
-    // Price becomes its SAVED price is stamped with the same salePriceFrozenAt.
-    const importFrozenAt = new Date();
+    // The barcode date (salePriceFrozenAt) is stamped after the write, by
+    // saveAutoBarcodes, for new products only.
     const buildPayload = (v: (typeof validRows)[number]) => {
         const opening = { openingStock: v.data.openingStock, openingRate: v.data.openingRate };
         const cachePatch = syncProductCacheFromOpening(opening);
@@ -592,7 +592,6 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             // Price → keep the STRATEGY default. Mirrors the Update & Print
             // Labels "Sale Price" save.
             effectiveSalePriceSource: v.data.savedSalePricePaise != null ? ("SAVED" as const) : ("STRATEGY" as const),
-            salePriceFrozenAt: v.data.savedSalePricePaise != null ? importFrozenAt : null,
             mrpPaise: v.data.mrpPaise,
             openingStock: v.data.openingStock,
             openingRate: v.data.openingRate,
@@ -649,7 +648,8 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
             // non-empty cells, so savedSalePricePaise is non-null here.
             out.savedSalePricePaise = v.data.savedSalePricePaise;
             out.effectiveSalePriceSource = "SAVED";
-            out.salePriceFrozenAt = importFrozenAt;
+            // The barcode price / date are not touched on an existing product;
+            // only its gap is re-measured after the recompute (barcodeStore.ts).
         }
         if (p.has("mrp")) out.mrpPaise = v.data.mrpPaise;
         // Opening fields move as a group — if any are touched, recompute the
@@ -766,6 +766,11 @@ export async function runProductImport(req: ProductImportRequest): Promise<Produ
         for (let i = 0; i < touchedIds.length; i += CHUNK_RECOMPUTE) {
             await recomputePricesForProducts(touchedIds.slice(i, i + CHUNK_RECOMPUTE));
         }
+        // New products with a Sale Price get their barcode saved; an existing
+        // product whose Sale Price was patched (now the selling price) only has its
+        // barcode gap re-measured — its barcode price and date stay.
+        await saveAutoBarcodes(createdIds, { onlyMissing: true });
+        await rebaseBarcodeGap(updateRows.filter((v) => v.present.has("salePrice")).map((v) => v.existingId!));
     } catch (err: unknown) {
         Sentry.captureException(err, { tags: { source: "price-recompute", context: "product-import" } });
         console.error("[price-recompute] failed after product import", err);

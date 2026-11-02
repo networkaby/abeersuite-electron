@@ -18,15 +18,16 @@
  *
  * EDITABLE + persisted (PATCH /api/pricing-strategy/items/[id]): Computed price
  *   (typed; Margin % is derived from it, read-only) → marginPercent, Barcode
- *   (own input; blank = auto from Sale Price, else manual/violet and never reset
- *   by a Sale Price change) → barcodeManualPaise,
+ *   (own input, saved on blur; violet = typed by hand) → barcodeManualPaise,
  * MRP → mrpPaise, Method → costMethod. Everything else (name,
  * taxonomy, stock, cost, GST, Strategy voice, days-since-sale, barcode) is
  * read-only/derived. Cost is GST-inclusive; because cost_incl × (1+margin) equals
  * the engine's cost_excl × (1+margin) × (1+gst), the Computed voice matches POS.
  *
- * The barcode price is computed from the Sale Price (buffer band + hint digit,
- * MRP-capped) and acts as a CEILING — never the charge. Each voice shows its own
+ * The barcode price is SAVED (barcodeStore.ts): only a hand edit or "Update
+ * barcode" (bands on the saved Sale Price, MRP-capped) writes it, with its date
+ * and gap. "Save prices" saves the Sale Price + source only. It acts as a
+ * CEILING — never the charge. Each voice shows its own
  * AFTER-TAX profit (₹ + %) beneath the price, so all three can be compared.
  *
  *   voicePrice = cost_incl × (1 + margin% / 100)
@@ -73,7 +74,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Check, Filter, Loader2, Plus, Printer, RotateCcw, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Barcode, Check, Filter, Loader2, Plus, Printer, RotateCcw, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 import { useTableSort } from "@/shared/hooks/useTableSort";
 import { SortHeader } from "@/shared/components/SortHeader";
@@ -156,7 +157,8 @@ type Row = {
     baseSource: SaleSource; // last-saved sale source, for dirty detection
     savedAt: string;        // local date the printed barcode ₹ (manual/auto) last changed → secret date code
     savedProfit: string;    // decided profit ₹ frozen at last save → basis for the profit-gap filter
-    barcodeManual: string;  // hand-set barcode ₹ (InvProduct.barcodeManualPaise); "" = auto from Sale Price
+    barcodeManual: string;  // SAVED barcode ₹ (InvProduct.barcodeManualPaise); "" = never saved (legacy → derived)
+    barcodeIsManual: boolean; // saved barcode was typed by hand (violet)
 };
 
 // ── Map the engine's PricingItem → a table Row ────────────────────────────────
@@ -216,6 +218,7 @@ function itemToRow(it: PricingItem): Row {
         savedAt: localDateOf(it.salePriceFrozenAt),
         savedProfit: it.savedProfitPaise != null ? (it.savedProfitPaise / 100).toFixed(2) : "",
         barcodeManual: it.barcodeManualPaise != null ? (it.barcodeManualPaise / 100).toFixed(2) : "",
+        barcodeIsManual: it.barcodeIsManual,
     };
 }
 
@@ -290,17 +293,35 @@ function barcodePrice(
     return barcodePriceCore(price, mrp, ACTIVE_BARCODE_BANDS);
 }
 
-// The row's printed barcode: the hand-set one when present (never reset by a
-// Sale Price change), else derived from the Sale Price + MRP. Every barcode
-// read on this page goes through here so the manual value is honoured.
+// The row's printed barcode: the SAVED one when present (nothing but a barcode
+// save moves it), else — a product never saved since this rule — derived from
+// the saved Sale Price + MRP. Every barcode read on this page goes through here.
 function rowBarcode(r: Row): { value: number | null; hint: string; capped: boolean; manual: boolean } {
     const m = numOrNull(r.mrp);
     const mrp = m != null && m > 0 ? m : null;
-    const manual = numOrNull(r.barcodeManual);
-    if (manual != null) return { value: manual, hint: "", capped: mrp != null && manual >= mrp, manual: true };
-    const sp = numOrNull(r.salePrice);
+    const stored = numOrNull(r.barcodeManual);
+    if (stored != null) return { value: stored, hint: "", capped: mrp != null && stored >= mrp, manual: r.barcodeIsManual };
+    const sp = numOrNull(r.baseline);
     if (sp == null) return { value: null, hint: "", capped: false, manual: false };
     return { ...barcodePrice(sp, mrp), manual: false };
+}
+
+// The barcode "Update barcode" would save: bands on the SAVED Sale Price, MRP-capped.
+function autoBarcodeOf(r: Row): number | null {
+    const sp = numOrNull(r.baseline);
+    if (sp == null) return null;
+    const m = numOrNull(r.mrp);
+    return barcodePrice(sp, m != null && m > 0 ? m : null).value;
+}
+
+// Not typed by hand, and the saved barcode is not what the saved Sale Price
+// gives today (or was never saved) → "Update barcode" would change it.
+function barcodeStale(r: Row): boolean {
+    if (r.id < 0 || r.barcodeIsManual) return false;
+    const auto = autoBarcodeOf(r);
+    if (auto == null) return false;
+    const stored = numOrNull(r.barcodeManual);
+    return stored == null || Math.abs(stored - auto) >= 0.005;
 }
 
 // ── Sort ──────────────────────────────────────────────────────────────────────
@@ -515,9 +536,10 @@ const ProductRow = memo(function ProductRow({
     const mrpNum = parseFloat(r.mrp);
     const mrp = isFinite(mrpNum) && mrpNum > 0 ? mrpNum : null;
     const bc = rowBarcode(r);
-    // What the barcode would be with no manual value — reset target + "same as auto" check.
-    const autoBc = savedPrice != null ? barcodePrice(savedPrice, mrp).value : null;
-    const [bcAtFocus, setBcAtFocus] = useState(r.barcodeManual);
+    // What "Update barcode" would save — the "auto" link target + "same as auto" check.
+    const autoBc = autoBarcodeOf(r);
+    // Typed text while the box is focused; null = show the saved barcode.
+    const [bcDraft, setBcDraft] = useState<string | null>(null);
     // Staff screen shows the real date; the secret code is only for the printed label.
     const dateCode = secretDateCode(r.savedAt);
     const priceDate = shortDate(r.savedAt);
@@ -691,15 +713,16 @@ const ProductRow = memo(function ProductRow({
 
             {show("barcode") ? (
                 <TableCell className={`text-right align-top ${COL_TINT.barcode}`}>
-                    {/* Own input. Blank / equal to auto = auto (follows Sale Price).
-                        Anything else is MANUAL: violet, and a Sale Price change never touches it. */}
+                    {/* Own input, saved on blur (price + date + gap). Typed = MANUAL (violet);
+                        typing the auto value back, or blank, saves the auto barcode. A Sale
+                        Price change never moves it — only this box or "Update barcode". */}
                     <div className="flex items-center justify-end gap-1">
                         {bc.manual ? (
                             <button
                                 type="button"
                                 className="text-[10px] text-violet-700 underline dark:text-violet-300"
-                                title={autoBc != null ? `Back to auto (₹${autoBc.toFixed(2)})` : "Back to auto"}
-                                onClick={() => { onUpdate(r.id, { barcodeManual: "" }); onPersist(r.id, { barcodeManualPaise: null }); }}
+                                title={autoBc != null ? `Save the auto barcode (₹${autoBc.toFixed(2)})` : "Save the auto barcode"}
+                                onClick={() => onPersist(r.id, { barcodeManualPaise: null })}
                             >
                                 auto
                             </button>
@@ -707,19 +730,22 @@ const ProductRow = memo(function ProductRow({
                         <Input
                             type="text"
                             inputMode="decimal"
-                            value={bc.manual ? r.barcodeManual : bc.value != null ? bc.value.toFixed(2) : ""}
+                            value={bcDraft ?? (bc.value != null ? bc.value.toFixed(2) : "")}
                             placeholder="—"
-                            title={bc.manual ? "Manual barcode — Sale Price changes will not change it" : "Auto from Sale Price — type to set your own"}
-                            onFocus={() => setBcAtFocus(r.barcodeManual)}
-                            onChange={(e) => onUpdate(r.id, { barcodeManual: parseDecimalInput(e.target.value) })}
+                            title={bc.manual ? "Typed barcode — only this box or Update barcode changes it" : "Saved barcode — type to set your own"}
+                            onFocus={() => setBcDraft(bc.value != null ? bc.value.toFixed(2) : "")}
+                            onChange={(e) => setBcDraft(parseDecimalInput(e.target.value))}
                             onBlur={() => {
-                                let v = numOrNull(r.barcodeManual);
+                                const typed = bcDraft;
+                                setBcDraft(null);
+                                if (typed == null) return;
+                                let v = numOrNull(typed);
                                 if (v != null && mrp != null && v > mrp) v = mrp; // never above MRP
                                 if (v != null && v <= 0) v = null;
-                                if (v != null && autoBc != null && Math.abs(v - autoBc) < 0.005) v = null; // same as auto
-                                const next = v != null ? v.toFixed(2) : "";
-                                if (next !== r.barcodeManual) onUpdate(r.id, { barcodeManual: next });
-                                if (next !== bcAtFocus) onPersist(r.id, { barcodeManualPaise: v != null ? Math.round(v * 100) : null });
+                                if (v != null && bc.value != null && Math.abs(v - bc.value) < 0.005) return; // unchanged
+                                if (v == null && bc.value == null) return;
+                                const asAuto = v == null || (autoBc != null && Math.abs(v - autoBc) < 0.005);
+                                onPersist(r.id, { barcodeManualPaise: asAuto ? null : Math.round(v! * 100) });
                             }}
                             className={`h-7 w-24 text-right text-sm font-mono font-semibold ${bc.manual ? "border-violet-500 bg-violet-50 text-violet-800 dark:bg-violet-950 dark:text-violet-200" : ""} ${bc.capped ? "text-amber-600" : ""} ${bc.hint === "m" ? "underline decoration-2 underline-offset-2" : ""}`}
                         />
@@ -813,6 +839,7 @@ export default function GeneratePage() {
     // Persist an editable field to InvProduct via the items PATCH. Local-only
     // rows (negative ids) are skipped. `reload` re-pulls the engine values when a
     // change alters the cost basis (cost method) so derived voices stay accurate.
+    const queueMarkTouched = useLabelPrintStore((s) => s.markTouched);
     const persist = useCallback(async (
         id: number,
         patch: RowPersistPatch,
@@ -820,18 +847,27 @@ export default function GeneratePage() {
     ) => {
         if (id < 0) return;
         try {
-            const { data } = await axios.patch<{ salePriceFrozenAt?: string | null }>(`/api/pricing-strategy/items/${id}`, patch);
-            // A manual barcode / MRP edit may move the printed tag → its date code.
-            if (data && "salePriceFrozenAt" in data) {
-                const savedAt = localDateOf(data.salePriceFrozenAt);
-                setRows((prev) => prev.map((r) => (r.id === id && r.savedAt !== savedAt ? { ...r, savedAt } : r)));
+            const { data } = await axios.patch<{ barcodeManualPaise?: number | null; barcodeIsManual?: boolean; salePriceFrozenAt?: string | null }>(`/api/pricing-strategy/items/${id}`, patch);
+            // The server owns the saved barcode (a barcode edit, or an MRP cut that
+            // capped it) — take its price, manual flag and date back.
+            if (data && "barcodeManualPaise" in data) {
+                const next = {
+                    barcodeManual: data.barcodeManualPaise != null ? (data.barcodeManualPaise / 100).toFixed(2) : "",
+                    barcodeIsManual: !!data.barcodeIsManual,
+                    savedAt: localDateOf(data.salePriceFrozenAt ?? null),
+                };
+                setRows((prev) => prev.map((r) => (
+                    r.id === id && (r.barcodeManual !== next.barcodeManual || r.barcodeIsManual !== next.barcodeIsManual || r.savedAt !== next.savedAt)
+                        ? { ...r, ...next } : r
+                )));
+                if (patch.barcodeManualPaise !== undefined) queueMarkTouched([id]);
             }
             if (opts?.reload) await loadData();
         } catch (e) {
             const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error : null;
             toast.error(msg ?? "Failed to save change.");
         }
-    }, [loadData]);
+    }, [loadData, queueMarkTouched]);
 
     // The label queue lives in a module-level store, so the products picked here
     // are the SAME list the standalone Print labels page shows (and the other way
@@ -840,7 +876,6 @@ export default function GeneratePage() {
     const queueAdd = useLabelPrintStore((s) => s.add);
     const queueRemove = useLabelPrintStore((s) => s.remove);
     const queueClear = useLabelPrintStore((s) => s.clear);
-    const queueMarkTouched = useLabelPrintStore((s) => s.markTouched);
     const selectionIds = useMemo(() => new Set(queueIds), [queueIds]);
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [fBrand, setFBrand] = useState("ALL");
@@ -1047,7 +1082,6 @@ export default function GeneratePage() {
     // click activate the Save button without needing a checkbox.
     const isSaveTarget = (r: Row) => selected.has(r.id) || rowDirty(r);
     const save = async () => {
-        const today = todayISO();
         const checked = rows.filter(isSaveTarget);
 
         // Pattern C — this is the largest write on the screen and it used to go
@@ -1059,16 +1093,13 @@ export default function GeneratePage() {
         const writes = checked.filter((r) => r.id > 0).length;
         if (writes > 0) {
             const ok = await confirmAction({
-                title: writes === 1 ? "Freeze the barcode price for 1 product?" : `Freeze the barcode price for ${writes} products?`,
-                body: "The price shown on each row becomes the saved barcode price, which POS and the shop will charge from. Rows set to Strategy or Computed go back to following the live engine. This cannot be undone in one step.",
-                confirmLabel: writes === 1 ? "Freeze 1 price" : `Freeze ${writes} prices`,
+                title: writes === 1 ? "Save the sale price for 1 product?" : `Save the sale price for ${writes} products?`,
+                body: "Each row's Sale Price and selling choice (Strategy / Computed / Sale Price) are saved; POS and the shop charge from them. The barcode price is NOT changed — use Update barcode for that. This cannot be undone in one step.",
+                confirmLabel: writes === 1 ? "Save 1 price" : `Save ${writes} prices`,
             });
             if (!ok) return;
         }
 
-        // Rows whose printed tag actually moves — every piece of that stock needs a
-        // fresh label, so their copies default to the full stock qty (see defaultCopies).
-        const repriced = checked.filter(rowDirty).map((r) => r.id);
         const payload = checked
             .filter((r) => r.id > 0)
             .map((r) => {
@@ -1086,12 +1117,8 @@ export default function GeneratePage() {
             });
         setFreezing(true);
         try {
-            // Server re-dates only rows whose printed barcode ₹ moved (barcodeDate.ts).
-            let frozenAt: Record<number, string | null> = {};
-            if (payload.length) {
-                const res = await axios.put<{ frozenAt?: Record<number, string | null> }>("/api/pricing-strategy/sale-price", { items: payload });
-                frozenAt = res.data?.frozenAt ?? {};
-            }
+            // Barcode price + date are untouched here (barcodeStore.ts).
+            if (payload.length) await axios.put("/api/pricing-strategy/sale-price", { items: payload });
             setRows((prev) =>
                 prev.map((r) => {
                     if (!isSaveTarget(r)) return r;
@@ -1102,17 +1129,46 @@ export default function GeneratePage() {
                         ...r,
                         baseline: r.salePrice,
                         baseSource: r.saleSource,
-                        savedAt: r.id in frozenAt ? localDateOf(frozenAt[r.id]) : hasSaved ? today : "",
                         savedProfit: decided != null ? decided.toFixed(2) : "",
                     };
                 }),
             );
             setSelected(new Set());
-            if (repriced.length) queueMarkTouched(repriced);
-            toast.success(`Frozen — ${payload.length} sale price${payload.length === 1 ? "" : "s"} saved.`);
+            toast.success(`${payload.length} sale price${payload.length === 1 ? "" : "s"} saved.`);
         } catch (e) {
             const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error : null;
             toast.error(msg ?? "Failed to save sale prices.");
+        } finally {
+            setFreezing(false);
+        }
+    };
+
+    // "Update barcode": save the auto barcode (bands on the SAVED Sale Price) for
+    // the ticked rows, or — nothing ticked — every row whose barcode is stale.
+    // Saves price + date + gap together. Unsaved Sale Price edits are not used.
+    const barcodeTargets = (selected.size > 0
+        ? rows.filter((r) => selected.has(r.id) && r.id > 0 && autoBarcodeOf(r) != null)
+        : rows.filter(barcodeStale));
+    const updateBarcodes = async () => {
+        const targets = barcodeTargets;
+        if (targets.length === 0) return;
+        const manualCount = targets.filter((r) => r.barcodeIsManual).length;
+        const ok = await confirmAction({
+            title: targets.length === 1 ? "Update the barcode price for 1 product?" : `Update the barcode price for ${targets.length} products?`,
+            body: `Each barcode is made again from the saved Sale Price (bands, capped at MRP) and saved with today's date.${manualCount ? ` ${manualCount} hand-typed barcode${manualCount === 1 ? "" : "s"} will be replaced.` : ""} Print new labels for them.`,
+            confirmLabel: "Update barcode",
+        });
+        if (!ok) return;
+        setFreezing(true);
+        try {
+            await axios.post("/api/pricing-strategy/barcode-price", { ids: targets.map((r) => r.id) });
+            queueMarkTouched(targets.map((r) => r.id));
+            setSelected(new Set());
+            await loadData();
+            toast.success(`${targets.length} barcode price${targets.length === 1 ? "" : "s"} updated.`);
+        } catch (e) {
+            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error : null;
+            toast.error(msg ?? "Failed to update barcode prices.");
         } finally {
             setFreezing(false);
         }
@@ -1264,10 +1320,13 @@ export default function GeneratePage() {
                     <span className="text-xs text-muted-foreground">
                         {selected.size > 0
                             ? `${selected.size} ticked`
-                            : dirtyCount === 0 ? "Barcodes current" : `${dirtyCount} to update`}
+                            : dirtyCount === 0 ? "Prices saved" : `${dirtyCount} to save`}
                     </span>
-                    <Button type="button" size="sm" className="h-8" onClick={save} disabled={saveCount === 0 || freezing} title="Save the barcode price for ticked or edited rows. SAVED rows store the sticky price (POS + shop use it); Strategy/Computed rows follow the live engine. Margin %, MRP and Method save automatically as you edit.">
-                        {freezing ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save barcode Price{saveCount > 0 ? ` (${saveCount})` : ""}
+                    <Button type="button" size="sm" className="h-8" onClick={save} disabled={saveCount === 0 || freezing} title="Save the Sale Price and selling choice for ticked or edited rows. The barcode price is not changed. Margin %, MRP, Method and Barcode save by themselves as you edit.">
+                        {freezing ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save prices{saveCount > 0 ? ` (${saveCount})` : ""}
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={updateBarcodes} disabled={barcodeTargets.length === 0 || freezing || dirtyCount > 0} title={dirtyCount > 0 ? "Save prices first — the barcode is made from the SAVED Sale Price" : "Make the barcode again from the saved Sale Price (bands, capped at MRP) and save it with today's date. Ticked rows, or every row whose barcode is out of date."}>
+                        <Barcode className="size-4" /> Update barcode{barcodeTargets.length > 0 ? ` (${barcodeTargets.length})` : ""}
                     </Button>
                 </div>
                 <DropdownMenu>

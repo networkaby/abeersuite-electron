@@ -149,7 +149,7 @@ export function pricingItemToLabelItem(it: PricingItem, bands: BarcodeBand[], co
         sell: effective,
         costIncl: it.resolvedCostPaise != null ? ((it.resolvedCostPaise + (it.additionalCostPaise ?? 0)) / 100) * gstMul : null,
         gstPct: it.gstRatePct,
-        manual: it.barcodeManualPaise != null,
+        manual: it.barcodeIsManual,
         autoPrice: autoTag,
     };
 }

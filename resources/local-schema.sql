@@ -2810,6 +2810,7 @@ CREATE TABLE IF NOT EXISTS "InvProduct" (
     "effectiveSalePriceSource" "EffectiveSalePriceSource" NOT NULL DEFAULT 'STRATEGY',
     "savedSalePricePaise" INTEGER,
     "barcodeManualPaise" INTEGER,
+    "barcodeIsManual" BOOLEAN NOT NULL DEFAULT false,
     "barcodeGapBasePaise" INTEGER,
     "salePriceFrozenAt" TIMESTAMP(3),
     "savedProfitPaise" INTEGER,
@@ -2899,6 +2900,7 @@ ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "savedSalePricePaise" INTEGER;
 ALTER TABLE "InvProduct" ALTER COLUMN "savedSalePricePaise" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "barcodeManualPaise" INTEGER;
 ALTER TABLE "InvProduct" ALTER COLUMN "barcodeManualPaise" DROP NOT NULL;
+ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "barcodeIsManual" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "barcodeGapBasePaise" INTEGER;
 ALTER TABLE "InvProduct" ALTER COLUMN "barcodeGapBasePaise" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "salePriceFrozenAt" TIMESTAMP(3);

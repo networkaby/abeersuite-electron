@@ -14,7 +14,7 @@
  *
  * Source date: InvProduct.salePriceFrozenAt, which is the age of the PRINTED
  * BARCODE PRICE (manual or auto) — re-stamped only when that ₹ moves. See
- * modules/pricing-strategy/lib/barcodeDate.ts.
+ * modules/pricing-strategy/lib/barcodeStore.ts.
  */
 
 /** Days per bucket. */

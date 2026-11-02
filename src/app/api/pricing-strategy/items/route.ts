@@ -60,6 +60,7 @@ export async function GET(req: Request) {
                     effectiveSalePriceSource: true,
                     savedSalePricePaise: true,
                     barcodeManualPaise: true,
+                    barcodeIsManual:    true,
                     barcodeGapBasePaise: true,
                     salePriceFrozenAt:   true,
                     savedProfitPaise:  true,
@@ -164,6 +165,7 @@ export async function GET(req: Request) {
                 daysSinceLastSale:     lastSaleAge.get(p.id) ?? null,
                 savedSalePricePaise:   p.savedSalePricePaise,
                 barcodeManualPaise:    p.barcodeManualPaise,
+                barcodeIsManual:       p.barcodeIsManual,
                 barcodeGapPct:         barcodeGapPct(
                     barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands, p.barcodeManualPaise),
                     p.barcodeGapBasePaise,

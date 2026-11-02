@@ -4,22 +4,16 @@ import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { salePriceSaveSchema } from "@/shared/lib/schemas/pricingSchemas";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
-import { nextBarcodeDate } from "@/modules/pricing-strategy/lib/barcodeDate";
-import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
+import { rebaseBarcodeGap } from "@/modules/pricing-strategy/lib/barcodeStore";
 
-// PUT /api/pricing-strategy/sale-price — bulk-freeze the saved Sale Price for
-// the rows ticked on Update & Print Labels.
-//   • A Sale Price was entered (savedSalePricePaise != null) → store it (MRP-capped)
-//                            + savedProfitPaise; salePriceFrozenAt is re-stamped
-//                            only if the printed barcode ₹ changes (barcodeDate.ts). This is
-//                            the printed barcode tag and persists INDEPENDENTLY of
-//                            the selling source — Strategy/Computed rows keep their
-//                            saved tag; only a blank Sale Price clears it.
-//   • Blank Sale Price (savedSalePricePaise == null) → clear the frozen fields.
-// `effectiveSalePriceSource` is written separately and only decides which voice POS
-// charges; it no longer wipes the saved tag. After the write, recompute
-// re-materializes effectiveSalePricePaise from the source immediately, so POS/shop
-// sell the new price without waiting for a voucher.
+// PUT /api/pricing-strategy/sale-price — save the Sale Price + selling source
+// for the rows ticked on Update prices ("Save").
+//   • savedSalePricePaise (MRP-capped) + savedProfitPaise; blank clears them.
+//   • The BARCODE price and its date are NOT touched here — they move only on
+//     a barcode save (POST /api/pricing-strategy/barcode-price, a hand edit). See
+//     barcodeStore.ts.
+//   • A hand change of the selling price (source switched, or Sale Price moved
+//     while SAVED) re-bases the barcode gap after the recompute.
 // Gated by Pricing Strategy page access — seeing the module means doing the work
 // on it (only "reset all points" keeps its own permission).
 export async function PUT(req: Request) {
@@ -30,39 +24,33 @@ export async function PUT(req: Request) {
         if (error) return error;
 
         const ids = data.items.map((i) => i.id);
-        const [products, bands] = await Promise.all([
-            prisma.invProduct.findMany({
-                where:  { id: { in: ids } },
-                select: { id: true, mrpPaise: true, savedSalePricePaise: true, barcodeManualPaise: true, salePriceFrozenAt: true },
-            }),
-            loadBarcodeBands(),
-        ]);
+        const products = await prisma.invProduct.findMany({
+            where:  { id: { in: ids } },
+            select: { id: true, mrpPaise: true, savedSalePricePaise: true, effectiveSalePriceSource: true },
+        });
         const byId = new Map(products.map((p) => [p.id, p]));
-        const mrpById = new Map(products.map((p) => [p.id, p.mrpPaise]));
-        const now = new Date();
-        const frozenAt: Record<number, string | null> = {};
 
-        const affected = data.items.filter((it) => mrpById.has(it.id)); // skip ids that don't exist
+        const affected = data.items.filter((it) => byId.has(it.id)); // skip ids that don't exist
+        // Rows whose SELLING price was changed by hand: the source was switched,
+        // or the Sale Price moved while it is the selling voice. Their barcode
+        // gap is re-measured after the recompute; the barcode itself is not touched.
+        const rebaseIds: number[] = [];
         const ops = affected.map((it) => {
-            // The saved Sale Price (and its barcode tag) persists whenever one was
-            // entered, INDEPENDENT of the selling source — the source only controls
-            // which voice POS charges. A blank Sale Price (null) clears the tag.
+            const before = byId.get(it.id)!;
             const hasSaved = it.savedSalePricePaise != null;
             let price = it.savedSalePricePaise;
             if (hasSaved && price != null) {
-                const mrp = mrpById.get(it.id);
+                const mrp = before.mrpPaise;
                 if (mrp != null && mrp > 0 && price > mrp) price = mrp; // clamp to MRP
             }
-            // Date = age of the printed barcode price: moves only if the tag moves.
-            const before = byId.get(it.id)!;
-            const at = nextBarcodeDate(before, { ...before, savedSalePricePaise: hasSaved ? price : null }, bands, now);
-            frozenAt[it.id] = at ? at.toISOString() : null;
+            const sourceChanged = before.effectiveSalePriceSource !== it.effectiveSalePriceSource;
+            const salePriceChanged = (hasSaved ? price : null) !== before.savedSalePricePaise;
+            if (sourceChanged || (it.effectiveSalePriceSource === "SAVED" && salePriceChanged)) rebaseIds.push(it.id);
             return prisma.invProduct.update({
                 where: { id: it.id },
                 data: {
                     effectiveSalePriceSource: it.effectiveSalePriceSource,
                     savedSalePricePaise:      hasSaved ? price : null,
-                    salePriceFrozenAt:        at,
                     savedProfitPaise:         hasSaved ? it.savedProfitPaise : null,
                 },
             });
@@ -76,19 +64,9 @@ export async function PUT(req: Request) {
         try {
             await recomputePricesForProducts(affected.map((it) => it.id));
         } catch { /* best-effort; price heals on next voucher */ }
+        await rebaseBarcodeGap(rebaseIds);
 
-        // Snapshot the price that sells NOW as the barcode's original-gap basis
-        // (Needs Attention → "Low barcode gap"). Cleared when the Sale Price is cleared.
-        const savedIds = affected.filter((it) => it.savedSalePricePaise != null).map((it) => it.id);
-        const clearedIds = affected.filter((it) => it.savedSalePricePaise == null).map((it) => it.id);
-        if (savedIds.length) {
-            await prisma.$executeRaw`UPDATE "InvProduct" SET "barcodeGapBasePaise" = "effectiveSalePricePaise", "updatedAt" = NOW() WHERE id = ANY(${savedIds}::int[])`;
-        }
-        if (clearedIds.length) {
-            await prisma.invProduct.updateMany({ where: { id: { in: clearedIds } }, data: { barcodeGapBasePaise: null } });
-        }
-
-        return NextResponse.json({ saved: ops.length, frozenAt });
+        return NextResponse.json({ saved: ops.length });
     } catch (e) {
         return handleApiError(e, "Failed to save sale prices");
     }

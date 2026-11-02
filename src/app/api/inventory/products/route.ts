@@ -18,6 +18,7 @@ import {
     loadProductPage, loadProductSelection, parseProductListQuery, productInclude,
 } from "@/modules/inventory/lib/productList";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
+import { saveAutoBarcodes } from "@/modules/pricing-strategy/lib/barcodeStore";
 import * as Sentry from "@sentry/nextjs";
 import { applyCollections, collectionsExist } from "@/modules/inventory/lib/productCollections";
 import { auth } from "@/auth";
@@ -175,6 +176,12 @@ export async function POST(req: Request) {
             Sentry.captureException(err, { tags: { source: "price-recompute", productId: String(row.id) } });
             console.error("[price-recompute] failed for new product", row.id, err);
         });
+        // A new product with a Sale Price gets its barcode saved now (price + date + gap).
+        if (b.savedSalePricePaise != null) {
+            await saveAutoBarcodes([row.id], { onlyMissing: true }).catch((err: unknown) => {
+                Sentry.captureException(err, { tags: { source: "barcode-save", productId: String(row.id) } });
+            });
+        }
         return NextResponse.json(row, { status: 201 });
     } catch (e) {
         // Global-unique clash on InvProductCode.value (a barcode/EAN/UPC already

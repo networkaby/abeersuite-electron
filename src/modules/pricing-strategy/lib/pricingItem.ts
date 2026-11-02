@@ -69,6 +69,8 @@ export interface PricingItem {
     savedSalePricePaise:  number | null;
     /** Hand-set barcode tag (paise). null = auto from saved price + MRP. Always wins. */
     barcodeManualPaise:   number | null;
+    /** true = the saved barcode was typed by hand (violet); false = made from the bands. */
+    barcodeIsManual:      boolean;
     /** Today's barcode gap (barcode − effective) as % of the gap when the barcode
      *  was saved. null = not measurable. Needs Attention flags it below X%. */
     barcodeGapPct:        number | null;

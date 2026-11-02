@@ -4,8 +4,7 @@ import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { pricingItemUpdateSchema } from "@/shared/lib/schemas/pricingSchemas";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
-import { nextBarcodeDate } from "@/modules/pricing-strategy/lib/barcodeDate";
-import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
+import { capBarcodeToMrp, rebaseBarcodeGap, saveAutoBarcodes, saveManualBarcode } from "@/modules/pricing-strategy/lib/barcodeStore";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requireModuleAccess("pricing-strategy");
@@ -38,32 +37,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             };
         }
 
-        // Manual barcode: never above MRP (the MRP in this same patch, else the stored one).
-        // MRP caps the auto tag too, so either edit can move the printed barcode ₹ —
-        // re-stamp its date (salePriceFrozenAt) only when it actually moves.
-        const barcodePatch: Record<string, unknown> = {};
-        if (data.barcodeManualPaise !== undefined || data.mrpPaise !== undefined) {
-            const [before, bands] = await Promise.all([
-                prisma.invProduct.findUnique({
-                    where:  { id },
-                    select: { mrpPaise: true, savedSalePricePaise: true, barcodeManualPaise: true, salePriceFrozenAt: true, effectiveSalePricePaise: true },
-                }),
-                loadBarcodeBands(),
-            ]);
-            if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
-            const mrp = data.mrpPaise !== undefined ? data.mrpPaise : before.mrpPaise;
-            let manual = before.barcodeManualPaise;
-            if (data.barcodeManualPaise !== undefined) {
-                manual = data.barcodeManualPaise;
-                if (manual != null && mrp != null && mrp > 0 && manual > mrp) manual = mrp;
-                barcodePatch.barcodeManualPaise = manual;
-            }
-            barcodePatch.salePriceFrozenAt = nextBarcodeDate(
-                before, { savedSalePricePaise: before.savedSalePricePaise, mrpPaise: mrp, barcodeManualPaise: manual }, bands, new Date(),
-            );
-            // A barcode edit re-bases the original gap (Needs Attention) on the price selling now.
-            if (data.barcodeManualPaise !== undefined) barcodePatch.barcodeGapBasePaise = before.effectiveSalePricePaise;
-        }
+        // Barcode price / date / gap are NOT written by this PATCH directly — they
+        // go through barcodeStore.ts after the recompute below.
+        const before = data.marginPercent !== undefined
+            ? await prisma.invProduct.findUnique({ where: { id }, select: { effectiveSalePriceSource: true } })
+            : null;
 
         const row = await prisma.invProduct.update({
             where: { id },
@@ -72,7 +50,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(data.marginPercent   !== undefined ? { marginPercent: data.marginPercent != null ? data.marginPercent.toString() : null } : {}),
                 ...(data.mrpPaise        !== undefined ? { mrpPaise:      data.mrpPaise } : {}),
                 ...openingPatch,
-                ...barcodePatch,
             },
             select: {
                 id:               true,
@@ -80,8 +57,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 marginPercent:    true,
                 effectiveSalePricePaise:       true,
                 mrpPaise:         true,
-                barcodeManualPaise: true,
-                salePriceFrozenAt: true,
                 openingRate:      true,
                 openingStock:     true,
                 openingValue:     true,
@@ -97,7 +72,24 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             await recomputePricesForProducts([id]);
         } catch { /* best-effort; price heals on next voucher */ }
 
-        return NextResponse.json(row);
+        // Barcode rules (barcodeStore.ts):
+        //   • typed barcode → save it (MRP-capped) with date + gap;
+        //   • barcode set back to auto (null) → save the auto one from the Sale Price;
+        //   • MRP cut below the saved barcode → cap it (a barcode save);
+        //   • margin changed while COMPUTED sells → re-measure the gap only.
+        if (data.barcodeManualPaise !== undefined) {
+            if (data.barcodeManualPaise != null) await saveManualBarcode(id, data.barcodeManualPaise);
+            else await saveAutoBarcodes([id]);
+        } else if (data.mrpPaise !== undefined) {
+            await capBarcodeToMrp(id);
+        }
+        if (before?.effectiveSalePriceSource === "COMPUTED") await rebaseBarcodeGap([id]);
+
+        const after = await prisma.invProduct.findUnique({
+            where:  { id },
+            select: { barcodeManualPaise: true, barcodeIsManual: true, salePriceFrozenAt: true, effectiveSalePricePaise: true },
+        });
+        return NextResponse.json({ ...row, ...after });
     } catch (e) {
         return handleApiError(e, "Failed to update pricing item");
     }

@@ -163,6 +163,7 @@ These do just the one job.
 |---|---|
 | `pnpm seed:apply-taxonomy` | Fills `group` + `brand` on the **real** catalog by matching product names. Two-pass (head-noun first, then anywhere) and only ever fills NULLs, so manual corrections survive. `--dry` previews. Re-run after a bulk import — see the note below. |
 | `pnpm seed:sync-permissions` | Creates the `Permission` rows the code-owned catalog has and the DB does not, and grants one to named roles (`--roles`) or takes it back (`--revoke-from`). **Dry by default — `--apply` writes.** Never deletes a `Permission`; a DB row absent from the catalog is reported and left alone. Carries no permission list of its own (it imports `PERMISSION_CATALOG`), so it cannot drift. Every `--apply` run (except a single `--grant` run) also tops R1 up with every grantable permission. |
+| `pnpm seed:saved-barcodes` | Saves the barcode price (`InvProduct.barcodeManualPaise`) of every product that has a Sale Price but no saved barcode, at exactly what it prints today (bands on the Sale Price, MRP-capped); keeps the label date. Idempotent — a saved barcode is never touched. Run once on each database after the `20261103090000_barcode_is_manual` migration. |
 
 ### Shipping a permission
 

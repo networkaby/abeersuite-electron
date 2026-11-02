@@ -108,22 +108,23 @@ export default function PrintLabelsPage() {
         if (unknown.length) toast.error(`Not in the catalogue: ${unknown.join(", ")}`);
     }, [add]);
 
-    // Hand-typed barcode ₹ (null = back to auto): optimistic, saved through the
-    // same PATCH as Update prices, which also re-dates it (barcodeDate.ts).
+    // Hand-typed barcode ₹ (null = save the auto one from the Sale Price):
+    // optimistic, saved through the same PATCH as Update prices, which stamps
+    // its date + gap (barcodeStore.ts).
     const onBarcodePriceChange = useCallback(async (id: number, rupees: number | null) => {
         const before = itemById.get(id);
         if (!before) return;
         const paise = rupees != null ? Math.round(rupees * 100) : null;
         const patchItem = (p: Partial<PricingItem>) =>
             setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...p } : it)));
-        patchItem({ barcodeManualPaise: paise });
+        if (paise != null) patchItem({ barcodeManualPaise: paise, barcodeIsManual: true });
         try {
-            const { data } = await axios.patch<{ barcodeManualPaise: number | null; salePriceFrozenAt: string | null }>(
+            const { data } = await axios.patch<{ barcodeManualPaise: number | null; barcodeIsManual: boolean; salePriceFrozenAt: string | null }>(
                 `/api/pricing-strategy/items/${id}`, { barcodeManualPaise: paise },
             );
-            patchItem({ barcodeManualPaise: data.barcodeManualPaise, salePriceFrozenAt: data.salePriceFrozenAt });
+            patchItem({ barcodeManualPaise: data.barcodeManualPaise, barcodeIsManual: data.barcodeIsManual, salePriceFrozenAt: data.salePriceFrozenAt });
         } catch (e) {
-            patchItem({ barcodeManualPaise: before.barcodeManualPaise, salePriceFrozenAt: before.salePriceFrozenAt });
+            patchItem({ barcodeManualPaise: before.barcodeManualPaise, barcodeIsManual: before.barcodeIsManual, salePriceFrozenAt: before.salePriceFrozenAt });
             const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error : null;
             toast.error(msg ?? "Failed to save barcode price.");
         }

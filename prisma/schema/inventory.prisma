@@ -353,16 +353,22 @@ model InvProduct {
   /// materializes into effectiveSalePricePaise when effectiveSalePriceSource = SAVED.
   /// Written by Edit Product, Item Import, and the Update & Print Labels "Sale Price" column.
   savedSalePricePaise      Int?
-  /// Manual barcode (tag) price override, paise. null = auto-derive from
-  /// savedSalePricePaise + MRP via the barcode bands. When set it wins
-  /// everywhere (labels, POS cap, shop) and a Sale Price change never resets it;
-  /// only the "reset" on Update & Print Labels clears it. MRP-capped on save.
+  /// The SAVED barcode (tag) price, paise. Written only when the barcode is
+  /// saved: a hand edit, "Update barcode" on Update prices (auto from the Sale
+  /// Price via the bands), a new product with a Sale Price, or an MRP cut below
+  /// it (capped). Nothing else changes it — not a Sale Price, margin, cost or
+  /// strategy change. null = never saved (legacy) → derived live as before.
+  /// See src/modules/pricing-strategy/lib/barcodeStore.ts.
   barcodeManualPaise       Int?
-  /// effectiveSalePricePaise at the moment the barcode was last saved (Sale Price
-  /// save or manual barcode edit). barcode − this = the ORIGINAL gap; Needs
+  /// true = the stored barcode was typed by hand (violet on screen); false = made from the bands.
+  barcodeIsManual          Boolean  @default(false)
+  /// effectiveSalePricePaise when the barcode was last saved — or re-based by a
+  /// hand change of the selling price (source switch; margin while COMPUTED;
+  /// Sale Price while SAVED). barcode − this = the ORIGINAL gap; Needs
   /// Attention flags a product when today's gap falls below X% of it.
   barcodeGapBasePaise      Int?
-  /// When savedSalePricePaise was last frozen — drives the printed barcode date code.
+  /// When the barcode price was last SAVED (see barcodeManualPaise) — drives the
+  /// printed barcode date code. Legacy name.
   salePriceFrozenAt        DateTime?
   /// After-tax profit (paise) decided at freeze time — basis for the drift /
   /// profit-gap filter on the labels page (current profit vs this snapshot).
