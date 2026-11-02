@@ -21,7 +21,9 @@ import { facebookAutoBlock, facebookReelBlock, facebookStoryBlock, postCaption }
 
 export const GRAPH = "https://graph.facebook.com/v21.0";
 const AUTH_URL = "https://www.facebook.com/v21.0/dialog/oauth";
-const SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "instagram_basic", "instagram_content_publish"];
+// business_management: the shop page is owned by the business portfolio, and
+// /me/accounts leaves out portfolio-assigned pages without it.
+const SCOPES = ["pages_show_list", "pages_read_engagement", "pages_manage_posts", "instagram_basic", "instagram_content_publish", "business_management"];
 
 export const FACEBOOK_LINK_ID = 1;
 
