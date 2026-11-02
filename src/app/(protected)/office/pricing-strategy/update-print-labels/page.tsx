@@ -159,6 +159,7 @@ type Row = {
     savedProfit: string;    // decided profit ₹ frozen at last save → basis for the profit-gap filter
     barcodeManual: string;  // SAVED barcode ₹ (InvProduct.barcodeManualPaise); "" = never saved (legacy → derived)
     barcodeIsManual: boolean; // saved barcode was typed by hand (violet)
+    barcodeGapPct: number | null; // today's barcode gap as % of the gap at barcode save (server); null = not measurable
 };
 
 // ── Map the engine's PricingItem → a table Row ────────────────────────────────
@@ -219,6 +220,7 @@ function itemToRow(it: PricingItem): Row {
         savedProfit: it.savedProfitPaise != null ? (it.savedProfitPaise / 100).toFixed(2) : "",
         barcodeManual: it.barcodeManualPaise != null ? (it.barcodeManualPaise / 100).toFixed(2) : "",
         barcodeIsManual: it.barcodeIsManual,
+        barcodeGapPct: it.barcodeGapPct,
     };
 }
 
@@ -348,7 +350,7 @@ function sortVal(r: Row, key: SortKey): number | string {
 
 // ── Range filters (numeric parameters: min/max) ───────────────────────────────
 
-type RangeKey = "cost" | "margin" | "profit" | "profitPct" | "stock" | "daysSinceSale";
+type RangeKey = "cost" | "margin" | "profit" | "profitPct" | "stock" | "daysSinceSale" | "barcodeGap";
 const RANGE_FIELDS: { key: RangeKey; label: string }[] = [
     { key: "cost", label: "Cost (incl)" },
     { key: "margin", label: "Margin % (strategy & mine)" },
@@ -356,6 +358,9 @@ const RANGE_FIELDS: { key: RangeKey; label: string }[] = [
     { key: "profitPct", label: "Profit % (sale price)" },
     { key: "stock", label: "Stock (units)" },
     { key: "daysSinceSale", label: "Days since last sale" },
+    // Same figure as Needs Attention → Low barcode gap: today's gap (barcode −
+    // selling price) as % of the gap when the barcode was saved. Max 30 = that list.
+    { key: "barcodeGap", label: "Barcode gap % of original" },
 ];
 
 // localStorage key for the persisted ("saved") filter state. Bump the suffix
@@ -437,6 +442,7 @@ function rangeVal(r: Row, key: RangeKey): number | null {
         case "margin": return numOrNull(r.margin);
         case "stock": return numOrNull(r.stock);
         case "daysSinceSale": return daysSinceSale(r);
+        case "barcodeGap": return r.barcodeGapPct;
         case "profit": {
             // After-tax profit on the price that actually applies (capped selling voice).
             const price = applicableSalePrice(r);
