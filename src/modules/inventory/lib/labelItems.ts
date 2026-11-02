@@ -8,6 +8,7 @@
  * pages can never drift on what a label says or how many come out.
  */
 
+import { businessTodayIso } from "@/shared/lib/format/formatDate";
 import { barcodePrice, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
 
@@ -73,21 +74,21 @@ export function defaultCopies(opts: {
 export const clampCopies = (n: number): number =>
     !isFinite(n) || n < 1 ? 1 : Math.min(999, Math.floor(n));
 
-/** ISO "YYYY-MM-DD" for today, in the browser's own date. */
+/** ISO "YYYY-MM-DD" for today in IST (BUSINESS_TIME_ZONE), whatever the PC zone. */
 export function todayISO(): string {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return businessTodayIso();
 }
 
 /**
- * "YYYY-MM-DD" of an ISO timestamp in the browser's own date — NOT `iso.slice(0, 10)`,
- * which is the UTC date and rolls back a day for saves between 00:00 and 05:30 IST.
+ * "YYYY-MM-DD" of an ISO timestamp in IST (BUSINESS_TIME_ZONE) — whatever the
+ * PC's own clock zone is. NOT `iso.slice(0, 10)`, which is the UTC date and
+ * rolls back a day for saves between 00:00 and 05:30 IST.
  */
 export function localDateOf(iso: string | null | undefined): string {
     if (!iso) return "";
     const d = new Date(iso);
     if (isNaN(d.getTime())) return "";
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return businessTodayIso(d);
 }
 
 /**

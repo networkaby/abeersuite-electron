@@ -79,10 +79,14 @@ export async function saveManualBarcode(id: number, pricePaise: number): Promise
  */
 export async function capBarcodeToMrp(id: number): Promise<boolean> {
     // One statement, so the cap always uses the MRP that is on the row now.
+    // The date is the app's clock, not the DB's NOW(): the column has no zone
+    // and Prisma stores UTC, while a counter's Postgres runs on IST — NOW()
+    // would be 5½ h off. Labels show it as an IST date (labelItems.localDateOf).
+    const now = new Date();
     const n = await prisma.$executeRaw`
         UPDATE "InvProduct" SET
             "barcodeManualPaise"  = "mrpPaise",
-            "salePriceFrozenAt"   = NOW(),
+            "salePriceFrozenAt"   = ${now},
             "barcodeGapBasePaise" = "effectiveSalePricePaise",
             "updatedAt"           = NOW()
         WHERE id = ${id} AND "mrpPaise" > 0 AND "barcodeManualPaise" > "mrpPaise"`;
