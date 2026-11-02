@@ -86,6 +86,7 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
             // require-note item still has a blank line note.
             if (!b.saleNoteMissing) b.openCheckout();
         },
+        allowWalkIn: true,
         partySearchRef,
         productSearchRef,
         cashTenderedRef,
@@ -621,7 +622,6 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     onClick={() => b.openCheckout()}
                     disabled={
                         b.cart.length === 0 ||
-                        !b.snapshot?.account ||
                         b.submitting ||
                         b.saleNoteMissing
                     }

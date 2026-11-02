@@ -8,7 +8,7 @@ import { PosHelpBackButton } from "@/modules/pos/components/PosHelpBackButton";
 
 const SHORTCUTS: { keys: string; label: string; notes: string }[] = [
     { keys: "/", label: "Product search", notes: "Focus the scan box — type name / scan barcode. In checkout, fills the rest of the bill into the focused payment line." },
-    { keys: "F2", label: "Customer", notes: "Pick a customer / party. Works from anywhere; press again to change the current customer." },
+    { keys: "F2", label: "Customer", notes: "Pick a customer / party. Works from anywhere; press again to change the current customer. No customer? Checkout offers a Walk-in Cash Customer sale (full payment only)." },
     { keys: "F3", label: "Product Explorer", notes: "Browse the full catalogue visually — group, brand, category facets. Press again or Esc to close." },
     { keys: "F9", label: "Quick cash", notes: "Open checkout with the full bill on Cash — just confirm with Enter." },
     { keys: "F10", label: "Quick UPI", notes: "Open checkout with the full bill on the first payment account (UPI) — just confirm with Enter." },

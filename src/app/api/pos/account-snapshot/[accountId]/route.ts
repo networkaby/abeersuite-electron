@@ -11,8 +11,10 @@ import { resolveEffectiveCreditLimit } from "@/shared/lib/accountancy/creditLimi
 import { closingForAccounts } from "@/modules/accountancy/lib/aggregateLedger";
 import { latestRating, parseQualityLog } from "@/modules/customer/lib/customerQuality";
 import { loadPartyPricing } from "@/modules/pricing-strategy/lib/groupPricingServer";
+import { getWalkInAccountId } from "@/shared/lib/parties/offlinePersonCollision";
+import { ACCOUNT_LEDGERS } from "@/shared/lib/constants/accounting";
 
-// GET /api/pos/account-snapshot/[accountId]
+// GET /api/pos/account-snapshot/[accountId]   (or /walk-in for the cash sale)
 // Polymorphic POS "we know you" panel — works for either a Person account
 // (B2C / individual customer) or a Company account (B2B). Account is the
 // shared abstraction so this single endpoint covers both.
@@ -44,12 +46,16 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
     const { response } = await requireAuth();
     if (response) return response;
 
-    const accountId = Number((await params).accountId);
-    if (!Number.isFinite(accountId)) {
-        return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-    }
+    const raw = (await params).accountId;
 
     try {
+        // "walk-in" = the seeded Walk-in Cash Customer ledger — the POS cash
+        // sale when the cashier enters no customer.
+        const walkInId = await getWalkInAccountId(prisma);
+        const accountId = raw === "walk-in" ? walkInId : Number(raw);
+        if (!Number.isFinite(accountId)) {
+            return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+        }
         const account = await prisma.account.findUnique({
             where: { id: accountId },
             select: {
@@ -111,6 +117,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                 address: c.address,
             };
         }
+        if (!party && account.id === walkInId) return NextResponse.json(walkInSnapshot(account.id));
         if (!party) return NextResponse.json({ error: "Account is not linked to a person or company" }, { status: 400 });
 
         // Customer Quality — staff rating/comments timeline.
@@ -268,4 +275,21 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
     } catch (e) {
         return handleApiError(e, "Snapshot failed");
     }
+}
+
+// The cash sale: no ledger history worth showing (it pools every walk-in), no
+// tier / points / group price, no credit — the sale route refuses credit on it
+// anyway. `party.id` 0 names nobody; `isWalkIn` is what screens check.
+function walkInSnapshot(accountId: number) {
+    return {
+        party: { kind: "person" as const, id: 0, name: ACCOUNT_LEDGERS.WALK_IN, phone: null, email: null, gstin: null, address: null },
+        isWalkIn: true,
+        account: { id: accountId, balance: 0, openingBalance: null },
+        turnover: { lifetime: 0, last12Months: 0, invoiceCount: 0 },
+        discountPct: 0, tierPeriods: [], tierCapPct: null, tierTitles: [], rawTierPct: 0, cappedByGuard: false,
+        loyaltyPoints: 0, loyaltyRates: null, customerLevel: "", groupPricing: null,
+        creditLimit: 0, balanceDue: 0, balanceOverdue: 0, availableCredit: 0,
+        rating: null, qualityLog: [], favouriteCategory: null, personalizedOffers: [],
+        lastVisitAt: null, recentTickets: [], warrantiesEnding: [],
+    };
 }

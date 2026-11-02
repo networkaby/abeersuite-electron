@@ -104,9 +104,9 @@ function CustomerPanel({ snapshot, tier, counterNo, onOpenUpsell, offersReadyCou
 }) {
     const c = snapshot.party;
 
-    // Detect walk-in ledger by name — the seeded "Walk-in Cash Customer" ledger
-    // lives under Sundry Debtors and is used for anonymous counter sales.
-    const isWalkIn = c.name.toLowerCase().includes("walk-in") || c.name.toLowerCase().includes("cash-walkin");
+    // The seeded "Walk-in Cash Customer" cash sale — flagged by the snapshot
+    // route, never guessed from the name.
+    const isWalkIn = !!snapshot.isWalkIn;
 
     // Customer Quality — rating + staff notes, appendable right from the counter.
     const [log, setLog] = useState<QualityLogEntry[]>(snapshot.qualityLog ?? []);

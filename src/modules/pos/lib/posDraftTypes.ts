@@ -9,6 +9,8 @@ import { type GroupPricing } from "@/modules/pricing-strategy/lib/groupPricing";
 
 export type Snapshot = {
     party: { kind: "person" | "company"; id: number; name: string; phone: string | null; email: string | null; gstin: string | null; address: string | null };
+    /// The Walk-in Cash Customer cash sale — `party` is a stand-in (id 0).
+    isWalkIn?: boolean;
     account: { id: number; balance: number; openingBalance: number | null } | null;
     turnover: { lifetime: number; last12Months: number; invoiceCount: number };
     // Spend-tier periods with their bracket spend already attached. The POS re-resolves

@@ -50,6 +50,8 @@ export function usePosBilling(opts: {
      * (no dialog open, cart non-empty, customer picked). Each screen decides
      * what "confirm" means (open checkout / save directly / PATCH an edit). */
     onHotkeyConfirm: () => void;
+    /** Sale screen only: checkout with no customer offers the Walk-in Cash Customer. */
+    allowWalkIn?: boolean;
     /** Created by the screen (never returned from here — a hook return carrying
      * ref objects taints every property access under react-hooks/refs). */
     partySearchRef: React.RefObject<PartySearchAndCreateHandle | null>;
@@ -209,13 +211,13 @@ export function usePosBilling(opts: {
             if (e.key !== "Enter") return;
             if (!(e.ctrlKey || e.metaKey)) return;
             if (createDialogOpen || checkoutOpen) return;
-            if (cart.length === 0 || !snapshot?.account) return;
+            if (cart.length === 0 || (!snapshot?.account && !opts.allowWalkIn)) return;
             e.preventDefault();
             hotkeyConfirmRef.current();
         };
         window.addEventListener("keydown", handler);
         return () => window.removeEventListener("keydown", handler);
-    }, [cart.length, snapshot?.account, createDialogOpen, checkoutOpen]);
+    }, [cart.length, snapshot?.account, createDialogOpen, checkoutOpen, opts.allowWalkIn]);
 
     // Latest payable total for the early-bound "/" shortcut effect below
     // (it lives above the computed totals). A ref, so the listener never
@@ -1053,7 +1055,7 @@ export function usePosBilling(opts: {
 
     // ── Actions ─────────────────────────────────────────────────────────────
 
-    const fetchSnapshot = useCallback(async (accountId: number) => {
+    const fetchSnapshot = useCallback(async (accountId: number | "walk-in") => {
         setLoadingSnapshot(true);
         // Once a party is picked the search is locked; shift focus to the product
         // search so the cashier can scan/type immediately.
@@ -1372,9 +1374,20 @@ export function usePosBilling(opts: {
     //                         when the counter has no such row.
     //   { tender: "cash" }  → option-1 — the Cash row.
     // A normal open starts at ₹0 and lets the cashier type the tendered amount.
+    // Set by the "Cash sale" warning action; the effect after openCheckout uses it.
+    const walkInCheckoutRef = useRef<{ tender?: "cash" | "split" } | null>(null);
     const openCheckout = useCallback((prefill?: { tender: "cash" | "split" }) => {
-        if (!snapshot?.account) { toast.error("Pick a customer first"); return; }
         if (cart.length === 0) { toast.error("Cart is empty"); return; }
+        if (!snapshot?.account && !opts.allowWalkIn) { toast.error("Pick a customer first"); return; }
+        if (!snapshot?.account) {
+            // No customer entered → offer the Walk-in Cash Customer, with a warning.
+            toast.warning("No customer selected", {
+                description: "Sell as Walk-in Cash Customer? Full payment only — no points, coupons or WhatsApp bill. F2 to pick a customer instead.",
+                duration: 8000,
+                action: { label: "Cash sale", onClick: () => { walkInCheckoutRef.current = prefill ?? {}; void fetchSnapshot("walk-in"); } },
+            });
+            return;
+        }
         if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
         // Pre-show the accounts flagged "default visible" as rows; the rest stay
         // behind "Add payment line".
@@ -1404,7 +1417,16 @@ export function usePosBilling(opts: {
         setSplits(splits);
         setCheckoutOpen(true);
         focusWhenReady(() => cashTenderedRef.current);
-    }, [snapshot, cart, payAccounts, coverAmountRef, cashTenderedRef, eb]);
+    }, [snapshot, cart, payAccounts, coverAmountRef, cashTenderedRef, eb, fetchSnapshot, opts.allowWalkIn]);
+
+    // "Cash sale" from the warning: once the walk-in snapshot lands, carry on
+    // into the checkout the cashier asked for.
+    useEffect(() => {
+        const pending = walkInCheckoutRef.current;
+        if (!pending || !snapshot?.isWalkIn) return;
+        walkInCheckoutRef.current = null;
+        openCheckout(pending.tender ? { tender: pending.tender } : undefined);
+    }, [snapshot, openCheckout]);
 
     // F10 → quick pay on option-2: opens checkout with the full payable amount
     // (total − gift card, no change) seeded on the FIRST payment-account row —
