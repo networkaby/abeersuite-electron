@@ -369,10 +369,10 @@ const RANGE_FIELDS: { key: RangeKey; label: string; unit?: string }[] = [
     { key: "profitPct", label: "Profit % (sale price)", unit: "%" },
 ];
 
-// Filter-card order (owner's layout). The barcode gap is split into its two
-// separate sides: Below (max) and Above (min).
-const RANGE_GRID: (Exclude<RangeKey, "barcodeGap"> | "gapBelow" | "gapAbove")[] =
-    ["profit", "profitPct", "gapBelow", "gapAbove", "daysSinceSale"];
+// Filter-card order for the Ranges row (owner's layout). The barcode gap's two
+// separate sides (Below = max, Above = min) sit in the Quick checks row instead.
+const RANGE_GRID: Exclude<RangeKey, "barcodeGap">[] =
+    ["profit", "profitPct", "daysSinceSale"];
 const RANGE_LABEL = Object.fromEntries(RANGE_FIELDS.map((f) => [f.key, f])) as Record<RangeKey, (typeof RANGE_FIELDS)[number]>;
 
 // localStorage key for the persisted ("saved") filter state. Bump the suffix
@@ -1450,15 +1450,17 @@ export default function GeneratePage() {
                                     {flagChip("Sale price capped", fSaleCapped, setFSaleCapped, "Selling price held down at the barcode / MRP ceiling")}
                                     {flagChip("In stock only", fInStock, setFInStock, "Hide products with no stock")}
                                 </div>
+                                {/* Barcode gap pair beside the toggles (owner). */}
+                                <div className="grid min-w-[20rem] flex-1 grid-cols-1 gap-x-3 sm:grid-cols-2">
+                                    {gapSideInput("max", "Below original gap")}
+                                    {gapSideInput("min", "Above original gap")}
+                                </div>
                             </div>
                         </section>
                         <section>
                             {sectionTitle("Ranges")}
-                            <div className="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2 lg:grid-cols-5">
-                                {RANGE_GRID.map((k) =>
-                                    k === "gapBelow" ? <Fragment key={k}>{gapSideInput("max", "Below original gap")}</Fragment>
-                                        : k === "gapAbove" ? <Fragment key={k}>{gapSideInput("min", "Above original gap")}</Fragment>
-                                            : <Fragment key={k}>{rangeInput(RANGE_LABEL[k].label, k, RANGE_LABEL[k].unit)}</Fragment>)}
+                            <div className="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-3">
+                                {RANGE_GRID.map((k) => <Fragment key={k}>{rangeInput(RANGE_LABEL[k].label, k, RANGE_LABEL[k].unit)}</Fragment>)}
                             </div>
                         </section>
                     </div>
