@@ -427,12 +427,20 @@ export function PosScreenShell({
                                                             <div className="hidden lg:flex flex-col items-end gap-0.5 text-[10px] leading-tight text-muted-foreground">
                                                                 <div className="flex items-center gap-1.5">
                                                                     <span className="uppercase tracking-wider text-rose-500/70">MRP</span>
-                                                                    <span className={mrp != null && mrp !== l.unitPrice ? "line-through text-muted-foreground" : ""}>{mrp != null ? formatInr(mrp) : "—"}</span>
+                                                                    <span className={mrp != null && Math.abs(mrp - unitInclusive) >= 0.005 ?"line-through text-muted-foreground" : ""}>{mrp != null ? formatInr(mrp) : "—"}</span>
                                                                 </div>
                                                                 <div className="flex items-center gap-1.5">
                                                                     <span className="uppercase tracking-wider text-emerald-600/80 dark:text-emerald-400/80">Barcode</span>
                                                                     <span className="font-medium text-emerald-700 dark:text-emerald-300">{barcode != null ? formatInr(barcode) : "—"}</span>
                                                                 </div>
+                                                                {/* Lowest price the cashier may type — the item's sale
+                                                                    price (usePosBilling.enforcePriceFloor). */}
+                                                                {l.salePaise != null && l.salePaise > 0 && (
+                                                                    <div className="flex items-center gap-1.5" title="Lowest price you can set on this line">
+                                                                        <span className="uppercase tracking-wider text-amber-600/90 dark:text-amber-400/90">Lowest</span>
+                                                                        <span className="font-medium text-amber-700 dark:text-amber-300">{formatInr(l.salePaise / 100)}</span>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         )}
                                                         <div className="flex items-center gap-0.5">
