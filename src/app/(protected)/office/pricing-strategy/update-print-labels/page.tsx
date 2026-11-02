@@ -47,6 +47,7 @@ import { barcodePrice as barcodePriceCore, normalizeBarcodeBands, DEFAULT_BARCOD
 import { productMatchesSearch } from "@/shared/lib/inventory";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import {
     Select,
@@ -1189,7 +1190,7 @@ export default function GeneratePage() {
     // Plain render fns (not components) so they don't remount on each keystroke.
     const filterSelect = (value: string, onChange: (v: string) => void, allLabel: string, options: { value: string; label: string }[]) => (
         <Select value={value} onValueChange={onChange}>
-            <SelectTrigger className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+            <SelectTrigger size="sm" className="h-7 w-full bg-white text-xs dark:bg-background"><SelectValue /></SelectTrigger>
             <SelectContent>
                 <SelectItem value="ALL">{allLabel}</SelectItem>
                 {options.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
@@ -1198,51 +1199,66 @@ export default function GeneratePage() {
     );
     const labelled = (label: string, node: ReactNode) => (
         <div>
-            <div className="mb-1 truncate text-[11px] font-medium text-muted-foreground">{label}</div>
+            <div className="mb-0.5 truncate text-[11px] font-medium text-muted-foreground">{label}</div>
             {node}
         </div>
     );
-    // ── Filter card pieces ── one look for every box: a soft field with the label
-    // on top, borderless inputs inside, the unit after, and a primary tint when
-    // the filter is in use so an active filter is visible at a glance.
+    // ── Filter card pieces ── compact, white boxes; a primary tint marks a
+    // filter in use. Ranges are a two-thumb slider over the real spread of the
+    // loaded rows, with the exact numbers typeable in the two small boxes.
     const fieldShell = (active: boolean) =>
-        `flex h-8 items-center gap-1 rounded-md border bg-background px-2 transition-colors focus-within:ring-2 focus-within:ring-ring/40 ${active ? "border-primary/60 bg-primary/5" : "border-input"}`;
-    const bareInput = "h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-right text-xs font-mono shadow-none focus-visible:ring-0";
-    const fieldLabel = (text: string) => <div className="mb-1 truncate text-[11px] font-medium text-muted-foreground">{text}</div>;
-    const unitTag = (u?: string) => (u ? <span className="shrink-0 text-[11px] text-muted-foreground">{u}</span> : null);
+        `flex h-7 items-center gap-1 rounded-md border bg-white px-1.5 transition-colors focus-within:ring-2 focus-within:ring-ring/40 dark:bg-background ${active ? "border-primary/70 ring-1 ring-primary/20" : "border-input"}`;
+    const bareInput = "h-6 min-w-0 flex-1 border-0 bg-transparent px-0 text-right text-xs font-mono shadow-none focus-visible:ring-0 dark:bg-transparent";
+    const fieldLabel = (text: string) => <div className="mb-0.5 truncate text-[11px] font-medium text-muted-foreground">{text}</div>;
+    const unitTag = (u?: string) => (u ? <span className="shrink-0 text-[10px] text-muted-foreground">{u}</span> : null);
 
-    // Barcode gap reads as words: "Below / Above original gap  [ ] %".
-    const barcodeGapInput = (label: string) => (
-        <div>
-            {fieldLabel(label)}
-            <div className="grid grid-cols-2 gap-1.5">
-                {([["max", "Below"], ["min", "Above"]] as const).map(([side, text]) => (
-                    <div key={side} className={fieldShell(!!ranges.barcodeGap?.[side].trim())} title={`${text} this % of the original gap`}>
-                        <span className="shrink-0 text-[11px] text-muted-foreground">{text}</span>
-                        <Input inputMode="decimal" value={ranges.barcodeGap?.[side] ?? ""} onChange={(e) => setRange("barcodeGap", side, e.target.value)} placeholder="any" className={bareInput} />
-                        {unitTag("%")}
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-    const rangeInput = (label: string, key: RangeKey, unit?: string) => key === "barcodeGap" ? barcodeGapInput(label) : (
-        <div>
-            {fieldLabel(label)}
-            <div className={fieldShell(!!(ranges[key]?.min.trim() || ranges[key]?.max.trim()))}>
-                <Input inputMode="decimal" value={ranges[key]?.min ?? ""} onChange={(e) => setRange(key, "min", e.target.value)} placeholder="min" className={bareInput} />
-                <span className="shrink-0 text-xs text-muted-foreground/60">–</span>
-                <Input inputMode="decimal" value={ranges[key]?.max ?? ""} onChange={(e) => setRange(key, "max", e.target.value)} placeholder="max" className={bareInput} />
+    const rangeInput = (label: string, key: RangeKey, unit?: string) => {
+        const b = rangeBounds[key];
+        const lo = numOrNull(ranges[key]?.min ?? "");
+        const hi = numOrNull(ranges[key]?.max ?? "");
+        const active = lo != null || hi != null;
+        // Barcode gap reads as words: Above (min) / Below (max) the original gap.
+        const isGap = key === "barcodeGap";
+        const box = (side: "min" | "max", text: string) => (
+            <div className={`${fieldShell(!!ranges[key]?.[side].trim())} w-[5.5rem]`} title={isGap ? `${text} this % of the original gap` : undefined}>
+                {isGap ? <span className="shrink-0 text-[10px] text-muted-foreground">{text}</span> : null}
+                <Input inputMode="decimal" value={ranges[key]?.[side] ?? ""} onChange={(e) => setRange(key, side, e.target.value)} placeholder={isGap ? "any" : text} className={bareInput} />
                 {unitTag(unit)}
             </div>
-        </div>
-    );
+        );
+        return (
+            <div className={`rounded-md border px-2 py-1.5 ${active ? "border-primary/40 bg-primary/5" : "border-transparent"}`}>
+                <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-[11px] font-medium text-muted-foreground">{label}</span>
+                    <span className="flex shrink-0 items-center gap-1">
+                        {box("min", isGap ? "Above" : "min")}
+                        {box("max", isGap ? "Below" : "max")}
+                    </span>
+                </div>
+                {b ? (
+                    <Slider
+                        className="mt-2 mb-0.5"
+                        min={b.lo}
+                        max={b.hi}
+                        step={b.step}
+                        value={[Math.max(b.lo, Math.min(b.hi, lo ?? b.lo)), Math.max(b.lo, Math.min(b.hi, hi ?? b.hi))]}
+                        onValueChange={([a, z]) => {
+                            // A thumb at the end of the track means "no limit" on that side.
+                            setRange(key, "min", a <= b.lo ? "" : String(a));
+                            setRange(key, "max", z >= b.hi ? "" : String(z));
+                        }}
+                        aria-label={label}
+                    />
+                ) : null}
+            </div>
+        );
+    };
     // Single "more than x%" threshold box.
     const thresholdInput = (label: string, value: string, onChange: (v: string) => void) => (
         <div>
             {fieldLabel(label)}
             <div className={fieldShell(!!value.trim())}>
-                <span className="shrink-0 text-[11px] text-muted-foreground">more than</span>
+                <span className="shrink-0 text-[10px] text-muted-foreground">more than</span>
                 <Input inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} placeholder="any" className={bareInput} />
                 {unitTag("%")}
             </div>
@@ -1255,14 +1271,34 @@ export default function GeneratePage() {
             title={hint}
             aria-pressed={on}
             onClick={() => set(!on)}
-            className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs transition-colors ${on ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background text-foreground hover:bg-muted"}`}
+            className={`inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs transition-colors ${on ? "border-primary bg-primary text-primary-foreground" : "border-input bg-white text-foreground hover:bg-muted dark:bg-background"}`}
         >
             {on ? <Check className="size-3.5" /> : null}
             {label}
         </button>
     );
-    const sectionTitle = (text: string) => <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">{text}</div>;
+    const sectionTitle = (text: string) => <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">{text}</div>;
 
+    // Slider ends per range = the real spread over every loaded row (not just the
+    // filtered ones, so the track does not jump while filtering).
+    const rangeBounds = (() => {
+        const out = {} as Record<RangeKey, { lo: number; hi: number; step: number } | null>;
+        for (const f of RANGE_FIELDS) {
+            let lo = Infinity, hi = -Infinity;
+            for (const r of rows) {
+                const v = rangeVal(r, f.key);
+                if (v == null || !isFinite(v)) continue;
+                if (v < lo) lo = v;
+                if (v > hi) hi = v;
+            }
+            if (f.key === "barcodeGap") { lo = Math.min(lo, 0); hi = Math.max(hi, 100); }
+            if (!isFinite(lo) || !isFinite(hi) || hi <= lo) { out[f.key] = null; continue; }
+            const span = hi - lo;
+            const step = span > 2000 ? 10 : span > 20 ? 1 : 0.1;
+            out[f.key] = { lo: Math.floor(lo / step) * step, hi: Math.ceil(hi / step) * step, step };
+        }
+        return out;
+    })();
     const catActive = [fBrand, fCategory, fGroup, fMethod, fSource].filter((x) => x !== "ALL").length;
     const flagActive = [fBarcodeCapped, fSaleCapped, fInStock].filter(Boolean).length;
     const thrActive = [tBarcodeShrink, tProfitReduce, tProfitIncrease].filter((x) => x.trim()).length;
@@ -1402,7 +1438,7 @@ export default function GeneratePage() {
             {/* Collapsible filter card — categorical + numeric ranges */}
             {filtersOpen ? (
                 <div className="mb-3 shrink-0 rounded-lg border bg-card shadow-sm">
-                    <div className="flex items-center justify-between border-b px-4 py-2">
+                    <div className="flex items-center justify-between border-b px-3 py-1.5">
                         <span className="flex items-center gap-2 text-sm font-medium">
                             <Filter className="size-4 text-muted-foreground" /> Filters
                             {activeFilterCount > 0 ? <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">{activeFilterCount} on</span> : null}
@@ -1413,10 +1449,10 @@ export default function GeneratePage() {
                             </Button>
                         ) : null}
                     </div>
-                    <div className="space-y-4 p-4">
+                    <div className="space-y-3 p-3">
                         <section>
                             {sectionTitle("Product")}
-                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                                 {labelled("Brand", filterSelect(fBrand, setFBrand, "All", brands.map((b) => ({ value: b, label: b }))))}
                                 {labelled("Collection", filterSelect(fCategory, setFCategory, "All", categories.map((c) => ({ value: c, label: c }))))}
                                 {labelled("Group", filterSelect(fGroup, setFGroup, "All", groups.map((g) => ({ value: g, label: g }))))}
@@ -1426,13 +1462,13 @@ export default function GeneratePage() {
                         </section>
                         <section>
                             {sectionTitle("Quick checks")}
-                            <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+                            <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
                                 <div className="flex flex-wrap gap-2">
                                     {flagChip("Barcode capped", fBarcodeCapped, setFBarcodeCapped, "MRP is squeezing the barcode price")}
                                     {flagChip("Sale price capped", fSaleCapped, setFSaleCapped, "Selling price held down at the barcode / MRP ceiling")}
                                     {flagChip("In stock only", fInStock, setFInStock, "Hide products with no stock")}
                                 </div>
-                                <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
+                                <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-3">
                                     {thresholdInput("Barcode gap shrunk", tBarcodeShrink, setTBarcodeShrink)}
                                     {thresholdInput("Profit reduced", tProfitReduce, setTProfitReduce)}
                                     {thresholdInput("Profit increased", tProfitIncrease, setTProfitIncrease)}
@@ -1441,7 +1477,7 @@ export default function GeneratePage() {
                         </section>
                         <section>
                             {sectionTitle("Ranges")}
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                            <div className="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2 lg:grid-cols-4">
                                 {RANGE_FIELDS.map((f) => <div key={f.key}>{rangeInput(f.label, f.key, f.unit)}</div>)}
                             </div>
                         </section>
