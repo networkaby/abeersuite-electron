@@ -265,13 +265,12 @@ function profitOf(
     return { amt, pct };
 }
 
-/** "2 Nov" this year, "13 Sep 2025" otherwise; "" for no date. Parsed from "YYYY-MM-DD" (no timezone shift). */
+/** "2 Nov 2026"; "" for no date. Parsed from "YYYY-MM-DD" (no timezone shift). */
 function shortDate(ymd: string): string {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
     if (!m) return "";
     const mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][parseInt(m[2], 10) - 1];
-    const year = parseInt(m[1], 10) === new Date().getFullYear() ? "" : ` ${m[1]}`;
-    return `${parseInt(m[3], 10)} ${mon}${year}`;
+    return `${parseInt(m[3], 10)} ${mon} ${m[1]}`;
 }
 
 const rupee = (n: number | null) => (n == null ? "—" : formatInr(n));
