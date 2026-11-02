@@ -57,18 +57,20 @@ export async function saveAutoBarcodes(ids: number[], opts: { onlyMissing?: bool
  * Returns what was stored.
  */
 export async function saveManualBarcode(id: number, pricePaise: number): Promise<{ barcodeManualPaise: number; salePriceFrozenAt: Date } | null> {
-    const p = await prisma.invProduct.findUnique({
-        where:  { id },
-        select: { mrpPaise: true, effectiveSalePricePaise: true },
-    });
-    if (!p) return null;
-    const v = p.mrpPaise != null && p.mrpPaise > 0 && pricePaise > p.mrpPaise ? p.mrpPaise : pricePaise;
+    // One statement: the MRP cap reads the row it writes, so an MRP edit landing
+    // between a read and a write can never leave the barcode above the new MRP.
     const now = new Date();
-    await prisma.invProduct.update({
-        where: { id },
-        data:  { barcodeManualPaise: v, barcodeIsManual: true, salePriceFrozenAt: now, barcodeGapBasePaise: p.effectiveSalePricePaise },
-    });
-    return { barcodeManualPaise: v, salePriceFrozenAt: now };
+    const rows = await prisma.$queryRaw<{ barcodeManualPaise: number }[]>`
+        UPDATE "InvProduct" SET
+            "barcodeManualPaise"  = CASE WHEN "mrpPaise" > 0 AND ${pricePaise}::int > "mrpPaise" THEN "mrpPaise" ELSE ${pricePaise}::int END,
+            "barcodeIsManual"     = true,
+            "salePriceFrozenAt"   = ${now},
+            "barcodeGapBasePaise" = "effectiveSalePricePaise",
+            "updatedAt"           = NOW()
+        WHERE id = ${id}
+        RETURNING "barcodeManualPaise"`;
+    if (rows.length === 0) return null;
+    return { barcodeManualPaise: rows[0].barcodeManualPaise, salePriceFrozenAt: now };
 }
 
 /**
@@ -76,16 +78,15 @@ export async function saveManualBarcode(id: number, pricePaise: number): Promise
  * barcode save (date + gap stamped). Below MRP nothing moves.
  */
 export async function capBarcodeToMrp(id: number): Promise<boolean> {
-    const p = await prisma.invProduct.findUnique({
-        where:  { id },
-        select: { mrpPaise: true, barcodeManualPaise: true, effectiveSalePricePaise: true },
-    });
-    if (!p || p.mrpPaise == null || p.mrpPaise <= 0 || p.barcodeManualPaise == null || p.barcodeManualPaise <= p.mrpPaise) return false;
-    await prisma.invProduct.update({
-        where: { id },
-        data:  { barcodeManualPaise: p.mrpPaise, salePriceFrozenAt: new Date(), barcodeGapBasePaise: p.effectiveSalePricePaise },
-    });
-    return true;
+    // One statement, so the cap always uses the MRP that is on the row now.
+    const n = await prisma.$executeRaw`
+        UPDATE "InvProduct" SET
+            "barcodeManualPaise"  = "mrpPaise",
+            "salePriceFrozenAt"   = NOW(),
+            "barcodeGapBasePaise" = "effectiveSalePricePaise",
+            "updatedAt"           = NOW()
+        WHERE id = ${id} AND "mrpPaise" > 0 AND "barcodeManualPaise" > "mrpPaise"`;
+    return n > 0;
 }
 
 /**
