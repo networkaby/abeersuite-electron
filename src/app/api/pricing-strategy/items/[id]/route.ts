@@ -46,7 +46,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             const [before, bands] = await Promise.all([
                 prisma.invProduct.findUnique({
                     where:  { id },
-                    select: { mrpPaise: true, savedSalePricePaise: true, barcodeManualPaise: true, salePriceFrozenAt: true },
+                    select: { mrpPaise: true, savedSalePricePaise: true, barcodeManualPaise: true, salePriceFrozenAt: true, effectiveSalePricePaise: true },
                 }),
                 loadBarcodeBands(),
             ]);
@@ -61,6 +61,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             barcodePatch.salePriceFrozenAt = nextBarcodeDate(
                 before, { savedSalePricePaise: before.savedSalePricePaise, mrpPaise: mrp, barcodeManualPaise: manual }, bands, new Date(),
             );
+            // A barcode edit re-bases the original gap (Needs Attention) on the price selling now.
+            if (data.barcodeManualPaise !== undefined) barcodePatch.barcodeGapBasePaise = before.effectiveSalePricePaise;
         }
 
         const row = await prisma.invProduct.update({

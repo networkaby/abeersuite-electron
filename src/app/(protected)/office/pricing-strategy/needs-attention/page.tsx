@@ -7,7 +7,7 @@ import { useTableSort } from "@/shared/hooks";
 import { SortHeader } from "@/shared/components/SortHeader";
 import { toast } from "sonner";
 import {
-    AlertCircle, AlertTriangle,
+    AlertCircle, AlertTriangle, Barcode,
     ChevronDown, ChevronRight, Pencil, RefreshCw, Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
 import { InvProductDialog } from "@/modules/inventory/components/InvProductDialog";
 import { ScrollBar } from "@/components/ui/scroll-area";
 import { formatInr } from "@/shared/lib/format";
+import { NumericInput } from "@/shared/components/NumericInput";
 
 const ROW_GRID = "grid gap-2 items-center grid-cols-[minmax(180px,1fr)_84px_84px_84px_72px]";
 
@@ -56,13 +57,25 @@ function inclToExcl(incl: string, gst: number): string {
 
 // ── attention ──────────────────────────────────────────────────────────────────
 
-type AttentionType = "cost" | "mrp";
+type AttentionType = "cost" | "mrp" | "gap";
 
-function attention(item: PricingItem): AttentionType[] {
+function attention(item: PricingItem, gapPct: number): AttentionType[] {
     const out: AttentionType[] = [];
     if (item.resolvedCostPaise == null) out.push("cost");
     if (item.mrpPaise == null || item.mrpPaise <= 0) out.push("mrp");
+    if (item.barcodeGapPct != null && item.barcodeGapPct < gapPct) out.push("gap");
     return out;
+}
+
+// "Low barcode gap" threshold: today's gap (barcode − selling price) below this %
+// of the gap when the barcode was saved. Kept per browser; default 30.
+const GAP_PCT_KEY = "needsAttention.gapPct";
+const DEFAULT_GAP_PCT = 30;
+function readGapPct(): number {
+    try {
+        const v = Number(localStorage.getItem(GAP_PCT_KEY));
+        return Number.isFinite(v) && v > 0 ? v : DEFAULT_GAP_PCT;
+    } catch { return DEFAULT_GAP_PCT; }
 }
 
 // ── types ──────────────────────────────────────────────────────────────────────
@@ -103,6 +116,12 @@ export default function NeedsAttentionPage() {
     const [view, setView] = useState<View>("group");
     const [showCost, setShowCost] = useState(true);
     const [showMrp, setShowMrp] = useState(true);
+    const [showGap, setShowGap] = useState(true);
+    // Applied threshold (drives the fetch + badges) and the box's draft text.
+    const [gapPct, setGapPct] = useState<number>(DEFAULT_GAP_PCT);
+    const [gapDraft, setGapDraft] = useState<string>(() => String(gapPct));
+    const gapPctRef = useRef(gapPct);
+    const itemsUrl = () => `/api/pricing-strategy/items?onlyAttention=1&gapPct=${gapPctRef.current}`;
     // Product A→Z by default; a third click on any header comes back to it.
     const sortProps = useTableSort<SortKey>("name", "asc");
     const { sortKey, sortDir } = sortProps;
@@ -120,7 +139,7 @@ export default function NeedsAttentionPage() {
     };
 
     const read = () => axios
-            .get<PricingItem[]>("/api/pricing-strategy/items?onlyAttention=1")
+            .get<PricingItem[]>(itemsUrl())
             .then((r) => {
                 setItems(r.data);
                 const keys = new Set(r.data.map((i) => groupKey(i, view)));
@@ -134,11 +153,19 @@ export default function NeedsAttentionPage() {
     };
 
     // First load: `loading` starts true, so only the read runs here.
-    const readOnMount = useEffectEvent(() => { void read(); });
+    // The saved threshold is read here (not in useState) so server and client render the same.
+    const readOnMount = useEffectEvent(() => {
+        const v = readGapPct();
+        gapPctRef.current = v;
+        setGapPct(v);
+        setGapDraft(String(v));
+        void read();
+    });
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot read of the per-browser threshold after mount; reading it during render would mismatch the server pass
     useEffect(() => { readOnMount(); }, []);
     // Live refresh swaps the rows only — no spinner, groups stay as opened, typed edits stay.
     useRealtimeTopics(["catalogue", "stock"], () => {
-        axios.get<PricingItem[]>("/api/pricing-strategy/items?onlyAttention=1")
+        axios.get<PricingItem[]>(itemsUrl())
             .then((r) => setItems(r.data))
             .catch(() => {});
     });
@@ -156,15 +183,29 @@ export default function NeedsAttentionPage() {
 
     const costCount = useMemo(() => items.filter((i) => i.resolvedCostPaise == null).length, [items]);
     const mrpCount = useMemo(() => items.filter((i) => !i.mrpPaise || i.mrpPaise <= 0).length, [items]);
+    const gapCount = useMemo(() => items.filter((i) => i.barcodeGapPct != null && i.barcodeGapPct < gapPct).length, [items, gapPct]);
+
+    // Apply a new threshold on blur: remember it, then re-read (the server
+    // decides which rows are in the attention list).
+    const applyGapPct = () => {
+        const v = Math.min(100, Math.max(1, Number(gapDraft) || DEFAULT_GAP_PCT));
+        setGapDraft(String(v));
+        if (v === gapPct) return;
+        try { localStorage.setItem(GAP_PCT_KEY, String(v)); } catch { /* per-browser convenience only */ }
+        gapPctRef.current = v;
+        setGapPct(v);
+        load();
+    };
 
     // ── filtered + grouped ────────────────────────────────────────────────────
 
     const filtered = useMemo(() => items.filter((i) => {
-        const att = attention(i);
+        const att = attention(i, gapPct);
         if (showCost && att.includes("cost")) return true;
         if (showMrp && att.includes("mrp")) return true;
+        if (showGap && att.includes("gap")) return true;
         return false;
-    }), [items, showCost, showMrp]);
+    }), [items, showCost, showMrp, showGap, gapPct]);
 
     const grouped = useMemo(() => {
         const map = new Map<string, PricingItem[]>();
@@ -278,7 +319,7 @@ export default function NeedsAttentionPage() {
                     <p className="text-sm text-muted-foreground mt-0.5">
                         {loading
                             ? "Loading…"
-                            : `${items.length} product${items.length !== 1 ? "s" : ""} need data. Showing ${filtered.length}.`}
+                            : `${items.length} product${items.length !== 1 ? "s" : ""} need attention. Showing ${filtered.length}.`}
                     </p>
                 </div>
                 <Button variant="outline" size="sm" onClick={load} disabled={loading}>
@@ -326,6 +367,30 @@ export default function NeedsAttentionPage() {
                     <AlertTriangle className="size-3 inline mr-1" />
                     No MRP ({mrpCount})
                 </button>
+                <button
+                    onClick={() => setShowGap((p) => !p)}
+                    title="Today's barcode gap (barcode − selling price) is below this % of the gap when the barcode was saved — reprint the label"
+                    className={`text-xs px-2.5 py-1 border rounded transition-colors ${showGap
+                            ? "bg-violet-100 border-violet-400 text-violet-800"
+                            : "border-border text-muted-foreground hover:bg-muted"
+                        }`}
+                >
+                    <Barcode className="size-3 inline mr-1" />
+                    Low barcode gap ({gapCount})
+                </button>
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    below
+                    <NumericInput
+                        value={gapDraft}
+                        onValueChange={setGapDraft}
+                        mode="decimal"
+                        onBlur={applyGapPct}
+                        onKeyDown={(e) => { if (e.key === "Enter") applyGapPct(); }}
+                        className="h-6 w-12 text-right text-xs font-mono"
+                        aria-label="Low barcode gap threshold %"
+                    />
+                    % of original gap
+                </span>
             </div>
 
             {/* groups */}
@@ -352,7 +417,7 @@ export default function NeedsAttentionPage() {
                         </thead>
                         <tbody className="divide-y divide-border">
                             {sortedItems.map((item) => {
-                                const att = attention(item);
+                                const att = attention(item, gapPct);
                                 const e = editFor(item);
                                 const dirty = isDirty(item);
                                 const gst = item.gstRatePct;
@@ -381,6 +446,11 @@ export default function NeedsAttentionPage() {
                                                 {att.includes("mrp") && (
                                                     <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-amber-700 border-amber-400 bg-amber-50">
                                                         no MRP
+                                                    </Badge>
+                                                )}
+                                                {att.includes("gap") && (
+                                                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-violet-700 border-violet-400 bg-violet-50" title="Today's gap as % of the gap when the barcode was saved">
+                                                        gap {item.barcodeGapPct}%
                                                     </Badge>
                                                 )}
                                             </div>
@@ -524,7 +594,7 @@ export default function NeedsAttentionPage() {
                                     {isOpen && (
                                         <div className="divide-y divide-border">
                                             {groupItems.map((item) => {
-                                                const att = attention(item);
+                                                const att = attention(item, gapPct);
                                                 const e = editFor(item);
                                                 const dirty = isDirty(item);
                                                 const gst = item.gstRatePct;
@@ -556,6 +626,11 @@ export default function NeedsAttentionPage() {
                                                                 {att.includes("mrp") && (
                                                                     <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-amber-700 border-amber-400 bg-amber-50">
                                                                         no MRP
+                                                                    </Badge>
+                                                                )}
+                                                                {att.includes("gap") && (
+                                                                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-violet-700 border-violet-400 bg-violet-50" title="Today's gap as % of the gap when the barcode was saved">
+                                                                        gap {item.barcodeGapPct}%
                                                                     </Badge>
                                                                 )}
                                                             </div>

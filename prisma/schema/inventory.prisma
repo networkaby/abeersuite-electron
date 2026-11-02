@@ -358,6 +358,10 @@ model InvProduct {
   /// everywhere (labels, POS cap, shop) and a Sale Price change never resets it;
   /// only the "reset" on Update & Print Labels clears it. MRP-capped on save.
   barcodeManualPaise       Int?
+  /// effectiveSalePricePaise at the moment the barcode was last saved (Sale Price
+  /// save or manual barcode edit). barcode − this = the ORIGINAL gap; Needs
+  /// Attention flags a product when today's gap falls below X% of it.
+  barcodeGapBasePaise      Int?
   /// When savedSalePricePaise was last frozen — drives the printed barcode date code.
   salePriceFrozenAt        DateTime?
   /// After-tax profit (paise) decided at freeze time — basis for the drift /
