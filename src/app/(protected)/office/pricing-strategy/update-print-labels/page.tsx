@@ -355,12 +355,12 @@ const RANGE_FIELDS: { key: RangeKey; label: string }[] = [
     { key: "cost", label: "Cost (incl)" },
     { key: "margin", label: "Margin % (strategy & mine)" },
     { key: "profit", label: "Profit ₹ (sale price)" },
-    { key: "profitPct", label: "Profit % (sale price)" },
+    // Same figure as Needs Attention → Low barcode gap: today's gap (barcode −
+    // selling price) as % of the gap when the barcode was saved. "Below 30" = that list.
+    { key: "barcodeGap", label: "Barcode gap % of original" },
     { key: "stock", label: "Stock (units)" },
     { key: "daysSinceSale", label: "Days since last sale" },
-    // Same figure as Needs Attention → Low barcode gap: today's gap (barcode −
-    // selling price) as % of the gap when the barcode was saved. Max 30 = that list.
-    { key: "barcodeGap", label: "Barcode gap % of original" },
+    { key: "profitPct", label: "Profit % (sale price)" },
 ];
 
 // localStorage key for the persisted ("saved") filter state. Bump the suffix
@@ -1202,7 +1202,21 @@ export default function GeneratePage() {
             {node}
         </div>
     );
-    const rangeInput = (label: string, key: RangeKey) => (
+    // Barcode gap reads as words, not min–max: "Below / Above original gap  [ ] %".
+    const barcodeGapInput = () => (
+        <div className="space-y-1">
+            {([["max", "Below original gap"], ["min", "Above original gap"]] as const).map(([side, text]) => (
+                <div key={side} className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-medium text-muted-foreground">{text}</span>
+                    <span className="flex items-center gap-1">
+                        <Input inputMode="decimal" value={ranges.barcodeGap?.[side] ?? ""} onChange={(e) => setRange("barcodeGap", side, e.target.value)} placeholder="any" className="h-7 w-16 text-right text-xs font-mono" />
+                        <span className="text-xs text-muted-foreground">%</span>
+                    </span>
+                </div>
+            ))}
+        </div>
+    );
+    const rangeInput = (label: string, key: RangeKey) => key === "barcodeGap" ? barcodeGapInput() : (
         <div className="space-y-1">
             <div className="text-[10px] font-medium text-muted-foreground">{label}</div>
             <div className="flex items-center gap-1">
