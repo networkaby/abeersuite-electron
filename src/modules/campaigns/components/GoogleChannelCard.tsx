@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { hasPermissionWithScope } from "@/shared/lib/auth/permissionScope";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
+import { startChannelConnect } from "../lib/startChannelConnect";
 
 type Status = {
     setupProblem: string | null;
@@ -120,8 +121,7 @@ export default function GoogleChannelCard() {
                             size="sm"
                             variant={status.connected ? "outline" : "default"}
                             disabled={busy !== null}
-                            // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- an API route that redirects to Google, not a Next page
-                            onClick={() => (window.location.href = "/api/campaigns/google/connect")}
+                            onClick={() => startChannelConnect("/api/campaigns/google/connect", "Google sign-in")}
                         >
                             <Link2 className="mr-1 h-3.5 w-3.5" /> {status.connected ? "Reconnect" : "Connect"}
                         </Button>
