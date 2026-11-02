@@ -8,7 +8,7 @@ import { rebaseBarcodeGap } from "@/modules/pricing-strategy/lib/barcodeStore";
 
 // PUT /api/pricing-strategy/sale-price — save the Sale Price + selling source
 // for the rows ticked on Update prices ("Save").
-//   • savedSalePricePaise (MRP-capped) + savedProfitPaise; blank clears them.
+//   • savedSalePricePaise (MRP-capped); blank clears it.
 //   • The BARCODE price and its date are NOT touched here — they move only on
 //     a barcode save (POST /api/pricing-strategy/barcode-price, a hand edit). See
 //     barcodeStore.ts.
@@ -51,7 +51,6 @@ export async function PUT(req: Request) {
                 data: {
                     effectiveSalePriceSource: it.effectiveSalePriceSource,
                     savedSalePricePaise:      hasSaved ? price : null,
-                    savedProfitPaise:         hasSaved ? it.savedProfitPaise : null,
                 },
             });
         });

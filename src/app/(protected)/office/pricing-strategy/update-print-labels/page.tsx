@@ -157,7 +157,6 @@ type Row = {
     saleSource: SaleSource; // which voice actually sells
     baseSource: SaleSource; // last-saved sale source, for dirty detection
     savedAt: string;        // local date the printed barcode ₹ (manual/auto) last changed → secret date code
-    savedProfit: string;    // decided profit ₹ frozen at last save → basis for the profit-gap filter
     barcodeManual: string;  // SAVED barcode ₹ (InvProduct.barcodeManualPaise); "" = never saved (legacy → derived)
     barcodeIsManual: boolean; // saved barcode was typed by hand (violet)
     barcodeGapPct: number | null; // today's barcode gap as % of the gap at barcode save (server); null = not measurable
@@ -218,7 +217,6 @@ function itemToRow(it: PricingItem): Row {
         saleSource: voiceFromDb(it.effectiveSalePriceSource),
         baseSource: voiceFromDb(it.effectiveSalePriceSource),
         savedAt: localDateOf(it.salePriceFrozenAt),
-        savedProfit: it.savedProfitPaise != null ? (it.savedProfitPaise / 100).toFixed(2) : "",
         barcodeManual: it.barcodeManualPaise != null ? (it.barcodeManualPaise / 100).toFixed(2) : "",
         barcodeIsManual: it.barcodeIsManual,
         barcodeGapPct: it.barcodeGapPct,
@@ -363,7 +361,7 @@ function sortVal(r: Row, key: SortKey): number | string {
 
 // ── Range filters (numeric parameters: min/max) ───────────────────────────────
 
-type RangeKey = "cost" | "margin" | "profit" | "profitPct" | "stock" | "daysSinceSale" | "barcodeGap" | "profitChange";
+type RangeKey = "cost" | "margin" | "profit" | "profitPct" | "stock" | "daysSinceSale" | "barcodeGap";
 const RANGE_FIELDS: { key: RangeKey; label: string; unit?: string }[] = [
     { key: "cost", label: "Cost (incl)", unit: "₹" },
     { key: "margin", label: "Margin % (strategy & mine)", unit: "%" },
@@ -374,9 +372,6 @@ const RANGE_FIELDS: { key: RangeKey; label: string; unit?: string }[] = [
     { key: "stock", label: "Stock (units)", unit: "pcs" },
     { key: "daysSinceSale", label: "Days since last sale", unit: "days" },
     { key: "profitPct", label: "Profit % (sale price)", unit: "%" },
-    // Profit today on the saved Sale Price vs the profit decided at the last
-    // "Save prices": − = reduced, + = increased (was two "more than" boxes).
-    { key: "profitChange", label: "Profit change since last save", unit: "%" },
 ];
 
 // Filter-card order (owner's layout). The barcode gap is split into its two
@@ -470,7 +465,6 @@ function rangeVal(r: Row, key: RangeKey): number | null {
         case "stock": return numOrNull(r.stock);
         case "daysSinceSale": return daysSinceSale(r);
         case "barcodeGap": return r.barcodeGapPct;
-        case "profitChange": return profitGapPct(r);
         case "profit": {
             // After-tax profit on the price that actually applies (capped selling voice).
             const price = applicableSalePrice(r);
@@ -485,18 +479,6 @@ function rangeVal(r: Row, key: RangeKey): number | null {
     }
 }
 
-// ── Drift signals (against what was decided at the last Save prices) ───────────
-
-// Profit gap %: current profit on the saved price vs the DECIDED profit saved at
-// print. Negative = profit reduced, positive = profit increased.
-function profitGapPct(r: Row): number | null {
-    const decided = numOrNull(r.savedProfit);
-    const saved = numOrNull(r.salePrice);
-    if (decided == null || decided === 0 || saved == null) return null;
-    const cur = profitOf(saved, r.costIncl, r.gst)?.amt;
-    if (cur == null) return null;
-    return ((cur - decided) / Math.abs(decided)) * 100;
-}
 
 // ── Voice cell (clickable price chip) ─────────────────────────────────────────
 
@@ -832,7 +814,7 @@ export default function GeneratePage() {
                 const merged = mapped.map((m) => {
                     const old = byId.get(m.id);
                     return old
-                        ? { ...m, salePrice: old.salePrice, baseline: old.baseline, saleSource: old.saleSource, baseSource: old.baseSource, savedAt: old.savedAt, savedProfit: old.savedProfit }
+                        ? { ...m, salePrice: old.salePrice, baseline: old.baseline, saleSource: old.saleSource, baseSource: old.baseSource, savedAt: old.savedAt }
                         : m;
                 });
                 const locals = prev.filter((r) => r.id < 0); // keep locally-added rows
@@ -1104,13 +1086,10 @@ export default function GeneratePage() {
                 const sp = numOrNull(r.salePrice);
                 // The saved Sale Price (barcode tag) persists whenever one is
                 // entered, regardless of which voice sells; a blank input clears it.
-                const hasSaved = sp != null;
-                const decided = hasSaved ? profitOf(sp, r.costIncl, r.gst)?.amt ?? null : null;
                 return {
                     id: r.id,
                     effectiveSalePriceSource: voiceToDb(r.saleSource),
-                    savedSalePricePaise: hasSaved ? Math.round(sp * 100) : null,
-                    savedProfitPaise: decided != null ? Math.round(decided * 100) : null,
+                    savedSalePricePaise: sp != null ? Math.round(sp * 100) : null,
                 };
             });
         setFreezing(true);
@@ -1120,15 +1099,7 @@ export default function GeneratePage() {
             setRows((prev) =>
                 prev.map((r) => {
                     if (!isSaveTarget(r)) return r;
-                    const sp = numOrNull(r.salePrice);
-                    const hasSaved = sp != null;
-                    const decided = hasSaved ? profitOf(sp, r.costIncl, r.gst)?.amt ?? null : null;
-                    return {
-                        ...r,
-                        baseline: r.salePrice,
-                        baseSource: r.saleSource,
-                        savedProfit: decided != null ? decided.toFixed(2) : "",
-                    };
+                    return { ...r, baseline: r.salePrice, baseSource: r.saleSource };
                 }),
             );
             setSelected(new Set());
@@ -1320,9 +1291,6 @@ export default function GeneratePage() {
                 if (v > hi) hi = v;
             }
             if (f.key === "barcodeGap") { lo = Math.min(lo, 0); hi = Math.max(hi, 100); }
-            // Change % can run to thousands on a tiny decided profit; keep the track
-            // readable (−100…+100). Wider values still filter through the boxes.
-            if (f.key === "profitChange") { lo = -100; hi = 100; }
             if (!isFinite(lo) || !isFinite(hi) || hi <= lo) { out[f.key] = null; continue; }
             const span = hi - lo;
             const step = span > 2000 ? 10 : span > 20 ? 1 : 0.1;
@@ -1496,9 +1464,6 @@ export default function GeneratePage() {
                                     {flagChip("Barcode capped", fBarcodeCapped, setFBarcodeCapped, "MRP is squeezing the barcode price")}
                                     {flagChip("Sale price capped", fSaleCapped, setFSaleCapped, "Selling price held down at the barcode / MRP ceiling")}
                                     {flagChip("In stock only", fInStock, setFInStock, "Hide products with no stock")}
-                                </div>
-                                <div className="min-w-[18rem] flex-1">
-                                    {rangeInput(RANGE_LABEL.profitChange.label, "profitChange", "%")}
                                 </div>
                             </div>
                         </section>

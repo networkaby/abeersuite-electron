@@ -371,7 +371,9 @@ model InvProduct {
   /// When the barcode price was last SAVED (see barcodeManualPaise) — drives the
   /// printed barcode date code. Legacy name.
   salePriceFrozenAt        DateTime?
-  /// After-tax profit (paise) decided at the last "Save prices" — basis for the drift /
+  /// RETIRED 2026-11-03 — nothing reads or writes it any more (the "Profit
+  /// reduced / increased" filter was removed). Kept so no migration is needed;
+  /// a counter replica cannot drop a column. Was: after-tax profit (paise) decided at the last "Save prices" — basis for the drift /
   /// profit-gap filter on the labels page (current profit vs this snapshot).
   savedProfitPaise         Int?
 

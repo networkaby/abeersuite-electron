@@ -75,7 +75,6 @@ export const salePriceSaveSchema = z.object({
                 id:                       z.number().int().positive(),
                 effectiveSalePriceSource: effectiveSalePriceSourceEnum,
                 savedSalePricePaise:      z.number().int().min(0).nullable(),
-                savedProfitPaise:         z.number().int().nullable(),
             }),
         )
         .min(1)

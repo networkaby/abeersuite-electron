@@ -78,6 +78,4 @@ export interface PricingItem {
     effectiveSalePriceSource: string;
     /** ISO timestamp the BARCODE price was last saved (legacy column name), or null. Drives the label date code. */
     salePriceFrozenAt:    string | null;
-    /** After-tax profit (paise) frozen at the last save, or null. */
-    savedProfitPaise:     number | null;
 }
