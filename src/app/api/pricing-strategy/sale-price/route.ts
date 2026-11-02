@@ -59,11 +59,13 @@ export async function PUT(req: Request) {
 
         // Re-materialize effectiveSalePricePaise from the freshly-written source so
         // POS/shop reflect the change immediately. Never fail the freeze on a
-        // recompute error — the next voucher would heal it anyway.
+        // recompute error — the next voucher would heal it anyway. The barcode
+        // gap is measured from the new effective price, so it only moves when
+        // the recompute succeeded (a stale base would mislead Needs Attention).
         try {
             await recomputePricesForProducts(affected.map((it) => it.id));
+            await rebaseBarcodeGap(rebaseIds);
         } catch { /* best-effort; price heals on next voucher */ }
-        await rebaseBarcodeGap(rebaseIds);
 
         return NextResponse.json({ saved: ops.length });
     } catch (e) {

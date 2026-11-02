@@ -196,6 +196,14 @@ in the reminder:
 pnpm db:migrate:status
 ```
 
+**Post-deploy data steps.** Some migrations need a one-time data script on live after
+the `d_office` deploy has applied them. If a pending migration below is listed here,
+add its command to the reminder for the owner to run once the deploy is green:
+
+| Migration | Run once on live after deploy |
+|---|---|
+| `20261103090000_barcode_is_manual` | `pnpm seed:saved-barcodes` — saves today's barcode for products that never had one, so a later Sale Price change stops moving it |
+
 "Database schema is up to date!" → code-only deploy. Anything pending → tell the owner
 to push `d_office` only after the tills have updated. Judge drift on what physically
 changes: a new table is invisible to old tills; a new **column on a table counters

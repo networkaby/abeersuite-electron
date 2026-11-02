@@ -44,7 +44,9 @@ const DROPDOWN_ROWS = 12;
 
 /** Pre-tax lowest price a cashier may type on a line — the item's sale price
  *  (tax-inclusive paise) backed out to exclusive. null = no floor (service,
- *  or no sale price on the line). */
+ *  or no sale price on the line). Hydrated edit / converted lines never carry
+ *  salePaise, so an old bill sold below today's sale price still re-saves —
+ *  keep it that way. */
 function lineFloorExcl(l: CartLine): number | null {
     if (l.kind === "service" || l.salePaise == null || l.salePaise <= 0) return null;
     const incl = l.salePaise / 100;
