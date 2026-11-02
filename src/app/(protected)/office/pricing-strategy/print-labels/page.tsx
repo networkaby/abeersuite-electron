@@ -108,6 +108,27 @@ export default function PrintLabelsPage() {
         if (unknown.length) toast.error(`Not in the catalogue: ${unknown.join(", ")}`);
     }, [add]);
 
+    // Hand-typed barcode ₹ (null = back to auto): optimistic, saved through the
+    // same PATCH as Update prices, which also re-dates it (barcodeDate.ts).
+    const onBarcodePriceChange = useCallback(async (id: number, rupees: number | null) => {
+        const before = itemById.get(id);
+        if (!before) return;
+        const paise = rupees != null ? Math.round(rupees * 100) : null;
+        const patchItem = (p: Partial<PricingItem>) =>
+            setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...p } : it)));
+        patchItem({ barcodeManualPaise: paise });
+        try {
+            const { data } = await axios.patch<{ barcodeManualPaise: number | null; salePriceFrozenAt: string | null }>(
+                `/api/pricing-strategy/items/${id}`, { barcodeManualPaise: paise },
+            );
+            patchItem({ barcodeManualPaise: data.barcodeManualPaise, salePriceFrozenAt: data.salePriceFrozenAt });
+        } catch (e) {
+            patchItem({ barcodeManualPaise: before.barcodeManualPaise, salePriceFrozenAt: before.salePriceFrozenAt });
+            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error : null;
+            toast.error(msg ?? "Failed to save barcode price.");
+        }
+    }, [itemById]);
+
     return (
         <div className="flex h-full flex-col overflow-y-auto px-4 pt-3 pb-3">
             <LabelDesigner
@@ -115,13 +136,14 @@ export default function PrintLabelsPage() {
                 onAddProducts={onAddProducts}
                 onRemoveItem={remove}
                 onCopiesChange={(id, n) => setCopies(id, clampCopies(n))}
+                onBarcodePriceChange={onBarcodePriceChange}
                 onUpdateBarcode={canOpen("/office/pricing-strategy/update-print-labels") ? () => router.push("/office/pricing-strategy/update-print-labels?view=selected") : undefined}
                 prefillVoucherId={fromVoucherId}
                 onPrefillConsumed={() => router.replace("/office/pricing-strategy/print-labels", { scroll: false })}
                 pageTitle="Print labels"
                 pageSubtitle={loading
                     ? "Loading products…"
-                    : "Search, scan, or pick a voucher. Prices and barcodes are set in Update & print labels."}
+                    : "Search, scan, or pick a voucher. Barcode ₹ can be edited here; Sale Price is set in Update prices."}
                 rootClassName="pb-10"
             />
         </div>

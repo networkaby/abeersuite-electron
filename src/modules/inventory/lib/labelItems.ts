@@ -23,6 +23,16 @@ export type Item = {
     copies: number;
     /** Current on-hand stock, shown for the batch/copies decision. */
     stock?: number | null;
+    // Catalogue rows only — feed the editable Barcode ₹ cell (gap + profit).
+    /** Price the product sells at now (effectiveSalePricePaise, ₹). */
+    sell?: number | null;
+    /** Landed cost incl GST (₹). null = no cost known. */
+    costIncl?: number | null;
+    gstPct?: number;
+    /** True when the barcode ₹ is hand-set (barcodeManualPaise). */
+    manual?: boolean;
+    /** The auto barcode ₹ (from saved Sale Price + MRP) — typing it back clears manual. */
+    autoPrice?: number | null;
 };
 
 /** A product the designer asks the parent to add to the shared set (₹ values). */
@@ -122,8 +132,9 @@ export function nameFitScale(name: string, availableMm: number, fontSizePt: numb
 export function pricingItemToLabelItem(it: PricingItem, bands: BarcodeBand[], copies: number): Item {
     const saved = it.savedSalePricePaise != null ? it.savedSalePricePaise / 100 : null;
     const mrp = it.mrpPaise != null ? it.mrpPaise / 100 : null;
-    const tag = it.barcodeManualPaise != null ? it.barcodeManualPaise / 100
-        : saved != null ? barcodePrice(saved, mrp != null && mrp > 0 ? mrp : null, bands).value : null;
+    const autoTag = saved != null ? barcodePrice(saved, mrp != null && mrp > 0 ? mrp : null, bands).value : null;
+    const tag = it.barcodeManualPaise != null ? it.barcodeManualPaise / 100 : autoTag;
+    const gstMul = 1 + (it.gstRatePct > 0 ? it.gstRatePct / 100 : 0);
     const effective = it.effectiveSalePricePaise != null ? it.effectiveSalePricePaise / 100 : null;
     const price = tag ?? saved ?? effective;
     return {
@@ -135,5 +146,10 @@ export function pricingItemToLabelItem(it: PricingItem, bands: BarcodeBand[], co
         date: localDateOf(it.salePriceFrozenAt),
         copies,
         stock: it.stock,
+        sell: effective,
+        costIncl: it.resolvedCostPaise != null ? ((it.resolvedCostPaise + (it.additionalCostPaise ?? 0)) / 100) * gstMul : null,
+        gstPct: it.gstRatePct,
+        manual: it.barcodeManualPaise != null,
+        autoPrice: autoTag,
     };
 }

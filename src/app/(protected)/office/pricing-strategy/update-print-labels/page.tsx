@@ -40,6 +40,7 @@ import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
 import { formatInr, gridRowClass, parseDecimalInput } from "@/shared/lib/format";
+import { afterGstProfit } from "@/shared/lib/pricing/profit";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { barcodePrice as barcodePriceCore, normalizeBarcodeBands, DEFAULT_BARCODE_BANDS, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 import { productMatchesSearch } from "@/shared/lib/inventory";
@@ -246,23 +247,9 @@ function strategyRupees(r: Row): number | null {
     return r.strategyPaise != null ? r.strategyPaise / 100 : null;
 }
 
-// After-tax profit on a given selling price: strip GST from both sale and cost
-// (output GST owed, input GST reclaimed). pct = margin on net sale.
-function profitOf(
-    price: number | null,
-    costIncl: string,
-    gstStr: string,
-): { amt: number; pct: number | null } | null {
-    if (price == null) return null;
-    const cost = parseFloat(costIncl);
-    if (!isFinite(cost)) return null;
-    const gst = parseFloat(gstStr);
-    const gstMul = isFinite(gst) && gst > 0 ? 1 + gst / 100 : 1;
-    const netSale = price / gstMul;
-    const netCost = cost / gstMul;
-    const amt = netSale - netCost;
-    const pct = netSale > 0 ? (amt / netSale) * 100 : null;
-    return { amt, pct };
+// After-tax profit on a given selling price — shared formula (pricing/profit.ts).
+function profitOf(price: number | null, costIncl: string, gstStr: string): { amt: number; pct: number | null } | null {
+    return afterGstProfit(price, parseFloat(costIncl), parseFloat(gstStr));
 }
 
 /** "2 Nov 26"; "" for no date. Parsed from "YYYY-MM-DD" (no timezone shift). */

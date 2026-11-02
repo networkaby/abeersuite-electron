@@ -21,6 +21,8 @@ import { useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { cn } from "@/shared/lib/format/utils";
+import { parseDecimalInput } from "@/shared/lib/format";
+import { afterGstProfit } from "@/shared/lib/pricing/profit";
 import { useProductCatalog } from "@/shared/hooks";
 import { Button } from "@/components/ui/button";
 import {
@@ -143,6 +145,8 @@ type LabelDesignerProps = {
     onRemoveItem: (id: number) => void;
     /** Change how many copies of one label to print. */
     onCopiesChange: (id: number, copies: number) => void;
+    /** Save a hand-typed barcode ₹ (null = back to auto). Omitted → Barcode ₹ is read-only. */
+    onBarcodePriceChange?: (id: number, rupees: number | null) => void;
     /** Go to the price/barcode editor (parent switches sub-tab). Button hidden if omitted. */
     onUpdateBarcode?: () => void;
     /** Deep-link prefill: when set, this GRN/Purchase voucher's lines are added
@@ -163,6 +167,7 @@ export function LabelDesigner({
     onAddProducts,
     onRemoveItem,
     onCopiesChange,
+    onBarcodePriceChange,
     onUpdateBarcode,
     prefillVoucherId = null,
     onPrefillConsumed,
@@ -503,7 +508,7 @@ export function LabelDesigner({
                 </Button>
             </div>
 
-            {/* ── Items table (read-only — prices/dates are set in Selected product) ─ */}
+            {/* ── Items table (Barcode ₹ editable when the parent passes onBarcodePriceChange) ─ */}
             <div className="print-hide mb-6 rounded-sm border">
                 <Table>
                     <TableHeader>
@@ -511,7 +516,7 @@ export function LabelDesigner({
                             <TableHead className="w-8 text-xs">#</TableHead>
                             <TableHead className="text-xs">Product name</TableHead>
                             <TableHead className="text-xs">Barcode</TableHead>
-                            <TableHead className="text-right text-xs">Sale ₹</TableHead>
+                            <TableHead className="text-right text-xs">Barcode ₹</TableHead>
                             <TableHead className="text-right text-xs">MRP ₹</TableHead>
                             <TableHead className="text-xs">Price date</TableHead>
                             <TableHead className="text-center text-xs">Secret code</TableHead>
@@ -535,7 +540,11 @@ export function LabelDesigner({
                                     <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
                                     <TableCell className="text-xs font-medium">{it.name}</TableCell>
                                     <TableCell className="font-mono text-xs">{it.barcode || "—"}</TableCell>
-                                    <TableCell className="text-right font-mono text-xs">₹{it.price}</TableCell>
+                                    <TableCell className="text-right font-mono text-xs">
+                                        {onBarcodePriceChange ? (
+                                            <BarcodePriceCell item={it} onCommit={(v) => onBarcodePriceChange(it.id, v)} />
+                                        ) : `₹${it.price}`}
+                                    </TableCell>
                                     <TableCell className="text-right font-mono text-xs">{it.mrp && it.mrp !== "0" ? `₹${it.mrp}` : "—"}</TableCell>
                                     <TableCell className="font-mono text-xs">{it.date || "—"}</TableCell>
                                     <TableCell className="text-center">
@@ -688,6 +697,60 @@ function LabelCell(props: {
 }
 
 /** One printed face — the barcode label, or the wide price-display card. */
+/**
+ * Editable barcode ₹ with the same read-outs as Update prices: gap to the price
+ * the product sells at (red = label below it) and after-GST profit % at the
+ * barcode ₹ (red = loss). Saves on blur / Enter; blank or the auto value = auto.
+ */
+function BarcodePriceCell({ item, onCommit }: { item: Item; onCommit: (rupees: number | null) => void }) {
+    const shown = item.price && item.price !== "0" ? item.price : "";
+    const [draft, setDraft] = useState<string | null>(null);
+    const text = draft ?? shown;
+    const value = parseFloat(text);
+    const bc = isFinite(value) && value > 0 ? value : null;
+    const gap = bc != null && item.sell != null ? bc - item.sell : null;
+    const profit = afterGstProfit(bc, item.costIncl, item.gstPct);
+    const commit = () => {
+        if (draft == null) return;
+        setDraft(null);
+        if (draft === shown) return;
+        let v = parseFloat(draft);
+        if (!isFinite(v) || v <= 0) v = NaN;
+        const mrp = parseFloat(item.mrp);
+        if (isFinite(v) && isFinite(mrp) && mrp > 0 && v > mrp) v = mrp; // never above MRP
+        const isAuto = !isFinite(v) || (item.autoPrice != null && Math.abs(v - item.autoPrice) < 0.5);
+        onCommit(isAuto ? null : Math.round(v * 100) / 100);
+    };
+    return (
+        <div className="flex flex-col items-end gap-0.5">
+            <Input
+                type="text"
+                inputMode="decimal"
+                value={text}
+                placeholder="auto"
+                aria-label={`Barcode price of ${item.name}`}
+                title={item.manual ? "Manual barcode price — clear it to go back to auto" : "Auto barcode price — type to set your own"}
+                onChange={(e) => setDraft(parseDecimalInput(e.target.value))}
+                onBlur={commit}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setDraft(null); }}
+                className={cn("h-7 w-24 text-right font-mono text-xs font-semibold", item.manual && "border-violet-500 bg-violet-50 text-violet-800 dark:bg-violet-950 dark:text-violet-200")}
+            />
+            <div
+                className="text-[10px] text-muted-foreground"
+                title="Gap = barcode − price it sells at now (red: label is below it). Profit % = after-GST profit at the barcode price."
+            >
+                <span className={gap != null && gap < -0.005 ? "text-red-600" : ""}>
+                    {gap == null ? "—" : `${gap < -0.005 ? "−" : "+"}₹${Math.abs(gap).toFixed(2)}`}
+                </span>
+                {" · "}
+                <span className={profit?.pct != null && profit.pct < 0 ? "text-red-600" : ""}>
+                    {profit?.pct != null ? `${profit.pct.toFixed(1)}%` : "—"}
+                </span>
+            </div>
+        </div>
+    );
+}
+
 function CardBody(props: React.ComponentProps<typeof LabelCard>) {
     return props.preset.body === "display" ? <PriceDisplayCard {...props} /> : <LabelCard {...props} />;
 }
