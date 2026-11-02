@@ -427,7 +427,7 @@ export function PosScreenShell({
                                                             <div className="hidden lg:flex flex-col items-end gap-0.5 text-[10px] leading-tight text-muted-foreground">
                                                                 <div className="flex items-center gap-1.5">
                                                                     <span className="uppercase tracking-wider text-rose-500/70">MRP</span>
-                                                                    <span className={mrp != null && mrp !== l.unitPrice ? "line-through text-muted-foreground" : ""}>{mrp != null ? formatInr(mrp) : "—"}</span>
+                                                                    <span className={mrp != null && Math.abs(mrp - unitInclusive) >= 0.005 ?"line-through text-muted-foreground" : ""}>{mrp != null ? formatInr(mrp) : "—"}</span>
                                                                 </div>
                                                                 <div className="flex items-center gap-1.5">
                                                                     <span className="uppercase tracking-wider text-emerald-600/80 dark:text-emerald-400/80">Barcode</span>
