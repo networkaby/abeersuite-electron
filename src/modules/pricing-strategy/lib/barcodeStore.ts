@@ -66,7 +66,7 @@ export async function saveManualBarcode(id: number, pricePaise: number): Promise
             "barcodeIsManual"     = true,
             "salePriceFrozenAt"   = ${now},
             "barcodeGapBasePaise" = "effectiveSalePricePaise",
-            "updatedAt"           = NOW()
+            "updatedAt"           = ${now}
         WHERE id = ${id}
         RETURNING "barcodeManualPaise"`;
     if (rows.length === 0) return null;
@@ -88,7 +88,7 @@ export async function capBarcodeToMrp(id: number): Promise<boolean> {
             "barcodeManualPaise"  = "mrpPaise",
             "salePriceFrozenAt"   = ${now},
             "barcodeGapBasePaise" = "effectiveSalePricePaise",
-            "updatedAt"           = NOW()
+            "updatedAt"           = ${now}
         WHERE id = ${id} AND "mrpPaise" > 0 AND "barcodeManualPaise" > "mrpPaise"`;
     return n > 0;
 }
@@ -100,6 +100,6 @@ export async function capBarcodeToMrp(id: number): Promise<boolean> {
  */
 export async function rebaseBarcodeGap(ids: number[]): Promise<void> {
     if (ids.length === 0) return;
-    await prisma.$executeRaw`UPDATE "InvProduct" SET "barcodeGapBasePaise" = "effectiveSalePricePaise", "updatedAt" = NOW()
+    await prisma.$executeRaw`UPDATE "InvProduct" SET "barcodeGapBasePaise" = "effectiveSalePricePaise", "updatedAt" = ${new Date()}
         WHERE id = ANY(${ids}::int[]) AND "barcodeManualPaise" IS NOT NULL`;
 }
