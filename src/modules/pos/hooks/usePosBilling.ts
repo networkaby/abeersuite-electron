@@ -42,6 +42,15 @@ import { usePosCatalogue } from "@/modules/pos/hooks/posBilling/usePosCatalogue"
  *  not change height between a good query and a poor one. */
 const DROPDOWN_ROWS = 12;
 
+/** Pre-tax lowest price a cashier may type on a line — the item's sale price
+ *  (tax-inclusive paise) backed out to exclusive. null = no floor (service,
+ *  or no sale price on the line). */
+function lineFloorExcl(l: CartLine): number | null {
+    if (l.kind === "service" || l.salePaise == null || l.salePaise <= 0) return null;
+    const incl = l.salePaise / 100;
+    return l.taxRate > 0 ? incl / (1 + l.taxRate / 100) : incl;
+}
+
 // Moved to posBilling/types.ts; re-exported so the screens' imports stay as they were.
 export { parseAmt, type EditBill };
 
@@ -1240,6 +1249,18 @@ export function usePosBilling(opts: {
     const setPrice = (productId: number, unitPrice: number) =>
         setCart((p) => p.map((l) => l.productId === productId ? { ...l, unitPrice, autoPrice: false } : l));
 
+    // The line starts at the barcode tag; the item's sale price is the lowest
+    // the cashier may type. Checked when the price box loses focus (setPrice
+    // fires per keystroke, so clamping there would break typing "3" → "300").
+    // Services and lines with no sale price have no floor.
+    const enforcePriceFloor = (productId: number) => {
+        const l = cart.find((x) => x.productId === productId);
+        const floor = l ? lineFloorExcl(l) : null;
+        if (!l || floor == null || l.unitPrice >= floor - 1e-6) return;
+        toast.error(`Lowest price for ${l.name} is ${formatInr((l.salePaise ?? 0) / 100)}`);
+        setCart((p) => p.map((x) => x.productId === productId ? { ...x, unitPrice: floor } : x));
+    };
+
     // Customer picked / changed / cleared → re-price the lines the POS priced
     // itself by the new customer's group rule (MRP / print price / normal
     // sale price). Typed prices, services and hydrated edit / converted lines
@@ -1389,6 +1410,8 @@ export function usePosBilling(opts: {
             return;
         }
         if (cart.some((l) => l.unitPrice <= 0)) { toast.error("All lines need a unit price"); return; }
+        const underFloor = cart.find((l) => { const f = lineFloorExcl(l); return f != null && l.unitPrice < f - 1e-6; });
+        if (underFloor) { toast.error(`${underFloor.name} is below its lowest price ${formatInr((underFloor.salePaise ?? 0) / 100)}`); return; }
         // Pre-show the accounts flagged "default visible" as rows; the rest stay
         // behind "Add payment line".
         const visible = payAccounts.filter((a) => a.defaultVisible);
@@ -1811,7 +1834,7 @@ export function usePosBilling(opts: {
         // product search + cart
         productQuery, setProductQuery, productHighlight, setProductHighlight,
         filteredProducts, productGuessIds, setHighlightTouched, allProducts, hoverPreviewProduct, setHoverPreviewProduct,
-        cart, setCart, renderCart, addToCart, setQty, setPrice, setLineDescription, onProductKeyDown,
+        cart, setCart, renderCart, addToCart, setQty, setPrice, enforcePriceFloor, setLineDescription, onProductKeyDown,
         cartSelectedId, setCartSelectedId,
         saleNoteMissing,
         // POS services (added from the "+ Add service charge" button, not the search)

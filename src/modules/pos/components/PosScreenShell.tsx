@@ -453,6 +453,7 @@ export function PosScreenShell({
                                                         <PriceInput
                                                             inclusive={unitInclusive}
                                                             onCommit={(inc) => b.setPrice(l.productId, inc / (1 + (l.taxRate ?? 0) / 100))}
+                                                            onDone={() => b.enforcePriceFloor(l.productId)}
                                                             onKeyDown={enterToNextProduct}
                                                         />
                                                         {/* Line total — qty × inclusive price. */}
@@ -749,10 +750,13 @@ export function PosScreenShell({
 function PriceInput({
     inclusive,
     onCommit,
+    onDone,
     onKeyDown,
 }: {
     inclusive: number;
     onCommit: (inclusive: number) => void;
+    /** Fired on blur — the cashier finished typing (price-floor check). */
+    onDone?: () => void;
     onKeyDown?: (e: React.KeyboardEvent) => void;
 }) {
     const fmt = (n: number) => (n ? n.toFixed(2) : "");
@@ -775,7 +779,7 @@ function PriceInput({
             placeholder="₹"
             className="h-7 w-24 text-right text-xs"
             onFocus={() => { setFocused(true); }}
-            onBlur={() => { setFocused(false); setDraft(fmt(inclusive)); }}
+            onBlur={() => { setFocused(false); setDraft(fmt(inclusive)); onDone?.(); }}
             onKeyDown={onKeyDown}
             onChange={(e) => {
                 // Allow digits + a single decimal point only.

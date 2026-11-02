@@ -96,8 +96,8 @@ export function ruleForGroup(pricing: GroupPricing | null | undefined, groupId: 
 
 /**
  * Tax-inclusive starting price (paise) for a line under `rule`. MRP falls
- * back to the barcode price, then the sale price; the barcode price falls
- * back to the sale price. Every other case is the normal sale price.
+ * back to the barcode price, then the sale price. Every other case starts at
+ * the barcode price, falling back to the sale price.
  */
 export function groupStartPricePaise(
     rule: GroupPriceRule | null,
@@ -105,8 +105,10 @@ export function groupStartPricePaise(
 ): number | null {
     const sale = p.salePaise ?? null;
     if (rule?.type === "MRP") return p.mrpPaise ?? p.tagPaise ?? sale;
-    if (rule?.type === "PRINT_PRICE") return p.tagPaise ?? sale;
-    return sale;
+    // Normal billing starts at the printed barcode tag too (PRINT_PRICE is now
+    // the default); the sale price is the floor the cashier may type down to
+    // (usePosBilling → lineFloorExcl).
+    return p.tagPaise ?? sale;
 }
 
 export type RebateLine = {
