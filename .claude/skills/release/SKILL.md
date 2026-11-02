@@ -202,7 +202,7 @@ add its command to the reminder for the owner to run once the deploy is green:
 
 | Migration | Run once on live after deploy |
 |---|---|
-| `20261103090000_barcode_is_manual` | `pnpm seed:saved-barcodes` — saves today's barcode for products that never had one, so a later Sale Price change stops moving it |
+| `20261103090000_barcode_saved_price` | `pnpm seed:saved-barcodes` — saves today's barcode for products that never had one, so a later Sale Price change stops moving it |
 
 "Database schema is up to date!" → code-only deploy. Anything pending → tell the owner
 to push `d_office` only after the tills have updated. Judge drift on what physically

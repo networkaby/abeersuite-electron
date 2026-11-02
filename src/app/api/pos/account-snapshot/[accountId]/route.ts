@@ -49,10 +49,11 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
     const raw = (await params).accountId;
 
     try {
-        // "walk-in" = the seeded Walk-in Cash Customer ledger — the POS cash
-        // sale when the cashier enters no customer.
-        const walkInId = await getWalkInAccountId(prisma);
-        const accountId = raw === "walk-in" ? walkInId : Number(raw);
+        // "walk-in" = the seeded Walk-in Cash Customer ledger — asked for only
+        // by checkout when the cashier entered no customer. Nothing else here
+        // knows about it.
+        if (raw === "walk-in") return NextResponse.json(walkInSnapshot(await getWalkInAccountId(prisma)));
+        const accountId = Number(raw);
         if (!Number.isFinite(accountId)) {
             return NextResponse.json({ error: "Invalid id" }, { status: 400 });
         }
@@ -117,7 +118,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ accountId:
                 address: c.address,
             };
         }
-        if (!party && account.id === walkInId) return NextResponse.json(walkInSnapshot(account.id));
         if (!party) return NextResponse.json({ error: "Account is not linked to a person or company" }, { status: 400 });
 
         // Customer Quality — staff rating/comments timeline.
