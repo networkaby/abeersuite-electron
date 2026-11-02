@@ -363,7 +363,7 @@ function sortVal(r: Row, key: SortKey): number | string {
 
 // ── Range filters (numeric parameters: min/max) ───────────────────────────────
 
-type RangeKey = "cost" | "margin" | "profit" | "profitPct" | "stock" | "daysSinceSale" | "barcodeGap";
+type RangeKey = "cost" | "margin" | "profit" | "profitPct" | "stock" | "daysSinceSale" | "barcodeGap" | "profitChange";
 const RANGE_FIELDS: { key: RangeKey; label: string; unit?: string }[] = [
     { key: "cost", label: "Cost (incl)", unit: "₹" },
     { key: "margin", label: "Margin % (strategy & mine)", unit: "%" },
@@ -374,6 +374,9 @@ const RANGE_FIELDS: { key: RangeKey; label: string; unit?: string }[] = [
     { key: "stock", label: "Stock (units)", unit: "pcs" },
     { key: "daysSinceSale", label: "Days since last sale", unit: "days" },
     { key: "profitPct", label: "Profit % (sale price)", unit: "%" },
+    // Profit today on the saved Sale Price vs the profit decided at the last
+    // "Save prices": − = reduced, + = increased (was two "more than" boxes).
+    { key: "profitChange", label: "Profit change since last save", unit: "%" },
 ];
 
 // Filter-card order (owner's layout). The barcode gap is split into its two
@@ -467,6 +470,7 @@ function rangeVal(r: Row, key: RangeKey): number | null {
         case "stock": return numOrNull(r.stock);
         case "daysSinceSale": return daysSinceSale(r);
         case "barcodeGap": return r.barcodeGapPct;
+        case "profitChange": return profitGapPct(r);
         case "profit": {
             // After-tax profit on the price that actually applies (capped selling voice).
             const price = applicableSalePrice(r);
@@ -894,11 +898,7 @@ export default function GeneratePage() {
     const [fSaleCapped, setFSaleCapped] = useState(false);
     const [fInStock, setFInStock] = useState(false);
     // Threshold boxes: show rows where the metric exceeds x%.
-    const [tProfitReduce, setTProfitReduceRaw] = useState("");
-    const [tProfitIncrease, setTProfitIncreaseRaw] = useState("");
     // Profit reduced & increased contradict → typing in one empties the other.
-    const setTProfitReduce = (val: string) => { setTProfitReduceRaw(val); if (val.trim()) setTProfitIncreaseRaw(""); };
-    const setTProfitIncrease = (val: string) => { setTProfitIncreaseRaw(val); if (val.trim()) setTProfitReduceRaw(""); };
     const emptyRanges = (): Record<RangeKey, { min: string; max: string }> =>
         RANGE_FIELDS.reduce((a, f) => { a[f.key] = { min: "", max: "" }; return a; }, {} as Record<RangeKey, { min: string; max: string }>);
     const [ranges, setRanges] = useState<Record<RangeKey, { min: string; max: string }>>(emptyRanges);
@@ -928,8 +928,6 @@ export default function GeneratePage() {
                 if (typeof s.fBarcodeCapped === "boolean") setFBarcodeCapped(s.fBarcodeCapped);
                 if (typeof s.fSaleCapped === "boolean") setFSaleCapped(s.fSaleCapped);
                 if (typeof s.fInStock === "boolean") setFInStock(s.fInStock);
-                if (typeof s.tProfitReduce === "string") setTProfitReduceRaw(s.tProfitReduce);
-                if (typeof s.tProfitIncrease === "string") setTProfitIncreaseRaw(s.tProfitIncrease);
                 if (typeof s.filtersOpen === "boolean") setFiltersOpen(s.filtersOpen);
                 if (s.ranges && typeof s.ranges === "object") {
                     setRanges({ ...emptyRanges(), ...(s.ranges as Record<RangeKey, { min: string; max: string }>) });
@@ -946,10 +944,10 @@ export default function GeneratePage() {
             localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({
                 query, fBrand, fCategory, fGroup, fMethod, fSource,
                 fBarcodeCapped, fSaleCapped, fInStock,
-                tProfitReduce, tProfitIncrease, ranges, filtersOpen,
+                ranges, filtersOpen,
             }));
         } catch { /* quota / disabled storage → silently skip */ }
-    }, [hydrated, query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tProfitReduce, tProfitIncrease, ranges, filtersOpen]);
+    }, [hydrated, query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, ranges, filtersOpen]);
 
     // Dynamic filter options — distinct values present in the data.
     const distinct = useCallback((pick: (r: Row) => string) =>
@@ -988,10 +986,6 @@ export default function GeneratePage() {
         if (fBarcodeCapped) v = v.filter((r) => barcodeCapped(r));
         if (fSaleCapped) v = v.filter((r) => saleCapped(r));
         if (fInStock) v = v.filter((r) => stockQty(r) > 0);
-        const xReduce = numOrNull(tProfitReduce);
-        if (xReduce != null) v = v.filter((r) => { const g = profitGapPct(r); return g != null && g < -xReduce; });
-        const xInc = numOrNull(tProfitIncrease);
-        if (xInc != null) v = v.filter((r) => { const g = profitGapPct(r); return g != null && g > xInc; });
         for (const f of RANGE_FIELDS) {
             const cell = ranges[f.key] ?? { min: "", max: "" };
             const lo = numOrNull(cell.min);
@@ -1019,12 +1013,12 @@ export default function GeneratePage() {
             });
         }
         return v;
-    }, [rows, query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tProfitReduce, tProfitIncrease, ranges, sortKey, sortDir]);
+    }, [rows, query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, ranges, sortKey, sortDir]);
 
     // Jump back to the first page whenever the filtered/sorted list or page size
     // changes, so you never land on a now-empty page.
     // While rendering, keyed on the values themselves (ranges / sort by content).
-    if (useValueChange(JSON.stringify([query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tProfitReduce, tProfitIncrease, ranges, sortKey, sortDir, tab, pageSize]))) {
+    if (useValueChange(JSON.stringify([query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, ranges, sortKey, sortDir, tab, pageSize]))) {
         setPageIndex(0);
     }
 
@@ -1206,7 +1200,6 @@ export default function GeneratePage() {
     const fieldShell = (active: boolean) =>
         `flex h-7 items-center gap-1 rounded-md border bg-white px-1.5 transition-colors focus-within:ring-2 focus-within:ring-ring/40 dark:bg-background ${active ? "border-primary/70 ring-1 ring-primary/20" : "border-input"}`;
     const bareInput = "h-6 min-w-0 flex-1 border-0 bg-transparent px-0 text-right text-xs font-mono shadow-none focus-visible:ring-0 dark:bg-transparent";
-    const fieldLabel = (text: string) => <div className="mb-0.5 truncate text-[11px] font-medium text-muted-foreground">{text}</div>;
     const unitTag = (u?: string) => (u ? <span className="shrink-0 text-[10px] text-muted-foreground">{u}</span> : null);
 
     // Small ↺ that clears one range (only shown while it is in use).
@@ -1299,17 +1292,6 @@ export default function GeneratePage() {
             </div>
         );
     };
-    // Single "more than x%" threshold box.
-    const thresholdInput = (label: string, value: string, onChange: (v: string) => void) => (
-        <div>
-            {fieldLabel(label)}
-            <div className={fieldShell(!!value.trim())}>
-                <span className="shrink-0 text-[10px] text-muted-foreground">more than</span>
-                <Input inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} placeholder="any" className={bareInput} />
-                {unitTag("%")}
-            </div>
-        </div>
-    );
     // On/off flag as a pill — reads better than a bare checkbox row.
     const flagChip = (label: string, on: boolean, set: (v: boolean) => void, hint: string) => (
         <button
@@ -1338,6 +1320,9 @@ export default function GeneratePage() {
                 if (v > hi) hi = v;
             }
             if (f.key === "barcodeGap") { lo = Math.min(lo, 0); hi = Math.max(hi, 100); }
+            // Change % can run to thousands on a tiny decided profit; keep the track
+            // readable (−100…+100). Wider values still filter through the boxes.
+            if (f.key === "profitChange") { lo = -100; hi = 100; }
             if (!isFinite(lo) || !isFinite(hi) || hi <= lo) { out[f.key] = null; continue; }
             const span = hi - lo;
             const step = span > 2000 ? 10 : span > 20 ? 1 : 0.1;
@@ -1347,13 +1332,11 @@ export default function GeneratePage() {
     })();
     const catActive = [fBrand, fCategory, fGroup, fMethod, fSource].filter((x) => x !== "ALL").length;
     const flagActive = [fBarcodeCapped, fSaleCapped, fInStock].filter(Boolean).length;
-    const thrActive = [tProfitReduce, tProfitIncrease].filter((x) => x.trim()).length;
     const rangeActive = RANGE_FIELDS.filter((f) => ranges[f.key]?.min.trim() || ranges[f.key]?.max.trim()).length;
-    const activeFilterCount = catActive + flagActive + thrActive + rangeActive;
+    const activeFilterCount = catActive + flagActive + rangeActive;
     const clearAllFilters = () => {
         setFBrand("ALL"); setFCategory("ALL"); setFGroup("ALL"); setFMethod("ALL"); setFSource("ALL");
         setFBarcodeCapped(false); setFSaleCapped(false); setFInStock(false);
-        setTProfitReduceRaw(""); setTProfitIncreaseRaw("");
         setRanges(emptyRanges());
     };
 
@@ -1514,9 +1497,8 @@ export default function GeneratePage() {
                                     {flagChip("Sale price capped", fSaleCapped, setFSaleCapped, "Selling price held down at the barcode / MRP ceiling")}
                                     {flagChip("In stock only", fInStock, setFInStock, "Hide products with no stock")}
                                 </div>
-                                <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-2">
-                                    {thresholdInput("Profit reduced", tProfitReduce, setTProfitReduce)}
-                                    {thresholdInput("Profit increased", tProfitIncrease, setTProfitIncrease)}
+                                <div className="min-w-[18rem] flex-1">
+                                    {rangeInput(RANGE_LABEL.profitChange.label, "profitChange", "%")}
                                 </div>
                             </div>
                         </section>
