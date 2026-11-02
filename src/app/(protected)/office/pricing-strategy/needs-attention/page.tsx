@@ -398,7 +398,9 @@ export default function NeedsAttentionPage() {
                 <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
             ) : filtered.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-8 text-center">
-                    All products have cost and MRP set. ✓
+                    {items.length === 0
+                        ? "Nothing needs attention. ✓"
+                        : "Nothing to show — turn on No cost, No MRP or Low barcode gap above."}
                 </p>
             ) : view === "item" ? (
                 <TableScrollArea>
