@@ -753,6 +753,8 @@ const ProductRow = memo(function ProductRow({
                         </div>
                     ) : null}
                     <div className="mt-0.5 flex justify-end gap-1 text-[10px] text-muted-foreground">
+                        {/* Colour already marks manual; the word shows only on wide screens. */}
+                        {bc.manual ? <span className="hidden text-violet-700 xl:inline dark:text-violet-300">manual</span> : null}
                         {bc.hint && bc.hint !== "m" ? <span>·{bc.hint}</span> : null}
                         {priceDate ? (
                             <span className="rounded bg-muted px-1" title={`Barcode price set on ${r.savedAt} — label code ${dateCode}`}>
