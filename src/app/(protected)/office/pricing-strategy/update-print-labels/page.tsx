@@ -265,6 +265,15 @@ function profitOf(
     return { amt, pct };
 }
 
+/** "2 Nov" this year, "13 Sep 2025" otherwise; "" for no date. Parsed from "YYYY-MM-DD" (no timezone shift). */
+function shortDate(ymd: string): string {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+    if (!m) return "";
+    const mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][parseInt(m[2], 10) - 1];
+    const year = parseInt(m[1], 10) === new Date().getFullYear() ? "" : ` ${m[1]}`;
+    return `${parseInt(m[3], 10)} ${mon}${year}`;
+}
+
 const rupee = (n: number | null) => (n == null ? "—" : formatInr(n));
 
 // ── Barcode price (the headroom price printed on the label) ───────────────────
@@ -523,7 +532,9 @@ const ProductRow = memo(function ProductRow({
     // What the barcode would be with no manual value — reset target + "same as auto" check.
     const autoBc = savedPrice != null ? barcodePrice(savedPrice, mrp).value : null;
     const [bcAtFocus, setBcAtFocus] = useState(r.barcodeManual);
+    // Staff screen shows the real date; the secret code is only for the printed label.
     const dateCode = secretDateCode(r.savedAt);
+    const priceDate = shortDate(r.savedAt);
     // Barcode vs the price this row sells at, and the profit % at the barcode price.
     const sellingNow = sellingVoice(r);
     const bcGap = bc.value != null && sellingNow != null ? bc.value - sellingNow : null;
@@ -742,11 +753,10 @@ const ProductRow = memo(function ProductRow({
                         </div>
                     ) : null}
                     <div className="mt-0.5 flex justify-end gap-1 text-[10px] text-muted-foreground">
-                        {bc.manual ? <span className="text-violet-700 dark:text-violet-300">manual</span> : null}
                         {bc.hint && bc.hint !== "m" ? <span>·{bc.hint}</span> : null}
-                        {dateCode ? (
-                            <span className="rounded bg-muted px-1 font-mono" title={`Barcode price date code — set ${r.savedAt} (MM + 5-day part)`}>
-                                {dateCode}
+                        {priceDate ? (
+                            <span className="rounded bg-muted px-1" title={`Barcode price set on ${r.savedAt} — label code ${dateCode}`}>
+                                {priceDate}
                             </span>
                         ) : null}
                     </div>
