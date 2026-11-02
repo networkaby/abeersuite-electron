@@ -1254,9 +1254,11 @@ export function usePosBilling(opts: {
     // The line starts at the barcode tag; the item's sale price is the lowest
     // the cashier may type. Checked when the price box loses focus (setPrice
     // fires per keystroke, so clamping there would break typing "3" → "300").
-    // Services and lines with no sale price have no floor.
+    // Services and lines with no sale price have no floor. Reads the store's
+    // live cart, not this render's copy: a fast type-then-tab blurs before the
+    // last keystroke's re-render, and the stale price would slip past.
     const enforcePriceFloor = (productId: number) => {
-        const l = cart.find((x) => x.productId === productId);
+        const l = usePosDraftStore.getState().cart.find((x) => x.productId === productId);
         const floor = l ? lineFloorExcl(l) : null;
         if (!l || floor == null || l.unitPrice >= floor - 1e-6) return;
         toast.error(`Lowest price for ${l.name} is ${formatInr((l.salePaise ?? 0) / 100)}`);
