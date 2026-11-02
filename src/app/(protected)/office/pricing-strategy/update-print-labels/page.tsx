@@ -372,7 +372,7 @@ const RANGE_FIELDS: { key: RangeKey; label: string; unit?: string }[] = [
 // Filter-card order (owner's layout). The barcode gap is split into its two
 // separate sides: Below (max) and Above (min).
 const RANGE_GRID: (Exclude<RangeKey, "barcodeGap"> | "gapBelow" | "gapAbove")[] =
-    ["profit", "profitPct", "daysSinceSale", "gapBelow", "gapAbove"];
+    ["profit", "profitPct", "gapBelow", "gapAbove", "daysSinceSale"];
 const RANGE_LABEL = Object.fromEntries(RANGE_FIELDS.map((f) => [f.key, f])) as Record<RangeKey, (typeof RANGE_FIELDS)[number]>;
 
 // localStorage key for the persisted ("saved") filter state. Bump the suffix
@@ -1454,7 +1454,7 @@ export default function GeneratePage() {
                         </section>
                         <section>
                             {sectionTitle("Ranges")}
-                            <div className="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2 lg:grid-cols-4">
+                            <div className="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2 lg:grid-cols-5">
                                 {RANGE_GRID.map((k) =>
                                     k === "gapBelow" ? <Fragment key={k}>{gapSideInput("max", "Below original gap")}</Fragment>
                                         : k === "gapAbove" ? <Fragment key={k}>{gapSideInput("min", "Above original gap")}</Fragment>
