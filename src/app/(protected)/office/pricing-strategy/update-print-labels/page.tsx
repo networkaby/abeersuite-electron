@@ -48,6 +48,7 @@ import { productMatchesSearch } from "@/shared/lib/inventory";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
+import { CrossRangeSlider } from "@/shared/components/CrossRangeSlider";
 import { Input } from "@/components/ui/input";
 import {
     Select,
@@ -363,6 +364,12 @@ const RANGE_FIELDS: { key: RangeKey; label: string; unit?: string }[] = [
     { key: "daysSinceSale", label: "Days since last sale", unit: "days" },
     { key: "profitPct", label: "Profit % (sale price)", unit: "%" },
 ];
+
+// Filter-card order (owner's layout). The barcode gap is split into its two
+// separate sides: Below (max) and Above (min).
+const RANGE_GRID: (Exclude<RangeKey, "barcodeGap"> | "gapBelow" | "gapAbove")[] =
+    ["cost", "margin", "profit", "gapBelow", "profitPct", "stock", "daysSinceSale", "gapAbove"];
+const RANGE_LABEL = Object.fromEntries(RANGE_FIELDS.map((f) => [f.key, f])) as Record<RangeKey, (typeof RANGE_FIELDS)[number]>;
 
 // localStorage key for the persisted ("saved") filter state. Bump the suffix
 // when the persisted shape changes so old blobs are ignored, not mis-applied.
@@ -1264,7 +1271,6 @@ export default function GeneratePage() {
     };
 
     const rangeInput = (label: string, key: RangeKey, unit?: string) => {
-        if (key === "barcodeGap") return <>{gapSideInput("max", "Below original gap")}{gapSideInput("min", "Above original gap")}</>;
         const b = rangeBounds[key];
         const lo = numOrNull(ranges[key]?.min ?? "");
         const hi = numOrNull(ranges[key]?.max ?? "");
@@ -1289,20 +1295,20 @@ export default function GeneratePage() {
                     </span>
                 </div>
                 {b ? (
-                    <Slider
-                        className="mt-2 mb-0.5"
-                        min={b.lo}
-                        max={b.hi}
+                    // Thumbs may cross: min > max keeps the outside (blue ends, amber middle).
+                    <CrossRangeSlider
+                        className="mt-1.5"
+                        lo={b.lo}
+                        hi={b.hi}
                         step={b.step}
-                        // Crossed (min > max = "outside") — the slider cannot show that; it shows
-                        // the excluded middle, and dragging it sets a normal range again.
-                        value={[Math.max(b.lo, Math.min(b.hi, Math.min(lo ?? b.lo, hi ?? b.hi))), Math.max(b.lo, Math.min(b.hi, Math.max(lo ?? b.lo, hi ?? b.hi)))]}
-                        onValueChange={([a, z]) => {
-                            // A thumb at the end of the track means "no limit" on that side.
+                        min={lo ?? b.lo}
+                        max={hi ?? b.hi}
+                        onChange={(a, z) => {
+                            // A thumb at its own end of the track means "no limit" on that side.
                             setRange(key, "min", a <= b.lo ? "" : String(a));
                             setRange(key, "max", z >= b.hi ? "" : String(z));
                         }}
-                        aria-label={label}
+                        ariaLabel={label}
                     />
                 ) : null}
             </div>
@@ -1533,7 +1539,10 @@ export default function GeneratePage() {
                         <section>
                             {sectionTitle("Ranges")}
                             <div className="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2 lg:grid-cols-4">
-                                {RANGE_FIELDS.map((f) => <Fragment key={f.key}>{rangeInput(f.label, f.key, f.unit)}</Fragment>)}
+                                {RANGE_GRID.map((k) =>
+                                    k === "gapBelow" ? <Fragment key={k}>{gapSideInput("max", "Below original gap")}</Fragment>
+                                        : k === "gapAbove" ? <Fragment key={k}>{gapSideInput("min", "Above original gap")}</Fragment>
+                                            : <Fragment key={k}>{rangeInput(RANGE_LABEL[k].label, k, RANGE_LABEL[k].unit)}</Fragment>)}
                             </div>
                         </section>
                     </div>
