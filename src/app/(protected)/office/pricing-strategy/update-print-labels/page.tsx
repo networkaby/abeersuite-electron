@@ -16,7 +16,8 @@
  * selling price. POS makes no decision; it just charges that voice, capped by the
  * barcode price and MRP (cap not shown as its own column — see Barcode).
  *
- * EDITABLE + persisted (PATCH /api/pricing-strategy/items/[id]): Margin % →
+ * EDITABLE + persisted (PATCH /api/pricing-strategy/items/[id]): Computed price
+ *   (typed; Margin % is derived from it, read-only) →
  * marginPercent, MRP → mrpPaise, Method → costMethod. Everything else (name,
  * taxonomy, stock, cost, GST, Strategy voice, days-since-sale, barcode) is
  * read-only/derived. Cost is GST-inclusive; because cost_incl × (1+margin) equals
@@ -36,7 +37,7 @@ import axios from "axios";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
-import { formatInr, gridRowClass } from "@/shared/lib/format";
+import { formatInr, gridRowClass, parseDecimalInput } from "@/shared/lib/format";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { barcodePrice as barcodePriceCore, normalizeBarcodeBands, DEFAULT_BARCODE_BANDS, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 import { productMatchesSearch } from "@/shared/lib/inventory";
@@ -224,6 +225,16 @@ function priceWithMargin(costIncl: string, marginStr: string): number | null {
     const m = parseFloat(marginStr);
     if (!isFinite(m)) return null;
     return cost * (1 + m / 100);
+}
+
+// Reverse of priceWithMargin: the margin % that turns cost into `priceStr`.
+// "" when it cannot be worked out (no cost, zero cost, or blank price). Kept to
+// 2 decimals because InvProduct.marginPercent is Decimal(6,2).
+function marginFromPrice(costIncl: string, priceStr: string): string {
+    const cost = parseFloat(costIncl);
+    const price = parseFloat(priceStr);
+    if (!isFinite(cost) || cost <= 0 || !isFinite(price)) return "";
+    return String(Math.round((price / cost - 1) * 10000) / 100);
 }
 
 // The engine's Strategy-voice price in ₹ (from computedPricePaise), or null.
@@ -499,6 +510,10 @@ const ProductRow = memo(function ProductRow({
     const show = (k: ColKey) => !hidden.has(k);
     const strategyPrice = strategyRupees(r);
     const myPrice = priceWithMargin(r.costIncl, r.margin);
+    // While the Computed box is focused it shows exactly what was typed (not the
+    // re-derived price, which could drift a paisa from the 2-dp margin).
+    const [computedDraft, setComputedDraft] = useState<string | null>(null);
+    const [marginAtFocus, setMarginAtFocus] = useState(r.margin);
     const savedNum = parseFloat(r.salePrice);
     const savedPrice = isFinite(savedNum) ? savedNum : null;
     const mrpNum = parseFloat(r.mrp);
@@ -582,24 +597,36 @@ const ProductRow = memo(function ProductRow({
             ) : null}
             {show("margin") ? (
                 <TableCell className={`text-right ${COL_TINT.margin}`}>
-                    <Input
-                        inputMode="decimal"
-                        value={r.margin}
-                        placeholder="—"
-                        onChange={(e) => onUpdate(r.id, { margin: e.target.value })}
-                        onBlur={() => onPersist(r.id, { marginPercent: numOrNull(r.margin) })}
-                        className="h-7 w-16 text-right text-xs font-mono"
-                    />
+                    {/* Read-only: worked out from the price typed in Computed. */}
+                    <span className="text-xs font-mono">{r.margin === "" ? "—" : `${r.margin}%`}</span>
                 </TableCell>
             ) : null}
 
             {show("computed") ? (
                 <TableCell className={`p-1 text-right align-top ${COL_TINT.computed}`}>
-                    <button type="button" className={voiceClass(r.saleSource === "MY")} onClick={() => onUpdate(r.id, { saleSource: "MY" })}>
+                    <div className={voiceClass(r.saleSource === "MY")} onClick={() => onUpdate(r.id, { saleSource: "MY" })}>
                         {r.saleSource === "MY" ? SELLING_TAG : null}
-                        <span className="block text-sm font-mono font-semibold">{rupee(myPrice)}</span>
+                        {/* Type the price; Margin % is derived from it and saved. */}
+                        <Input
+                            type="text"
+                            inputMode="decimal"
+                            value={computedDraft ?? (myPrice != null ? myPrice.toFixed(2) : "")}
+                            placeholder="—"
+                            disabled={!(parseFloat(r.costIncl) > 0)}
+                            onFocus={() => { setMarginAtFocus(r.margin); setComputedDraft(myPrice != null ? myPrice.toFixed(2) : ""); }}
+                            onChange={(e) => {
+                                const v = parseDecimalInput(e.target.value);
+                                setComputedDraft(v);
+                                onUpdate(r.id, { margin: marginFromPrice(r.costIncl, v), saleSource: "MY" });
+                            }}
+                            onBlur={() => {
+                                setComputedDraft(null);
+                                if (r.margin !== marginAtFocus) onPersist(r.id, { marginPercent: numOrNull(r.margin) });
+                            }}
+                            className="h-7 w-24 ml-auto text-right text-sm font-mono font-semibold"
+                        />
                         <ProfitSub p={myProfit} />
-                    </button>
+                    </div>
                 </TableCell>
             ) : null}
 
