@@ -149,7 +149,6 @@ type Row = {
     additionalExcl: number; // per-unit shipping/courier surcharge (GST-excl paise) folded into costIncl. 0 = none.
     gst: string;            // GST % (resolved). Read-only.
     margin: string;         // % — drives the "Computed" voice. Editable → InvProduct.marginPercent.
-    strategyMargin: string; // % — the matched strategy's applied markup (for the Margin range filter).
     strategyPaise: number | null; // engine's exact Strategy-voice price (computedPricePaise), ₹·100. Authoritative.
     salePrice: string;      // Sale Price (sticky), user-editable; "" = not set
     baseline: string;       // last-saved Sale Price, for dirty detection
@@ -209,7 +208,6 @@ function itemToRow(it: PricingItem): Row {
         additionalExcl,
         gst: String(gst),
         margin: it.marginPercent != null ? String(it.marginPercent) : "",
-        strategyMargin: String(it.appliedMarkupPct ?? 0),
         strategyPaise: it.computedPricePaise,
         salePrice: sale,
         baseline: sale,
@@ -361,15 +359,12 @@ function sortVal(r: Row, key: SortKey): number | string {
 
 // ── Range filters (numeric parameters: min/max) ───────────────────────────────
 
-type RangeKey = "cost" | "margin" | "profit" | "profitPct" | "stock" | "daysSinceSale" | "barcodeGap";
+type RangeKey = "profit" | "profitPct" | "daysSinceSale" | "barcodeGap";
 const RANGE_FIELDS: { key: RangeKey; label: string; unit?: string }[] = [
-    { key: "cost", label: "Cost (incl)", unit: "₹" },
-    { key: "margin", label: "Margin % (strategy & mine)", unit: "%" },
     { key: "profit", label: "Profit ₹ (sale price)", unit: "₹" },
     // Same figure as Needs Attention → Low barcode gap: today's gap (barcode −
     // selling price) as % of the gap when the barcode was saved. "Below 30" = that list.
     { key: "barcodeGap", label: "Barcode gap % of original", unit: "%" },
-    { key: "stock", label: "Stock (units)", unit: "pcs" },
     { key: "daysSinceSale", label: "Days since last sale", unit: "days" },
     { key: "profitPct", label: "Profit % (sale price)", unit: "%" },
 ];
@@ -377,7 +372,7 @@ const RANGE_FIELDS: { key: RangeKey; label: string; unit?: string }[] = [
 // Filter-card order (owner's layout). The barcode gap is split into its two
 // separate sides: Below (max) and Above (min).
 const RANGE_GRID: (Exclude<RangeKey, "barcodeGap"> | "gapBelow" | "gapAbove")[] =
-    ["cost", "margin", "profit", "gapBelow", "profitPct", "stock", "daysSinceSale", "gapAbove"];
+    ["profit", "profitPct", "daysSinceSale", "gapBelow", "gapAbove"];
 const RANGE_LABEL = Object.fromEntries(RANGE_FIELDS.map((f) => [f.key, f])) as Record<RangeKey, (typeof RANGE_FIELDS)[number]>;
 
 // localStorage key for the persisted ("saved") filter state. Bump the suffix
@@ -456,13 +451,9 @@ function daysSinceSale(r: Row): number {
     return Math.floor((now.getTime() - sold.getTime()) / 86_400_000);
 }
 
-// The numeric value of a row for a given range parameter. The Margin range is
-// special-cased in the filter loop (it checks BOTH strategy & user margin).
+// The numeric value of a row for a given range parameter.
 function rangeVal(r: Row, key: RangeKey): number | null {
     switch (key) {
-        case "cost": return numOrNull(r.costIncl);
-        case "margin": return numOrNull(r.margin);
-        case "stock": return numOrNull(r.stock);
         case "daysSinceSale": return daysSinceSale(r);
         case "barcodeGap": return r.barcodeGapPct;
         case "profit": {
@@ -973,13 +964,7 @@ export default function GeneratePage() {
             const lo = numOrNull(cell.min);
             const hi = numOrNull(cell.max);
             if (lo == null && hi == null) continue;
-            v = v.filter((r) => {
-                if (f.key === "margin") {
-                    // Match if EITHER the strategy margin or the user margin is in range.
-                    return inRange(numOrNull(r.strategyMargin), lo, hi) || inRange(numOrNull(r.margin), lo, hi);
-                }
-                return inRange(rangeVal(r, f.key), lo, hi);
-            });
+            v = v.filter((r) => inRange(rangeVal(r, f.key), lo, hi));
         }
         if (sortKey !== "none") {
             const key = sortKey;
