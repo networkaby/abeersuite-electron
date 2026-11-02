@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/shared/lib/auth/permissions";
-import { META_APP_ID } from "@/shared/lib/constants/whatsapp";
+import { META_WA_SIGNUP_CONFIG_ID } from "@/shared/lib/constants/whatsapp";
+import { META_APP_ID_MISSING, metaAppId } from "@/shared/lib/whatsapp/metaTemplates";
 import { incomingSecret } from "@/modules/incoming/lib/incomingApi";
 
 /**
@@ -13,7 +14,7 @@ import { incomingSecret } from "@/modules/incoming/lib/incomingApi";
  * and ask Meta to copy the app's contacts and chat history — Meta allows that
  * only in the first 24 hours after onboarding, so it is done right away.
  *
- *   META_APP_ID               constants/whatsapp.ts
+ *   META_APP_ID               .env (metaAppId)
  *   META_WA_APP_SECRET        same app's secret, already used by the webhook
  */
 const GRAPH = "https://graph.facebook.com/v23.0";
@@ -29,23 +30,24 @@ async function graph(path: string, token: string, body?: Record<string, unknown>
     return json;
 }
 
+/** GET — the public ids the browser's Facebook popup needs. */
 export async function GET() {
     const { response } = await requirePermission("settings:manage");
     if (response) return response;
 
-    return NextResponse.json({
-        appId: process.env.META_APP_ID?.trim() || META_APP_ID,
-        configId: process.env.META_WA_SIGNUP_CONFIG_ID?.trim() || "1061577020211736",
-    });
+    const appId = metaAppId();
+    if (!appId) return NextResponse.json({ error: META_APP_ID_MISSING }, { status: 503 });
+    return NextResponse.json({ appId, configId: process.env.META_WA_SIGNUP_CONFIG_ID?.trim() || META_WA_SIGNUP_CONFIG_ID });
 }
 
 export async function POST(req: Request) {
     const { response } = await requirePermission("settings:manage");
     if (response) return response;
 
-    const appId = META_APP_ID;
+    const appId = metaAppId();
+    if (!appId) return NextResponse.json({ error: META_APP_ID_MISSING }, { status: 503 });
     const { value: secret } = await incomingSecret("META_WA_APP");
-    if (!appId || !secret) return NextResponse.json({ error: "WhatsApp app secret not set — Settings → Incoming API (or META_WA_APP_SECRET)" }, { status: 503 });
+    if (!secret) return NextResponse.json({ error: "WhatsApp app secret not set — Settings → Incoming API (or META_WA_APP_SECRET)" }, { status: 503 });
 
     const { code, phoneNumberId, wabaId } = (await req.json().catch(() => ({}))) as { code?: string; phoneNumberId?: string; wabaId?: string };
     if (!code || !phoneNumberId || !wabaId) return NextResponse.json({ error: "code, phoneNumberId and wabaId are required" }, { status: 400 });

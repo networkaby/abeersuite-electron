@@ -6,8 +6,6 @@ import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { productPath } from "@/shared/lib/shop/productPublic";
@@ -36,14 +34,7 @@ export default function ShopCheckoutPage() {
         setPayChoice,
         address,
         setAddress,
-        setField,
         pincodeValid,
-        pincodeInfo,
-        localityOptions,
-        neighbourhoodOptions,
-        hasCoverage,
-        onLocalityChange,
-        onNeighbourhoodChange,
         options,
         quoting,
         quoteError,
@@ -131,12 +122,6 @@ export default function ShopCheckoutPage() {
                                         onChange={setAddress}
                                         showRecipient
                                         showLabelChips={false}
-                                        pincodeInfo={pincodeInfo}
-                                        localityOptions={localityOptions}
-                                        neighbourhoodOptions={neighbourhoodOptions}
-                                        hasCoverage={hasCoverage}
-                                        onLocalityChange={onLocalityChange}
-                                        onNeighbourhoodChange={onNeighbourhoodChange}
                                     />
                                 </div>
                             )}

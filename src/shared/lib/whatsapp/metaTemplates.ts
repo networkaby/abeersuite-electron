@@ -1,6 +1,6 @@
 import "server-only";
 import QRCode from "qrcode";
-import { META_APP_ID, WA_CONVERSATION_NUMBER_ID } from "@/shared/lib/constants/whatsapp";
+import { WA_CONVERSATION_NUMBER_ID } from "@/shared/lib/constants/whatsapp";
 import {
     WA_APP_LINK,
     WA_BILL_LINK_BASE,
@@ -79,9 +79,16 @@ async function graph<T>(path: string, init?: { method?: string; body?: unknown }
  * Upload a sample picture for a photo-header template. Meta wants a handle from
  * its Resumable Upload API (app-level), not a link, as the header example.
  */
+/** The shop's Meta app (loginapi) — META_APP_ID in .env, read when needed so a
+ *  server without it says so instead of calling Meta with an empty id. */
+export const metaAppId = () => process.env.META_APP_ID?.trim() || "";
+export const META_APP_ID_MISSING = "META_APP_ID is not set on this server.";
+
 async function uploadHeaderSample(bytes: Uint8Array, mime: string): Promise<string> {
+    const appId = metaAppId();
+    if (!appId) throw new Error(META_APP_ID_MISSING);
     const session = await graph<{ id: string }>(
-        `${META_APP_ID}/uploads?file_length=${bytes.byteLength}&file_type=${encodeURIComponent(mime)}`,
+        `${appId}/uploads?file_length=${bytes.byteLength}&file_type=${encodeURIComponent(mime)}`,
         { method: "POST" },
     );
     const res = await fetch(`${GRAPH}/${session.id}`, {

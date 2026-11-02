@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
-import axios from "axios";
+import { useCallback, useId, useLayoutEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -13,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { INDIA_STATE_NAMES } from "@/modules/delivery/lib/deliveryMethodConfig";
 import { ADDRESS_LABELS, type AddressInput } from "@/shared/lib/address/address";
+import { usePincodeLookup, type AddressUpdate } from "./usePincodeLookup";
 
 export type AddressDraft = {
     label: string;
@@ -56,155 +56,41 @@ export interface AddressFormProps {
     showRecipient?: boolean;
     /** Category chips (Home, Office, Shop) — shown on address books, omitted at checkout. */
     showLabelChips?: boolean;
-    // Optional external control (e.g. passed from useShopCheckout):
-    pincodeInfo?: string;
-    localityOptions?: string[];
-    neighbourhoodOptions?: string[];
-    hasCoverage?: boolean;
-    onLocalityChange?: (locality: string) => void;
-    onNeighbourhoodChange?: (neighbourhood: string) => void;
 }
 
 /**
- * Universal address form: standard fields and layout across Office, POS, Customer Portal,
- * and Shop Checkout (web & app).
+ * Universal address form: one set of fields and one layout for the office profile,
+ * POS, customer portal and both checkouts (web & app). Add or remove a field here and
+ * every screen follows. POS quick create on the bill keeps its own one address box.
  *
- * Automatically resolves City & State from a 6-digit Pincode (India Post lookup) and
- * offers localities and local-delivery neighbourhoods when available.
+ * A 6-digit PIN fills empty City / State / Locality boxes and lists our local-delivery
+ * neighbourhoods (usePincodeLookup); a box already typed changes only on "Use".
  */
-export default function AddressForm({
-    value,
-    onChange,
-    showRecipient = false,
-    showLabelChips = true,
-    pincodeInfo,
-    localityOptions: externalLocalityOptions,
-    neighbourhoodOptions: externalNeighbourhoodOptions,
-    hasCoverage: externalHasCoverage,
-    onLocalityChange,
-    onNeighbourhoodChange,
-}: AddressFormProps) {
+export default function AddressForm({ value, onChange, showRecipient = false, showLabelChips = true }: AddressFormProps) {
     const uid = useId();
-    const [customLocality, setCustomLocality] = useState("");
 
-    // Internal lookup state when external handlers/options are not provided
-    const [internalLocalities, setInternalLocalities] = useState<string[]>([]);
-    const [internalCoverage, setInternalCoverage] = useState<Record<string, string[]>>({});
-    const [internalPincodeInfo, setInternalPincodeInfo] = useState<string>("");
+    // A PIN answer can land after more typing: apply it to the newest address, not
+    // to the one on screen when the lookup started.
+    const latest = useRef(value);
+    const onChangeRef = useRef(onChange);
+    useLayoutEffect(() => {
+        latest.current = value;
+        onChangeRef.current = onChange;
+    });
+    const update = useCallback<AddressUpdate>((fn) => {
+        const next = fn(latest.current);
+        latest.current = next;
+        onChangeRef.current(next);
+    }, []);
 
-    const isControlledLookup = externalLocalityOptions !== undefined;
+    const lookup = usePincodeLookup(value, update);
+    const set = (k: keyof AddressDraft) => (v: string) => update((a) => ({ ...a, [k]: v }));
 
-    const pin = (value.pincode ?? "").replace(/\D/gu, "").slice(0, 6);
-    const pinValid = /^\d{6}$/u.test(pin);
-
-    // Self-managed lookups when not driven by an external checkout hook
-    useEffect(() => {
-        if (isControlledLookup) return;
-        if (!pinValid) {
-            setInternalLocalities([]);
-            setInternalCoverage({});
-            setInternalPincodeInfo("");
-            return;
-        }
-
-        let live = true;
-        setInternalPincodeInfo("Detecting location…");
-
-        // 1. India Post pincode lookup for city, state, and localities
-        axios
-            .get<{ ok: boolean; city?: string; state?: string; localities?: string[] }>(`/api/shop/pincode/${pin}`)
-            .then(({ data }) => {
-                if (!live) return;
-                if (!data.ok) {
-                    setInternalLocalities([]);
-                    setInternalPincodeInfo("Pincode not found — type city and state");
-                    return;
-                }
-                const locs = Array.isArray(data.localities) ? data.localities : [];
-                setInternalLocalities(locs);
-                setInternalPincodeInfo(data.city && data.state ? `${data.city}, ${data.state}` : "");
-                onChange({
-                    ...value,
-                    city: value.city || data.city || "",
-                    state: value.state || data.state || "",
-                    locality: value.locality || (locs.length === 1 ? locs[0] : ""),
-                });
-            })
-            .catch(() => {
-                if (live) {
-                    setInternalLocalities([]);
-                    setInternalPincodeInfo("");
-                }
-            });
-
-        // 2. Local delivery neighbourhood coverage
-        axios
-            .get<{ localities: Record<string, string[]> }>(`/api/shop/local-coverage/${pin}`)
-            .then(({ data }) => {
-                if (!live) return;
-                const cov = data.localities ?? {};
-                setInternalCoverage(cov);
-                const all = Object.values(cov).flat();
-                if (value.neighbourhood && !all.includes(value.neighbourhood)) {
-                    onChange({ ...value, neighbourhood: "" });
-                }
-            })
-            .catch(() => {
-                if (live) setInternalCoverage({});
-            });
-
-        return () => {
-            live = false;
-        };
-        // Runs only when the 6-digit pin changes
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pin, pinValid, isControlledLookup]);
-
-    const activeLocalityOptions = externalLocalityOptions ?? internalLocalities;
-    const activeHasCoverage = externalHasCoverage ?? Object.keys(internalCoverage).length > 0;
-    const activeNeighbourhoodOptions = externalNeighbourhoodOptions ?? [
-        ...new Set(
-            value.locality && internalCoverage[value.locality]
-                ? internalCoverage[value.locality]
-                : Object.values(internalCoverage).flat(),
-        ),
-    ];
-    const activePincodeInfo = pincodeInfo ?? internalPincodeInfo;
-
-    const set = (k: keyof AddressDraft) => (v: string) => onChange({ ...value, [k]: v });
-
-    const handleLocalityChange = (v: string) => {
-        if (onLocalityChange) {
-            onLocalityChange(v);
-            return;
-        }
-        const loc = v === "__none__" ? "" : v;
-        const valid = loc ? internalCoverage[loc] ?? [] : Object.values(internalCoverage).flat();
-        onChange({
-            ...value,
-            locality: loc,
-            neighbourhood: value.neighbourhood && valid.includes(value.neighbourhood) ? value.neighbourhood : "",
-        });
-    };
-
-    const handleNeighbourhoodChange = (v: string) => {
-        if (onNeighbourhoodChange) {
-            onNeighbourhoodChange(v);
-            return;
-        }
-        const nb = v === "__none__" ? "" : v;
-        const parent = nb
-            ? Object.keys(internalCoverage).find((l) => (internalCoverage[l] ?? []).includes(nb)) ?? value.locality
-            : value.locality;
-        onChange({ ...value, neighbourhood: nb, locality: parent });
-    };
-
-    const displayLocalityOptions = Array.from(
-        new Set([
-            ...activeLocalityOptions,
-            ...(value.locality && value.locality !== "__none__" ? [value.locality] : []),
-        ]),
-    );
+    // "Not listed / other" picked: the typing box stays open while the customer
+    // types, until a listed locality is picked again.
+    const [otherLocality, setOtherLocality] = useState(false);
+    const typingLocality = otherLocality || !value.locality;
+    const localityChoices = [...new Set([...lookup.localityOptions, ...(value.locality ? [value.locality] : [])])];
 
     return (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -276,6 +162,17 @@ export default function AddressForm({
                 />
             </div>
 
+            <div className="space-y-1 sm:col-span-2">
+                <Label htmlFor={`${uid}-landmark`}>Landmark (optional)</Label>
+                <Input
+                    id={`${uid}-landmark`}
+                    value={value.landmark ?? ""}
+                    onChange={(e) => set("landmark")(e.target.value)}
+                    placeholder="Near …"
+                    maxLength={120}
+                />
+            </div>
+
             <div className="space-y-1">
                 <Label htmlFor={`${uid}-pincode`}>Pincode</Label>
                 <Input
@@ -286,34 +183,46 @@ export default function AddressForm({
                     placeholder="6-digit — city & state auto-fill"
                     maxLength={6}
                 />
-                {activePincodeInfo ? <p className="text-xs text-muted-foreground">{activePincodeInfo}</p> : null}
+                {lookup.suggestion ? (
+                    <p className="text-xs text-muted-foreground">
+                        PIN says {[lookup.suggestion.city, lookup.suggestion.state].filter(Boolean).join(", ")} ·{" "}
+                        <button type="button" onClick={lookup.applySuggestion} className="font-medium text-primary hover:underline">
+                            Use
+                        </button>
+                    </p>
+                ) : lookup.pincodeInfo ? (
+                    <p className="text-xs text-muted-foreground">{lookup.pincodeInfo}</p>
+                ) : null}
             </div>
 
             <div className="space-y-1">
                 <Label htmlFor={`${uid}-locality`}>Locality / area</Label>
-                {activeLocalityOptions.length > 0 ? (
+                {lookup.localityOptions.length > 0 ? (
                     <div className="space-y-1.5">
                         <Select
-                            value={value.locality || "__none__"}
-                            onValueChange={handleLocalityChange}
+                            value={typingLocality ? "__none__" : value.locality}
+                            onValueChange={(v) => {
+                                setOtherLocality(v === "__none__");
+                                lookup.onLocalityChange(v === "__none__" ? "" : v);
+                            }}
                         >
                             <SelectTrigger id={`${uid}-locality`} className="w-full">
                                 <SelectValue placeholder="Select locality" />
                             </SelectTrigger>
                             <SelectContent className="max-h-72">
                                 <SelectItem value="__none__">Not listed / other</SelectItem>
-                                {displayLocalityOptions.map((l) => (
+                                {localityChoices.map((l) => (
                                     <SelectItem key={l} value={l}>
                                         {l}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
-                        {value.locality === "" && (
+                        {typingLocality && (
                             <Input
-                                value={customLocality}
+                                value={value.locality ?? ""}
                                 onChange={(e) => {
-                                    setCustomLocality(e.target.value);
+                                    setOtherLocality(true);
                                     set("locality")(e.target.value);
                                 }}
                                 placeholder="Type locality / area"
@@ -333,19 +242,23 @@ export default function AddressForm({
                 )}
             </div>
 
-            {activeHasCoverage ? (
+            {lookup.hasCoverage ? (
                 <div className="space-y-1 sm:col-span-2">
                     <Label htmlFor={`${uid}-neighbourhood`}>Neighbourhood (for local delivery)</Label>
                     <Select
                         value={value.neighbourhood || "__none__"}
-                        onValueChange={handleNeighbourhoodChange}
+                        onValueChange={(v) => {
+                            // Its parent locality fills in from the list, so the typing box closes.
+                            if (v !== "__none__") setOtherLocality(false);
+                            lookup.onNeighbourhoodChange(v === "__none__" ? "" : v);
+                        }}
                     >
                         <SelectTrigger id={`${uid}-neighbourhood`} className="w-full">
                             <SelectValue placeholder="Select your neighbourhood" />
                         </SelectTrigger>
                         <SelectContent className="max-h-72">
                             <SelectItem value="__none__">Not my area</SelectItem>
-                            {activeNeighbourhoodOptions.map((n) => (
+                            {lookup.neighbourhoodOptions.map((n) => (
                                 <SelectItem key={n} value={n}>
                                     {n}
                                 </SelectItem>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useShopCartStore } from "@/store/external/shopCartStore";
 import { usePortalAccountStore } from "@/store/external/portalAccountStore";
@@ -10,8 +10,8 @@ import { isDeliverable, type AddressRow } from "@/shared/lib/address/address";
 import { EMPTY_ADDRESS_DRAFT, type AddressDraft } from "@/shared/components/address/AddressForm";
 
 /**
- * Everything a checkout knows and does — the address with its pincode lookups
- * and local-delivery areas, the courier quote, the payment rails, the level /
+ * Everything a checkout knows and does — the address (its PIN lookups and
+ * local-delivery areas live in the shared AddressForm), the courier quote, the payment rails, the level /
  * coupon / loyalty preview, and placing the order. The website checkout page and
  * the customer app's step-by-step checkout both draw from this one hook, so the
  * rules (and the payment hand-off) are never written twice. `onPlaced` decides
@@ -66,7 +66,6 @@ export function useShopCheckout({ onPlaced }: { onPlaced: (orderId: number) => v
     const [payChoice, setPayChoice] = useState<string>("cod");
 
     const [address, setAddress] = useState<AddressDraft>(EMPTY_ADDRESS);
-    const setField = (k: keyof AddressDraft) => (v: string) => setAddress((a) => ({ ...a, [k]: v }));
 
     // The customer's address book. Checkout opens on the last one used (else the
     // main one) as "Deliver to …"; Change lists the rest + a new one. Whatever is
@@ -76,12 +75,9 @@ export function useShopCheckout({ onPlaced }: { onPlaced: (orderId: number) => v
     const [addressId, setAddressId] = useState<number | null>(null);
     // The full form shows for a new address, or one missing what delivery needs.
     const [addressOpen, setAddressOpen] = useState(true);
-    // The PIN a saved address brought in — its locality is kept, not re-guessed.
-    const filledPin = useRef<string | null>(null);
     const fillFrom = (row: AddressRow | null) => {
         const me = { name: profile?.name ?? "", phone: profile?.phones.find((p) => p.isPrimary)?.value ?? profile?.phones[0]?.value ?? "" };
         setAddressId(row?.id ?? null);
-        filledPin.current = row?.pincode ?? null;
         setAddress(
             row
                 ? {
@@ -148,81 +144,6 @@ export function useShopCheckout({ onPlaced }: { onPlaced: (orderId: number) => v
     }, [lines, byId]);
 
     const pincodeValid = /^\d{6}$/u.test(address.pincode);
-    const [pincodeInfo, setPincodeInfo] = useState<string>("");
-    const [localities, setLocalities] = useState<string[]>([]);
-    // Our local delivery boy's coverage for this pincode: locality → [neighbourhoods].
-    const [coverage, setCoverage] = useState<Record<string, string[]>>({});
-
-    // A pincode that stops being valid clears what was looked up for it — while
-    // rendering (the effects below only read for a valid one).
-    if (useValueChange(pincodeValid) && !pincodeValid) {
-        setCoverage({});
-        setPincodeInfo("");
-        setLocalities([]);
-    }
-
-    // Load local-delivery neighbourhood coverage for the pincode (enables the
-    // linked Locality ↔ Neighbourhood pickers + the Local delivery courier).
-    useEffect(() => {
-        if (!pincodeValid) return;
-        let cancelled = false;
-        axios
-            .get<{ localities: Record<string, string[]> }>(`/api/shop/local-coverage/${address.pincode}`)
-            .then((r) => {
-                if (cancelled) return;
-                const cov = r.data.localities ?? {};
-                setCoverage(cov);
-                // Drop a stale neighbourhood if it isn't covered under the new pincode.
-                setAddress((a) => {
-                    const all = Object.values(cov).flat();
-                    return a.neighbourhood && !all.includes(a.neighbourhood) ? { ...a, neighbourhood: "" } : a;
-                });
-            })
-            .catch(() => {
-                if (!cancelled) setCoverage({});
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [address.pincode, pincodeValid]);
-
-    // Auto-fill City + State + locality options from the pincode (India Post
-    // lookup). Runs whenever a valid 6-digit pincode is entered; the resolved
-    // state also drives zone matching.
-    if (useValueChange(pincodeValid ? address.pincode : null) && pincodeValid) setPincodeInfo("Detecting location…");
-    useEffect(() => {
-        if (!pincodeValid) return;
-        let cancelled = false;
-        axios
-            .get<{ ok: boolean; city?: string; state?: string; localities?: string[] }>(`/api/shop/pincode/${address.pincode}`)
-            .then((r) => {
-                if (cancelled) return;
-                if (r.data.ok) {
-                    const locs = Array.isArray(r.data.localities) ? r.data.localities : [];
-                    setLocalities(locs);
-                    setAddress((a) => ({
-                        ...a,
-                        city: r.data.city || a.city,
-                        state: r.data.state || a.state,
-                        // Reset the locality when the pincode changes; auto-pick when
-                        // there's only one so the customer needn't choose. A saved
-                        // address keeps its own (it may be one of our coverage areas).
-                        locality: filledPin.current === address.pincode && a.locality ? a.locality : locs.length === 1 ? locs[0] : "",
-                    }));
-                    setPincodeInfo(r.data.city && r.data.state ? `${r.data.city}, ${r.data.state}` : "");
-                } else {
-                    setLocalities([]);
-                    setPincodeInfo("Couldn't detect — enter city & state.");
-                }
-            })
-            .catch(() => {
-                if (!cancelled) setPincodeInfo("");
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [address.pincode, pincodeValid]);
-
     // Payment rails available for this address: the online gateway (address-
     // independent) + Pay-on-Delivery (folds in its Active toggle + area rule). Re-runs
     // as the pincode/state changes so a blocked area hides the POD button live.
@@ -298,30 +219,6 @@ export function useShopCheckout({ onPlaced }: { onPlaced: (orderId: number) => v
             cancelled = true;
         };
     }, [address.pincode, address.state, address.neighbourhood, pincodeValid, lines, payChoice]);
-
-    // Linked Locality ↔ Neighbourhood pickers (pincode is the enabler).
-    const hasCoverage = Object.keys(coverage).length > 0;
-    // Locality options = India Post areas ∪ the localities we cover (so a
-    // neighbourhood's parent locality is always selectable).
-    const localityOptions = [...new Set([...localities, ...Object.keys(coverage)])];
-    // Neighbourhood options: the selected locality's, else all covered ones.
-    const neighbourhoodOptions = [
-        ...new Set(address.locality && coverage[address.locality] ? coverage[address.locality] : Object.values(coverage).flat()),
-    ];
-    // Pick a locality → keep the neighbourhood only if still valid under it.
-    const onLocalityChange = (v: string) =>
-        setAddress((a) => {
-            const loc = v === "__none__" ? "" : v;
-            const valid = loc ? coverage[loc] ?? [] : Object.values(coverage).flat();
-            return { ...a, locality: loc, neighbourhood: a.neighbourhood && valid.includes(a.neighbourhood) ? a.neighbourhood : "" };
-        });
-    // Pick a neighbourhood → its parent locality auto-fills.
-    const onNeighbourhoodChange = (v: string) =>
-        setAddress((a) => {
-            const nb = v === "__none__" ? "" : v;
-            const parent = nb ? Object.keys(coverage).find((l) => (coverage[l] ?? []).includes(nb)) ?? a.locality : a.locality;
-            return { ...a, neighbourhood: nb, locality: parent };
-        });
 
     const selected = options.find((o) => o.optionId === selectedOptionId) ?? null;
     const shipping = selected?.amountPaise ?? 0;
@@ -473,19 +370,12 @@ export function useShopCheckout({ onPlaced }: { onPlaced: (orderId: number) => v
         setPayChoice,
         address,
         setAddress,
-        setField,
         savedAddresses,
         addressId,
         pickAddress,
         addressOpen,
         setAddressOpen,
         pincodeValid,
-        pincodeInfo,
-        localityOptions,
-        neighbourhoodOptions,
-        hasCoverage,
-        onLocalityChange,
-        onNeighbourhoodChange,
         options,
         quoting,
         quoteError,

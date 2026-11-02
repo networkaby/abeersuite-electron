@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Check, CreditCard, HandCoins, Loader2, MapPin, Truck } from "lucide-react";
+import { Check, CreditCard, HandCoins, Loader2, Truck } from "lucide-react";
 import MobileHeader from "@/modules/mobile/components/MobileHeader";
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import PortalProfileSwitch from "@/modules/external/portal/PortalProfileSwitch";
@@ -18,8 +18,6 @@ import { SHOP_APP_PLAY_REVIEW } from "@/shared/lib/device/shopApp";
 
 const STEPS = ["Address", "Delivery", "Summary"] as const;
 
-const field = "h-12 w-full rounded-xl border bg-background px-3 text-[15px] outline-none focus:border-primary";
-const label = "mb-1 block text-xs font-medium text-muted-foreground";
 const choice = (on: boolean) =>
     `flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left ${on ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border bg-background"}`;
 
@@ -110,12 +108,6 @@ export default function AppCheckout() {
                                     onChange={c.setAddress}
                                     showRecipient
                                     showLabelChips={false}
-                                    pincodeInfo={c.pincodeInfo}
-                                    localityOptions={c.localityOptions}
-                                    neighbourhoodOptions={c.neighbourhoodOptions}
-                                    hasCoverage={c.hasCoverage}
-                                    onLocalityChange={c.onLocalityChange}
-                                    onNeighbourhoodChange={c.onNeighbourhoodChange}
                                 />
                             </section>
                         )}

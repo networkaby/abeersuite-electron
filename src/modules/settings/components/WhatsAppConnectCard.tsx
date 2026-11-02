@@ -7,7 +7,6 @@ import { Loader2, Smartphone } from "lucide-react";
 import { extractApiError } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
 
-
 /**
  * Connect a second number that stays on the WhatsApp Business app (Meta
  * "coexistence"). Opens Meta's Embedded Signup popup; staff pick the
@@ -23,9 +22,6 @@ type FbSdk = {
 declare global {
     interface Window { FB?: FbSdk; fbAsyncInit?: () => void }
 }
-
-
-
 
 function loadSdk(appId: string): Promise<FbSdk> {
     if (window.FB) return Promise.resolve(window.FB);
@@ -68,12 +64,8 @@ export function WhatsAppConnectCard() {
     async function start() {
         setBusy(true);
         try {
-            const { data: config } = await axios.get<{ appId?: string; configId?: string }>("/api/settings/whatsapp-connect");
-            if (!config?.appId || !config?.configId) {
-                toast.error("Meta signup credentials not configured in Vercel / server settings");
-                setBusy(false);
-                return;
-            }
+            // The server says why when META_APP_ID is missing (503) — shown by the catch.
+            const { data: config } = await axios.get<{ appId: string; configId: string }>("/api/settings/whatsapp-connect");
             const FB = await loadSdk(config.appId);
             FB.login(
                 (r) => {
@@ -83,7 +75,6 @@ export function WhatsAppConnectCard() {
                         setBusy(false);
                         if (code) toast.error("Meta did not return the number — try again");
                         return;
-            
                     }
                     axios
                         .post("/api/settings/whatsapp-connect", { code, phoneNumberId, wabaId })
@@ -99,7 +90,7 @@ export function WhatsAppConnectCard() {
                 },
             );
         } catch (e) {
-            toast.error((e as Error).message);
+            toast.error(axios.isAxiosError(e) ? extractApiError(e) : (e as Error).message);
             setBusy(false);
         }
     }
