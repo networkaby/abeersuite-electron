@@ -4,6 +4,8 @@ import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { pricingItemUpdateSchema } from "@/shared/lib/schemas/pricingSchemas";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
+import { nextBarcodeDate } from "@/modules/pricing-strategy/lib/barcodeDate";
+import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     const { response } = await requireModuleAccess("pricing-strategy");
@@ -37,16 +39,28 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
 
         // Manual barcode: never above MRP (the MRP in this same patch, else the stored one).
-        let barcodePatch: Record<string, unknown> = {};
-        if (data.barcodeManualPaise !== undefined) {
-            let v = data.barcodeManualPaise;
-            if (v != null) {
-                const mrp = data.mrpPaise !== undefined
-                    ? data.mrpPaise
-                    : (await prisma.invProduct.findUnique({ where: { id }, select: { mrpPaise: true } }))?.mrpPaise;
-                if (mrp != null && mrp > 0 && v > mrp) v = mrp;
+        // MRP caps the auto tag too, so either edit can move the printed barcode ₹ —
+        // re-stamp its date (salePriceFrozenAt) only when it actually moves.
+        const barcodePatch: Record<string, unknown> = {};
+        if (data.barcodeManualPaise !== undefined || data.mrpPaise !== undefined) {
+            const [before, bands] = await Promise.all([
+                prisma.invProduct.findUnique({
+                    where:  { id },
+                    select: { mrpPaise: true, savedSalePricePaise: true, barcodeManualPaise: true, salePriceFrozenAt: true },
+                }),
+                loadBarcodeBands(),
+            ]);
+            if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
+            const mrp = data.mrpPaise !== undefined ? data.mrpPaise : before.mrpPaise;
+            let manual = before.barcodeManualPaise;
+            if (data.barcodeManualPaise !== undefined) {
+                manual = data.barcodeManualPaise;
+                if (manual != null && mrp != null && mrp > 0 && manual > mrp) manual = mrp;
+                barcodePatch.barcodeManualPaise = manual;
             }
-            barcodePatch = { barcodeManualPaise: v };
+            barcodePatch.salePriceFrozenAt = nextBarcodeDate(
+                before, { savedSalePricePaise: before.savedSalePricePaise, mrpPaise: mrp, barcodeManualPaise: manual }, bands, new Date(),
+            );
         }
 
         const row = await prisma.invProduct.update({
@@ -65,6 +79,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 effectiveSalePricePaise:       true,
                 mrpPaise:         true,
                 barcodeManualPaise: true,
+                salePriceFrozenAt: true,
                 openingRate:      true,
                 openingStock:     true,
                 openingValue:     true,

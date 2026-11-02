@@ -11,6 +11,10 @@
  * mean nothing. The last bucket carries the month's remainder (26–28/29/30/31)
  * rather than giving the 31st a bucket of its own — a one-day code would be read
  * as stale stock far too easily.
+ *
+ * Source date: InvProduct.salePriceFrozenAt, which is the age of the PRINTED
+ * BARCODE PRICE (manual or auto) — re-stamped only when that ₹ moves. See
+ * modules/pricing-strategy/lib/barcodeDate.ts.
  */
 
 /** Days per bucket. */

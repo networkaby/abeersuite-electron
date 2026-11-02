@@ -70,6 +70,17 @@ export function todayISO(): string {
 }
 
 /**
+ * "YYYY-MM-DD" of an ISO timestamp in the browser's own date — NOT `iso.slice(0, 10)`,
+ * which is the UTC date and rolls back a day for saves between 00:00 and 05:30 IST.
+ */
+export function localDateOf(iso: string | null | undefined): string {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
  * The label's product-name font. A CONDENSED family, because the name is the one
  * field that never fits: 41mm of a 50mm label holds ~32 characters of ordinary
  * sans, but ~40 of this, at the same point size. Condensing beats reducing the
@@ -121,7 +132,7 @@ export function pricingItemToLabelItem(it: PricingItem, bands: BarcodeBand[], co
         barcode: it.sku?.trim() || it.barcode?.trim() || String(it.id),
         price: price != null ? String(Math.round(price)) : "0",
         mrp: mrp != null ? mrp.toFixed(2) : "0",
-        date: it.salePriceFrozenAt ? it.salePriceFrozenAt.slice(0, 10) : "",
+        date: localDateOf(it.salePriceFrozenAt),
         copies,
         stock: it.stock,
     };

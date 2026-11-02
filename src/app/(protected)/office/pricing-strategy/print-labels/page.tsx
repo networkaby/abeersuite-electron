@@ -22,7 +22,7 @@ import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
 import { normalizeBarcodeBands, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 import { LabelDesigner } from "@/modules/inventory/components/LabelDesigner";
 import {
-    clampCopies, defaultCopies, pricingItemToLabelItem, todayISO,
+    clampCopies, defaultCopies, localDateOf, pricingItemToLabelItem, todayISO,
     type AddedProduct, type Item as LabelItem,
 } from "@/modules/inventory/lib/labelItems";
 import { useLabelPrintStore } from "@/store/labelPrintStore";
@@ -83,7 +83,7 @@ export default function PrintLabelsPage() {
             const it = itemById.get(id);
             if (!it) return [];
             const priceChanged = touched.includes(id)
-                || (it.salePriceFrozenAt?.slice(0, 10) ?? "") === today;
+                || localDateOf(it.salePriceFrozenAt) === today;
             const count = copies[id] ?? defaultCopies({
                 priceChanged,
                 stock: it.stock,

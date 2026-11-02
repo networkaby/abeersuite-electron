@@ -61,7 +61,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { todayISO } from "@/modules/inventory/lib/labelItems";
+import { localDateOf, todayISO } from "@/modules/inventory/lib/labelItems";
 import { secretDateCode } from "@/modules/inventory/lib/secretDateCode";
 import { useLabelPrintStore } from "@/store/labelPrintStore";
 import {
@@ -153,7 +153,7 @@ type Row = {
     mrp: string;            // MRP ceiling (incl GST). "" = no MRP
     saleSource: SaleSource; // which voice actually sells
     baseSource: SaleSource; // last-saved sale source, for dirty detection
-    savedAt: string;        // ISO date the Sale Price was last frozen → barcode date code
+    savedAt: string;        // local date the printed barcode ₹ (manual/auto) last changed → secret date code
     savedProfit: string;    // decided profit ₹ frozen at last save → basis for the profit-gap filter
     barcodeManual: string;  // hand-set barcode ₹ (InvProduct.barcodeManualPaise); "" = auto from Sale Price
 };
@@ -212,7 +212,7 @@ function itemToRow(it: PricingItem): Row {
         mrp: it.mrpPaise != null ? (it.mrpPaise / 100).toFixed(2) : "",
         saleSource: voiceFromDb(it.effectiveSalePriceSource),
         baseSource: voiceFromDb(it.effectiveSalePriceSource),
-        savedAt: it.salePriceFrozenAt ? it.salePriceFrozenAt.slice(0, 10) : "",
+        savedAt: localDateOf(it.salePriceFrozenAt),
         savedProfit: it.savedProfitPaise != null ? (it.savedProfitPaise / 100).toFixed(2) : "",
         barcodeManual: it.barcodeManualPaise != null ? (it.barcodeManualPaise / 100).toFixed(2) : "",
     };
@@ -730,7 +730,7 @@ const ProductRow = memo(function ProductRow({
                         {bc.manual ? <span className="text-violet-700 dark:text-violet-300">manual</span> : null}
                         {bc.hint && bc.hint !== "m" ? <span>·{bc.hint}</span> : null}
                         {dateCode ? (
-                            <span className="rounded bg-muted px-1 font-mono" title={`Barcode date code — frozen ${r.savedAt} (MM + 10-day third)`}>
+                            <span className="rounded bg-muted px-1 font-mono" title={`Barcode price date code — set ${r.savedAt} (MM + 5-day part)`}>
                                 {dateCode}
                             </span>
                         ) : null}
@@ -807,7 +807,12 @@ export default function GeneratePage() {
     ) => {
         if (id < 0) return;
         try {
-            await axios.patch(`/api/pricing-strategy/items/${id}`, patch);
+            const { data } = await axios.patch<{ salePriceFrozenAt?: string | null }>(`/api/pricing-strategy/items/${id}`, patch);
+            // A manual barcode / MRP edit may move the printed tag → its date code.
+            if (data && "salePriceFrozenAt" in data) {
+                const savedAt = localDateOf(data.salePriceFrozenAt);
+                setRows((prev) => prev.map((r) => (r.id === id && r.savedAt !== savedAt ? { ...r, savedAt } : r)));
+            }
             if (opts?.reload) await loadData();
         } catch (e) {
             const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error : null;
@@ -1068,8 +1073,11 @@ export default function GeneratePage() {
             });
         setFreezing(true);
         try {
+            // Server re-dates only rows whose printed barcode ₹ moved (barcodeDate.ts).
+            let frozenAt: Record<number, string | null> = {};
             if (payload.length) {
-                await axios.put("/api/pricing-strategy/sale-price", { items: payload });
+                const res = await axios.put<{ frozenAt?: Record<number, string | null> }>("/api/pricing-strategy/sale-price", { items: payload });
+                frozenAt = res.data?.frozenAt ?? {};
             }
             setRows((prev) =>
                 prev.map((r) => {
@@ -1081,7 +1089,7 @@ export default function GeneratePage() {
                         ...r,
                         baseline: r.salePrice,
                         baseSource: r.saleSource,
-                        savedAt: hasSaved ? today : "",
+                        savedAt: r.id in frozenAt ? localDateOf(frozenAt[r.id]) : hasSaved ? today : "",
                         savedProfit: decided != null ? decided.toFixed(2) : "",
                     };
                 }),
