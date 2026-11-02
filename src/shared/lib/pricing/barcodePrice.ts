@@ -1,6 +1,9 @@
 // ── barcodePrice ─────────────────────────────────────────────────────────────
-// The printed barcode (tag) price is DERIVED from the saved sale price unless
-// InvProduct.barcodeManualPaise holds a hand-set override (that always wins). A band-based buffer is added to the sale price to leave headroom on
+// The band rule that MAKES a barcode (tag) price. The printed price itself is
+// the SAVED one, InvProduct.barcodeManualPaise (barcodeStore.ts writes it from
+// these bands on the effective price, or a hand-typed value); a product never
+// saved yet falls back to these bands on its saved Sale Price. A band-based
+// buffer is added to the price to leave headroom on
 // the printed label; the buffered value is rounded to the nearest 10, then a
 // per-band "hint" digit is set as the units digit (silently encoding which band
 // applied to staff). MRP cap: when MRP is tight the barcode floors to MRP

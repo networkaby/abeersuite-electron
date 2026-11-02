@@ -10,9 +10,10 @@
  * A product has THREE price "voices":
  *   • Strategy — the winning pricing-strategy rule's output (engine `computedPricePaise`). LIVE.
  *   • Computed — cost × my margin. LIVE (floats with cost).
- *   • Sale Price — the sticky, human-frozen price (NOT yet persisted — Phase C).
+ *   • Sale Price — the sticky, hand-typed price (InvProduct.savedSalePricePaise).
  *
- * You pick which voice actually sells by CLICKING it — the highlighted one is the
+ * You pick which voice actually sells by CLICKING it (Sale Price: its "sell at
+ * this" link) — the highlighted one is the
  * selling price. POS makes no decision; it just charges that voice, capped by the
  * barcode price and MRP (cap not shown as its own column — see Barcode).
  *
@@ -25,7 +26,7 @@
  * the engine's cost_excl × (1+margin) × (1+gst), the Computed voice matches POS.
  *
  * The barcode price is SAVED (barcodeStore.ts): only a hand edit or "Update
- * barcode" (bands on the saved Sale Price, MRP-capped) writes it, with its date
+ * barcode" (bands on the effective/selling price, MRP-capped) writes it, with its date
  * and gap. "Save prices" saves the Sale Price + source only. It acts as a
  * CEILING — never the charge. Each voice shows its own
  * AFTER-TAX profit (₹ + %) beneath the price, so all three can be compared.
@@ -99,7 +100,7 @@ const enumFromCode = (c: CostCode): string =>
 
 // ── Toggleable columns (show/hide) ───────────────────────────────────────────
 // Name / # / select / remove are always shown; everything else can be hidden.
-type ColKey = "brand" | "category" | "group" | "stock" | "cost" | "margin" | "strategy" | "computed" | "sale" | "selling" | "mrp" | "barcode";
+type ColKey = "brand" | "category" | "group" | "stock" | "cost" | "margin" | "strategy" | "computed" | "sale" | "mrp" | "barcode";
 const COLS: { key: ColKey; label: string }[] = [
     { key: "brand", label: "Brand" },
     { key: "category", label: "Collection" },
@@ -110,7 +111,6 @@ const COLS: { key: ColKey; label: string }[] = [
     { key: "computed", label: "Computed" },
     { key: "strategy", label: "Strategy" },
     { key: "sale", label: "Sale Price" },
-    { key: "selling", label: "Selling" },
     { key: "mrp", label: "MRP" },
     { key: "barcode", label: "Barcode" },
 ];
@@ -126,7 +126,6 @@ const COL_TINT: Partial<Record<ColKey, string>> = {
     margin: "bg-amber-50 dark:bg-amber-950/20",
     sale: "bg-amber-50 dark:bg-amber-950/20",
     mrp: "bg-amber-50 dark:bg-amber-950/20",
-    selling: "bg-emerald-50 dark:bg-emerald-950/20",
     barcode: "bg-emerald-50 dark:bg-emerald-950/20",
 };
 
@@ -304,22 +303,34 @@ function rowBarcode(r: Row): { value: number | null; hint: string; capped: boole
     const m = numOrNull(r.mrp);
     const mrp = m != null && m > 0 ? m : null;
     const stored = numOrNull(r.barcodeManual);
-    if (stored != null) return { value: stored, hint: "", capped: mrp != null && stored >= mrp, manual: r.barcodeIsManual };
+    if (stored != null) {
+        const capped = mrp != null && stored >= mrp;
+        // A saved AUTO barcode keeps its band hint as its units digit (that is how
+        // the bands build it), so read it back from there. Hand-typed and
+        // MRP-capped prices carry no hint ("m" when it is MRP exactly).
+        const unit = String(Math.round(stored) % 10);
+        const hint = r.barcodeIsManual ? "" : capped ? (mrp != null && Math.abs(stored - mrp) < 0.005 ? "m" : "0")
+            : ACTIVE_BARCODE_BANDS.some((b) => String(b.hint) === unit) ? unit : "";
+        return { value: stored, hint, capped, manual: r.barcodeIsManual };
+    }
     const sp = numOrNull(r.baseline);
     if (sp == null) return { value: null, hint: "", capped: false, manual: false };
     return { ...barcodePrice(sp, mrp), manual: false };
 }
 
-// The barcode "Update barcode" would save: bands on the SAVED Sale Price, MRP-capped.
+// The barcode "Update barcode" / "auto" would save: bands on the EFFECTIVE price
+// (the selling voice — Strategy, Computed or Sale Price), MRP-capped. Same rule
+// as barcodeStore.saveAutoBarcodes. Update barcode is disabled while prices are
+// unsaved, so the selling voice here equals the saved one.
 function autoBarcodeOf(r: Row): number | null {
-    const sp = numOrNull(r.baseline);
+    const sp = sellingVoice(r);
     if (sp == null) return null;
     const m = numOrNull(r.mrp);
     return barcodePrice(sp, m != null && m > 0 ? m : null).value;
 }
 
-// Not typed by hand, and the saved barcode is not what the saved Sale Price
-// gives today (or was never saved) → "Update barcode" would change it.
+// Not typed by hand, and the saved barcode is not what the selling price gives
+// today (or was never saved) → "Update barcode" would change it.
 function barcodeStale(r: Row): boolean {
     if (r.id < 0 || r.barcodeIsManual) return false;
     const auto = autoBarcodeOf(r);
@@ -470,22 +481,9 @@ function rangeVal(r: Row, key: RangeKey): number | null {
     }
 }
 
-// ── Drift signals (computed against the frozen print-time snapshot) ────────────
+// ── Drift signals (against what was decided at the last Save prices) ───────────
 
-// Barcode gap shrink %: how far the (live) selling voice has climbed ABOVE the
-// frozen saved price, as % of the printed barcode. Bigger = the live price is
-// eating the barcode's headroom (heading toward stale). 0 when selling at SAVED.
-function barcodeShrinkPct(r: Row): number | null {
-    const saved = numOrNull(r.salePrice);
-    if (saved == null) return null;
-    const bc = rowBarcode(r).value;
-    if (bc == null || bc === 0) return null;
-    const live = sellingVoice(r);
-    if (live == null) return null;
-    return ((live - saved) / bc) * 100;
-}
-
-// Profit gap %: current profit on the saved price vs the DECIDED profit frozen at
+// Profit gap %: current profit on the saved price vs the DECIDED profit saved at
 // print. Negative = profit reduced, positive = profit increased.
 function profitGapPct(r: Row): number | null {
     const decided = numOrNull(r.savedProfit);
@@ -500,8 +498,8 @@ function profitGapPct(r: Row): number | null {
 
 // `clickable` = the chip itself switches the selling voice (Strategy / Computed).
 // The Sale Price cell passes false: it holds an editable input, so clicking or
-// tabbing into it must NOT silently move the selling voice — that flip is the
-// Selling dropdown's job alone.
+// tabbing into it must NOT silently move the selling voice — its own small
+// "sell at this" link does that. (The separate Selling dropdown column is gone.)
 function voiceClass(selected: boolean, clickable = true): string {
     return `w-full rounded px-1.5 py-1 text-right transition-colors ${selected ? "bg-emerald-50 ring-1 ring-emerald-400" : clickable ? "cursor-pointer hover:bg-muted" : ""
         }`;
@@ -689,7 +687,12 @@ const ProductRow = memo(function ProductRow({
             {show("sale") ? (
                 <TableCell className={`p-1 text-right align-top ${COL_TINT.sale}`}>
                     <div className={voiceClass(r.saleSource === "SAVED", false)}>
-                        {r.saleSource === "SAVED" ? SELLING_TAG : null}
+                        {r.saleSource === "SAVED" ? SELLING_TAG : savedPrice != null ? (
+                            // The input itself never flips the voice (typing must not); this link does.
+                            <button type="button" onClick={() => onUpdate(r.id, { saleSource: "SAVED" })} className="mb-0.5 block w-full text-right text-[10px] font-medium uppercase tracking-wide text-muted-foreground hover:text-emerald-600">
+                                sell at this
+                            </button>
+                        ) : null}
                         <Input
                             inputMode="decimal"
                             value={r.salePrice}
@@ -699,21 +702,6 @@ const ProductRow = memo(function ProductRow({
                         />
                         <ProfitSub p={savedProfit} />
                     </div>
-                </TableCell>
-            ) : null}
-
-            {show("selling") ? (
-                <TableCell className={`text-right ${COL_TINT.selling}`}>
-                    {/* The one deliberate control for which voice POS/shop charges.
-                        Editing Sale Price no longer moves it — you pick it here. */}
-                    <Select value={r.saleSource} onValueChange={(v) => onUpdate(r.id, { saleSource: v as SaleSource })}>
-                        <SelectTrigger className="h-7 w-32 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="STRATEGY">Strategy</SelectItem>
-                            <SelectItem value="MY">Computed</SelectItem>
-                            <SelectItem value="SAVED" disabled={savedPrice == null}>Sale Price</SelectItem>
-                        </SelectContent>
-                    </Select>
                 </TableCell>
             ) : null}
 
@@ -906,7 +894,6 @@ export default function GeneratePage() {
     const [fSaleCapped, setFSaleCapped] = useState(false);
     const [fInStock, setFInStock] = useState(false);
     // Threshold boxes: show rows where the metric exceeds x%.
-    const [tBarcodeShrink, setTBarcodeShrink] = useState("");
     const [tProfitReduce, setTProfitReduceRaw] = useState("");
     const [tProfitIncrease, setTProfitIncreaseRaw] = useState("");
     // Profit reduced & increased contradict → typing in one empties the other.
@@ -941,7 +928,6 @@ export default function GeneratePage() {
                 if (typeof s.fBarcodeCapped === "boolean") setFBarcodeCapped(s.fBarcodeCapped);
                 if (typeof s.fSaleCapped === "boolean") setFSaleCapped(s.fSaleCapped);
                 if (typeof s.fInStock === "boolean") setFInStock(s.fInStock);
-                if (typeof s.tBarcodeShrink === "string") setTBarcodeShrink(s.tBarcodeShrink);
                 if (typeof s.tProfitReduce === "string") setTProfitReduceRaw(s.tProfitReduce);
                 if (typeof s.tProfitIncrease === "string") setTProfitIncreaseRaw(s.tProfitIncrease);
                 if (typeof s.filtersOpen === "boolean") setFiltersOpen(s.filtersOpen);
@@ -960,10 +946,10 @@ export default function GeneratePage() {
             localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({
                 query, fBrand, fCategory, fGroup, fMethod, fSource,
                 fBarcodeCapped, fSaleCapped, fInStock,
-                tBarcodeShrink, tProfitReduce, tProfitIncrease, ranges, filtersOpen,
+                tProfitReduce, tProfitIncrease, ranges, filtersOpen,
             }));
         } catch { /* quota / disabled storage → silently skip */ }
-    }, [hydrated, query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tBarcodeShrink, tProfitReduce, tProfitIncrease, ranges, filtersOpen]);
+    }, [hydrated, query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tProfitReduce, tProfitIncrease, ranges, filtersOpen]);
 
     // Dynamic filter options — distinct values present in the data.
     const distinct = useCallback((pick: (r: Row) => string) =>
@@ -1002,8 +988,6 @@ export default function GeneratePage() {
         if (fBarcodeCapped) v = v.filter((r) => barcodeCapped(r));
         if (fSaleCapped) v = v.filter((r) => saleCapped(r));
         if (fInStock) v = v.filter((r) => stockQty(r) > 0);
-        const xShrink = numOrNull(tBarcodeShrink);
-        if (xShrink != null) v = v.filter((r) => { const s = barcodeShrinkPct(r); return s != null && s > xShrink; });
         const xReduce = numOrNull(tProfitReduce);
         if (xReduce != null) v = v.filter((r) => { const g = profitGapPct(r); return g != null && g < -xReduce; });
         const xInc = numOrNull(tProfitIncrease);
@@ -1035,12 +1019,12 @@ export default function GeneratePage() {
             });
         }
         return v;
-    }, [rows, query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tBarcodeShrink, tProfitReduce, tProfitIncrease, ranges, sortKey, sortDir]);
+    }, [rows, query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tProfitReduce, tProfitIncrease, ranges, sortKey, sortDir]);
 
     // Jump back to the first page whenever the filtered/sorted list or page size
     // changes, so you never land on a now-empty page.
     // While rendering, keyed on the values themselves (ranges / sort by content).
-    if (useValueChange(JSON.stringify([query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tBarcodeShrink, tProfitReduce, tProfitIncrease, ranges, sortKey, sortDir, tab, pageSize]))) {
+    if (useValueChange(JSON.stringify([query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, tProfitReduce, tProfitIncrease, ranges, sortKey, sortDir, tab, pageSize]))) {
         setPageIndex(0);
     }
 
@@ -1091,10 +1075,11 @@ export default function GeneratePage() {
             return next;
         });
     }, [tab, queueRemove]);
-    // Freeze = persist the sticky Sale Price for CHECKED rows via the sale-price
-    // endpoint, then reflect the freeze locally (baseline + date + decided profit).
-    // SAVED rows store savedSalePricePaise; STRATEGY/COMPUTED rows clear it (follow
-    // the live engine). Local-only rows (negative ids) freeze in the UI only.
+    // "Save prices" = persist the Sale Price + selling voice for ticked / edited rows
+    // (PUT /api/pricing-strategy/sale-price), then mark them saved locally
+    // (baseline + decided profit). The barcode price and its date are NOT touched
+    // here — only a barcode save moves them (barcodeStore.ts). Local-only rows
+    // (negative ids) save in the UI only.
     const [freezing, setFreezing] = useState(false);
     // A row is a save target if it's ticked OR has an unsaved freeze decision
     // (Sale Price edited or selling source switched). This lets a plain edit/source
@@ -1174,7 +1159,7 @@ export default function GeneratePage() {
         const manualCount = targets.filter((r) => r.barcodeIsManual).length;
         const ok = await confirmAction({
             title: targets.length === 1 ? "Update the barcode price for 1 product?" : `Update the barcode price for ${targets.length} products?`,
-            body: `Each barcode is made again from the saved Sale Price (bands, capped at MRP) and saved with today's date.${manualCount ? ` ${manualCount} hand-typed barcode${manualCount === 1 ? "" : "s"} will be replaced.` : ""} Print new labels for them.`,
+            body: `Each barcode is made again from the price it sells at now — Strategy, Computed or Sale Price (bands, capped at MRP) — and saved with today's date.${manualCount ? ` ${manualCount} hand-typed barcode${manualCount === 1 ? "" : "s"} will be replaced.` : ""} Print new labels for them.`,
             confirmLabel: "Update barcode",
         });
         if (!ok) return;
@@ -1362,13 +1347,13 @@ export default function GeneratePage() {
     })();
     const catActive = [fBrand, fCategory, fGroup, fMethod, fSource].filter((x) => x !== "ALL").length;
     const flagActive = [fBarcodeCapped, fSaleCapped, fInStock].filter(Boolean).length;
-    const thrActive = [tBarcodeShrink, tProfitReduce, tProfitIncrease].filter((x) => x.trim()).length;
+    const thrActive = [tProfitReduce, tProfitIncrease].filter((x) => x.trim()).length;
     const rangeActive = RANGE_FIELDS.filter((f) => ranges[f.key]?.min.trim() || ranges[f.key]?.max.trim()).length;
     const activeFilterCount = catActive + flagActive + thrActive + rangeActive;
     const clearAllFilters = () => {
         setFBrand("ALL"); setFCategory("ALL"); setFGroup("ALL"); setFMethod("ALL"); setFSource("ALL");
         setFBarcodeCapped(false); setFSaleCapped(false); setFInStock(false);
-        setTBarcodeShrink(""); setTProfitReduceRaw(""); setTProfitIncreaseRaw("");
+        setTProfitReduceRaw(""); setTProfitIncreaseRaw("");
         setRanges(emptyRanges());
     };
 
@@ -1467,7 +1452,7 @@ export default function GeneratePage() {
                     <Button type="button" size="sm" className="h-8" onClick={save} disabled={saveCount === 0 || freezing} title="Save the Sale Price and selling choice for ticked or edited rows. The barcode price is not changed. Margin %, MRP, Method and Barcode save by themselves as you edit.">
                         {freezing ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save prices{saveCount > 0 ? ` (${saveCount})` : ""}
                     </Button>
-                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={updateBarcodes} disabled={barcodeTargets.length === 0 || freezing || dirtyCount > 0} title={dirtyCount > 0 ? "Save prices first — the barcode is made from the SAVED Sale Price" : "Make the barcode again from the saved Sale Price (bands, capped at MRP) and save it with today's date. Ticked rows, or every row whose barcode is out of date."}>
+                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={updateBarcodes} disabled={barcodeTargets.length === 0 || freezing || dirtyCount > 0} title={dirtyCount > 0 ? "Save prices first — the barcode is made from the saved selling price" : "Make the barcode again from the price each row sells at (bands, capped at MRP) and save it with today's date. Ticked rows, or every auto row whose barcode is out of date (hand-typed ones only when ticked)."}>
                         <Barcode className="size-4" /> Update barcode{barcodeTargets.length > 0 ? ` (${barcodeTargets.length})` : ""}
                     </Button>
                 </div>
@@ -1529,8 +1514,7 @@ export default function GeneratePage() {
                                     {flagChip("Sale price capped", fSaleCapped, setFSaleCapped, "Selling price held down at the barcode / MRP ceiling")}
                                     {flagChip("In stock only", fInStock, setFInStock, "Hide products with no stock")}
                                 </div>
-                                <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-3">
-                                    {thresholdInput("Barcode gap shrunk", tBarcodeShrink, setTBarcodeShrink)}
+                                <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-2">
                                     {thresholdInput("Profit reduced", tProfitReduce, setTProfitReduce)}
                                     {thresholdInput("Profit increased", tProfitIncrease, setTProfitIncrease)}
                                 </div>
@@ -1574,7 +1558,6 @@ export default function GeneratePage() {
                             {show("computed") ? <SortHeader k="computed" label="Computed" align="right" firstDir="desc" className={`${SORT_TH} ${COL_TINT.computed}`} {...sortProps} /> : null}
                             {show("strategy") ? <SortHeader k="strategy" label="Strategy" align="right" firstDir="desc" title="Go to Strategy page to change" className={`${SORT_TH} ${COL_TINT.strategy}`} {...sortProps} /> : null}
                             {show("sale") ? <SortHeader k="saved" label="Sale Price" align="right" firstDir="desc" title="Manual — you type this price" className={`${SORT_TH} ${COL_TINT.sale}`} {...sortProps} /> : null}
-                            {show("selling") ? <TableHead className={`text-right text-xs ${COL_TINT.selling}`}>Selling</TableHead> : null}
                             {show("mrp") ? <TableHead className={`text-right text-xs ${COL_TINT.mrp}`}>MRP</TableHead> : null}
                             {show("barcode") ? <SortHeader k="barcode" label="Barcode" align="right" firstDir="desc" title="Auto from Sale Price; type to set a manual barcode" className={`${SORT_TH} ${COL_TINT.barcode}`} {...sortProps} /> : null}
                             <TableHead className="w-8" />

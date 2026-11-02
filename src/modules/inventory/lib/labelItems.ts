@@ -125,17 +125,22 @@ export function nameFitScale(name: string, availableMm: number, fontSizePt: numb
 }
 
 /**
- * Engine item → label. The printed price is the barcode price (the hand-set
- * barcodeManualPaise if any, else the band-buffered, MRP-capped tag), falling back to the saved sale price, then to the price that
- * currently sells — so a product nobody has frozen yet still prints a real price.
+ * Engine item → label. The printed price is the SAVED barcode price
+ * (barcodeManualPaise); a product never saved yet falls back to the band tag on
+ * its saved Sale Price (what it printed before saving existed), then the saved
+ * Sale Price, then the price that sells now — so it still prints a real price.
+ * `autoPrice` = what "auto" / Update barcode would save now: bands on the
+ * EFFECTIVE price (barcodeStore.ts).
  */
 export function pricingItemToLabelItem(it: PricingItem, bands: BarcodeBand[], copies: number): Item {
     const saved = it.savedSalePricePaise != null ? it.savedSalePricePaise / 100 : null;
     const mrp = it.mrpPaise != null ? it.mrpPaise / 100 : null;
-    const autoTag = saved != null ? barcodePrice(saved, mrp != null && mrp > 0 ? mrp : null, bands).value : null;
-    const tag = it.barcodeManualPaise != null ? it.barcodeManualPaise / 100 : autoTag;
-    const gstMul = 1 + (it.gstRatePct > 0 ? it.gstRatePct / 100 : 0);
+    const mrpCap = mrp != null && mrp > 0 ? mrp : null;
     const effective = it.effectiveSalePricePaise != null ? it.effectiveSalePricePaise / 100 : null;
+    const legacyTag = saved != null ? barcodePrice(saved, mrpCap, bands).value : null;
+    const autoTag = effective != null ? barcodePrice(effective, mrpCap, bands).value : null;
+    const tag = it.barcodeManualPaise != null ? it.barcodeManualPaise / 100 : legacyTag;
+    const gstMul = 1 + (it.gstRatePct > 0 ? it.gstRatePct / 100 : 0);
     const price = tag ?? saved ?? effective;
     return {
         id: it.id,

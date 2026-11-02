@@ -349,8 +349,9 @@ model InvProduct {
   effectiveSalePriceSource EffectiveSalePriceSource @default(STRATEGY)
   /// The saved, human-entered sale price (paise). null = not set. The pricing
   /// engine NEVER overwrites this (unlike effectiveSalePricePaise). MRP-capped at
-  /// save time. Single source of truth for the printed barcode, and the value that
-  /// materializes into effectiveSalePricePaise when effectiveSalePriceSource = SAVED.
+  /// save time. Materializes into effectiveSalePricePaise when
+  /// effectiveSalePriceSource = SAVED. (The printed barcode is its own saved
+  /// column, barcodeManualPaise — a Sale Price change does not move it.)
   /// Written by Edit Product, Item Import, and the Update & Print Labels "Sale Price" column.
   savedSalePricePaise      Int?
   /// The SAVED barcode (tag) price, paise. Written only when the barcode is
@@ -370,7 +371,7 @@ model InvProduct {
   /// When the barcode price was last SAVED (see barcodeManualPaise) — drives the
   /// printed barcode date code. Legacy name.
   salePriceFrozenAt        DateTime?
-  /// After-tax profit (paise) decided at freeze time — basis for the drift /
+  /// After-tax profit (paise) decided at the last "Save prices" — basis for the drift /
   /// profit-gap filter on the labels page (current profit vs this snapshot).
   savedProfitPaise         Int?
 

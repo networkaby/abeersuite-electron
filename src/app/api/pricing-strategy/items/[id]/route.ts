@@ -74,7 +74,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         // Barcode rules (barcodeStore.ts):
         //   • typed barcode → save it (MRP-capped) with date + gap;
-        //   • barcode set back to auto (null) → save the auto one from the Sale Price;
+        //   • barcode set back to auto (null) → save the auto one from the effective sale price;
         //   • MRP cut below the saved barcode → cap it (a barcode save);
         //   • margin changed while COMPUTED sells → re-measure the gap only.
         if (data.barcodeManualPaise !== undefined) {

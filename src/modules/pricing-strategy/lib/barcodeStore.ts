@@ -19,32 +19,32 @@ import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
  */
 
 /**
- * Save the AUTO barcode (bands applied to the saved Sale Price, capped at MRP)
- * for these products. `onlyMissing` skips products that already have a saved
- * barcode (new-product paths). A product with no Sale Price has no auto
- * barcode: on the explicit path its saved barcode is cleared; with
- * `onlyMissing` it is left alone.
+ * Save the AUTO barcode — bands applied to the EFFECTIVE sale price (the price
+ * that really sells now: Strategy, Computed or Sale Price), capped at MRP — for
+ * these products. So the label always has headroom over the selling price.
+ * `onlyMissing` skips products that already have a saved barcode (new-product
+ * paths). A product with no effective price is skipped (its barcode stays).
  */
 export async function saveAutoBarcodes(ids: number[], opts: { onlyMissing?: boolean } = {}): Promise<number> {
     if (ids.length === 0) return 0;
     const [rows, bands] = await Promise.all([
         prisma.invProduct.findMany({
             where:  { id: { in: ids }, ...(opts.onlyMissing ? { barcodeManualPaise: null } : {}) },
-            select: { id: true, savedSalePricePaise: true, mrpPaise: true, effectiveSalePricePaise: true },
+            select: { id: true, mrpPaise: true, effectiveSalePricePaise: true },
         }),
         loadBarcodeBands(),
     ]);
     const now = new Date();
     const ops = rows.flatMap((p) => {
-        const tag = barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands);
-        if (tag == null && opts.onlyMissing) return [];
+        const tag = barcodeTagPaise(p.effectiveSalePricePaise, p.mrpPaise, bands);
+        if (tag == null) return [];
         return [prisma.invProduct.update({
             where: { id: p.id },
             data:  {
                 barcodeManualPaise:  tag,
                 barcodeIsManual:     false,
-                salePriceFrozenAt:   tag != null ? now : null,
-                barcodeGapBasePaise: tag != null ? p.effectiveSalePricePaise : null,
+                salePriceFrozenAt:   now,
+                barcodeGapBasePaise: p.effectiveSalePricePaise,
             },
         })];
     });

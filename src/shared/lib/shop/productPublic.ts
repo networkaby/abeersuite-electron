@@ -110,7 +110,8 @@ export function productGalleryUrls(galleryJson: unknown, imageUrl: string | null
  * Map an InvProduct to its storefront shape.
  *
  * When `bands` is supplied (the org's barcode bands), the displayed `pricePaise`
- * is the **printed barcode tag price** derived from the saved sale price + MRP —
+ * is the **printed barcode tag price** — the saved barcode (barcodeManualPaise), or for
+ * a product never saved yet the band tag on its saved sale price + MRP —
  * so the shop price equals the shelf label and the POS receipt. It falls back to
  * `effectiveSalePricePaise` when the product has no saved sale price. When
  * `bands` is omitted the legacy behaviour (effectiveSalePricePaise) is kept, so
