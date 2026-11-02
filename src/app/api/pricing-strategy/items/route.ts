@@ -1,3 +1,5 @@
+import { barcodeTagPaise } from "@/shared/lib/pricing/barcodePrice";
+import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/shared/lib/auth/permissions";
@@ -12,6 +14,15 @@ import { primaryBarcode } from "@/shared/lib/inventory";
 
 import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
 
+// Today's barcode gap as % of the gap when the barcode was saved. null when
+// there is no barcode, no snapshot, or the original gap was not positive.
+function barcodeGapPct(tag: number | null, base: number | null, effective: number | null): number | null {
+    if (tag == null || base == null || effective == null) return null;
+    const original = tag - base;
+    if (original <= 0) return null;
+    return Math.round(((tag - effective) / original) * 1000) / 10;
+}
+
 export async function GET(req: Request) {
     // Item list feeds Needs attention + Update & print labels — readable by any
     // pricing role (or the inventory:manage umbrella). Editing an item stays on
@@ -24,8 +35,12 @@ export async function GET(req: Request) {
         // Opt-in: compute days-since-last-sale per product (one ledger groupBy).
         // Off by default so the items / needs-attention pages keep the cheap path.
         const withSaleAge = searchParams.get("withSaleAge") === "1";
+        // Needs Attention "Low barcode gap": flag when today's gap (barcode −
+        // effective) is below this % of the gap at barcode-save time. Default 30.
+        const gapPctParam = Number(searchParams.get("gapPct"));
+        const gapPct = Number.isFinite(gapPctParam) && gapPctParam > 0 ? gapPctParam : 30;
 
-        const [products, points, orgDefaults] = await Promise.all([
+        const [products, points, orgDefaults, bands] = await Promise.all([
             prisma.invProduct.findMany({
                 where:   { isActive: true },
                 orderBy: [{ name: "asc" }],
@@ -45,6 +60,7 @@ export async function GET(req: Request) {
                     effectiveSalePriceSource: true,
                     savedSalePricePaise: true,
                     barcodeManualPaise: true,
+                    barcodeGapBasePaise: true,
                     salePriceFrozenAt:   true,
                     savedProfitPaise:  true,
                     category: { select: { name: true } },
@@ -54,6 +70,7 @@ export async function GET(req: Request) {
             }),
             loadStrategyPoints(),
             prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { valuationMethod: true } }),
+            loadBarcodeBands(),
         ]);
         const orgDefault = orgDefaults?.valuationMethod ?? "WEIGHTED_AVG";
 
@@ -147,6 +164,11 @@ export async function GET(req: Request) {
                 daysSinceLastSale:     lastSaleAge.get(p.id) ?? null,
                 savedSalePricePaise:   p.savedSalePricePaise,
                 barcodeManualPaise:    p.barcodeManualPaise,
+                barcodeGapPct:         barcodeGapPct(
+                    barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands, p.barcodeManualPaise),
+                    p.barcodeGapBasePaise,
+                    p.effectiveSalePricePaise,
+                ),
                 effectiveSalePriceSource: p.effectiveSalePriceSource,
                 salePriceFrozenAt:     p.salePriceFrozenAt ? p.salePriceFrozenAt.toISOString() : null,
                 savedProfitPaise:      p.savedProfitPaise,
@@ -158,7 +180,8 @@ export async function GET(req: Request) {
                 (i) =>
                     i.resolvedCostPaise == null ||
                     i.mrpPaise == null || i.mrpPaise <= 0 ||
-                    i.effectiveSalePricePaise == null,
+                    i.effectiveSalePricePaise == null ||
+                    (i.barcodeGapPct != null && i.barcodeGapPct < gapPct),
             );
         }
 

@@ -65,6 +65,17 @@ export async function PUT(req: Request) {
             await recomputePricesForProducts(affected.map((it) => it.id));
         } catch { /* best-effort; price heals on next voucher */ }
 
+        // Snapshot the price that sells NOW as the barcode's original-gap basis
+        // (Needs Attention → "Low barcode gap"). Cleared when the Sale Price is cleared.
+        const savedIds = affected.filter((it) => it.savedSalePricePaise != null).map((it) => it.id);
+        const clearedIds = affected.filter((it) => it.savedSalePricePaise == null).map((it) => it.id);
+        if (savedIds.length) {
+            await prisma.$executeRaw`UPDATE "InvProduct" SET "barcodeGapBasePaise" = "effectiveSalePricePaise", "updatedAt" = NOW() WHERE id = ANY(${savedIds}::int[])`;
+        }
+        if (clearedIds.length) {
+            await prisma.invProduct.updateMany({ where: { id: { in: clearedIds } }, data: { barcodeGapBasePaise: null } });
+        }
+
         return NextResponse.json({ saved: ops.length });
     } catch (e) {
         return handleApiError(e, "Failed to save sale prices");

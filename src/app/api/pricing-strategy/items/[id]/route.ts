@@ -46,7 +46,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     : (await prisma.invProduct.findUnique({ where: { id }, select: { mrpPaise: true } }))?.mrpPaise;
                 if (mrp != null && mrp > 0 && v > mrp) v = mrp;
             }
-            barcodePatch = { barcodeManualPaise: v };
+            // A new barcode re-bases the original gap on the price selling now.
+            const cur = await prisma.invProduct.findUnique({ where: { id }, select: { effectiveSalePricePaise: true } });
+            barcodePatch = { barcodeManualPaise: v, barcodeGapBasePaise: cur?.effectiveSalePricePaise ?? null };
         }
 
         const row = await prisma.invProduct.update({
