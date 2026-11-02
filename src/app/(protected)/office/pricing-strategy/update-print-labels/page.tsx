@@ -360,13 +360,17 @@ const numOrNull = (s: string): number | null => {
 const inRange = (val: number | null, lo: number | null, hi: number | null): boolean =>
     val != null && (lo == null || val >= lo) && (hi == null || val <= hi);
 
+// The price of the voice marked SELLING (Strategy / Computed / Sale Price),
+// before the barcode/MRP cap — what the row is set to sell at.
+function sellingVoice(r: Row): number | null {
+    return r.saleSource === "STRATEGY" ? strategyRupees(r)
+        : r.saleSource === "MY" ? priceWithMargin(r.costIncl, r.margin)
+            : numOrNull(r.salePrice);
+}
+
 // The "applicable" sale price = the chosen voice, capped by the barcode price and MRP.
 function applicableSalePrice(r: Row): number | null {
-    const saved = numOrNull(r.salePrice);
-    const chosen =
-        r.saleSource === "STRATEGY" ? strategyRupees(r)
-            : r.saleSource === "MY" ? priceWithMargin(r.costIncl, r.margin)
-                : saved;
+    const chosen = sellingVoice(r);
     if (chosen == null) return null;
     let val = chosen;
     const m = numOrNull(r.mrp);
@@ -385,11 +389,7 @@ function barcodeCapped(r: Row): boolean {
 // Sale price capped = the selling voice itself had to be held down by the
 // barcode/MRP ceiling (applicable price < the chosen voice).
 function saleCapped(r: Row): boolean {
-    const saved = numOrNull(r.salePrice);
-    const chosen =
-        r.saleSource === "STRATEGY" ? strategyRupees(r)
-            : r.saleSource === "MY" ? priceWithMargin(r.costIncl, r.margin)
-                : saved;
+    const chosen = sellingVoice(r);
     if (chosen == null) return false;
     const applic = applicableSalePrice(r);
     return applic != null && applic < chosen - 0.005;
@@ -445,10 +445,7 @@ function barcodeShrinkPct(r: Row): number | null {
     if (saved == null) return null;
     const bc = rowBarcode(r).value;
     if (bc == null || bc === 0) return null;
-    const live =
-        r.saleSource === "STRATEGY" ? strategyRupees(r)
-            : r.saleSource === "MY" ? priceWithMargin(r.costIncl, r.margin)
-                : saved;
+    const live = sellingVoice(r);
     if (live == null) return null;
     return ((live - saved) / bc) * 100;
 }
@@ -527,6 +524,10 @@ const ProductRow = memo(function ProductRow({
     const autoBc = savedPrice != null ? barcodePrice(savedPrice, mrp).value : null;
     const [bcAtFocus, setBcAtFocus] = useState(r.barcodeManual);
     const dateCode = secretDateCode(r.savedAt);
+    // Barcode vs the price this row sells at, and the profit % at the barcode price.
+    const sellingNow = sellingVoice(r);
+    const bcGap = bc.value != null && sellingNow != null ? bc.value - sellingNow : null;
+    const bcProfit = profitOf(bc.value, r.costIncl, r.gst);
     const stratProfit = profitOf(strategyPrice, r.costIncl, r.gst);
     const myProfit = profitOf(myPrice, r.costIncl, r.gst);
     const savedProfit = profitOf(savedPrice, r.costIncl, r.gst);
@@ -726,6 +727,20 @@ const ProductRow = memo(function ProductRow({
                             className={`h-7 w-24 text-right text-sm font-mono font-semibold ${bc.manual ? "border-violet-500 bg-violet-50 text-violet-800 dark:bg-violet-950 dark:text-violet-200" : ""} ${bc.capped ? "text-amber-600" : ""} ${bc.hint === "m" ? "underline decoration-2 underline-offset-2" : ""}`}
                         />
                     </div>
+                    {bcGap != null || bcProfit != null ? (
+                        <div
+                            className="mt-0.5 text-right font-mono text-[10px] text-muted-foreground"
+                            title="Gap = barcode − selling price (red: label is below what this row sells at; the till charges at most the barcode). Profit % = after-GST profit if sold at the barcode price."
+                        >
+                            <span className={bcGap != null && bcGap < -0.005 ? "text-red-600" : ""}>
+                                {bcGap == null ? "—" : `${bcGap < -0.005 ? "−" : "+"}${rupee(Math.abs(bcGap))}`}
+                            </span>
+                            {" · "}
+                            <span className={bcProfit?.pct != null && bcProfit.pct < 0 ? "text-red-600" : ""}>
+                                {bcProfit?.pct != null ? `${bcProfit.pct.toFixed(1)}%` : "—"}
+                            </span>
+                        </div>
+                    ) : null}
                     <div className="mt-0.5 flex justify-end gap-1 text-[10px] text-muted-foreground">
                         {bc.manual ? <span className="text-violet-700 dark:text-violet-300">manual</span> : null}
                         {bc.hint && bc.hint !== "m" ? <span>·{bc.hint}</span> : null}
