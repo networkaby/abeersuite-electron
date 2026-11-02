@@ -33,7 +33,7 @@
  *   voicePrice = cost_incl × (1 + margin% / 100)
  */
 
-import { type ReactNode, memo, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, type ReactNode, memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import axios from "axios";
@@ -1212,17 +1212,61 @@ export default function GeneratePage() {
     const fieldLabel = (text: string) => <div className="mb-0.5 truncate text-[11px] font-medium text-muted-foreground">{text}</div>;
     const unitTag = (u?: string) => (u ? <span className="shrink-0 text-[10px] text-muted-foreground">{u}</span> : null);
 
+    // Small ↺ that clears one range (only shown while it is in use).
+    const resetBtn = (key: RangeKey, side?: "min" | "max") => (
+        <button
+            type="button"
+            title="Reset"
+            aria-label="Reset"
+            onClick={() => { if (side !== "max") setRange(key, "min", ""); if (side !== "min") setRange(key, "max", ""); }}
+            className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+            <RotateCcw className="size-3" />
+        </button>
+    );
+
+    // Barcode gap: Below and Above are two SEPARATE filters, each its own line
+    // with its own one-thumb slider (0–100% of the original gap).
+    const gapSideInput = (side: "max" | "min", text: string) => {
+        const b = rangeBounds.barcodeGap ?? { lo: 0, hi: 100, step: 1 };
+        const raw = ranges.barcodeGap?.[side] ?? "";
+        const v = numOrNull(raw);
+        const active = v != null;
+        return (
+            <div key={side} className={`rounded-md border px-2 py-1.5 ${active ? "border-primary/40 bg-primary/5" : "border-transparent"}`}>
+                <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-[11px] font-medium text-muted-foreground">{text}</span>
+                    <span className="flex shrink-0 items-center gap-1">
+                        {active ? resetBtn("barcodeGap", side) : null}
+                        <div className={`${fieldShell(active)} w-16`}>
+                            <Input inputMode="decimal" value={raw} onChange={(e) => setRange("barcodeGap", side, e.target.value)} placeholder="any" className={bareInput} />
+                            {unitTag("%")}
+                        </div>
+                    </span>
+                </div>
+                <Slider
+                    className="mt-2 mb-0.5"
+                    min={b.lo}
+                    max={b.hi}
+                    step={b.step}
+                    // "Below" fills from the left; an untouched slider sits at its "no limit" end.
+                    value={[Math.max(b.lo, Math.min(b.hi, v ?? (side === "max" ? b.hi : b.lo)))]}
+                    onValueChange={([x]) => setRange("barcodeGap", side, (side === "max" ? x >= b.hi : x <= b.lo) ? "" : String(x))}
+                    aria-label={text}
+                />
+            </div>
+        );
+    };
+
     const rangeInput = (label: string, key: RangeKey, unit?: string) => {
+        if (key === "barcodeGap") return <>{gapSideInput("max", "Below original gap")}{gapSideInput("min", "Above original gap")}</>;
         const b = rangeBounds[key];
         const lo = numOrNull(ranges[key]?.min ?? "");
         const hi = numOrNull(ranges[key]?.max ?? "");
         const active = lo != null || hi != null;
-        // Barcode gap reads as words: Above (min) / Below (max) the original gap.
-        const isGap = key === "barcodeGap";
-        const box = (side: "min" | "max", text: string) => (
-            <div className={`${fieldShell(!!ranges[key]?.[side].trim())} w-[5.5rem]`} title={isGap ? `${text} this % of the original gap` : undefined}>
-                {isGap ? <span className="shrink-0 text-[10px] text-muted-foreground">{text}</span> : null}
-                <Input inputMode="decimal" value={ranges[key]?.[side] ?? ""} onChange={(e) => setRange(key, side, e.target.value)} placeholder={isGap ? "any" : text} className={bareInput} />
+        const box = (side: "min" | "max") => (
+            <div className={`${fieldShell(!!ranges[key]?.[side].trim())} w-[5.5rem]`}>
+                <Input inputMode="decimal" value={ranges[key]?.[side] ?? ""} onChange={(e) => setRange(key, side, e.target.value)} placeholder={side} className={bareInput} />
                 {unitTag(unit)}
             </div>
         );
@@ -1231,8 +1275,9 @@ export default function GeneratePage() {
                 <div className="flex items-center justify-between gap-2">
                     <span className="truncate text-[11px] font-medium text-muted-foreground">{label}</span>
                     <span className="flex shrink-0 items-center gap-1">
-                        {box("min", isGap ? "Above" : "min")}
-                        {box("max", isGap ? "Below" : "max")}
+                        {active ? resetBtn(key) : null}
+                        {box("min")}
+                        {box("max")}
                     </span>
                 </div>
                 {b ? (
@@ -1478,7 +1523,7 @@ export default function GeneratePage() {
                         <section>
                             {sectionTitle("Ranges")}
                             <div className="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2 lg:grid-cols-4">
-                                {RANGE_FIELDS.map((f) => <div key={f.key}>{rangeInput(f.label, f.key, f.unit)}</div>)}
+                                {RANGE_FIELDS.map((f) => <Fragment key={f.key}>{rangeInput(f.label, f.key, f.unit)}</Fragment>)}
                             </div>
                         </section>
                     </div>
