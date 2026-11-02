@@ -351,16 +351,16 @@ function sortVal(r: Row, key: SortKey): number | string {
 // ── Range filters (numeric parameters: min/max) ───────────────────────────────
 
 type RangeKey = "cost" | "margin" | "profit" | "profitPct" | "stock" | "daysSinceSale" | "barcodeGap";
-const RANGE_FIELDS: { key: RangeKey; label: string }[] = [
-    { key: "cost", label: "Cost (incl)" },
-    { key: "margin", label: "Margin % (strategy & mine)" },
-    { key: "profit", label: "Profit ₹ (sale price)" },
+const RANGE_FIELDS: { key: RangeKey; label: string; unit?: string }[] = [
+    { key: "cost", label: "Cost (incl)", unit: "₹" },
+    { key: "margin", label: "Margin % (strategy & mine)", unit: "%" },
+    { key: "profit", label: "Profit ₹ (sale price)", unit: "₹" },
     // Same figure as Needs Attention → Low barcode gap: today's gap (barcode −
     // selling price) as % of the gap when the barcode was saved. "Below 30" = that list.
-    { key: "barcodeGap", label: "Barcode gap % of original" },
-    { key: "stock", label: "Stock (units)" },
-    { key: "daysSinceSale", label: "Days since last sale" },
-    { key: "profitPct", label: "Profit % (sale price)" },
+    { key: "barcodeGap", label: "Barcode gap % of original", unit: "%" },
+    { key: "stock", label: "Stock (units)", unit: "pcs" },
+    { key: "daysSinceSale", label: "Days since last sale", unit: "days" },
+    { key: "profitPct", label: "Profit % (sale price)", unit: "%" },
 ];
 
 // localStorage key for the persisted ("saved") filter state. Bump the suffix
@@ -1197,46 +1197,71 @@ export default function GeneratePage() {
         </Select>
     );
     const labelled = (label: string, node: ReactNode) => (
-        <div className="space-y-1">
-            <div className="text-[10px] font-medium text-muted-foreground">{label}</div>
+        <div>
+            <div className="mb-1 truncate text-[11px] font-medium text-muted-foreground">{label}</div>
             {node}
         </div>
     );
-    // Barcode gap reads as words, not min–max: "Below / Above original gap  [ ] %".
-    const barcodeGapInput = () => (
-        <div className="space-y-1">
-            {([["max", "Below original gap"], ["min", "Above original gap"]] as const).map(([side, text]) => (
-                <div key={side} className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-medium text-muted-foreground">{text}</span>
-                    <span className="flex items-center gap-1">
-                        <Input inputMode="decimal" value={ranges.barcodeGap?.[side] ?? ""} onChange={(e) => setRange("barcodeGap", side, e.target.value)} placeholder="any" className="h-7 w-16 text-right text-xs font-mono" />
-                        <span className="text-xs text-muted-foreground">%</span>
-                    </span>
-                </div>
-            ))}
+    // ── Filter card pieces ── one look for every box: a soft field with the label
+    // on top, borderless inputs inside, the unit after, and a primary tint when
+    // the filter is in use so an active filter is visible at a glance.
+    const fieldShell = (active: boolean) =>
+        `flex h-8 items-center gap-1 rounded-md border bg-background px-2 transition-colors focus-within:ring-2 focus-within:ring-ring/40 ${active ? "border-primary/60 bg-primary/5" : "border-input"}`;
+    const bareInput = "h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-right text-xs font-mono shadow-none focus-visible:ring-0";
+    const fieldLabel = (text: string) => <div className="mb-1 truncate text-[11px] font-medium text-muted-foreground">{text}</div>;
+    const unitTag = (u?: string) => (u ? <span className="shrink-0 text-[11px] text-muted-foreground">{u}</span> : null);
+
+    // Barcode gap reads as words: "Below / Above original gap  [ ] %".
+    const barcodeGapInput = (label: string) => (
+        <div>
+            {fieldLabel(label)}
+            <div className="grid grid-cols-2 gap-1.5">
+                {([["max", "Below"], ["min", "Above"]] as const).map(([side, text]) => (
+                    <div key={side} className={fieldShell(!!ranges.barcodeGap?.[side].trim())} title={`${text} this % of the original gap`}>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">{text}</span>
+                        <Input inputMode="decimal" value={ranges.barcodeGap?.[side] ?? ""} onChange={(e) => setRange("barcodeGap", side, e.target.value)} placeholder="any" className={bareInput} />
+                        {unitTag("%")}
+                    </div>
+                ))}
+            </div>
         </div>
     );
-    const rangeInput = (label: string, key: RangeKey) => key === "barcodeGap" ? barcodeGapInput() : (
-        <div className="space-y-1">
-            <div className="text-[10px] font-medium text-muted-foreground">{label}</div>
-            <div className="flex items-center gap-1">
-                <Input inputMode="decimal" value={ranges[key]?.min ?? ""} onChange={(e) => setRange(key, "min", e.target.value)} placeholder="min" className="h-7 w-full text-right text-xs font-mono" />
-                <span className="text-xs text-muted-foreground">–</span>
-                <Input inputMode="decimal" value={ranges[key]?.max ?? ""} onChange={(e) => setRange(key, "max", e.target.value)} placeholder="max" className="h-7 w-full text-right text-xs font-mono" />
+    const rangeInput = (label: string, key: RangeKey, unit?: string) => key === "barcodeGap" ? barcodeGapInput(label) : (
+        <div>
+            {fieldLabel(label)}
+            <div className={fieldShell(!!(ranges[key]?.min.trim() || ranges[key]?.max.trim()))}>
+                <Input inputMode="decimal" value={ranges[key]?.min ?? ""} onChange={(e) => setRange(key, "min", e.target.value)} placeholder="min" className={bareInput} />
+                <span className="shrink-0 text-xs text-muted-foreground/60">–</span>
+                <Input inputMode="decimal" value={ranges[key]?.max ?? ""} onChange={(e) => setRange(key, "max", e.target.value)} placeholder="max" className={bareInput} />
+                {unitTag(unit)}
             </div>
         </div>
     );
     // Single "more than x%" threshold box.
     const thresholdInput = (label: string, value: string, onChange: (v: string) => void) => (
-        <div className="space-y-1">
-            <div className="text-[10px] font-medium text-muted-foreground">{label}</div>
-            <div className="flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">&gt;</span>
-                <Input inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} placeholder="any" className="h-7 w-20 text-right text-xs font-mono" />
-                <span className="text-xs text-muted-foreground">%</span>
+        <div>
+            {fieldLabel(label)}
+            <div className={fieldShell(!!value.trim())}>
+                <span className="shrink-0 text-[11px] text-muted-foreground">more than</span>
+                <Input inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} placeholder="any" className={bareInput} />
+                {unitTag("%")}
             </div>
         </div>
     );
+    // On/off flag as a pill — reads better than a bare checkbox row.
+    const flagChip = (label: string, on: boolean, set: (v: boolean) => void, hint: string) => (
+        <button
+            type="button"
+            title={hint}
+            aria-pressed={on}
+            onClick={() => set(!on)}
+            className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs transition-colors ${on ? "border-primary bg-primary text-primary-foreground" : "border-input bg-background text-foreground hover:bg-muted"}`}
+        >
+            {on ? <Check className="size-3.5" /> : null}
+            {label}
+        </button>
+    );
+    const sectionTitle = (text: string) => <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">{text}</div>;
 
     const catActive = [fBrand, fCategory, fGroup, fMethod, fSource].filter((x) => x !== "ALL").length;
     const flagActive = [fBarcodeCapped, fSaleCapped, fInStock].filter(Boolean).length;
@@ -1376,46 +1401,50 @@ export default function GeneratePage() {
 
             {/* Collapsible filter card — categorical + numeric ranges */}
             {filtersOpen ? (
-                <div className="mb-3 shrink-0 rounded-md border bg-muted/30 p-3">
-                    <div className="mb-2 flex items-center justify-between">
-                        {/* <span className="text-xs font-medium">Filters — all parameters &amp; ranges</span> */}
+                <div className="mb-3 shrink-0 rounded-lg border bg-card shadow-sm">
+                    <div className="flex items-center justify-between border-b px-4 py-2">
+                        <span className="flex items-center gap-2 text-sm font-medium">
+                            <Filter className="size-4 text-muted-foreground" /> Filters
+                            {activeFilterCount > 0 ? <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">{activeFilterCount} on</span> : null}
+                        </span>
                         {activeFilterCount > 0 ? (
-                            <button type="button" onClick={clearAllFilters} className="text-xs text-muted-foreground underline-offset-2 hover:underline">
-                                Clear all ({activeFilterCount})
-                            </button>
+                            <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={clearAllFilters}>
+                                <RotateCcw className="size-3.5" /> Clear all
+                            </Button>
                         ) : null}
                     </div>
-                    <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                        {labelled("Brand", filterSelect(fBrand, setFBrand, "All", brands.map((b) => ({ value: b, label: b }))))}
-                        {labelled("Collection", filterSelect(fCategory, setFCategory, "All", categories.map((c) => ({ value: c, label: c }))))}
-                        {labelled("Group", filterSelect(fGroup, setFGroup, "All", groups.map((g) => ({ value: g, label: g }))))}
-                        {labelled("Method", filterSelect(fMethod, setFMethod, "All", methodOpts))}
-                        {labelled("Sells at", filterSelect(fSource, setFSource, "All", SOURCE_OPTIONS))}
-                    </div>
-                    <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-2">
-                        <label className="flex items-center gap-1.5 text-xs">
-                            <Checkbox checked={fBarcodeCapped} onCheckedChange={(v) => setFBarcodeCapped(v === true)} />
-                            Barcode capped
-                            {/* <span className="text-muted-foreground">(MRP squeezing barcode)</span> */}
-                        </label>
-                        <label className="flex items-center gap-1.5 text-xs">
-                            <Checkbox checked={fSaleCapped} onCheckedChange={(v) => setFSaleCapped(v === true)} />
-                            Sale price capped
-                            {/* <span className="text-muted-foreground">(selling held at ceiling)</span> */}
-                        </label>
-                        <label className="flex items-center gap-1.5 text-xs">
-                            <Checkbox checked={fInStock} onCheckedChange={(v) => setFInStock(v === true)} />
-                            In stock only
-                            {/* <span className="text-muted-foreground">(hide zero stock)</span> */}
-                        </label>
-                        {/* </div>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3"> */}
-                        {thresholdInput("Barcode gap shrunk", tBarcodeShrink, setTBarcodeShrink)}
-                        {thresholdInput("Profit reduced", tProfitReduce, setTProfitReduce)}
-                        {thresholdInput("Profit increased", tProfitIncrease, setTProfitIncrease)}
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                        {RANGE_FIELDS.map((f) => <div key={f.key}>{rangeInput(f.label, f.key)}</div>)}
+                    <div className="space-y-4 p-4">
+                        <section>
+                            {sectionTitle("Product")}
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                                {labelled("Brand", filterSelect(fBrand, setFBrand, "All", brands.map((b) => ({ value: b, label: b }))))}
+                                {labelled("Collection", filterSelect(fCategory, setFCategory, "All", categories.map((c) => ({ value: c, label: c }))))}
+                                {labelled("Group", filterSelect(fGroup, setFGroup, "All", groups.map((g) => ({ value: g, label: g }))))}
+                                {labelled("Method", filterSelect(fMethod, setFMethod, "All", methodOpts))}
+                                {labelled("Sells at", filterSelect(fSource, setFSource, "All", SOURCE_OPTIONS))}
+                            </div>
+                        </section>
+                        <section>
+                            {sectionTitle("Quick checks")}
+                            <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+                                <div className="flex flex-wrap gap-2">
+                                    {flagChip("Barcode capped", fBarcodeCapped, setFBarcodeCapped, "MRP is squeezing the barcode price")}
+                                    {flagChip("Sale price capped", fSaleCapped, setFSaleCapped, "Selling price held down at the barcode / MRP ceiling")}
+                                    {flagChip("In stock only", fInStock, setFInStock, "Hide products with no stock")}
+                                </div>
+                                <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
+                                    {thresholdInput("Barcode gap shrunk", tBarcodeShrink, setTBarcodeShrink)}
+                                    {thresholdInput("Profit reduced", tProfitReduce, setTProfitReduce)}
+                                    {thresholdInput("Profit increased", tProfitIncrease, setTProfitIncrease)}
+                                </div>
+                            </div>
+                        </section>
+                        <section>
+                            {sectionTitle("Ranges")}
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                {RANGE_FIELDS.map((f) => <div key={f.key}>{rangeInput(f.label, f.key, f.unit)}</div>)}
+                            </div>
+                        </section>
                     </div>
                 </div>
             ) : null}
