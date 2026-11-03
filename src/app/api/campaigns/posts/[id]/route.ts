@@ -9,6 +9,9 @@ import { requirePostsPage } from "@/modules/campaigns/lib/campaignAccess";
  * GET    /api/campaigns/posts/:id — one post, with its file links and shares.
  * PATCH  /api/campaigns/posts/:id — save changes. A done post can still be
  *        edited (staff fix a typo before sharing it again).
+ * POST   /api/campaigns/posts/:id — schedule a timed draft as it stands. A new
+ *        post is saved as a draft until its photos are in, then this, so no
+ *        job can send it without them.
  * DELETE /api/campaigns/posts/:id — remove it with its share lines. The R2 file
  *        stays behind (a few MB, private), like a replaced chat attachment.
  */
@@ -41,6 +44,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         return NextResponse.json(await loadPost(id));
     } catch (e) {
         return handleApiError(e, "Failed to save the post");
+    }
+}
+
+export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+    const { response } = await requirePostsPage();
+    if (response) return response;
+    const { id, error: idError } = await parseIdParam(params);
+    if (idError) return idError;
+
+    try {
+        // Only a timed draft moves; the photos, variants and times stay exactly as saved.
+        const { count } = await prisma.post.updateMany({ where: { id, status: "DRAFT", scheduledAt: { not: null } }, data: { status: "SCHEDULED" } });
+        if (count === 0) return NextResponse.json({ error: "Only a draft with a time can be scheduled." }, { status: 400 });
+        return NextResponse.json(await loadPost(id));
+    } catch (e) {
+        return handleApiError(e, "Failed to schedule the post");
     }
 }
 

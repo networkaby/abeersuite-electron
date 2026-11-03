@@ -202,9 +202,13 @@ export default function PostComposer({
                 setForm(fromRow(r.data));
                 toast.success(as === "SCHEDULED" ? "Scheduled — each waiting platform goes out at its time" : "Saved as draft — nothing goes out until you schedule it");
             } else {
-                // Photos picked here win over the product's own.
+                // Photos picked here win over the product's own. With photos to
+                // upload it stays a draft until they are in, so the job never
+                // sends it text-only (post 7 went to Google without its photo).
+                const hasUploads = pending.length > 0 || Object.keys(cardFiles).length > 0;
                 const r = await axios.post<PostRow & { photoNote?: string | null }>("/api/campaigns/posts", {
                     ...body,
+                    status: hasUploads ? "DRAFT" : as,
                     fromProductId: pending.length ? null : (fromProduct?.id ?? null),
                 });
                 const id = r.data.id;
@@ -212,6 +216,7 @@ export default function PostComposer({
                 let main = pending.length ? pending[0].type : r.data.mediaKey ? "image/" : null;
                 if (pending.length) setSaving("Uploading photos…");
                 const keyOf = new Map<File, string>();
+                let photoFailed = false;
                 try {
                     for (const [i, f] of pending.entries()) {
                         const row = await uploadPostFile(id, f, i > 0);
@@ -221,6 +226,7 @@ export default function PostComposer({
                 } catch (e) {
                     note = extractApiError(e, "A photo did not upload — add it below.");
                     main = null;
+                    photoFailed = true;
                 }
                 // Channels with a photo of their own keep it; the rest get the main one fitted.
                 const ownMedia = (c: string) => {
@@ -256,9 +262,25 @@ export default function PostComposer({
                         await uploadPostFile(id, f, true, c);
                     } catch (e) {
                         note = extractApiError(e, "A platform's photo did not upload — add it on its card.");
+                        photoFailed = true;
                     }
                 }
-                if (note) toast.warning(`Post saved. ${note}`);
+                // A failed upload leaves a draft; a failed fit still schedules (the photo is on).
+                let draftKept = false;
+                // No time = "share now": it was never going to be scheduled.
+                if (hasUploads && as === "SCHEDULED" && r.data.scheduledAt) {
+                    if (photoFailed) draftKept = true;
+                    else {
+                        try {
+                            await axios.post(`/api/campaigns/posts/${id}`);
+                        } catch (e) {
+                            note = extractApiError(e, "Could not schedule it.");
+                            draftKept = true;
+                        }
+                    }
+                }
+                if (draftKept) toast.warning(`Saved as a draft, not scheduled. ${note} Then press Schedule.`);
+                else if (note) toast.warning(`Post saved. ${note}`);
                 else toast.success(as === "SCHEDULED" ? "Scheduled — each platform goes out at its time" : "Saved as draft — continue any time, nothing goes out yet");
                 router.replace(`/office/campaigns/posts/${id}`);
             }
