@@ -1,29 +1,21 @@
-# v1.16.23 [urgent]
+# v1.16.24
 
-Every counter must install this today. It brings a database change for product barcodes, and a counter on the old version will pause its sync once the office site is updated.
+A normal update — no database change, nothing urgent. Install when the counter is free. From this version on, everyday updates like this one wait for you to choose "Restart now"; only important ones restart the counter by themselves.
 
-**Install on every counter first.** The office site will be updated only after all counters are on v1.16.23 — until a counter updates, its sync stops for all data, not just products.
+## Updates on the counter
 
-## Barcode price on tags
-
-- **Barcode price is now saved**: Once a product's barcode (tag) price is saved, it stays fixed. Changing the Sale Price later no longer moves the printed barcode by itself.
-- **Hand-typed barcodes are marked** separately from ones made automatically from the price bands.
-- **Barcode never above MRP**: a barcode higher than MRP is brought down to MRP safely.
-- **Label dates use India time**, whatever time zone the PC is set to.
+- **Two kinds of update from now on.** An important update (a database change, sign-in, sync, a serious billing fix) still shows the countdown and restarts the counter at a free moment. Every other update downloads quietly and shows a small card — it installs only when you press **Restart now**, never on its own, not even when the app is closed.
+- **"Later" hides the card for about one shift**, then it comes back as a reminder.
+- A counter that skipped updates will still get the next important one; it keeps checking in the background.
 
 ## Update & Print Labels screen
 
-- Simpler filter card with sliders for each range; a range can also pick items *outside* it.
-- "Profit change since last save" replaces the two Profit reduced / increased filters.
-- Cost, Margin % and Stock range filters removed; a "sell at this" link sits on the Sale Price cell.
+- Much faster: the list no longer reloads after every sale, and typing in the boxes has no lag.
+- **Save prices** counts only the rows you actually edited — ticking a row alone no longer re-saves it.
+- **Update barcode** works on ticked rows only and is greyed out when nothing is ticked.
+- A barcode you typed by hand is never replaced by Update barcode, even if the row is ticked.
+- After saving, the list shows the new barcode date straight away.
 
-## Billing (POS)
+## Contacts
 
-- Each bill line now shows the lowest price (sale price) under MRP and Barcode.
-- MRP is struck out only when the line is really billed below MRP.
-- The lowest-price check reads the current cart correctly when you leave a price box.
-
-## Other
-
-- Address form: PIN code lookup is quicker and more reliable.
-- WhatsApp connect settings small fixes.
+- **Contacts now opens one list of every party** — persons and companies together. Old links to the Contacts page land there automatically.
