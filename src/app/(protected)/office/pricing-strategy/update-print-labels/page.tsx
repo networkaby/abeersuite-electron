@@ -1099,17 +1099,18 @@ export default function GeneratePage() {
 
     // "Update barcode": save the auto barcode (bands on the SAVED Sale Price) for
     // the ticked rows, or — nothing ticked — every row whose barcode is stale.
-    // Saves price + date + gap together. Unsaved Sale Price edits are not used.
+    // Hand-typed barcodes are always skipped, ticked or not (the server skips
+    // them too). Saves price + date + gap together. Unsaved Sale Price edits are not used.
     const barcodeTargets = (selected.size > 0
-        ? rows.filter((r) => selected.has(r.id) && r.id > 0 && autoBarcodeOf(r) != null)
+        ? rows.filter((r) => selected.has(r.id) && r.id > 0 && !r.barcodeIsManual && autoBarcodeOf(r) != null)
         : rows.filter(barcodeStale));
     const updateBarcodes = async () => {
         const targets = barcodeTargets;
         if (targets.length === 0) return;
-        const manualCount = targets.filter((r) => r.barcodeIsManual).length;
+        const manualCount = rows.filter((r) => selected.has(r.id) && r.barcodeIsManual).length;
         const ok = await confirmAction({
             title: targets.length === 1 ? "Update the barcode price for 1 product?" : `Update the barcode price for ${targets.length} products?`,
-            body: `Each barcode is made again from the price it sells at now — Strategy, Computed or Sale Price (bands, capped at MRP) — and saved with today's date.${manualCount ? ` ${manualCount} hand-typed barcode${manualCount === 1 ? "" : "s"} will be replaced.` : ""} Print new labels for them.`,
+            body: `Each barcode is made again from the price it sells at now — Strategy, Computed or Sale Price (bands, capped at MRP) — and saved with today's date.${manualCount ? ` ${manualCount} hand-typed barcode${manualCount === 1 ? " is" : "s are"} skipped and stay as typed.` : ""} Print new labels for them.`,
             confirmLabel: "Update barcode",
         });
         if (!ok) return;

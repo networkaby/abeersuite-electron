@@ -23,13 +23,18 @@ import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
  * that really sells now: Strategy, Computed or Sale Price), capped at MRP — for
  * these products. So the label always has headroom over the selling price.
  * `onlyMissing` skips products that already have a saved barcode (new-product
- * paths). A product with no effective price is skipped (its barcode stays).
+ * paths). `skipManual` leaves hand-typed barcodes alone (bulk Update barcode).
+ * A product with no effective price is skipped (its barcode stays).
  */
-export async function saveAutoBarcodes(ids: number[], opts: { onlyMissing?: boolean } = {}): Promise<number> {
+export async function saveAutoBarcodes(ids: number[], opts: { onlyMissing?: boolean; skipManual?: boolean } = {}): Promise<number> {
     if (ids.length === 0) return 0;
     const [rows, bands] = await Promise.all([
         prisma.invProduct.findMany({
-            where:  { id: { in: ids }, ...(opts.onlyMissing ? { barcodeManualPaise: null } : {}) },
+            where:  {
+                id: { in: ids },
+                ...(opts.onlyMissing ? { barcodeManualPaise: null } : {}),
+                ...(opts.skipManual ? { barcodeIsManual: false } : {}),
+            },
             select: { id: true, mrpPaise: true, effectiveSalePricePaise: true },
         }),
         loadBarcodeBands(),
