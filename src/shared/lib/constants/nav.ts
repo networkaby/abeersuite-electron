@@ -325,7 +325,7 @@ export const MODULE_SECTIONS: ModuleSection[] = [
         label: "Contacts",
         icon: Users,
         key: "customers",
-        dashboardHref: "/office/customers",
+        dashboardHref: "/office/customers/all",
         pathPrefixes: ["/office/customers"],
         createActions: [
             { label: "Person +", subtitle: "Create a new person", icon: Users, variant: "default", action: "new-person", permission: "customers:create" },
