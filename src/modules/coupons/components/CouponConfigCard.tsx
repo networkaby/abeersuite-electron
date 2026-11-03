@@ -96,7 +96,7 @@ export function CouponConfigCard({ own, showLedgers }: {
             {box("maxTotalDiscountPct", "All together max %", "Coupon + spend tier + loyalty on one bill, as a % of goods. Shared by the Coupons, Spend Tiers and Loyalty pages. Blank = no cap.")}
             {showLedgers && (
                 <span className="hidden text-[11px] text-muted-foreground/75 2xl:inline">
-                    GL coupon #{!loaded ? "…" : `#${ledgers.coupon ?? "—"}`} · gift card #{!loaded ? "…" : `#${ledgers.gift ?? "—"}`}
+                    GL coupon {!loaded ? "…" : `#${ledgers.coupon ?? "—"}`} · gift card {!loaded ? "…" : `#${ledgers.gift ?? "—"}`}
                 </span>
             )}
         </div>
