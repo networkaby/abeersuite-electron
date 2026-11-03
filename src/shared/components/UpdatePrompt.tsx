@@ -14,14 +14,24 @@ import type { UpdateState } from "../../../electron/preload";
  * any POS screen. Main never restarts while the cart holds lines.
  *
  * Two looks, because two situations:
- *   quiet          A small card in the corner. "Later" hides it for the session; the
- *                  install happens on its own when the PC is idle.
+ *   quiet          A small card in the corner. It never installs on its own, so this card
+ *                  is the only way in: "Later" hides it for LATER_HIDE_MS, then it comes
+ *                  back, and staff may keep saying Later for good.
  *   urgent/schema  A blocking dialog with the countdown main is running. Nothing to
  *                  dismiss: the restart is coming, the choice is only "now" or "when
  *                  this bill is done".
  */
 
 const LATER_KEY = "abeersuite:update-later";
+/** About one shift: long enough not to nag, short enough that the card is seen again. */
+const LATER_HIDE_MS = 8 * 60 * 60 * 1000;
+
+/** "version|hide-until" → is the card for this version still hidden? */
+function hiddenFor(saved: string | null, version: string, now: number): boolean {
+    if (!saved) return false;
+    const [v, until] = saved.split("|");
+    return v === version && Number(until) > now;
+}
 
 function api() {
     if (typeof window === "undefined") return null;
@@ -39,7 +49,7 @@ export default function UpdatePrompt() {
     const [state, setState] = useState<UpdateState | null>(null);
     const [later, setLater] = useState<string | null>(() => {
         try {
-            return typeof window === "undefined" ? null : sessionStorage.getItem(LATER_KEY);
+            return typeof window === "undefined" ? null : localStorage.getItem(LATER_KEY);
         } catch {
             return null; // No storage — the card simply stays.
         }
@@ -65,6 +75,14 @@ export default function UpdatePrompt() {
         return () => clearInterval(t);
     }, [deadlineAt]);
 
+    // Bring a "Later" card back when its hide runs out — a counter stays open for weeks.
+    useEffect(() => {
+        const until = Number(later?.split("|")[1]);
+        if (!until) return;
+        const t = setTimeout(() => setNow(Date.now()), Math.max(0, until - Date.now()) + 1000);
+        return () => clearTimeout(t);
+    }, [later]);
+
     if (!state || !state.version) return null;
     if (state.phase !== "ready" && state.phase !== "installing") return null;
 
@@ -72,7 +90,7 @@ export default function UpdatePrompt() {
     const restartNow = () => void api()?.installNow().catch(() => {});
 
     if (state.tier === "quiet") {
-        if (later === state.version) return null;
+        if (hiddenFor(later, state.version, now)) return null;
         return (
             <div
                 role="status"
@@ -82,7 +100,7 @@ export default function UpdatePrompt() {
                 <p className="mt-1 text-xs text-muted-foreground">
                     {installing
                         ? "Restarting to install…"
-                        : "It installs by itself when this PC is idle. Restart now if you are free."}
+                        : "Not urgent — it installs only when you choose. Restart when you are free."}
                 </p>
                 {!installing && (
                     <div className="mt-3 flex justify-end gap-2">
@@ -90,9 +108,10 @@ export default function UpdatePrompt() {
                             type="button"
                             className="rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted"
                             onClick={() => {
-                                setLater(state.version);
+                                const saved = `${state.version}|${Date.now() + LATER_HIDE_MS}`;
+                                setLater(saved);
                                 try {
-                                    sessionStorage.setItem(LATER_KEY, state.version ?? "");
+                                    localStorage.setItem(LATER_KEY, saved);
                                 } catch {
                                     // Fine without it.
                                 }

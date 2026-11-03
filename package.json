@@ -1,6 +1,7 @@
 {
   "name": "abeersuite-electron",
   "version": "1.16.23",
+  "minimumCounterVersion": "1.16.23",
   "description": "AbeerSuite Desktop Operating System",
   "author": "AbeerSuite",
   "main": "dist-electron/main.js",
@@ -13,7 +14,7 @@
     "electron:build": "tsx scripts/electron-build.ts",
     "electron:pack": "pnpm electron:build && electron-builder --dir && pnpm verify:package",
     "electron:dist": "pnpm electron:build && electron-builder && pnpm verify:package",
-    "electron:release": "pnpm electron:pack && tsx scripts/release-electron.ts",
+    "electron:release": "tsx scripts/release-electron.ts --preflight && pnpm electron:pack && tsx scripts/release-electron.ts",
     "verify:package": "tsx scripts/verify-package.ts",
     "icon:build": "electron scripts/make-icon.js",
     "build:downloader": "tsx scripts/build-downloader.ts",

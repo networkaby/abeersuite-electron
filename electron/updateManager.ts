@@ -9,15 +9,22 @@
  *
  * ── Three tiers, decided on the counter ──────────────────────────────────────
  *
- *   quiet   Every ordinary release: a colour fix, a small feature. A small banner offers
- *           "Restart now"; otherwise the install waits for a SAFE moment — an empty cart
- *           and a PC nobody has touched for a while (or the window hidden in the tray,
- *           or the login screen). It is never forced.
+ * Every release carries a MINIMUM: the oldest version a counter may keep running
+ * (`minimumCounterVersion` in package.json, which release-electron.ts writes into
+ * latest.yml as `vendor.minimumCounterVersion`). The office raises it for a release
+ * that touches everyone — a migration, a common API, sync, sign-in — and leaves it for
+ * one that only touches a module or a screen. The counter compares its OWN version, so
+ * one that skipped releases is still caught by a floor raised while it was away.
  *
- *   urgent  The release notes carry `[urgent]` (first line of RELEASE_NOTES.md, which
- *           electron-builder copies into latest.yml). A blocking prompt with a countdown:
+ *   quiet   This counter is at or above the minimum. The update downloads and unpacks
+ *           in the background and a small card offers "Restart now". It never installs
+ *           by itself — not when the PC is idle, not on quit. Staff may skip it for
+ *           good; the next urgent update carries it in.
+ *
+ *   urgent  This counter is below the minimum. A blocking prompt with a countdown:
  *           installs the moment the cart is empty and the cashier's hands are off the
- *           keyboard, and at the end of the countdown regardless.
+ *           keyboard, and at the end of the countdown regardless. A release published
+ *           before the minimum existed falls back to `[urgent]` on its notes' first line.
  *
  *   schema  The counter itself has found its replica halted on schema drift (the sync
  *           worker sends `{ type: "drift" }`, see syncManager.ts). Billing on a replica
@@ -52,6 +59,7 @@ const { autoUpdater } = require("electron-updater") as typeof import("electron-u
 import type { UpdateDownloadedEvent, UpdateInfo } from "electron-updater";
 import { beginSwap, isStaging, stageUpdate } from "./stagedUpdate";
 import { writeJsonAtomic } from "./stateFile";
+import { compareVersions, isAppVersion } from "./versionCompare";
 
 export type UpdateTier = "quiet" | "urgent" | "schema";
 export type UpdatePhase = "idle" | "checking" | "downloading" | "ready" | "installing" | "error";
@@ -82,12 +90,6 @@ const SAFE_POLL_MS = 15 * 1000;
 // counter main.ts loads the machine's .env AFTER its imports have run, so a
 // top-level read would see them empty (see the note above main.ts's imports).
 
-/**
- * How long the PC must have been untouched before a QUIET update may restart it.
- * Long, because nobody asked for this restart: a cashier stepping away for tea
- * must not come back to a login screen. Overridable for testing.
- */
-const quietIdleSeconds = () => Number(process.env.UPDATE_IDLE_SECONDS) || 10 * 60;
 /** For urgent/schema tiers: only "hands off the keyboard", not "gone for a while". */
 const urgentIdleSeconds = () => Number(process.env.UPDATE_URGENT_IDLE_SECONDS) || 60;
 
@@ -114,6 +116,8 @@ let configured = false;
 let cartBusy = false;
 let schemaDrift = false;
 let releaseNotes = "";
+/** The release's floor; null when its latest.yml predates the field. */
+let minimumVersion: string | null = null;
 let safeTimer: NodeJS.Timeout | null = null;
 let checkTimer: NodeJS.Timeout | null = null;
 /** The screen the app boots on. Nothing is entered there, so a restart costs nothing. */
@@ -160,18 +164,27 @@ function notesText(info: UpdateInfo): string {
     return n.map((r) => r.note ?? "").join("\n");
 }
 
+function minimumFrom(info: UpdateInfo): string | null {
+    const v = (info as UpdateInfo & { vendor?: { minimumCounterVersion?: unknown } }).vendor?.minimumCounterVersion;
+    return isAppVersion(v) ? v.trim() : null;
+}
+
 /**
- * The tier is re-derived whenever either input changes: the notes arrive with the
+ * The tier is re-derived whenever either input changes: the minimum arrives with the
  * update, drift can be found later (or clear, if the office re-runs a migration).
  */
 function currentTier(): UpdateTier {
     if (schemaDrift) return "schema";
-    if (/\[urgent\]/i.test(releaseNotes)) return "urgent";
-    return "quiet";
+    if (minimumVersion) return compareVersions(app.getVersion(), minimumVersion) < 0 ? "urgent" : "quiet";
+    // Only the first line: the commit log appended below the notes is not ours to word.
+    return /\[urgent\]/i.test(releaseNotes.split("\n", 1)[0] ?? "") ? "urgent" : "quiet";
 }
 
 function applyTier(): void {
     const tier = currentTier();
+    // A clean quit (tray → Quit, Windows shutting down) installs an update that has to go
+    // in anyway; a quiet one waits for somebody to choose it.
+    autoUpdater.autoInstallOnAppQuit = tier !== "quiet";
     if (tier === state.tier && state.deadlineAt !== null) return;
     const grace = graceMs(tier);
     // A deadline only starts counting once the update is actually here to install.
@@ -211,17 +224,14 @@ function onSafeScreen(): boolean {
 }
 
 /**
- * Is this a moment where a restart costs nobody anything?
- *
- * Quiet: an empty cart AND (hidden / login screen OR untouched for quietIdleSeconds()).
- * Urgent/schema: an empty cart AND hands off for urgentIdleSeconds() — the countdown
- * on screen has already told the cashier it is coming.
+ * May an urgent/schema update restart the counter now? An empty cart AND (hands off for
+ * urgentIdleSeconds() OR hidden / login screen) — the countdown on screen has already
+ * told the cashier it is coming. A quiet update is never installed from here; only
+ * "Restart now" installs it.
  */
 function safeToInstall(): boolean {
-    if (cartBusy) return false;
-    const idle = powerMonitor.getSystemIdleTime();
-    if (state.tier === "quiet") return onSafeScreen() || idle >= quietIdleSeconds();
-    return idle >= urgentIdleSeconds() || onSafeScreen();
+    if (cartBusy || state.tier === "quiet") return false;
+    return powerMonitor.getSystemIdleTime() >= urgentIdleSeconds() || onSafeScreen();
 }
 
 function stopSafePoll(): void {
@@ -355,7 +365,11 @@ export function install(reason: string): void {
 
 export async function checkNow(reason: string): Promise<void> {
     if (!configured) return;
-    if (state.phase === "downloading" || state.phase === "ready" || state.phase === "installing") return;
+    if (state.phase === "downloading" || state.phase === "installing") return;
+    // A ready QUIET update may sit unclicked for weeks, so keep asking: the next release
+    // (an urgent one above all) must still reach this counter. A ready urgent/schema
+    // update is already on its way in.
+    if (state.phase === "ready" && state.tier !== "quiet") return;
     console.log(`[Updater] Checking for updates (${reason}).`);
     try {
         await autoUpdater.checkForUpdates();
@@ -429,9 +443,8 @@ export function setupAutoUpdater(opts: { isDev: boolean; landingPage: string }):
         autoUpdater.updateConfigPath = writeFeedConfig(feed);
         if (feed.provider === "generic") autoUpdater.forceDevUpdateConfig = true;
         autoUpdater.autoDownload = true;
-        // A clean quit (tray → Quit, or Windows shutting the app down) still installs a
-        // downloaded update; the safe-moment loop above is for the quits that never come.
-        autoUpdater.autoInstallOnAppQuit = true;
+        // applyTier() turns this on once the update in hand is urgent or schema.
+        autoUpdater.autoInstallOnAppQuit = false;
         autoUpdater.allowDowngrade = false;
         autoUpdater.logger = {
             info: (m: unknown) => console.log(`[Updater] ${String(m)}`),
@@ -450,7 +463,11 @@ export function setupAutoUpdater(opts: { isDev: boolean; landingPage: string }):
             if (state.phase === "checking") patch({ phase: "idle", version: null, percent: null });
         });
         autoUpdater.on("update-available", (info: UpdateInfo) => {
+            // The re-check under a waiting quiet update finds that same version again;
+            // electron-updater hands it back from its cache, so there is nothing new.
+            if (state.phase === "ready" && info.version === state.version) return;
             releaseNotes = notesText(info);
+            minimumVersion = minimumFrom(info);
             patch({ phase: "downloading", version: info.version, percent: 0, deadlineAt: null });
             applyTier();
             console.log(`[Updater] ${info.version} available (${state.tier}) — downloading in the background.`);
@@ -459,10 +476,15 @@ export function setupAutoUpdater(opts: { isDev: boolean; landingPage: string }):
             patch({ percent: Math.round(p.percent) });
         });
         autoUpdater.on("update-downloaded", (info: UpdateDownloadedEvent) => {
+            if (state.phase === "ready" && info.version === state.version) return;
             releaseNotes = notesText(info) || releaseNotes;
+            minimumVersion = minimumFrom(info) ?? minimumVersion;
             patch({ phase: "ready", version: info.version, percent: 100, deadlineAt: null });
             applyTier();
-            console.log(`[Updater] ${info.version} downloaded (${state.tier}) — waiting for a safe moment.`);
+            console.log(
+                `[Updater] ${info.version} downloaded (${state.tier}, minimum ${minimumVersion ?? "none"}) — ` +
+                    (state.tier === "quiet" ? "waiting for Restart now." : "waiting for a safe moment."),
+            );
             startSafePoll();
             // Unpack it NOW, with the counter still selling, so the restart has nothing
             // expensive left to do. Never awaited and never fatal: if this cannot run,

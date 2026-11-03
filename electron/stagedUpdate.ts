@@ -174,7 +174,7 @@ function looksLikeOurApp(dir: string): boolean {
 /**
  * True while the background unpack is still running.
  *
- * The safe-moment loop in updateManager.ts uses this to hold a QUIET update back for a
+ * The safe-moment loop in updateManager.ts uses this to hold an update back for a
  * minute or two rather than restarting into the slow installer path when the fast one is
  * nearly ready. A deadline always wins over it — an urgent update waits for nothing.
  */

@@ -98,7 +98,7 @@ git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"%h %s"
 
 The full rules — customer-readable plain Indian English, one `##` heading per area the user notices, `# v<version>` as the first line, calling out a schema change and its publish-then-migrate ordering, and the urgency tiers — live in **`.claude/skills/release/SKILL.md` step 3**. They are identical here; read them there rather than keeping a second copy that will drift.
 
-The short version of the part that costs the most if it is wrong: `[urgent]` in the **first line only**, and only when **every counter must restart today** — it interrupts cashiers mid-sale.
+The short version of the part that costs the most if it is wrong: urgency is `minimumCounterVersion` in `package.json`, not a word in the notes. Raise it to this version only for what touches everyone (a migration, a common API, sync, sign-in, a serious POS bug) — it interrupts cashiers mid-sale. The script writes `[urgent]` itself.
 
 `scripts/release-electron.ts` appends the raw commit log below what you write, so the file holds **only** the hand-written half.
 
@@ -198,4 +198,4 @@ Handing a step back is not stopping the publish: do everything either side of it
 - `scripts/verify-package.ts` — the gate; check A6 is the packaged-version match.
 - `scripts/packagedVersion.ts` — reads the version baked into `app.asar`.
 - `package.json` — `version`, `electron:dist`, `electron:pack`, `verify:package`.
-- `electron/updateManager.ts` — how a counter reads `[urgent]` and decides when to install.
+- `electron/updateManager.ts` — how a counter compares itself with the minimum and decides when to install.

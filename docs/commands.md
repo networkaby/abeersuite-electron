@@ -26,7 +26,7 @@ git checkout main && git merge --ff-only dev
    Not fast-forwardable means `main` carries something `dev` does not — resolve that first, never force it.
 
 2. **Bump `version` in `package.json`.** This number *is* the tag, the GitHub release name, and what every counter's updater compares against. It goes up on every publish, no exception.
-3. **Craft `RELEASE_NOTES.md` for this version.** Hand-written, customer-readable, rewritten — not appended to, not left from last time. The first line decides how counters take the update (see §9): `[urgent]` in the heading only when every counter must restart today.
+3. **Craft `RELEASE_NOTES.md` for this version, and decide `minimumCounterVersion`.** The notes: hand-written, customer-readable, rewritten — not appended to, not left from last time. The minimum in `package.json` decides how counters take the update (see §9): raise it to this version when the release touches everyone (a migration, a common API, sync, sign-in / permissions, the counter app's own core, a serious POS bug); leave it for one module or screen (bank reconciliation, a report, UI). Never write `[urgent]` yourself — the release script puts it on the notes' first line exactly when the minimum goes up.
 4. **Commit the bump and the notes on `main`, and push `main` to both remotes before building:**
 
 ```bash
@@ -274,7 +274,7 @@ git checkout main && git merge --ff-only dev
 
 Bump `version` in `package.json`. This number is the release tag and what the updater compares against, so it must go up on every publish.
 
-Rewrite `RELEASE_NOTES.md` for this version. The first line decides how counters take the update (see section 9): put `[urgent]` in the heading only when every counter must restart today.
+Rewrite `RELEASE_NOTES.md` for this version, and decide `minimumCounterVersion` in `package.json` (see section 9): raise it to this version when the release touches everyone (a migration, a common API, sync, sign-in / permissions, the counter app's own core, a serious POS bug); leave it for one module or screen (bank reconciliation, a report, UI).
 
 **Schema change? Publish first, migrate second.** The counter build carries the new `local-schema.sql`, and the sync worker tolerates a replica that is AHEAD of Supabase (extra columns) but halts on one that is BEHIND (missing columns). Push the release, let counters pick it up, then apply the schema to Supabase. The reverse order pauses billing on every replica counter until the update lands — the app does recover on its own (the halt triggers an immediate update check and a 5-minute countdown), but nobody wants that at 6 pm.
 
@@ -466,15 +466,25 @@ Carried over from the webapp and unchanged in spirit: `dev`, `build`, `start`, `
 
 ## 9. How counters take an update
 
-`electron/updateManager.ts` checks the feed 20 s after boot and every 30 minutes, downloads in the background, and then picks one of three tiers. Nothing is shown until the download is complete.
+`electron/updateManager.ts` checks the feed 20 s after boot and every 30 minutes, downloads and unpacks in the background, and then picks one of three tiers. Nothing is shown until the download is complete.
+
+**The minimum decides, not the version number.** `package.json`'s `minimumCounterVersion` is the oldest version a counter may keep running. `scripts/release-electron.ts` writes it into `latest.yml` as `vendor.minimumCounterVersion`, and each counter compares **its own** version with it — so a counter that skipped releases is still caught by a floor raised while it was away. The version number keeps its ordinary meaning (patch = fixes, minor = features, major = big changes); an urgent POS fix can be a patch with the minimum raised, a big safe feature a minor with it left alone.
+
+| Raise the minimum to this version | Leave it where it is |
+| --- | --- |
+| A migration, a common API, sync, sign-in / permissions, the counter app's own core, a serious POS bug | One module or screen: bank reconciliation, a report, UI, colours |
+
+`pnpm electron:release` runs `release-electron.ts --preflight` before the build and stops when the minimum is missing, is above this version, went down from the last release's, or when `prisma/migrations` changed since the last real release (no `-` in it) and the minimum does not pass that release.
 
 | Tier | Trigger | On screen | Installs |
 | --- | --- | --- | --- |
-| quiet | Every release by default | Corner card: Restart now / Later | Only at a safe moment: empty POS cart and (window in the tray, or the login page, or no input for 10 min). Never forced. Also on a clean quit. |
-| urgent | `[urgent]` in `RELEASE_NOTES.md` | Blocking dialog with a countdown | When the cart is empty and hands are off for a minute; at 30 min regardless |
+| quiet | The counter is at or above the minimum | Corner card: Restart now / Later (Later hides it for 8 h, then it comes back) | **Never by itself** — not when idle, not on quit. Only Restart now. Staff may skip it for good; the next urgent update carries it in. The counter keeps checking every 30 min underneath it. |
+| urgent | The counter is below the minimum (a release with no minimum: `[urgent]` on the notes' **first line**) | Blocking dialog with a countdown | When the cart is empty and hands are off for a minute; at 30 min regardless |
 | schema | The counter's own sync worker halted on `SCHEMA DRIFT` | The same dialog, schema wording, above ReplicaReadyGate | Check runs at once; installs like urgent, at 5 min regardless |
 
 The install is silent and relaunches the app, so a counter that updated overnight is back on the login screen by morning.
+
+**Change-over.** A counter still on a build from before the minimum reads only `[urgent]` (anywhere in the notes) and installs a quiet update by itself at a safe moment. So the release script writes `[urgent]` on the notes' first line exactly when the minimum passes the last release, and strips it otherwise; once every counter runs a minimum-aware build that word is only a fallback.
 
 **Testing without a GitHub release.** A folder served over HTTP with `latest.yml` + the installer is a valid feed:
 
@@ -482,6 +492,6 @@ The install is silent and relaunches the app, so a counter that updated overnigh
 UPDATE_FEED_URL=http://127.0.0.1:8765/ UPDATE_DRY_RUN=1 pnpm electron:dev
 ```
 
-`UPDATE_FEED_URL` also switches the updater on in dev. `UPDATE_DRY_RUN=1` logs the install decision instead of running the installer, so the fake `latest.yml` can point at any file (electron-updater still verifies its `sha512` and `size`). Shorten the waits with `UPDATE_IDLE_SECONDS`, `UPDATE_URGENT_IDLE_SECONDS`, `UPDATE_URGENT_GRACE_MINUTES`, `UPDATE_SCHEMA_GRACE_MINUTES`. Both vars are honoured by a packaged build too, via the per-machine `%APPDATA%/abeersuite-electron/.env`, which is how one counter can be pointed at a test feed. The tray's "Check for updates" skips the 30-minute wait.
+`UPDATE_FEED_URL` also switches the updater on in dev. `UPDATE_DRY_RUN=1` logs the install decision instead of running the installer, so the fake `latest.yml` can point at any file (electron-updater still verifies its `sha512` and `size`). Shorten the waits with `UPDATE_URGENT_IDLE_SECONDS`, `UPDATE_URGENT_GRACE_MINUTES`, `UPDATE_SCHEMA_GRACE_MINUTES`. Both vars are honoured by a packaged build too, via the per-machine `%APPDATA%/abeersuite-electron/.env`, which is how one counter can be pointed at a test feed. The tray's "Check for updates" skips the 30-minute wait.
 
 **When a counter says "checking failed".** `%APPDATA%/abeersuite-electron/logs/main.log` has every `[Updater]` line. A `404` on `/releases/latest` means the repo in `GITHUB_DOWNLOAD_UPDATE_REPO` has no release, or the baked PAT was not granted *Contents: Read* on it.

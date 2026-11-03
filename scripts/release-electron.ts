@@ -13,6 +13,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { config as loadDotenv } from "dotenv";
 import { spawnSync, execSync, execFileSync } from "child_process";
+import { compareVersions, isAppVersion } from "../electron/versionCompare";
 
 loadDotenv({ path: path.join(process.cwd(), ".env") });
 
@@ -147,6 +148,58 @@ for (const target of publishTargets) {
 
 console.log(`[release-electron] Release target version: ${version} (${tagName})`);
 
+// ── How counters take this release (electron/updateManager.ts) ───────────────
+// package.json's `minimumCounterVersion` is the oldest version a counter may keep
+// running. A counter below it updates IMMEDIATELY (countdown, forced); one at or above
+// it gets a QUIET update it may never install. Raise it for what touches everyone — a
+// migration, a common API, sync, sign-in; leave it for a module or a screen. It ships
+// in latest.yml as `vendor.minimumCounterVersion`. Checked here, against the last real
+// release (no "-": the only kind a counter ever ran), so a mistake stops the release
+// before anything is tagged.
+const minimumVersion = String(pkg.minimumCounterVersion ?? "").trim();
+const lastRelease = execFileSync("git", ["tag", "-l", "v*"], { encoding: "utf-8" })
+    .split("\n")
+    .map(t => t.trim().replace(/^v/, ""))
+    .filter(v => /^\d+\.\d+\.\d+$/.test(v) && compareVersions(v, version) < 0)
+    .sort(compareVersions)
+    .pop() ?? null;
+const minimumFail = (why: string) => {
+    console.error(`[release-electron] FATAL: minimumCounterVersion "${minimumVersion}" — ${why}`);
+    process.exit(1);
+};
+if (!isAppVersion(minimumVersion)) minimumFail("package.json needs it as a version like \"1.17.0\".");
+if (compareVersions(minimumVersion, version) > 0) minimumFail(`it is above this release, ${version}.`);
+if (lastRelease) {
+    const before = (() => {
+        try {
+            return JSON.parse(execFileSync("git", ["show", `v${lastRelease}:package.json`], { encoding: "utf-8" })).minimumCounterVersion;
+        } catch {
+            return undefined;
+        }
+    })();
+    if (isAppVersion(before) && compareVersions(minimumVersion, before) < 0) {
+        minimumFail(`v${lastRelease} already required ${before}; the minimum never goes down.`);
+    }
+    const newMigrations = execFileSync("git", ["diff", "--name-only", `v${lastRelease}`, "HEAD", "--", "prisma/migrations"], { encoding: "utf-8" }).trim();
+    if (newMigrations && compareVersions(minimumVersion, lastRelease) <= 0) {
+        minimumFail(
+            `prisma/migrations changed since v${lastRelease}, so every counter on v${lastRelease} must update now.\n` +
+            `  Set "minimumCounterVersion": "${version}" in package.json, commit, and release again.`
+        );
+    }
+}
+/** This release is the one that left older counters behind. */
+const raisesMinimum = lastRelease !== null && compareVersions(minimumVersion, lastRelease) > 0;
+console.log(
+    raisesMinimum
+        ? `[release-electron] URGENT for counters below ${minimumVersion} (v${lastRelease} included) — they install it immediately.`
+        : `[release-electron] QUIET for counters on ${minimumVersion} or later — they install it only when staff choose.`
+);
+
+// `pnpm electron:release` runs this first, so a bad minimum or a missing token stops the
+// release before the ten-minute build rather than after it.
+if (process.argv.includes("--preflight")) process.exit(0);
+
 const prepackaged = path.join(process.cwd(), "dist-app", "win-unpacked");
 if (!fs.existsSync(path.join(prepackaged, "AbeerSuite.exe"))) {
     console.error(
@@ -164,6 +217,16 @@ const releaseNotesPath = path.join(process.cwd(), "RELEASE_NOTES.md");
 let humanNotes = "";
 if (fs.existsSync(releaseNotesPath)) {
     humanNotes = fs.readFileSync(releaseNotesPath, "utf-8").trim();
+}
+// The minimum decides urgency now, not a word in the notes. But counters still on a
+// build from before the minimum only read `[urgent]` on the notes' first line, so it is
+// written there exactly when this release raises the floor, and dropped otherwise.
+{
+    const [first = "", ...rest] = humanNotes.split("\n");
+    const bare = first.replace(/\s*\[urgent\]\s*/gi, " ").replace(/^(#*)\s+/, "$1 ").trim();
+    const heading = raisesMinimum ? bare.replace(/^(#+\s*)?/, m => `${m}[urgent] `) : bare;
+    if (heading !== first) console.log(`[release-electron] Notes heading set to: ${heading}`);
+    humanNotes = [heading, ...rest].join("\n").trim();
 }
 
 let autoNotes = "";
@@ -287,9 +350,11 @@ for (const target of publishTargets) {
     // releaseNotes goes through package.json rather than a `-c.releaseInfo.releaseNotes=...`
     // CLI arg — with 80+ commits since the last tag, the escaped JSON routinely blows
     // past Windows' ~8KB CreateProcess command-line limit ("The command line is too long").
-    if (releaseNotes) {
-        pkg.build.releaseInfo = { releaseNotes };
-    }
+    // `vendor` is copied into latest.yml as it is, which is how the minimum reaches a counter.
+    pkg.build.releaseInfo = {
+        ...(releaseNotes ? { releaseNotes } : {}),
+        vendor: { minimumCounterVersion: minimumVersion },
+    };
     fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2) + "\n");
     try {
         const result = spawnSync("electron-builder", builderArgs, {

@@ -76,7 +76,7 @@ When the owner says **"do a release"** (or release / publish / ship a version), 
 
 1. `git checkout main && git merge --ff-only dev` — not fast-forwardable → stop and report, never force.
 2. Bump `version` in `package.json`.
-3. **Write** `RELEASE_NOTES.md` **yourself** — customer-readable, rewritten from scratch, from the actual commits since the last tag. `[urgent]` in the first line only when every counter must restart today. Never leave last version's notes.
+3. **Write** `RELEASE_NOTES.md` **yourself** — customer-readable, rewritten from scratch, from the actual commits since the last tag. Never leave last version's notes. **Then set `minimumCounterVersion`** in `package.json`: raise it to this version when the release touches everyone (a migration, a common API, sync, sign-in / permissions, the counter app's own core, a serious POS bug); leave it for one module or screen (bank reconciliation, a report, UI). Counters below it update immediately; the rest get a quiet update they may never install. Tell the owner which and why. Never write `[urgent]` — the script derives it (`docs/commands.md` §9).
 4. Commit the bump + notes on `main`. Message it `chore(release): attempt v<version> - <one line>` — the build has not run yet, so the commit must not claim the version shipped. The tag from step 6 is the proof; never reword the commit afterwards.
 5. `git push origin main && git push production main` — push before building.
 6. `pnpm electron:release` — pack, `verify:package` gate, tag `v<version>`, push the annotated tag to `origin` and to every release repo's remote (so GitHub never makes its own lightweight tag; a remote already holding that tag on another commit stops the release), publish. **A** `-` **in the version makes it a test build**: `1.3.1-pre.1` goes to `GITHUB_UPDATE_REPO_2` only, marked a GitHub prerelease; a version with no `-` goes to every `GITHUB_UPDATE_REPO_N`. Counters update from repo 1, so a test build never reaches a till. The gate is automatic — never use `RELEASE_ONLY_REPO` to get it.
@@ -87,6 +87,6 @@ When the owner says **"do a release"** (or release / publish / ship a version), 
 
 **Publish as soon as possible.** No smoke-test stop, no pause for the owner to test — if something needs checking, test it yourself and carry on. **Ask the owner to join hand** at any step needing their eyes or their machine, rather than guessing or skipping it — the notes and their urgency tier (ask once), the `.env` variant (`APP_MODE`, `LANDING_PAGE`), a push they would rather run, and anything else that would be a guess. Say plainly what you need and wait. Handing a step back is not stopping the release: do everything either side of it, and pick the list up where you left off.
 
-`/release urgent` (or "release urgent") means nothing to ask: notes go out `[urgent]`, the `.env` variant is used as it is, no waiting — run the list straight through.
+`/release urgent` (or "release urgent") means nothing to ask: the minimum is raised to this version, the `.env` variant is used as it is, no waiting — run the list straight through.
 
 **Stop and ask** on a non-fast-forward merge, a failing `verify:package`, or a publish failure (then `RELEASE_ONLY_REPO=<repo>` to retry that one repo — never as the normal path).
