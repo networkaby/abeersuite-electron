@@ -40,7 +40,9 @@ export async function GET(req: Request) {
         const gapPctParam = Number(searchParams.get("gapPct"));
         const gapPct = Number.isFinite(gapPctParam) && gapPctParam > 0 ? gapPctParam : 30;
 
-        const [products, points, orgDefaults, bands] = await Promise.all([
+        // Every step is a whole-catalogue read, so they run side by side: the
+        // ones that need nothing first, then the ones that need the product ids.
+        const [products, points, orgDefaults, bands, taxResult] = await Promise.all([
             prisma.invProduct.findMany({
                 where:   { isActive: true },
                 orderBy: [{ name: "asc" }],
@@ -71,30 +73,12 @@ export async function GET(req: Request) {
             loadStrategyPoints(),
             prisma.orgDefaults.findUnique({ where: { id: 1 }, select: { valuationMethod: true } }),
             loadBarcodeBands(),
+            // GST rates for all products in 3 queries (cascade: product → group chain → org default).
+            resolveProductTaxBatch({}),
         ]);
         const orgDefault = orgDefaults?.valuationMethod ?? "WEIGHTED_AVG";
 
-        // Resolve GST rates for all products in 3 queries (cascade: product → group chain → org default).
-        const taxResult = await resolveProductTaxBatch({});
         const taxByProduct = taxResult.products;
-
-        // Days-since-last-sale — opt-in (one ledger groupBy) since only the
-        // labels page needs it.
-        const lastSaleAge = withSaleAge
-            ? await loadLastSaleAgeDays(products.map((p) => p.id))
-            : new Map<number, number | null>();
-
-        // Pre-resolve LAST_INWARD for the display column. Replaces the dropped costPaise cache.
-        const lastInwardCosts = await valueStockBatch(
-            products.map((p) => ({ id: p.id, stock: p.stock })),
-            "LAST_INWARD",
-        );
-
-        // Per-product additional cost (shipping/courier) from the Costing page.
-        // Decision-support only — never sourced from the GL.
-        const additionalCostByProduct = await getCurrentAdditionalCostByProduct(
-            products.map((p) => p.id),
-        );
 
         // Effective cost method per product: product.costMethod ?? OrgDefaults.valuationMethod.
         type EffectiveMethod = Exclude<typeof products[number]["costMethod"], null>;
@@ -107,12 +91,24 @@ export async function GET(req: Request) {
             const arr = byMethod.get(m);
             if (arr) arr.push(p); else byMethod.set(m, [p]);
         }
+
+        const ids = products.map((p) => p.id);
+        const [lastSaleAge, lastInwardCosts, additionalCostByProduct, resolvedByMethod] = await Promise.all([
+            // Days-since-last-sale — opt-in (one ledger groupBy) since only the
+            // labels page needs it.
+            withSaleAge ? loadLastSaleAgeDays(ids) : Promise.resolve(new Map<number, number | null>()),
+            // Pre-resolve LAST_INWARD for the display column. Replaces the dropped costPaise cache.
+            valueStockBatch(products.map((p) => ({ id: p.id, stock: p.stock })), "LAST_INWARD"),
+            // Per-product additional cost (shipping/courier) from the Costing page.
+            // Decision-support only — never sourced from the GL.
+            getCurrentAdditionalCostByProduct(ids),
+            // One cost batch per method.
+            Promise.all([...byMethod.entries()].map(([method, group]) =>
+                resolveCostBatch(group.map((g) => ({ id: g.id, stock: g.stock })), method))),
+        ]);
+
         const costById = new Map<number, { paise: number | null; fallback: string | null }>();
-        for (const [method, group] of byMethod.entries()) {
-            const resolved = await resolveCostBatch(
-                group.map((g) => ({ id: g.id, stock: g.stock })),
-                method,
-            );
+        for (const resolved of resolvedByMethod) {
             for (const [id, r] of resolved) {
                 costById.set(id, { paise: r.costPaise, fallback: r.fallback ?? null });
             }

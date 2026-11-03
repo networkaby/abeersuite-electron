@@ -34,7 +34,7 @@
  *   voicePrice = cost_incl × (1 + margin% / 100)
  */
 
-import { Fragment, type ReactNode, memo, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, type ReactNode, memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import axios from "axios";
@@ -596,23 +596,23 @@ const ProductRow = memo(function ProductRow({
                                 incl +₹{(r.additionalExcl / 100).toFixed(2)} ship
                             </span>
                         ) : null}
-                        <Select
+                        {/* Native select, not the Radix one: a page holds 150 of these,
+                            and a Radix Select per row made mounting and paging slow. */}
+                        <select
                             value={r.method}
-                            onValueChange={(v) => {
-                                onUpdate(r.id, { method: v as CostCode });
-                                onPersist(r.id, { costMethod: enumFromCode(v as CostCode) }, { reload: true });
+                            title={COST_METHODS.find((m) => m.code === r.method)?.full}
+                            aria-label={`Cost method for ${r.name}`}
+                            onChange={(e) => {
+                                const v = e.target.value as CostCode;
+                                onUpdate(r.id, { method: v });
+                                onPersist(r.id, { costMethod: enumFromCode(v) }, { reload: true });
                             }}
+                            className="h-6 w-16 cursor-pointer rounded-md border border-input bg-transparent px-1 text-xs font-mono shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/40 dark:bg-input/30"
                         >
-                            <SelectTrigger className="h-6 w-16 text-xs font-mono"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                {COST_METHODS.map((m) => (
-                                    <SelectItem key={m.code} value={m.code}>
-                                        <span className="font-mono">{m.code}</span>
-                                        <span className="ml-2 text-muted-foreground">{m.full}</span>
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                            {COST_METHODS.map((m) => (
+                                <option key={m.code} value={m.code}>{m.code} — {m.full}</option>
+                            ))}
+                        </select>
                     </div>
                 </TableCell>
             ) : null}
@@ -817,8 +817,17 @@ export default function GeneratePage() {
     useEffect(() => { loadData(); }, [loadData]);
 
     // Product rows, brands and categories behind the label picker are catalogue
-    // data; a new SKU should be printable without reloading the screen.
-    useRealtimeTopics(["catalogue", "stock"], () => { loadData(); });
+    // data; a new SKU should be printable without reloading the screen. Not
+    // "stock": every bill at any counter moves stock, and each one re-read the
+    // whole catalogue under the person pricing. The Stock column catches up on
+    // the next catalogue change or when the tab is looked at again. On a replica
+    // the tables narrow the wake-up, so an unrelated sync cycle costs nothing.
+    useRealtimeTopics(
+        ["catalogue"],
+        () => { loadData(); },
+        true,
+        ["InvProduct", "InvProductCode", "InvBrand", "InvCategory", "InvProductGroup"],
+    );
 
     // Persist an editable field to InvProduct via the items PATCH. Local-only
     // rows (negative ids) are skipped. `reload` re-pulls the engine values when a
@@ -922,9 +931,16 @@ export default function GeneratePage() {
         } catch { /* quota / disabled storage → silently skip */ }
     }, [hydrated, query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, ranges, filtersOpen]);
 
+    // Whole-list work (filter, sort, dropdown options, slider ends, barcode
+    // count) reads these deferred copies. A keystroke in one price box or the
+    // search box then repaints its own row at once, and the 1400-row passes run
+    // in a background render React can drop when the next key arrives.
+    const deferredRows = useDeferredValue(rows);
+    const deferredQuery = useDeferredValue(query);
+
     // Dynamic filter options — distinct values present in the data.
     const distinct = useCallback((pick: (r: Row) => string) =>
-        [...new Set(rows.map(pick).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [rows]);
+        [...new Set(deferredRows.map(pick).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [deferredRows]);
     const brands = useMemo(() => distinct((r) => r.brand), [distinct]);
     const categories = useMemo(() => distinct((r) => r.category), [distinct]);
     const groups = useMemo(() => distinct((r) => r.group), [distinct]);
@@ -948,8 +964,8 @@ export default function GeneratePage() {
 
     // Filter (by name) + sort → the visible list.
     const visible = useMemo(() => {
-        const q = query.trim().toLowerCase();
-        let v = rows;
+        const q = deferredQuery.trim().toLowerCase();
+        let v = deferredRows;
         if (q) v = v.filter((r) => productMatchesSearch(r, q));
         if (fBrand !== "ALL") v = v.filter((r) => r.brand === fBrand);
         if (fCategory !== "ALL") v = v.filter((r) => r.category === fCategory);
@@ -980,7 +996,7 @@ export default function GeneratePage() {
             });
         }
         return v;
-    }, [rows, query, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, ranges, sortKey, sortDir]);
+    }, [deferredRows, deferredQuery, fBrand, fCategory, fGroup, fMethod, fSource, fBarcodeCapped, fSaleCapped, fInStock, ranges, sortKey, sortDir]);
 
     // Jump back to the first page whenever the filtered/sorted list or page size
     // changes, so you never land on a now-empty page.
@@ -998,7 +1014,11 @@ export default function GeneratePage() {
     const totalPages = pageSize === 0 ? 1 : Math.max(1, Math.ceil(listRows.length / pageSize));
     const safePage = Math.min(pageIndex, totalPages - 1);
     const pageStart = pageSize === 0 ? 0 : safePage * pageSize;
-    const pageRows = pageSize === 0 ? listRows : listRows.slice(pageStart, pageStart + pageSize);
+    // The list above may be a keystroke behind; each row shown is swapped for its
+    // current copy so the box being typed in never lags (or loses a row just removed).
+    const rowById = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
+    const pageRows = (pageSize === 0 ? listRows : listRows.slice(pageStart, pageStart + pageSize))
+        .flatMap((r) => { const cur = rowById.get(r.id); return cur ? [cur] : []; });
 
     const toggleSel = useCallback((id: number) =>
         setSelected((prev) => {
@@ -1101,11 +1121,13 @@ export default function GeneratePage() {
     // the ticked rows, or — nothing ticked — every row whose barcode is stale.
     // Hand-typed barcodes are always skipped, ticked or not (the server skips
     // them too). Saves price + date + gap together. Unsaved Sale Price edits are not used.
-    const barcodeTargets = (selected.size > 0
-        ? rows.filter((r) => selected.has(r.id) && r.id > 0 && !r.barcodeIsManual && autoBarcodeOf(r) != null)
-        : rows.filter(barcodeStale));
+    const barcodeTargetsOf = useCallback((list: Row[]) => (selected.size > 0
+        ? list.filter((r) => selected.has(r.id) && r.id > 0 && !r.barcodeIsManual && autoBarcodeOf(r) != null)
+        : list.filter(barcodeStale)), [selected]);
+    const barcodeTargets = useMemo(() => barcodeTargetsOf(deferredRows), [barcodeTargetsOf, deferredRows]);
     const updateBarcodes = async () => {
-        const targets = barcodeTargets;
+        // Fresh from the current rows, not the deferred copy the button count uses.
+        const targets = barcodeTargetsOf(rows);
         if (targets.length === 0) return;
         const manualCount = rows.filter((r) => selected.has(r.id) && r.barcodeIsManual).length;
         const ok = await confirmAction({
@@ -1128,6 +1150,27 @@ export default function GeneratePage() {
             setFreezing(false);
         }
     };
+
+    // Slider ends per range = the real spread over every loaded row (not just the
+    // filtered ones, so the track does not jump while filtering).
+    const rangeBounds = useMemo(() => {
+        const out = {} as Record<RangeKey, { lo: number; hi: number; step: number } | null>;
+        for (const f of RANGE_FIELDS) {
+            let lo = Infinity, hi = -Infinity;
+            for (const r of deferredRows) {
+                const v = rangeVal(r, f.key);
+                if (v == null || !isFinite(v)) continue;
+                if (v < lo) lo = v;
+                if (v > hi) hi = v;
+            }
+            if (f.key === "barcodeGap") { lo = Math.min(lo, 0); hi = Math.max(hi, 100); }
+            if (!isFinite(lo) || !isFinite(hi) || hi <= lo) { out[f.key] = null; continue; }
+            const span = hi - lo;
+            const step = span > 2000 ? 10 : span > 20 ? 1 : 0.1;
+            out[f.key] = { lo: Math.floor(lo / step) * step, hi: Math.ceil(hi / step) * step, step };
+        }
+        return out;
+    }, [deferredRows]);
 
     const dirtyCount = rows.filter(rowDirty).length;
     // Rows that the Save action will write: ticked OR edited. Drives the button's
@@ -1264,26 +1307,6 @@ export default function GeneratePage() {
     );
     const sectionTitle = (text: string) => <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">{text}</div>;
 
-    // Slider ends per range = the real spread over every loaded row (not just the
-    // filtered ones, so the track does not jump while filtering).
-    const rangeBounds = (() => {
-        const out = {} as Record<RangeKey, { lo: number; hi: number; step: number } | null>;
-        for (const f of RANGE_FIELDS) {
-            let lo = Infinity, hi = -Infinity;
-            for (const r of rows) {
-                const v = rangeVal(r, f.key);
-                if (v == null || !isFinite(v)) continue;
-                if (v < lo) lo = v;
-                if (v > hi) hi = v;
-            }
-            if (f.key === "barcodeGap") { lo = Math.min(lo, 0); hi = Math.max(hi, 100); }
-            if (!isFinite(lo) || !isFinite(hi) || hi <= lo) { out[f.key] = null; continue; }
-            const span = hi - lo;
-            const step = span > 2000 ? 10 : span > 20 ? 1 : 0.1;
-            out[f.key] = { lo: Math.floor(lo / step) * step, hi: Math.ceil(hi / step) * step, step };
-        }
-        return out;
-    })();
     const catActive = [fBrand, fCategory, fGroup, fMethod, fSource].filter((x) => x !== "ALL").length;
     const flagActive = [fBarcodeCapped, fSaleCapped, fInStock].filter(Boolean).length;
     const rangeActive = RANGE_FIELDS.filter((f) => ranges[f.key]?.min.trim() || ranges[f.key]?.max.trim()).length;
