@@ -325,16 +325,6 @@ function autoBarcodeOf(r: Row): number | null {
     return barcodePrice(sp, m != null && m > 0 ? m : null).value;
 }
 
-// Not typed by hand, and the saved barcode is not what the selling price gives
-// today (or was never saved) → "Update barcode" would change it.
-function barcodeStale(r: Row): boolean {
-    if (r.id < 0 || r.barcodeIsManual) return false;
-    const auto = autoBarcodeOf(r);
-    if (auto == null) return false;
-    const stored = numOrNull(r.barcodeManual);
-    return stored == null || Math.abs(stored - auto) >= 0.005;
-}
-
 // ── Sort ──────────────────────────────────────────────────────────────────────
 
 type SortKey = "name" | "brand" | "category" | "group" | "stock" | "cost" | "strategy" | "computed" | "saved" | "barcode";
@@ -1062,19 +1052,16 @@ export default function GeneratePage() {
     // here — only a barcode save moves them (barcodeStore.ts). Local-only rows
     // (negative ids) save in the UI only.
     const [freezing, setFreezing] = useState(false);
-    // A row is a save target if it's ticked OR has an unsaved freeze decision
-    // (Sale Price edited or selling source switched). This lets a plain edit/source
-    // click activate the Save button without needing a checkbox.
-    const isSaveTarget = (r: Row) => selected.has(r.id) || rowDirty(r);
+    // Only rows with an unsaved freeze decision (Sale Price edited or selling
+    // source switched) are saved. A tick alone used to count too, lighting the
+    // button for rows with nothing to save; ticks now feed Add to selection and
+    // Update barcode only.
     const save = async () => {
-        const checked = rows.filter(isSaveTarget);
+        const checked = rows.filter(rowDirty);
 
-        // Pattern C — this is the largest write on the screen and it used to go
-        // through on one click. `checked` is every ticked OR edited row in the
-        // WHOLE FILTERED LIST, not just the visible page, and the header checkbox
-        // ticks all of them — so a stray click followed by Save could re-freeze
-        // the sale price of thousands of products shop-wide. The count is the
-        // whole point of the question, so it goes in the button too.
+        // Pattern C — this is the largest write on the screen: every edited row
+        // in the WHOLE list, not just the visible page. The count is the whole
+        // point of the question, so it goes in the button too.
         const writes = checked.filter((r) => r.id > 0).length;
         if (writes > 0) {
             const ok = await confirmAction({
@@ -1103,11 +1090,10 @@ export default function GeneratePage() {
             if (payload.length) await axios.put("/api/pricing-strategy/sale-price", { items: payload });
             setRows((prev) =>
                 prev.map((r) => {
-                    if (!isSaveTarget(r)) return r;
+                    if (!rowDirty(r)) return r;
                     return { ...r, baseline: r.salePrice, baseSource: r.saleSource };
                 }),
             );
-            setSelected(new Set());
             toast.success(`${payload.length} sale price${payload.length === 1 ? "" : "s"} saved.`);
         } catch (e) {
             const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error : null;
@@ -1117,13 +1103,14 @@ export default function GeneratePage() {
         }
     };
 
-    // "Update barcode": save the auto barcode (bands on the SAVED Sale Price) for
-    // the ticked rows, or — nothing ticked — every row whose barcode is stale.
-    // Hand-typed barcodes are always skipped, ticked or not (the server skips
+    // "Update barcode": save the auto barcode (bands on the selling price) for
+    // the ticked rows. Hand-typed barcodes are always skipped (the server skips
     // them too). Saves price + date + gap together. Unsaved Sale Price edits are not used.
-    const barcodeTargetsOf = useCallback((list: Row[]) => (selected.size > 0
-        ? list.filter((r) => selected.has(r.id) && r.id > 0 && !r.barcodeIsManual && autoBarcodeOf(r) != null)
-        : list.filter(barcodeStale)), [selected]);
+    // Ticked rows only. With nothing ticked the button is off: the old fallback
+    // ("every stale row") counted the whole catalogue, hidden and filtered-out
+    // rows included, so the number did not match the screen.
+    const barcodeTargetsOf = useCallback((list: Row[]) =>
+        list.filter((r) => selected.has(r.id) && r.id > 0 && !r.barcodeIsManual && autoBarcodeOf(r) != null), [selected]);
     const barcodeTargets = useMemo(() => barcodeTargetsOf(deferredRows), [barcodeTargetsOf, deferredRows]);
     const updateBarcodes = async () => {
         // Fresh from the current rows, not the deferred copy the button count uses.
@@ -1173,9 +1160,8 @@ export default function GeneratePage() {
     }, [deferredRows]);
 
     const dirtyCount = rows.filter(rowDirty).length;
-    // Rows that the Save action will write: ticked OR edited. Drives the button's
-    // enabled state + count, so a plain Sale Price edit activates Save on its own.
-    const saveCount = rows.filter(isSaveTarget).length;
+    // Rows the Save action will write — the edited ones (same as dirtyCount).
+    const saveCount = dirtyCount;
 
 
     // Plain render fns (not components) so they don't remount on each keystroke.
@@ -1409,10 +1395,10 @@ export default function GeneratePage() {
                             ? `${selected.size} ticked`
                             : dirtyCount === 0 ? "Prices saved" : `${dirtyCount} to save`}
                     </span>
-                    <Button type="button" size="sm" className="h-8" onClick={save} disabled={saveCount === 0 || freezing} title="Save the Sale Price and selling choice for ticked or edited rows. The barcode price is not changed. Margin %, MRP, Method and Barcode save by themselves as you edit.">
+                    <Button type="button" size="sm" className="h-8" onClick={save} disabled={saveCount === 0 || freezing} title="Save the Sale Price and selling choice for edited rows. The barcode price is not changed. Margin %, MRP, Method and Barcode save by themselves as you edit.">
                         {freezing ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save prices{saveCount > 0 ? ` (${saveCount})` : ""}
                     </Button>
-                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={updateBarcodes} disabled={barcodeTargets.length === 0 || freezing || dirtyCount > 0} title={dirtyCount > 0 ? "Save prices first — the barcode is made from the saved selling price" : "Make the barcode again from the price each row sells at (bands, capped at MRP) and save it with today's date. Ticked rows, or every auto row whose barcode is out of date (hand-typed ones only when ticked)."}>
+                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={updateBarcodes} disabled={barcodeTargets.length === 0 || freezing || dirtyCount > 0} title={dirtyCount > 0 ? "Save prices first — the barcode is made from the saved selling price" : "Make the barcode again from the price each row sells at (bands, capped at MRP) and save it with today's date. Ticked rows only; hand-typed barcodes are skipped. Tick rows first (the header box ticks the whole list)."}>
                         <Barcode className="size-4" /> Update barcode{barcodeTargets.length > 0 ? ` (${barcodeTargets.length})` : ""}
                     </Button>
                 </div>
