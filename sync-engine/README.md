@@ -239,6 +239,26 @@ cursor, and re-syncing: all 3529 came back and the fingerprints matched exactly.
 compound key and fall back to the timestamp alone; a tie there would have to exceed
 a whole page to lose anything.)
 
+### One probe per cycle, not one `SELECT *` per table
+
+Every change signal wakes every counter, and each wake used to send one
+`SELECT * … WHERE (cursor) > … LIMIT` per delta table — ~88 queries, nearly all
+empty. An empty `SELECT *` still carries the full column description, and
+pg_stat_statements on 3 Nov 2026 showed ~63k such probes per config table: that
+"nothing moved" answer was most of the Supabase egress. `pull.probeMoved` now asks
+the drain's own predicate as one `EXISTS` per table in a single `UNION ALL` round
+trip; only the tables that answer yes are drained. The late re-check
+(`recheckBehindCursor`) still runs for every table inside its horizon, a table with
+no cursor is always drained, and a failed probe (e.g. a table not deployed yet)
+drains everything as before. The probe runs after `onReading`, so a commit after
+it queues another cycle — no change is lost and no screen waits longer.
+
+### keyDiff sends keys only for buckets that disagree
+
+`keyDiff` splits the table into 64 hash buckets of the key and compares a
+count + hash per bucket first; only differing buckets send their keys. One late
+voucher used to transfer every key of the voucher table out of Supabase.
+
 The stored cursor is the largest value **seen**, never `now()` — taking the clock
 would skip any row committed during the query but stamped just before it, the same
 silent hole by a different route. `_sync_state` (local only, keyed on the registry's

@@ -36,7 +36,8 @@
  *
  * It was removed on 2026-09-01 rather than wired up, because the saving it chased
  * does not exist: a cycle where little moved is already close to free. A watermark
- * table returns 0 rows from one indexed query, a child table whose parent did not
+ * table is answered by one shared EXISTS probe (pull.js probeMoved — the per-table
+ * empty `SELECT *` it replaced was most of the egress), a child table whose parent did not
  * move does no query at all, and a `full` table is skipped after two aggregate
  * numbers by the fingerprint guard in sync-once.js. Filtering would have shaved a
  * fraction off that while adding a way for the child pass -- which depends on

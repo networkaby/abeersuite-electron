@@ -190,6 +190,9 @@ async function contentFingerprint(client, entry, columns) {
     return rows[0];
 }
 
+/** How many hash buckets keyDiff splits a table into before sending any keys. */
+const KEY_BUCKETS = 64;
+
 /** True when source and replica agree on both numbers. */
 function same(a, b) {
     return a && b && a.count === b.count && a.checksum === b.checksum;
@@ -215,11 +218,25 @@ function same(a, b) {
 async function keyDiff(source, local, entry) {
     const keyExpr = keyExpression(entry);
     const stamp = stampColumn(entry);
-    const select = stamp
-        ? `SELECT ${keyExpr} AS k, ${stampExpression(stamp)} AS s FROM ${q(entry.table)}`
-        : `SELECT ${keyExpr} AS k FROM ${q(entry.table)}`;
+    const hashed = stamp ? `${keyExpr} || '${KEY_SEPARATOR}' || ${stampExpression(stamp)}` : keyExpr;
 
-    const [srcKeys, localKeys] = await Promise.all([source.query(select), local.query(select)]);
+    // Keys are split into KEY_BUCKETS by hash and each bucket is fingerprinted on both
+    // sides first; only the buckets that disagree send their keys. One late voucher used
+    // to pull every key of the whole table out of Supabase — now it pulls ~1/64th.
+    const bucket = `(abs(hashtextextended(${keyExpr}, 1)) % ${KEY_BUCKETS})::int`;
+    const bucketSql =
+        `SELECT ${bucket} AS b, count(*)::text AS n, sum(hashtextextended(${hashed}, 0))::text AS h
+         FROM ${q(entry.table)} GROUP BY 1`;
+    const [srcB, locB] = await Promise.all([source.query(bucketSql), local.query(bucketSql)]);
+    const sig = (r) => `${r.n}:${r.h}`;
+    const srcSig = new Map(srcB.rows.map((r) => [r.b, sig(r)]));
+    const locSig = new Map(locB.rows.map((r) => [r.b, sig(r)]));
+    const differ = [...new Set([...srcSig.keys(), ...locSig.keys()])].filter((b) => srcSig.get(b) !== locSig.get(b));
+    if (differ.length === 0) return { onlyLocal: [], onlySource: [], stale: [] };
+
+    const select = `SELECT ${keyExpr} AS k${stamp ? `, ${stampExpression(stamp)} AS s` : ""}
+                    FROM ${q(entry.table)} WHERE ${bucket} = ANY($1::int[])`;
+    const [srcKeys, localKeys] = await Promise.all([source.query(select, [differ]), local.query(select, [differ])]);
     const live = new Map(srcKeys.rows.map((r) => [r.k, r.s]));
     const here = new Map(localKeys.rows.map((r) => [r.k, r.s]));
 

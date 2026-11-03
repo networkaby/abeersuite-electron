@@ -324,6 +324,44 @@ async function refreshByKeys(source, local, entry, keys) {
     return out;
 }
 
+/**
+ * Which watermark / append tables have a row past their cursor — ONE round trip for all
+ * of them.
+ *
+ * Every change signal wakes every counter, and each wake used to send one `SELECT *`
+ * per table. Nearly all of those came back empty, and an empty `SELECT *` still carries
+ * the full column description, so the "nothing moved" answer was most of the Supabase
+ * egress (pg_stat_statements, 3 Nov 2026: ~63k empty probes per config table). This asks
+ * the drain's own WHERE as an EXISTS per table and returns only the tables that said yes.
+ *
+ * `checks` is `[{ model, entry, since, sinceId }]`; a table with no cursor is not asked
+ * (it is always drained). Returns the Set of models that moved, or null when the probe
+ * itself failed — the caller then drains every table, exactly as before.
+ */
+async function probeMoved(source, checks) {
+    const asked = checks.filter((c) => c.since);
+    if (asked.length === 0) return new Set();
+    const params = [];
+    const parts = asked.map((c, i) => {
+        const col = q(c.entry.column);
+        const keyed = c.entry.pk.length === 1 && c.sinceId != null;
+        params.push(c.since);
+        let pred = `${col} > $${params.length}`;
+        if (keyed) {
+            params.push(c.sinceId);
+            pred = `(${col}, ${q(c.entry.pk[0])}::text) > ($${params.length - 1}, $${params.length})`;
+        }
+        return `SELECT ${i} AS i WHERE EXISTS (SELECT 1 FROM ${q(c.entry.table)} WHERE ${pred})`;
+    });
+    try {
+        const { rows } = await source.query(parts.join(" UNION ALL "), params);
+        return new Set(rows.map((r) => asked[r.i].model));
+    } catch (e) {
+        console.log(`  probe failed (${e.code || e.message}) - draining every table this cycle`);
+        return null;
+    }
+}
+
 /** How far behind its cursor a table is re-checked for late commits. */
 const LATE_WINDOW_MS = 60 * 1000;
 /** A cursor older than this is not re-checked: nothing can still be committing behind it.
@@ -436,6 +474,6 @@ async function deleteByKeys(local, entry, keys) {
 }
 
 module.exports = {
-    pullWatermark, pullFull, pullChildren, pullByKeys, refreshByKeys, recheckBehindCursor, deleteByKeys,
+    pullWatermark, pullFull, pullChildren, pullByKeys, refreshByKeys, recheckBehindCursor, probeMoved, deleteByKeys,
     upsert, jsonColumnsOf, coerce, CHUNK,
 };

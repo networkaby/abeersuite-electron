@@ -30,7 +30,7 @@ const { pool, canSuspendForeignKeys, q } = require("./lib/db");
 const registryLib = require("./lib/registry");
 const state = require("./lib/state");
 const {
-    pullWatermark, pullFull, pullChildren, pullByKeys, refreshByKeys, recheckBehindCursor, deleteByKeys,
+    pullWatermark, pullFull, pullChildren, pullByKeys, refreshByKeys, recheckBehindCursor, probeMoved, deleteByKeys,
 } = require("./lib/pull");
 const totals = require("./lib/rebuildTotals");
 const reconcile = require("./lib/reconcile");
@@ -433,6 +433,22 @@ async function main(opts, cfg, pools = null, hooks = {}) {
          * though its fingerprint already matches.
          */
         const held = new Map();
+
+        // Which delta tables have anything past their cursor, asked in ONE query rather
+        // than one empty `SELECT *` per table (pull.js probeMoved). A table the probe
+        // says is still keeps its late re-check below; only the drain is skipped. null =
+        // the probe failed, so every table drains as before.
+        const deltaChecks = DRY ? [] : order.independent.filter(want)
+            .filter((m) => tables[m].strategy !== "full")
+            .map((m) => {
+                const resume = state.cursorFor(prior.get(tables[m].n), tables[m]);
+                return resume.reason ? null : { model: m, entry: tables[m], since: resume.since, sinceId: resume.sinceId };
+            })
+            .filter(Boolean);
+        const probed = deltaChecks.length ? await probeMoved(source, deltaChecks) : null;
+        const isQuiet = (model) => probed != null && !probed.has(model)
+            && deltaChecks.some((c) => c.model === model && c.since);
+
         const parentsInCycle = new Set(order.children.filter(want).map((m) => tables[m].parent));
         /** Pass-1 models whose subtree had a child pull fail this cycle. */
         const childFailedUnder = new Set();
@@ -502,7 +518,7 @@ async function main(opts, cfg, pools = null, hooks = {}) {
                         if (late.pulled > 0) {
                             console.log(`  ${model.padEnd(28)} late      ${late.pulled} (committed behind the cursor)`);
                         }
-                        res = { pulled: late.pulled, watermark: null, watermarkId: null, ids: [...late.ids], more: true };
+                        res = { pulled: late.pulled, watermark: null, watermarkId: null, ids: [...late.ids], more: !isQuiet(model) };
                         let cursor = since;
                         let cursorId = resume.sinceId;
                         let pages = 0;
