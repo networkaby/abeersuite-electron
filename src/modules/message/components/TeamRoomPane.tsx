@@ -14,7 +14,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Send, MessageSquare, Loader2, Hash, AtSign, Bell, ChevronLeft } from "lucide-react";
+import { Send, MessageSquare, Loader2, Hash, AtSign, Bell, ChevronLeft, Paperclip, X, FileText, FileSpreadsheet, Download } from "lucide-react";
 import { extractApiError } from "@/shared/lib/api";
 import { GatedLink } from "@/shared/components/GatedLink";
 import { supabase } from "@/shared/lib/supabase/supabaseClient";
@@ -25,6 +25,8 @@ import { INBOX_MESSAGES_POLL_MS } from "@/shared/lib/constants/polling";
 import { writeCache } from "@/shared/lib/browser/pollCache";
 import { initials } from "@/shared/lib/format/initials";
 import { useValueChange } from "@/shared/hooks/useValueChange";
+import { putToSignedUrl } from "@/shared/lib/storage/signedUpload";
+import { TEAM_FILE_BLOCKED_EXT, TEAM_FILE_MAX_BYTES } from "@/shared/lib/constants/whatsapp";
 
 /** Cross-tab mirror of "which room is open" — see `GlobalInboxListener.tsx`'s reader. */
 const ACTIVE_ROOM_KEY = "inbox-active-room:v1";
@@ -57,8 +59,62 @@ type Message = {
     messageType: "SYSTEM" | "USER";
     createdAt: string;
     senderUser: { id: number; name: string; role: string } | null;
+    /** Attached file — null on a text-only message. */
+    mediaType?: string | null;
+    fileName?: string | null;
+    mediaSize?: number | null;
+    /** Signed view / download links (a local blob link while still sending). */
+    fileUrl?: string | null;
+    downloadUrl?: string | null;
     pending?: boolean;
 };
+
+/** Same rule as the server's checkTeamFile — refuse before uploading. */
+function fileProblem(f: File): string | null {
+    if (f.size > TEAM_FILE_MAX_BYTES) return `File is too large — ${Math.round(TEAM_FILE_MAX_BYTES / 1024 / 1024)} MB at most.`;
+    const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
+    if ((TEAM_FILE_BLOCKED_EXT as readonly string[]).includes(ext)) return `.${ext} files cannot be sent in chat.`;
+    return null;
+}
+
+function formatSize(bytes: number | null | undefined): string {
+    if (!bytes) return "";
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function isSheet(name: string | null | undefined): boolean {
+    return /\.(xlsx?|xlsm|csv|ods)$/i.test(name ?? "");
+}
+
+/** A message's file: a photo shows small, anything else as a name + Download card. */
+function FileCard({ message }: { message: Message }) {
+    const name = message.fileName ?? "file";
+    if (message.mediaType?.startsWith("image/") && message.fileUrl) {
+        return (
+            <a href={message.downloadUrl ?? message.fileUrl} target="_blank" rel="noreferrer" className="mt-1 block w-fit" title={`Download ${name}`}>
+                {/* eslint-disable-next-line @next/next/no-img-element -- signed R2 link, not an optimisable asset */}
+                <img src={message.fileUrl} alt={name} className="max-h-60 max-w-xs rounded-md border border-border object-contain" />
+            </a>
+        );
+    }
+    const sheet = isSheet(name);
+    const Icon = sheet ? FileSpreadsheet : FileText;
+    return (
+        <div className="mt-1 flex w-fit max-w-sm items-center gap-3 rounded-md border border-border bg-card px-3 py-2">
+            <Icon size={22} className={sheet ? "shrink-0 text-emerald-600" : "shrink-0 text-muted-foreground"} />
+            <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-foreground">{name}</p>
+                <p className="text-[11px] text-muted-foreground">{formatSize(message.mediaSize)}</p>
+            </div>
+            {message.downloadUrl && !message.pending && (
+                <a href={message.downloadUrl} className="ml-1 rounded-md p-1.5 text-primary hover:bg-muted" title="Download" aria-label={`Download ${name}`}>
+                    <Download size={16} />
+                </a>
+            )}
+        </div>
+    );
+}
 
 /** The other person's id in a DM room ("dm:<a>:<b>"). */
 export function dmPartnerId(room: Pick<Room, "key">, me: number): number {
@@ -88,7 +144,7 @@ function notify(msg: Message) {
     playNotificationSound();
     if (typeof Notification !== "undefined" && Notification.permission === "granted") {
         const notif = new Notification(`${msg.senderUser?.name ?? "Someone"} — ServiceMgmt`, {
-            body: msg.body.length > 100 ? msg.body.slice(0, 100) + "…" : msg.body,
+            body: !msg.body && msg.fileName ? `📎 ${msg.fileName}` : msg.body.length > 100 ? msg.body.slice(0, 100) + "…" : msg.body,
             icon: "/favicon.ico",
             tag:  `msg-${msg.id}`,
         });
@@ -133,6 +189,9 @@ export default function TeamRoomPane({
     const [loadingMsgs, setLoadingMsgs] = useState(false);
     const [draft, setDraft] = useState("");
     const [sending, setSending] = useState(false);
+    const [attach, setAttach] = useState<File | null>(null);
+    const [dragOver, setDragOver] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const onReadRef = useRef(onRead);
     useLayoutEffect(() => { onReadRef.current = onRead; });
@@ -236,16 +295,27 @@ export default function TeamRoomPane({
         return () => clearInterval(interval);
     }, [roomId, currentUserId]);
 
+    const pickFile = (f: File | null | undefined) => {
+        if (!f) return;
+        const bad = fileProblem(f);
+        if (bad) { toast.error(bad); return; }
+        setAttach(f);
+    };
+
     const sendMessage = async () => {
         const body = draft.trim();
-        if (!body || sending) return;
+        const file = attach;
+        if ((!body && !file) || sending) return;
         setSending(true);
         setDraft("");
+        setAttach(null);
+        const localUrl = file ? URL.createObjectURL(file) : null;
 
         // Optimistic: add immediately with negative temp ID
         const tempId = -(Date.now());
         const optimistic: Message = {
             id: tempId, title: null, body, link: null, messageType: "USER",
+            ...(file ? { mediaType: file.type, fileName: file.name, mediaSize: file.size, fileUrl: localUrl } : {}),
             createdAt: new Date().toISOString(),
             senderUser: currentUserId ? { id: currentUserId, name: currentUserName ?? "You", role: "" } : null,
             pending: true,
@@ -253,7 +323,17 @@ export default function TeamRoomPane({
         setMessages((prev) => [...prev, optimistic]);
 
         try {
-            const res = await axios.post<Message>(`/api/inbox/rooms/${roomId}/messages`, { body });
+            let upload: { key: string; type: string; name: string; size: number } | undefined;
+            if (file) {
+                const type = file.type || "application/octet-stream";
+                const { data } = await axios.post<{ key: string; putUrl: string }>(`/api/inbox/rooms/${roomId}/upload-url`, {
+                    name: file.name, type, size: file.size,
+                });
+                // Straight to R2 — the signed URL carries the permission.
+                await putToSignedUrl(data.putUrl, file, type);
+                upload = { key: data.key, type, name: file.name, size: file.size };
+            }
+            const res = await axios.post<Message>(`/api/inbox/rooms/${roomId}/messages`, { body, file: upload });
             const saved = res.data;
             setMessages((prev) => [...prev.filter((m) => m.id !== tempId), saved]);
             // Broadcast to all other subscribers in this room
@@ -262,14 +342,30 @@ export default function TeamRoomPane({
         } catch (error) {
             setMessages((prev) => prev.filter((m) => m.id !== tempId));
             setDraft(body);
+            setAttach(file);
             toast.error(extractApiError(error, "Failed to send message"));
         } finally {
+            if (localUrl) URL.revokeObjectURL(localUrl);
             setSending(false);
         }
     };
 
     return (
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <section
+            className={`flex min-h-0 flex-1 flex-col overflow-hidden ${dragOver ? "ring-2 ring-inset ring-primary" : ""}`}
+            onDragOver={(e) => {
+                if (room.type === "SYSTEM_INBOX" || !e.dataTransfer.types.includes("Files")) return;
+                e.preventDefault();
+                setDragOver(true);
+            }}
+            onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false); }}
+            onDrop={(e) => {
+                if (room.type === "SYSTEM_INBOX") return;
+                e.preventDefault();
+                setDragOver(false);
+                pickFile(e.dataTransfer.files[0]);
+            }}
+        >
             {/* Room header */}
             <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-4 py-3 pt-[calc(0.5rem+env(safe-area-inset-top))] md:px-6 md:pt-3">
                 {onBack && (
@@ -366,7 +462,8 @@ export default function TeamRoomPane({
                                             </div>
                                         )}
                                         {message.title && <p className="mb-0.5 text-xs font-semibold text-foreground">{message.title}</p>}
-                                        <p className="wrap-break-word whitespace-pre-wrap text-sm leading-relaxed text-foreground">{message.body}</p>
+                                        {message.body && <p className="wrap-break-word whitespace-pre-wrap text-sm leading-relaxed text-foreground">{message.body}</p>}
+                                        {message.fileName && <FileCard message={message} />}
                                         {message.link && (
                                             <GatedLink href={message.link} className="mt-0.5 inline-flex text-xs text-primary hover:underline">
                                                 Open →
@@ -386,11 +483,44 @@ export default function TeamRoomPane({
                 {room.type === "SYSTEM_INBOX" ? (
                     <p className="py-1 text-sm italic text-muted-foreground">System inbox is read-only.</p>
                 ) : (
-                    <div className="flex items-end gap-2 rounded-md border border-border bg-background px-3 py-2 focus-within:ring-2 focus-within:ring-ring">
+                    <div className="rounded-md border border-border bg-background px-3 py-2 focus-within:ring-2 focus-within:ring-ring">
+                    {attach && (
+                        <div className="mb-2 flex w-fit max-w-full items-center gap-2 rounded-md bg-muted px-2 py-1 text-xs">
+                            {isSheet(attach.name) ? <FileSpreadsheet size={14} className="text-emerald-600" /> : <FileText size={14} />}
+                            <span className="truncate font-medium">{attach.name}</span>
+                            <span className="text-muted-foreground">{formatSize(attach.size)}</span>
+                            <button type="button" onClick={() => setAttach(null)} className="rounded p-0.5 hover:bg-background" aria-label="Remove file">
+                                <X size={12} />
+                            </button>
+                        </div>
+                    )}
+                    <div className="flex items-end gap-2">
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            className="hidden"
+                            onChange={(e) => { pickFile(e.target.files?.[0]); e.target.value = ""; }}
+                        />
+                        <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="ghost"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={sending}
+                            className="shrink-0 text-muted-foreground"
+                            title="Attach a file"
+                            aria-label="Attach a file"
+                        >
+                            <Paperclip size={14} />
+                        </Button>
                         <Textarea
                             value={draft}
                             onChange={(e) => setDraft(e.target.value)}
                             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(); } }}
+                            onPaste={(e) => {
+                                const f = e.clipboardData.files[0];
+                                if (f) { e.preventDefault(); pickFile(f); }
+                            }}
                             rows={1}
                             placeholder={`Message ${room.type === "DIRECT_MESSAGE" ? `@ ${title}` : `# ${title}`}`}
                             className="max-h-40 min-h-0 flex-1 resize-none border-0 bg-transparent px-0 py-0 text-sm shadow-none placeholder:text-muted-foreground/65 focus-visible:ring-0"
@@ -405,15 +535,16 @@ export default function TeamRoomPane({
                             type="button"
                             size="icon-sm"
                             onClick={() => void sendMessage()}
-                            disabled={sending || !draft.trim()}
+                            disabled={sending || (!draft.trim() && !attach)}
                             className="shrink-0 disabled:opacity-30"
                             title="Send (Enter)"
                         >
                             <Send size={14} />
                         </Button>
                     </div>
+                    </div>
                 )}
-                <p className="mt-1 px-1 text-[10px] text-muted-foreground/65">Enter to send · Shift+Enter for new line</p>
+                <p className="mt-1 px-1 text-[10px] text-muted-foreground/65">Enter to send · Shift+Enter for new line · drop or paste a file to attach</p>
             </div>
         </section>
     );

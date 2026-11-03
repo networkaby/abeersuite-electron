@@ -1,6 +1,8 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import type { ResolvedUser } from "@/shared/lib/auth/permissions";
 import { findUserIdsHoldingRoles } from "@/shared/lib/auth/roleHolders";
+import { TEAM_FILE_BLOCKED_EXT, TEAM_FILE_MAX_BYTES } from "@/shared/lib/constants/whatsapp";
+import { mediaLink } from "@/modules/message/lib/customerMessages";
 
 const ROOM_KEY = {
     system:  (userId: number)              => `system:${userId}`,
@@ -104,6 +106,35 @@ const accessibleRoomsWhere = (userId: number) => ({
     ],
 });
 
+/** A file-only message previews as its file name in the room list. */
+function withFilePreview<T extends { body: string; fileName: string | null }>(m: T): T {
+    return m.body || !m.fileName ? m : { ...m, body: `📎 ${m.fileName}` };
+}
+
+/** Where a Team chat file lives in R2 — every key of a room shares this prefix. */
+export function teamFilePrefix(roomId: string): string {
+    return `team/${roomId}/`;
+}
+
+/** A fresh R2 key for one file in a room. */
+export function teamFileKey(roomId: string, fileName: string): string {
+    const safe = fileName.replace(/[^A-Za-z0-9._-]+/g, "_").slice(-80) || "file";
+    return `${teamFilePrefix(roomId)}${Date.now().toString(36)}-${safe}`;
+}
+
+/** Why this file cannot be attached, or null when it can. */
+export function checkTeamFile(name: string, size: number): string | null {
+    if (size > TEAM_FILE_MAX_BYTES) return `File is too large — ${Math.round(TEAM_FILE_MAX_BYTES / 1024 / 1024)} MB at most.`;
+    const ext = name.split(".").pop()?.toLowerCase() ?? "";
+    if ((TEAM_FILE_BLOCKED_EXT as readonly string[]).includes(ext)) return `.${ext} files cannot be sent in chat.`;
+    return null;
+}
+
+/** View + download links for a message's file (none when it has no file). */
+export function withTeamFileLinks<T extends { mediaKey: string | null; fileName: string | null }>(m: T) {
+    return { ...m, fileUrl: mediaLink(m.mediaKey), downloadUrl: mediaLink(m.mediaKey, m.fileName, true) };
+}
+
 export async function listAccessibleRooms(user: ResolvedUser) {
     await ensureCoreRoomsForUser(user);
 
@@ -125,6 +156,7 @@ export async function listAccessibleRooms(user: ResolvedUser) {
                     link: true,
                     messageType: true,
                     createdAt: true,
+                    fileName: true,
                     senderUser: { select: { name: true } },
                 },
             },
@@ -164,7 +196,7 @@ export async function listAccessibleRooms(user: ResolvedUser) {
         name: room.name,
         unreadCount: unreadCounts.get(room.id) ?? 0,
         messageCount: room._count.messages,
-        latestMessage: room.messages[0] ?? null,
+        latestMessage: room.messages[0] ? withFilePreview(room.messages[0]) : null,
     }));
 }
 

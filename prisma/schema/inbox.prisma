@@ -51,6 +51,15 @@ model ChatMessage {
   title        String?
   body         String
   link         String?
+  /// Attached file (Excel, PDF, photo …) — the object key in the private R2
+  /// bucket, shown through a short-lived signed link. Null = text only.
+  mediaKey     String?
+  /// MIME type as the browser gave it.
+  mediaType    String?
+  /// Original file name.
+  fileName     String?
+  /// Size in bytes.
+  mediaSize    Int?
   createdAt    DateTime        @default(now())
   room         ChatRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
   senderUser   User?           @relation(fields: [senderUserId], references: [id])

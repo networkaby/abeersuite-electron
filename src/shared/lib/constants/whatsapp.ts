@@ -25,6 +25,11 @@ export const META_WA_SIGNUP_CONFIG_ID = "1061577020211736";
  *  R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY. */
 export const R2_MESSAGES_BUCKET = "abeersuite-messages";
 
+/** Largest file staff may attach in a Team chat (direct or group). */
+export const TEAM_FILE_MAX_BYTES = 25 * 1024 * 1024;
+/** File types a Team chat refuses — programs and scripts, nothing else. */
+export const TEAM_FILE_BLOCKED_EXT = ["exe", "msi", "bat", "cmd", "com", "scr", "ps1", "vbs", "js", "jar", "apk"] as const;
+
 /** Largest attachment staff may send, per WhatsApp type (Meta's own limits). */
 export const WA_SEND_LIMIT_BYTES = {
     image: 5 * 1024 * 1024,
