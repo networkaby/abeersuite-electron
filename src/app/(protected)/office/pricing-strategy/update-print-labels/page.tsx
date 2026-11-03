@@ -805,7 +805,7 @@ export default function GeneratePage() {
                 const merged = mapped.map((m) => {
                     const old = byId.get(m.id);
                     return old
-                        ? { ...m, salePrice: old.salePrice, baseline: old.baseline, saleSource: old.saleSource, baseSource: old.baseSource, savedAt: old.savedAt }
+                        ? { ...m, salePrice: old.salePrice, baseline: old.baseline, saleSource: old.saleSource, baseSource: old.baseSource }
                         : m;
                 });
                 const locals = prev.filter((r) => r.id < 0); // keep locally-added rows
