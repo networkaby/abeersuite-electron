@@ -524,7 +524,7 @@ export async function POST(req: Request) {
     /// TOP of the money coupon (no guard, no exclusivity mask).
     let onTopSelected: Extract<CouponSelection, { kind: "on-top" }> | null = null;
     let couponExpenseAccountId: number | null = null;
-    let couponConfig: { couponExpenseAccountId: number | null; maxTotalDiscountPct: Prisma.Decimal | null } | null = null;
+    let couponConfig: { couponExpenseAccountId: number | null; maxTotalDiscountPct: Prisma.Decimal | null; maxCouponDiscountPct: Prisma.Decimal | null } | null = null;
     let couponLines: CartLineLite[] = [];
     let couponInput: EvalInput | null = null;
     // customerAccount is narrowed to non-null above, but narrowing doesn't
@@ -707,6 +707,7 @@ export async function POST(req: Request) {
             loyaltyRupees: redemptionRupees,
             goodsValue,
             maxTotalDiscountPct: couponConfig.maxTotalDiscountPct != null ? Number(couponConfig.maxTotalDiscountPct) : null,
+            maxCouponDiscountPct: couponConfig.maxCouponDiscountPct != null ? Number(couponConfig.maxCouponDiscountPct) : null,
         });
         couponRupees = fin.couponRupees;
         couponId = selected.coupon.id;

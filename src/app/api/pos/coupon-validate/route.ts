@@ -264,6 +264,7 @@ export async function POST(req: Request) {
             selectedDiscount: selected.discountRupees,
             tierRupees: tierRupeesEff, loyaltyRupees: loyaltyRupeesEff, goodsValue,
             maxTotalDiscountPct: config?.maxTotalDiscountPct != null ? Number(config.maxTotalDiscountPct) : null,
+            maxCouponDiscountPct: config?.maxCouponDiscountPct != null ? Number(config.maxCouponDiscountPct) : null,
         });
 
         if (fin.couponRupees <= 0) return NextResponse.json({ ok: false, reason: "Coupon yields no discount on this bill" });

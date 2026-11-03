@@ -275,6 +275,12 @@ model CouponConfig {
   /// clamped last against whatever tier + loyalty left (applyGlobalDiscountGuard).
   /// Editable from Coupons AND Spend Tiers — it is one shared ceiling, not per-page.
   maxTotalDiscountPct        Decimal? @db.Decimal(5, 2)
+  /// Own cap for the coupon on a bill, % of goods (null = none). Applied before the
+  /// combined guard above (finalizeCouponAmount).
+  maxCouponDiscountPct       Decimal? @db.Decimal(5, 2)
+  /// Own cap for the stacked spend-tier %, (null = none). The tier % is capped at
+  /// the lower of this and maxTotalDiscountPct (resolveTierForAccount).
+  maxTierDiscountPct         Decimal? @db.Decimal(5, 2)
   /// Dedicated expense ledger coupon discounts post to (Dr on a sale).
   couponExpenseAccountId     Int?
   couponExpenseAccount       Account? @relation("CouponExpenseLedger", fields: [couponExpenseAccountId], references: [id])

@@ -416,15 +416,20 @@ export function finalizeCouponAmount(args: {
     loyaltyRupees: number; // already exclusivity-adjusted by the caller
     goodsValue: number;
     maxTotalDiscountPct: number | null;
+    /// The coupon's own cap, % of goods (CouponConfig.maxCouponDiscountPct); null = none.
+    maxCouponDiscountPct?: number | null;
 }): { couponRupees: number; clampedByGuard: boolean } {
-    const { selectedDiscount, tierRupees, loyaltyRupees, goodsValue, maxTotalDiscountPct } = args;
+    const { selectedDiscount, tierRupees, loyaltyRupees, goodsValue, maxTotalDiscountPct, maxCouponDiscountPct } = args;
     // Keep goods − tier − loyalty − coupon strictly > 0.
     const ceiling = Math.max(0, goodsValue - tierRupees - loyaltyRupees - 0.01);
+    // Own cap first, then the combined guard.
+    const ownCap = maxCouponDiscountPct == null ? Infinity : goodsValue * (maxCouponDiscountPct / 100);
+    const own = Math.min(selectedDiscount, ceiling, ownCap);
     const guard = applyGlobalDiscountGuard({
-        couponRupees: Math.min(selectedDiscount, ceiling),
+        couponRupees: own,
         tierRupees, loyaltyRupees, billGoods: goodsValue, maxTotalDiscountPct,
     });
-    return { couponRupees: r2(guard.couponRupees), clampedByGuard: guard.clamped };
+    return { couponRupees: r2(guard.couponRupees), clampedByGuard: guard.clamped || own < Math.min(selectedDiscount, ceiling) };
 }
 
 /// Global guard: clamp the COUPON portion so coupon + tier + loyalty never exceed

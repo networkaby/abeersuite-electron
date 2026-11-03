@@ -1473,6 +1473,8 @@ ALTER TABLE "GiftCardTxn" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT 
 CREATE TABLE IF NOT EXISTS "CouponConfig" (
     "id" INTEGER NOT NULL DEFAULT 1,
     "maxTotalDiscountPct" DECIMAL(5,2),
+    "maxCouponDiscountPct" DECIMAL(5,2),
+    "maxTierDiscountPct" DECIMAL(5,2),
     "couponExpenseAccountId" INTEGER,
     "giftCardLiabilityAccountId" INTEGER,
     "giftCardBreakageAccountId" INTEGER,
@@ -1483,6 +1485,10 @@ CREATE TABLE IF NOT EXISTS "CouponConfig" (
 ALTER TABLE "CouponConfig" ADD COLUMN IF NOT EXISTS "id" INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE "CouponConfig" ADD COLUMN IF NOT EXISTS "maxTotalDiscountPct" DECIMAL(5,2);
 ALTER TABLE "CouponConfig" ALTER COLUMN "maxTotalDiscountPct" DROP NOT NULL;
+ALTER TABLE "CouponConfig" ADD COLUMN IF NOT EXISTS "maxCouponDiscountPct" DECIMAL(5,2);
+ALTER TABLE "CouponConfig" ALTER COLUMN "maxCouponDiscountPct" DROP NOT NULL;
+ALTER TABLE "CouponConfig" ADD COLUMN IF NOT EXISTS "maxTierDiscountPct" DECIMAL(5,2);
+ALTER TABLE "CouponConfig" ALTER COLUMN "maxTierDiscountPct" DROP NOT NULL;
 ALTER TABLE "CouponConfig" ADD COLUMN IF NOT EXISTS "couponExpenseAccountId" INTEGER;
 ALTER TABLE "CouponConfig" ALTER COLUMN "couponExpenseAccountId" DROP NOT NULL;
 ALTER TABLE "CouponConfig" ADD COLUMN IF NOT EXISTS "giftCardLiabilityAccountId" INTEGER;

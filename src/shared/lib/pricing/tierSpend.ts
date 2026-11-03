@@ -19,8 +19,13 @@ export type TierSpendContext = {
     /** Periods with bracket spend attached — the resolver's raw material
      *  (also returned to the POS so it can re-resolve against the live cart). */
     tierPeriodInputs: TierPeriodInput[];
-    /** Global discount guard (CouponConfig.maxTotalDiscountPct); null = uncapped. */
+    /** Cap on the tier % — the lower of the tier's own cap and the combined
+     *  guard (CouponConfig.maxTierDiscountPct / maxTotalDiscountPct); null = uncapped. */
     tierCapPct: number | null;
+    /** Combined guard alone (coupon + tier + loyalty), for the coupon clamp. */
+    totalCapPct: number | null;
+    /** Coupon's own cap (CouponConfig.maxCouponDiscountPct); null = none. */
+    couponCapPct: number | null;
     /** Posted sale-type voucher count (ledger truth only). */
     invoiceCount: number;
     /** The "new customer" verdict the resolution used — posted vouchers AND any
@@ -89,7 +94,7 @@ export async function resolveTierForAccount(
             },
         },
     });
-    const couponConfig = await db.couponConfig.findUnique({ where: { id: 1 }, select: { maxTotalDiscountPct: true } });
+    const couponConfig = await db.couponConfig.findUnique({ where: { id: 1 }, select: { maxTotalDiscountPct: true, maxTierDiscountPct: true, maxCouponDiscountPct: true } });
 
     const tierPeriodInputs: TierPeriodInput[] = tierPeriods.map((p, i) => ({
         id:               p.id,
@@ -106,7 +111,10 @@ export async function resolveTierForAccount(
         })),
     }));
 
-    const tierCapPct = couponConfig?.maxTotalDiscountPct != null ? Number(couponConfig.maxTotalDiscountPct) : null;
+    const totalCapPct = couponConfig?.maxTotalDiscountPct != null ? Number(couponConfig.maxTotalDiscountPct) : null;
+    const ownCapPct = couponConfig?.maxTierDiscountPct != null ? Number(couponConfig.maxTierDiscountPct) : null;
+    const couponCapPct = couponConfig?.maxCouponDiscountPct != null ? Number(couponConfig.maxCouponDiscountPct) : null;
+    const tierCapPct = ownCapPct == null ? totalCapPct : totalCapPct == null ? ownCapPct : Math.min(ownCapPct, totalCapPct);
     const isNewCustomer = invoiceCount === 0 && (opts.extraPriorSales ?? 0) === 0;
     const tier = resolveTierTitles({
         periods: tierPeriodInputs,
@@ -115,5 +123,5 @@ export async function resolveTierForAccount(
         capPct: tierCapPct,
     });
 
-    return { tierPeriodInputs, tierCapPct, invoiceCount, isNewCustomer, tier };
+    return { tierPeriodInputs, tierCapPct, totalCapPct, couponCapPct, invoiceCount, isNewCustomer, tier };
 }

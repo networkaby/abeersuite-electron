@@ -4,6 +4,7 @@ import { Coins, BadgeCheck, BadgeX } from "lucide-react";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { LoyaltyConfigForm } from "@/modules/loyalty/components/LoyaltyConfigForm";
 import { LoyaltyEarnRules } from "@/modules/loyalty/components/LoyaltyEarnRules";
+import { CouponConfigCard } from "@/modules/coupons/components/CouponConfigCard";
 import { LoyaltyMilestones } from "@/modules/loyalty/components/LoyaltyMilestones";
 import { ratesFromConfig, expiryCutoff } from "@/modules/loyalty/lib";
 import LiveRefresh from "@/shared/components/LiveRefresh";
@@ -77,6 +78,8 @@ export default async function LoyaltyHubPage() {
                     </Card>
                 </div>
 
+                {/* Loyalty's own cap is "max redeem % of bill" in the form below. */}
+                <CouponConfigCard />
                 <LoyaltyConfigForm />
                 <LoyaltyEarnRules categories={categories} groups={groups} products={products} />
                 <LoyaltyMilestones />

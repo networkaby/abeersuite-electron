@@ -429,7 +429,8 @@ export async function computeShopCartBenefits(
                 tierRupees:          inclEffect / 100,
                 loyaltyRupees:       redeemRupees,
                 goodsValue:          couponGoodsValue,
-                maxTotalDiscountPct: tierCtx.tierCapPct,
+                maxTotalDiscountPct: tierCtx.totalCapPct,
+                maxCouponDiscountPct: tierCtx.couponCapPct,
             });
             if (fin.couponRupees > 0) {
                 coupon = {

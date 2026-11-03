@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Plus, Trash2, X, CalendarRange, Shield } from "lucide-react";
+import { Plus, Trash2, X, CalendarRange } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,7 @@ import { DEFAULT_TIER_FROM_DAY, DEFAULT_TIER_TO_DAY } from "@/shared/lib/schemas
 import { type TierCurrentSaleScope } from "@/shared/lib/pricing";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { useValueChange } from "@/shared/hooks/useValueChange";
+import { CouponConfigCard } from "@/modules/coupons/components/CouponConfigCard";
 
 // A level inside a period — "Gold" of "Best of the month".
 interface Level {
@@ -94,7 +95,7 @@ export function CustomerTiers() {
                     Each period counts one slice of the past and applies on its own — a customer&rsquo;s titles add up.
                     Tile the days (0&ndash;30, 30&ndash;90, …) so each sale is rewarded once.
                 </p>
-                <DiscountGuard />
+                <CouponConfigCard own={{ field: "maxTierDiscountPct", label: "Tier max %" }} />
                 {!showAdd && (
                     <Button size="sm" variant="outline" className="shrink-0" onClick={() => setShowAdd(true)}>
                         <Plus size={14} className="mr-1" /> Add period
@@ -144,66 +145,6 @@ export function CustomerTiers() {
                     {periods.map((p) => <PeriodCard key={p.id} period={p} onChanged={load} />)}
                 </div>
             )}
-        </div>
-    );
-}
-
-// The global discount guard. Deliberately NOT a spend-tier setting of its own: it caps
-// coupon + spend-tier + loyalty on a bill together, and the same value is edited from the
-// Coupons page ("Discount guard" card). Kept here because stacked titles are the easiest
-// way to run the bill away from you, so the ceiling belongs where the stack is built.
-function DiscountGuard() {
-    const [value, setValue] = useState("");   // "" = no cap (stored as null)
-    const [saved, setSaved] = useState("");
-    const [loaded, setLoaded] = useState(false);
-
-    useEffect(() => {
-        axios.get<{ maxTotalDiscountPct: string | number | null }>("/api/coupons/config")
-            .then((r) => {
-                const v = r.data.maxTotalDiscountPct == null ? "" : String(Number(r.data.maxTotalDiscountPct));
-                setValue(v);
-                setSaved(v);
-            })
-            .catch(() => toast.error("Failed to load the discount guard"))
-            .finally(() => setLoaded(true));
-    }, []);
-
-    async function save() {
-        if (value === saved) return;
-        const pct = value.trim() === "" ? null : Number(value);
-        if (pct !== null && (!Number.isFinite(pct) || pct < 0 || pct > 100)) {
-            toast.error("Enter a cap between 0 and 100, or leave it blank for none");
-            return setValue(saved);
-        }
-        try {
-            await axios.patch("/api/coupons/config", { maxTotalDiscountPct: pct });
-            setSaved(value);
-            toast.success(pct === null ? "Discount cap removed" : `Total discount capped at ${pct}%`);
-        } catch (e) {
-            toast.error(extractApiError(e, "Failed to save the discount guard"));
-            setValue(saved);
-        }
-    }
-
-    if (!loaded) return null;
-    return (
-        <div
-            className="flex shrink-0 items-center gap-1.5"
-            title="Caps the total discount on any bill — spend-tier titles + coupon + loyalty combined — as a % of goods value. Shared with the Coupons page. Blank = no cap."
-        >
-            <Shield size={13} className="text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">Max total discount</span>
-            <div className="relative w-16">
-                <Input
-                    inputMode="decimal"
-                    value={value}
-                    onChange={(e) => setValue(parseDecimalInput(e.target.value))}
-                    onBlur={save}
-                    placeholder="none"
-                    className="h-8 w-full pr-4 text-right text-xs"
-                />
-                <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
-            </div>
         </div>
     );
 }

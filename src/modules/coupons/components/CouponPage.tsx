@@ -27,7 +27,7 @@ export function CouponPage({ masters, brandName }: { masters: RuleMasters; brand
                     </p> */}
                 </div>
                 <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
-                    <CouponConfigCard />
+                    <CouponConfigCard own={{ field: "maxCouponDiscountPct", label: "Coupon max %" }} showLedgers />
                     <div className="inline-flex rounded-lg border border-border bg-muted/30 p-0.5">
                         <HeaderTab active={view === "LIST"} onClick={() => setView("LIST")} icon={<List size={14} />}>
                             See coupons
