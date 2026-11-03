@@ -1,12 +1,15 @@
 import AppTopBar from "@/modules/external/shopApp/AppTopBar";
 import AppCategoryGrid from "@/modules/external/shopApp/AppCategoryGrid";
-import { loadStorefrontProducts, storefrontCategories } from "@/shared/lib/shop/storefrontProducts";
+import { loadStorefrontProductsCached, storefrontCategories } from "@/shared/lib/shop/storefrontProducts";
 
-export const revalidate = 300;
+// Rendered on request, never at build time: the build must not read the catalogue
+// (on a schema release the build DB lacks the new columns). The product list is
+// still cached 5 minutes, so opening the app costs no extra database read.
+export const dynamic = "force-dynamic";
 
 /** Every category with something in it, biggest first. */
 export default async function CustomerAppCategoriesPage() {
-    const categories = storefrontCategories(await loadStorefrontProducts());
+    const categories = storefrontCategories(await loadStorefrontProductsCached());
     return (
         <>
             <AppTopBar title="Categories" />
