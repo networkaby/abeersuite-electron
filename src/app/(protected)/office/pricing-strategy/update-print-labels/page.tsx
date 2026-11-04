@@ -479,6 +479,14 @@ const SELLING_TAG = (
     </span>
 );
 
+// The only way to change which column is the lowest price: clicking or typing
+// in a box never does (same rule for Computed, Strategy and Sale Price).
+const UseAsLowest = ({ onClick }: { onClick: () => void }) => (
+    <button type="button" onClick={onClick} className="mb-0.5 block w-full text-right text-[10px] font-medium uppercase tracking-wide text-muted-foreground hover:text-emerald-600">
+        use as lowest
+    </button>
+);
+
 const ProfitSub = ({ p }: { p: { amt: number; pct: number | null } | null }) =>
     p == null ? (
         <span className="block text-[10px] text-muted-foreground">—</span>
@@ -616,8 +624,8 @@ const ProductRow = memo(function ProductRow({
 
             {show("computed") ? (
                 <TableCell className={`p-1 text-right align-top ${COL_TINT.computed}`}>
-                    <div className={voiceClass(r.saleSource === "MY")} onClick={() => onUpdate(r.id, { saleSource: "MY" })}>
-                        {r.saleSource === "MY" ? SELLING_TAG : null}
+                    <div className={voiceClass(r.saleSource === "MY", false)}>
+                        {r.saleSource === "MY" ? SELLING_TAG : myPrice != null ? <UseAsLowest onClick={() => onUpdate(r.id, { saleSource: "MY" })} /> : null}
                         {/* Type the price; Margin % is derived from it and saved. */}
                         <Input
                             type="text"
@@ -629,7 +637,7 @@ const ProductRow = memo(function ProductRow({
                             onChange={(e) => {
                                 const v = parseDecimalInput(e.target.value);
                                 setComputedDraft(v);
-                                onUpdate(r.id, { margin: marginFromPrice(r.costIncl, v), saleSource: "MY" });
+                                onUpdate(r.id, { margin: marginFromPrice(r.costIncl, v) });
                             }}
                             onBlur={() => {
                                 setComputedDraft(null);
@@ -644,11 +652,11 @@ const ProductRow = memo(function ProductRow({
 
             {show("strategy") ? (
                 <TableCell className={`p-1 text-right align-top ${COL_TINT.strategy}`}>
-                    <button type="button" className={voiceClass(r.saleSource === "STRATEGY")} onClick={() => onUpdate(r.id, { saleSource: "STRATEGY" })}>
-                        {r.saleSource === "STRATEGY" ? SELLING_TAG : null}
+                    <div className={voiceClass(r.saleSource === "STRATEGY", false)}>
+                        {r.saleSource === "STRATEGY" ? SELLING_TAG : strategyPrice != null ? <UseAsLowest onClick={() => onUpdate(r.id, { saleSource: "STRATEGY" })} /> : null}
                         <span className="block text-sm font-mono font-semibold">{rupee(strategyPrice)}</span>
                         <ProfitSub p={stratProfit} />
-                    </button>
+                    </div>
                 </TableCell>
             ) : null}
 
@@ -657,9 +665,7 @@ const ProductRow = memo(function ProductRow({
                     <div className={voiceClass(r.saleSource === "SAVED", false)}>
                         {r.saleSource === "SAVED" ? SELLING_TAG : savedPrice != null ? (
                             // The input itself never flips the voice (typing must not); this link does.
-                            <button type="button" onClick={() => onUpdate(r.id, { saleSource: "SAVED" })} className="mb-0.5 block w-full text-right text-[10px] font-medium uppercase tracking-wide text-muted-foreground hover:text-emerald-600">
-                                use as lowest
-                            </button>
+                            <UseAsLowest onClick={() => onUpdate(r.id, { saleSource: "SAVED" })} />
                         ) : null}
                         <Input
                             inputMode="decimal"
