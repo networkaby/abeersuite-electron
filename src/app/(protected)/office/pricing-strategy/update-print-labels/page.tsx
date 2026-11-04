@@ -78,7 +78,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Barcode, Check, Filter, Loader2, Plus, Printer, RotateCcw, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Check, Filter, Loader2, Plus, Printer, RotateCcw, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 import { useTableSort } from "@/shared/hooks/useTableSort";
 import { SortHeader } from "@/shared/components/SortHeader";
@@ -321,17 +321,6 @@ function rowBarcode(r: Row): { value: number | null; hint: string; capped: boole
     const sp = numOrNull(r.baseline);
     if (sp == null) return { value: null, hint: "", capped: false, manual: false };
     return { ...barcodePrice(sp, mrp), manual: false };
-}
-
-// The barcode "Update barcode" / "auto" would save: bands on the EFFECTIVE price
-// (the selling voice — Strategy, Computed or Sale Price), MRP-capped. Same rule
-// as barcodeStore.saveAutoBarcodes. Update barcode is disabled while prices are
-// unsaved, so the selling voice here equals the saved one.
-function autoBarcodeOf(r: Row): number | null {
-    const sp = sellingVoice(r);
-    if (sp == null) return null;
-    const m = numOrNull(r.mrp);
-    return barcodePrice(sp, m != null && m > 0 ? m : null).value;
 }
 
 // ── Sort ──────────────────────────────────────────────────────────────────────
@@ -709,14 +698,14 @@ const ProductRow = memo(function ProductRow({
                 <TableCell className={`text-right align-top ${COL_TINT.barcode}`}>
                     {/* Own input, fully manual: a typed amount is an unsaved change (↺ resets it)
                         until Save prices. Blank = put the saved one back. Nothing moves it on its
-                        own — not a Sale Price or MRP change; only this box or "Update barcode". */}
+                        own — not a Sale Price or MRP change; only this box. */}
                     <div className="flex items-center justify-end gap-1">
                         <Input
                             type="text"
                             inputMode="decimal"
                             value={bcDraft ?? (bc.value != null ? bc.value.toFixed(2) : "")}
                             placeholder="—"
-                            title={bc.manual ? "Typed barcode — only this box or Update barcode changes it" : "Saved barcode — type to set your own"}
+                            title={bc.manual ? "Typed barcode — only this box changes it" : "Saved barcode — type to set your own"}
                             onFocus={() => setBcDraft(bc.value != null ? bc.value.toFixed(2) : "")}
                             onChange={(e) => setBcDraft(parseDecimalInput(e.target.value))}
                             onBlur={() => {
@@ -1067,7 +1056,7 @@ export default function GeneratePage() {
     // Only rows with an unsaved freeze decision (Sale Price edited or selling
     // source switched) are saved. A tick alone used to count too, lighting the
     // button for rows with nothing to save; ticks now feed Add to selection and
-    // Update barcode only.
+    // nothing else.
     const save = async () => {
         const checked = rows.filter(rowDirty);
 
@@ -1078,7 +1067,7 @@ export default function GeneratePage() {
         if (writes > 0) {
             const ok = await confirmAction({
                 title: writes === 1 ? "Save the sale price for 1 product?" : `Save the sale price for ${writes} products?`,
-                body: "Each row's Sale Price and selling choice (Strategy / Computed / Sale Price) are saved; POS and the shop charge from them. The barcode price is NOT changed — use Update barcode for that. This cannot be undone in one step.",
+                body: "Each row's Sale Price and selling choice (Strategy / Computed / Sale Price) are saved; POS and the shop charge from them. Margin %, MRP and any typed barcode are saved too. This cannot be undone in one step.",
                 confirmLabel: writes === 1 ? "Save 1 price" : `Save ${writes} prices`,
             });
             if (!ok) return;
@@ -1101,7 +1090,7 @@ export default function GeneratePage() {
             });
         setFreezing(true);
         try {
-            // Barcode price + date are untouched here (barcodeStore.ts).
+            // A typed barcode rides along; nothing else moves it (barcodeStore.ts).
             if (payload.length) await axios.put("/api/pricing-strategy/sale-price", { items: payload });
             setRows((prev) =>
                 prev.map((r) => {
@@ -1110,46 +1099,13 @@ export default function GeneratePage() {
                 }),
             );
             // Margin / MRP moved the Strategy price and maybe capped the barcode — take the server's.
+            const bcIds = payload.filter((p) => "barcodeManualPaise" in p).map((p) => p.id);
+            if (bcIds.length) queueMarkTouched(bcIds); // new barcode → reprint its label
             if (payload.some((p) => "marginPercent" in p || "mrpPaise" in p || "barcodeManualPaise" in p)) void loadData();
             toast.success(`${payload.length} sale price${payload.length === 1 ? "" : "s"} saved.`);
         } catch (e) {
             const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error : null;
             toast.error(msg ?? "Failed to save sale prices.");
-        } finally {
-            setFreezing(false);
-        }
-    };
-
-    // "Update barcode": save the auto barcode (bands on the selling price) for
-    // the ticked rows. Hand-typed barcodes are always skipped (the server skips
-    // them too). Saves price + date + gap together. Unsaved Sale Price edits are not used.
-    // Ticked rows only. With nothing ticked the button is off: the old fallback
-    // ("every stale row") counted the whole catalogue, hidden and filtered-out
-    // rows included, so the number did not match the screen.
-    const barcodeTargetsOf = useCallback((list: Row[]) =>
-        list.filter((r) => selected.has(r.id) && r.id > 0 && !r.barcodeIsManual && autoBarcodeOf(r) != null), [selected]);
-    const barcodeTargets = useMemo(() => barcodeTargetsOf(deferredRows), [barcodeTargetsOf, deferredRows]);
-    const updateBarcodes = async () => {
-        // Fresh from the current rows, not the deferred copy the button count uses.
-        const targets = barcodeTargetsOf(rows);
-        if (targets.length === 0) return;
-        const manualCount = rows.filter((r) => selected.has(r.id) && r.barcodeIsManual).length;
-        const ok = await confirmAction({
-            title: targets.length === 1 ? "Update the barcode price for 1 product?" : `Update the barcode price for ${targets.length} products?`,
-            body: `Each barcode is made again from the price it sells at now — Strategy, Computed or Sale Price (bands, capped at MRP) — and saved with today's date.${manualCount ? ` ${manualCount} hand-typed barcode${manualCount === 1 ? " is" : "s are"} skipped and stay as typed.` : ""} Print new labels for them.`,
-            confirmLabel: "Update barcode",
-        });
-        if (!ok) return;
-        setFreezing(true);
-        try {
-            await axios.post("/api/pricing-strategy/barcode-price", { ids: targets.map((r) => r.id) });
-            queueMarkTouched(targets.map((r) => r.id));
-            setSelected(new Set());
-            await loadData();
-            toast.success(`${targets.length} barcode price${targets.length === 1 ? "" : "s"} updated.`);
-        } catch (e) {
-            const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error : null;
-            toast.error(msg ?? "Failed to update barcode prices.");
         } finally {
             setFreezing(false);
         }
@@ -1412,11 +1368,8 @@ export default function GeneratePage() {
                             ? `${selected.size} ticked`
                             : dirtyCount === 0 ? "Prices saved" : `${dirtyCount} to save`}
                     </span>
-                    <Button type="button" size="sm" className="h-8" onClick={save} disabled={saveCount === 0 || freezing} title="Save the Sale Price and selling choice for edited rows. The barcode price is not changed. Margin %, MRP, Method and Barcode save by themselves as you edit.">
+                    <Button type="button" size="sm" className="h-8" onClick={save} disabled={saveCount === 0 || freezing} title="Save every edited row: Computed (margin), Sale Price, MRP, Barcode and the selling choice. Method saves by itself as you change it.">
                         {freezing ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save prices{saveCount > 0 ? ` (${saveCount})` : ""}
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" className="h-8" onClick={updateBarcodes} disabled={barcodeTargets.length === 0 || freezing || dirtyCount > 0} title={dirtyCount > 0 ? "Save prices first — the barcode is made from the saved selling price" : "Make the barcode again from the price each row sells at (bands, capped at MRP) and save it with today's date. Ticked rows only; hand-typed barcodes are skipped. Tick rows first (the header box ticks the whole list)."}>
-                        <Barcode className="size-4" /> Update barcode{barcodeTargets.length > 0 ? ` (${barcodeTargets.length})` : ""}
                     </Button>
                 </div>
                 <DropdownMenu>
@@ -1520,7 +1473,7 @@ export default function GeneratePage() {
                             {show("strategy") ? <SortHeader k="strategy" label="Strategy" align="right" firstDir="desc" title="Go to Strategy page to change" className={`${SORT_TH} ${COL_TINT.strategy}`} {...sortProps} /> : null}
                             {show("sale") ? <SortHeader k="saved" label="Sale Price" align="right" firstDir="desc" title="Manual — you type this price" className={`${SORT_TH} ${COL_TINT.sale}`} {...sortProps} /> : null}
                             {show("mrp") ? <TableHead className={`text-right text-xs ${COL_TINT.mrp}`}>MRP</TableHead> : null}
-                            {show("barcode") ? <SortHeader k="barcode" label="Barcode" align="right" firstDir="desc" title="Auto from Sale Price; type to set a manual barcode" className={`${SORT_TH} ${COL_TINT.barcode}`} {...sortProps} /> : null}
+                            {show("barcode") ? <SortHeader k="barcode" label="Barcode" align="right" firstDir="desc" title="Type the barcode price; it saves with Save prices" className={`${SORT_TH} ${COL_TINT.barcode}`} {...sortProps} /> : null}
                             <TableHead className="w-8" />
                         </TableRow>
                     </TableHeader>
