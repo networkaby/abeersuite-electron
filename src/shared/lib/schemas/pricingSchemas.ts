@@ -78,6 +78,8 @@ export const salePriceSaveSchema = z.object({
                 /** Sent only when edited on the screen (Computed box / MRP box); absent = leave as is. */
                 marginPercent:            z.number().gte(-100).lte(10_000).nullable().optional(),
                 mrpPaise:                 z.number().int().min(0).nullable().optional(),
+                /** Typed barcode ₹·100, saved as manual. Absent = leave the barcode alone. */
+                barcodeManualPaise:       z.number().int().min(1).optional(),
             }),
         )
         .min(1)

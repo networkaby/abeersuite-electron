@@ -4,7 +4,7 @@ import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { salePriceSaveSchema } from "@/shared/lib/schemas/pricingSchemas";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
-import { capBarcodeToMrp, rebaseBarcodeGap } from "@/modules/pricing-strategy/lib/barcodeStore";
+import { rebaseBarcodeGap, saveManualBarcode } from "@/modules/pricing-strategy/lib/barcodeStore";
 
 // PUT /api/pricing-strategy/sale-price — save the Sale Price + selling source
 // for the rows ticked on Update prices ("Save").
@@ -13,7 +13,9 @@ import { capBarcodeToMrp, rebaseBarcodeGap } from "@/modules/pricing-strategy/li
 //     a barcode save (POST /api/pricing-strategy/barcode-price, a hand edit). See
 //     barcodeStore.ts.
 //   • Margin % (Computed box) and MRP ride along when edited — they are
-//     unsaved on the screen until Save too. An MRP change caps the barcode.
+//     unsaved on the screen until Save too. So does a typed barcode
+//     (barcodeManualPaise), saved as manual. Barcodes are fully manual: an MRP
+//     change never moves one — the screen's gap figure shows it instead.
 //   • A hand change of the selling price (source switched, or Sale Price moved
 //     while SAVED) re-bases the barcode gap after the recompute.
 // Gated by Pricing Strategy page access — seeing the module means doing the work
@@ -37,13 +39,12 @@ export async function PUT(req: Request) {
         // or the Sale Price moved while it is the selling voice. Their barcode
         // gap is re-measured after the recompute; the barcode itself is not touched.
         const rebaseIds: number[] = [];
-        const mrpIds: number[] = [];
+        const barcodeEdits: [number, number][] = [];
         const ops = affected.map((it) => {
             const before = byId.get(it.id)!;
             const hasSaved = it.savedSalePricePaise != null;
             let price = it.savedSalePricePaise;
-            const mrpChanged = it.mrpPaise !== undefined && it.mrpPaise !== before.mrpPaise;
-            if (mrpChanged) mrpIds.push(it.id);
+            if (it.barcodeManualPaise !== undefined) barcodeEdits.push([it.id, it.barcodeManualPaise]);
             if (hasSaved && price != null) {
                 const mrp = it.mrpPaise !== undefined ? it.mrpPaise : before.mrpPaise;
                 if (mrp != null && mrp > 0 && price > mrp) price = mrp; // clamp to MRP
@@ -73,8 +74,9 @@ export async function PUT(req: Request) {
         // the recompute succeeded (a stale base would mislead Needs Attention).
         try {
             await recomputePricesForProducts(affected.map((it) => it.id));
-            for (const id of mrpIds) await capBarcodeToMrp(id);
-            await rebaseBarcodeGap(rebaseIds);
+            await rebaseBarcodeGap(rebaseIds.filter((id) => !barcodeEdits.some(([b]) => b === id)));
+            // Typed barcode: price + date + gap from the new selling price (barcodeStore.ts).
+            for (const [id, paise] of barcodeEdits) await saveManualBarcode(id, paise);
         } catch { /* best-effort; price heals on next voucher */ }
 
         return NextResponse.json({ saved: ops.length });

@@ -20,7 +20,7 @@
  *
  * EDITABLE + persisted (PATCH /api/pricing-strategy/items/[id]): Computed price
  *   (typed; Margin % is derived from it, read-only) → marginPercent, Barcode
- *   (own input, saved on blur; violet = typed by hand) → barcodeManualPaise,
+ *   (own input, saved with Save prices; violet = typed by hand) → barcodeManualPaise,
  * MRP → mrpPaise, Method → costMethod. Everything else (name,
  * taxonomy, stock, cost, GST, Strategy voice, days-since-sale, barcode) is
  * read-only/derived. Cost is GST-inclusive; because cost_incl × (1+margin) equals
@@ -161,6 +161,8 @@ type Row = {
     savedAt: string;        // local date the printed barcode ₹ (manual/auto) last changed → secret date code
     barcodeManual: string;  // SAVED barcode ₹ (InvProduct.barcodeManualPaise); "" = never saved (legacy → derived)
     barcodeIsManual: boolean; // saved barcode was typed by hand (violet)
+    baseBarcode: string;    // last-saved barcode ₹, for dirty detection + reset
+    baseBarcodeIsManual: boolean;
     barcodeGapPct: number | null; // today's barcode gap as % of the gap at barcode save (server); null = not measurable
 };
 
@@ -222,6 +224,8 @@ function itemToRow(it: PricingItem): Row {
         savedAt: localDateOf(it.salePriceFrozenAt),
         barcodeManual: it.barcodeManualPaise != null ? (it.barcodeManualPaise / 100).toFixed(2) : "",
         barcodeIsManual: it.barcodeIsManual,
+        baseBarcode: it.barcodeManualPaise != null ? (it.barcodeManualPaise / 100).toFixed(2) : "",
+        baseBarcodeIsManual: it.barcodeIsManual,
         barcodeGapPct: it.barcodeGapPct,
     };
 }
@@ -439,9 +443,10 @@ const sameAmount = (a: string, b: string, scale = 100): boolean => {
 };
 const marginDirty = (r: Row) => !sameAmount(r.margin, r.baseMargin, 10_000);
 const mrpDirty = (r: Row) => !sameAmount(r.mrp, r.baseMrp);
-// Computed (margin), Sale Price, MRP and the selling choice all wait for Save prices.
+const barcodeDirty = (r: Row) => !sameAmount(r.barcodeManual, r.baseBarcode);
+// Computed (margin), Sale Price, MRP, Barcode and the selling choice all wait for Save prices.
 const rowDirty = (r: Row): boolean =>
-    !sameAmount(r.salePrice, r.baseline) || r.saleSource !== r.baseSource || marginDirty(r) || mrpDirty(r);
+    !sameAmount(r.salePrice, r.baseline) || r.saleSource !== r.baseSource || marginDirty(r) || mrpDirty(r) || barcodeDirty(r);
 
 const stockQty = (r: Row): number => numOrNull(r.stock) ?? 0;
 
@@ -541,8 +546,6 @@ const ProductRow = memo(function ProductRow({
     const mrpNum = parseFloat(r.mrp);
     const mrp = isFinite(mrpNum) && mrpNum > 0 ? mrpNum : null;
     const bc = rowBarcode(r);
-    // What "Update barcode" would save — the "auto" link target + "same as auto" check.
-    const autoBc = autoBarcodeOf(r);
     // Typed text while the box is focused; null = show the saved barcode.
     const [bcDraft, setBcDraft] = useState<string | null>(null);
     // Staff screen shows the real date; the secret code is only for the printed label.
@@ -570,9 +573,9 @@ const ProductRow = memo(function ProductRow({
                     {dirty ? (
                         <button
                             type="button"
-                            onClick={() => onUpdate(r.id, { salePrice: r.baseline, saleSource: r.baseSource, margin: r.baseMargin, mrp: r.baseMrp })}
+                            onClick={() => onUpdate(r.id, { salePrice: r.baseline, saleSource: r.baseSource, margin: r.baseMargin, mrp: r.baseMrp, barcodeManual: r.baseBarcode, barcodeIsManual: r.baseBarcodeIsManual })}
                             className="rounded-full p-0.5 text-amber-600 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/40"
-                            title="Unsaved change — click to reset this row (Computed, Sale Price, MRP + Selling)"
+                            title="Unsaved change — click to reset this row (Computed, Sale Price, MRP, Barcode + Selling)"
                             aria-label={`Reset ${r.name}`}
                         >
                             <RotateCcw className="size-3.5" />
@@ -704,20 +707,10 @@ const ProductRow = memo(function ProductRow({
 
             {show("barcode") ? (
                 <TableCell className={`text-right align-top ${COL_TINT.barcode}`}>
-                    {/* Own input, saved on blur (price + date + gap). Typed = MANUAL (violet);
-                        typing the auto value back, or blank, saves the auto barcode. A Sale
-                        Price change never moves it — only this box or "Update barcode". */}
+                    {/* Own input, fully manual: a typed amount is an unsaved change (↺ resets it)
+                        until Save prices. Blank = put the saved one back. Nothing moves it on its
+                        own — not a Sale Price or MRP change; only this box or "Update barcode". */}
                     <div className="flex items-center justify-end gap-1">
-                        {bc.manual ? (
-                            <button
-                                type="button"
-                                className="text-[10px] text-violet-700 underline dark:text-violet-300"
-                                title={autoBc != null ? `Save the auto barcode (₹${autoBc.toFixed(2)})` : "Save the auto barcode"}
-                                onClick={() => onPersist(r.id, { barcodeManualPaise: null })}
-                            >
-                                auto
-                            </button>
-                        ) : null}
                         <Input
                             type="text"
                             inputMode="decimal"
@@ -733,10 +726,9 @@ const ProductRow = memo(function ProductRow({
                                 let v = numOrNull(typed);
                                 if (v != null && mrp != null && v > mrp) v = mrp; // never above MRP
                                 if (v != null && v <= 0) v = null;
-                                if (v != null && bc.value != null && Math.abs(v - bc.value) < 0.005) return; // unchanged
-                                if (v == null && bc.value == null) return;
-                                const asAuto = v == null || (autoBc != null && Math.abs(v - autoBc) < 0.005);
-                                onPersist(r.id, { barcodeManualPaise: asAuto ? null : Math.round(v! * 100) });
+                                if (v == null) { onUpdate(r.id, { barcodeManual: r.baseBarcode, barcodeIsManual: r.baseBarcodeIsManual }); return; }
+                                if (bc.value != null && Math.abs(v - bc.value) < 0.005) return; // unchanged
+                                onUpdate(r.id, { barcodeManual: v.toFixed(2), barcodeIsManual: true });
                             }}
                             className={`h-7 w-24 text-right text-sm font-mono font-semibold ${bc.manual ? "border-violet-500 bg-violet-50 text-violet-800 dark:bg-violet-950 dark:text-violet-200" : ""} ${bc.capped ? "text-amber-600" : ""} ${bc.hint === "m" ? "underline decoration-2 underline-offset-2" : ""}`}
                         />
@@ -813,7 +805,9 @@ export default function GeneratePage() {
                     const old = byId.get(m.id);
                     return old
                         ? { ...m, salePrice: old.salePrice, baseline: old.baseline, saleSource: old.saleSource, baseSource: old.baseSource,
-                            margin: old.margin, baseMargin: old.baseMargin, mrp: old.mrp, baseMrp: old.baseMrp }
+                            margin: old.margin, baseMargin: old.baseMargin, mrp: old.mrp, baseMrp: old.baseMrp,
+                            // An unsaved barcode survives a reload; a clean row takes the server's.
+                            ...(barcodeDirty(old) ? { barcodeManual: old.barcodeManual, barcodeIsManual: old.barcodeIsManual, baseBarcode: m.baseBarcode, baseBarcodeIsManual: m.baseBarcodeIsManual } : {}) }
                         : m;
                 });
                 const locals = prev.filter((r) => r.id < 0); // keep locally-added rows
@@ -1101,6 +1095,7 @@ export default function GeneratePage() {
                     effectiveSalePriceSource: voiceToDb(r.saleSource),
                     savedSalePricePaise: sp != null ? Math.round(sp * 100) : null,
                     ...(marginDirty(r) ? { marginPercent: numOrNull(r.margin) } : {}),
+                    ...(barcodeDirty(r) ? { barcodeManualPaise: Math.round(numOrNull(r.barcodeManual)! * 100) } : {}),
                     ...(mrpDirty(r) ? { mrpPaise: ((m) => (m != null ? Math.round(m * 100) : null))(numOrNull(r.mrp)) } : {}),
                 };
             });
@@ -1111,11 +1106,11 @@ export default function GeneratePage() {
             setRows((prev) =>
                 prev.map((r) => {
                     if (!rowDirty(r)) return r;
-                    return { ...r, baseline: r.salePrice, baseSource: r.saleSource, baseMargin: r.margin, baseMrp: r.mrp };
+                    return { ...r, baseline: r.salePrice, baseSource: r.saleSource, baseMargin: r.margin, baseMrp: r.mrp, baseBarcode: r.barcodeManual, baseBarcodeIsManual: r.barcodeIsManual };
                 }),
             );
             // Margin / MRP moved the Strategy price and maybe capped the barcode — take the server's.
-            if (payload.some((p) => "marginPercent" in p || "mrpPaise" in p)) void loadData();
+            if (payload.some((p) => "marginPercent" in p || "mrpPaise" in p || "barcodeManualPaise" in p)) void loadData();
             toast.success(`${payload.length} sale price${payload.length === 1 ? "" : "s"} saved.`);
         } catch (e) {
             const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error : null;
