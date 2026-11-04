@@ -433,12 +433,14 @@ export function PosScreenShell({
                                                                     <span className="uppercase tracking-wider text-emerald-600/80 dark:text-emerald-400/80">Barcode</span>
                                                                     <span className="font-medium text-emerald-700 dark:text-emerald-300">{barcode != null ? formatInr(barcode) : "—"}</span>
                                                                 </div>
-                                                                {/* Lowest price the cashier may type — the item's sale
-                                                                    price (usePosBilling.enforcePriceFloor). */}
-                                                                {l.salePaise != null && l.salePaise > 0 && (
-                                                                    <div className="flex items-center gap-1.5" title="Lowest price you can set on this line">
-                                                                        <span className="uppercase tracking-wider text-amber-600/90 dark:text-amber-400/90">Lowest</span>
-                                                                        <span className="font-medium text-amber-700 dark:text-amber-300">{formatInr(l.salePaise / 100)}</span>
+                                                                {/* Half the room between the barcode price and the floor
+                                                                    (the sale price, usePosBilling.enforcePriceFloor).
+                                                                    Staff know the real room is double; a customer
+                                                                    watching the screen never sees the floor itself. */}
+                                                                {barcode != null && l.salePaise != null && l.salePaise > 0 && barcode - l.salePaise / 100 >= 0.01 && (
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <span className="uppercase tracking-wider text-amber-600/90 dark:text-amber-400/90">Gap</span>
+                                                                        <span className="font-medium text-amber-700 dark:text-amber-300">{formatInr((barcode - l.salePaise / 100) / 2)}</span>
                                                                     </div>
                                                                 )}
                                                             </div>
