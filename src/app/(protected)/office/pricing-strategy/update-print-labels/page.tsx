@@ -110,9 +110,9 @@ const COLS: { key: ColKey; label: string }[] = [
     { key: "margin", label: "Margin %" },
     { key: "computed", label: "Computed" },
     { key: "strategy", label: "Strategy" },
-    { key: "sale", label: "Sale Price" },
+    { key: "sale", label: "Fixed Price" },
     { key: "mrp", label: "MRP" },
-    { key: "barcode", label: "Barcode · sells at" },
+    { key: "barcode", label: "Public Price" },
 ];
 
 // ── Column colour groups (visual grouping only, no logic) ────────────────────
@@ -351,7 +351,7 @@ const RANGE_FIELDS: { key: RangeKey; label: string; unit?: string }[] = [
     { key: "profit", label: "Profit ₹ (sale price)", unit: "₹" },
     // Same figure as Needs Attention → Low barcode gap: today's gap (barcode −
     // selling price) as % of the gap when the barcode was saved. "Below 30" = that list.
-    { key: "barcodeGap", label: "Barcode gap % of original", unit: "%" },
+    { key: "barcodeGap", label: "Public Price gap % of original", unit: "%" },
     { key: "daysSinceSale", label: "Days since last sale", unit: "days" },
     { key: "profitPct", label: "Profit % (sale price)", unit: "%" },
 ];
@@ -369,7 +369,7 @@ const FILTER_STORAGE_KEY = "pricing.update-print-labels.filters.v1";
 const SOURCE_OPTIONS = [
     { value: "STRATEGY", label: "Strategy" },
     { value: "MY", label: "Computed" },
-    { value: "SAVED", label: "Sale Price" },
+    { value: "SAVED", label: "Fixed Price" },
 ];
 
 const numOrNull = (s: string): number | null => {
@@ -565,7 +565,7 @@ const ProductRow = memo(function ProductRow({
                             type="button"
                             onClick={() => onUpdate(r.id, resetRow(r))}
                             className="rounded-full p-0.5 text-amber-600 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/40"
-                            title="Unsaved change — click to reset this row (Computed, Sale Price, MRP, Barcode + Selling)"
+                            title="Unsaved change — click to reset this row (Computed, Fixed Price, MRP, Public Price + Selling)"
                             aria-label={`Reset ${r.name}`}
                         >
                             <RotateCcw className="size-3.5" />
@@ -706,7 +706,7 @@ const ProductRow = memo(function ProductRow({
                             inputMode="decimal"
                             value={bcDraft ?? (bc.value != null ? bc.value.toFixed(2) : "")}
                             placeholder="—"
-                            title={bc.manual ? "Typed barcode — only this box changes it" : "Saved barcode — type to set your own"}
+                            title={bc.manual ? "Typed Public Price — only this box changes it" : "Saved Public Price — type to set your own"}
                             onFocus={() => setBcDraft(bc.value != null ? bc.value.toFixed(2) : "")}
                             onChange={(e) => setBcDraft(parseDecimalInput(e.target.value))}
                             onBlur={() => {
@@ -726,7 +726,7 @@ const ProductRow = memo(function ProductRow({
                     {bcGap != null || bcProfit != null ? (
                         <div
                             className="mt-0.5 text-right font-mono text-[10px] text-muted-foreground"
-                            title="Gap = barcode − lowest price: the room for bargaining and every discount (tier, loyalty, coupon). Red: the barcode is below the lowest price, so POS has no room — raise the barcode or lower the lowest. Profit % = after-GST profit if sold at the barcode price (POS bills at the barcode)."
+                            title="Gap = Public Price − lowest price: the room for bargaining and every discount (tier, loyalty, coupon). Red: the Public Price is below the lowest price, so POS has no room — raise the Public Price or lower the lowest. Profit % = after-GST profit if sold at the barcode price (POS bills at the barcode)."
                         >
                             <span className={bcGap != null && bcGap < -0.005 ? "text-red-600" : ""}>
                                 {bcGap == null ? "—" : `${bcGap < -0.005 ? "−" : "+"}${rupee(Math.abs(bcGap))}`}
@@ -1088,10 +1088,10 @@ export default function GeneratePage() {
             const bcIds = payload.filter((p) => "barcodeManualPaise" in p).map((p) => p.id);
             if (bcIds.length) queueMarkTouched(bcIds); // new barcode → reprint its label
             if (payload.some((p) => "marginPercent" in p || "mrpPaise" in p || "barcodeManualPaise" in p)) void loadData();
-            toast.success(`${payload.length} sale price${payload.length === 1 ? "" : "s"} saved.`);
+            toast.success(`${payload.length} product${payload.length === 1 ? "" : "s"} saved.`);
         } catch (e) {
             const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error : null;
-            toast.error(msg ?? "Failed to save sale prices.");
+            toast.error(msg ?? "Failed to save prices.");
         } finally {
             setFreezing(false);
         }
@@ -1344,7 +1344,7 @@ export default function GeneratePage() {
                             ? `${selected.size} ticked`
                             : dirtyCount === 0 ? "Prices saved" : `${dirtyCount} to save`}
                     </span>
-                    <Button type="button" size="sm" className="h-8" onClick={save} disabled={saveCount === 0 || freezing} title="Save every edited row: Computed (margin), Sale Price, MRP, Barcode and the selling choice. Method saves by itself as you change it.">
+                    <Button type="button" size="sm" className="h-8" onClick={save} disabled={saveCount === 0 || freezing} title="Save every edited row: Computed (margin), Fixed Price, MRP, Public Price and the selling choice. Method saves by itself as you change it.">
                         {freezing ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save prices{saveCount > 0 ? ` (${saveCount})` : ""}
                     </Button>
                 </div>
@@ -1402,8 +1402,8 @@ export default function GeneratePage() {
                             {sectionTitle("Quick checks")}
                             <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
                                 <div className="flex flex-wrap gap-2">
-                                    {flagChip("Barcode capped", fBarcodeCapped, setFBarcodeCapped, "MRP is squeezing the barcode price")}
-                                    {flagChip("Sale price capped", fSaleCapped, setFSaleCapped, "Selling price held down at the barcode / MRP ceiling")}
+                                    {flagChip("Public Price capped", fBarcodeCapped, setFBarcodeCapped, "MRP is squeezing the Public Price")}
+                                    {flagChip("Selling price capped", fSaleCapped, setFSaleCapped, "Selling price held down at the Public Price / MRP ceiling")}
                                     {flagChip("In stock only", fInStock, setFInStock, "Hide products with no stock")}
                                 </div>
                                 {/* Barcode gap pair beside the toggles (owner). */}
@@ -1458,12 +1458,12 @@ export default function GeneratePage() {
                             {show("group") ? <SortHeader k="group" label="Group" className={SORT_TH} {...sortProps} /> : null}
                             {show("stock") ? <SortHeader k="stock" label="Stock" align="right" firstDir="desc" className={`${SORT_TH} ${COL_TINT.stock}`} {...sortProps} /> : null}
                             {show("cost") ? <SortHeader k="cost" label="Cost (incl)" align="right" firstDir="desc" className={`${SORT_TH} ${COL_TINT.cost}`} {...sortProps} /> : null}
-                            {show("margin") ? <TableHead className={`text-right text-xs ${COL_TINT.margin}`}>Margin %</TableHead> : null}
-                            {show("computed") ? <SortHeader k="computed" label="Computed" align="right" firstDir="desc" className={`${SORT_TH} ${COL_TINT.computed}`} {...sortProps} /> : null}
-                            {show("strategy") ? <SortHeader k="strategy" label="Strategy" align="right" firstDir="desc" title="Go to Strategy page to change" className={`${SORT_TH} ${COL_TINT.strategy}`} {...sortProps} /> : null}
-                            {show("sale") ? <SortHeader k="saved" label="Sale Price" align="right" firstDir="desc" title="Manual — you type this price" className={`${SORT_TH} ${COL_TINT.sale}`} {...sortProps} /> : null}
-                            {show("mrp") ? <TableHead className={`text-right text-xs ${COL_TINT.mrp}`}>MRP</TableHead> : null}
-                            {show("barcode") ? <SortHeader k="barcode" label="Barcode" align="right" firstDir="desc" title="Type the barcode price; it saves with Save prices" className={`${SORT_TH} ${COL_TINT.barcode}`} {...sortProps} /> : null}
+                            {show("margin") ? <TableHead className={`text-right text-xs ${COL_TINT.margin}`} title="Worked out from the Computed price">Margin %</TableHead> : null}
+                            {show("computed") ? <SortHeader k="computed" label="Computed" align="right" firstDir="desc" title="Type a price — Margin % is worked out from it. Saves with Save prices." className={`${SORT_TH} ${COL_TINT.computed}`} {...sortProps} /> : null}
+                            {show("strategy") ? <SortHeader k="strategy" label="Strategy" align="right" firstDir="desc" title="Set on the Strategy page" className={`${SORT_TH} ${COL_TINT.strategy}`} {...sortProps} /> : null}
+                            {show("sale") ? <SortHeader k="saved" label="Fixed Price" align="right" firstDir="desc" title="Your fixed price — it never moves by itself. Saves with Save prices." className={`${SORT_TH} ${COL_TINT.sale}`} {...sortProps} /> : null}
+                            {show("mrp") ? <TableHead className={`text-right text-xs ${COL_TINT.mrp}`} title="Type the MRP. Saves with Save prices.">MRP</TableHead> : null}
+                            {show("barcode") ? <SortHeader k="barcode" label="Public Price" align="right" firstDir="desc" title="Price printed on the label (barcode). Typed only — nothing changes it on its own. Saves with Save prices." className={`${SORT_TH} ${COL_TINT.barcode}`} {...sortProps} /> : null}
                             <TableHead className="w-8" />
                         </TableRow>
                     </TableHeader>
