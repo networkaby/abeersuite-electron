@@ -62,6 +62,7 @@ import { convertSourceError } from "@/modules/pos/lib/convertSource";
 import { findHeldRedemptions, executeRedemptions, RedemptionHoldChangedError } from "@/modules/order/lib/redemptionHold";
 import { loadPartyPricing } from "@/modules/pricing-strategy/lib/groupPricingServer";
 import { groupRebatesExcl, rebatedRate, ruleForGroup } from "@/modules/pricing-strategy/lib/groupPricing";
+import { POS_MAX_ROUND_OFF } from "@/shared/lib/constants/inventory";
 import { capToFloorExcl, floorExclFromPaise, floorRoomIncl } from "@/modules/pricing-strategy/lib/priceFloor";
 import { payAccountMdr } from "@/modules/pos/lib/paymentGateways";
 import { mdrRecovery, upliftedRates } from "@/modules/pos/lib/paymentMdr";
@@ -152,7 +153,9 @@ const createSchema = z.object({
     // not by the shape of this array.
     payments: z.array(paymentSchema).default([]),
     shippingAmt: z.number().min(0).default(0),
-    roundOff: z.number().default(0),  // signed
+    // Signed; a typed R-off may not skip the lowest-price wall (constants/inventory.ts).
+    // +1 paisa slack for float noise. Auto round-off is always within ±0.50.
+    roundOff: z.number().min(-POS_MAX_ROUND_OFF - 0.01).max(POS_MAX_ROUND_OFF + 0.01).default(0),
     charges: z.array(chargeSchema).default([]),
     // Voucher-level tier discount (₹). Reduces the bill via the existing
     // discountAmt → "Discount Allowed" path. Client-supplied (cashier-trusted,

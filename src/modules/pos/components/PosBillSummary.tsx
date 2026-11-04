@@ -21,6 +21,8 @@ import { formatInr, parseDecimalInput, parseDigitsInput } from "@/shared/lib/for
 import { type Snapshot, type CartLine, type CouponHit, type OnTopHit } from "@/modules/pos/lib/posDraftTypes";
 import { type TierResult } from "@/shared/lib/pricing";
 import type { EditBill } from "@/modules/pos/hooks/usePosBilling";
+import { toast } from "sonner";
+import { POS_MAX_ROUND_OFF } from "@/shared/lib/constants/inventory";
 
 type GiftCardState = { id: number; code: string; balance: number };
 
@@ -427,12 +429,19 @@ export function PosBillSummary({
                         }}
                         placeholder="auto"
                         className="h-7 w-16 text-right text-xs"
-                        title="Auto-rounded to whole rupee. Type a value to override; clear to restore auto."
+                        title="Auto-rounded to whole rupee. Type a value (up to ±₹1) to override; clear to restore auto."
                         onBlur={(e) => {
                             // Empty field → back to auto mode.
                             if (e.target.value.trim() === "") {
                                 setRoundOffManuallyEdited(false);
                                 setRoundOffStr("");
+                                return;
+                            }
+                            // Held to ±₹1 — bigger cuts go through a discount (lowest-price wall).
+                            const v = Number(e.target.value);
+                            if (Number.isFinite(v) && Math.abs(v) > POS_MAX_ROUND_OFF) {
+                                setRoundOffStr((v < 0 ? -POS_MAX_ROUND_OFF : POS_MAX_ROUND_OFF).toFixed(2));
+                                toast.info(`R-off is limited to ±₹${POS_MAX_ROUND_OFF}`);
                             }
                         }}
                     />

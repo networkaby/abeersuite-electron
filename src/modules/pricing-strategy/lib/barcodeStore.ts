@@ -16,6 +16,13 @@ import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
  *
  * Call these AFTER recomputePricesForProducts, so effectiveSalePricePaise is
  * the price that really sells now.
+ *
+ * Floor rule (owner, 2026-11-04): a saved barcode is never below the lowest
+ * price (effectiveSalePricePaise) — POS opens a line at the barcode and refuses
+ * anything under the lowest price, so a lower label could never be billed. A
+ * lower amount is raised to the lowest price, silently. The floor beats the
+ * MRP cap: when the lowest price is itself above MRP, that is a pricing error
+ * to fix at the Sale Price, not by printing an unbillable label.
  */
 
 /**
@@ -41,8 +48,9 @@ export async function saveAutoBarcodes(ids: number[], opts: { onlyMissing?: bool
     ]);
     const now = new Date();
     const ops = rows.flatMap((p) => {
-        const tag = barcodeTagPaise(p.effectiveSalePricePaise, p.mrpPaise, bands);
-        if (tag == null) return [];
+        const raw = barcodeTagPaise(p.effectiveSalePricePaise, p.mrpPaise, bands);
+        if (raw == null) return [];
+        const tag = Math.max(raw, p.effectiveSalePricePaise ?? 0);
         return [prisma.invProduct.update({
             where: { id: p.id },
             data:  {
@@ -58,8 +66,8 @@ export async function saveAutoBarcodes(ids: number[], opts: { onlyMissing?: bool
 }
 
 /**
- * Save a hand-typed barcode (capped at MRP). Stamps date + gap basis.
- * Returns what was stored.
+ * Save a hand-typed barcode (capped at MRP, raised to the lowest price). Stamps
+ * date + gap basis. Returns what was stored.
  */
 export async function saveManualBarcode(id: number, pricePaise: number): Promise<{ barcodeManualPaise: number; salePriceFrozenAt: Date } | null> {
     // One statement: the MRP cap reads the row it writes, so an MRP edit landing
@@ -67,7 +75,9 @@ export async function saveManualBarcode(id: number, pricePaise: number): Promise
     const now = new Date();
     const rows = await prisma.$queryRaw<{ barcodeManualPaise: number }[]>`
         UPDATE "InvProduct" SET
-            "barcodeManualPaise"  = CASE WHEN "mrpPaise" > 0 AND ${pricePaise}::int > "mrpPaise" THEN "mrpPaise" ELSE ${pricePaise}::int END,
+            "barcodeManualPaise"  = GREATEST(
+                CASE WHEN "mrpPaise" > 0 AND ${pricePaise}::int > "mrpPaise" THEN "mrpPaise" ELSE ${pricePaise}::int END,
+                COALESCE("effectiveSalePricePaise", 0)),
             "barcodeIsManual"     = true,
             "salePriceFrozenAt"   = ${now},
             "barcodeGapBasePaise" = "effectiveSalePricePaise",
@@ -80,7 +90,8 @@ export async function saveManualBarcode(id: number, pricePaise: number): Promise
 
 /**
  * MRP was lowered: a saved barcode above the new MRP is capped to it — that is a
- * barcode save (date + gap stamped). Below MRP nothing moves.
+ * barcode save (date + gap stamped), but never below the lowest price. Below
+ * MRP nothing moves.
  */
 export async function capBarcodeToMrp(id: number): Promise<boolean> {
     // One statement, so the cap always uses the MRP that is on the row now.
@@ -90,11 +101,12 @@ export async function capBarcodeToMrp(id: number): Promise<boolean> {
     const now = new Date();
     const n = await prisma.$executeRaw`
         UPDATE "InvProduct" SET
-            "barcodeManualPaise"  = "mrpPaise",
+            "barcodeManualPaise"  = GREATEST("mrpPaise", COALESCE("effectiveSalePricePaise", 0)),
             "salePriceFrozenAt"   = ${now},
             "barcodeGapBasePaise" = "effectiveSalePricePaise",
             "updatedAt"           = ${now}
-        WHERE id = ${id} AND "mrpPaise" > 0 AND "barcodeManualPaise" > "mrpPaise"`;
+        WHERE id = ${id} AND "mrpPaise" > 0 AND "barcodeManualPaise" > "mrpPaise"
+          AND "barcodeManualPaise" <> GREATEST("mrpPaise", COALESCE("effectiveSalePricePaise", 0))`;
     return n > 0;
 }
 

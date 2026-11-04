@@ -31,3 +31,8 @@ export const MAX_PRODUCT_PHOTOS = 12;
  *  once it is this old — room for a photo still being saved, and for undoing a
  *  Remove tapped by mistake (the link can be put back while the file exists). */
 export const PHOTO_CLEANUP_MIN_AGE_DAYS = 30;
+
+/** POS R-off: the most a hand-typed round-off may move a new bill, either way (₹).
+ *  Bigger cuts must go through a discount, which stops at each line's lowest price
+ *  (priceFloor.ts); a free-typed −200 R-off would skip that wall. Owner 2026-11-04. */
+export const POS_MAX_ROUND_OFF = 1;

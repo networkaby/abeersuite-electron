@@ -25,6 +25,7 @@ import { DEFAULT_PAYEE_NAME } from "@/modules/pos/lib/paymentLink";
 import { formatInr, parseDigitsInput, round2 } from "@/shared/lib/format";
 import { resolveTierTitles } from "@/shared/lib/pricing";
 import { groupRebatesExcl, groupStartPricePaise, rebatedRate, ruleForGroup } from "@/modules/pricing-strategy/lib/groupPricing";
+import { POS_MAX_ROUND_OFF } from "@/shared/lib/constants/inventory";
 import { capToFloorExcl, floorExclFromPaise, floorRoomIncl } from "@/modules/pricing-strategy/lib/priceFloor";
 import { mdrRecovery, upiPlan, upliftedRates, type UpiPart, type UpliftLine } from "@/modules/pos/lib/paymentMdr";
 import { CHANNEL_LABEL } from "@/modules/pos/lib/counterTenders";
@@ -668,7 +669,8 @@ export function usePosBilling(opts: {
         const natural = calcVoucherTotals(rows, shippingAmt, tierDiscount, 0, chargesNet).totalAmount;
         // `natural` is already in paise, so round2 only strips float noise
         // (0.3999999999996362 → 0.4) — the total cannot move.
-        const ro = roundOffManuallyEdited ? parseAmt(roundOffStr) : editSameBill ? eb?.roundOff ?? 0 : round2(Math.round(natural) - natural);
+        // A typed R-off is held to ±POS_MAX_ROUND_OFF (the server rejects more).
+        const ro = roundOffManuallyEdited ? Math.max(-POS_MAX_ROUND_OFF, Math.min(POS_MAX_ROUND_OFF, parseAmt(roundOffStr))) : editSameBill ? eb?.roundOff ?? 0 : round2(Math.round(natural) - natural);
         // Single source of truth — matches /api/inventory/vouchers SALE math via
         // calcVoucherTotals, so server-side validation cannot disagree.
         const t = calcVoucherTotals(rows, shippingAmt, tierDiscount, ro, chargesNet).totalAmount;
