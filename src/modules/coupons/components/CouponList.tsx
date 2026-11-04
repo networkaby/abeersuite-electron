@@ -68,7 +68,7 @@ function metaLine(c: Coupon): string[] {
     const parts: string[] = [];
     if (c.minBillValue != null && Number(c.minBillValue) > 0) parts.push(`Min ₹${Number(c.minBillValue).toLocaleString("en-IN")}`);
     if (c.independent) parts.push("free on top");
-    if (c.stackable) parts.push("stackable");
+    if (c.stackable) parts.push("with tier + points");
     else if (c.stackScope === "LINE") parts.push("exclusive · its items only");
     if (c.isPrivate) parts.push("private");
     if (c.eligibility !== "ANY") parts.push(c.eligibility.toLowerCase());

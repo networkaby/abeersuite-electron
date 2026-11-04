@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Dices, Gift, IndianRupee, Percent, Plus, Repeat, Save, Sparkles, Tag, X, type LucideIcon } from "lucide-react";
+import { CircleHelp, Dices, Gift, IndianRupee, Percent, Plus, Repeat, Save, Sparkles, Tag, X, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/shared/components/SearchableSelect";
+import { CouponHelpDialog } from "./CouponHelpDialog";
 import { extractApiError } from "@/shared/lib/api";
 import { parseDecimalInput, parseDigitsInput, toDateInput } from "@/shared/lib/format";
 
@@ -156,6 +157,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
     };
     const [eligibility, setEligibility] = useState<Coupon["eligibility"]>(initial?.eligibility ?? "ANY");
     const [stackable, setStackable] = useState(initial?.stackable ?? false);
+    const [helpOpen, setHelpOpen] = useState(false);
     const [stackScope, setStackScope] = useState<Coupon["stackScope"]>(initial?.stackScope ?? (initial?.type === "SET_PRICE" ? "LINE" : "BILL"));
     const [independent, setIndependent] = useState(initial?.independent ?? false);
     const [saving, setSaving] = useState(false);
@@ -480,7 +482,12 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
     const behaviourSection = (
         <Section title="Behaviour" tone="behaviour">
             <div className="space-y-1.5">
-                <Toggle label="Stackable" hint="with tier + loyalty" checked={stackable} onChange={setStackable} />
+                <Toggle
+                    label="Use with tier + loyalty"
+                    hint={stackable ? "coupon + tier discount + points" : "off — coupon replaces them"}
+                    checked={stackable}
+                    onChange={setStackable}
+                />
                 {(type === "FREE_ITEM" || type === "BOGO") && (
                     <Toggle
                         label="Independent"
@@ -492,15 +499,20 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
             </div>
             {!stackable && (
                 <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 px-2.5 py-1.5">
-                    <span className="block text-[11px] text-muted-foreground" title="When not stackable, the coupon blocks the spend-tier discount and loyalty redemption">Exclusive</span>
+                    <span className="block text-[11px] text-muted-foreground">Coupon cancels tier discount + points on:</span>
                     <RadioGroup value={stackScope} onValueChange={(v) => setStackScope(v as Coupon["stackScope"])} className="grid gap-1.5">
                         <label className="flex cursor-pointer items-center gap-2 text-xs">
                             <RadioGroupItem value="BILL" />
-                            <span>The whole bill</span>
+                            <span>Every item on the bill</span>
                         </label>
                         <label className="flex cursor-pointer items-center gap-2 text-xs">
                             <RadioGroupItem value="LINE" />
-                            <span>Only this coupon&rsquo;s own items</span>
+                            <span>
+                                Only the items this coupon covers
+                                <span className="text-muted-foreground">
+                                    {rules.length === 0 ? " (no item rules, so the whole bill)" : " — other items keep them"}
+                                </span>
+                            </span>
                         </label>
                     </RadioGroup>
                 </div>
@@ -532,7 +544,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
                 {minBillValue.trim() && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">Min ₹{minBillValue}</span>}
                 <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{CHANNEL_LABEL[channels]}</span>
                 {independent && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">free on top</span>}
-                {stackable && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">stackable</span>}
+                {stackable && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">+ tier &amp; points</span>}
             </div>
 
             {/* Dialog: identity + offer on the left, gates + behaviour on the right.
@@ -556,6 +568,10 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
             <div className={embedded
                 ? "sticky bottom-0 -mx-4 -mb-4 mt-0.5 flex justify-end gap-2 rounded-b-xl border-t bg-muted/50 px-4 py-1.5"
                 : "sticky bottom-0 -mx-1 -mb-1 mt-0.5 flex justify-end gap-2 rounded-b-xl border-t bg-background px-1 py-1.5"}>
+                <Button variant="outline" size="sm" className="mr-auto self-center" onClick={() => setHelpOpen(true)}>
+                    <CircleHelp size={14} className="mr-1" /> Help
+                </Button>
+                <CouponHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
                 <Button variant="ghost" onClick={onCancel}>Cancel</Button>
                 <Button onClick={save} disabled={saving}><Save size={14} className="mr-1" /> {editing ? "Save" : "Create"}</Button>
             </div>
