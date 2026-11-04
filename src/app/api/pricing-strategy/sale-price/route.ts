@@ -4,7 +4,7 @@ import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
 import { salePriceSaveSchema } from "@/shared/lib/schemas/pricingSchemas";
 import { recomputePricesForProducts } from "@/modules/pricing-strategy/lib/recomputePrices";
-import { rebaseBarcodeGap } from "@/modules/pricing-strategy/lib/barcodeStore";
+import { capBarcodeToMrp, rebaseBarcodeGap } from "@/modules/pricing-strategy/lib/barcodeStore";
 
 // PUT /api/pricing-strategy/sale-price — save the Sale Price + selling source
 // for the rows ticked on Update prices ("Save").
@@ -12,6 +12,8 @@ import { rebaseBarcodeGap } from "@/modules/pricing-strategy/lib/barcodeStore";
 //   • The BARCODE price and its date are NOT touched here — they move only on
 //     a barcode save (POST /api/pricing-strategy/barcode-price, a hand edit). See
 //     barcodeStore.ts.
+//   • Margin % (Computed box) and MRP ride along when edited — they are
+//     unsaved on the screen until Save too. An MRP change caps the barcode.
 //   • A hand change of the selling price (source switched, or Sale Price moved
 //     while SAVED) re-bases the barcode gap after the recompute.
 // Gated by Pricing Strategy page access — seeing the module means doing the work
@@ -35,22 +37,29 @@ export async function PUT(req: Request) {
         // or the Sale Price moved while it is the selling voice. Their barcode
         // gap is re-measured after the recompute; the barcode itself is not touched.
         const rebaseIds: number[] = [];
+        const mrpIds: number[] = [];
         const ops = affected.map((it) => {
             const before = byId.get(it.id)!;
             const hasSaved = it.savedSalePricePaise != null;
             let price = it.savedSalePricePaise;
+            const mrpChanged = it.mrpPaise !== undefined && it.mrpPaise !== before.mrpPaise;
+            if (mrpChanged) mrpIds.push(it.id);
             if (hasSaved && price != null) {
-                const mrp = before.mrpPaise;
+                const mrp = it.mrpPaise !== undefined ? it.mrpPaise : before.mrpPaise;
                 if (mrp != null && mrp > 0 && price > mrp) price = mrp; // clamp to MRP
             }
             const sourceChanged = before.effectiveSalePriceSource !== it.effectiveSalePriceSource;
             const salePriceChanged = (hasSaved ? price : null) !== before.savedSalePricePaise;
-            if (sourceChanged || (it.effectiveSalePriceSource === "SAVED" && salePriceChanged)) rebaseIds.push(it.id);
+            // A margin edit moves the Computed price, so it re-bases the gap when Computed sells.
+            const marginEdited = it.marginPercent !== undefined && it.effectiveSalePriceSource === "COMPUTED";
+            if (sourceChanged || marginEdited || (it.effectiveSalePriceSource === "SAVED" && salePriceChanged)) rebaseIds.push(it.id);
             return prisma.invProduct.update({
                 where: { id: it.id },
                 data: {
                     effectiveSalePriceSource: it.effectiveSalePriceSource,
                     savedSalePricePaise:      hasSaved ? price : null,
+                    ...(it.marginPercent !== undefined ? { marginPercent: it.marginPercent != null ? it.marginPercent.toString() : null } : {}),
+                    ...(it.mrpPaise !== undefined ? { mrpPaise: it.mrpPaise } : {}),
                 },
             });
         });
@@ -64,6 +73,7 @@ export async function PUT(req: Request) {
         // the recompute succeeded (a stale base would mislead Needs Attention).
         try {
             await recomputePricesForProducts(affected.map((it) => it.id));
+            for (const id of mrpIds) await capBarcodeToMrp(id);
             await rebaseBarcodeGap(rebaseIds);
         } catch { /* best-effort; price heals on next voucher */ }
 

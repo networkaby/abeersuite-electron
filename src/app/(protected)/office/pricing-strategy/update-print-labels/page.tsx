@@ -154,6 +154,8 @@ type Row = {
     salePrice: string;      // Sale Price (sticky), user-editable; "" = not set
     baseline: string;       // last-saved Sale Price, for dirty detection
     mrp: string;            // MRP ceiling (incl GST). "" = no MRP
+    baseMargin: string;     // last-saved Margin %, for dirty detection
+    baseMrp: string;        // last-saved MRP, for dirty detection
     saleSource: SaleSource; // which voice actually sells
     baseSource: SaleSource; // last-saved sale source, for dirty detection
     savedAt: string;        // local date the printed barcode ₹ (manual/auto) last changed → secret date code
@@ -209,10 +211,12 @@ function itemToRow(it: PricingItem): Row {
         additionalExcl,
         gst: String(gst),
         margin: it.marginPercent != null ? String(it.marginPercent) : "",
+        baseMargin: it.marginPercent != null ? String(it.marginPercent) : "",
         strategyPaise: it.computedPricePaise,
         salePrice: sale,
         baseline: sale,
         mrp: it.mrpPaise != null ? (it.mrpPaise / 100).toFixed(2) : "",
+        baseMrp: it.mrpPaise != null ? (it.mrpPaise / 100).toFixed(2) : "",
         saleSource: voiceFromDb(it.effectiveSalePriceSource),
         baseSource: voiceFromDb(it.effectiveSalePriceSource),
         savedAt: localDateOf(it.salePriceFrozenAt),
@@ -427,8 +431,17 @@ function saleCapped(r: Row): boolean {
 // A row has an unsaved FREEZE decision when its Sale Price OR its selling source
 // differs from what was last saved. (Margin/MRP/method aren't here — they persist
 // on their own as you edit; the Save button only commits the freeze decision.)
+// Amounts compare as numbers (paise for ₹, 4 places for %), so "5644" and
+// "5644.00" are the same price and a row typed back to its saved amount is clean.
+const sameAmount = (a: string, b: string, scale = 100): boolean => {
+    const x = numOrNull(a), y = numOrNull(b);
+    return x == null || y == null ? x === y : Math.round(x * scale) === Math.round(y * scale);
+};
+const marginDirty = (r: Row) => !sameAmount(r.margin, r.baseMargin, 10_000);
+const mrpDirty = (r: Row) => !sameAmount(r.mrp, r.baseMrp);
+// Computed (margin), Sale Price, MRP and the selling choice all wait for Save prices.
 const rowDirty = (r: Row): boolean =>
-    r.salePrice.trim() !== r.baseline.trim() || r.saleSource !== r.baseSource;
+    !sameAmount(r.salePrice, r.baseline) || r.saleSource !== r.baseSource || marginDirty(r) || mrpDirty(r);
 
 const stockQty = (r: Row): number => numOrNull(r.stock) ?? 0;
 
@@ -523,7 +536,6 @@ const ProductRow = memo(function ProductRow({
     // While the Computed box is focused it shows exactly what was typed (not the
     // re-derived price, which could drift a paisa from the 2-dp margin).
     const [computedDraft, setComputedDraft] = useState<string | null>(null);
-    const [marginAtFocus, setMarginAtFocus] = useState(r.margin);
     const savedNum = parseFloat(r.salePrice);
     const savedPrice = isFinite(savedNum) ? savedNum : null;
     const mrpNum = parseFloat(r.mrp);
@@ -558,9 +570,9 @@ const ProductRow = memo(function ProductRow({
                     {dirty ? (
                         <button
                             type="button"
-                            onClick={() => onUpdate(r.id, { salePrice: r.baseline, saleSource: r.baseSource })}
+                            onClick={() => onUpdate(r.id, { salePrice: r.baseline, saleSource: r.baseSource, margin: r.baseMargin, mrp: r.baseMrp })}
                             className="rounded-full p-0.5 text-amber-600 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/40"
-                            title="Unsaved change — click to reset this row (Sale Price + Selling)"
+                            title="Unsaved change — click to reset this row (Computed, Sale Price, MRP + Selling)"
                             aria-label={`Reset ${r.name}`}
                         >
                             <RotateCcw className="size-3.5" />
@@ -633,7 +645,7 @@ const ProductRow = memo(function ProductRow({
                             value={computedDraft ?? (myPrice != null ? myPrice.toFixed(2) : "")}
                             placeholder="—"
                             disabled={!(parseFloat(r.costIncl) > 0)}
-                            onFocus={() => { setMarginAtFocus(r.margin); setComputedDraft(myPrice != null ? myPrice.toFixed(2) : ""); }}
+                            onFocus={() => { setComputedDraft(myPrice != null ? myPrice.toFixed(2) : ""); }}
                             onChange={(e) => {
                                 const v = parseDecimalInput(e.target.value);
                                 setComputedDraft(v);
@@ -641,7 +653,6 @@ const ProductRow = memo(function ProductRow({
                             }}
                             onBlur={() => {
                                 setComputedDraft(null);
-                                if (r.margin !== marginAtFocus) onPersist(r.id, { marginPercent: numOrNull(r.margin) });
                             }}
                             className="h-7 w-24 ml-auto text-right text-sm font-mono font-semibold"
                         />
@@ -686,8 +697,7 @@ const ProductRow = memo(function ProductRow({
                         value={r.mrp}
                         placeholder="—"
                         onChange={(e) => onUpdate(r.id, { mrp: e.target.value })}
-                        onBlur={() => { const v = numOrNull(r.mrp); onPersist(r.id, { mrpPaise: v != null ? Math.round(v * 100) : null }); }}
-                        className="h-7 w-20 text-right text-xs font-mono"
+                        className={`h-7 w-20 text-right text-xs font-mono ${mrpDirty(r) ? "ring-1 ring-amber-400 focus-visible:ring-amber-400" : ""}`}
                     />
                 </TableCell>
             ) : null}
@@ -802,7 +812,8 @@ export default function GeneratePage() {
                 const merged = mapped.map((m) => {
                     const old = byId.get(m.id);
                     return old
-                        ? { ...m, salePrice: old.salePrice, baseline: old.baseline, saleSource: old.saleSource, baseSource: old.baseSource }
+                        ? { ...m, salePrice: old.salePrice, baseline: old.baseline, saleSource: old.saleSource, baseSource: old.baseSource,
+                            margin: old.margin, baseMargin: old.baseMargin, mrp: old.mrp, baseMrp: old.baseMrp }
                         : m;
                 });
                 const locals = prev.filter((r) => r.id < 0); // keep locally-added rows
@@ -1089,6 +1100,8 @@ export default function GeneratePage() {
                     id: r.id,
                     effectiveSalePriceSource: voiceToDb(r.saleSource),
                     savedSalePricePaise: sp != null ? Math.round(sp * 100) : null,
+                    ...(marginDirty(r) ? { marginPercent: numOrNull(r.margin) } : {}),
+                    ...(mrpDirty(r) ? { mrpPaise: ((m) => (m != null ? Math.round(m * 100) : null))(numOrNull(r.mrp)) } : {}),
                 };
             });
         setFreezing(true);
@@ -1098,9 +1111,11 @@ export default function GeneratePage() {
             setRows((prev) =>
                 prev.map((r) => {
                     if (!rowDirty(r)) return r;
-                    return { ...r, baseline: r.salePrice, baseSource: r.saleSource };
+                    return { ...r, baseline: r.salePrice, baseSource: r.saleSource, baseMargin: r.margin, baseMrp: r.mrp };
                 }),
             );
+            // Margin / MRP moved the Strategy price and maybe capped the barcode — take the server's.
+            if (payload.some((p) => "marginPercent" in p || "mrpPaise" in p)) void loadData();
             toast.success(`${payload.length} sale price${payload.length === 1 ? "" : "s"} saved.`);
         } catch (e) {
             const msg = axios.isAxiosError(e) ? (e.response?.data as { error?: string } | undefined)?.error : null;
