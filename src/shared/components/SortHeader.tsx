@@ -11,6 +11,7 @@
 // that silently never sorts.
 
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import type { ReactNode } from "react";
 
 export type SortDir = "asc" | "desc";
 
@@ -26,7 +27,7 @@ export function SortHeader<K extends string>({
     k, label, align = "left", title, firstDir = "asc", className = "px-3 py-2", sortKey, sortDir, toggleSort,
 }: SortProps<K> & {
     k: K;
-    label: string;
+    label: ReactNode;
     align?: "left" | "right" | "center";
     /** Native tooltip — used to explain what a computed column means. */
     title?: string;

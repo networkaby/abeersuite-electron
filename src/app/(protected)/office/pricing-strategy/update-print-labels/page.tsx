@@ -77,7 +77,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Check, Filter, Loader2, Plus, Printer, RotateCcw, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Barcode, Check, Filter, Loader2, Plus, Printer, RotateCcw, Save, Search, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useValueChange } from "@/shared/hooks/useValueChange";
 import { useTableSort } from "@/shared/hooks/useTableSort";
 import { SortHeader } from "@/shared/components/SortHeader";
@@ -1463,7 +1463,7 @@ export default function GeneratePage() {
                             {show("strategy") ? <SortHeader k="strategy" label="Strategy" align="right" firstDir="desc" title="Set on the Strategy page" className={`${SORT_TH} ${COL_TINT.strategy}`} {...sortProps} /> : null}
                             {show("sale") ? <SortHeader k="saved" label="Fixed Price" align="right" firstDir="desc" title="Your fixed price — it never moves by itself. Saves with Save prices." className={`${SORT_TH} ${COL_TINT.sale}`} {...sortProps} /> : null}
                             {show("mrp") ? <TableHead className={`text-right text-xs ${COL_TINT.mrp}`} title="Type the MRP. Saves with Save prices.">MRP</TableHead> : null}
-                            {show("barcode") ? <SortHeader k="barcode" label="Public Price" align="right" firstDir="desc" title="Price printed on the label (barcode). Typed only — nothing changes it on its own. Saves with Save prices." className={`${SORT_TH} ${COL_TINT.barcode}`} {...sortProps} /> : null}
+                            {show("barcode") ? <SortHeader k="barcode" label={<span className="inline-flex items-center gap-1"><Barcode className="size-3.5" aria-hidden />Public Price</span>} align="right" firstDir="desc" title="Price printed on the label (barcode). Typed only — nothing changes it on its own. Saves with Save prices." className={`${SORT_TH} ${COL_TINT.barcode}`} {...sortProps} /> : null}
                             <TableHead className="w-8" />
                         </TableRow>
                     </TableHeader>
