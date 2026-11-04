@@ -448,11 +448,28 @@ export async function POST(req: Request) {
     const protectedProductIds = await loadProtectedProductIds(prisma);
     // Safety wall: a flagged line bills from barcode and no discount may take it
     // below its effective sale price — read here, never from the client.
-    const floorIds = [...new Set(body.lines.filter((l) => l.applyFloor).map((l) => l.productId))];
+    // A new bill's typed price is checked on EVERY line, not just flagged ones —
+    // an old counter or a hand-made request sends no applyFloor. A convert keeps
+    // its source's prices (lines arrive unflagged), so it is checked flagged-only.
+    const priceChecked = (l: { applyFloor?: boolean }) => !!l.applyFloor || !body.sourceVoucherId;
+    const floorIds = [...new Set(body.lines.filter(priceChecked).map((l) => l.productId))];
     const floorPaiseById = new Map(floorIds.length === 0 ? [] : (await prisma.invProduct.findMany({
         where: { id: { in: floorIds } }, select: { id: true, effectiveSalePricePaise: true },
     })).map((p) => [p.id, p.effectiveSalePricePaise]));
     const lineFloorExcl = body.lines.map((l) => (l.applyFloor ? floorExclFromPaise(floorPaiseById.get(l.productId), l.taxRate) : null));
+    // The wall on the typed price itself (the screen enforces it too): a line
+    // under its lowest price is refused, never quietly raised.
+    const underFloor = body.lines.find((l) => {
+        if (!priceChecked(l)) return false;
+        const f = floorExclFromPaise(floorPaiseById.get(l.productId), l.taxRate);
+        return f != null && l.unitPrice < f - 0.005;
+    });
+    if (underFloor) {
+        return NextResponse.json(
+            { error: "A line is priced below its lowest price. Refresh the bill and check the prices.", code: "BELOW_LOWEST_PRICE", productId: underFloor.productId },
+            { status: 422 },
+        );
+    }
     // Incl ₹ the bill may drop before a floored line hits its wall; undefined = no wall on this bill.
     const floorRoom = lineFloorExcl.some((f) => f != null)
         ? floorRoomIncl(body.lines.map((l, i) => ({ qty: l.quantity, unitPrice: l.unitPrice, taxRate: l.taxRate, floorExcl: lineFloorExcl[i] })))
