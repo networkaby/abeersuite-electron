@@ -44,7 +44,6 @@ import { toast } from "sonner";
 import type { PricingItem } from "@/modules/pricing-strategy/lib/pricingItem";
 import { formatInr, gridRowClass, parseDecimalInput } from "@/shared/lib/format";
 import { afterGstProfit } from "@/shared/lib/pricing/profit";
-import { confirmAction } from "@/shared/lib/ui/confirmStore";
 import { barcodePrice as barcodePriceCore, normalizeBarcodeBands, DEFAULT_BARCODE_BANDS, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 import { productMatchesSearch } from "@/shared/lib/inventory";
 import { Button } from "@/components/ui/button";
@@ -1058,19 +1057,6 @@ export default function GeneratePage() {
     const save = async () => {
         const checked = rows.filter(rowDirty);
 
-        // Pattern C — this is the largest write on the screen: every edited row
-        // in the WHOLE list, not just the visible page. The count is the whole
-        // point of the question, so it goes in the button too.
-        const writes = checked.filter((r) => r.id > 0).length;
-        if (writes > 0) {
-            const ok = await confirmAction({
-                title: writes === 1 ? "Save the sale price for 1 product?" : `Save the sale price for ${writes} products?`,
-                body: "Each row's Sale Price and selling choice (Strategy / Computed / Sale Price) are saved; POS and the shop charge from them. Margin %, MRP and any typed barcode are saved too. This cannot be undone in one step.",
-                confirmLabel: writes === 1 ? "Save 1 price" : `Save ${writes} prices`,
-            });
-            if (!ok) return;
-        }
-
         const payload = checked
             .filter((r) => r.id > 0)
             .map((r) => {
@@ -1338,17 +1324,7 @@ export default function GeneratePage() {
                                 variant="ghost"
                                 size="sm"
                                 className="h-8"
-                                onClick={async () => {
-                                    // Pattern C — this empties the print queue that the
-                                    // Print labels page shares, so it throws away work
-                                    // done on another screen. Worth one question.
-                                    const ok = await confirmAction({
-                                        title: `Clear all ${selectionIds.size} products from the selection?`,
-                                        body: "The print queue is shared with the Print labels page, so it empties there too. The products themselves stay in the catalogue.",
-                                        confirmLabel: "Clear selection",
-                                    });
-                                    if (ok) queueClear();
-                                }}
+                                onClick={queueClear}
                                 disabled={selectionIds.size === 0}
                                 title="Empty the whole selection (the products stay in the catalogue)"
                             >
