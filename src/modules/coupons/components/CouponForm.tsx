@@ -60,7 +60,7 @@ export interface Coupon {
     minBillValue: string | number | null;
     totalUsageLimit: number | null;
     perCustomerLimit: number | null;
-    singleUse: boolean;
+    isPrivate: boolean;
     eligibility: "ANY" | "NEW" | "RETURNING";
     stackable: boolean;
     stackScope: "BILL" | "LINE";
@@ -143,7 +143,17 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
     const [minBillValue, setMinBillValue] = useState(str(initial?.minBillValue));
     const [totalUsageLimit, setTotalUsageLimit] = useState(str(initial?.totalUsageLimit));
     const [perCustomerLimit, setPerCustomerLimit] = useState(str(initial?.perCustomerLimit));
-    const [singleUse, setSingleUse] = useState(initial?.singleUse ?? false);
+    const [isPrivate, setIsPrivate] = useState(initial?.isPrivate ?? false);
+    /// Private = hidden from every offer list, claimed only by its typed code:
+    /// it never auto-applies, and both use caps start at 1 so a shared code
+    /// cannot be overused by mistake (staff can raise them).
+    const togglePrivate = (on: boolean) => {
+        setIsPrivate(on);
+        if (!on) return;
+        setAutoApply(false);
+        if (!totalUsageLimit.trim()) setTotalUsageLimit("1");
+        if (!perCustomerLimit.trim()) setPerCustomerLimit("1");
+    };
     const [eligibility, setEligibility] = useState<Coupon["eligibility"]>(initial?.eligibility ?? "ANY");
     const [stackable, setStackable] = useState(initial?.stackable ?? false);
     const [stackScope, setStackScope] = useState<Coupon["stackScope"]>(initial?.stackScope ?? (initial?.type === "SET_PRICE" ? "LINE" : "BILL"));
@@ -189,7 +199,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
             name: name.trim(),
             description: description.trim() || null,
             type, channels,
-            applyMode: autoApply ? "AUTO" : "CODE",
+            applyMode: autoApply && !isPrivate ? "AUTO" : "CODE",
             percentOff: type === "PERCENT" ? optNum(percentOff) : null,
             maxDiscountAmt: type === "PERCENT" ? optNum(maxDiscountAmt) : null,
             flatAmt: type === "FLAT" ? optNum(flatAmt) : null,
@@ -206,7 +216,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
             minBillValue: optNum(minBillValue),
             totalUsageLimit: optInt(totalUsageLimit),
             perCustomerLimit: optInt(perCustomerLimit),
-            singleUse, eligibility, stackable,
+            isPrivate, eligibility, stackable,
             stackScope: stackable ? "BILL" as const : stackScope,
             // Independent free-grant (FREE_ITEM / BOGO): the item rides the bill
             // as a zero-price FREE line on top of everything — no ₹ discount.
@@ -265,11 +275,14 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
                         </label>
                     </RadioGroup>
                 </Field>
-                <div>
-                    <Label className="text-[11px] text-muted-foreground">Auto-apply</Label>
-                    <div className={`flex ${fullPage ? "h-9" : "h-10"} items-center justify-between gap-2 rounded-md border border-border/60 bg-background px-3`}>
-                        <span className="truncate text-xs text-muted-foreground">At checkout when it qualifies</span>
-                        <Switch checked={autoApply} onCheckedChange={setAutoApply} />
+                <div className="divide-y divide-border/60 rounded-md border border-border/60 bg-background">
+                    <div className="flex h-9 items-center justify-between gap-2 px-3">
+                        <span className="truncate text-xs"><span className="font-medium">Auto-apply</span> <span className="text-muted-foreground">— at checkout when it qualifies</span></span>
+                        <Switch checked={autoApply && !isPrivate} onCheckedChange={setAutoApply} disabled={isPrivate} />
+                    </div>
+                    <div className="flex h-9 items-center justify-between gap-2 px-3">
+                        <span className="truncate text-xs"><span className="font-medium">Private</span> <span className="text-muted-foreground">— hidden, share the code by hand</span></span>
+                        <Switch checked={isPrivate} onCheckedChange={togglePrivate} />
                     </div>
                 </div>
             </div>
@@ -467,7 +480,6 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
     const behaviourSection = (
         <Section title="Behaviour" tone="behaviour">
             <div className="space-y-1.5">
-                <Toggle label="Single-use" hint="one redemption" checked={singleUse} onChange={setSingleUse} />
                 <Toggle label="Stackable" hint="with tier + loyalty" checked={stackable} onChange={setStackable} />
                 {(type === "FREE_ITEM" || type === "BOGO") && (
                     <Toggle
@@ -515,7 +527,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
                     : <span className="text-[11px] text-muted-foreground">Fill in the offer to preview.</span>}
                 {name.trim() && <span className="text-[11px] text-muted-foreground">{name.trim()}</span>}
                 <span className="hidden h-4 w-px bg-border/70 sm:block" />
-                {autoApply && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">Auto-apply</span>}
+                {autoApply && !isPrivate && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">Auto-apply</span>}
                 {code.trim() && <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{code.trim().toUpperCase()}</span>}
                 {minBillValue.trim() && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">Min ₹{minBillValue}</span>}
                 <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{CHANNEL_LABEL[channels]}</span>

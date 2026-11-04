@@ -19,13 +19,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     try {
         const { rules, ...fields } = data;
-        // Keep totalUsageLimit consistent when singleUse is toggled on.
-        const totalUsageLimit = fields.singleUse === true ? 1 : fields.totalUsageLimit;
         const coupon = await prisma.coupon.update({
             where: { id },
             data: {
                 ...fields,
-                ...(totalUsageLimit !== undefined ? { totalUsageLimit } : {}),
+                // A private coupon is claimed only by its typed code — never auto.
+                ...(fields.isPrivate === true ? { applyMode: "CODE" as const } : {}),
                 // When `rules` is sent, replace the whole set atomically.
                 ...(rules ? { rules: { deleteMany: {}, create: rules.map(toCouponRuleCreate) } } : {}),
             },

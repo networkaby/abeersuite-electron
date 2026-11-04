@@ -46,7 +46,7 @@ const baseShape = {
     minBillValue:    z.number().min(0).max(100_000_000).nullable().optional(),
     totalUsageLimit: z.number().int().min(1).max(10_000_000).nullable().optional(),
     perCustomerLimit:z.number().int().min(1).max(10_000_000).nullable().optional(),
-    singleUse:       z.boolean().optional(),
+    isPrivate:       z.boolean().optional(),
     eligibility:     couponEligibilityEnum.optional(),
     stackable:       z.boolean().optional(),
     stackScope:      couponStackScopeEnum.optional(),

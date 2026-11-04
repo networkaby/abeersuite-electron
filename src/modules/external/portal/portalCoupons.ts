@@ -63,9 +63,9 @@ async function compute(accountId: number): Promise<PortalCoupon[]> {
             AND: [
                 { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
                 { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
-                // Public offers, or ones issued to this profile. A one-time code with no
-                // owner is handed out by staff — never listed for everyone to see.
-                { OR: [{ ownerAccountId: accountId }, { ownerAccountId: null, singleUse: false }] },
+                // Public offers, or ones issued to this profile. A private code is shared
+                // by hand — never listed for everyone to see.
+                { OR: [{ ownerAccountId: accountId }, { ownerAccountId: null, isPrivate: false }] },
             ],
         },
         orderBy: [{ endsAt: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
@@ -74,7 +74,7 @@ async function compute(accountId: number): Promise<PortalCoupon[]> {
             percentOff: true, maxDiscountAmt: true, flatAmt: true, setPriceAmt: true, freeDiscountPct: true,
             buyQty: true, getQty: true, freeProduct: { select: { name: true } },
             minBillValue: true, endsAt: true, ownerAccountId: true, eligibility: true,
-            totalUsageLimit: true, perCustomerLimit: true, singleUse: true,
+            totalUsageLimit: true, perCustomerLimit: true,
         },
     });
     if (rows.length === 0) return [];
@@ -89,7 +89,7 @@ async function compute(accountId: number): Promise<PortalCoupon[]> {
     const usedMine = new Map(mine.map((t) => [t.couponId, t._count]));
 
     return rows.flatMap((c) => {
-        const limit = c.singleUse ? 1 : c.totalUsageLimit;
+        const limit = c.totalUsageLimit;
         if (limit != null && (usedAll.get(c.id) ?? 0) >= limit) return [];
         const usesLeft = c.perCustomerLimit != null ? c.perCustomerLimit - (usedMine.get(c.id) ?? 0) : null;
         if (usesLeft != null && usesLeft <= 0) return [];

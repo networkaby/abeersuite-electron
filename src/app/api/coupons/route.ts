@@ -32,8 +32,8 @@ export async function POST(req: Request) {
         const coupon = await prisma.coupon.create({
             data: {
                 ...fields,
-                // singleUse ⇒ a hard total cap of 1 (the engine reads totalUsageLimit).
-                totalUsageLimit: fields.singleUse ? 1 : fields.totalUsageLimit ?? null,
+                // A private coupon is claimed only by its typed code — never auto.
+                ...(fields.isPrivate ? { applyMode: "CODE" as const } : {}),
                 createdById: user!.id,
                 rules: rules?.length ? { create: rules.map(toCouponRuleCreate) } : undefined,
             },

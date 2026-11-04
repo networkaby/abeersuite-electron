@@ -57,7 +57,7 @@ function toContext(row: CouponRow): CouponContext {
         isActive: row.isActive,
         totalUsageLimit: row.totalUsageLimit,
         perCustomerLimit: row.perCustomerLimit,
-        singleUse: row.singleUse,
+        isPrivate: row.isPrivate,
         rules: row.rules.map((r) => ({
             kind: r.kind === "EXCLUDE" ? "EXCLUDE" : "INCLUDE",
             productId: r.productId, categoryId: r.categoryId, groupId: r.groupId, brandId: r.brandId,
@@ -79,7 +79,7 @@ export async function resolveCouponByCode(tx: Tx, code: string, channel: CouponC
 /// All live AUTO coupons for this channel (Phase 2 auto-apply candidates).
 export async function loadAutoCoupons(tx: Tx, channel: CouponChannel): Promise<CouponContext[]> {
     const rows = await tx.coupon.findMany({
-        where: { applyMode: "AUTO", isActive: true, ...channelFilter(channel) },
+        where: { applyMode: "AUTO", isActive: true, isPrivate: false, ...channelFilter(channel) },
         include: { rules: true },
         orderBy: { createdAt: "asc" },
     });
@@ -93,6 +93,8 @@ export async function loadPosOffers(tx: Tx, now: Date): Promise<CouponContext[]>
     const rows = await tx.coupon.findMany({
         where: {
             isActive: true,
+            // Private coupons are never listed — staff type the code like anyone else.
+            isPrivate: false,
             ...channelFilter("POS"),
             OR: [
                 { startsAt: null },
@@ -384,7 +386,7 @@ export async function issueMilestoneCoupon(
             startsAt: t.startsAt, endsAt: t.endsAt, minBillValue: t.minBillValue,
             eligibility: t.eligibility, stackable: t.stackable, stackScope: t.stackScope,
             independent: t.independent,
-            ownerAccountId: args.accountId, singleUse: true, totalUsageLimit: 1,
+            ownerAccountId: args.accountId, totalUsageLimit: 1,
             issuedByMilestoneId: args.milestoneId, isActive: true, createdById: args.createdById,
             rules: t.rules.length
                 ? { create: t.rules.map((r) => ({ kind: r.kind, productId: r.productId, categoryId: r.categoryId, groupId: r.groupId, brandId: r.brandId })) }

@@ -55,7 +55,8 @@ export interface CouponContext {
     isActive: boolean;
     totalUsageLimit: number | null;
     perCustomerLimit: number | null;
-    singleUse: boolean;
+    /// Hidden from offer lists; claimable only by typing the code (never auto-applies).
+    isPrivate: boolean;
     rules: CouponRuleLite[];
 }
 

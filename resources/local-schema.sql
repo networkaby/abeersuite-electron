@@ -1295,7 +1295,7 @@ CREATE TABLE IF NOT EXISTS "Coupon" (
     "minBillValue" DECIMAL(14,2),
     "totalUsageLimit" INTEGER,
     "perCustomerLimit" INTEGER,
-    "singleUse" BOOLEAN NOT NULL DEFAULT false,
+    "isPrivate" BOOLEAN NOT NULL DEFAULT false,
     "eligibility" "CouponEligibility" NOT NULL DEFAULT 'ANY',
     "stackable" BOOLEAN NOT NULL DEFAULT false,
     "stackScope" "CouponStackScope" NOT NULL DEFAULT 'BILL',
@@ -1348,7 +1348,7 @@ ALTER TABLE "Coupon" ADD COLUMN IF NOT EXISTS "totalUsageLimit" INTEGER;
 ALTER TABLE "Coupon" ALTER COLUMN "totalUsageLimit" DROP NOT NULL;
 ALTER TABLE "Coupon" ADD COLUMN IF NOT EXISTS "perCustomerLimit" INTEGER;
 ALTER TABLE "Coupon" ALTER COLUMN "perCustomerLimit" DROP NOT NULL;
-ALTER TABLE "Coupon" ADD COLUMN IF NOT EXISTS "singleUse" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Coupon" ADD COLUMN IF NOT EXISTS "isPrivate" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "Coupon" ADD COLUMN IF NOT EXISTS "eligibility" "CouponEligibility" NOT NULL DEFAULT 'ANY';
 ALTER TABLE "Coupon" ADD COLUMN IF NOT EXISTS "stackable" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "Coupon" ADD COLUMN IF NOT EXISTS "stackScope" "CouponStackScope" NOT NULL DEFAULT 'BILL';

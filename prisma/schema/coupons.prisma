@@ -104,7 +104,7 @@ model Coupon {
   /// Max ₹ a single redemption can take (independent of percent cap; null = none).
   totalUsageLimit  Int? // N across all customers (null = unlimited)
   perCustomerLimit Int? // per-account cap (null = unlimited)
-  singleUse        Boolean           @default(false) // unique one-time code (≡ totalUsageLimit 1)
+  isPrivate        Boolean           @default(false) // hidden from every offer list; works only when the code is typed
   eligibility      CouponEligibility @default(ANY)
 
   // ── Stacking ──

@@ -70,7 +70,7 @@ function metaLine(c: Coupon): string[] {
     if (c.independent) parts.push("free on top");
     if (c.stackable) parts.push("stackable");
     else if (c.stackScope === "LINE") parts.push("exclusive · its items only");
-    if (c.singleUse) parts.push("single-use");
+    if (c.isPrivate) parts.push("private");
     if (c.eligibility !== "ANY") parts.push(c.eligibility.toLowerCase());
     return parts;
 }
