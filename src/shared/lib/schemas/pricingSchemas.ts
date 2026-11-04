@@ -88,12 +88,6 @@ export const salePriceSaveSchema = z.object({
 
 export type SalePriceSaveInput = z.infer<typeof salePriceSaveSchema>;
 
-// "Update barcode" on Update prices: save the AUTO barcode (bands on the
-// effective sale price, MRP-capped) for these products — price + date + gap together.
-export const barcodePriceSaveSchema = z.object({
-    ids: z.array(z.number().int().positive()).min(1).max(2000),
-});
-
 // ── Strategy points (additive-margin model) ───────────────────────────────
 // The single org-wide points configuration. GET and PUT share this grouped
 // shape: `base` is the baseline; `brand`/`category`/`group` map a master id

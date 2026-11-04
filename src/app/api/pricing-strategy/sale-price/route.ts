@@ -10,7 +10,7 @@ import { rebaseBarcodeGap, saveManualBarcode } from "@/modules/pricing-strategy/
 // for the rows ticked on Update prices ("Save").
 //   • savedSalePricePaise (MRP-capped); blank clears it.
 //   • The BARCODE price and its date are NOT touched here — they move only on
-//     a barcode save (POST /api/pricing-strategy/barcode-price, a hand edit). See
+//     a typed barcode (sent here with Save prices, or the PATCH). See
 //     barcodeStore.ts.
 //   • Margin % (Computed box) and MRP ride along when edited — they are
 //     unsaved on the screen until Save too. So does a typed barcode
