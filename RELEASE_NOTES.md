@@ -1,21 +1,29 @@
-# v1.16.24
+# v1.16.25
 
-A normal update — no database change, nothing urgent. Install when the counter is free. From this version on, everyday updates like this one wait for you to choose "Restart now"; only important ones restart the counter by themselves.
+An important update — it carries a database change, so every counter must take it before the office site is updated. The counter will show the countdown and restart itself at a free moment. Until a counter is updated, its sync pauses once the office side changes.
 
-## Updates on the counter
+## Billing on the counter
 
-- **Two kinds of update from now on.** An important update (a database change, sign-in, sync, a serious billing fix) still shows the countdown and restarts the counter at a free moment. Every other update downloads quietly and shows a small card — it installs only when you press **Restart now**, never on its own, not even when the app is closed.
-- **"Later" hides the card for about one shift**, then it comes back as a reminder.
-- A counter that skipped updates will still get the next important one; it keeps checking in the background.
+- **The lowest price is now a safety wall.** Every discount comes off the barcode (Public) price and stops at the lowest price — a bill can no longer go below it, even if typed by hand. The server also refuses such a line.
+- A line now shows half the gap between the barcode price and the lowest price, so staff can see how much room there is to bargain.
+- A hand-typed round-off is held to ±₹1.
 
-## Update & Print Labels screen
+## Update Prices screen
 
-- Much faster: the list no longer reloads after every sale, and typing in the boxes has no lag.
-- **Save prices** counts only the rows you actually edited — ticking a row alone no longer re-saves it.
-- **Update barcode** works on ticked rows only and is greyed out when nothing is ticked.
-- A barcode you typed by hand is never replaced by Update barcode, even if the row is ticked.
-- After saving, the list shows the new barcode date straight away.
+- Column names are clearer: Sale Price now shows as **Fixed Price**, Barcode as **Public Price** (with a barcode icon).
+- Barcodes are typed by hand only — the Update barcode button is gone, MRP or Sale Price changes never move a barcode, and a barcode is never saved below the lowest price.
+- Every edit (Computed, Sale Price, MRP, barcode) waits for **Save prices**; Save prices no longer asks for a confirm and clears the ticks after saving.
+- A reset-all circle beside the header tick undoes unsaved edits.
 
-## Contacts
+## Coupons and discounts
 
-- **Contacts now opens one list of every party** — persons and companies together. Old links to the Contacts page land there automatically.
+- **Private coupons** replace Single-use: a private coupon is hidden from the POS, app and shop offer lists and works only when its code is typed. Use limits come from the total and per-customer limits.
+- Coupons and spend tiers each get their own discount cap, plus the shared overall cap — on all three discount pages.
+- The coupon form is wider, with clearer Behaviour wording, one switches card and a Help button.
+
+## Other
+
+- **Team chat** can now send files — Excel, PDF and photos.
+- Products list has a **Photos** count column and a filter by number of photos.
+- Social posts with photos stay a draft until the photos finish uploading, then schedule themselves.
+- Counters use less internet while syncing.
