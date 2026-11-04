@@ -432,6 +432,8 @@ const sameAmount = (a: string, b: string, scale = 100): boolean => {
 const marginDirty = (r: Row) => !sameAmount(r.margin, r.baseMargin, 10_000);
 const mrpDirty = (r: Row) => !sameAmount(r.mrp, r.baseMrp);
 const barcodeDirty = (r: Row) => !sameAmount(r.barcodeManual, r.baseBarcode);
+// Puts a row's editable boxes back to the last saved values (no DB call).
+const resetRow = (r: Row): Row => ({ ...r, salePrice: r.baseline, saleSource: r.baseSource, margin: r.baseMargin, mrp: r.baseMrp, barcodeManual: r.baseBarcode, barcodeIsManual: r.baseBarcodeIsManual });
 // Computed (margin), Sale Price, MRP, Barcode and the selling choice all wait for Save prices.
 const rowDirty = (r: Row): boolean =>
     !sameAmount(r.salePrice, r.baseline) || r.saleSource !== r.baseSource || marginDirty(r) || mrpDirty(r) || barcodeDirty(r);
@@ -561,7 +563,7 @@ const ProductRow = memo(function ProductRow({
                     {dirty ? (
                         <button
                             type="button"
-                            onClick={() => onUpdate(r.id, { salePrice: r.baseline, saleSource: r.baseSource, margin: r.baseMargin, mrp: r.baseMrp, barcodeManual: r.baseBarcode, barcodeIsManual: r.baseBarcodeIsManual })}
+                            onClick={() => onUpdate(r.id, resetRow(r))}
                             className="rounded-full p-0.5 text-amber-600 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/40"
                             title="Unsaved change — click to reset this row (Computed, Sale Price, MRP, Barcode + Selling)"
                             aria-label={`Reset ${r.name}`}
@@ -1433,7 +1435,21 @@ export default function GeneratePage() {
                     <TableHeader className="sticky top-0 z-20 bg-background [&_th]:bg-background [&_tr]:border-b [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
                         <TableRow>
                             <TableHead className="w-8">
-                                <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Select all visible rows" />
+                                <div className="flex items-center gap-1">
+                                    <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Select all visible rows" />
+                                    {/* Reset all: every unsaved row in the whole list (the Save count), not just this page. */}
+                                    {dirtyCount > 0 ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => setRows((prev) => prev.map((x) => (rowDirty(x) ? resetRow(x) : x)))}
+                                            className="rounded-full p-0.5 text-amber-600 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/40"
+                                            title={`Reset all ${dirtyCount} unsaved row${dirtyCount === 1 ? "" : "s"}`}
+                                            aria-label="Reset all unsaved rows"
+                                        >
+                                            <RotateCcw className="size-3.5" />
+                                        </button>
+                                    ) : null}
+                                </div>
                             </TableHead>
                             <TableHead className="w-8 text-xs">#</TableHead>
                             <SortHeader k="name" label="Product name" className={`${SORT_TH} w-full min-w-[240px]`} {...sortProps} />
