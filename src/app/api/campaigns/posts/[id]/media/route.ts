@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+// Posts read the server, not a counter's local copy: a post saved a moment ago is not there yet
+// ("Post not found" on its photo upload), so it went out text-only.
+import { prismaAuthoritative as prisma } from "@/shared/lib/prisma/prismaClient";
 import { handleApiError, parseIdParam, validateRequest } from "@/shared/lib/api";
 import { checkPostMedia, variantEmpty, type PostPhoto, type PostVariants } from "@/modules/campaigns/lib/post";
 import { loadPost, postMediaPrefix, postMediaResponse } from "@/modules/campaigns/lib/postServer";

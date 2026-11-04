@@ -1,6 +1,8 @@
 import "server-only";
 import sharp from "sharp";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+// Posts read the server, not a counter's local copy: a post saved a moment ago is not there yet
+// ("Post not found" on its photo upload), so it went out text-only.
+import { prismaAuthoritative as prisma } from "@/shared/lib/prisma/prismaClient";
 import { mediaLink } from "@/modules/message/lib/customerMessages";
 import { R2_MESSAGES_BUCKET } from "@/shared/lib/constants/whatsapp";
 import { isR2Configured, putR2 } from "@/shared/lib/storage/r2";

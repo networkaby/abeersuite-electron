@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { confirmAction } from "@/shared/lib/ui/confirmStore";
+import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import {
     productPostCaption,
     type PhotoCrop,
@@ -83,17 +84,25 @@ export default function PostComposer({
     // A new post: which Master photo a platform takes instead of the main one, held until the first save.
     const [prePick, setPrePick] = useState<Record<string, File[]>>({});
 
-    useEffect(() => {
+    function loadPost() {
         if (postId === null) return;
         axios
             .get<PostRow>(`/api/campaigns/posts/${postId}`)
             .then((r) => {
                 setPost(r.data);
                 setForm(fromRow(r.data));
+                setLoading(false);
             })
-            .catch((e) => toast.error(extractApiError(e, "Failed to load the post")))
-            .finally(() => setLoading(false));
-    }, [postId]);
+            .catch((e) => {
+                // On a counter a post saved a moment ago is not in the local copy yet:
+                // keep "Loading…" and take it when the copy has it (like Day Book).
+                if (axios.isAxiosError(e) && e.response?.status === 404) return;
+                toast.error(extractApiError(e, "Failed to load the post"));
+                setLoading(false);
+            });
+    }
+    useEffect(loadPost, [postId]);
+    useRealtimeTopics(["settings"], loadPost, postId !== null && !post, ["Post"]);
 
     useEffect(() => {
         // Linking a campaign needs the Campaigns tick; without it the picker just stays empty.

@@ -1,6 +1,9 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+// Posts read the server, not a counter's local copy: a post saved a moment ago is not there yet
+// ("Post not found" on its photo upload), so it went out text-only. Only the screen's own
+// GET reads the local copy (loadPost(id, prismaRouted)) and refreshes when the copy has it.
+import { prismaAuthoritative as prisma } from "@/shared/lib/prisma/prismaClient";
 import { mediaLink } from "@/modules/message/lib/customerMessages";
 import { R2_MESSAGES_BUCKET } from "@/shared/lib/constants/whatsapp";
 import { isR2Configured, putR2 } from "@/shared/lib/storage/r2";
@@ -110,9 +113,9 @@ export function asChannelCopy<T extends Parameters<typeof channelPost>[0]>(post:
 export const channelDue = (post: Parameters<typeof channelPost>[0], channel: string, now: Date) =>
     (channelPost(post, channel).scheduledAt?.getTime() ?? Infinity) <= now.getTime();
 
-/** One post as the screens want it, or null. */
-export async function loadPost(id: number) {
-    const row = await prisma.post.findUnique({ where: { id }, select: POST_SELECT });
+/** One post as the screens want it, or null. `db` = the local copy for a plain screen read. */
+export async function loadPost(id: number, db: typeof prisma = prisma) {
+    const row = await db.post.findUnique({ where: { id }, select: POST_SELECT });
     return row && withMediaLinks(row);
 }
 

@@ -1,5 +1,7 @@
 import "server-only";
-import { prisma } from "@/shared/lib/prisma/prismaClient";
+// Posts read the server, not a counter's local copy: a post saved a moment ago is not there yet
+// ("Post not found" on its photo upload), so it went out text-only.
+import { prismaAuthoritative as prisma } from "@/shared/lib/prisma/prismaClient";
 import { FacebookError, facebookReady, postReelToFacebook, postStoryToFacebook, postToFacebook } from "@/modules/campaigns/lib/facebookPage";
 import { channelOf, facebookAutoBlock, facebookReelBlock, facebookStoryBlock } from "@/modules/campaigns/lib/post";
 import { COPY_SELECT, asChannelCopy, channelDue, claimPostFor, recordShare } from "@/modules/campaigns/lib/postServer";
