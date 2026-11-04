@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { recomputePricesQuietly } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { NextResponse } from "next/server";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
@@ -48,6 +49,7 @@ export async function POST(req: Request) {
             })),
         });
 
+        await recomputePricesQuietly(data.lines.map((l) => l.productId), "costing-draw-batch");
         return NextResponse.json({ created: data.lines.length, remainingPaise: remaining - total });
     } catch (e) {
         return handleApiError(e, "Failed to allocate");

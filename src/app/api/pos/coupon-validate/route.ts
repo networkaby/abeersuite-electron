@@ -9,6 +9,7 @@ import { selectCouponForCart, selectCouponForCartById, selectOnTopCouponByCode, 
 import { round2 } from "@/shared/lib/format";
 import { resolveEffectiveCostMap } from "@/modules/pricing-strategy/lib/resolveCost";
 import { loadProtectedProductIds } from "@/modules/retention/lib/protection";
+import { floorExclFromPaise, floorRoomIncl } from "@/modules/pricing-strategy/lib/priceFloor";
 
 // POST /api/pos/coupon-validate — validate a coupon code (or pick the best auto
 // coupon) against the current cart. Returns the SAME ₹ the sale route will post,
@@ -24,6 +25,8 @@ const lineSchema = z.object({
     // cost-incl-tax for the LINE-scope tier-share estimate (the tier discount
     // is still % of cost). Same snapshot /sale receives.
     taxRate:    z.number().min(0).max(100).optional(),
+    // Same safety-wall flag /sale receives (priceFloor.ts).
+    applyFloor: z.boolean().optional(),
 });
 
 const bodySchema = z.object({
@@ -74,11 +77,17 @@ export async function POST(req: Request) {
         // in /sale (cost rides along for the LINE-scope tier-share estimate below).
         const productIds = [...new Set(data.lines.map((l) => l.productId))];
         const [products, costPaiseById, protectedProductIds] = await Promise.all([
-            prisma.invProduct.findMany({ where: { id: { in: productIds } }, select: { id: true, groupId: true, categoryId: true, brandId: true } }),
+            prisma.invProduct.findMany({ where: { id: { in: productIds } }, select: { id: true, groupId: true, categoryId: true, brandId: true, effectiveSalePricePaise: true } }),
             resolveEffectiveCostMap(productIds),
             loadProtectedProductIds(prisma),
         ]);
         const taxById = new Map(products.map((p) => [p.id, p]));
+        // Safety wall — same floors /sale reads (priceFloor.ts).
+        const floorLines = data.lines.map((l) => ({
+            qty: l.qty, unitPrice: l.unitPrice, taxRate: l.taxRate ?? 0,
+            floorExcl: l.applyFloor ? floorExclFromPaise(taxById.get(l.productId)?.effectiveSalePricePaise, l.taxRate ?? 0) : null,
+        }));
+        const floorRoom = floorLines.some((l) => l.floorExcl != null) ? floorRoomIncl(floorLines) : undefined;
 
         const input: EvalInput = {
             accountId: data.accountId ?? null,
@@ -265,6 +274,7 @@ export async function POST(req: Request) {
             tierRupees: tierRupeesEff, loyaltyRupees: loyaltyRupeesEff, goodsValue,
             maxTotalDiscountPct: config?.maxTotalDiscountPct != null ? Number(config.maxTotalDiscountPct) : null,
             maxCouponDiscountPct: config?.maxCouponDiscountPct != null ? Number(config.maxCouponDiscountPct) : null,
+            floorRoomIncl: floorRoom,
         });
 
         if (fin.couponRupees <= 0) return NextResponse.json({ ok: false, reason: "Coupon yields no discount on this bill" });

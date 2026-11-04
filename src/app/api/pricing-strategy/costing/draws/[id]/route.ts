@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { recomputePricesQuietly } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { NextResponse } from "next/server";
 import { requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
@@ -23,7 +24,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
         const draw = await prisma.additionalCostAllocation.findUnique({
             where: { id: drawId },
-            select: { id: true, kind: true, sourceVoucherGlLineId: true, amountPaise: true },
+            select: { id: true, kind: true, sourceVoucherGlLineId: true, amountPaise: true, productId: true },
         });
         if (!draw) return NextResponse.json({ error: "Draw not found" }, { status: 404 });
 
@@ -57,6 +58,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
                 ...(isAlloc && data.quantity !== undefined ? { quantity: data.quantity } : {}),
             },
         });
+        // The landed cost moved — refresh the floor POS reads (Lowest).
+        await recomputePricesQuietly([draw.productId], "costing-draw-edit");
         return NextResponse.json({ ok: true });
     } catch (e) {
         return handleApiError(e, "Failed to update draw");
@@ -74,7 +77,8 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
         if (!Number.isInteger(drawId) || drawId <= 0) {
             return NextResponse.json({ error: "Invalid draw id" }, { status: 400 });
         }
-        await prisma.additionalCostAllocation.delete({ where: { id: drawId } });
+        const gone = await prisma.additionalCostAllocation.delete({ where: { id: drawId }, select: { productId: true } });
+        await recomputePricesQuietly([gone.productId], "costing-draw-delete");
         return NextResponse.json({ ok: true });
     } catch (e) {
         return handleApiError(e, "Failed to delete draw");

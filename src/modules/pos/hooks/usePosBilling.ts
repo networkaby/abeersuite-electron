@@ -25,6 +25,7 @@ import { DEFAULT_PAYEE_NAME } from "@/modules/pos/lib/paymentLink";
 import { formatInr, parseDigitsInput, round2 } from "@/shared/lib/format";
 import { resolveTierTitles } from "@/shared/lib/pricing";
 import { groupRebatesExcl, groupStartPricePaise, rebatedRate, ruleForGroup } from "@/modules/pricing-strategy/lib/groupPricing";
+import { capToFloorExcl, floorExclFromPaise, floorRoomIncl } from "@/modules/pricing-strategy/lib/priceFloor";
 import { mdrRecovery, upiPlan, upliftedRates, type UpiPart, type UpliftLine } from "@/modules/pos/lib/paymentMdr";
 import { CHANNEL_LABEL } from "@/modules/pos/lib/counterTenders";
 import { type UpiPanelState } from "@/modules/pos/components/UpiPartsPanel";
@@ -48,9 +49,8 @@ const DROPDOWN_ROWS = 12;
  *  salePaise, so an old bill sold below today's sale price still re-saves —
  *  keep it that way. */
 function lineFloorExcl(l: CartLine): number | null {
-    if (l.kind === "service" || l.salePaise == null || l.salePaise <= 0) return null;
-    const incl = l.salePaise / 100;
-    return l.taxRate > 0 ? incl / (1 + l.taxRate / 100) : incl;
+    if (l.kind === "service") return null;
+    return floorExclFromPaise(l.salePaise, l.taxRate);
 }
 
 // Moved to posBilling/types.ts; re-exported so the screens' imports stay as they were.
@@ -469,14 +469,24 @@ export function usePosBilling(opts: {
         return !!o && o.productId === l.productId && o.qty === l.qty && o.unitPrice === l.unitPrice;
     };
     const editLinesUnchanged = !!eb && cart.length === eb.lines.length && cart.every(sameAsSaved);
+    // Safety wall (priceFloor.ts): a new bill's line starts at barcode and no
+    // discount takes it below its sale price. An edit keeps its sale day's rules
+    // (the edit route has no wall), so it carries no floor here either.
+    const wallExcl = (l: CartLine): number | null => (eb ? null : lineFloorExcl(l));
     const lineTierDiscExcl = cart.map((l, i) => {
         if (eb && sameAsSaved(l, i)) return eb.lines[i].discountAmt;
         const perUnit = eb ? editUnitDisc.get(l.productId) : undefined;
         if (perUnit != null) return Math.min(round2(perUnit * l.qty), l.qty * l.unitPrice);
         const c = lineCostExcl(l);
         if (c == null || discountPct <= 0 || lineProtected(l)) return 0;
-        return Math.min((discountPct / 100) * c * l.qty, l.qty * l.unitPrice);
+        return capToFloorExcl(Math.min((discountPct / 100) * c * l.qty, l.qty * l.unitPrice), l.qty, l.unitPrice, wallExcl(l));
     });
+    // Incl ₹ the goods may drop before a floored line hits its wall — mirrors
+    // /api/pos/sale (services and edits carry no floor). Infinity = no wall.
+    const goodsForWall = cart.filter((l) => l.kind !== "service");
+    const floorRoom = goodsForWall.some((l) => wallExcl(l) != null)
+        ? floorRoomIncl(goodsForWall.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice, taxRate: l.taxRate, floorExcl: wallExcl(l) })))
+        : Infinity;
     // Inclusive rupee effect shown on the bill = Σ (line gross incl − line net incl),
     // where the tax saving rides along. Feeding THIS as the voucher-level discount to
     // calcVoucherTotals yields the same total as netting per line (they're equal by
@@ -523,7 +533,9 @@ export function usePosBilling(opts: {
         return acc + net * frac;
     }, 0);
     const requestedPts = canRedeem && redeemOn && !redeemBlocked ? parseInt(parseDigitsInput(redeemPointsStr) || "0", 10) : 0;
-    const cartCapPts = rates && rates.redeemValue > 0 ? Math.floor(maxRedeemableRupees / rates.redeemValue) : 0;
+    // The wall: points may only take what the tier discount left above the floor.
+    const wallRedeemRupees = Math.min(maxRedeemableRupees, Math.max(0, floorRoom - discountAmount));
+    const cartCapPts = rates && rates.redeemValue > 0 ? Math.floor(wallRedeemRupees / rates.redeemValue) : 0;
     // The points an unchanged edit already redeemed stay redeemable whatever the cap reads now.
     const maxRedeemablePts = eb && editLinesUnchanged ? Math.max(cartCapPts, eb.redeemedBefore) : cartCapPts;
     const cappedPts = Math.min(requestedPts, loyaltyBalance, maxRedeemablePts);
@@ -587,6 +599,7 @@ export function usePosBilling(opts: {
                 costExcl: lineCostExcl(l),
                 protected: lineProtected(l),
                 rule: ruleForGroup(groupPricing, l.groupId ?? productById.get(l.productId)?.groupId ?? null),
+                floorExcl: wallExcl(l),
             };
         }), billDiscountIncl);
         goodsIdx.forEach((i, k) => { lineRebateExcl[i] = rebates[k]; });
@@ -816,7 +829,7 @@ export function usePosBilling(opts: {
         // cost-incl-tax — the LINE-scope tier-share estimate base. Service
         // lines are excluded — coupons evaluate the goods cart only (mirrors
         // /api/pos/sale).
-        lines: cart.filter((l) => l.kind !== "service").map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice, taxRate: l.taxRate })),
+        lines: cart.filter((l) => l.kind !== "service").map((l) => ({ productId: l.productId, qty: l.qty, unitPrice: l.unitPrice, taxRate: l.taxRate, applyFloor: lineFloorExcl(l) != null })),
     } : null, [snapshot?.account, snapshot?.turnover.invoiceCount, discountAmount, redemptionRupees, billAmountIncl, cart, eb]);
     const couponSig = JSON.stringify(couponBill);
     // Coupon identity for re-validation: AUTO offers carry no code, so the key

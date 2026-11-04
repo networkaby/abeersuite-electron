@@ -12,10 +12,11 @@
  *   • Computed — cost × my margin. LIVE (floats with cost).
  *   • Sale Price — the sticky, hand-typed price (InvProduct.savedSalePricePaise).
  *
- * You pick which voice actually sells by CLICKING it (Sale Price: its "sell at
- * this" link) — the highlighted one is the
- * selling price. POS makes no decision; it just charges that voice, capped by the
- * barcode price and MRP (cap not shown as its own column — see Barcode).
+ * You pick which voice is the LOWEST price by CLICKING it (Sale Price: its "use
+ * as lowest" link) — the highlighted one is the effective sale price, the floor.
+ * POS bills at the BARCODE price; the gap down to the floor is the room for
+ * bargaining and every discount (tier, loyalty, coupon, group rebate), which
+ * all stop at the floor (priceFloor.ts). POS shows the floor as "Lowest".
  *
  * EDITABLE + persisted (PATCH /api/pricing-strategy/items/[id]): Computed price
  *   (typed; Margin % is derived from it, read-only) → marginPercent, Barcode
@@ -27,8 +28,8 @@
  *
  * The barcode price is SAVED (barcodeStore.ts): only a hand edit or "Update
  * barcode" (bands on the effective/selling price, MRP-capped) writes it, with its date
- * and gap. "Save prices" saves the Sale Price + source only. It acts as a
- * CEILING — never the charge. Each voice shows its own
+ * and gap. "Save prices" saves the Sale Price + source only. The barcode is
+ * what POS charges; the floor is the least it may end up at. Each voice shows its own
  * AFTER-TAX profit (₹ + %) beneath the price, so all three can be compared.
  *
  *   voicePrice = cost_incl × (1 + margin% / 100)
@@ -112,7 +113,7 @@ const COLS: { key: ColKey; label: string }[] = [
     { key: "strategy", label: "Strategy" },
     { key: "sale", label: "Sale Price" },
     { key: "mrp", label: "MRP" },
-    { key: "barcode", label: "Barcode" },
+    { key: "barcode", label: "Barcode · sells at" },
 ];
 
 // ── Column colour groups (visual grouping only, no logic) ────────────────────
@@ -466,7 +467,7 @@ function rangeVal(r: Row, key: RangeKey): number | null {
 // `clickable` = the chip itself switches the selling voice (Strategy / Computed).
 // The Sale Price cell passes false: it holds an editable input, so clicking or
 // tabbing into it must NOT silently move the selling voice — its own small
-// "sell at this" link does that. (The separate Selling dropdown column is gone.)
+// "use as lowest" link does that. (The separate Selling dropdown column is gone.)
 function voiceClass(selected: boolean, clickable = true): string {
     return `w-full rounded px-1.5 py-1 text-right transition-colors ${selected ? "bg-emerald-50 ring-1 ring-emerald-400" : clickable ? "cursor-pointer hover:bg-muted" : ""
         }`;
@@ -474,7 +475,7 @@ function voiceClass(selected: boolean, clickable = true): string {
 
 const SELLING_TAG = (
     <span className="mb-0.5 flex items-center justify-end gap-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-600">
-        <Check className="size-2.5" /> selling
+        <Check className="size-2.5" /> lowest
     </span>
 );
 
@@ -657,7 +658,7 @@ const ProductRow = memo(function ProductRow({
                         {r.saleSource === "SAVED" ? SELLING_TAG : savedPrice != null ? (
                             // The input itself never flips the voice (typing must not); this link does.
                             <button type="button" onClick={() => onUpdate(r.id, { saleSource: "SAVED" })} className="mb-0.5 block w-full text-right text-[10px] font-medium uppercase tracking-wide text-muted-foreground hover:text-emerald-600">
-                                sell at this
+                                use as lowest
                             </button>
                         ) : null}
                         <Input
@@ -727,7 +728,7 @@ const ProductRow = memo(function ProductRow({
                     {bcGap != null || bcProfit != null ? (
                         <div
                             className="mt-0.5 text-right font-mono text-[10px] text-muted-foreground"
-                            title="Gap = barcode − selling price (red: label is below what this row sells at; the till charges at most the barcode). Profit % = after-GST profit if sold at the barcode price."
+                            title="Gap = barcode − lowest price: the room for bargaining and every discount (tier, loyalty, coupon). Red: the barcode is below the lowest price, so POS has no room — raise the barcode or lower the lowest. Profit % = after-GST profit if sold at the barcode price (POS bills at the barcode)."
                         >
                             <span className={bcGap != null && bcGap < -0.005 ? "text-red-600" : ""}>
                                 {bcGap == null ? "—" : `${bcGap < -0.005 ? "−" : "+"}${rupee(Math.abs(bcGap))}`}

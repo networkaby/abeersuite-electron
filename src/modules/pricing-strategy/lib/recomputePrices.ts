@@ -11,10 +11,12 @@
 // (`additiveMargin.ts`) — base + brand + category + group points. (The old
 // PricingStrategy engine was dropped.)
 
+import * as Sentry from "@sentry/nextjs";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { resolveCostBatch } from "@/modules/pricing-strategy/lib/resolveCost";
 import { resolveProductTaxBatch } from "@/modules/inventory/lib/gstResolver";
-import { loadStrategyPoints, additiveMarginPct, additivePrice } from "@/modules/pricing-strategy/lib/additiveMargin";
+import { loadStrategyPoints, additiveMarginPct, additivePriceWithSurcharge } from "@/modules/pricing-strategy/lib/additiveMargin";
+import { getCurrentAdditionalCostByProduct } from "@/modules/pricing-strategy/lib/costPool";
 
 export interface RecomputeResult {
     /** Products whose `effectiveSalePricePaise` was rewritten. */
@@ -86,8 +88,14 @@ export async function recomputePricesForProducts(
         for (const [id, r] of resolved) costById.set(id, r.costPaise);
     }
 
-    // GST so the written price is inclusive.
-    const taxResult = await resolveProductTaxBatch({ productIds: products.map((p) => p.id) });
+    // GST so the written price is inclusive. The additional cost (shipping /
+    // courier, Costing page) folds in before GST — exactly as the Update prices
+    // screen's Computed / Strategy columns do, so the floor POS reads (Lowest)
+    // is the number that screen shows.
+    const [taxResult, additionalById] = await Promise.all([
+        resolveProductTaxBatch({ productIds: products.map((p) => p.id) }),
+        getCurrentAdditionalCostByProduct(products.map((p) => p.id)),
+    ]);
     const taxByProduct = taxResult.products;
 
     const mrpCap = (val: number, mrp: number | null): number =>
@@ -103,15 +111,13 @@ export async function recomputePricesForProducts(
                 effective = mrpCap(p.savedSalePricePaise, p.mrpPaise);
             } else {
                 const cost = costById.get(p.id) ?? null;
-                if (p.effectiveSalePriceSource === "COMPUTED" && p.marginPercent != null && cost != null) {
-                    // COMPUTED → cost × (1 + margin%), GST-inclusive, MRP-capped.
-                    const raw   = cost * (1 + Number(p.marginPercent) / 100);
-                    const gross = raw * (1 + gstRatePct / 100);
-                    effective   = mrpCap(Math.round(gross), p.mrpPaise);
-                } else {
-                    // STRATEGY (default) → additive-margin engine (markup on cost).
-                    effective = additivePrice(cost, additiveMarginPct(p, points), p.mrpPaise, gstRatePct).pricePaise;
-                }
+                const extra = additionalById.get(p.id) ?? 0;
+                // COMPUTED → the product's own margin %; STRATEGY (default) →
+                // the additive-margin engine. Both mark up the landed cost.
+                const margin = p.effectiveSalePriceSource === "COMPUTED" && p.marginPercent != null
+                    ? Number(p.marginPercent)
+                    : additiveMarginPct(p, points);
+                effective = additivePriceWithSurcharge(cost, extra, margin, p.mrpPaise, gstRatePct).pricePaise;
             }
 
             if (effective == null) {
@@ -134,4 +140,16 @@ export async function recomputePricesForProducts(
     }, { timeout: 60_000, maxWait: 15_000 });
 
     return result;
+}
+
+/**
+ * Fire-and-report recompute for a route that has already saved its own work —
+ * a failure is logged, never thrown, so the caller's response is unaffected.
+ */
+export async function recomputePricesQuietly(productIds: Array<number | null | undefined>, source: string): Promise<void> {
+    const ids = productIds.filter((id): id is number => id != null);
+    await recomputePricesForProducts(ids).catch((err: unknown) => {
+        Sentry.captureException(err, { tags: { source: "price-recompute", via: source } });
+        console.error(`[price-recompute] ${source} failed for`, ids, err);
+    });
 }

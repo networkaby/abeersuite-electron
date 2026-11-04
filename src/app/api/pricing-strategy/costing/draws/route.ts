@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
+import { recomputePricesQuietly } from "@/modules/pricing-strategy/lib/recomputePrices";
 import { NextResponse } from "next/server";
 import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { handleApiError, validateRequest } from "@/shared/lib/api";
@@ -144,6 +145,7 @@ export async function POST(req: Request) {
             },
             select: { id: true },
         });
+        if (data.kind === "ALLOCATION") await recomputePricesQuietly([data.productId], "costing-draw");
 
         return NextResponse.json({
             id: draw.id,

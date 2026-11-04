@@ -417,6 +417,8 @@ export default function PosScreen({ editId, fromId }: { editId?: number; fromId?
                     // Snapshots for the customer-facing "Today's discount" ladder.
                     mrpPaise: l.mrpPaise ?? null,
                     savedSalePricePaise: l.barcodePaise ?? null,
+                    // Safety wall: discounts stop at this line's sale price (priceFloor.ts).
+                    applyFloor: (l.salePaise ?? 0) > 0,
                 })),
                 // POS-service lines (cart kind="service", productId = −serviceId).
                 // The server re-resolves each service's income ledger + GST rate

@@ -418,10 +418,14 @@ export function finalizeCouponAmount(args: {
     maxTotalDiscountPct: number | null;
     /// The coupon's own cap, % of goods (CouponConfig.maxCouponDiscountPct); null = none.
     maxCouponDiscountPct?: number | null;
+    /// Safety wall (priceFloor.floorRoomIncl): incl ₹ the bill may drop before a
+    /// line hits its effective sale price. Absent = no wall (shop orders).
+    floorRoomIncl?: number;
 }): { couponRupees: number; clampedByGuard: boolean } {
-    const { selectedDiscount, tierRupees, loyaltyRupees, goodsValue, maxTotalDiscountPct, maxCouponDiscountPct } = args;
-    // Keep goods − tier − loyalty − coupon strictly > 0.
-    const ceiling = Math.max(0, goodsValue - tierRupees - loyaltyRupees - 0.01);
+    const { selectedDiscount, tierRupees, loyaltyRupees, goodsValue, maxTotalDiscountPct, maxCouponDiscountPct, floorRoomIncl } = args;
+    // Keep goods − tier − loyalty − coupon strictly > 0, and above the floor.
+    const wall = floorRoomIncl == null ? Infinity : Math.max(0, floorRoomIncl - tierRupees - loyaltyRupees);
+    const ceiling = Math.min(Math.max(0, goodsValue - tierRupees - loyaltyRupees - 0.01), wall);
     // Own cap first, then the combined guard.
     const ownCap = maxCouponDiscountPct == null ? Infinity : goodsValue * (maxCouponDiscountPct / 100);
     const own = Math.min(selectedDiscount, ceiling, ownCap);

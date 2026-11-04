@@ -62,6 +62,7 @@ import { convertSourceError } from "@/modules/pos/lib/convertSource";
 import { findHeldRedemptions, executeRedemptions, RedemptionHoldChangedError } from "@/modules/order/lib/redemptionHold";
 import { loadPartyPricing } from "@/modules/pricing-strategy/lib/groupPricingServer";
 import { groupRebatesExcl, rebatedRate, ruleForGroup } from "@/modules/pricing-strategy/lib/groupPricing";
+import { capToFloorExcl, floorExclFromPaise, floorRoomIncl } from "@/modules/pricing-strategy/lib/priceFloor";
 import { payAccountMdr } from "@/modules/pos/lib/paymentGateways";
 import { mdrRecovery, upliftedRates } from "@/modules/pos/lib/paymentMdr";
 // Note: branch context comes from the cashier's active shift, NOT from the
@@ -103,6 +104,10 @@ const lineSchema = z.object({
     // Snapshots for the customer-facing "Today's discount" price ladder (paise).
     mrpPaise: z.number().int().nonnegative().nullish(),
     savedSalePricePaise: z.number().int().nonnegative().nullish(),
+    // The counter billed this line from barcode with its sale price as the
+    // floor — every discount stops there (priceFloor.ts). The floor itself is
+    // read from the DB. Absent = no wall (edited / converted line, old counter).
+    applyFloor: z.boolean().optional(),
 });
 
 const paymentSchema = z.object({
@@ -426,8 +431,9 @@ export async function POST(req: Request) {
     // The server RE-RESOLVES each line's cost from the ledger (never trusts the
     // client) via the product's effective cost method, then cuts each line's taxable
     // by `discount% × costExcl × qty` and lets calcLineTotals recompute GST on the
-    // reduced base. Clamp to the line gross only (no margin floor — clearance may sell
-    // below cost). No cost basis → no discount on that line. The per-line discount
+    // reduced base. Clamp to the line gross, and on a floored line (applyFloor) to
+    // the gap above its effective sale price — the safety wall (priceFloor.ts).
+    // No cost basis → no discount on that line. The per-line discount
     // nets into line.amount, so the voucher-level discountAmt is 0 (no separate
     // "Discount Allowed" leg — Sales + GST post net).
     const costPaiseById = await resolveEffectiveCostMap(body.lines.map((l) => l.productId));
@@ -437,11 +443,22 @@ export async function POST(req: Request) {
     // Discount-protection blacklist (Retention → Protection) — protected lines are
     // excluded from the tier discount, coupon eligibility, and loyalty entirely.
     const protectedProductIds = await loadProtectedProductIds(prisma);
+    // Safety wall: a flagged line bills from barcode and no discount may take it
+    // below its effective sale price — read here, never from the client.
+    const floorIds = [...new Set(body.lines.filter((l) => l.applyFloor).map((l) => l.productId))];
+    const floorPaiseById = new Map(floorIds.length === 0 ? [] : (await prisma.invProduct.findMany({
+        where: { id: { in: floorIds } }, select: { id: true, effectiveSalePricePaise: true },
+    })).map((p) => [p.id, p.effectiveSalePricePaise]));
+    const lineFloorExcl = body.lines.map((l) => (l.applyFloor ? floorExclFromPaise(floorPaiseById.get(l.productId), l.taxRate) : null));
+    // Incl ₹ the bill may drop before a floored line hits its wall; undefined = no wall on this bill.
+    const floorRoom = lineFloorExcl.some((f) => f != null)
+        ? floorRoomIncl(body.lines.map((l, i) => ({ qty: l.quantity, unitPrice: l.unitPrice, taxRate: l.taxRate, floorExcl: lineFloorExcl[i] })))
+        : undefined;
     // Per-line pre-tax discount IF the tier applies (before the coupon-drop decision).
-    const lineTierDiscExclRaw = body.lines.map((l) => {
+    const lineTierDiscExclRaw = body.lines.map((l, i) => {
         const c = costExclById.get(l.productId) ?? null;
         if (c == null || body.discountPct <= 0 || protectedProductIds.has(l.productId)) return 0;
-        return Math.min((body.discountPct / 100) * c * l.quantity, l.quantity * l.unitPrice);
+        return capToFloorExcl(Math.min((body.discountPct / 100) * c * l.quantity, l.quantity * l.unitPrice), l.quantity, l.unitPrice, lineFloorExcl[i]);
     });
     // Inclusive rupee effect (gross incl − net incl) — kept as the tier's voucher-level
     // number for the loyalty floors + coupon-stacking math (which reason about the
@@ -654,7 +671,10 @@ export async function POST(req: Request) {
     );
     const requestedRedeem = loyaltyEnabled ? body.redeemPoints : 0;
     const redeemCeiling = loyaltyEnabled
-        ? redeemableBaseForCart(earnLinesForCeiling, tierDiscount, rulesIndex, taxonomyMaps, loyaltyRates.maxRedeemPctOfBill)
+        ? Math.min(
+            redeemableBaseForCart(earnLinesForCeiling, tierDiscount, rulesIndex, taxonomyMaps, loyaltyRates.maxRedeemPctOfBill),
+            floorRoom == null ? Infinity : Math.max(0, floorRoom - tierDiscount),
+        )
         : 0;
     const redemption = clampRedemption(requestedRedeem, loyaltyBalance, redeemCeiling, invoiceValueGross, loyaltyRates);
     if (requestedRedeem > 0 && redemption.points === 0 && redemption.reason) {
@@ -708,6 +728,7 @@ export async function POST(req: Request) {
             goodsValue,
             maxTotalDiscountPct: couponConfig.maxTotalDiscountPct != null ? Number(couponConfig.maxTotalDiscountPct) : null,
             maxCouponDiscountPct: couponConfig.maxCouponDiscountPct != null ? Number(couponConfig.maxCouponDiscountPct) : null,
+            floorRoomIncl: floorRoom,
         });
         couponRupees = fin.couponRupees;
         couponId = selected.coupon.id;
@@ -746,6 +767,7 @@ export async function POST(req: Request) {
             costExcl: costExclById.get(l.productId) ?? null,
             protected: protectedProductIds.has(l.productId),
             rule: ruleForGroup(groupPricing, tax.get(l.productId)?.groupId ?? null),
+            floorExcl: lineFloorExcl[i],
         })), billDiscountIncl);
     }
     // ── Payment-method MDR (Settings → Payment Methods) ─────────────────────

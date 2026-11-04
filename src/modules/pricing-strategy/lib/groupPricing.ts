@@ -106,8 +106,8 @@ export function groupStartPricePaise(
     const sale = p.salePaise ?? null;
     if (rule?.type === "MRP") return p.mrpPaise ?? p.tagPaise ?? sale;
     // Normal billing starts at the printed barcode tag too (PRINT_PRICE is now
-    // the default); the sale price is the floor the cashier may type down to
-    // (usePosBilling → lineFloorExcl).
+    // the default); the sale price is the floor — the cashier may type down to
+    // it and every discount stops at it (priceFloor.ts).
     return p.tagPaise ?? sale;
 }
 
@@ -123,6 +123,8 @@ export type RebateLine = {
     /** Discount-protected product — never rebated, never takes a share. */
     protected: boolean;
     rule: GroupPriceRule | null;
+    /** Pre-tax floor per unit (effective sale price); the rebate stops there. null/absent = no wall. */
+    floorExcl?: number | null;
 };
 
 /**
@@ -152,7 +154,9 @@ export function groupRebatesExcl(lines: RebateLine[], billDiscountIncl: number):
         const rebate = rule.type === "PROFIT_SHARE"
             ? pct * profitLeft
             : Math.min(pct * afterExcl, profitLeft);
-        return round2(Math.max(0, rebate));
+        // The safety wall: never past the line's effective sale price.
+        const room = l.floorExcl == null ? Infinity : afterExcl - l.floorExcl * l.quantity;
+        return round2(Math.max(0, Math.min(rebate, room)));
     });
 }
 
