@@ -52,6 +52,13 @@ const SECTIONS: { title: string; points: string[] }[] = [
         ],
     },
     {
+        title: "Selling at a loss (stock clearance)",
+        points: [
+            "At POS, % off / Flat ₹ / Set price stop at each bill's lowest prices. To clear an item below cost, lower its lowest price first, then make a coupon for that item.",
+            "Free items (₹0) and Independent part-free coupons can go below the lowest price — the form shows a yellow warning. It is allowed on purpose.",
+        ],
+    },
+    {
         title: "Top bar",
         points: [
             "Coupon max % — no coupon can give more than this % of the bill.",

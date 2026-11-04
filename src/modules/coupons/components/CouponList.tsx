@@ -351,7 +351,7 @@ export function CouponList({ masters, brandName }: { masters: RuleMasters; brand
 
             {/* Add / edit dialog — keeps the list in view while configuring */}
             <Dialog open={formOpen} onOpenChange={(o) => { if (!o) setFormOpen(false); }}>
-                <DialogContent className="max-h-[calc(100vh-5rem)] overflow-y-auto sm:max-w-4xl">
+                <DialogContent className="max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] overflow-y-auto sm:max-w-[min(1400px,calc(100vw-2rem))]">
                     <DialogHeader>
                         <DialogTitle>{editing ? `Edit ${editing.name}` : "New coupon"}</DialogTitle>
                         <DialogDescription>

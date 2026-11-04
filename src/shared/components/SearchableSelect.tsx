@@ -19,6 +19,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, X } from "lucide-react";
 import { useEscapeLayer } from "@/shared/hooks/useEscape";
 
+/// Room the popover needs below the trigger (search box + list) before it flips up.
+const DROP_SPACE_PX = 320;
+
 export interface SearchableSelectOption<V extends string | number> {
     value: V;
     label: string;
@@ -60,6 +63,9 @@ export function SearchableSelect<V extends string | number>({
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
     const [highlight, setHighlight] = useState(0);
+    /// Open upwards when the trigger sits too near the bottom of the screen
+    /// (e.g. the last row of a dialog) — decided once, on open.
+    const [dropUp, setDropUp] = useState(false);
     const wrapRef = useRef<HTMLDivElement | null>(null);
     const inputRef = useRef<HTMLInputElement | null>(null);
     const listRef = useRef<HTMLUListElement | null>(null);
@@ -121,7 +127,14 @@ export function SearchableSelect<V extends string | number>({
         <div ref={wrapRef} className="relative">
             <button
                 type="button"
-                onClick={() => { if (!open) { setQuery(""); setHighlight(0); } setOpen((o) => !o); }}
+                onClick={() => {
+                    if (!open) {
+                        setQuery(""); setHighlight(0);
+                        const r = wrapRef.current?.getBoundingClientRect();
+                        setDropUp(!!r && window.innerHeight - r.bottom < DROP_SPACE_PX && r.top > window.innerHeight - r.bottom);
+                    }
+                    setOpen((o) => !o);
+                }}
                 aria-haspopup="listbox"
                 aria-expanded={open}
                 aria-label={ariaLabel}
@@ -152,7 +165,7 @@ export function SearchableSelect<V extends string | number>({
                 // Popover anchored at the trigger's left but free to grow wider
                 // than it (min-w-full guarantees at-least-trigger-width; max-w
                 // keeps very long labels from blowing past the viewport edge).
-                <div className="absolute z-50 left-0 mt-1 min-w-full w-max max-w-[min(28rem,90vw)] rounded-md border border-border bg-popover text-popover-foreground shadow-md">
+                <div className={`absolute z-50 left-0 ${dropUp ? "bottom-full mb-1" : "mt-1"} min-w-full w-max max-w-[min(28rem,90vw)] rounded-md border border-border bg-popover text-popover-foreground shadow-md`}>
                     <div className="p-1 border-b border-border">
                         <input
                             ref={inputRef}

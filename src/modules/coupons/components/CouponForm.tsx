@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { CircleHelp, Dices, Gift, IndianRupee, Percent, Plus, Repeat, Save, Sparkles, Tag, X, type LucideIcon } from "lucide-react";
+import { CircleHelp, Dices, TriangleAlert, Gift, IndianRupee, Percent, Plus, Repeat, Save, Sparkles, Tag, X, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TallyDateInput } from "@/shared/components/TallyDateInput";
@@ -163,6 +163,20 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
     const [saving, setSaving] = useState(false);
 
     /// Live "how it reads" summary — mirrors what the coupon card / POS shows.
+    /// Loss warnings — these coupons can sell below the lowest price (and so
+    /// below cost). Allowed on purpose for stock clearance; we only warn.
+    const lossWarnings = useMemo(() => {
+        const w: string[] = [];
+        const freeType = type === "FREE_ITEM" || type === "BOGO";
+        const pct = Number(freeDiscountPct || "100");
+        if (freeType && pct >= 99.5) {
+            w.push("The free item goes out at ₹0 — below its lowest price and cost. Its cost is counted as goods given away.");
+        } else if (freeType && independent) {
+            w.push("Independent part-free coupon: it ignores the lowest price and the All together max %, so it can sell this item below cost.");
+        }
+        return w;
+    }, [type, freeDiscountPct, independent]);
+
     const preview = useMemo(() => {
         const prod = (id: number | null) => (id == null ? null : products.find((p) => p.id === id));
         const buy = prod(buyProductId);
@@ -549,7 +563,7 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
 
             {/* Dialog: identity + offer on the left, gates + behaviour on the right.
                 Full page: three equal columns — the create tab reads like a page. */}
-            <div className={`grid gap-x-5 gap-y-2 ${fullPage ? "md:grid-cols-3" : "md:grid-cols-5"}`}>
+            <div className={`grid gap-x-5 gap-y-2 ${fullPage ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
                 {fullPage ? (
                     <>
                         <div className="space-y-2">{basicsSection}</div>
@@ -558,8 +572,9 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
                     </>
                 ) : (
                     <>
-                        <div className="space-y-2 md:col-span-3">{basicsSection}{offerSection}{rulesSection}</div>
-                        <div className="space-y-2 md:col-span-2">{validitySection}{behaviourSection}</div>
+                        <div className="space-y-2">{basicsSection}{offerSection}</div>
+                        <div className="space-y-2">{validitySection}{behaviourSection}</div>
+                        <div className="md:col-span-2">{rulesSection}</div>
                     </>
                 )}
             </div>
@@ -568,9 +583,21 @@ export function CouponForm({ initial, masters, onSaved, onCancel, embedded, full
             <div className={embedded
                 ? "sticky bottom-0 -mx-4 -mb-4 mt-0.5 flex justify-end gap-2 rounded-b-xl border-t bg-muted/50 px-4 py-1.5"
                 : "sticky bottom-0 -mx-1 -mb-1 mt-0.5 flex justify-end gap-2 rounded-b-xl border-t bg-background px-1 py-1.5"}>
-                <Button variant="outline" size="sm" className="mr-auto self-center" onClick={() => setHelpOpen(true)}>
+                <Button variant="outline" size="sm" className="self-center" onClick={() => setHelpOpen(true)}>
                     <CircleHelp size={14} className="mr-1" /> Help
                 </Button>
+                {/* Loss note — centred between Help and Cancel; details on hover. */}
+                <div className="flex flex-1 items-center justify-center">
+                    {lossWarnings.length > 0 && (
+                        <span
+                            title={lossWarnings.join(" ")}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-amber-300/70 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800 shadow-xs dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+                        >
+                            <TriangleAlert size={13} className="shrink-0" />
+                            Can sell below floor price
+                        </span>
+                    )}
+                </div>
                 <CouponHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
                 <Button variant="ghost" onClick={onCancel}>Cancel</Button>
                 <Button onClick={save} disabled={saving}><Save size={14} className="mr-1" /> {editing ? "Save" : "Create"}</Button>
