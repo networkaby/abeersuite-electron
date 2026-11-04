@@ -70,7 +70,7 @@ export function ProductFilterPanel({
             {choice("group", "Group", list("All groups", options.groups), "w-40")}
             {choice("status", "Shop status", [["all", "Any status"], ["live", "Live"], ["ready", "Ready to publish"], ["needs", "Needs info"]])}
             {choice("stock", "Stock", [["all", "Any stock"], ["in", "In stock"], ["out", "Out of stock"], ["untracked", "Untracked"]])}
-            {choice("photos", "Photos", [["all", "Any"], ["has", "Has photo"], ["none", "No photo"]], "w-32")}
+            {choice("photos", "Photos", [["all", "Any"], ["none", "No photo"], ["one", "Only 1 photo"], ["has", "1 or more"], ["2", "2 or more"], ["3", "3 or more"], ["5", "5 or more"]], "w-32")}
             {choice("description", "Description", [["all", "Any"], ["has", "Written"], ["missing", "Missing"]], "w-32")}
             {choice("active", "Active", [["all", "All"], ["active", "Active only"], ["inactive", "Inactive only"]], "w-32")}
             {activeFilterCount(value, defaults) > 0 ? (

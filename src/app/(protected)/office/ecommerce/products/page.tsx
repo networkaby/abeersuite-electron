@@ -15,6 +15,7 @@ import {
     activeFilterCount,
     matchesProductFilters,
     productFilterOptions,
+    productPhotoCount,
     productStatus,
     type ProductFilters,
     type ProductStatus,
@@ -56,7 +57,7 @@ const SCROLL_FRAME =
 const STICKY_HEAD =
     "sticky top-0 z-20 bg-muted/60 backdrop-blur [&_th]:bg-transparent [&_th]:shadow-[inset_0_-1px_0_var(--border)]";
 
-const COL_COUNT = 10;
+const COL_COUNT = 11;
 const PAGE_SIZE = 25;
 
 type TabKey = "all" | "published" | "pending";
@@ -447,6 +448,7 @@ export default function EcommerceProductsPage() {
                             <TableHead className="w-32">Shop status</TableHead>
                             <TableHead className="w-28 text-right">Shop price</TableHead>
                             <TableHead className="w-20 text-right">Stock</TableHead>
+                            <TableHead className="w-20 text-right">Photos</TableHead>
                             <TableHead className="w-40" />
                         </TableRow>
                     </TableHeader>
@@ -503,6 +505,9 @@ export default function EcommerceProductsPage() {
                                         </TableCell>
                                         <TableCell className="text-right text-sm tabular-nums">
                                             {p.stock === null ? "—" : p.stock}
+                                        </TableCell>
+                                        <TableCell className={`text-right text-sm tabular-nums ${productPhotoCount(p) === 0 ? "text-destructive/70" : ""}`}>
+                                            {productPhotoCount(p)}
                                         </TableCell>
                                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-end gap-1.5">

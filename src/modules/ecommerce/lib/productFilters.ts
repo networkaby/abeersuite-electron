@@ -8,7 +8,7 @@ import { shopQualification, type ShopPublishRules } from "@/modules/ecommerce/li
 export type StockFilter = "all" | "in" | "out" | "untracked";
 export type ActiveFilter = "all" | "active" | "inactive";
 export type StatusFilter = "all" | "live" | "ready" | "needs";
-export type PhotoFilter = "all" | "has" | "none";
+export type PhotoFilter = "all" | "none" | "one" | "has" | "2" | "3" | "5"; // "has" = 1 or more (kept for saved filters)
 export type DescriptionFilter = "all" | "has" | "missing";
 
 export type ProductFilters = {
@@ -59,7 +59,8 @@ export function productStatus(p: ShopProductAdmin, rules: ShopPublishRules): Pro
     return { kind: q.qualified ? "ready" : "draft", missing: q.missing };
 }
 
-export const productPhotoCount = (p: ShopProductAdmin) => p.galleryUrls.length;
+/** Gallery photos, or 1 when only the main image is set — the same rule the shop-ready check uses. */
+export const productPhotoCount = (p: ShopProductAdmin) => p.galleryUrls.length || (p.imageUrl ? 1 : 0);
 export const hasDescription = (p: ShopProductAdmin) => !!p.description?.trim();
 
 /** Filters moved off the screen's defaults, minus the search box (the Filters badge). */
@@ -77,8 +78,10 @@ export function matchesProductFilters(p: ShopProductAdmin, f: ProductFilters, ru
     if (f.stock === "out" && p.stock !== 0) return false;
     if (f.active === "active" && !p.isActive) return false;
     if (f.active === "inactive" && p.isActive) return false;
-    if (f.photos === "has" && productPhotoCount(p) === 0) return false;
-    if (f.photos === "none" && productPhotoCount(p) > 0) return false;
+    if (f.photos !== "all") {
+        const n = productPhotoCount(p);
+        if (f.photos === "none" ? n !== 0 : f.photos === "one" ? n !== 1 : n < (f.photos === "has" ? 1 : Number(f.photos))) return false;
+    }
     if (f.description === "has" && !hasDescription(p)) return false;
     if (f.description === "missing" && hasDescription(p)) return false;
     if (f.status !== "all") {
