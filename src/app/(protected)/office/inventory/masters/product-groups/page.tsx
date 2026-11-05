@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { useDeleteWithConfirm } from "@/shared/hooks";
+import { useDeleteWithConfirm, useSessionScroll } from "@/shared/hooks";
 import {
     Select,
     SelectContent,
@@ -169,6 +169,9 @@ export default function InventoryProductGroupsPage() {
     };
 
     useRealtimeTopics(["catalogue"], load);
+
+    // Back from an Items drill-down lands where the list was, not at the top.
+    const { ref: scrollRef, onScroll } = useSessionScroll("product-groups:scroll", !loading && rows.length > 0);
 
     const cancel = () => {
         setAdding(false);
@@ -411,7 +414,7 @@ export default function InventoryProductGroupsPage() {
                 </DialogContent>
             </Dialog>
 
-            <div className="min-h-0 flex-1 overflow-auto border border-border [&_[data-slot=table-container]]:overflow-x-visible">
+            <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-auto border border-border [&_[data-slot=table-container]]:overflow-x-visible">
                 <Table>
                     <TableHeader className="sticky top-0 z-20 bg-background [&_th]:bg-background [&_tr]:border-b [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
                         <TableRow>
