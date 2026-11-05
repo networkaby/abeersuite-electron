@@ -52,6 +52,20 @@ export const STORE_PAGE_HEADING =
     "Buy computers, CCTV systems and office supplies online — Network Service";
 
 /** Auto-rotating top hero. Three slides keep load light and message fresh. */
+/**
+ * A banner / slide link as the shop should follow it. Old same-page anchors
+ * ("#catalog", "#cat-<name>") only worked while the Home layout also carried
+ * the Full catalogue section, and saved Customize Home slides still hold them —
+ * so they open /shop instead. "#cat-<name>" becomes a SEARCH, not a category
+ * filter: slide names are free text ("Laptops") and an exact category filter on
+ * a name that is not a real category shows an empty shop. Anything else is kept.
+ */
+export function shopHref(href: string): string {
+    if (href === "#catalog") return "/shop";
+    if (href.startsWith("#cat-")) return `/shop?q=${href.slice(5)}`;
+    return href;
+}
+
 export const HERO_SLIDES: HeroSlide[] = [
     {
         id: "laptops",
@@ -63,7 +77,7 @@ export const HERO_SLIDES: HeroSlide[] = [
             "https://images.pexels.com/photos/1229861/pexels-photo-1229861.jpeg?auto=compress&cs=tinysrgb&w=1600",
         imageAlt: "Open laptop on a wooden desk in soft daylight",
         ctaLabel: "Shop laptops",
-        ctaHref: "#cat-Laptops",
+        ctaHref: "/shop?q=laptop",
         accent: "primary",
     },
     {
@@ -76,7 +90,7 @@ export const HERO_SLIDES: HeroSlide[] = [
             "https://images.pexels.com/photos/8463140/pexels-photo-8463140.jpeg?auto=compress&cs=tinysrgb&w=1600",
         imageAlt: "White security camera mounted on a wall",
         ctaLabel: "Shop CCTV kits",
-        ctaHref: "#cat-CCTV%20%26%20Security",
+        ctaHref: "/shop?q=camera",
         accent: "violet",
     },
     {
@@ -89,7 +103,7 @@ export const HERO_SLIDES: HeroSlide[] = [
             "https://images.pexels.com/photos/325229/pexels-photo-325229.jpeg?auto=compress&cs=tinysrgb&w=1600",
         imageAlt: "Memory module and PC components in close-up",
         ctaLabel: "Shop components",
-        ctaHref: "#cat-Components",
+        ctaHref: "/shop?q=motherboard",
         accent: "emerald",
     },
 ];
@@ -147,7 +161,7 @@ export const PROMO_BANNERS_TOP: PromoBanner[] = [
             "https://images.pexels.com/photos/442150/pexels-photo-442150.jpeg?auto=compress&cs=tinysrgb&w=1200",
         imageAlt: "Modern office workspace with desks and monitors",
         ctaLabel: "Browse office",
-        ctaHref: "#cat-Desktops",
+        ctaHref: "/shop?q=desktop",
         height: "md",
     },
     {
@@ -159,7 +173,7 @@ export const PROMO_BANNERS_TOP: PromoBanner[] = [
             "https://images.pexels.com/photos/3862139/pexels-photo-3862139.jpeg?auto=compress&cs=tinysrgb&w=1200",
         imageAlt: "Custom built PC with RGB lights",
         ctaLabel: "Shop components",
-        ctaHref: "#cat-Components",
+        ctaHref: "/shop?q=motherboard",
         height: "md",
     },
 ];
@@ -174,7 +188,7 @@ export const PROMO_BANNERS_BOTTOM: PromoBanner[] = [
             "https://images.pexels.com/photos/1181244/pexels-photo-1181244.jpeg?auto=compress&cs=tinysrgb&w=1200",
         imageAlt: "Large monitor on a clean desk",
         ctaLabel: "Shop monitors",
-        ctaHref: "#cat-Monitors",
+        ctaHref: "/shop?q=monitor",
         height: "sm",
     },
     {
@@ -185,7 +199,7 @@ export const PROMO_BANNERS_BOTTOM: PromoBanner[] = [
             "https://images.pexels.com/photos/1714341/pexels-photo-1714341.jpeg?auto=compress&cs=tinysrgb&w=1200",
         imageAlt: "Workplace printer with paper output",
         ctaLabel: "Shop printers",
-        ctaHref: "#cat-Printers",
+        ctaHref: "/shop?q=printer",
         height: "sm",
     },
     {
@@ -196,7 +210,7 @@ export const PROMO_BANNERS_BOTTOM: PromoBanner[] = [
             "https://images.pexels.com/photos/4302071/pexels-photo-4302071.jpeg?auto=compress&cs=tinysrgb&w=1200",
         imageAlt: "Server storage racks",
         ctaLabel: "Shop storage",
-        ctaHref: "#cat-Components",
+        ctaHref: "/shop?q=ssd",
         height: "sm",
     },
 ];

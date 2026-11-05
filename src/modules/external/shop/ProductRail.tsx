@@ -23,7 +23,7 @@ export default function ProductRail({
     products,
     accent = "primary",
     /** Where "see all" points. Omit to hide the link entirely. */
-    seeAllHref = "#catalog",
+    seeAllHref = "/shop",
     seeAllLabel = "See all in catalog",
     /** Home-page sections are separated by a rule; in-page rails supply their own. */
     bordered = true,

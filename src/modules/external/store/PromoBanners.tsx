@@ -2,7 +2,7 @@ import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/shared/lib/format/utils";
-import type { PromoBanner } from "@/shared/lib/shop/storeContent";
+import { shopHref, type PromoBanner } from "@/shared/lib/shop/storeContent";
 
 const HEIGHT_CLASS: Record<NonNullable<PromoBanner["height"]>, string> = {
     sm: "aspect-[5/3] sm:aspect-[16/9]",
@@ -35,7 +35,7 @@ export default function PromoBanners({
                     {banners.map((b) => (
                         <li key={b.id}>
                             <Link
-                                href={b.ctaHref}
+                                href={shopHref(b.ctaHref)}
                                 className="group relative block touch-manipulation overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm transition-all active:opacity-95 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
                             >
                                 <div className={cn("relative w-full bg-muted", HEIGHT_CLASS[b.height ?? "md"])}>

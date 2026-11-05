@@ -39,7 +39,7 @@ export default function DealOfTheDay({
                         <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{title}</h2>
                     </div>
                     <Link
-                        href="#deals"
+                        href="/shop"
                         className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-primary"
                     >
                         See all deals

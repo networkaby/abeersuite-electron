@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/shared/lib/format/utils";
-import type { HeroSlide } from "@/shared/lib/shop/storeContent";
+import { shopHref, type HeroSlide } from "@/shared/lib/shop/storeContent";
 
 const ROTATE_MS = 6000;
 
@@ -123,7 +123,7 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                                         size="lg"
                                         className="h-12 w-full touch-manipulation rounded-full px-7 shadow-lg sm:h-11 sm:w-auto"
                                     >
-                                        <Link href={s.ctaHref} className="inline-flex items-center justify-center gap-2">
+                                        <Link href={shopHref(s.ctaHref)} className="inline-flex items-center justify-center gap-2">
                                             {s.ctaLabel}
                                             <ArrowRight className="size-4" />
                                         </Link>
@@ -134,7 +134,7 @@ export default function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
                                         variant="outline"
                                         className="h-12 w-full touch-manipulation rounded-full border-white/40 bg-white/10 px-6 text-white backdrop-blur hover:bg-white/20 hover:text-white sm:h-11 sm:w-auto"
                                     >
-                                        <Link href="#catalog">Browse all</Link>
+                                        <Link href="/shop">Browse all</Link>
                                     </Button>
                                 </div>
                             </div>
