@@ -224,7 +224,11 @@ export default function InventoryProductsPage() {
 
     /// Per-column multi-select filters keyed by the row field name. Values are
     /// option ids stringified; "__none__" represents null/missing relations.
-    const [colFilters, setColFilters] = useState<Map<FilterField, Set<string>>>(new Map());
+    /// `?groups=1,2,3` (the Items link on Product groups) pre-filters the Group column.
+    const [colFilters, setColFilters] = useState<Map<FilterField, Set<string>>>(() => {
+        const ids = searchParams.get("groups")?.split(",").filter((x) => /^\d+$/.test(x)) ?? [];
+        return ids.length ? new Map([["groupId", new Set(ids)]]) : new Map();
+    });
 
     /// Which data columns are visible — user-controlled via the Columns chooser,
     /// remembered per browser. Unknown/legacy ids are ignored; new columns

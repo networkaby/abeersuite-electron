@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
+import Link from "next/link";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, LayoutGrid, ChevronRight, ChevronDown, Check, X } from "lucide-react";
@@ -157,6 +158,15 @@ export default function InventoryProductGroupsPage() {
         }
         return total;
     })();
+
+    // The group plus every descendant id — the Items link filters Products by these.
+    const subtreeIds = (id: number): number[] => {
+        const out = [id];
+        for (let i = 0; i < out.length; i++) {
+            for (const g of rows) if (g.parentId === out[i] && !out.includes(g.id)) out.push(g.id);
+        }
+        return out;
+    };
 
     useRealtimeTopics(["catalogue"], load);
 
@@ -504,7 +514,19 @@ export default function InventoryProductGroupsPage() {
                                             </span>
                                         )}
                                     </TableCell>
-                                    <TableCell className="text-right font-mono text-sm">{itemTotals.get(r.id) ?? 0}</TableCell>
+                                    <TableCell className="text-right font-mono text-sm">
+                                        {(itemTotals.get(r.id) ?? 0) > 0 ? (
+                                            <Link
+                                                href={`/office/inventory/products?groups=${subtreeIds(r.id).join(",")}`}
+                                                className="text-primary underline-offset-2 hover:underline"
+                                                title="Open these products"
+                                            >
+                                                {itemTotals.get(r.id)}
+                                            </Link>
+                                        ) : (
+                                            <span className="text-muted-foreground">0</span>
+                                        )}
+                                    </TableCell>
                                     <TableCell className="text-right space-x-2">
                                         {!r.isActive ? <Badge variant="outline">inactive</Badge> : null}
                                         <Button
