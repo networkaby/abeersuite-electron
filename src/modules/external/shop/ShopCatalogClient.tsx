@@ -41,6 +41,10 @@ type SortKey = "featured" | "price-asc" | "price-desc" | "name";
 
 /** Products revealed per "page" — also the initial render size and scroll-load chunk. */
 const PAGE_SIZE = 24;
+/** A result smaller than this gets "You may also like" groups below it. */
+const RELATED_FILL = 12;
+/** Most products one related group shows before its "See all". */
+const RELATED_PER_GROUP = 6;
 
 /** The facet axes a product can be narrowed by. Counts are computed per axis. */
 type FacetKey =
@@ -462,6 +466,42 @@ function ShopCatalogInner({
         }
         return map;
     }, [visible]);
+
+    // A thin result (one small group, a short collection) leaves the page
+    // half empty. Fill it with related groups: siblings under the same parent
+    // group first, then the same department — in-stock first, a few per group,
+    // until the page holds about RELATED_FILL products. Only once every match
+    // is on screen, so it never sits between pages of the real result.
+    const related = useMemo(() => {
+        if (hasMore || filtered.length === 0 || filtered.length >= RELATED_FILL) return [];
+        const shown = new Set(filtered.map((p) => p.id));
+        const shownCats = new Set(filtered.map((p) => p.category));
+        const parents = new Set(filtered.map((p) => p.categoryPath[0]).filter(Boolean));
+        const depts = new Set(filtered.map((p) => p.department).filter(Boolean));
+        const byCat = new Map<string, { rank: number; items: ShopProductPublic[] }>();
+        for (const p of products) {
+            if (shown.has(p.id) || !p.category || shownCats.has(p.category)) continue;
+            const rank = parents.has(p.categoryPath[0]) ? 0 : depts.has(p.department) ? 1 : -1;
+            if (rank < 0) continue;
+            const e = byCat.get(p.category) ?? { rank, items: [] };
+            e.items.push(p);
+            byCat.set(p.category, e);
+        }
+        const inStockFirst = (a: ShopProductPublic, b: ShopProductPublic) =>
+            Number(b.stockStatus === "in_stock") - Number(a.stockStatus === "in_stock") ||
+            a.displayName.localeCompare(b.displayName);
+        const out: { category: string; total: number; items: ShopProductPublic[] }[] = [];
+        let room = RELATED_FILL - filtered.length;
+        for (const [category, e] of [...byCat].sort(
+            (a, b) => a[1].rank - b[1].rank || b[1].items.length - a[1].items.length
+        )) {
+            if (room <= 0) break;
+            const items = [...e.items].sort(inStockFirst).slice(0, Math.max(3, Math.min(RELATED_PER_GROUP, room)));
+            out.push({ category, total: e.items.length, items });
+            room -= items.length;
+        }
+        return out;
+    }, [products, filtered, hasMore]);
 
     // One picker per render, walked in reading order: the top strip, then
     // every group's row gap and the strip after each third group, then the
@@ -893,6 +933,47 @@ function ShopCatalogInner({
                             </Fragment>
                         ))
                     )}
+
+                    {related.length > 0 ? (
+                        <div className="space-y-8 border-t border-border/60 pt-8">
+                            <h3 className="text-xl font-semibold tracking-tight">You may also like</h3>
+                            {related.map(({ category, total, items }) => (
+                                <section key={`rel-${category}`} className="space-y-4">
+                                    <div className="flex items-end justify-between gap-4 border-b border-border/60 pb-2">
+                                        <h4 className="text-lg font-semibold">{category}</h4>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setCats(new Set([category]));
+                                                setCollections(new Set());
+                                                window.scrollTo({ top: 0, behavior: "smooth" });
+                                            }}
+                                            className="text-xs font-medium text-primary hover:underline"
+                                        >
+                                            See all {total}
+                                        </button>
+                                    </div>
+                                    {viewMode === "list" ? (
+                                        <ul className="flex flex-col gap-4">
+                                            {items.map((p) => (
+                                                <li key={p.id}>
+                                                    <ProductListRow product={p} />
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <ul className="grid auto-rows-fr gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                                            {items.map((p) => (
+                                                <li key={p.id} className="flex min-h-0 h-full flex-col">
+                                                    <ProductCard product={p} className="min-h-0 flex-1" />
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </section>
+                            ))}
+                        </div>
+                    ) : null}
 
                     {hasMore ? (
                         <div ref={loadMoreRef} className="flex justify-center pt-2">
