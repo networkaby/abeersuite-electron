@@ -105,8 +105,14 @@ function buildWhere(query: ProductListQuery): Prisma.InvProductWhereInput {
     for (const [field, vals] of Object.entries(query.idFilters) as [(typeof ID_FILTERS)[number], string[]][]) {
         const ids = vals.filter((v) => v !== NONE).map(Number).filter(Number.isInteger);
         const or: Prisma.InvProductWhereInput[] = [];
-        if (ids.length > 0) or.push({ [field]: { in: ids } });
-        if (vals.includes(NONE)) or.push({ [field]: null });
+        if (field === "categoryId") {
+            // Collection = ANY of the product's collections, not only the main one.
+            if (ids.length > 0) or.push({ collections: { some: { categoryId: { in: ids } } } });
+            if (vals.includes(NONE)) or.push({ collections: { none: {} } });
+        } else {
+            if (ids.length > 0) or.push({ [field]: { in: ids } });
+            if (vals.includes(NONE)) or.push({ [field]: null });
+        }
         // Only junk values ticked — match nothing rather than everything.
         and.push(or.length > 0 ? { OR: or } : { id: { in: [] } });
     }

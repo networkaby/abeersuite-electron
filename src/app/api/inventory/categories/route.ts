@@ -13,9 +13,11 @@ export async function GET() {
     try {
         const rows = await prisma.invCategory.findMany({
             orderBy: { name: "asc" },
-            include: { parent: { select: { id: true, name: true } }, _count: { select: { products: true } } },
+            include: { parent: { select: { id: true, name: true } }, _count: { select: { collectionLinks: true } } },
         });
-        return NextResponse.json(rows);
+        // Items = every product in the collection (a product can sit in several),
+        // not only those whose MAIN collection it is. Shape kept as _count.products.
+        return NextResponse.json(rows.map(({ _count, ...r }) => ({ ...r, _count: { products: _count.collectionLinks } })));
     } catch (e) {
         return handleApiError(e, "Failed to fetch categories");
     }
