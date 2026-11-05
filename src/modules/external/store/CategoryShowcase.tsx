@@ -7,6 +7,8 @@ type CategoryEntry = {
     count: number;
     /** Optional fallback product image if the category isn't in CATEGORY_IMAGES. */
     fallbackImageUrl?: string | null;
+    /** Where the tile goes — a combined tile ticks several categories. */
+    href?: string;
 };
 
 export default function CategoryShowcase({
@@ -34,7 +36,7 @@ export default function CategoryShowcase({
                 </div>
 
                 <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
-                    {categories.map(({ name, count, fallbackImageUrl }) => {
+                    {categories.map(({ name, count, fallbackImageUrl, href }) => {
                         const known = CATEGORY_IMAGES[name];
                         const imageUrl = known?.imageUrl ?? fallbackImageUrl ?? null;
                         const imageAlt = known?.imageAlt ?? `${name} category image`;
@@ -45,7 +47,7 @@ export default function CategoryShowcase({
                                     // Open the shop filtered to this category. A same-page
                                     // "#cat-…" jump only worked when the Home layout also
                                     // carried the Full catalogue section; without it every tile was dead.
-                                    href={`/shop?category=${encodeURIComponent(name)}`}
+                                    href={href ?? `/shop?category=${encodeURIComponent(name)}`}
                                     className="group relative block touch-manipulation overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm transition-all active:scale-[0.99] hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
                                 >
                                     <div className="relative aspect-[4/3] bg-muted">

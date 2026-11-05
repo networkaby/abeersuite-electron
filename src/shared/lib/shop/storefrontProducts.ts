@@ -69,6 +69,89 @@ export function storefrontCategories(products: ShopProductPublic[]): StorefrontC
         .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
+/** A tile smaller than this is folded into its parent or a sibling bundle. */
+const TILE_MIN_ITEMS = 6;
+
+export type StorefrontCategoryTile = StorefrontCategory & {
+    /** Opens /shop with every category in the tile ticked. */
+    href: string;
+};
+
+/** "A · B · C", or "A · B + 3 more" — "·" because group names carry "&" and ",". */
+function tileName(names: string[]): string {
+    if (names.length <= 3) return names.join(" · ");
+    return `${names.slice(0, 2).join(" · ")} + ${names.length - 2} more`;
+}
+
+/**
+ * Home-page category tiles without a wall of "1 item" cards. Per parent group:
+ * up to two child groups → one tile for the parent; otherwise every child with
+ * TILE_MIN_ITEMS or more keeps its own tile and the small ones are packed into
+ * sibling bundles ("Mouse Pad · Webcam") of at least that size, so a parent with
+ * many tiny children becomes a few tiles, not one giant one. Leftovers too small
+ * for a bundle go into the last bundle, or ride along with the smallest big sibling.
+ */
+export function storefrontCategoryTiles(products: ShopProductPublic[]): StorefrontCategoryTile[] {
+    const byCat = new Map<string, ShopProductPublic[]>();
+    const parentOf = new Map<string, string>();
+    for (const p of products) {
+        if (!p.category) continue;
+        byCat.set(p.category, [...(byCat.get(p.category) ?? []), p]);
+        if (!parentOf.has(p.category)) parentOf.set(p.category, p.categoryPath[0] ?? p.category);
+    }
+    const families = new Map<string, string[]>();
+    for (const [cat, parent] of parentOf) families.set(parent, [...(families.get(parent) ?? []), cat]);
+
+    const tiles: StorefrontCategoryTile[] = [];
+    const push = (name: string, cats: string[]) => {
+        const items = cats.flatMap((c) => byCat.get(c) ?? []);
+        const pic = items.find((p) => p.galleryUrls[0] || p.imageUrl);
+        tiles.push({
+            name,
+            count: items.length,
+            fallbackImageUrl: pic ? (pic.galleryUrls[0] ?? pic.imageUrl) : null,
+            href: `/shop?${cats.map((c) => `category=${encodeURIComponent(c)}`).join("&")}`,
+        });
+    };
+    const size = (c: string) => byCat.get(c)?.length ?? 0;
+
+    for (const [parent, cats] of families) {
+        if (cats.length <= 2) {
+            push(cats.length === 1 ? cats[0] : parent, cats);
+            continue;
+        }
+        const big = cats.filter((c) => size(c) >= TILE_MIN_ITEMS);
+        const small = cats.filter((c) => size(c) < TILE_MIN_ITEMS).sort((a, b) => size(b) - size(a));
+        const smallTotal = small.reduce((n, c) => n + size(c), 0);
+        // Too few for a tile of their own: ride along with the smallest big sibling.
+        const host = smallTotal < TILE_MIN_ITEMS && big.length ? [...big].sort((x, y) => size(x) - size(y))[0] : null;
+        for (const c of big) push(c === host ? tileName([c, ...small]) : c, c === host ? [c, ...small] : [c]);
+        if (small.length === 0 || host) continue;
+        if (smallTotal < TILE_MIN_ITEMS) {
+            push(parent, small);
+            continue;
+        }
+        const bundles: string[][] = [];
+        let cur: string[] = [];
+        let n = 0;
+        for (const c of small) {
+            cur.push(c);
+            n += size(c);
+            if (n >= TILE_MIN_ITEMS) {
+                bundles.push(cur);
+                cur = [];
+                n = 0;
+            }
+        }
+        if (cur.length) {
+            if (bundles.length) bundles[bundles.length - 1].push(...cur);
+            else bundles.push(cur);
+        }
+        for (const b of bundles) push(tileName(b), b);
+    }
+    return tiles.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
 /** "Top picks": badged products first, then the rest. */
 export function pickFeatured(products: ShopProductPublic[], n = 8): ShopProductPublic[] {
     return [...products]

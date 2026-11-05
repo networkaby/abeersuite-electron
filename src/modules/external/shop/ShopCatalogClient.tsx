@@ -318,7 +318,8 @@ function ShopCatalogInner({
     const [q, setQ] = useState(initialQuery);
     const [departments, setDepartments] = useState<Set<string>>(new Set());
     const [cats, setCats] = useState<Set<string>>(
-        () => new Set(initialCategory && initialCategory !== "all" ? [initialCategory] : [])
+        // "A|B" = several categories ticked at once (a combined home-page tile).
+        () => new Set(initialCategory && initialCategory !== "all" ? initialCategory.split("|") : [])
     );
     const [collections, setCollections] = useState<Set<string>>(
         () => new Set(initialCollection ? [initialCollection] : [])

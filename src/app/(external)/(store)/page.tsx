@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Fragment, type ReactNode } from "react";
-import { loadStorefrontProducts, pickDealOfTheDay, pickDeals, pickFeatured, storefrontCategories } from "@/shared/lib/shop/storefrontProducts";
+import { loadStorefrontProducts, pickDealOfTheDay, pickDeals, pickFeatured, storefrontCategoryTiles } from "@/shared/lib/shop/storefrontProducts";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { STORE_PAGE_HEADING } from "@/shared/lib/shop/storeContent";
 import {
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 };
 
 type PageData = {
-    categoryEntries: { name: string; count: number; fallbackImageUrl: string | null }[];
+    categoryEntries: { name: string; count: number; fallbackImageUrl: string | null; href?: string }[];
     featured: ShopProductPublic[];
     deals: ShopProductPublic[];
     dealOfTheDay: ShopProductPublic | null;
@@ -144,7 +144,7 @@ export default async function StoreHomePage({
     ]);
 
     const allCategories = [...new Set(products.map((p) => p.category))];
-    const categoryEntries = storefrontCategories(products);
+    const categoryEntries = storefrontCategoryTiles(products);
 
     const data: PageData = {
         categoryEntries,

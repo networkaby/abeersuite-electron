@@ -8,10 +8,11 @@ import { loadShopAdContext } from "@/shared/lib/shop/adContext";
 export default async function ShopCatalogPage({
     searchParams,
 }: {
-    searchParams: Promise<{ q?: string; category?: string; collection?: string; adPreview?: string }>;
+    searchParams: Promise<{ q?: string; category?: string | string[]; collection?: string; adPreview?: string }>;
 }) {
     const sp = await searchParams;
-    const initialCategory = sp.category && sp.category !== "" ? sp.category : "all";
+    // `?category=A&category=B` (a combined home-page tile) ticks every one.
+    const initialCategory = [sp.category ?? []].flat().filter(Boolean).join("|") || "all";
     const initialCollection = sp.collection?.trim() || undefined;
     const [products, adContext] = await Promise.all([loadStorefrontProducts(), loadShopAdContext(sp)]);
     const cats = [...new Set(products.map((p) => p.category))];
