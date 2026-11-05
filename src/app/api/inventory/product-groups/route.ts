@@ -19,7 +19,7 @@ export async function GET() {
     try {
         const rows = await prisma.invProductGroup.findMany({
             orderBy: { name: "asc" },
-            include: groupInclude,
+            include: { ...groupInclude, _count: { select: { products: true } } },
         });
         return NextResponse.json(rows);
     } catch (e) {

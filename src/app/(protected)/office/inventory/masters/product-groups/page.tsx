@@ -51,6 +51,8 @@ type Row = {
     slowAfterDays: number | null;
     nonMovingAfterDays: number | null;
     deadAfterDays: number | null;
+    /** Products directly in this group (from the list API). */
+    _count?: { products: number };
 };
 
 const TAXABILITY_OPTIONS = [
@@ -139,6 +141,22 @@ export default function InventoryProductGroupsPage() {
         }
         return out;
     };
+
+    // Items per group: own products + every descendant group's products.
+    const itemTotals = (() => {
+        const own = new Map(rows.map((g) => [g.id, g._count?.products ?? 0]));
+        const total = new Map(own);
+        for (const g of rows) {
+            const seen = new Set<number>([g.id]);
+            let pid = g.parentId;
+            while (pid != null && !seen.has(pid) && total.has(pid)) {
+                seen.add(pid);
+                total.set(pid, (total.get(pid) ?? 0) + (own.get(g.id) ?? 0));
+                pid = rows.find((x) => x.id === pid)?.parentId ?? null;
+            }
+        }
+        return total;
+    })();
 
     useRealtimeTopics(["catalogue"], load);
 
@@ -394,17 +412,18 @@ export default function InventoryProductGroupsPage() {
                             <TableHead title="Days since last sale: Slow / Non-moving / Dead. Click a cell to edit.">
                                 Movement (S / N / D)
                             </TableHead>
+                            <TableHead className="text-right" title="Products in this group, including its subgroups">Items</TableHead>
                             <TableHead className="text-right"> </TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-muted-foreground">Loading…</TableCell>
+                                <TableCell colSpan={7} className="text-muted-foreground">Loading…</TableCell>
                             </TableRow>
                         ) : visible.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-muted-foreground">No groups yet.</TableCell>
+                                <TableCell colSpan={7} className="text-muted-foreground">No groups yet.</TableCell>
                             </TableRow>
                         ) : (
                             visible.map(({ row: r, depth, hasChildren }) => {
@@ -485,6 +504,7 @@ export default function InventoryProductGroupsPage() {
                                             </span>
                                         )}
                                     </TableCell>
+                                    <TableCell className="text-right font-mono text-sm">{itemTotals.get(r.id) ?? 0}</TableCell>
                                     <TableCell className="text-right space-x-2">
                                         {!r.isActive ? <Badge variant="outline">inactive</Badge> : null}
                                         <Button
