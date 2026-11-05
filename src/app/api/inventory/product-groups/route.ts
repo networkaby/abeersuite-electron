@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
+import { autoShopSlug, shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { requireAuth, requirePermission } from "@/shared/lib/auth/permissions";
 import { invProductGroupCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { prismaUniqueError } from "@/shared/lib/api";
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
                 gstRateId:  b.gstRateId  ?? null,
                 hsnCode:    b.hsnCode    ?? null,
                 taxability: b.taxability ?? null,
-                slug:        b.slug        ?? null,
+                slug: b.slug || (await autoShopSlug(b.name, { kind: "group" })),
                 imageUrl:    b.imageUrl    ?? null,
                 description: b.description ?? null,
                 slowAfterDays:      b.slowAfterDays      ?? null,

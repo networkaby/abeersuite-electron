@@ -1,6 +1,6 @@
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
-import { shopSlugClash } from "@/shared/lib/shop/shopSlug";
+import { autoShopSlug, shopSlugClash } from "@/shared/lib/shop/shopSlug";
 import { requirePermission, requireAuth } from "@/shared/lib/auth/permissions";
 import { invCategoryCreateSchema } from "@/shared/lib/schemas/inventorySchemas";
 import { validateRequest } from "@/shared/lib/api";
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
         const row = await prisma.invCategory.create({
             data: {
                 name: b.name,
-                slug: b.slug ?? null,
+                slug: b.slug || (await autoShopSlug(b.name, { kind: "category" })),
                 imageUrl: b.imageUrl ?? null,
                 description: b.description ?? null,
                 parentId: b.parentId ?? null,

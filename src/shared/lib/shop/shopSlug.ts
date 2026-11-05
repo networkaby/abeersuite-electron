@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { isReservedShopSlug } from "@/shared/lib/shop/storefrontSlugPath";
+import { slugify } from "@/shared/lib/format/slugify";
 
 /**
  * One flat URL space for the shop: `/hp-15-laptop` (product), `/laptops`
@@ -40,6 +41,21 @@ export async function shopSlugClash(slug: string, self: { kind: ShopSlugKind; id
     ]);
     const taken = (Object.entries({ product, group, category, brand }) as [ShopSlugKind, unknown][]).find(([, row]) => row);
     return taken ? `Link "${s}" is already used by ${KIND_LABEL[taken[0]]}` : null;
+}
+
+/**
+ * A free link made from `name` — "CCTV & Security" → "cctv-security",
+ * then "-2", "-3"… when taken. Used when a group / collection is created
+ * without a link, so every one gets its own `/name` shop page.
+ */
+export async function autoShopSlug(name: string, self: { kind: ShopSlugKind; id?: number }): Promise<string | null> {
+    const base = slugify(name, { maxLength: 80 });
+    if (!base) return null;
+    for (let n = 1; n <= 50; n++) {
+        const candidate = n === 1 ? base : `${base}-${n}`;
+        if (!(await shopSlugClash(candidate, self))) return candidate;
+    }
+    return null;
 }
 
 /** The group / category / brand behind a root slug, active rows only. */
