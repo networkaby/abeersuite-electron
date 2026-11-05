@@ -13,7 +13,7 @@ export async function GET() {
     try {
         const rows = await prisma.invCategory.findMany({
             orderBy: { name: "asc" },
-            include: { parent: { select: { id: true, name: true } } },
+            include: { parent: { select: { id: true, name: true } }, _count: { select: { products: true } } },
         });
         return NextResponse.json(rows);
     } catch (e) {

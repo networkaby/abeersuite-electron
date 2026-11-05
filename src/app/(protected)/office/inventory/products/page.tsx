@@ -224,16 +224,19 @@ export default function InventoryProductsPage() {
 
     /// Per-column multi-select filters keyed by the row field name. Values are
     /// option ids stringified; "__none__" represents null/missing relations.
-    /// `?groups=1,2,3` (the Items link on Product groups) sets the Group column
-    /// filter — on first open AND whenever the link changes while the page is
-    /// already mounted (client navigation keeps state, so an initializer alone misses it).
-    const groupsParam = searchParams.get("groups");
+    /// `?groups=1,2,3` / `?collections=1,2,3` (the Items links on Product groups
+    /// and Collections) set that column's filter — on first open AND whenever the
+    /// link changes while the page is already mounted (client navigation keeps state).
+    const drillParam = `${searchParams.get("groups") ?? ""}|${searchParams.get("collections") ?? ""}`;
     const [colFilters, setColFilters] = useState<Map<FilterField, Set<string>>>(new Map());
-    const [seenGroupsParam, setSeenGroupsParam] = useState<string | null>(null);
-    if (groupsParam !== seenGroupsParam) {
-        setSeenGroupsParam(groupsParam);
-        const ids = groupsParam?.split(",").filter((x) => /^[0-9]+$/.test(x)) ?? [];
-        if (ids.length) setColFilters(new Map([["groupId", new Set(ids)]]));
+    const [seenDrillParam, setSeenDrillParam] = useState<string | null>(null);
+    if (drillParam !== seenDrillParam) {
+        setSeenDrillParam(drillParam);
+        const ids = (key: string) => searchParams.get(key)?.split(",").filter((x) => /^[0-9]+$/.test(x)) ?? [];
+        const next = new Map<FilterField, Set<string>>();
+        if (ids("groups").length) next.set("groupId", new Set(ids("groups")));
+        if (ids("collections").length) next.set("categoryId", new Set(ids("collections")));
+        if (next.size) setColFilters(next);
     }
 
     /// Which data columns are visible — user-controlled via the Columns chooser,

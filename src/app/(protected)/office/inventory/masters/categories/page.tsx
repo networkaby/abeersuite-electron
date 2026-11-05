@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { useDeleteWithConfirm } from "@/shared/hooks";
+import { useDeleteWithConfirm, useSessionScroll } from "@/shared/hooks";
 import {
     Select,
     SelectContent,
@@ -34,6 +34,8 @@ import {
 } from "@/components/ui/dialog";
 import { flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 import { useCollapsibleTree } from "@/modules/inventory/hooks";
+import { treeItemTotals } from "@/modules/inventory/lib/treeItems";
+import { TreeItemsLink } from "@/modules/inventory/components/TreeItemsLink";
 
 type InvCategory = {
     id: number;
@@ -46,6 +48,8 @@ type InvCategory = {
     slowAfterDays: number | null;
     nonMovingAfterDays: number | null;
     deadAfterDays: number | null;
+    /** Products whose main collection is this one (from the list API). */
+    _count?: { products: number };
 };
 
 const empty = {
@@ -74,6 +78,10 @@ export default function InventoryCategoriesPage() {
     }, []);
 
     useRealtimeTopics(["catalogue"], load);
+
+    // Items per collection (own + sub-collections); Back from a drill-down keeps the scroll.
+    const itemTotals = treeItemTotals(rows);
+    const { ref: scrollRef, onScroll } = useSessionScroll("collections:scroll", !loading && rows.length > 0);
 
     const cancel = () => {
         setAdding(false);
@@ -226,25 +234,26 @@ export default function InventoryCategoriesPage() {
                 </DialogContent>
             </Dialog>
 
-            <div className="min-h-0 flex-1 overflow-auto border border-border [&_[data-slot=table-container]]:overflow-x-visible">
+            <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-auto border border-border [&_[data-slot=table-container]]:overflow-x-visible">
                 <Table>
                     <TableHeader className="sticky top-0 z-20 bg-background [&_th]:bg-background [&_tr]:border-b [&_th]:shadow-[inset_0_-1px_0_var(--border)]">
                         <TableRow>
                             <TableHead>Name</TableHead>
                             <TableHead>Slug</TableHead>
+                            <TableHead className="text-right" title="Products whose main collection is this one, including sub-collections">Items</TableHead>
                             <TableHead> </TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={3} className="text-muted-foreground">
+                                <TableCell colSpan={4} className="text-muted-foreground">
                                     Loading…
                                 </TableCell>
                             </TableRow>
                         ) : visible.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={3} className="text-muted-foreground">
+                                <TableCell colSpan={4} className="text-muted-foreground">
                                     No collections yet.
                                 </TableCell>
                             </TableRow>
@@ -269,6 +278,9 @@ export default function InventoryCategoriesPage() {
                                         </span>
                                     </TableCell>
                                     <TableCell className="text-muted-foreground text-sm">{c.slug ?? "—"}</TableCell>
+                                    <TableCell className="text-right font-mono text-sm">
+                                        <TreeItemsLink rows={rows} totals={itemTotals} id={c.id} param="collections" />
+                                    </TableCell>
                                     <TableCell className="text-right space-x-2">
                                         {!c.isActive ? <Badge variant="outline">inactive</Badge> : null}
                                         <Button

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import Link from "next/link";
 import { useRealtimeTopics } from "@/shared/hooks/useRealtimeTopics";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, LayoutGrid, ChevronRight, ChevronDown, Check, X } from "lucide-react";
@@ -35,6 +34,8 @@ import {
 } from "@/components/ui/dialog";
 import { flattenTree, treeLabel } from "@/modules/inventory/components/InventoryMasterDropdownQuickDialog";
 import { useCollapsibleTree } from "@/modules/inventory/hooks";
+import { treeItemTotals } from "@/modules/inventory/lib/treeItems";
+import { TreeItemsLink } from "@/modules/inventory/components/TreeItemsLink";
 
 type GstRateOpt = { id: number; rate: string | number; label: string; isActive: boolean };
 
@@ -144,29 +145,7 @@ export default function InventoryProductGroupsPage() {
     };
 
     // Items per group: own products + every descendant group's products.
-    const itemTotals = (() => {
-        const own = new Map(rows.map((g) => [g.id, g._count?.products ?? 0]));
-        const total = new Map(own);
-        for (const g of rows) {
-            const seen = new Set<number>([g.id]);
-            let pid = g.parentId;
-            while (pid != null && !seen.has(pid) && total.has(pid)) {
-                seen.add(pid);
-                total.set(pid, (total.get(pid) ?? 0) + (own.get(g.id) ?? 0));
-                pid = rows.find((x) => x.id === pid)?.parentId ?? null;
-            }
-        }
-        return total;
-    })();
-
-    // The group plus every descendant id — the Items link filters Products by these.
-    const subtreeIds = (id: number): number[] => {
-        const out = [id];
-        for (let i = 0; i < out.length; i++) {
-            for (const g of rows) if (g.parentId === out[i] && !out.includes(g.id)) out.push(g.id);
-        }
-        return out;
-    };
+    const itemTotals = treeItemTotals(rows);
 
     useRealtimeTopics(["catalogue"], load);
 
@@ -518,17 +497,7 @@ export default function InventoryProductGroupsPage() {
                                         )}
                                     </TableCell>
                                     <TableCell className="text-right font-mono text-sm">
-                                        {(itemTotals.get(r.id) ?? 0) > 0 ? (
-                                            <Link
-                                                href={`/office/inventory/products?groups=${subtreeIds(r.id).join(",")}`}
-                                                className="text-primary underline-offset-2 hover:underline"
-                                                title="Open these products"
-                                            >
-                                                {itemTotals.get(r.id)}
-                                            </Link>
-                                        ) : (
-                                            <span className="text-muted-foreground">0</span>
-                                        )}
+                                        <TreeItemsLink rows={rows} totals={itemTotals} id={r.id} param="groups" />
                                     </TableCell>
                                     <TableCell className="text-right space-x-2">
                                         {!r.isActive ? <Badge variant="outline">inactive</Badge> : null}
