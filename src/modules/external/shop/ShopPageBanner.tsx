@@ -13,20 +13,22 @@ import {
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { HERO_SLIDES } from "@/shared/lib/shop/storeContent";
 
-type CategoryPill = { name: string; count: number };
+type CollectionPill = { name: string; count: number };
 
 export default function ShopPageBanner({
     productCount,
-    categoryPills,
+    categoryCount,
+    collectionPills,
     activeQuery,
 }: {
     productCount: number;
-    categoryPills: CategoryPill[];
+    categoryCount: number;
+    /** Collections (office Category), biggest first. */
+    collectionPills: CollectionPill[];
     activeQuery?: string;
 }) {
     const heroImage = HERO_SLIDES[0]?.imageUrl;
-    const categoryCount = categoryPills.length;
-    const topPills = categoryPills.slice(0, 8);
+    const topPills = collectionPills.slice(0, 8);
 
     return (
         <section className="relative overflow-hidden border-b border-border/80 bg-linear-to-br from-primary/8 via-background to-violet-500/8">
@@ -94,18 +96,18 @@ export default function ShopPageBanner({
                         {topPills.length > 0 ? (
                             <div className="mt-6">
                                 <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                                    Jump to category
+                                    Jump to collection
                                 </p>
                                 <ul className="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:flex-wrap sm:overflow-visible">
                                     {topPills.map(({ name, count }) => (
                                         <li key={name} className="shrink-0 snap-start">
-                                            <a
-                                                href={`#cat-${encodeURIComponent(name)}`}
+                                            <Link
+                                                href={`/shop?collection=${encodeURIComponent(name)}#catalog`}
                                                 className="inline-flex touch-manipulation items-center gap-1.5 rounded-full border border-border/80 bg-background/80 px-3 py-2 text-sm font-medium shadow-sm transition active:bg-muted hover:border-primary/50 hover:text-primary"
                                             >
                                                 {name}
                                                 <span className="text-xs text-muted-foreground tabular-nums">({count})</span>
-                                            </a>
+                                            </Link>
                                         </li>
                                     ))}
                                 </ul>

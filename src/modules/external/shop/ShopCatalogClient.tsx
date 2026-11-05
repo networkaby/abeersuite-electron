@@ -123,27 +123,140 @@ function FacetOption({
     );
 }
 
-/** A facet list that grows a filter box once it is long enough to need one. */
-function FacetList({
+type FacetValue = { value: string; count: number };
+
+/** A group in the facet tree; `own` is set when the group is itself a choice. */
+type FacetNode = {
+    key: string;
+    label: string;
+    own: FacetValue | null;
+    children: FacetNode[];
+    /** Products in the whole branch. */
+    total: number;
+    /** Every choice in the branch, `own` included. */
+    values: string[];
+};
+
+/** A sub-group this small is not worth its own row until the shopper asks. */
+const FACET_SMALL_SUBGROUP = 5;
+
+function buildFacetTree(options: FacetValue[], pathOf: (value: string) => string[]): FacetNode[] {
+    const root: FacetNode = { key: "", label: "", own: null, children: [], total: 0, values: [] };
+    for (const o of options) {
+        let node = root;
+        for (const label of [...pathOf(o.value), o.value]) {
+            let next = node.children.find((c) => c.label === label);
+            if (!next) {
+                next = { key: `${node.key}/${label}`, label, own: null, children: [], total: 0, values: [] };
+                node.children.push(next);
+            }
+            next.total += o.count;
+            next.values.push(o.value);
+            node = next;
+        }
+        node.own = o;
+    }
+    const sort = (nodes: FacetNode[]) => {
+        nodes.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+        nodes.forEach((n) => sort(n.children));
+    };
+    sort(root.children);
+    return root.children;
+}
+
+function FacetTreeNode({
+    node,
     idPrefix,
-    options,
     selected,
     onToggle,
 }: {
+    node: FacetNode;
     idPrefix: string;
-    options: { value: string; count: number }[];
     selected: Set<string>;
     onToggle: (value: string) => void;
 }) {
+    // Small sub-groups fold into the parent behind a "+"; a ticked one shows.
+    const [open, setOpen] = useState(
+        () =>
+            node.children.some((c) => c.total >= FACET_SMALL_SUBGROUP) ||
+            node.values.some((v) => v !== node.own?.value && selected.has(v))
+    );
+    const id = `${idPrefix}-${node.key}`;
+    if (node.children.length === 0 && node.own) {
+        return (
+            <FacetOption
+                id={id}
+                label={node.label}
+                count={node.own.count}
+                checked={selected.has(node.own.value)}
+                onChange={() => onToggle(node.own!.value)}
+            />
+        );
+    }
+    // Ticking a group ticks its whole branch; it reads ticked once all are.
+    const allTicked = node.values.every((v) => selected.has(v));
+    const toggleBranch = () => node.values.forEach((v) => selected.has(v) === allTicked && onToggle(v));
+    return (
+        <div>
+            <div className="flex items-center gap-1">
+                <div className="min-w-0 flex-1">
+                    <FacetOption id={id} label={node.label} count={node.total} checked={allTicked} onChange={toggleBranch} />
+                </div>
+                <button
+                    type="button"
+                    className="flex size-5 shrink-0 items-center justify-center rounded text-sm font-semibold text-muted-foreground hover:bg-muted"
+                    onClick={() => setOpen((o) => !o)}
+                    aria-label={open ? `Hide ${node.label} sub-groups` : `Show ${node.label} sub-groups`}
+                    aria-expanded={open}
+                >
+                    {open ? "−" : "+"}
+                </button>
+            </div>
+            {open ? (
+                <div className="pl-3.5">
+                    {node.children.map((c) => (
+                        <FacetTreeNode key={c.key} node={c} idPrefix={idPrefix} selected={selected} onToggle={onToggle} />
+                    ))}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+/** A facet list that grows a filter box once it is long enough to need one. */
+function FacetList({
+    idPrefix,
+    options: allOptions,
+    selected,
+    onToggle,
+    pathOf,
+}: {
+    idPrefix: string;
+    options: FacetValue[];
+    selected: Set<string>;
+    onToggle: (value: string) => void;
+    /** Parent groups of a choice, top-first — turns the list into a tree. */
+    pathOf?: (value: string) => string[];
+}) {
+    // Hide choices that would give zero products under the other filters,
+    // but keep a ticked one so the shopper can still untick it.
+    const options = useMemo(
+        () => allOptions.filter((o) => o.value && (o.count > 0 || selected.has(o.value))),
+        [allOptions, selected],
+    );
     const [needle, setNeedle] = useState("");
-    const [expanded, setExpanded] = useState(false);
     const searchable = options.length > 8;
+    // Every choice is listed: the rail itself is screen-tall and scrolls.
     const visible = useMemo(() => {
         const n = norm(needle);
-        const hits = n ? options.filter((o) => norm(o.value).includes(n)) : options;
-        return expanded || needle ? hits : hits.slice(0, 6);
-    }, [options, needle, expanded]);
-    const hiddenCount = options.length - visible.length;
+        return n ? options.filter((o) => norm(o.value).includes(n)) : options;
+    }, [options, needle]);
+
+    // With `pathOf`, the choices become a tree of groups. A search shows a flat list.
+    const tree = useMemo(
+        () => (pathOf && !needle ? buildFacetTree(visible, pathOf) : null),
+        [visible, pathOf, needle]
+    );
 
     return (
         <>
@@ -155,36 +268,26 @@ function FacetList({
                     className="mb-2 h-8 text-xs"
                 />
             ) : null}
-            <div className={cn(searchable && "max-h-56 overflow-y-auto pr-1")}>
-                {visible.map((o) => (
-                    <FacetOption
-                        key={o.value}
-                        id={`${idPrefix}-${o.value}`}
-                        label={o.value}
-                        count={o.count}
-                        checked={selected.has(o.value)}
-                        onChange={() => onToggle(o.value)}
-                    />
-                ))}
-            </div>
-            {!needle && hiddenCount > 0 ? (
-                <button
-                    type="button"
-                    className="pt-1 text-xs font-medium text-primary hover:underline"
-                    onClick={() => setExpanded(true)}
-                >
-                    + {hiddenCount} more
-                </button>
-            ) : null}
-            {!needle && expanded && options.length > 6 ? (
-                <button
-                    type="button"
-                    className="pt-1 text-xs font-medium text-primary hover:underline"
-                    onClick={() => setExpanded(false)}
-                >
-                    Show less
-                </button>
-            ) : null}
+            {tree
+                ? tree.map((n) => (
+                      <FacetTreeNode
+                          key={n.key}
+                          node={n}
+                          idPrefix={idPrefix}
+                          selected={selected}
+                          onToggle={onToggle}
+                      />
+                  ))
+                : visible.map((o) => (
+                      <FacetOption
+                          key={o.value}
+                          id={`${idPrefix}-${o.value}`}
+                          label={o.value}
+                          count={o.count}
+                          checked={selected.has(o.value)}
+                          onChange={() => onToggle(o.value)}
+                      />
+                  ))}
         </>
     );
 }
@@ -194,6 +297,7 @@ function ShopCatalogInner({
     allCategories,
     initialQuery,
     initialCategory,
+    initialCollection,
     title = "Catalog",
     adContext,
 }: {
@@ -201,6 +305,7 @@ function ShopCatalogInner({
     allCategories: string[];
     initialQuery: string;
     initialCategory: string;
+    initialCollection?: string;
     title?: string;
     /** The ad pool and visit seed — absent means no ads on this render. */
     adContext?: ShopAdContext;
@@ -211,7 +316,20 @@ function ShopCatalogInner({
     const [cats, setCats] = useState<Set<string>>(
         () => new Set(initialCategory && initialCategory !== "all" ? [initialCategory] : [])
     );
-    const [collections, setCollections] = useState<Set<string>>(new Set());
+    const [collections, setCollections] = useState<Set<string>>(
+        () => new Set(initialCollection ? [initialCollection] : [])
+    );
+    // Category → its parent groups below the department, top-first, for the
+    // Category tree. The department (root) has its own facet, so it is left out.
+    const categoryPathOf = useMemo(() => {
+        const paths = new Map<string, string[]>();
+        for (const p of products) {
+            if (p.category && !paths.has(p.category)) {
+                paths.set(p.category, [...p.categoryPath].reverse().slice(1));
+            }
+        }
+        return (v: string) => paths.get(v) ?? [];
+    }, [products]);
     const [priceIds, setPriceIds] = useState<Set<string>>(new Set());
     const [discountMin, setDiscountMin] = useState<number | null>(null);
     const [inStockOnly, setInStockOnly] = useState(false);
@@ -388,8 +506,23 @@ function ShopCatalogInner({
         return { top, mobileTop, groups, between, sidebarRect, sidebarTall };
     }, [adContext, products, visible, grouped, viewMode]);
 
+    // A banner pill links to ?collection= on this same page, which keeps this
+    // component mounted: pick that collection alone, clearing the other filters
+    // so the pill never lands on an empty list.
+    const [pillCollection, setPillCollection] = useState(initialCollection);
+    if (initialCollection !== pillCollection) {
+        setPillCollection(initialCollection);
+        if (initialCollection && !(collections.size === 1 && collections.has(initialCollection))) {
+            setDepartments(new Set());
+            setCats(new Set());
+            setPriceIds(new Set());
+            setDiscountMin(null);
+            setCollections(new Set([initialCollection]));
+        }
+    }
+
     // Keep the shareable URL in step with the search box and a single-category
-    // pick (the server page reads only `q` and `category`).
+    // and single-collection pick (the server page reads `q`, `category`, `collection`).
     useEffect(() => {
         const t = setTimeout(() => {
             const url = new URL(window.location.href);
@@ -397,11 +530,13 @@ function ShopCatalogInner({
             else url.searchParams.delete("q");
             if (cats.size === 1) url.searchParams.set("category", [...cats][0]);
             else url.searchParams.delete("category");
+            if (collections.size === 1) url.searchParams.set("collection", [...collections][0]);
+            else url.searchParams.delete("collection");
             const next = url.pathname + url.search;
-            if (next !== window.location.pathname + window.location.search) router.replace(next);
+            if (next !== window.location.pathname + window.location.search) router.replace(next, { scroll: false });
         }, 400);
         return () => clearTimeout(t);
-    }, [q, cats, router]);
+    }, [q, cats, collections, router]);
 
     const activeChips = [
         ...[...departments].map((v) => ({ key: `dep-${v}`, label: v, clear: () => setDepartments((s) => toggle(s, v)) })),
@@ -426,6 +561,26 @@ function ShopCatalogInner({
         setDiscountMin(null);
         setInStockOnly(false);
     };
+
+    // Empty choices are hidden (a ticked one stays so it can be unticked), and
+    // a section with nothing left to offer is hidden with them.
+    const priceOpts =
+        priceBands.length > 1
+            ? priceBands
+                  .map((b) => ({
+                      b,
+                      count: countBy(
+                          "price",
+                          (p) => p.pricePaise >= b.minPaise && (b.maxPaise == null || p.pricePaise < b.maxPaise)
+                      ),
+                  }))
+                  .filter(({ b, count }) => count > 0 || priceIds.has(b.id))
+            : [];
+    const discountOpts = DISCOUNT_OPTIONS.map((d) => ({
+        d,
+        count: countBy("discount", (p) => discountPct(p) >= d),
+    })).filter(({ d, count }) => count > 0 || discountMin === d);
+    const inStockCount = countBy("stock", (p) => p.stockStatus === "in_stock");
 
     const panel = (
         <div className="space-y-1">
@@ -461,23 +616,21 @@ function ShopCatalogInner({
                             value: v,
                             count: countBy("category", (p) => p.category === v),
                         }))}
+                        pathOf={categoryPathOf}
                         selected={cats}
                         onToggle={(v) => setCats((s) => toggle(s, v))}
                     />
                 </FacetSection>
             ) : null}
 
-            {priceBands.length > 1 ? (
+            {priceOpts.length > 0 ? (
                 <FacetSection title="Price">
-                    {priceBands.map((b) => (
+                    {priceOpts.map(({ b, count }) => (
                         <FacetOption
                             key={b.id}
                             id={`price-${b.id}`}
                             label={b.label}
-                            count={countBy(
-                                "price",
-                                (p) => p.pricePaise >= b.minPaise && (b.maxPaise == null || p.pricePaise < b.maxPaise)
-                            )}
+                            count={count}
                             checked={priceIds.has(b.id)}
                             onChange={() => setPriceIds((s) => toggle(s, b.id))}
                         />
@@ -485,21 +638,23 @@ function ShopCatalogInner({
                 </FacetSection>
             ) : null}
 
-            <FacetSection title="Discount">
-                {DISCOUNT_OPTIONS.map((d) => (
-                    <FacetOption
-                        key={d}
-                        id={`disc-${d}`}
-                        label={`${d}% off or more`}
-                        count={countBy("discount", (p) => discountPct(p) >= d)}
-                        checked={discountMin === d}
-                        onChange={() => setDiscountMin((cur) => (cur === d ? null : d))}
-                    />
-                ))}
-            </FacetSection>
+            {discountOpts.length > 0 ? (
+                <FacetSection title="Discount">
+                    {discountOpts.map(({ d, count }) => (
+                        <FacetOption
+                            key={d}
+                            id={`disc-${d}`}
+                            label={`${d}% off or more`}
+                            count={count}
+                            checked={discountMin === d}
+                            onChange={() => setDiscountMin((cur) => (cur === d ? null : d))}
+                        />
+                    ))}
+                </FacetSection>
+            ) : null}
 
             {collectionValues.length > 1 ? (
-                <FacetSection title="Collection" defaultOpen={false}>
+                <FacetSection title="Collection" defaultOpen={Boolean(initialCollection)}>
                     <FacetList
                         idPrefix="col"
                         options={collectionValues.map((v) => ({
@@ -512,15 +667,17 @@ function ShopCatalogInner({
                 </FacetSection>
             ) : null}
 
-            <FacetSection title="Availability">
-                <FacetOption
-                    id="in-stock"
-                    label="In stock only"
-                    count={countBy("stock", (p) => p.stockStatus === "in_stock")}
-                    checked={inStockOnly}
-                    onChange={() => setInStockOnly((v) => !v)}
-                />
-            </FacetSection>
+            {inStockCount > 0 || inStockOnly ? (
+                <FacetSection title="Availability">
+                    <FacetOption
+                        id="in-stock"
+                        label="In stock only"
+                        count={inStockCount}
+                        checked={inStockOnly}
+                        onChange={() => setInStockOnly((v) => !v)}
+                    />
+                </FacetSection>
+            ) : null}
         </div>
     );
 
@@ -761,6 +918,8 @@ export default function ShopCatalogClient(props: {
     allCategories: string[];
     initialQuery: string;
     initialCategory: string;
+    /** A collection to start ticked — the banner's collection pills. */
+    initialCollection?: string;
     title?: string;
     adContext?: ShopAdContext;
 }) {
