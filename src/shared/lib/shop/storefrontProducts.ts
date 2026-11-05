@@ -90,6 +90,7 @@ function tileName(names: string[]): string {
  * sibling bundles ("Mouse Pad · Webcam") of at least that size, so a parent with
  * many tiny children becomes a few tiles, not one giant one. Leftovers too small
  * for a bundle go into the last bundle, or ride along with the smallest big sibling.
+ * A tile that ends up holding every child takes the parent's own name.
  */
 export function storefrontCategoryTiles(products: ShopProductPublic[]): StorefrontCategoryTile[] {
     const byCat = new Map<string, ShopProductPublic[]>();
@@ -120,12 +121,14 @@ export function storefrontCategoryTiles(products: ShopProductPublic[]): Storefro
             push(cats.length === 1 ? cats[0] : parent, cats);
             continue;
         }
+        // A tile holding every child IS the parent: show its real name, not "A · B · C".
+        const label = (b: string[]) => (b.length === cats.length ? parent : tileName(b));
         const big = cats.filter((c) => size(c) >= TILE_MIN_ITEMS);
         const small = cats.filter((c) => size(c) < TILE_MIN_ITEMS).sort((a, b) => size(b) - size(a));
         const smallTotal = small.reduce((n, c) => n + size(c), 0);
         // Too few for a tile of their own: ride along with the smallest big sibling.
         const host = smallTotal < TILE_MIN_ITEMS && big.length ? [...big].sort((x, y) => size(x) - size(y))[0] : null;
-        for (const c of big) push(c === host ? tileName([c, ...small]) : c, c === host ? [c, ...small] : [c]);
+        for (const c of big) push(c === host ? label([c, ...small]) : c, c === host ? [c, ...small] : [c]);
         if (small.length === 0 || host) continue;
         if (smallTotal < TILE_MIN_ITEMS) {
             push(parent, small);
@@ -147,7 +150,7 @@ export function storefrontCategoryTiles(products: ShopProductPublic[]): Storefro
             if (bundles.length) bundles[bundles.length - 1].push(...cur);
             else bundles.push(cur);
         }
-        for (const b of bundles) push(tileName(b), b);
+        for (const b of bundles) push(label(b), b);
     }
     return tiles.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
