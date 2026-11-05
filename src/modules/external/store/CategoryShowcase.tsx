@@ -13,7 +13,7 @@ export default function CategoryShowcase({
     categories,
     eyebrow = "Departments",
     title = "Shop by category",
-    subtitle = "Tap a department to jump to its section in the catalog below.",
+    subtitle = "Tap a department to see everything in it.",
 }: {
     categories: CategoryEntry[];
     eyebrow?: string;
@@ -42,7 +42,10 @@ export default function CategoryShowcase({
                         return (
                             <li key={name}>
                                 <a
-                                    href={`#cat-${encodeURIComponent(name)}`}
+                                    // Open the shop filtered to this category. A same-page
+                                    // "#cat-…" jump only worked when the Home layout also
+                                    // carried the Full catalogue section; without it every tile was dead.
+                                    href={`/shop?category=${encodeURIComponent(name)}`}
                                     className="group relative block touch-manipulation overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm transition-all active:scale-[0.99] hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
                                 >
                                     <div className="relative aspect-[4/3] bg-muted">
