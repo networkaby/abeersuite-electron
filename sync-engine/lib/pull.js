@@ -55,6 +55,113 @@ function chunk(arr, size) {
 }
 
 /**
+ * table -> { keys: [[{ name, type }]], pkTypes } — the table's plain unique indexes
+ * other than the primary key (Prisma's @unique / @@unique), plus the primary key's
+ * column types. Read once per process.
+ */
+const uniqueCache = new Map();
+
+async function uniqueKeysOf(client, table, pk) {
+    if (uniqueCache.has(table)) return uniqueCache.get(table);
+    const rel = `public.${q(table)}`;
+    const { rows } = await client.query(
+        `SELECT array_agg(a.attname::text ORDER BY k.ord) AS names,
+                array_agg(format_type(a.atttypid, a.atttypmod) ORDER BY k.ord) AS types
+           FROM pg_index i
+           CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS k(attnum, ord)
+           JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
+          WHERE i.indrelid = to_regclass($1)
+            AND i.indisunique AND NOT i.indisprimary
+            AND i.indexprs IS NULL AND i.indpred IS NULL
+          GROUP BY i.indexrelid`,
+        [rel],
+    );
+    const pkRes = await client.query(
+        `SELECT attname::text AS attname, format_type(atttypid, atttypmod) AS t
+           FROM pg_attribute WHERE attrelid = to_regclass($1) AND attname = ANY($2)`,
+        [rel, pk],
+    );
+    const pkType = new Map(pkRes.rows.map((r) => [r.attname, r.t]));
+    const out = {
+        keys: rows.map((r) => r.names.map((name, n) => ({ name, type: r.types[n] }))),
+        pkTypes: pk.map((p) => pkType.get(p)),
+    };
+    uniqueCache.set(table, out);
+    return out;
+}
+
+/**
+ * Clear the way for rows whose UNIQUE value (not primary key) is held here by a
+ * DIFFERENT row.
+ *
+ * ON CONFLICT only handles the primary key. When a value moves from one row to
+ * another on the source — group 102 "Converter & Adapter" deleted, group 61 renamed to
+ * it — this replica still has 102 holding the name, so 61's update fails on
+ * `InvProductGroup_name_key` and the whole table stops syncing, every cycle, forever.
+ * Reordering cannot fix it: a swap (A↔B) has no valid order at all. Checked before
+ * every chunk; tables with no unique index other than the key pay one cached lookup.
+ *
+ * The source is the truth, and it can hold the value on only one row, so the local
+ * holder is stale: either deleted upstream (reconcile would remove it anyway) or
+ * itself changed upstream (its fresh copy arrives in this or a later page and is
+ * re-inserted). It is deleted here, inside the caller's replica-role transaction —
+ * foreign keys are suspended, so rows that point at it are untouched and keep their
+ * reference for when it returns.
+ *
+ * A row this counter wrote and has not pushed yet is never touched (outboxGuard):
+ * the insert then fails as before and the badge shows it, rather than losing the
+ * only copy.
+ */
+async function clearUniqueClashes(client, table, pk, batch) {
+    const { keys, pkTypes } = await uniqueKeysOf(client, table, pk);
+    if (keys.length === 0) return 0;
+    const entry = { table, pk };
+    const keyExpr = keyExpression(entry);
+    let pending = null;
+    let cleared = 0;
+
+    for (const cols of keys) {
+        if (!cols.every((c) => c.name in batch[0])) continue;
+        const names = [...cols.map((c) => c.name), ...pk];
+        const types = [...cols.map((c) => c.type), ...pkTypes];
+        const params = [];
+        const tuples = [];
+        for (const row of batch) {
+            if (cols.some((c) => row[c.name] == null)) continue; // NULLs never clash
+            tuples.push(`(${names.map((name, n) => {
+                params.push(row[name]);
+                return `$${params.length}::${types[n]}`;
+            }).join(", ")})`);
+        }
+        if (tuples.length === 0) continue;
+
+        const vCols = [...cols.map((_, n) => `u${n}`), ...pk.map((_, n) => `p${n}`)];
+        const sameValue = cols.map((c, n) => `l.${q(c.name)} = v.u${n}`).join(" AND ");
+        const samePk = pk.map((p, n) => `l.${q(p)} = v.p${n}`).join(" AND ");
+        // The CTE exposes the holder's own columns unqualified, so keyExpression
+        // (written for a bare table) applies as-is.
+        const holders = await client.query(
+            `WITH h AS (
+                 SELECT l.* FROM ${q(table)} l
+                 JOIN (VALUES ${tuples.join(", ")}) AS v(${vCols.join(", ")}) ON ${sameValue}
+                 WHERE NOT (${samePk}))
+             SELECT ${keyExpr} AS k FROM h`,
+            params,
+        );
+        if (holders.rows.length === 0) continue;
+
+        pending ??= await outboxGuard.pendingKeys(client, entry);
+        const stale = holders.rows.map((r) => r.k).filter((k) => !pending.has(k));
+        if (stale.length === 0) continue;
+        await totals.noteBeforeDelete(client, table, `${keyExpr} = ANY($1)`, [stale]);
+        const r = await client.query(`DELETE FROM ${q(table)} WHERE ${keyExpr} = ANY($1)`, [stale]);
+        cleared += r.rowCount || 0;
+        console.log(`[sync] ${table}: cleared ${r.rowCount} stale row(s) holding a unique value now on another row upstream (${stale.slice(0, 10).join(", ")})`);
+    }
+    return cleared;
+}
+
+/**
  * INSERT ... ON CONFLICT (pk) DO UPDATE, in chunks.
  *
  * Columns are taken from the row objects themselves, so a column added on the source
@@ -109,6 +216,7 @@ async function upsert(client, table, pk, rows, jsonCols, cacheCols, force) {
 
     let written = 0;
     for (const batch of chunk(rows, CHUNK)) {
+        await clearUniqueClashes(client, table, pk, batch);
         const params = [];
         const tuples = batch.map((row) => {
             const ph = cols.map((c) => {

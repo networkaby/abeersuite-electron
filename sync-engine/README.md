@@ -474,6 +474,7 @@ Seen live on 2026-09-08: a counter still on the previous build reported all 405
 ```powershell
 node test-reconcile.js        # needs TEST_SOURCE_URL and TEST_LOCAL_URL — two empty databases
 node test-child-watermark.js  # same two databases: a failed child pull must not lose the children
+node test-unique-clash.js     # TEST_LOCAL_URL only: a unique value moving between rows must not stop a table
 ```
 
 Reproduces every fault above against a throwaway pair of databases — the FK-rewritten

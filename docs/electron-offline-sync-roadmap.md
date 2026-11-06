@@ -462,6 +462,25 @@ answered with a reset. Either one could throw away a till's unsent sales.
 `pnpm check:state-file` proves the read/write rules, the id rules and the Windows lock
 retry in a temp folder.
 
+### 4.8 A unique value that moves between rows no longer stops a table (2026-11-06)
+
+The pull upserts on the primary key only. When a UNIQUE value (not the key) moves to
+another row upstream — the 2026-11-06 group regroup deleted group 102 "Converter &
+Adapter" and renamed 61 to it — the replica still held the value on 102, every page
+failed on `InvProductGroup_name_key`, and the table stopped syncing on every counter
+("Copy incomplete", old groups on screen). A swap (A↔B) has no valid order, so
+reordering could not fix it.
+
+`clearUniqueClashes` (`sync-engine/lib/pull.js`) runs before each upsert chunk: for every
+plain unique index other than the key, a local row holding an incoming row's value under a
+different key is stale (the source can hold the value once), so it is deleted inside the
+replica-role transaction. Foreign keys are suspended there, so rows pointing at it keep
+their reference; its fresh copy arrives in the same or a later page, or the hourly
+reconcile confirms the upstream delete. A row still pending in `_outbox` is never
+cleared — the insert fails loudly as before. `pnpm test:unique-clash` (needs
+`TEST_LOCAL_URL`) covers the swap, the take-over from a deleted row, the protected
+unpushed row and the no-op case.
+
 ## 5. Desktop & hardware capabilities
 
 | | Today | Target |
