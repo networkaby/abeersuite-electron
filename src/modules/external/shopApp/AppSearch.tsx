@@ -8,35 +8,11 @@ import { matchesQuery } from "@/shared/lib/shop/catalogFilters";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { appProductPath, appProductsPath } from "@/modules/external/shopApp/appPaths";
 import { noSubscribe } from "@/modules/mobile/components/installPlace";
+import { parseRecent, pushRecent, readRecentRaw, writeRecent } from "@/shared/lib/shop/recentSearches";
 
 type Suggestion = Pick<ShopProductPublic, "id" | "slug" | "displayName" | "category" | "description">;
 
 const RECENT_KEY = "nsShopApp.recentSearches";
-const RECENT_MAX = 8;
-
-/** Recent searches live on the phone only. Storage can be blocked — never break on it. */
-function readRecentRaw(): string {
-    try {
-        return localStorage.getItem(RECENT_KEY) ?? "[]";
-    } catch {
-        return "[]";
-    }
-}
-function parseRecent(raw: string): string[] {
-    try {
-        const v = JSON.parse(raw);
-        return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
-    } catch {
-        return [];
-    }
-}
-function writeRecent(list: string[]) {
-    try {
-        localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_MAX)));
-    } catch {
-        /* storage blocked — recent searches just aren't remembered */
-    }
-}
 
 /**
  * The full-screen search, as in Flipkart and Amazon: the box takes the keyboard
@@ -47,7 +23,7 @@ function writeRecent(list: string[]) {
 export default function AppSearch({ products, categories }: { products: Suggestion[]; categories: string[] }) {
     const router = useRouter();
     const [q, setQ] = useState("");
-    const raw = useSyncExternalStore(noSubscribe, readRecentRaw, () => "[]");
+    const raw = useSyncExternalStore(noSubscribe, () => readRecentRaw(RECENT_KEY), () => "[]");
     const loaded = useMemo(() => parseRecent(raw), [raw]);
     const [recent, setRecent] = useState<string[] | null>(null);
     const shownRecent = recent ?? loaded;
@@ -65,12 +41,11 @@ export default function AppSearch({ products, categories }: { products: Suggesti
     const go = (text: string) => {
         const t = text.trim();
         if (!t) return;
-        const next = [t, ...shownRecent.filter((r) => r.toLowerCase() !== t.toLowerCase())].slice(0, RECENT_MAX);
-        writeRecent(next);
+        writeRecent(RECENT_KEY, pushRecent(shownRecent, t));
         router.push(appProductsPath({ q: t }));
     };
     const clearRecent = () => {
-        writeRecent([]);
+        writeRecent(RECENT_KEY, []);
         setRecent([]);
     };
 

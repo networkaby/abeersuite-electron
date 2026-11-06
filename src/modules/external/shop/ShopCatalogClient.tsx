@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/shared/lib/format/utils";
 import { buildPriceBands, discountPct, DISCOUNT_OPTIONS, matchesQuery } from "@/shared/lib/shop/catalogFilters";
+import { didYouMean, searchRelevance } from "@/shared/lib/shop/searchRank";
 // Leaf import, NOT the inventory barrel — the barrel re-exports the Dexie
 // catalogue, and none of that belongs in a public storefront bundle.
 import AdUnit from "./ads/AdUnit";
@@ -322,6 +323,13 @@ function ShopCatalogInner({
 }) {
     const router = useRouter();
     const [q, setQ] = useState(initialQuery);
+    // The header search box pushes a new ?q= onto this same page, which keeps
+    // this component mounted: take the new search when it arrives.
+    const [seenQuery, setSeenQuery] = useState(initialQuery);
+    if (initialQuery !== seenQuery) {
+        setSeenQuery(initialQuery);
+        setQ(initialQuery);
+    }
     const [departments, setDepartments] = useState<Set<string>>(new Set());
     const [cats, setCats] = useState<Set<string>>(
         // "A|B" = several categories ticked at once (a combined home-page tile).
@@ -423,6 +431,11 @@ function ShopCatalogInner({
                 break;
             case "featured":
             default:
+                // With a search, "Featured" is relevance: the best title match first.
+                if (q.trim()) {
+                    list.sort((a, b) => searchRelevance(b, q) - searchRelevance(a, q) || a.displayName.localeCompare(b.displayName));
+                    break;
+                }
                 list.sort((a, b) => {
                     const ba = a.badge ? 1 : 0;
                     const bb = b.badge ? 1 : 0;
@@ -432,7 +445,7 @@ function ShopCatalogInner({
                 break;
         }
         return list;
-    }, [products, predicates, sort]);
+    }, [products, predicates, sort, q]);
 
     // Reveal `filtered` in pages instead of rendering the whole result set at
     // once — resets to the first page whenever the result set itself changes
@@ -851,7 +864,7 @@ function ShopCatalogInner({
                                         <SelectValue placeholder="Sort" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="featured">Featured</SelectItem>
+                                        <SelectItem value="featured">{q.trim() ? "Relevance" : "Featured"}</SelectItem>
                                         <SelectItem value="price-asc">Price · Low to high</SelectItem>
                                         <SelectItem value="price-desc">Price · High to low</SelectItem>
                                         <SelectItem value="name">Name A–Z</SelectItem>
@@ -908,7 +921,13 @@ function ShopCatalogInner({
 
                     {filtered.length === 0 ? (
                         <div className="rounded-2xl border border-dashed border-border py-20 text-center text-muted-foreground">
-                            No matches — try another search or clear filters.
+                            <NoResults
+                                q={q}
+                                products={products}
+                                hasFilters={activeChips.length > 0}
+                                onSearch={setQ}
+                                onClearFilters={clearAll}
+                            />
                         </div>
                     ) : (
                         Array.from(grouped.entries()).map(([category, items]) => (
@@ -1043,5 +1062,72 @@ export default function ShopCatalogClient(props: {
         >
             <ShopCatalogInner {...props} />
         </Suspense>
+    );
+}
+
+/**
+ * Never a dead end: offer a corrected spelling (a link the shopper chooses —
+ * the list itself stays strict), a way out of the filters, and the biggest
+ * categories to browse instead.
+ */
+function NoResults({
+    q,
+    products,
+    hasFilters,
+    onSearch,
+    onClearFilters,
+}: {
+    q: string;
+    products: ShopProductPublic[];
+    hasFilters: boolean;
+    onSearch: (q: string) => void;
+    onClearFilters: () => void;
+}) {
+    const suggestion = useMemo(
+        () => (q.trim() ? didYouMean(q, products.flatMap((p) => [p.displayName, p.category])) : null),
+        [q, products]
+    );
+    const topCategories = useMemo(() => {
+        const counts = new Map<string, number>();
+        for (const p of products) if (p.category) counts.set(p.category, (counts.get(p.category) ?? 0) + 1);
+        return [...counts].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([name]) => name);
+    }, [products]);
+
+    return (
+        <div className="space-y-4 px-4">
+            <p className="text-base font-medium text-foreground">
+                {q.trim() ? <>No products found for “{q.trim()}”</> : "No products match these filters"}
+            </p>
+            {suggestion ? (
+                <p>
+                    Did you mean{" "}
+                    <button type="button" onClick={() => onSearch(suggestion)} className="font-semibold text-primary hover:underline">
+                        {suggestion}
+                    </button>
+                    ?
+                </p>
+            ) : null}
+            {hasFilters ? (
+                <button type="button" onClick={onClearFilters} className="text-sm font-medium text-primary hover:underline">
+                    Clear all filters
+                </button>
+            ) : null}
+            {topCategories.length > 0 ? (
+                <div>
+                    <p className="pb-2 text-sm">Or browse a popular category:</p>
+                    <div className="flex flex-wrap justify-center gap-2">
+                        {topCategories.map((c) => (
+                            <a
+                                key={c}
+                                href={`/shop?view=all&category=${encodeURIComponent(c)}`}
+                                className="rounded-full border border-border/80 bg-card px-3 py-1.5 text-sm text-foreground hover:border-primary/50"
+                            >
+                                {c}
+                            </a>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
+        </div>
     );
 }
