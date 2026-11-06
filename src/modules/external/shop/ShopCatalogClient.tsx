@@ -127,6 +127,12 @@ function FacetOption({
     );
 }
 
+/** Height an ad slot needs in the filter rail, gap included (300×250, 300×600). */
+const RAIL_RECT_PX = 250 + 16;
+const RAIL_TALL_PX = 600 + 16;
+/** The rail's own padding and "Filters" header row. */
+const RAIL_CHROME_PX = 64;
+
 type FacetValue = { value: string; count: number };
 
 /** A group in the facet tree; `own` is set when the group is itself a choice. */
@@ -547,6 +553,23 @@ function ShopCatalogInner({
         return { top, mobileTop, groups, between, sidebarRect, sidebarTall };
     }, [adContext, products, visible, grouped, viewMode]);
 
+    // Rail ads only fill the space the product column leaves below the filters,
+    // so a short result list never gets a rail that runs on past it.
+    const railPanelRef = useRef<HTMLDivElement>(null);
+    const mainColRef = useRef<HTMLDivElement>(null);
+    const [railRoom, setRailRoom] = useState(0);
+    useEffect(() => {
+        const panelEl = railPanelRef.current;
+        const mainEl = mainColRef.current;
+        if (!panelEl || !mainEl) return;
+        const measure = () => setRailRoom(mainEl.offsetHeight - panelEl.offsetHeight - RAIL_CHROME_PX);
+        const ro = new ResizeObserver(measure);
+        ro.observe(panelEl);
+        ro.observe(mainEl);
+        measure();
+        return () => ro.disconnect();
+    }, []);
+
     // A banner pill links to ?collection= on this same page, which keeps this
     // component mounted: pick that collection alone, clearing the other filters
     // so the pill never lands on an empty list.
@@ -745,9 +768,13 @@ function ShopCatalogInner({
                             </button>
                         ) : null}
                     </div>
-                    {panel}
-                    {adPlan?.sidebarRect ? <AdUnit ad={adPlan.sidebarRect} className="mt-4" /> : null}
-                    {adPlan?.sidebarTall ? <AdUnit ad={adPlan.sidebarTall} className="mt-4" /> : null}
+                    <div ref={railPanelRef}>{panel}</div>
+                    {adPlan?.sidebarRect && railRoom >= RAIL_RECT_PX ? (
+                        <AdUnit ad={adPlan.sidebarRect} className="mt-4" />
+                    ) : null}
+                    {adPlan?.sidebarTall && railRoom >= RAIL_RECT_PX + RAIL_TALL_PX ? (
+                        <AdUnit ad={adPlan.sidebarTall} className="mt-4" />
+                    ) : null}
                 </aside>
 
                 {/* Mobile bottom sheet */}
@@ -789,7 +816,7 @@ function ShopCatalogInner({
                     </div>
                 ) : null}
 
-                <div className="min-w-0 flex-1 space-y-8">
+                <div ref={mainColRef} className="min-w-0 flex-1 space-y-8">
                     {adPlan?.top ? <AdUnit ad={adPlan.top} className="hidden sm:flex" /> : null}
                     {adPlan?.mobileTop ? <AdUnit ad={adPlan.mobileTop} className="sm:hidden" /> : null}
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
