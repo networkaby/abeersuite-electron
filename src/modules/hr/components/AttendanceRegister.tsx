@@ -2,7 +2,8 @@
 
 // The attendance register — one month, everyone down the side, a cell per day.
 // The till fills in the sign-ins; HR clicks a cell to mark it. A click cycles
-// P → ½ → A → L → clear, and a cleared cell reads off the calendar again
+// P → ½ → A → L → Auto. Auto drops the office mark: a day the till measured
+// shows the till's own answer again (green ring), any other day reads off the calendar again
 // (weekly off, holiday, approved leave, or unmarked).
 
 import { useMemo, useState, type ReactNode } from "react";
@@ -67,9 +68,14 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
         const before = overrides[key];
         // An office mark carries no worked minutes of its own — it is HR overruling
         // the clock, and readDay() stops grading the day the moment source is OFFICE.
-        setOverrides((o) => ({ ...o, [key]: next ? { status: next, source: "OFFICE", firstInAt: null, lastOutAt: null, workedMinutes: 0, note: null } : null }));
+        // Back to Auto on a day the till measured: the till's grade comes from the
+        // server, so nothing is painted early — the reload brings it in.
+        const under = data?.people.find((p) => p.id === userId)?.marks[iso];
+        const tillUnder = next === null && !!under && (under.workedMinutes > 0 || !!under.firstInAt);
+        if (!tillUnder) setOverrides((o) => ({ ...o, [key]: next ? { status: next, source: "OFFICE", firstInAt: null, lastOutAt: null, workedMinutes: 0, note: null } : null }));
         try {
             await axios.put("/api/hr/attendance", { userId, date: iso, status: next });
+            if (tillUnder) { setOverrides((o) => { const n = { ...o }; delete n[key]; return n; }); reload(); }
         } catch (e) {
             setOverrides((o) => { const n = { ...o }; if (before === undefined) delete n[key]; else n[key] = before; return n; });
             toast.error(extractApiError(e, "Could not mark the day"));
@@ -94,7 +100,7 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
         });
         try {
             const res = await axios.post<{ count: number }>("/api/hr/attendance/bulk", { cells, status });
-            toast.success(`${status ? "Marked" : "Cleared"} ${res.data.count} day${res.data.count === 1 ? "" : "s"}`);
+            toast.success(`${status ? "Marked" : "Set back to Auto:"} ${res.data.count} day${res.data.count === 1 ? "" : "s"}`);
             if (!status) reload();
         } catch (e) {
             setOverrides(before);
@@ -150,7 +156,7 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                         </span>
                         Late
                     </span>
-                    {canEdit && <span className="ml-auto">Click a day to mark it: P → ½ → A → L → clear. Click a date at the top, or Bulk mark, to mark many at once. The till marks sign-ins itself.</span>}
+                    {canEdit && <span className="ml-auto">Click a day to mark it: P → ½ → A → L → Auto. Click a date at the top, or Bulk mark, to mark many at once. The till marks sign-ins itself.</span>}
                 </p>
 
                 <QueryStateBlock loading={loading} error={error} hasData={!!data} onRetry={reload} />
@@ -327,9 +333,9 @@ function RegisterHelp({ canEdit }: { canEdit: boolean }) {
                 <section className="space-y-2">
                     <h3 className="font-semibold">Marking</h3>
                     <ul className="list-disc space-y-1 pl-5">
-                        <li><b>One box:</b> click it. Each click goes P → ½ → A → L → clear. Clearing a till day hands it back to Auto.</li>
+                        <li><b>One box:</b> click it. Each click goes P → ½ → A → L → <b>Auto</b>. Auto removes the office mark: if the till recorded that day, the till&apos;s own answer comes back with the green ring; if not, the box shows the calendar again (weekly off, holiday, leave or empty).</li>
                         <li><b>Many boxes:</b> click <b>Bulk mark</b>, or click a date at the top to mark that day for everyone.</li>
-                        <li>Bulk mark never changes an Auto (till) day. To override one, click that box on its own.</li>
+                        <li>Bulk mark never overrides an Auto (till) day — click that box on its own. Its <b>Auto</b> option sets many manual days back to Auto at once.</li>
                         <li>Future days cannot be marked.</li>
                         <li>Click a name to see that person&apos;s hours day by day (Employee Activity).</li>
                     </ul>

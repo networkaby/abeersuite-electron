@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eraser, ListChecks, Search } from "lucide-react";
+import { Bot, ListChecks, Search } from "lucide-react";
 import UserAvatar from "@/shared/components/UserAvatar";
 import { CELL } from "../lib/attendanceStyles";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -83,7 +83,7 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
                     if (skipLeave && p.leaveDays[iso]) continue;
                     if (skipOff && p.weeklyOff.includes(weekdayOf(iso))) continue;
                 }
-                // Clearing a cell with nothing stored does nothing — leave it out.
+                // Auto on a cell with nothing stored does nothing — leave it out.
                 if (status === null && !m) continue;
                 out.push({ userId: p.id, date: iso });
             }
@@ -112,7 +112,7 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
         ...(yesterday >= monthFrom && yesterday <= lastDay ? [{ label: "Yesterday", from: yesterday, to: yesterday }] : []),
         { label: monthTo < today ? "Whole month" : "Month so far", from: monthFrom, to: lastDay },
     ];
-    const verb = status ? `Mark ${cells.length} day${cells.length === 1 ? "" : "s"} as ${ATTENDANCE_STATUS_META[status].label}` : `Clear ${cells.length} day${cells.length === 1 ? "" : "s"}`;
+    const verb = status ? `Mark ${cells.length} day${cells.length === 1 ? "" : "s"} as ${ATTENDANCE_STATUS_META[status].label}` : `Set ${cells.length} day${cells.length === 1 ? "" : "s"} back to Auto`;
 
     return (
         <Dialog open={open} onOpenChange={(o) => { if (!saving) onOpenChange(o); }}>
@@ -153,20 +153,22 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
                                     const on = status === c;
                                     return (
                                         <button
-                                            key={c ?? "clear"}
+                                            key={c ?? "auto"}
+                                            title={c ? undefined : "Remove the office mark — till days show the till's answer again"}
                                             type="button"
                                             onClick={() => setStatus(c)}
                                             aria-pressed={on}
                                             className={`flex flex-col items-center gap-1 rounded-lg border px-1 py-2 text-[11px] transition ${on ? "border-primary ring-2 ring-primary/40" : "border-border hover:border-primary/50"}`}
                                         >
                                             <span className={`inline-flex h-7 w-7 items-center justify-center rounded text-sm font-semibold ${c ? CELL[c] : "border border-dashed border-border text-muted-foreground"}`}>
-                                                {c ? ATTENDANCE_STATUS_META[c].short : <Eraser size={14} />}
+                                                {c ? ATTENDANCE_STATUS_META[c].short : <Bot size={14} />}
                                             </span>
-                                            {c ? ATTENDANCE_STATUS_META[c].label : "Clear"}
+                                            {c ? ATTENDANCE_STATUS_META[c].label : "Auto"}
                                         </button>
                                     );
                                 })}
                             </div>
+                            {status === null && <p className="text-xs text-muted-foreground">Auto removes office marks. Days the till recorded show the till&apos;s answer again; other days show the calendar.</p>}
                         </section>
 
                         <section className="space-y-2">
