@@ -13,14 +13,18 @@ import {
 import { COMPANY_DETAILS } from "@/shared/lib/constants/companyDetails";
 import { HERO_SLIDES } from "@/shared/lib/shop/storeContent";
 
-type CollectionPill = { name: string; count: number };
+/** `href` = the collection's own page; without one the pill filters the grid. */
+type CollectionPill = { name: string; count: number; href?: string };
 
 export default function ShopPageBanner({
     productCount,
     categoryCount,
     collectionPills,
     activeQuery,
+    heading = "All products",
 }: {
+    /** "Shop" on the browse hub; "All products" over the full grid. */
+    heading?: string;
     productCount: number;
     categoryCount: number;
     /** Collections (office Category), biggest first. */
@@ -60,7 +64,7 @@ export default function ShopPageBanner({
                                 </BreadcrumbItem>
                                 <BreadcrumbSeparator />
                                 <BreadcrumbItem>
-                                    <BreadcrumbPage>All products</BreadcrumbPage>
+                                    <BreadcrumbPage>{heading}</BreadcrumbPage>
                                 </BreadcrumbItem>
                             </BreadcrumbList>
                         </Breadcrumb>
@@ -70,7 +74,7 @@ export default function ShopPageBanner({
                                 <LayoutGrid className="size-5 sm:size-6" />
                             </span>
                             <h1 className="text-2xl font-bold tracking-tight sm:text-4xl">
-                                All products
+                                {heading}
                             </h1>
                         </div>
 
@@ -99,10 +103,10 @@ export default function ShopPageBanner({
                                     Jump to collection
                                 </p>
                                 <ul className="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:flex-wrap sm:overflow-visible">
-                                    {topPills.map(({ name, count }) => (
+                                    {topPills.map(({ name, count, href }) => (
                                         <li key={name} className="shrink-0 snap-start">
                                             <Link
-                                                href={`/shop?collection=${encodeURIComponent(name)}#catalog`}
+                                                href={href ?? `/shop?view=all&collection=${encodeURIComponent(name)}#catalog`}
                                                 className="inline-flex touch-manipulation items-center gap-1.5 rounded-full border border-border/80 bg-background/80 px-3 py-2 text-sm font-medium shadow-sm transition active:bg-muted hover:border-primary/50 hover:text-primary"
                                             >
                                                 {name}
@@ -127,7 +131,7 @@ export default function ShopPageBanner({
                                 </Link>
                             </Button>
                             <a
-                                href="#catalog"
+                                href="/shop?view=all#catalog"
                                 className="min-h-11 text-center text-sm font-medium text-primary underline-offset-4 hover:underline sm:min-h-0 sm:text-left"
                             >
                                 Go to filters

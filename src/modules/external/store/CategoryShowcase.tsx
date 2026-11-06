@@ -16,11 +16,16 @@ export default function CategoryShowcase({
     eyebrow = "Departments",
     title = "Shop by category",
     subtitle = "Tap a department to see everything in it.",
+    moreHref,
+    moreLabel = "See all",
 }: {
     categories: CategoryEntry[];
     eyebrow?: string;
     title?: string;
     subtitle?: string;
+    /** A "More" link to the full list (`/shop?view=…`) when this row is only a handful. */
+    moreHref?: string;
+    moreLabel?: string;
 }) {
     if (categories.length === 0) return null;
 
@@ -33,6 +38,15 @@ export default function CategoryShowcase({
                         <h2 className="mt-2 text-xl font-bold tracking-tight sm:text-3xl">{title}</h2>
                         {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
                     </div>
+                    {moreHref ? (
+                        <a
+                            href={moreHref}
+                            className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline"
+                        >
+                            {moreLabel}
+                            <ArrowRight className="size-4" />
+                        </a>
+                    ) : null}
                 </div>
 
                 <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">

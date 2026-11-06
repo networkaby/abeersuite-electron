@@ -573,6 +573,9 @@ function ShopCatalogInner({
             else url.searchParams.delete("category");
             if (collections.size === 1) url.searchParams.set("collection", [...collections][0]);
             else url.searchParams.delete("collection");
+            // On /shop the bare URL is the browse hub, so the grid keeps `view=all`
+            // — clearing the search must not swap the page out from under the user.
+            if (url.pathname === "/shop") url.searchParams.set("view", "all");
             const next = url.pathname + url.search;
             if (next !== window.location.pathname + window.location.search) router.replace(next, { scroll: false });
         }, 400);

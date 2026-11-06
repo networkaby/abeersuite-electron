@@ -12,6 +12,7 @@ import HeroCarousel from "@/modules/external/store/HeroCarousel";
 import PromoBanners from "@/modules/external/store/PromoBanners";
 import TrustStrip from "@/modules/external/store/TrustStrip";
 import CategoryShowcase from "@/modules/external/store/CategoryShowcase";
+import { HOME_TILE_LIMIT } from "@/shared/lib/shop/homeLayout";
 import DealOfTheDay from "@/modules/external/store/DealOfTheDay";
 import BrandStripView, { type BrandStripBrand } from "@/modules/external/store/BrandStripView";
 import ProductRail from "@/modules/external/shop/ProductRail";
@@ -98,13 +99,39 @@ export default function SectionPreview({ inst, data }: { inst: HomeSectionInstan
                         fallbackImageUrl: inCat[0]?.galleryUrls?.[0] ?? inCat[0]?.imageUrl ?? null,
                     };
                 })
-                .sort((a, b) => b.count - a.count);
+                .sort((a, b) => b.count - a.count)
+                .slice(0, HOME_TILE_LIMIT);
             return (
                 <CategoryShowcase
                     categories={categories}
+                    moreHref="#"
+                    moreLabel="More categories"
                     eyebrow={content.eyebrow}
                     title={content.title}
                     subtitle={content.subtitle}
+                />
+            );
+        }
+        case "collectionShowcase": {
+            const counts = new Map<string, { count: number; img: string | null }>();
+            for (const p of data.products) {
+                for (const c of p.collections) {
+                    const cur = counts.get(c) ?? { count: 0, img: null };
+                    counts.set(c, { count: cur.count + 1, img: cur.img ?? p.galleryUrls?.[0] ?? p.imageUrl ?? null });
+                }
+            }
+            const collections = [...counts]
+                .map(([name, v]) => ({ name, count: v.count, fallbackImageUrl: v.img }))
+                .sort((a, b) => b.count - a.count)
+                .slice(0, HOME_TILE_LIMIT);
+            return (
+                <CategoryShowcase
+                    categories={collections}
+                    eyebrow={content.eyebrow ?? "Collections"}
+                    title={content.title ?? "Shop by collection"}
+                    subtitle={content.subtitle ?? "Ready-made picks for how you use them."}
+                    moreHref="#"
+                    moreLabel="More collections"
                 />
             );
         }

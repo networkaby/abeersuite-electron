@@ -15,10 +15,13 @@ export default function BrandStripView({
     brands,
     eyebrow = "Trusted brands",
     title = "Original products from leading manufacturers",
+    moreHref,
 }: {
     brands: BrandStripBrand[];
     eyebrow?: string;
     title?: string;
+    /** "All brands" link to the full list when the strip shows only some. */
+    moreHref?: string;
 }) {
     if (brands.length === 0) return null;
     return (
@@ -29,6 +32,11 @@ export default function BrandStripView({
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">{eyebrow}</p>
                         <h2 className="mt-2 text-xl font-bold tracking-tight sm:text-2xl">{title}</h2>
                     </div>
+                    {moreHref ? (
+                        <Link href={moreHref} className="text-sm font-semibold text-primary hover:underline">
+                            All brands →
+                        </Link>
+                    ) : null}
                 </div>
                 <ul className="-mx-3 flex snap-x snap-mandatory gap-4 overflow-x-auto px-3 pb-3 [-webkit-overflow-scrolling:touch] [scrollbar-width:thin] sm:-mx-4 sm:gap-10 sm:px-4">
                     {brands.map((b) => {

@@ -8,6 +8,9 @@ import { loadSimilarProducts, SIMILAR_PRODUCTS_LIMIT } from "@/shared/lib/shop/s
 import { loadShopAdContext } from "@/shared/lib/shop/adContext";
 import { loadStorefrontProductsCached } from "@/shared/lib/shop/storefrontProducts";
 import { buildBridgeRows } from "@/shared/lib/shop/productRelations";
+import { loadBoughtTogether } from "@/shared/lib/shop/boughtTogether";
+import { dailyPick } from "@/shared/lib/shop/browseTiles";
+import { businessTodayIso } from "@/shared/lib/format/formatDate";
 import { groupHref, loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
 import { AdPicker } from "@/shared/lib/shop/ads";
 import { ChevronRight } from "lucide-react";
@@ -76,6 +79,18 @@ export default async function ShopProductPage({
     // Collections bridge to OTHER groups: one row per collection the product
     // sits in (productRelations.ts). Built from the cached catalogue.
     const bridges = buildBridgeRows(product, catalogue, similar.map((p) => p.id));
+    // Real bills first: what customers actually bought with this (cached daily).
+    const together = await loadBoughtTogether(product.id, catalogue);
+    // "Recommended": same department, other categories, not already on the page.
+    const onPage = new Set([product.id, ...similar.map((p) => p.id), ...together.map((p) => p.id), ...bridges.flatMap((r) => r.items.map((p) => p.id))]);
+    const department = product.categoryPath[0] ?? null;
+    const recommended = dailyPick(
+        catalogue.filter((p) => !onPage.has(p.id) && p.groupId !== product.groupId && (department == null || p.categoryPath[0] === department)),
+        8,
+        businessTodayIso(),
+        `rec-${product.id}`,
+        0
+    );
     const pageAd = new AdPicker(adContext.ads, {
         todayIso: adContext.todayIso,
         products: similarPool,
@@ -129,6 +144,18 @@ export default async function ShopProductPage({
 
             {pageAd ? <AdUnit ad={pageAd} className="mt-12" /> : null}
 
+            {together.length > 0 ? (
+                <ProductRail
+                    className="mt-16"
+                    bordered={false}
+                    eyebrow="Frequently bought together"
+                    title="Customers also bought"
+                    subtitle="Picked up on the same bill as this one"
+                    products={together}
+                    seeAllHref={null}
+                />
+            ) : null}
+
             <ProductRail
                 className="mt-20 border-t border-border/80 pt-12"
                 bordered={false}
@@ -152,6 +179,17 @@ export default async function ShopProductPage({
                     seeAllHref={null}
                 />
             ))}
+
+            <ProductRail
+                className="mt-16"
+                bordered={false}
+                eyebrow="Recommended"
+                title="You may also like"
+                subtitle={department ? `More from ${department}` : undefined}
+                products={recommended}
+                seeAllHref="/shop?view=categories"
+                seeAllLabel="Explore categories"
+            />
         </main>
     );
 }

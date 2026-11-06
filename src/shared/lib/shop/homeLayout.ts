@@ -51,6 +51,7 @@ export const HOME_SECTION_TYPES = [
     "whatsappStrip",
     "trustStrip",
     "categoryShowcase",
+    "collectionShowcase",
     "productRail",
     "dealOfTheDay",
     "brandStrip",
@@ -63,6 +64,11 @@ export const HOME_SECTION_TYPES = [
     "recentlyViewed",
     "relatedAlternatives",
 ] as const;
+
+/** Tiles a home "Shop by …" row shows before its "More" link (two rows of 4 on desktop). */
+export const HOME_TILE_LIMIT = 8;
+/** Brand logos the home strip shows before "All brands". */
+export const HOME_BRAND_LIMIT = 12;
 
 export type HomeSectionType = (typeof HOME_SECTION_TYPES)[number];
 
@@ -83,6 +89,7 @@ export const HOME_SECTION_TYPE_DEFS: HomeSectionTypeDef[] = [
     { type: "hero", label: "Hero banner", kind: "banner", hint: "Big top image + headline offer.", implemented: true },
     { type: "trustStrip", label: "Trust strip", kind: "trust", hint: "Shipping, returns, support, secure checkout.", implemented: true },
     { type: "categoryShowcase", label: "Category tiles", kind: "heading", hint: "Browse by category — tiles come from your live catalogue.", implemented: true },
+    { type: "collectionShowcase", label: "Collection tiles", kind: "heading", hint: "Browse by collection (Gaming, Office…) — a daily handful with a link to all.", implemented: true },
     { type: "promoBanner", label: "Promo banner", kind: "banner", hint: "One image + copy banner.", implemented: true },
     { type: "productRail", label: "Product rail", kind: "productRail", hint: "A horizontal row of products picked by a rule.", implemented: true },
     { type: "dealOfTheDay", label: "Deal of the day", kind: "heading", hint: "Single featured discount — product comes from your live catalogue.", implemented: true },
@@ -293,6 +300,7 @@ export const DEFAULT_HOME_INSTANCES: HomeSectionInstance[] = [
     } },
     { id: "default-trust", type: "trustStrip", label: "Trust strip", sectionNo: 20, priority: 0, enabled: true, content: {} },
     { id: "default-categories", type: "categoryShowcase", label: "Category tiles", sectionNo: 30, priority: 0, enabled: false, content: {} },
+    { id: "default-collections", type: "collectionShowcase", label: "Collection tiles", sectionNo: 35, priority: 0, enabled: true, content: {} },
     { id: "default-promo-1", type: "promoBanner", label: "Promo banners — top", sectionNo: 40, priority: 0, enabled: true, content: {
         slides: seedSlides(PROMO_BANNERS_TOP), columns: 2,
     } },

@@ -48,6 +48,7 @@ import { todayIso } from "@/shared/lib/format/formatDate";
 // field falls back to, i.e. what the component's own hardcoded default says.
 const HEADING_FIELDS: Partial<Record<HomeSectionType, ("eyebrow" | "title" | "subtitle")[]>> = {
     categoryShowcase: ["eyebrow", "title", "subtitle"],
+    collectionShowcase: ["eyebrow", "title", "subtitle"],
     dealOfTheDay: ["eyebrow", "title"],
     brandStrip: ["eyebrow", "title"],
     fullCatalog: ["title"],
@@ -56,7 +57,12 @@ const HEADING_PLACEHOLDERS: Partial<Record<HomeSectionType, { eyebrow?: string; 
     categoryShowcase: {
         eyebrow: "Departments",
         title: "Shop by category",
-        subtitle: "Tap a department to jump to its section in the catalog below.",
+        subtitle: "Tap a department to see everything in it.",
+    },
+    collectionShowcase: {
+        eyebrow: "Collections",
+        title: "Shop by collection",
+        subtitle: "Ready-made picks for how you use them.",
     },
     dealOfTheDay: { eyebrow: "Deal of the day", title: "Biggest savings — limited stock" },
     brandStrip: { eyebrow: "Trusted brands", title: "Original products from leading manufacturers" },

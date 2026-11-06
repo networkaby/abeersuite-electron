@@ -89,7 +89,7 @@ export default function ShopHeader() {
                                     <Link href="/">Home</Link>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem asChild>
-                                    <Link href="/shop">All products</Link>
+                                    <Link href="/shop">Browse shop</Link>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem asChild>
                                     <Link href="/shop/cart">Cart</Link>
@@ -167,7 +167,7 @@ export default function ShopHeader() {
 
                 <nav className="hidden items-center gap-1 text-sm text-muted-foreground md:flex">
                     <Button variant="ghost" size="sm" className="touch-manipulation" asChild>
-                        <Link href="/shop">All products</Link>
+                        <Link href="/shop">Browse shop</Link>
                     </Button>
                     {/* When logged in, the account button (top-right) already links to the
                         portal — don't show a second Portal link. */}
