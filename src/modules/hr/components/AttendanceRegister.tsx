@@ -92,7 +92,7 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
     // Bulk mark: null = closed, "" = open on the whole month, an ISO = open on that day.
     const [bulkDay, setBulkDay] = useState<string | null>(null);
     const officeMark = (status: AttendanceStatus): AttendanceMark => ({ status, source: "OFFICE", firstInAt: null, lastOutAt: null, workedMinutes: 0, note: null });
-    const bulkMark = async (cells: BulkCell[], status: AttendanceStatus | null) => {
+    const bulkMark = async (cells: BulkCell[]) => {
         const before = overrides;
         setOverrides((o) => {
             const n = { ...o };
@@ -100,15 +100,15 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
             // only office-only cells are blanked optimistically.
             for (const c of cells) {
                 const key = `${c.userId}|${c.date}`;
-                if (status) n[key] = officeMark(status);
+                if (c.status) n[key] = officeMark(c.status);
                 else if (data?.people.find((p) => p.id === c.userId)?.marks[c.date]?.workedMinutes === 0) n[key] = null;
             }
             return n;
         });
         try {
-            const res = await axios.post<{ count: number }>("/api/hr/attendance/bulk", { cells, status });
-            toast.success(`${status ? "Marked" : "Set back to Auto:"} ${res.data.count} day${res.data.count === 1 ? "" : "s"}`);
-            if (!status) reload();
+            const res = await axios.post<{ count: number }>("/api/hr/attendance/bulk", { cells });
+            toast.success(`Updated ${res.data.count} day${res.data.count === 1 ? "" : "s"}`);
+            if (cells.some((c) => c.status === null)) reload();
         } catch (e) {
             setOverrides(before);
             toast.error(extractApiError(e, "Could not mark the days"));
@@ -346,7 +346,7 @@ function RegisterHelp({ canEdit }: { canEdit: boolean }) {
                     <ul className="list-disc space-y-1 pl-5">
                         <li><b>One box:</b> click it. Each click goes P → ½ → A → L → <b>Auto</b>. On an Auto (green ring) box the first click is always manual P. On a weekly off or holiday the cycle starts with a manual <b>W</b> / <b>H</b>: use it when the till shows activity on an off day that was not real work (testing, a quick check) — it removes the green ring and no extra duty is paid. Auto removes the office mark: if the till recorded that day, the till&apos;s own answer comes back with the green ring; if not, the box shows the calendar again (weekly off, holiday, leave or empty).</li>
                         <li><b>Many boxes:</b> click <b>Bulk mark</b>, or click a date at the top to mark that day for everyone.</li>
-                        <li>Bulk mark never overrides an Auto (till) day — click that box on its own. Its <b>Auto</b> option sets many manual days back to Auto at once.</li>
+                        <li>Bulk mark never overrides an Auto (till) day on a working day — click that box on its own. Its <b>W</b> / <b>H</b> options (and the &quot;Set off days to W / H&quot; tick) do set off days aside, rings included. Its <b>Auto</b> option sets many manual days back to Auto at once.</li>
                         <li>Future days cannot be marked.</li>
                         <li>Click a name to see that person&apos;s hours day by day (Employee Activity).</li>
                     </ul>

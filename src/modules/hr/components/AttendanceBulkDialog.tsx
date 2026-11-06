@@ -18,7 +18,8 @@ import { ATTENDANCE_STATUS_META, type AttendanceStatus } from "@/shared/lib/sche
 import { isoDaysBetween, readDay, holidayDatesFor, weekdayOf } from "../lib/attendanceCalendar";
 import type { HolidayDto, RegisterPerson } from "../lib/attendanceTypes";
 
-const CHOICES: (AttendanceStatus | null)[] = ["PRESENT", "HALF_DAY", "ABSENT", "LEAVE", null];
+const CHOICES: (AttendanceStatus | null)[] = ["PRESENT", "HALF_DAY", "ABSENT", "LEAVE", "WEEKLY_OFF", "HOLIDAY", null];
+type Shut = "WEEKLY_OFF" | "HOLIDAY";
 
 function Opt({ checked, set, label }: { checked: boolean; set: (v: boolean) => void; label: string }) {
     return (
@@ -29,7 +30,8 @@ function Opt({ checked, set, label }: { checked: boolean; set: (v: boolean) => v
     );
 }
 
-export type BulkCell = { userId: number; date: string };
+/** One cell to write; `status: null` = back to Auto. */
+export type BulkCell = { userId: number; date: string; status: AttendanceStatus | null };
 
 type Props = {
     open: boolean;
@@ -42,7 +44,7 @@ type Props = {
     today: string;
     /** Pre-filled day (a click on a column head), else the whole month so far. */
     initialDate: string | null;
-    onApply: (cells: BulkCell[], status: AttendanceStatus | null) => Promise<void>;
+    onApply: (cells: BulkCell[]) => Promise<void>;
 };
 
 export default function AttendanceBulkDialog({ open, onOpenChange, people, holidays, monthFrom, monthTo, today, initialDate, onApply }: Props) {
@@ -53,8 +55,7 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
     const [from, setFrom] = useState(initialDate ?? monthFrom);
     const [to, setTo] = useState(initialDate ?? lastDay);
     const [status, setStatus] = useState<AttendanceStatus | null>("PRESENT");
-    const [skipOff, setSkipOff] = useState(true);
-    const [skipHoliday, setSkipHoliday] = useState(true);
+    const [offToWH, setOffToWH] = useState(true);
     const [skipLeave, setSkipLeave] = useState(true);
     const [onlyEmpty, setOnlyEmpty] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -74,22 +75,34 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
                 const r = readDay(p, iso, mine);
                 if (r.kind === "outside") continue; // before joining / after leaving
                 const m = p.marks[iso];
-                // A day the till recorded stays on auto: overriding it is a
-                // one-by-one job on the grid, never a bulk one (owner, 2026-11-06).
-                if (m?.source === "COUNTER") continue;
+                const shut: Shut | null = mine.has(iso) ? "HOLIDAY" : p.weeklyOff.includes(weekdayOf(iso)) ? "WEEKLY_OFF" : null;
                 if (onlyEmpty && m) continue;
-                if (!m) {
-                    if (skipHoliday && mine.has(iso)) continue;
-                    if (skipLeave && p.leaveDays[iso]) continue;
-                    if (skipOff && p.weeklyOff.includes(weekdayOf(iso))) continue;
+
+                // The off-day marks. A W / H tile, or "Set off days to W / H" while
+                // marking P / ½ / A / L, puts the day's own off mark on it — the one
+                // place bulk overrides a till day: activity on an off day that was not
+                // work (testing) is set aside in one go (owner, 2026-11-06). An off
+                // day with nothing stored already reads W / H, so it is not written.
+                const offTile = status === "WEEKLY_OFF" || status === "HOLIDAY";
+                if (offTile || (shut && offToWH && status !== null)) {
+                    const want = offTile ? status : shut;
+                    if (!shut || want !== shut || !m) continue;
+                    if (m.source === "OFFICE" && m.status === want) continue;
+                    out.push({ userId: p.id, date: iso, status: want });
+                    continue;
                 }
+
+                // Every other day: a till day stays on auto — overriding it is a
+                // one-by-one job on the grid.
+                if (m?.source === "COUNTER") continue;
+                if (!m && skipLeave && p.leaveDays[iso]) continue;
                 // Auto on a cell with nothing stored does nothing — leave it out.
                 if (status === null && !m) continue;
-                out.push({ userId: p.id, date: iso });
+                out.push({ userId: p.id, date: iso, status });
             }
         }
         return out;
-    }, [people, holidays, picked, from, to, today, status, skipOff, skipHoliday, skipLeave, onlyEmpty]);
+    }, [people, holidays, picked, from, to, today, status, offToWH, skipLeave, onlyEmpty]);
 
     const peopleCount = new Set(cells.map((c) => c.userId)).size;
     const toggle = (id: number) => setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -98,7 +111,7 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
         if (!cells.length) return;
         setSaving(true);
         try {
-            await onApply(cells, status);
+            await onApply(cells);
             onOpenChange(false);
         } finally {
             setSaving(false);
@@ -112,14 +125,20 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
         ...(yesterday >= monthFrom && yesterday <= lastDay ? [{ label: "Yesterday", from: yesterday, to: yesterday }] : []),
         { label: monthTo < today ? "Whole month" : "Month so far", from: monthFrom, to: lastDay },
     ];
-    const verb = status ? `Mark ${cells.length} day${cells.length === 1 ? "" : "s"} as ${ATTENDANCE_STATUS_META[status].label}` : `Set ${cells.length} day${cells.length === 1 ? "" : "s"} back to Auto`;
+    // What the Apply will do, per mark — "20 Present · 4 Weekly off".
+    const byStatus = new Map<AttendanceStatus | null, number>();
+    for (const c of cells) byStatus.set(c.status, (byStatus.get(c.status) ?? 0) + 1);
+    const breakdown = [...byStatus].map(([s, n]) => `${n} ${s ? ATTENDANCE_STATUS_META[s].label : "back to Auto"}`).join(" · ");
+    const plural = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
+    const verb = byStatus.size > 1 ? `Apply to ${plural(cells.length)}`
+        : status ? `Mark ${plural(cells.length)} as ${ATTENDANCE_STATUS_META[cells[0]?.status ?? status].label}` : `Set ${plural(cells.length)} back to Auto`;
 
     return (
         <Dialog open={open} onOpenChange={(o) => { if (!saving) onOpenChange(o); }}>
             <DialogContent className="gap-0 p-0 sm:max-w-3xl">
                 <DialogHeader className="border-b border-border px-5 py-4">
                     <DialogTitle className="flex items-center gap-2 text-base"><ListChecks size={18} /> Bulk mark attendance</DialogTitle>
-                    <DialogDescription>Pick the days, the mark and the people. Days the office already marked are replaced. Days the till recorded are never touched here — change those one by one on the grid.</DialogDescription>
+                    <DialogDescription>Pick the days, the mark and the people. Days the office already marked are replaced. Days the till recorded are left on Auto — except off days, which W / H can set aside.</DialogDescription>
                 </DialogHeader>
 
                 <div className="grid max-h-[65vh] gap-0 overflow-y-auto md:grid-cols-[1fr_1fr] md:overflow-visible">
@@ -148,7 +167,7 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
 
                         <section className="space-y-2">
                             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">2. Mark as</h3>
-                            <div className="grid grid-cols-5 gap-1.5">
+                            <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
                                 {CHOICES.map((c) => {
                                     const on = status === c;
                                     return (
@@ -168,16 +187,23 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
                                     );
                                 })}
                             </div>
+                            {(status === "WEEKLY_OFF" || status === "HOLIDAY") && <p className="text-xs text-muted-foreground">Marks only each person&apos;s {status === "HOLIDAY" ? "holidays" : "weekly off days"} — also those the till recorded (green ring), so off-day testing is not paid as extra duty.</p>}
                             {status === null && <p className="text-xs text-muted-foreground">Auto removes office marks. Days the till recorded show the till&apos;s answer again; other days show the calendar.</p>}
                         </section>
 
                         <section className="space-y-2">
                             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">3. Leave these alone</h3>
                             <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                                <Opt checked={skipOff} set={setSkipOff} label="Weekly off" />
-                                <Opt checked={skipHoliday} set={setSkipHoliday} label="Holidays" />
                                 <Opt checked={skipLeave} set={setSkipLeave} label="Approved leave" />
                                 <Opt checked={onlyEmpty} set={setOnlyEmpty} label="Already marked days" />
+                            </div>
+                            <div className="pt-1">
+                                <Opt checked={offToWH} set={setOffToWH} label="Set off days to W / H" />
+                                <p className="pl-6 text-xs text-muted-foreground">
+                                    {offToWH
+                                        ? "Weekly offs become W and holidays H — wrong marks and green rings on them are removed."
+                                        : "Off days get the same mark as the other days."}
+                                </p>
                             </div>
                         </section>
                     </div>
@@ -212,7 +238,7 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
                 <DialogFooter className="items-center border-t border-border px-5 py-3 sm:justify-between">
                     <p className="text-sm text-muted-foreground">
                         {cells.length
-                            ? <><span className="font-medium text-foreground">{cells.length}</span> day{cells.length === 1 ? "" : "s"} for <span className="font-medium text-foreground">{peopleCount}</span> {peopleCount === 1 ? "person" : "people"}</>
+                            ? <><span className="font-medium text-foreground">{breakdown}</span> for <span className="font-medium text-foreground">{peopleCount}</span> {peopleCount === 1 ? "person" : "people"}</>
                             : "Nothing to mark with these choices."}
                     </p>
                     <div className="flex gap-2">

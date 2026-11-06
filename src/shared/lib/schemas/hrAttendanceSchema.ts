@@ -46,13 +46,16 @@ export const attendanceMarkSchema = z.object({
 });
 
 /**
- * POST /api/hr/attendance/bulk — one status on many (person, day) cells in one
+ * POST /api/hr/attendance/bulk — a mark on each of many (person, day) cells in one
  * go. The register picks the cells (it already knows each person's calendar);
  * the server only checks and writes them. `status: null` clears, as on PUT.
  */
 export const attendanceBulkMarkSchema = z.object({
-    cells:  z.array(z.object({ userId: z.number().int().positive(), date: isoDateSchema })).min(1).max(3000),
-    status: z.enum(ATTENDANCE_STATUSES).nullable(),
+    cells: z.array(z.object({
+        userId: z.number().int().positive(),
+        date:   isoDateSchema,
+        status: z.enum(ATTENDANCE_STATUSES).nullable(),
+    })).min(1).max(3000),
 });
 
 /**
