@@ -69,8 +69,10 @@ export function storefrontCategories(products: ShopProductPublic[]): StorefrontC
         .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
-/** A tile smaller than this is folded into its parent or a sibling bundle. */
-const TILE_MIN_ITEMS = 6;
+/** A parent group with up to this many products is ONE home tile (about a shop page). */
+const TILE_PARENT_MAX = 24;
+/** In a bigger parent, a child below this is bundled with siblings to reach it. */
+const TILE_MIN_ITEMS = 10;
 
 export type StorefrontCategoryTile = StorefrontCategory & {
     /** Opens /shop with every category in the tile ticked. */
@@ -84,12 +86,13 @@ function tileName(names: string[]): string {
 }
 
 /**
- * Home-page category tiles without a wall of "1 item" cards. Per parent group:
- * up to two child groups → one tile for the parent; otherwise every child with
- * TILE_MIN_ITEMS or more keeps its own tile and the small ones are packed into
- * sibling bundles ("Mouse Pad · Webcam") of at least that size, so a parent with
- * many tiny children becomes a few tiles, not one giant one. Leftovers too small
- * for a bundle go into the last bundle, or ride along with the smallest big sibling.
+ * Home-page category tiles — display only, worked out afresh from live counts
+ * (nothing saved; a group that grows gets its own tile by itself). Per parent
+ * group: up to TILE_PARENT_MAX products → one tile for the parent, and its
+ * click ticks every child on /shop. A bigger parent splits: a child with
+ * TILE_MIN_ITEMS or more keeps its own tile, and the smaller ones are packed
+ * into sibling bundles ("Mouse Pad · Webcam") of at least that size. Leftovers
+ * too small for a bundle join the last bundle, or the smallest big sibling.
  * A tile that ends up holding every child takes the parent's own name.
  */
 export function storefrontCategoryTiles(products: ShopProductPublic[]): StorefrontCategoryTile[] {
@@ -117,7 +120,7 @@ export function storefrontCategoryTiles(products: ShopProductPublic[]): Storefro
     const size = (c: string) => byCat.get(c)?.length ?? 0;
 
     for (const [parent, cats] of families) {
-        if (cats.length <= 2) {
+        if (cats.length === 1 || cats.reduce((n, c) => n + size(c), 0) <= TILE_PARENT_MAX) {
             push(cats.length === 1 ? cats[0] : parent, cats);
             continue;
         }
@@ -130,10 +133,6 @@ export function storefrontCategoryTiles(products: ShopProductPublic[]): Storefro
         const host = smallTotal < TILE_MIN_ITEMS && big.length ? [...big].sort((x, y) => size(x) - size(y))[0] : null;
         for (const c of big) push(c === host ? label([c, ...small]) : c, c === host ? [c, ...small] : [c]);
         if (small.length === 0 || host) continue;
-        if (smallTotal < TILE_MIN_ITEMS) {
-            push(parent, small);
-            continue;
-        }
         const bundles: string[][] = [];
         let cur: string[] = [];
         let n = 0;
