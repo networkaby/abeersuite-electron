@@ -11,6 +11,8 @@ import { businessTodayIso } from "@/shared/lib/format/formatDate";
 // The register's "Bulk mark": the same office mark as PUT /api/hr/attendance,
 // on many cells at once, in one transaction and a fixed number of queries
 // (not one per cell — AGENTS §7). Same gate as a single mark.
+// A day on auto (source COUNTER — the till recorded it) is never touched here:
+// overriding one is a one-by-one job on the grid (owner, 2026-11-06).
 //   status  → every cell becomes a MANUAL office mark; the till's figures on an
 //             existing row stay underneath, exactly as a single mark leaves them.
 //   null    → a cell the till measured goes back to auto; an office-only cell goes.
@@ -31,7 +33,7 @@ export async function POST(req: Request) {
         const seen = new Map<string, { userId: number; date: Date }>();
         for (const c of data.cells) seen.set(`${c.userId}|${c.date}`, { userId: c.userId, date: dayOf(c.date) });
         const cells = [...seen.values()];
-        const anyCell = { OR: cells.map((c) => ({ userId: c.userId, date: c.date })) };
+        const anyCell = { OR: cells.map((c) => ({ userId: c.userId, date: c.date })), source: { not: "COUNTER" } };
 
         if (data.status === null) {
             await prisma.$transaction([

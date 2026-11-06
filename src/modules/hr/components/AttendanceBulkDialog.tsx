@@ -56,7 +56,6 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
     const [skipOff, setSkipOff] = useState(true);
     const [skipHoliday, setSkipHoliday] = useState(true);
     const [skipLeave, setSkipLeave] = useState(true);
-    const [skipTill, setSkipTill] = useState(true);
     const [onlyEmpty, setOnlyEmpty] = useState(false);
     const [saving, setSaving] = useState(false);
     const [query, setQuery] = useState("");
@@ -75,7 +74,9 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
                 const r = readDay(p, iso, mine);
                 if (r.kind === "outside") continue; // before joining / after leaving
                 const m = p.marks[iso];
-                if (skipTill && m?.source === "COUNTER") continue;
+                // A day the till recorded stays on auto: overriding it is a
+                // one-by-one job on the grid, never a bulk one (owner, 2026-11-06).
+                if (m?.source === "COUNTER") continue;
                 if (onlyEmpty && m) continue;
                 if (!m) {
                     if (skipHoliday && mine.has(iso)) continue;
@@ -88,7 +89,7 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
             }
         }
         return out;
-    }, [people, holidays, picked, from, to, today, status, skipOff, skipHoliday, skipLeave, skipTill, onlyEmpty]);
+    }, [people, holidays, picked, from, to, today, status, skipOff, skipHoliday, skipLeave, onlyEmpty]);
 
     const peopleCount = new Set(cells.map((c) => c.userId)).size;
     const toggle = (id: number) => setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -118,7 +119,7 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
             <DialogContent className="gap-0 p-0 sm:max-w-3xl">
                 <DialogHeader className="border-b border-border px-5 py-4">
                     <DialogTitle className="flex items-center gap-2 text-base"><ListChecks size={18} /> Bulk mark attendance</DialogTitle>
-                    <DialogDescription>Pick the days, the mark and the people. Days the office already marked are replaced.</DialogDescription>
+                    <DialogDescription>Pick the days, the mark and the people. Days the office already marked are replaced. Days the till recorded are never touched here — change those one by one on the grid.</DialogDescription>
                 </DialogHeader>
 
                 <div className="grid max-h-[65vh] gap-0 overflow-y-auto md:grid-cols-[1fr_1fr] md:overflow-visible">
@@ -174,7 +175,6 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
                                 <Opt checked={skipOff} set={setSkipOff} label="Weekly off" />
                                 <Opt checked={skipHoliday} set={setSkipHoliday} label="Holidays" />
                                 <Opt checked={skipLeave} set={setSkipLeave} label="Approved leave" />
-                                <Opt checked={skipTill} set={setSkipTill} label="Till-recorded days" />
                                 <Opt checked={onlyEmpty} set={setOnlyEmpty} label="Already marked days" />
                             </div>
                         </section>
