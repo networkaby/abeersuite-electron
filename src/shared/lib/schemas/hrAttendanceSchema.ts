@@ -46,6 +46,16 @@ export const attendanceMarkSchema = z.object({
 });
 
 /**
+ * POST /api/hr/attendance/bulk — one status on many (person, day) cells in one
+ * go. The register picks the cells (it already knows each person's calendar);
+ * the server only checks and writes them. `status: null` clears, as on PUT.
+ */
+export const attendanceBulkMarkSchema = z.object({
+    cells:  z.array(z.object({ userId: z.number().int().positive(), date: isoDateSchema })).min(1).max(3000),
+    status: z.enum(ATTENDANCE_STATUSES).nullable(),
+});
+
+/**
  * POST /api/hr/attendance/review — one person's day on Employee Activity.
  * `useManual` flips which side pays (attendanceSource.ts); the overrides
  * correct the till's figures on the activity card, null handing a figure back
