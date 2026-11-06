@@ -2,7 +2,7 @@
 
 // The attendance register — one month, everyone down the side, a cell per day.
 // The till fills in the sign-ins; HR clicks a cell to mark it. A click cycles
-// P → ½ → A → L → Auto. Auto drops the office mark: a day the till measured
+// P → ½ → A → L → Auto (an Auto day's first click is P). Auto drops the office mark: a day the till measured
 // shows the till's own answer again (green ring), any other day reads off the calendar again
 // (weekly off, holiday, approved leave, or unmarked).
 
@@ -239,7 +239,9 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                                                             title={tip}
                                                             aria-label={`${p.name}, ${iso}: ${tip}`}
                                                             disabled={!canEdit || iso > today}
-                                                            onClick={() => void mark(p.id, iso, stored ? status : null)}
+                                                            // An Auto (till) day starts the cycle at P, so a manual P is always
+                                                            // one click away: Auto → P → ½ → A → L → Auto.
+                                                            onClick={() => void mark(p.id, iso, stored && m?.source !== "COUNTER" ? status : null)}
                                                             className={`relative inline-flex h-6 w-6 items-center justify-center rounded text-[11px] font-semibold ${status ? CELL[status] : "border border-dashed border-border text-muted-foreground/60"} ${stored && m?.source === "COUNTER" ? "ring-1 ring-emerald-400/60" : ""} ${canEdit && iso <= today ? "cursor-pointer hover:ring-2 hover:ring-primary/40" : "cursor-default"}`}
                                                         >
                                                             {status ? ATTENDANCE_STATUS_META[status].short : ""}
@@ -333,7 +335,7 @@ function RegisterHelp({ canEdit }: { canEdit: boolean }) {
                 <section className="space-y-2">
                     <h3 className="font-semibold">Marking</h3>
                     <ul className="list-disc space-y-1 pl-5">
-                        <li><b>One box:</b> click it. Each click goes P → ½ → A → L → <b>Auto</b>. Auto removes the office mark: if the till recorded that day, the till&apos;s own answer comes back with the green ring; if not, the box shows the calendar again (weekly off, holiday, leave or empty).</li>
+                        <li><b>One box:</b> click it. Each click goes P → ½ → A → L → <b>Auto</b>. On an Auto (green ring) box the first click is always manual P. Auto removes the office mark: if the till recorded that day, the till&apos;s own answer comes back with the green ring; if not, the box shows the calendar again (weekly off, holiday, leave or empty).</li>
                         <li><b>Many boxes:</b> click <b>Bulk mark</b>, or click a date at the top to mark that day for everyone.</li>
                         <li>Bulk mark never overrides an Auto (till) day — click that box on its own. Its <b>Auto</b> option sets many manual days back to Auto at once.</li>
                         <li>Future days cannot be marked.</li>
