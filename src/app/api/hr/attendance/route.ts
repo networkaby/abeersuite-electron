@@ -25,6 +25,7 @@ import type { AttendanceStatus, LeaveKind } from "@/shared/lib/schemas/hrAttenda
 //       (attendanceSource.ts); the till's figures stay underneath. null removes
 //       the mark: the day reads off the calendar again, or — when the till
 //       measured it — goes back to auto.
+//   Many days at once: POST /api/hr/attendance/bulk (bulk/route.ts).
 
 const dayOf = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -136,6 +137,10 @@ export async function PUT(req: Request) {
     const { data, error } = await validateRequest(req, attendanceMarkSchema);
     if (error) return error;
     try {
+        // The register greys future cells, but the server is the gate.
+        if (data.date > businessTodayIso()) {
+            return NextResponse.json({ error: "A day in the future cannot be marked" }, { status: 400 });
+        }
         const date = dayOf(data.date);
         if (data.status === null) {
             // A day the till measured keeps its measurement: clearing the office

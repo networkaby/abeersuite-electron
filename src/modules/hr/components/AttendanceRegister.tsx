@@ -9,7 +9,7 @@ import { useMemo, useState } from "react";
 import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { toast } from "sonner";
-import { CalendarCheck, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarCheck, ChevronLeft, ChevronRight, ListChecks } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import UserAvatar from "@/shared/components/UserAvatar";
@@ -23,6 +23,7 @@ import { isoDaysBetween, monthBounds, readDay, summarise, weekdayOf, holidayDate
 import { CELL, DOW } from "../lib/attendanceStyles";
 import { formatWorked } from "@/shared/lib/hr/dutyTime";
 import type { AttendanceMark, RegisterPayload } from "../lib/attendanceTypes";
+import AttendanceBulkDialog, { type BulkCell } from "./AttendanceBulkDialog";
 
 const CYCLE: (AttendanceStatus | null)[] = ["PRESENT", "HALF_DAY", "ABSENT", "LEAVE", null];
 
@@ -74,6 +75,33 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
         }
     };
 
+    // Bulk mark: null = closed, "" = open on the whole month, an ISO = open on that day.
+    const [bulkDay, setBulkDay] = useState<string | null>(null);
+    const officeMark = (status: AttendanceStatus): AttendanceMark => ({ status, source: "OFFICE", firstInAt: null, lastOutAt: null, workedMinutes: 0, note: null });
+    const bulkMark = async (cells: BulkCell[], status: AttendanceStatus | null) => {
+        const before = overrides;
+        setOverrides((o) => {
+            const n = { ...o };
+            // A cleared till day goes back to auto — the reload paints it; meanwhile
+            // only office-only cells are blanked optimistically.
+            for (const c of cells) {
+                const key = `${c.userId}|${c.date}`;
+                if (status) n[key] = officeMark(status);
+                else if (data?.people.find((p) => p.id === c.userId)?.marks[c.date]?.workedMinutes === 0) n[key] = null;
+            }
+            return n;
+        });
+        try {
+            const res = await axios.post<{ count: number }>("/api/hr/attendance/bulk", { cells, status });
+            toast.success(`${status ? "Marked" : "Cleared"} ${res.data.count} day${res.data.count === 1 ? "" : "s"}`);
+            if (!status) reload();
+        } catch (e) {
+            setOverrides(before);
+            toast.error(extractApiError(e, "Could not mark the days"));
+            throw e;
+        }
+    };
+
     const monthLabel = new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
 
     return (
@@ -85,6 +113,11 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                     icon={<CalendarCheck size={20} />}
                     actions={
                         <div className="flex items-center gap-1">
+                            {canEdit && from <= today && (
+                                <Button type="button" variant="outline" size="sm" className="mr-2" disabled={!data} onClick={() => setBulkDay("")}>
+                                    <ListChecks size={14} /> Bulk mark
+                                </Button>
+                            )}
                             <Button type="button" variant="outline" size="icon-sm" aria-label="Previous month" onClick={() => move(-1)}><ChevronLeft size={14} /></Button>
                             <span className="min-w-36 text-center text-sm font-medium">{monthLabel}</span>
                             <Button type="button" variant="outline" size="icon-sm" aria-label="Next month" disabled={from > today} onClick={() => move(1)}><ChevronRight size={14} /></Button>
@@ -99,7 +132,7 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                             {ATTENDANCE_STATUS_META[s].label}
                         </span>
                     ))}
-                    {canEdit && <span className="ml-auto">Click a day to mark it: P → ½ → A → L → clear. The till marks sign-ins itself.</span>}
+                    {canEdit && <span className="ml-auto">Click a day to mark it: P → ½ → A → L → clear. Click a date at the top, or Bulk mark, to mark many at once. The till marks sign-ins itself.</span>}
                 </p>
 
                 <QueryStateBlock loading={loading} error={error} hasData={!!data} onRetry={reload} />
@@ -115,7 +148,13 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                                         return (
                                             <th key={iso} className={`px-0.5 py-1 text-center font-normal ${wd === 0 ? "text-red-600" : "text-muted-foreground"} ${iso === today ? "bg-primary/10" : ""}`} title={holidayDates.has(iso) ? data.holidays.find((h) => h.date === iso)?.name : undefined}>
                                                 <div className="text-[10px]">{DOW[wd]}</div>
-                                                <div className="font-medium text-foreground">{Number(iso.slice(8, 10))}</div>
+                                                {canEdit && iso <= today ? (
+                                                    <button type="button" className="font-medium text-foreground hover:text-primary hover:underline" title="Bulk mark this day" onClick={() => setBulkDay(iso)}>
+                                                        {Number(iso.slice(8, 10))}
+                                                    </button>
+                                                ) : (
+                                                    <div className="font-medium text-foreground">{Number(iso.slice(8, 10))}</div>
+                                                )}
                                             </th>
                                         );
                                     })}
@@ -202,6 +241,19 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                     </div>
                 )}
 
+                {data && canEdit && bulkDay !== null && (
+                    <AttendanceBulkDialog
+                        open
+                        onOpenChange={(o) => { if (!o) setBulkDay(null); }}
+                        people={people}
+                        holidays={holidays}
+                        monthFrom={from}
+                        monthTo={to}
+                        today={today}
+                        initialDate={bulkDay || null}
+                        onApply={bulkMark}
+                    />
+                )}
             </div>
         </ScrollArea>
     );
