@@ -7,6 +7,8 @@ import { loadSeasonalHours } from "@/shared/lib/hr/officeCalendarServer";
 import { shopDateFromIso } from "@/shared/lib/hr/seasonalHours";
 import { ATTENDANCE_SOURCE_SELECT, autoCounts, workedOf } from "@/shared/lib/hr/attendanceSource";
 import { unpaidLeaveDaysFor } from "./leaveBalance";
+import { holidayDatesFor, weekdayOf } from "./attendanceCalendar";
+import { userBranchIds } from "./staffBranchesServer";
 
 /**
  * The attendance seam for payroll (agreed with the payroll session, 2026-09-20).
@@ -43,10 +45,10 @@ export async function nonPayableDays(
 ): Promise<Map<string, 0 | 0.5>> {
     const from = new Date(`${fromIso}T00:00:00.000Z`);
     const to = new Date(`${toIso}T00:00:00.000Z`);
-    const [seasonal, rules, profile, rows, unpaid] = await Promise.all([
+    const [seasonal, rules, profile, rows, unpaid, holidayRows, branchIds] = await Promise.all([
         loadSeasonalHours(),
         loadPayRules(),
-        prisma.staffProfile.findUnique({ where: { userId }, select: { dutyMinutes: true, dutyStart: true, dutyEnd: true } }),
+        prisma.staffProfile.findUnique({ where: { userId }, select: { dutyMinutes: true, dutyStart: true, dutyEnd: true, weeklyOff: true } }),
         // Every stored row, not only the three exception statuses: a COUNTER day
         // stored as PRESENT may still grade to HALF or ABSENT on its hours, and
         // filtering by status first would hide exactly those days from payroll.
@@ -55,7 +57,18 @@ export async function nonPayableDays(
             select: { date: true, status: true, ...ATTENDANCE_SOURCE_SELECT },
         }),
         unpaidLeaveDaysFor(userId, fromIso, toIso),
+        prisma.holiday.findMany({ where: { date: { gte: from, lte: to } }, select: { date: true, branchId: true } }),
+        userBranchIds(userId),
     ]);
+    // The days this person's shop was shut. A shut day is a paid day: minutes on
+    // it are extra duty (payRulesApply.ts), never a grade — a short spell at the
+    // till on a holiday must not turn it into an unpaid ABSENT (fixed 2026-11-06;
+    // weekly offs were already safe, prorate skips them, but are named too).
+    const holidays = holidayDatesFor(
+        holidayRows.map((h, i) => ({ id: i, name: "", date: h.date.toISOString().slice(0, 10), branchId: h.branchId })),
+        branchIds,
+    );
+    const offDays = new Set(profile?.weeklyOff ?? []);
     /**
      * What was owed on THAT day.
      *
@@ -75,7 +88,8 @@ export async function nonPayableDays(
     for (const r of rows) {
         const iso = r.date.toISOString().slice(0, 10);
         const offMark = r.status === "WEEKLY_OFF" || r.status === "HOLIDAY";
-        const graded = opts.clockOnly ? workedOf(r) > 0 && !offMark : autoCounts(r);
+        const shut = holidays.has(iso) || offDays.has(weekdayOf(iso));
+        const graded = !shut && (opts.clockOnly ? workedOf(r) > 0 && !offMark : autoCounts(r));
         const status = graded ? gradeDay(workedOf(r), dutyOnDay(iso), rules) : r.status;
         if (status === "ABSENT") out.set(iso, 0);
         else if (status === "HALF_DAY") out.set(iso, 0.5);
