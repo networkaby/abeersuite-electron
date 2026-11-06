@@ -836,10 +836,9 @@ function ShopCatalogInner({
                         <div>
                             <h2 className="text-xl font-bold tracking-tight sm:text-2xl">{title}</h2>
                             <p className="mt-1 text-sm text-muted-foreground">
-                                {hasMore
-                                    ? `Showing ${visible.length} of ${filtered.length} products`
-                                    : `${filtered.length} product${filtered.length === 1 ? "" : "s"}`}{" "}
-                                · filter, compare, and checkout securely
+                                {/* No "24 of 49" — the total stays a surprise while there is more to load. */}
+                                {hasMore ? "" : `${filtered.length} product${filtered.length === 1 ? "" : "s"} · `}
+                                Filter, compare, and checkout securely
                             </p>
                         </div>
                         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
@@ -1034,7 +1033,7 @@ function ShopCatalogInner({
                                 className="h-11 touch-manipulation"
                                 onClick={() => setVisibleCount((c) => Math.min(c + PAGE_SIZE, filtered.length))}
                             >
-                                Load more ({filtered.length - visible.length} left)
+                                Load more
                             </Button>
                         </div>
                     ) : null}
