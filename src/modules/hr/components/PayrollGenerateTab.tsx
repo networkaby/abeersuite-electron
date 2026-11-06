@@ -33,10 +33,9 @@ import { AlertTriangle, Bot, CalendarRange, ChevronDown, ChevronRight, Eye, Sear
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Field } from "@/shared/components/Field";
 import { QueryStateBlock } from "@/shared/components/QueryStateBlock";
 import { TableEmptyRow } from "@/shared/components/DataTableStates";
-import { TallyDateInput } from "@/shared/components/TallyDateInput";
+import { PeriodPicker, monthPeriod, periodDays, type PeriodPreset } from "@/shared/components/PeriodPicker";
 import { useApiResource } from "@/shared/hooks";
 import { extractApiError } from "@/shared/lib/api/extractApiError";
 import { formatDate } from "@/shared/lib/format/formatDate";
@@ -52,13 +51,6 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
     // where the last run finished, and the screen does not.
     const [from, setFrom] = useState<string | null>(null);
     const [to, setTo] = useState<string | null>(null);
-    // Owner, 2026-10-12: open on the two date boxes — From the first unpaid
-    // day, Till today — so the screen says plainly that it is paying every
-    // day still owed. The month box used to open showing only the month the
-    // period STARTED in while the period ran on to today, and picking that
-    // same month changed nothing. "By month" is one click away, and switching
-    // to it snaps the period to that whole month (see `switchMode`).
-    const [mode, setMode] = useState<"month" | "custom">("custom");
     const [q, setQ] = useState("");
     const [open, setOpen] = useState<Set<number>>(new Set());
     const [saving, setSaving] = useState(false);
@@ -87,32 +79,23 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
     const periodFrom = from ?? data?.periodFrom ?? "";
     const periodTo = to ?? data?.periodTo ?? "";
 
-    // yyyy-mm for the month box, taken from whatever the period currently is.
-    const month = periodFrom.slice(0, 7);
-
-    // Picking a month pays the whole of it — except a month still running,
-    // which is paid up to today, the same day the server would have stopped at.
-    const pickMonth = (ym: string) => {
-        if (!/^\d{4}-\d{2}$/.test(ym)) return;
-        const [y, m] = ym.split("-").map(Number);
-        const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        const today = new Date();
-        const last = new Date(y, m, 0);
-        setFrom(`${ym}-01`);
-        setTo(iso(last > today ? today : last));
-        setOpen(new Set());
-    };
-
-    // The month box can only honestly show a month when the period IS that
-    // month, so moving to it pays the month the period starts in.
-    const switchMode = () => {
-        if (mode === "custom") {
-            if (month) pickMonth(month);
-            setMode("month");
-        } else {
-            setMode("custom");
-        }
-    };
+    // Today on this computer, for the chips and the month cap — a month still
+    // running is paid up to today, the day the server would have stopped at.
+    const todayIso = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
+    const setPeriod = (f: string | null, t: string | null) => { setFrom(f); setTo(t); setOpen(new Set()); };
+    const ty = Number(todayIso.slice(0, 4)), tm = Number(todayIso.slice(5, 7));
+    const lastMonth = monthPeriod(ty, tm - 1);
+    const thisMonth = monthPeriod(ty, tm);
+    const same = (p: { from: string; to: string }) => periodFrom === p.from && periodTo === p.to;
+    const presets: PeriodPreset[] = [
+        // Back to the server's own answer: the day after the last run, up to today.
+        { label: "Since last payroll", active: from === null && to === null, apply: () => setPeriod(null, null) },
+        { label: "Last month",           active: from !== null && same(lastMonth), apply: () => setPeriod(lastMonth.from, lastMonth.to) },
+        { label: "This month",           active: from !== null && same(thisMonth) && thisMonth.to !== todayIso, apply: () => setPeriod(thisMonth.from, thisMonth.to) },
+        { label: "This month till today", active: from !== null && periodFrom === thisMonth.from && periodTo === todayIso, apply: () => setPeriod(thisMonth.from, todayIso) },
+    ];
+    const spanDays = periodDays(periodFrom, periodTo);
+    const longerThanMonth = !!periodFrom && spanDays > new Date(Date.UTC(Number(periodFrom.slice(0, 4)), Number(periodFrom.slice(5, 7)), 0)).getUTCDate();
 
     const rows = useMemo(() => {
         const needle = q.trim().toLowerCase();
@@ -159,52 +142,13 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
     return (
         <div className="space-y-4">
             <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4">
-                {mode === "month" ? (
-                    <Field label="Month">
-                        {(id) => (
-                            <Input
-                                id={id}
-                                type="month"
-                                value={month}
-                                onChange={(e) => pickMonth(e.target.value)}
-                                className="h-9 w-40 text-sm"
-                            />
-                        )}
-                    </Field>
-                ) : (
-                    <>
-                        <Field label="From">
-                            {(id) => (
-                                <TallyDateInput
-                                    id={id}
-                                    value={periodFrom}
-                                    onValueChange={(v) => { setFrom(v); setOpen(new Set()); }}
-                                    className="h-9 w-36 text-sm"
-                                />
-                            )}
-                        </Field>
-                        <Field label="Till">
-                            {(id) => (
-                                <TallyDateInput
-                                    id={id}
-                                    value={periodTo}
-                                    onValueChange={(v) => { setTo(v); setOpen(new Set()); }}
-                                    monthMode="end"
-                                    className="h-9 w-36 text-sm"
-                                />
-                            )}
-                        </Field>
-                    </>
-                )}
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-9"
-                    onClick={switchMode}
-                >
-                    {mode === "month" ? "Custom dates" : "By month"}
-                </Button>
+                <PeriodPicker
+                    from={periodFrom}
+                    to={periodTo}
+                    onChange={(f, t) => setPeriod(f, t)}
+                    presets={presets}
+                    monthCapIso={todayIso}
+                />
                 {/* Fixed width, so "Reading…" does not make the button breathe. */}
                 <Button type="button" variant="outline" size="sm" className="w-24" onClick={reload} disabled={refreshing}>
                     {refreshing ? "Reading…" : "Refresh"}
@@ -241,6 +185,12 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
                     {data ? (
                         <>
                             Paying <strong className="text-foreground">{formatPeriod(data.periodFrom, data.periodTo)}</strong>
+                            {" · "}<strong className="text-foreground">{spanDays} day{spanDays === 1 ? "" : "s"}</strong>
+                            {longerThanMonth && (
+                                <span className="ml-1.5 inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+                                    <AlertTriangle size={12} /> more than one month
+                                </span>
+                            )}
                             {" — "}proportioned to the days each person was on the staff.{startedNote && ` ${startedNote}`}
                         </>
                     ) : "Reading what is owed since the last payroll…"}
