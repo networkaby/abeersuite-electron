@@ -15,12 +15,11 @@ import type { Prisma } from "@/generated/prisma/client";
 //   status  → the cell becomes a MANUAL office mark; the till's figures on an
 //             existing row stay underneath, exactly as a single mark leaves them.
 //   null    → a cell the till measured goes back to auto; an office-only cell goes.
-// A day on auto (source COUNTER) is left alone — overriding one is a one-by-one
-// job on the grid — EXCEPT by a W / H mark: setting an off day's till activity
-// aside (testing on the off day) is a bulk job (owner, 2026-11-06).
+// A mark overrides the till on every day it is put on, exactly as a single PUT
+// does; the till's answer counts only where a day is left on (or set back to)
+// Auto — owner, 2026-11-06: "till only come for those days mark as auto".
 
 const dayOf = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
-const OFF_MARKS: ReadonlySet<AttendanceStatus> = new Set(["WEEKLY_OFF", "HOLIDAY"]);
 
 export async function POST(req: Request) {
     const { user, response } = await requirePermission(PERMISSIONS.HR_ATTENDANCE_EDIT);
@@ -58,10 +57,7 @@ export async function POST(req: Request) {
             }
             const mark = { status, manualStatus: status, source: "OFFICE", note: null, markedById: user.id };
             ops.push(
-                prisma.attendanceDay.updateMany({
-                    where: OFF_MARKS.has(status) ? any : { AND: [any, { source: { not: "COUNTER" } }] },
-                    data: mark,
-                }),
+                prisma.attendanceDay.updateMany({ where: any, data: mark }),
                 prisma.attendanceDay.createMany({
                     data: cells.map((c) => ({ userId: c.userId, date: c.date, ...mark })),
                     skipDuplicates: true,

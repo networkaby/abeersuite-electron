@@ -84,9 +84,8 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
 
                 // Off days, three ways (owner, 2026-11-06):
                 //   "Mark weekly off / holiday as W / H" on → the day's own off mark
-                //     goes on it — the one place bulk overrides a till day, so
-                //     activity on an off day that was not work (testing) is set
-                //     aside. An off day with nothing stored already reads W / H.
+                //     goes on it, till activity (testing) included. An off day
+                //     with nothing stored already reads W / H.
                 //   off, its skip ticked → the day is left alone.
                 //   off, skip unticked   → marked like any working day.
                 if (shut && toWH) {
@@ -97,12 +96,12 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
                 if (shut === "HOLIDAY" && skipHoliday && !toWH) continue;
                 if (shut === "WEEKLY_OFF" && skipOff && !toWH) continue;
 
-                // Every other day: a till day stays on auto — overriding it is a
-                // one-by-one job on the grid.
-                if (m?.source === "COUNTER") continue;
+                // The office mark wins over the till on every day it is put on; the
+                // till's answer counts only where the day is left on Auto (owner,
+                // 2026-11-06: "till only come for those days mark as auto").
                 if (!m && skipLeave && p.leaveDays[iso]) continue;
-                // Auto on a cell with nothing stored does nothing — leave it out.
-                if (status === null && !m) continue;
+                // Auto on a cell already on auto, or with nothing stored, does nothing.
+                if (status === null && (!m || m.source === "COUNTER")) continue;
                 out.push({ userId: p.id, date: iso, status });
             }
         }
@@ -143,7 +142,7 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
             <DialogContent className="gap-0 p-0 sm:max-w-3xl">
                 <DialogHeader className="border-b border-border px-5 py-4">
                     <DialogTitle className="flex items-center gap-2 text-base"><ListChecks size={18} /> Bulk mark attendance</DialogTitle>
-                    <DialogDescription>Pick the days, the mark and the people. Days the office already marked are replaced. Days the till recorded are left on Auto — except off days set to W / H.</DialogDescription>
+                    <DialogDescription>Pick the days, the mark and the people. The mark replaces whatever the day shows now — the till&apos;s answer included. Pick Auto to hand days back to the till.</DialogDescription>
                 </DialogHeader>
 
                 <div className="grid max-h-[65vh] gap-0 overflow-y-auto md:grid-cols-[1fr_1fr] md:overflow-visible">
@@ -200,7 +199,7 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
                                 <Opt checked={offToWH} set={setOffToWH} label="Mark weekly off / holiday as W / H" />
                                 <p className="pl-6 text-xs text-muted-foreground">
                                     {offToWH
-                                        ? "Weekly offs become W and holidays H — wrong marks and green rings (off-day testing) are removed."
+                                        ? "Weekly offs become W and holidays H — wrong marks and green rings (off-day testing) are replaced."
                                         : "Off: the Weekly off / Holidays ticks below decide — ticked leaves those days alone, unticked marks them like working days."}
                                 </p>
                             </section>
@@ -216,7 +215,7 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
                             </div>
                             <p className="text-xs text-muted-foreground">
                                 {toWH
-                                    ? "Off days are marked W / H (switch below), so these two are not needed."
+                                    ? "Off days are marked W / H (switch above), so these two are not needed."
                                     : "Untick Weekly off / Holidays to mark those days like working days."}
                             </p>
                         </section>
