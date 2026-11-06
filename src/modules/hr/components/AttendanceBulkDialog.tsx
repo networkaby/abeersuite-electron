@@ -249,7 +249,7 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
                     </section>
                 </div>
 
-                <DialogFooter className="items-center border-t border-border px-5 py-3 sm:justify-between">
+                <DialogFooter className="mx-0 mb-0 items-center border-t border-border px-5 py-3 sm:justify-between">
                     <p className="text-sm text-muted-foreground">
                         {cells.length
                             ? <><span className="font-medium text-foreground">{breakdown}</span> for <span className="font-medium text-foreground">{peopleCount}</span> {peopleCount === 1 ? "person" : "people"}</>
