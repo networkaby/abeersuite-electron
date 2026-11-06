@@ -40,13 +40,19 @@ function pickDeals(products: ShopProductPublic[], n = 8) {
         .slice(0, n);
 }
 
-function NotWired({ label }: { label: string }) {
+function NotWired({
+    label,
+    note = "Not wired to real data yet — nothing renders on the storefront.",
+}: {
+    label: string;
+    note?: string;
+}) {
     return (
         <div className="flex min-h-40 items-center justify-center rounded-md border border-dashed border-border bg-muted/20 p-6 text-center">
             <div className="space-y-1">
                 <p className="text-sm font-medium">{label}</p>
                 <p className="text-xs text-muted-foreground">
-                    Not wired to real data yet — nothing renders on the storefront.
+                    {note}
                 </p>
             </div>
         </div>
@@ -142,6 +148,8 @@ export default function SectionPreview({ inst, data }: { inst: HomeSectionInstan
                     : content.railKind === "featured"
                       ? pickFeatured(data.products)
                       : null;
+            if (content.railKind === "bestSellers")
+                return <NotWired label="Best sellers" note="Ranked from the last 30 days of bills — see it on View storefront." />;
             if (!products) return <NotWired label="This picking rule isn't wired up yet" />;
             return (
                 <ProductRail
@@ -177,6 +185,9 @@ export default function SectionPreview({ inst, data }: { inst: HomeSectionInstan
                     title={content.title}
                 />
             );
+        case "recentPurchases":
+        case "recentlyViewed":
+            return <NotWired label={def.label} note="Different for every visitor — it fills in on the storefront, and hides when there is nothing to show." />;
         default:
             return <NotWired label={def.label} />;
     }

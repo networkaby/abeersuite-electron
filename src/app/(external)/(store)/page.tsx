@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Fragment, type ReactNode } from "react";
-import { loadStorefrontProducts, pickDealOfTheDay, pickDeals, pickFeatured } from "@/shared/lib/shop/storefrontProducts";
+import { loadStorefrontProducts, loadStorefrontProductsCached, pickDealOfTheDay, pickDeals, pickFeatured } from "@/shared/lib/shop/storefrontProducts";
 import { dailyPick, loadBrowseTiles, type BrowseTile, type BrowseTiles } from "@/shared/lib/shop/browseTiles";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { STORE_PAGE_HEADING } from "@/shared/lib/shop/storeContent";
@@ -25,6 +25,8 @@ import DealOfTheDay from "@/modules/external/store/DealOfTheDay";
 import ProductRail from "@/modules/external/shop/ProductRail";
 import BrandStrip from "@/modules/external/store/BrandStrip";
 import ShopCatalogClient from "@/modules/external/shop/ShopCatalogClient";
+import { BuyAgainRail, RecentlyViewedRail } from "@/modules/external/shop/PersonalRails";
+import { loadBestSellers } from "@/shared/lib/shop/salesSignals";
 import JsonLd from "@/shared/components/JsonLd";
 import { buildSiteLd } from "@/shared/lib/seo/jsonLd";
 
@@ -47,6 +49,7 @@ type PageData = {
     /** Every category / collection tile; each section takes its own daily handful. */
     tiles: BrowseTiles;
     featured: ShopProductPublic[];
+    bestSellers: ShopProductPublic[];
     deals: ShopProductPublic[];
     dealOfTheDay: ShopProductPublic | null;
     products: ShopProductPublic[];
@@ -112,7 +115,13 @@ function renderSection(inst: HomeSectionInstance, data: PageData, todayIso: stri
             // wired up so far — other rail kinds are addable/schedulable
             // already, but render nothing until their picking rule exists.
             const products =
-                content.railKind === "deals" ? data.deals : content.railKind === "featured" ? data.featured : null;
+                content.railKind === "deals"
+                    ? data.deals
+                    : content.railKind === "featured"
+                      ? data.featured
+                      : content.railKind === "bestSellers"
+                        ? data.bestSellers
+                        : null;
             if (!products) return null;
             return (
                 <ProductRail
@@ -143,12 +152,15 @@ function renderSection(inst: HomeSectionInstance, data: PageData, todayIso: stri
         // Not wired up yet — addable/schedulable in Customize Home, but the
         // data they need (cart, view history, order history, coupons)
         // doesn't exist on the storefront yet.
+        // Per-visitor rows load in the browser, so this page stays one cacheable page.
+        case "recentPurchases":
+            return <BuyAgainRail eyebrow={content.eyebrow} title={content.title} subtitle={content.subtitle} />;
+        case "recentlyViewed":
+            return <RecentlyViewedRail className="border-b border-border/60" />;
         case "couponStrip":
         case "wishlistNudge":
-        case "recentPurchases":
         case "cartPreview":
         case "abandonedCart":
-        case "recentlyViewed":
         case "relatedAlternatives":
             return null;
     }
@@ -162,17 +174,19 @@ export default async function StoreHomePage({
     const sp = await searchParams;
     const initialCategory = sp.category && sp.category !== "" ? sp.category : "all";
 
-    const [products, instances, adContext, tiles] = await Promise.all([
+    const [products, instances, adContext, tiles, bestSellers] = await Promise.all([
         loadStorefrontProducts(),
         loadHomeLayout(),
         loadShopAdContext(sp),
         loadBrowseTiles(),
+        loadStorefrontProductsCached().then((c) => loadBestSellers(c)),
     ]);
 
     const todayIso = businessTodayIso();
     const allCategories = [...new Set(products.map((p) => p.category))];
     const data: PageData = {
         tiles,
+        bestSellers,
         featured: dailyPick(pickFeatured(products, 24), 8, todayIso, "featured", 2),
         deals: pickDeals(products),
         dealOfTheDay: pickDealOfTheDay(products),

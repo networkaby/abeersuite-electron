@@ -109,10 +109,10 @@ export const HOME_SECTION_TYPE_DEFS: HomeSectionTypeDef[] = [
     { type: "whatsappStrip", label: "WhatsApp ordering", kind: "banner", hint: "\"Order or ask on WhatsApp\" strip.", implemented: true },
     { type: "couponStrip", label: "Coupon strip", kind: "heading", hint: "Active coupon codes. Not wired yet — data source pending.", implemented: false },
     { type: "wishlistNudge", label: "Wishlist nudge", kind: "heading", hint: "\"You have N items saved\" for signed-in customers. Not wired yet.", implemented: false },
-    { type: "recentPurchases", label: "Buy again", kind: "heading", hint: "Customer's own past orders. Not wired yet.", implemented: false },
+    { type: "recentPurchases", label: "Buy again", kind: "heading", hint: "Signed-in customer's own past purchases (counter + online). Hidden when signed out.", implemented: true },
     { type: "cartPreview", label: "What's in your cart", kind: "heading", hint: "Mini cart preview. Not wired yet.", implemented: false },
     { type: "abandonedCart", label: "Complete your purchase", kind: "heading", hint: "Nudge for items left in cart. Not wired yet.", implemented: false },
-    { type: "recentlyViewed", label: "Recently viewed", kind: "heading", hint: "Customer's own browsing history. Not wired yet.", implemented: false },
+    { type: "recentlyViewed", label: "Recently viewed", kind: "heading", hint: "Products this visitor looked at, remembered in their own browser.", implemented: true },
     { type: "relatedAlternatives", label: "Related / alternatives", kind: "heading", hint: "Similar or alternative products. Not wired yet.", implemented: false },
 ];
 
@@ -129,7 +129,7 @@ export const RAIL_KINDS: { value: RailKind; label: string; implemented: boolean 
     { value: "underPrice", label: "Under a price", implemented: false },
     { value: "category", label: "One category", implemented: false },
     { value: "brand", label: "One brand", implemented: false },
-    { value: "bestSellers", label: "Best sellers", implemented: false },
+    { value: "bestSellers", label: "Best sellers (last 30 days of bills)", implemented: true },
 ];
 
 export type TrustIconKey =

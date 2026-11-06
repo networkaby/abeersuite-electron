@@ -3,12 +3,13 @@ import Link from "next/link";
 import { productPath, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import ProductDetailView from "@/modules/external/shop/ProductDetailView";
 import ProductRail from "@/modules/external/shop/ProductRail";
+import { NoteViewed, RecentlyViewedRail } from "@/modules/external/shop/PersonalRails";
 import AdUnit from "@/modules/external/shop/ads/AdUnit";
 import { loadSimilarProducts, SIMILAR_PRODUCTS_LIMIT } from "@/shared/lib/shop/similarProducts";
 import { loadShopAdContext } from "@/shared/lib/shop/adContext";
 import { loadStorefrontProductsCached } from "@/shared/lib/shop/storefrontProducts";
 import { buildBridgeRows } from "@/shared/lib/shop/productRelations";
-import { loadBoughtTogether } from "@/shared/lib/shop/boughtTogether";
+import { loadBoughtTogether } from "@/shared/lib/shop/salesSignals";
 import { dailyPick } from "@/shared/lib/shop/browseTiles";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
 import { groupHref, loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
@@ -141,6 +142,7 @@ export default async function ShopProductPage({
             ) : null}
 
             <ProductDetailView product={product} />
+            <NoteViewed productId={product.id} />
 
             {pageAd ? <AdUnit ad={pageAd} className="mt-12" /> : null}
 
@@ -190,6 +192,8 @@ export default async function ShopProductPage({
                 seeAllHref="/shop?view=categories"
                 seeAllLabel="Explore categories"
             />
+
+            <RecentlyViewedRail excludeId={product.id} className="mt-16" />
         </main>
     );
 }
