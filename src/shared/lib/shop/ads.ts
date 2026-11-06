@@ -80,8 +80,8 @@ export type AdSpotDef = {
 export const AD_SPOT_DEFS: AdSpotDef[] = [
     { spot: "catalogTop", label: "Catalog top", page: "Catalog", sizes: ["billboard"], hint: "Under the page banner, above the filters and grid. Desktop and tablet." },
     { spot: "catalogMobileTop", label: "Catalog top (phone)", page: "Catalog", sizes: ["mobile"], hint: "Same place on a phone — the billboard is too wide there." },
-    { spot: "gridFill", label: "Grid gap", page: "Catalog", sizes: ["wide", "tile"], hint: "Empty boxes at the end of a group's last row. Two empty boxes take one wide ad, else two tiles." },
-    { spot: "catalogBetween", label: "Between groups", page: "Catalog", sizes: ["billboard"], hint: "A strip after every third product group." },
+    { spot: "gridFill", label: "Grid gap", page: "Catalog", sizes: ["wide", "tile"], hint: "Empty boxes at the end of the catalog's last row. Two empty boxes take one wide ad, else two tiles." },
+    { spot: "catalogBetween", label: "Between rows", page: "Catalog", sizes: ["billboard"], hint: "A strip after every 36 products in the catalog grid." },
     { spot: "sidebarRect", label: "Sidebar", page: "Catalog", sizes: ["rectangle"], hint: "Under the filters. Desktop only." },
     { spot: "sidebarTall", label: "Sidebar (tall)", page: "Catalog", sizes: ["halfPage"], hint: "Below the sidebar rectangle. Desktop only." },
     { spot: "cart", label: "Cart summary", page: "Cart", sizes: ["rectangle"], hint: "Under the order summary." },
@@ -89,8 +89,11 @@ export const AD_SPOT_DEFS: AdSpotDef[] = [
     { spot: "wishlistFill", label: "Wishlist gap", page: "Wishlist", sizes: ["wide", "tile"], hint: "Same gap rule as the catalog grid." },
 ];
 
-/** Every third group on the catalog gets a billboard strip after it. */
+/** Every third block of the catalog grid gets a billboard strip after it. */
 export const CATALOG_BETWEEN_EVERY = 3;
+/** Products per catalogue block — whole rows at both 2 and 3 columns. A strip ad
+ *  sits after every CATALOG_BETWEEN_EVERY blocks. */
+export const CATALOG_BLOCK = 12;
 
 /** Hard cap so a busy catalog never turns into a wall of ads. */
 export const MAX_ADS_PER_PAGE = 6;

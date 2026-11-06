@@ -33,6 +33,7 @@ import AdUnit from "./ads/AdUnit";
 import {
     AdPicker,
     CATALOG_BETWEEN_EVERY,
+    CATALOG_BLOCK,
     adColumnSpan,
     type ResolvedAd,
     type ShopAdContext,
@@ -477,14 +478,15 @@ function ShopCatalogInner({
         return () => observer.disconnect();
     }, [hasMore, filtered.length]);
 
-    const grouped = useMemo(() => {
-        const map = new Map<string, ShopProductPublic[]>();
-        for (const p of visible) {
-            const arr = map.get(p.category) ?? [];
-            arr.push(p);
-            map.set(p.category, arr);
-        }
-        return map;
+    // One flat grid, like Flipkart / Amazon listings: no per-group headings, so a
+    // one-item group never leaves a half-empty row. Products still arrive grouped by
+    // category (catalogue order) and every card names its own category. The grid is
+    // cut into blocks of CATALOG_BLOCK (a whole number of rows at 2 and 3 columns)
+    // so a strip ad can sit between blocks.
+    const blocks = useMemo(() => {
+        const out: ShopProductPublic[][] = [];
+        for (let i = 0; i < visible.length; i += CATALOG_BLOCK) out.push(visible.slice(i, i + CATALOG_BLOCK));
+        return out;
     }, [visible]);
 
     // A thin result (one small group, a short collection) leaves the page
@@ -540,31 +542,30 @@ function ShopCatalogInner({
         });
         const top = picker.pick("catalogTop");
         const mobileTop = picker.pick("catalogMobileTop");
-        const groups = new Map<string, { xl: ResolvedAd[]; sm: ResolvedAd[] }>();
-        const between = new Map<string, ResolvedAd>();
-        let index = 0;
-        for (const [category, items] of grouped) {
-            index += 1;
-            if (viewMode === "grid") {
-                const gapXl = (3 - (items.length % 3)) % 3;
-                const gapSm = items.length % 2;
-                const xl = picker.fillGap(gapXl, category);
-                let sm: ResolvedAd[] = [];
-                if (gapSm === 1) {
-                    const tile = xl.find((a) => a.size === "tile");
-                    sm = tile ? [tile] : picker.fillGap(1, category);
-                }
-                groups.set(category, { xl, sm });
-            }
-            if (index % CATALOG_BETWEEN_EVERY === 0 && index < grouped.size) {
+        // Only the last row can have empty boxes; ads fill them. A strip sits
+        // after every CATALOG_BETWEEN_EVERY blocks.
+        const between = new Map<number, ResolvedAd>();
+        blocks.forEach((_, i) => {
+            if ((i + 1) % CATALOG_BETWEEN_EVERY === 0 && i < blocks.length - 1) {
                 const strip = picker.pick("catalogBetween");
-                if (strip) between.set(category, strip);
+                if (strip) between.set(i, strip);
             }
+        });
+        let tail: { xl: ResolvedAd[]; sm: ResolvedAd[] } = { xl: [], sm: [] };
+        if (viewMode === "grid" && visible.length > 0) {
+            const lastCategory = visible[visible.length - 1]!.category;
+            const xl = picker.fillGap((3 - (visible.length % 3)) % 3, lastCategory);
+            let sm: ResolvedAd[] = [];
+            if (visible.length % 2 === 1) {
+                const tile = xl.find((a) => a.size === "tile");
+                sm = tile ? [tile] : picker.fillGap(1, lastCategory);
+            }
+            tail = { xl, sm };
         }
         const sidebarRect = picker.pick("sidebarRect");
         const sidebarTall = picker.pick("sidebarTall");
-        return { top, mobileTop, groups, between, sidebarRect, sidebarTall };
-    }, [adContext, products, visible, grouped, viewMode]);
+        return { top, mobileTop, tail, between, sidebarRect, sidebarTall };
+    }, [adContext, products, visible, blocks, viewMode]);
 
     // Rail ads only fill the space the product column leaves below the filters,
     // so a short result list never gets a rail that runs on past it.
@@ -929,58 +930,55 @@ function ShopCatalogInner({
                             />
                         </div>
                     ) : (
-                        Array.from(grouped.entries()).map(([category, items]) => (
-                            <Fragment key={category}>
-                            <section
-                                id={`cat-${encodeURIComponent(category)}`}
-                                className="scroll-mt-24 space-y-4"
-                            >
-                                <div className="flex items-end justify-between gap-4 border-b border-border/60 pb-2">
-                                    <h3 className="text-lg font-semibold">{category}</h3>
-                                    <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                                        {items.length} item{items.length === 1 ? "" : "s"}
-                                    </span>
-                                </div>
-                                {viewMode === "list" ? (
-                                    <ul className="flex flex-col gap-4">
-                                        {items.map((p) => (
-                                            <li key={p.id}>
-                                                <ProductListRow product={p} />
-                                            </li>
-                                        ))}
-                                    </ul>
-                                ) : (
-                                    <ul className="grid auto-rows-fr gap-6 sm:grid-cols-2 xl:grid-cols-3">
-                                        {items.map((p) => (
-                                            <li key={p.id} className="flex min-h-0 h-full flex-col">
-                                                <ProductCard product={p} className="min-h-0 flex-1" />
-                                            </li>
-                                        ))}
-                                        {adPlan?.groups.get(category)?.xl.map((ad) => (
-                                            <li
-                                                key={`ad-xl-${ad.key}`}
-                                                className={cn(
-                                                    "hidden min-h-0 h-full flex-col xl:flex",
-                                                    adColumnSpan(ad.size) === 2 && "xl:col-span-2"
-                                                )}
-                                            >
-                                                <AdUnit ad={ad} className="min-h-0 flex-1" />
-                                            </li>
-                                        ))}
-                                        {adPlan?.groups.get(category)?.sm.map((ad) => (
-                                            <li
-                                                key={`ad-sm-${ad.key}`}
-                                                className="hidden min-h-0 h-full flex-col sm:flex xl:hidden"
-                                            >
-                                                <AdUnit ad={ad} className="min-h-0 flex-1" />
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </section>
-                            {adPlan?.between.get(category) ? <AdUnit ad={adPlan.between.get(category)!} /> : null}
-                            </Fragment>
-                        ))
+                        blocks.map((items, i) => {
+                            const isLast = i === blocks.length - 1;
+                            const strip = adPlan?.between.get(i);
+                            return (
+                                <Fragment key={`block-${i}`}>
+                                    {viewMode === "list" ? (
+                                        <ul className="flex flex-col gap-4">
+                                            {items.map((p) => (
+                                                <li key={p.id}>
+                                                    <ProductListRow product={p} />
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <ul className="grid auto-rows-fr gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                                            {items.map((p) => (
+                                                <li key={p.id} className="flex min-h-0 h-full flex-col">
+                                                    <ProductCard product={p} className="min-h-0 flex-1" />
+                                                </li>
+                                            ))}
+                                            {isLast
+                                                ? adPlan?.tail.xl.map((ad) => (
+                                                      <li
+                                                          key={`ad-xl-${ad.key}`}
+                                                          className={cn(
+                                                              "hidden min-h-0 h-full flex-col xl:flex",
+                                                              adColumnSpan(ad.size) === 2 && "xl:col-span-2"
+                                                          )}
+                                                      >
+                                                          <AdUnit ad={ad} className="min-h-0 flex-1" />
+                                                      </li>
+                                                  ))
+                                                : null}
+                                            {isLast
+                                                ? adPlan?.tail.sm.map((ad) => (
+                                                      <li
+                                                          key={`ad-sm-${ad.key}`}
+                                                          className="hidden min-h-0 h-full flex-col sm:flex xl:hidden"
+                                                      >
+                                                          <AdUnit ad={ad} className="min-h-0 flex-1" />
+                                                      </li>
+                                                  ))
+                                                : null}
+                                        </ul>
+                                    )}
+                                    {strip ? <AdUnit ad={strip} /> : null}
+                                </Fragment>
+                            );
+                        })
                     )}
 
                     {related.length > 0 ? (
