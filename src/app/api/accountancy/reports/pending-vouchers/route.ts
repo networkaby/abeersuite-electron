@@ -132,6 +132,10 @@ export async function GET(req: NextRequest) {
             partyName:   readPartyName(v.partyJson),
             ...partyLinkFields(partyLinks.for(v)),
             description: v.universalVoucher?.description ?? "",
+            // Challan / GRN / rejections post stock only — no money legs to read, so
+
+            // the document's own total is the only figure there is.
+
             totalAmount: Number(v.totalAmount),
             lineCount:   v.lines.length,
             branchName:  v.universalVoucher?.branch?.name ?? null,
