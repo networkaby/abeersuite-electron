@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { permanentRedirect } from "next/navigation";
-import { ArrowRight } from "lucide-react";
 import { loadStorefrontProducts, pickDeals, pickFeatured } from "@/shared/lib/shop/storefrontProducts";
 import { dailyPick, loadBrowseTiles, type BrowseKind, type BrowseTile } from "@/shared/lib/shop/browseTiles";
 import { HOME_BRAND_LIMIT, HOME_TILE_LIMIT } from "@/shared/lib/shop/homeLayout";
@@ -181,15 +180,6 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
                 brands={brands.map(toBrand)}
                 moreHref={tiles.brands.length > brands.length ? "/shop?view=brands" : undefined}
             />
-            <div className="mx-auto max-w-6xl px-3 py-10 text-center sm:px-4">
-                <Link
-                    href="/shop?view=all"
-                    className="inline-flex items-center gap-2 rounded-full border border-border px-5 py-2.5 text-sm font-semibold hover:border-primary/50 hover:text-primary"
-                >
-                    Browse everything ({products.length} products)
-                    <ArrowRight className="size-4" />
-                </Link>
-            </div>
         </>
     );
 }
