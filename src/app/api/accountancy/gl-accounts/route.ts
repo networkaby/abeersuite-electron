@@ -87,13 +87,17 @@ export async function GET(req: Request) {
             // Payment be deposited straight into their bank? One flag, not the
             // details — the slip reads those at print time (partyDepositSlip.ts).
             const owner = person ?? company ?? staffLedgerOf ?? null;
+            const bank = owner ? parsePartyBank(owner.bankJson) : null;
             return {
                 ...rest,
                 phones,
                 aliases: (aliases ?? []).map((x) => x.alias),
                 balance: closingMap.get(a.id) ?? 0,
                 ...(counterTills.length > 0 ? { isTill: true } : {}),
-                ...(owner ? { partyBank: canDepositToPartyBank(parsePartyBank(owner.bankJson)) } : {}),
+                ...(bank ? { partyBank: canDepositToPartyBank(bank) } : {}),
+                // Scan-to-pay QR on the Payment voucher (PartyUpiQrCard). Rides
+                // the bankJson already selected — no extra query.
+                ...(bank?.upiVpa ? { upiVpa: bank.upiVpa, upiPayee: bank.beneficiary || undefined } : {}),
             };
         });
         return NextResponse.json(accountsWithEffective);

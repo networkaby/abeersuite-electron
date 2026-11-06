@@ -95,9 +95,15 @@ export const isValidVpa = (v: string): boolean =>
  * kept as its own function because the payee name comes from a different place
  * (the party's beneficiary / display name, not the shop's brand).
  */
-export function buildPartyUpiLink(bank: PartyBankFields, partyName?: string): string {
+export function buildPartyUpiLink(
+    bank: Pick<PartyBankFields, "upiVpa" | "beneficiary">,
+    partyName?: string,
+    /** Rupees to pre-fill on the payer's phone; omitted / ≤ 0 → payer types it. */
+    amount?: number,
+): string {
     if (!bank.upiVpa) return "";
     const payee = bank.beneficiary || partyName || "";
     const pn = payee ? `&pn=${encodeURIComponent(payee)}` : "";
-    return `upi://pay?pa=${encodeURIComponent(bank.upiVpa)}${pn}&cu=INR`;
+    const am = amount && amount > 0 ? `&am=${amount.toFixed(2)}` : "";
+    return `upi://pay?pa=${encodeURIComponent(bank.upiVpa)}${pn}${am}&cu=INR`;
 }

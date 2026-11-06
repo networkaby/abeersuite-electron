@@ -53,6 +53,10 @@ export interface GlAccount {
      *  so a cash Payment to them prints the party Bank Deposit Slip. Absent on
      *  every other ledger. */
     partyBank?: boolean;
+    /** Party's UPI id (Bank tab) — drives the Payment voucher's scan-to-pay QR. */
+    upiVpa?: string;
+    /** Beneficiary name from the Bank tab, when captured. */
+    upiPayee?: string;
     /** A POS counter's till cash — only a shift moves it, so office Payment /
      *  Receipt pickers hide it. Absent on every other ledger. */
     isTill?: boolean;

@@ -45,6 +45,7 @@ import { BillLinkDialog, clearBillLinkCache } from "@/modules/accountancy/compon
 import { settleFromPicks } from "@/modules/accountancy/lib/settleFromPicks";
 import { EPS } from "@/modules/accountancy/lib/billLinkPlan";
 import { OpenBillsPanel, clearOpenBillsCache, type BillPicks } from "@/modules/accountancy/components/OpenBillsPanel";
+import { PartyUpiQrCard } from "@/modules/accountancy/components/PartyUpiQrCard";
 import { VoucherTopBar } from "@/modules/accountancy/components/VoucherTopBar";
 import { VoucherActionBar } from "@/modules/accountancy/components/VoucherActionBar";
 import {
@@ -1547,6 +1548,19 @@ export function GlVoucherPage({ kind, voucherId, onClose, onSaved, initialParty 
                                 }}
                             />
                         )}
+                        {/* Payment → pay the party by UPI from a phone; under the
+                            bills in the same scroll so the bills keep their place. */}
+                        {showOpenBills && isPayment && partyLedgerId != null && (() => {
+                            const p = accountById.get(partyLedgerId);
+                            return p ? (
+                                <PartyUpiQrCard
+                                    partyName={p.name}
+                                    upiVpa={p.upiVpa}
+                                    upiPayee={p.upiPayee}
+                                    amount={partyRow ? Math.max(0, parseRowAmount(partyRow.amount)) : 0}
+                                />
+                            ) : null;
+                        })()}
                         {cashRows.map((r) => (
                             <DenomPanel
                                 key={r.id}
