@@ -10,6 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Eraser, ListChecks, Search } from "lucide-react";
+import UserAvatar from "@/shared/components/UserAvatar";
+import { CELL } from "../lib/attendanceStyles";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ATTENDANCE_STATUS_META, type AttendanceStatus } from "@/shared/lib/schemas/hrAttendanceSchema";
 import { isoDaysBetween, readDay, holidayDatesFor, weekdayOf } from "../lib/attendanceCalendar";
@@ -56,6 +59,7 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
     const [skipTill, setSkipTill] = useState(true);
     const [onlyEmpty, setOnlyEmpty] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [query, setQuery] = useState("");
 
     const clampDate = (v: string) => (v < monthFrom ? monthFrom : v > lastDay ? lastDay : v);
 
@@ -100,73 +104,119 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
         }
     };
 
+    const shown = people.filter((p) => !query.trim() || p.name.toLowerCase().includes(query.trim().toLowerCase()));
+    const yesterday = (() => { const d = new Date(`${today}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); })();
+    const ranges: { label: string; from: string; to: string }[] = [
+        ...(today >= monthFrom && today <= monthTo ? [{ label: "Today", from: today, to: today }] : []),
+        ...(yesterday >= monthFrom && yesterday <= lastDay ? [{ label: "Yesterday", from: yesterday, to: yesterday }] : []),
+        { label: monthTo < today ? "Whole month" : "Month so far", from: monthFrom, to: lastDay },
+    ];
+    const verb = status ? `Mark ${cells.length} day${cells.length === 1 ? "" : "s"} as ${ATTENDANCE_STATUS_META[status].label}` : `Clear ${cells.length} day${cells.length === 1 ? "" : "s"}`;
+
     return (
         <Dialog open={open} onOpenChange={(o) => { if (!saving) onOpenChange(o); }}>
-            <DialogContent className="max-w-lg">
-                <DialogHeader>
-                    <DialogTitle>Bulk mark attendance</DialogTitle>
-                    <DialogDescription>Pick people, days and a mark. Days already marked by the office are overwritten.</DialogDescription>
+            <DialogContent className="gap-0 p-0 sm:max-w-3xl">
+                <DialogHeader className="border-b border-border px-5 py-4">
+                    <DialogTitle className="flex items-center gap-2 text-base"><ListChecks size={18} /> Bulk mark attendance</DialogTitle>
+                    <DialogDescription>Pick the days, the mark and the people. Days the office already marked are replaced.</DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                            <Label htmlFor="bulk-from">From</Label>
-                            <Input id="bulk-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} onBlur={(e) => setFrom(clampDate(e.target.value || monthFrom))} />
-                        </div>
-                        <div className="space-y-1">
-                            <Label htmlFor="bulk-to">To</Label>
-                            <Input id="bulk-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} onBlur={(e) => setTo(clampDate(e.target.value || lastDay))} />
-                        </div>
+                <div className="grid max-h-[65vh] gap-0 overflow-y-auto md:grid-cols-[1fr_1fr] md:overflow-visible">
+                    {/* Left: what and when */}
+                    <div className="space-y-5 px-5 py-4 md:border-r md:border-border">
+                        <section className="space-y-2">
+                            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">1. Days</h3>
+                            <div className="flex flex-wrap gap-1">
+                                {ranges.map((r) => (
+                                    <Button key={r.label} type="button" size="sm" variant={from === r.from && to === r.to ? "secondary" : "ghost"} className="h-7 text-xs" onClick={() => { setFrom(r.from); setTo(r.to); }}>
+                                        {r.label}
+                                    </Button>
+                                ))}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                    <Label htmlFor="bulk-from" className="text-xs">From</Label>
+                                    <Input id="bulk-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} onBlur={(e) => setFrom(clampDate(e.target.value || monthFrom))} />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label htmlFor="bulk-to" className="text-xs">To</Label>
+                                    <Input id="bulk-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} onBlur={(e) => setTo(clampDate(e.target.value || lastDay))} />
+                                </div>
+                            </div>
+                        </section>
+
+                        <section className="space-y-2">
+                            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">2. Mark as</h3>
+                            <div className="grid grid-cols-5 gap-1.5">
+                                {CHOICES.map((c) => {
+                                    const on = status === c;
+                                    return (
+                                        <button
+                                            key={c ?? "clear"}
+                                            type="button"
+                                            onClick={() => setStatus(c)}
+                                            aria-pressed={on}
+                                            className={`flex flex-col items-center gap-1 rounded-lg border px-1 py-2 text-[11px] transition ${on ? "border-primary ring-2 ring-primary/40" : "border-border hover:border-primary/50"}`}
+                                        >
+                                            <span className={`inline-flex h-7 w-7 items-center justify-center rounded text-sm font-semibold ${c ? CELL[c] : "border border-dashed border-border text-muted-foreground"}`}>
+                                                {c ? ATTENDANCE_STATUS_META[c].short : <Eraser size={14} />}
+                                            </span>
+                                            {c ? ATTENDANCE_STATUS_META[c].label : "Clear"}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </section>
+
+                        <section className="space-y-2">
+                            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">3. Leave these alone</h3>
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                                <Opt checked={skipOff} set={setSkipOff} label="Weekly off" />
+                                <Opt checked={skipHoliday} set={setSkipHoliday} label="Holidays" />
+                                <Opt checked={skipLeave} set={setSkipLeave} label="Approved leave" />
+                                <Opt checked={skipTill} set={setSkipTill} label="Till-recorded days" />
+                                <Opt checked={onlyEmpty} set={setOnlyEmpty} label="Already marked days" />
+                            </div>
+                        </section>
                     </div>
 
-                    <div className="space-y-1">
-                        <Label>Mark as</Label>
-                        <div className="flex flex-wrap gap-1">
-                            {CHOICES.map((s) => (
-                                <Button key={s ?? "clear"} type="button" size="sm" variant={status === s ? "default" : "outline"} onClick={() => setStatus(s)}>
-                                    {s ? ATTENDANCE_STATUS_META[s].label : "Clear mark"}
-                                </Button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                        <Opt checked={skipOff} set={setSkipOff} label="Skip weekly off" />
-                        <Opt checked={skipHoliday} set={setSkipHoliday} label="Skip holidays" />
-                        <Opt checked={skipLeave} set={setSkipLeave} label="Skip approved leave" />
-                        <Opt checked={skipTill} set={setSkipTill} label="Skip days the till recorded" />
-                        <Opt checked={onlyEmpty} set={setOnlyEmpty} label="Only empty days" />
-                    </div>
-
-                    <div className="space-y-1">
+                    {/* Right: who */}
+                    <section className="flex min-h-0 flex-col gap-2 px-5 py-4">
                         <div className="flex items-center justify-between">
-                            <Label>Staff ({picked.size} of {people.length})</Label>
+                            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">4. Staff · {picked.size} of {people.length}</h3>
                             <div className="flex gap-1">
-                                <Button type="button" size="sm" variant="ghost" onClick={() => setPicked(new Set(people.map((p) => p.id)))}>Select all</Button>
-                                <Button type="button" size="sm" variant="ghost" onClick={() => setPicked(new Set())}>Clear</Button>
+                                <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setPicked(new Set(people.map((p) => p.id)))}>All</Button>
+                                <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setPicked(new Set())}>None</Button>
                             </div>
                         </div>
-                        <div className="max-h-44 space-y-1 overflow-y-auto rounded-md border border-border p-2">
-                            {people.map((p) => (
-                                <label key={p.id} className="flex items-center gap-2 text-sm">
+                        <div className="relative">
+                            <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                            <Input placeholder="Search staff" value={query} onChange={(e) => setQuery(e.target.value)} className="pl-8" />
+                        </div>
+                        <div className="max-h-72 min-h-40 flex-1 overflow-y-auto rounded-md border border-border">
+                            {shown.length === 0 ? (
+                                <p className="px-3 py-6 text-center text-xs text-muted-foreground">No one matches.</p>
+                            ) : shown.map((p) => (
+                                <label key={p.id} className="flex cursor-pointer items-center gap-2 border-b border-border/60 px-3 py-1.5 text-sm last:border-b-0 hover:bg-muted/50">
                                     <Checkbox checked={picked.has(p.id)} onCheckedChange={() => toggle(p.id)} />
-                                    {p.name}
+                                    <UserAvatar avatarUrl={p.avatarUrl} name={p.name} role={p.role} sizePx={22} />
+                                    <span className="truncate">{p.name}</span>
                                 </label>
                             ))}
                         </div>
-                    </div>
-
-                    <p className="text-sm text-muted-foreground">
-                        {cells.length
-                            ? `This will ${status ? `mark ${cells.length} day${cells.length === 1 ? "" : "s"} as ${ATTENDANCE_STATUS_META[status].label}` : `clear ${cells.length} day${cells.length === 1 ? "" : "s"}`} for ${peopleCount} ${peopleCount === 1 ? "person" : "people"}.`
-                            : "Nothing to mark with these choices."}
-                    </p>
+                    </section>
                 </div>
 
-                <DialogFooter>
-                    <Button type="button" variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>Cancel</Button>
-                    <Button type="button" disabled={saving || !cells.length} onClick={() => void apply()}>{saving ? "Saving…" : "Apply"}</Button>
+                <DialogFooter className="items-center border-t border-border px-5 py-3 sm:justify-between">
+                    <p className="text-sm text-muted-foreground">
+                        {cells.length
+                            ? <><span className="font-medium text-foreground">{cells.length}</span> day{cells.length === 1 ? "" : "s"} for <span className="font-medium text-foreground">{peopleCount}</span> {peopleCount === 1 ? "person" : "people"}</>
+                            : "Nothing to mark with these choices."}
+                    </p>
+                    <div className="flex gap-2">
+                        <Button type="button" variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>Cancel</Button>
+                        <Button type="button" disabled={saving || !cells.length} onClick={() => void apply()}>{saving ? "Saving…" : cells.length ? verb : "Apply"}</Button>
+                    </div>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
