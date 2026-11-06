@@ -102,6 +102,6 @@ export function apiBase(source: VoucherSource, rawId: number): string {
     switch (source) {
         case "inv": return `/api/inventory/vouchers/${rawId}`;
         case "gl":  return `/api/accountancy/vouchers/${rawId}`;
-        case "je":  return `/api/accountancy/journal-entries/${rawId}`;
+        case "je":  return `/api/accountancy/vouchers/${rawId}`;   // a journal is a spine like any GL voucher
     }
 }

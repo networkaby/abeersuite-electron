@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { billTotalFromGl } from "@/modules/accountancy/lib/outstandings";
 import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { hasPermission, requireAuth } from "@/shared/lib/auth/permissions";
@@ -253,7 +254,7 @@ export async function GET(req: Request) {
             // `accountId` is here for the bill-wise chip: the party's own leg on
             // this voucher is what settlement is measured on, and these lines are
             // already loaded for the GL total below — so it costs no extra query.
-            lines: { select: { type: true, amount: true, accountId: true } },
+            lines: { select: { type: true, amount: true, accountId: true, role: true } },
             // The trade detail carries its own id — which is what every inventory
             // edit URL and line-expand fetch keys on, NOT the spine id. Getting
             // this wrong would break the link on every inventory row.
@@ -422,7 +423,11 @@ export async function GET(req: Request) {
                 branchId:       v.branchId,
                 createdById:    v.createdById,
                 totalAmount: detail
-                    ? Number(detail.totalAmount)
+                    // Books figure from the bill's ledger legs; the frozen copy is for print.
+                    ? billTotalFromGl(
+                          v.lines.filter((l) => l.role === "TENDER").map((l) => ({ amount: Number(l.amount) })),
+                          Number(detail.totalAmount),
+                      )
                     : v.lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + Number(l.amount), 0),
                 status:      v.status,
                 cancelledAt: v.cancelledAt,

@@ -157,6 +157,19 @@ export async function loadTenderLines(
 }
 
 /**
+ * A bill's amount for the BOOKS, read off its ledger lines: the counter-side
+ * legs (`role=TENDER` — cash, bank, card and the party's own account) are what
+ * the bill was posted for. The frozen `VoucherDetail.totalAmount` is the print
+ * copy (owner, 2026-11-06: print what it was then, use the GL for the books);
+ * it is used here only for a bill with no tagged legs to read — imported rows,
+ * and bills edited before 2026-09-16, whose tags were lost for good.
+ */
+export function billTotalFromGl(tenders: { amount: number }[] | undefined, frozenTotal: number): number {
+    if (!tenders || tenders.length === 0) return frozenTotal;
+    return round2(tenders.reduce((s, t) => s + t.amount, 0));
+}
+
+/**
  * Every one of these parties' own legs on these bills, keyed `accountId:spineId`
  * and signed debit-positive. One query for the whole report — the per-bill
  * alternative is a query per row, which this report cannot afford.
@@ -377,7 +390,10 @@ async function loadOpenBills(
                         : null);
         if (accountId === null) continue;
         const due = dueDateOf(v.universalVoucher!.date, v.creditPeriodDays);   // 5D-10: date on spine
-        const total = Number(v.totalAmount);
+        const total = billTotalFromGl(
+            v.universalVoucherId !== null ? tendersBySpine.get(v.universalVoucherId) : undefined,
+            Number(v.totalAmount),
+        );
         // Paid at sale time = sum of non-AR tenders on this voucher
         // (cash / bank / card / wallet). The AR tender row IS the
         // unsettled remainder; later Receipt vouchers chip away at it
@@ -509,8 +525,8 @@ export async function getOpenSaleBillsForFifo(
     for (const v of invVouchers) {
         if (v.universalVoucherId === null) continue;
         const resolved = v.universalVoucher?.partyAccountId ?? accountId; // single-ledger scope — partyOr already matched
-        const total = Number(v.totalAmount);
         const vTenders = tendersBySpine.get(v.universalVoucherId) ?? [];
+        const total = billTotalFromGl(vTenders, Number(v.totalAmount));
         const paidAtSale = vTenders
             .filter((t) => t.accountId !== resolved)
             .reduce((s, t) => s + t.amount, 0);
