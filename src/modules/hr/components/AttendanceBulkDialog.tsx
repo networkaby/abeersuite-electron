@@ -18,13 +18,13 @@ import { ATTENDANCE_STATUS_META, type AttendanceStatus } from "@/shared/lib/sche
 import { isoDaysBetween, readDay, holidayDatesFor, weekdayOf } from "../lib/attendanceCalendar";
 import type { HolidayDto, RegisterPerson } from "../lib/attendanceTypes";
 
-const CHOICES: (AttendanceStatus | null)[] = ["PRESENT", "HALF_DAY", "ABSENT", "LEAVE", "WEEKLY_OFF", "HOLIDAY", null];
+const CHOICES: (AttendanceStatus | null)[] = ["PRESENT", "HALF_DAY", "ABSENT", "LEAVE", null];
 type Shut = "WEEKLY_OFF" | "HOLIDAY";
 
-function Opt({ checked, set, label }: { checked: boolean; set: (v: boolean) => void; label: string }) {
+function Opt({ checked, set, label, disabled }: { checked: boolean; set: (v: boolean) => void; label: string; disabled?: boolean }) {
     return (
-        <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={checked} onCheckedChange={(v) => set(v === true)} />
+        <label className={`flex items-center gap-2 text-sm ${disabled ? "opacity-50" : ""}`}>
+            <Checkbox checked={checked} disabled={disabled} onCheckedChange={(v) => set(v === true)} />
             {label}
         </label>
     );
@@ -56,6 +56,8 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
     const [to, setTo] = useState(initialDate ?? lastDay);
     const [status, setStatus] = useState<AttendanceStatus | null>("PRESENT");
     const [offToWH, setOffToWH] = useState(true);
+    const [skipOff, setSkipOff] = useState(true);
+    const [skipHoliday, setSkipHoliday] = useState(true);
     const [skipLeave, setSkipLeave] = useState(true);
     const [onlyEmpty, setOnlyEmpty] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -63,6 +65,8 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
 
     const clampDate = (v: string) => (v < monthFrom ? monthFrom : v > lastDay ? lastDay : v);
 
+    // The W / H switch only means something while marking P / ½ / A / L.
+    const toWH = offToWH && status !== null;
     const cells = useMemo<BulkCell[]>(() => {
         if (!from || !to || from > to) return [];
         const days = isoDaysBetween(from, to);
@@ -78,19 +82,20 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
                 const shut: Shut | null = mine.has(iso) ? "HOLIDAY" : p.weeklyOff.includes(weekdayOf(iso)) ? "WEEKLY_OFF" : null;
                 if (onlyEmpty && m) continue;
 
-                // The off-day marks. A W / H tile, or "Set off days to W / H" while
-                // marking P / ½ / A / L, puts the day's own off mark on it — the one
-                // place bulk overrides a till day: activity on an off day that was not
-                // work (testing) is set aside in one go (owner, 2026-11-06). An off
-                // day with nothing stored already reads W / H, so it is not written.
-                const offTile = status === "WEEKLY_OFF" || status === "HOLIDAY";
-                if (offTile || (shut && offToWH && status !== null)) {
-                    const want = offTile ? status : shut;
-                    if (!shut || want !== shut || !m) continue;
-                    if (m.source === "OFFICE" && m.status === want) continue;
-                    out.push({ userId: p.id, date: iso, status: want });
+                // Off days, three ways (owner, 2026-11-06):
+                //   "Mark weekly off / holiday as W / H" on → the day's own off mark
+                //     goes on it — the one place bulk overrides a till day, so
+                //     activity on an off day that was not work (testing) is set
+                //     aside. An off day with nothing stored already reads W / H.
+                //   off, its skip ticked → the day is left alone.
+                //   off, skip unticked   → marked like any working day.
+                if (shut && toWH) {
+                    if (!m || (m.source === "OFFICE" && m.status === shut)) continue;
+                    out.push({ userId: p.id, date: iso, status: shut });
                     continue;
                 }
+                if (shut === "HOLIDAY" && skipHoliday && !toWH) continue;
+                if (shut === "WEEKLY_OFF" && skipOff && !toWH) continue;
 
                 // Every other day: a till day stays on auto — overriding it is a
                 // one-by-one job on the grid.
@@ -102,7 +107,7 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
             }
         }
         return out;
-    }, [people, holidays, picked, from, to, today, status, offToWH, skipLeave, onlyEmpty]);
+    }, [people, holidays, picked, from, to, today, status, toWH, skipOff, skipHoliday, skipLeave, onlyEmpty]);
 
     const peopleCount = new Set(cells.map((c) => c.userId)).size;
     const toggle = (id: number) => setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -138,7 +143,7 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
             <DialogContent className="gap-0 p-0 sm:max-w-3xl">
                 <DialogHeader className="border-b border-border px-5 py-4">
                     <DialogTitle className="flex items-center gap-2 text-base"><ListChecks size={18} /> Bulk mark attendance</DialogTitle>
-                    <DialogDescription>Pick the days, the mark and the people. Days the office already marked are replaced. Days the till recorded are left on Auto — except off days, which W / H can set aside.</DialogDescription>
+                    <DialogDescription>Pick the days, the mark and the people. Days the office already marked are replaced. Days the till recorded are left on Auto — except off days set to W / H.</DialogDescription>
                 </DialogHeader>
 
                 <div className="grid max-h-[65vh] gap-0 overflow-y-auto md:grid-cols-[1fr_1fr] md:overflow-visible">
@@ -167,7 +172,7 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
 
                         <section className="space-y-2">
                             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">2. Mark as</h3>
-                            <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
+                            <div className="grid grid-cols-5 gap-1.5">
                                 {CHOICES.map((c) => {
                                     const on = status === c;
                                     return (
@@ -187,24 +192,33 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
                                     );
                                 })}
                             </div>
-                            {(status === "WEEKLY_OFF" || status === "HOLIDAY") && <p className="text-xs text-muted-foreground">Marks only each person&apos;s {status === "HOLIDAY" ? "holidays" : "weekly off days"} — also those the till recorded (green ring), so off-day testing is not paid as extra duty.</p>}
                             {status === null && <p className="text-xs text-muted-foreground">Auto removes office marks. Days the till recorded show the till&apos;s answer again; other days show the calendar.</p>}
                         </section>
+
+                        {status !== null && (
+                            <section className="space-y-1 rounded-md border border-border p-3">
+                                <Opt checked={offToWH} set={setOffToWH} label="Mark weekly off / holiday as W / H" />
+                                <p className="pl-6 text-xs text-muted-foreground">
+                                    {offToWH
+                                        ? "Weekly offs become W and holidays H — wrong marks and green rings (off-day testing) are removed."
+                                        : "Off: the Weekly off / Holidays ticks below decide — ticked leaves those days alone, unticked marks them like working days."}
+                                </p>
+                            </section>
+                        )}
 
                         <section className="space-y-2">
                             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">3. Leave these alone</h3>
                             <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                                <Opt checked={skipOff && !toWH} set={setSkipOff} label="Weekly off" disabled={toWH} />
+                                <Opt checked={skipHoliday && !toWH} set={setSkipHoliday} label="Holidays" disabled={toWH} />
                                 <Opt checked={skipLeave} set={setSkipLeave} label="Approved leave" />
                                 <Opt checked={onlyEmpty} set={setOnlyEmpty} label="Already marked days" />
                             </div>
-                            <div className="pt-1">
-                                <Opt checked={offToWH} set={setOffToWH} label="Set off days to W / H" />
-                                <p className="pl-6 text-xs text-muted-foreground">
-                                    {offToWH
-                                        ? "Weekly offs become W and holidays H — wrong marks and green rings on them are removed."
-                                        : "Off days get the same mark as the other days."}
-                                </p>
-                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                {toWH
+                                    ? "Off days are marked W / H (switch below), so these two are not needed."
+                                    : "Untick Weekly off / Holidays to mark those days like working days."}
+                            </p>
                         </section>
                     </div>
 

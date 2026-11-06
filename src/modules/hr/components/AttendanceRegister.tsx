@@ -346,7 +346,7 @@ function RegisterHelp({ canEdit }: { canEdit: boolean }) {
                     <ul className="list-disc space-y-1 pl-5">
                         <li><b>One box:</b> click it. Each click goes P → ½ → A → L → <b>Auto</b>. On an Auto (green ring) box the first click is always manual P. On a weekly off or holiday the cycle starts with a manual <b>W</b> / <b>H</b>: use it when the till shows activity on an off day that was not real work (testing, a quick check) — it removes the green ring and no extra duty is paid. Auto removes the office mark: if the till recorded that day, the till&apos;s own answer comes back with the green ring; if not, the box shows the calendar again (weekly off, holiday, leave or empty).</li>
                         <li><b>Many boxes:</b> click <b>Bulk mark</b>, or click a date at the top to mark that day for everyone.</li>
-                        <li>Bulk mark never overrides an Auto (till) day on a working day — click that box on its own. Its <b>W</b> / <b>H</b> options (and the &quot;Set off days to W / H&quot; tick) do set off days aside, rings included. Its <b>Auto</b> option sets many manual days back to Auto at once.</li>
+                        <li>Bulk mark never overrides an Auto (till) day on a working day — click that box on its own. Its &quot;Mark weekly off / holiday as W / H&quot; switch does set off days aside, rings included; switch it off to leave off days alone, or untick both to mark them like working days. Its <b>Auto</b> option sets many manual days back to Auto at once.</li>
                         <li>Future days cannot be marked.</li>
                         <li>Click a name to see that person&apos;s hours day by day (Employee Activity).</li>
                     </ul>
