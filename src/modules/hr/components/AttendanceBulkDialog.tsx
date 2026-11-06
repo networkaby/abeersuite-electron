@@ -80,7 +80,8 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
                 if (r.kind === "outside") continue; // before joining / after leaving
                 const m = p.marks[iso];
                 const shut: Shut | null = mine.has(iso) ? "HOLIDAY" : p.weeklyOff.includes(weekdayOf(iso)) ? "WEEKLY_OFF" : null;
-                if (onlyEmpty && m) continue;
+                // "Days already marked by hand" — a till (auto) day is not one.
+                if (onlyEmpty && m?.source === "OFFICE") continue;
 
                 // Off days, three ways (owner, 2026-11-06):
                 //   "Mark weekly off / holiday as W / H" on → the day's own off mark
@@ -211,7 +212,7 @@ export default function AttendanceBulkDialog({ open, onOpenChange, people, holid
                                 <Opt checked={skipOff && !toWH} set={setSkipOff} label="Weekly off" disabled={toWH} />
                                 <Opt checked={skipHoliday && !toWH} set={setSkipHoliday} label="Holidays" disabled={toWH} />
                                 <Opt checked={skipLeave} set={setSkipLeave} label="Approved leave" />
-                                <Opt checked={onlyEmpty} set={setOnlyEmpty} label="Already marked days" />
+                                <Opt checked={onlyEmpty} set={setOnlyEmpty} label="Days already marked by hand" />
                             </div>
                             <p className="text-xs text-muted-foreground">
                                 {toWH
