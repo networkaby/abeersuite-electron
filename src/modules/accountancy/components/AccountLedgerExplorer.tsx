@@ -21,7 +21,7 @@ import {
     BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { useApiResource, useEscape } from "@/shared/hooks";
-import { BookOpen, Loader2, RefreshCw, Printer, Pencil, CheckCircle2 } from "lucide-react";
+import { BookOpen, Loader2, RefreshCw, Printer, Pencil, Percent, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ import { toIsoDate } from "@/shared/hooks/useTallyDate";
 import { BookPage } from "@/modules/accountancy/components/BookPage";
 import { CreateLedgerDialog } from "@/modules/accountancy/components/CreateLedgerDialog";
 import { EditLedgerDialog, type EditableLedger } from "@/modules/accountancy/components/EditLedgerDialog";
+import { ChargeInterestDialog } from "@/modules/accountancy/components/ChargeInterestDialog";
 import { aliasMatches } from "@/modules/accountancy/lib/accountAlias";
 import { ReconciledBadge, ReconciledTick } from "@/modules/accountancy/components/ReconciledBadge";
 import { DayBookActionsMenu } from "@/modules/accountancy/components/DayBookActionsMenu";
@@ -159,6 +160,8 @@ export interface AccountLedgerExplorerProps {
         groupName: string | string[];
         subtitle?: string;
     };
+    /** Loans Book: show "Charge Interest" (Dr interest, Cr this ledger). */
+    chargeInterest?: boolean;
 }
 
 // ── Main component ───────────────────────────────────────────────────────────
@@ -170,6 +173,7 @@ export function AccountLedgerExplorer({
     groupNames,
     emptyMessage,
     book,
+    chargeInterest = false,
 }: AccountLedgerExplorerProps) {
     const router = useRouter();
     const params = useSearchParams();
@@ -178,6 +182,7 @@ export function AccountLedgerExplorer({
     const [groupTree, setGroupTree] = useState<GroupTreeNode[]>([]);
     const [createOpen, setCreateOpen] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
+    const [interestOpen, setInterestOpen] = useState(false);
     const [search, setSearch] = useState("");
     const [selectedId, setSelectedId] = useState<number | null>(() => {
         const id = params.get("accountId");
@@ -554,6 +559,17 @@ export function AccountLedgerExplorer({
                                                 refreshDetail();
                                             }}
                                         />
+                                        {chargeInterest && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-7 px-2.5 text-xs"
+                                                onClick={() => setInterestOpen(true)}
+                                            >
+                                                <Percent size={12} className="mr-1" />
+                                                Charge Interest
+                                            </Button>
+                                        )}
                                         <Button
                                             size="sm"
                                             variant="outline"
@@ -732,6 +748,19 @@ export function AccountLedgerExplorer({
                     refreshDetail();
                 }}
             />
+
+            {chargeInterest && interestOpen && (
+                <ChargeInterestDialog
+                    open={interestOpen}
+                    onOpenChange={setInterestOpen}
+                    loan={detail ? { id: detail.account.id, name: detail.account.name, loanJson: editSource?.loanJson } : null}
+                    outstanding={Math.abs(detail?.closingBalance ?? 0)}
+                    onSaved={() => {
+                        reloadAccounts();
+                        refreshDetail();
+                    }}
+                />
+            )}
 
             <LinkContextMenu menu={linkMenu} onClose={closeLinkMenu} />
         </div>
