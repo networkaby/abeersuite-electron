@@ -21,6 +21,8 @@ import {
     HOME_SECTION_TYPE_DEFS,
     RAIL_KINDS,
     homeSectionTypeDef,
+    HOME_LIMIT_DEFAULTS,
+    HOME_LIMIT_MAX,
     isFallbackInstance,
     isInstanceActive,
     newHomeInstance,
@@ -444,13 +446,30 @@ function ContentEditor({ inst, onChange }: { inst: HomeSectionInstance; onChange
             </div>
         );
     }
+    const limitDefault = HOME_LIMIT_DEFAULTS[inst.type];
     return (
-        <HeadingEditor
-            content={inst.content}
-            onChange={onChange}
-            fields={HEADING_FIELDS[inst.type] ?? ["title"]}
-            placeholders={HEADING_PLACEHOLDERS[inst.type]}
-        />
+        <div className="space-y-3">
+            <HeadingEditor
+                content={inst.content}
+                onChange={onChange}
+                fields={HEADING_FIELDS[inst.type] ?? ["title"]}
+                placeholders={HEADING_PLACEHOLDERS[inst.type]}
+            />
+            {limitDefault != null ? (
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    How many to show
+                    <BufferedIntField
+                        aria-label="How many to show"
+                        className="h-8 w-20"
+                        value={inst.content.limit ?? limitDefault}
+                        onCommit={(n) =>
+                            onChange({ ...inst.content, limit: Math.min(HOME_LIMIT_MAX, Math.max(1, n)) })
+                        }
+                    />
+                    <span>(the rest are behind &ldquo;More&rdquo;; a few rotate daily)</span>
+                </label>
+            ) : null}
+        </div>
     );
 }
 

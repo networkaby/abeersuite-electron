@@ -69,6 +69,14 @@ export const HOME_SECTION_TYPES = [
 export const HOME_TILE_LIMIT = 8;
 /** Brand logos the home strip shows before "All brands". */
 export const HOME_BRAND_LIMIT = 12;
+/** Most a staff-set limit may ask for. */
+export const HOME_LIMIT_MAX = 48;
+/** Section types whose "How many to show" box is offered, with their default. */
+export const HOME_LIMIT_DEFAULTS: Partial<Record<HomeSectionType, number>> = {
+    categoryShowcase: HOME_TILE_LIMIT,
+    collectionShowcase: HOME_TILE_LIMIT,
+    brandStrip: HOME_BRAND_LIMIT,
+};
 
 export type HomeSectionType = (typeof HOME_SECTION_TYPES)[number];
 
@@ -201,6 +209,8 @@ export type HomeSectionContent = {
     columns?: 1 | 2 | 3;
     items?: TrustContentItem[];
     railKind?: RailKind;
+    /** Tile / logo sections — how many show before the "More" link (1–48). */
+    limit?: number;
 };
 
 export type HomeSectionInstance = {
@@ -376,6 +386,7 @@ function normalizeContent(raw: unknown): HomeSectionContent {
         if (items.length > 0) content.items = items;
     }
     if (RAIL_KINDS.some((k) => k.value === r.railKind)) content.railKind = r.railKind as RailKind;
+    if (typeof r.limit === "number" && Number.isInteger(r.limit) && r.limit >= 1 && r.limit <= HOME_LIMIT_MAX) content.limit = r.limit;
     return content;
 }
 

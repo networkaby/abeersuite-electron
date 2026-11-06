@@ -12,7 +12,7 @@ import HeroCarousel from "@/modules/external/store/HeroCarousel";
 import PromoBanners from "@/modules/external/store/PromoBanners";
 import TrustStrip from "@/modules/external/store/TrustStrip";
 import CategoryShowcase from "@/modules/external/store/CategoryShowcase";
-import { HOME_TILE_LIMIT } from "@/shared/lib/shop/homeLayout";
+import { HOME_BRAND_LIMIT, HOME_TILE_LIMIT } from "@/shared/lib/shop/homeLayout";
 import DealOfTheDay from "@/modules/external/store/DealOfTheDay";
 import BrandStripView, { type BrandStripBrand } from "@/modules/external/store/BrandStripView";
 import ProductRail from "@/modules/external/shop/ProductRail";
@@ -100,7 +100,7 @@ export default function SectionPreview({ inst, data }: { inst: HomeSectionInstan
                     };
                 })
                 .sort((a, b) => b.count - a.count)
-                .slice(0, HOME_TILE_LIMIT);
+                .slice(0, content.limit ?? HOME_TILE_LIMIT);
             return (
                 <CategoryShowcase
                     categories={categories}
@@ -123,7 +123,7 @@ export default function SectionPreview({ inst, data }: { inst: HomeSectionInstan
             const collections = [...counts]
                 .map(([name, v]) => ({ name, count: v.count, fallbackImageUrl: v.img }))
                 .sort((a, b) => b.count - a.count)
-                .slice(0, HOME_TILE_LIMIT);
+                .slice(0, content.limit ?? HOME_TILE_LIMIT);
             return (
                 <CategoryShowcase
                     categories={collections}
@@ -159,7 +159,14 @@ export default function SectionPreview({ inst, data }: { inst: HomeSectionInstan
             return <DealOfTheDay product={top} eyebrow={content.eyebrow} title={content.title} />;
         }
         case "brandStrip":
-            return <BrandStripView brands={data.brands} eyebrow={content.eyebrow} title={content.title} />;
+            return (
+                <BrandStripView
+                    brands={data.brands.slice(0, content.limit ?? HOME_BRAND_LIMIT)}
+                    eyebrow={content.eyebrow}
+                    title={content.title}
+                    moreHref={data.brands.length > (content.limit ?? HOME_BRAND_LIMIT) ? "#" : undefined}
+                />
+            );
         case "fullCatalog":
             return (
                 <ShopCatalogClient

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Fragment, type ReactNode } from "react";
 import { loadStorefrontProducts, pickDealOfTheDay, pickDeals, pickFeatured } from "@/shared/lib/shop/storefrontProducts";
-import { dailyPick, loadBrowseTiles, type BrowseTile } from "@/shared/lib/shop/browseTiles";
+import { dailyPick, loadBrowseTiles, type BrowseTile, type BrowseTiles } from "@/shared/lib/shop/browseTiles";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { STORE_PAGE_HEADING } from "@/shared/lib/shop/storeContent";
 import {
@@ -35,14 +35,17 @@ export const metadata: Metadata = {
     alternates: { canonical: "/" },
 };
 
-type TileEntry = { name: string; count: number; fallbackImageUrl: string | null; href?: string };
+/**
+ * A section's daily handful: the biggest few stay, the rest rotate by date,
+ * so the page feels fresh yet is one stable, cacheable page per day.
+ */
+function todaysTiles(all: BrowseTile[], limit: number, todayIso: string, salt: string) {
+    return dailyPick(all, limit, todayIso, salt).map((t) => ({ name: t.name, count: t.count, fallbackImageUrl: t.imageUrl, href: t.href }));
+}
 
 type PageData = {
-    /** Today's handful of categories — the full list is `/shop?view=categories`. */
-    categoryEntries: TileEntry[];
-    collectionEntries: TileEntry[];
-    moreCategories: boolean;
-    moreCollections: boolean;
+    /** Every category / collection tile; each section takes its own daily handful. */
+    tiles: BrowseTiles;
     featured: ShopProductPublic[];
     deals: ShopProductPublic[];
     dealOfTheDay: ShopProductPublic | null;
@@ -85,22 +88,22 @@ function renderSection(inst: HomeSectionInstance, data: PageData, todayIso: stri
         case "categoryShowcase":
             return (
                 <CategoryShowcase
-                    categories={data.categoryEntries}
+                    categories={todaysTiles(data.tiles.categories, content.limit ?? HOME_TILE_LIMIT, todayIso, "categories")}
                     eyebrow={content.eyebrow}
                     title={content.title}
                     subtitle={content.subtitle}
-                    moreHref={data.moreCategories ? "/shop?view=categories" : undefined}
+                    moreHref={data.tiles.categories.length > (content.limit ?? HOME_TILE_LIMIT) ? "/shop?view=categories" : undefined}
                     moreLabel="More categories"
                 />
             );
         case "collectionShowcase":
             return (
                 <CategoryShowcase
-                    categories={data.collectionEntries}
+                    categories={todaysTiles(data.tiles.collections, content.limit ?? HOME_TILE_LIMIT, todayIso, "collections")}
                     eyebrow={content.eyebrow ?? "Collections"}
                     title={content.title ?? "Shop by collection"}
                     subtitle={content.subtitle ?? "Ready-made picks for how you use them."}
-                    moreHref={data.moreCollections ? "/shop?view=collections" : undefined}
+                    moreHref={data.tiles.collections.length > (content.limit ?? HOME_TILE_LIMIT) ? "/shop?view=collections" : undefined}
                     moreLabel="More collections"
                 />
             );
@@ -125,7 +128,7 @@ function renderSection(inst: HomeSectionInstance, data: PageData, todayIso: stri
         case "dealOfTheDay":
             return <DealOfTheDay product={data.dealOfTheDay} eyebrow={content.eyebrow} title={content.title} />;
         case "brandStrip":
-            return <BrandStrip eyebrow={content.eyebrow} title={content.title} limit={HOME_BRAND_LIMIT} todayIso={todayIso} />;
+            return <BrandStrip eyebrow={content.eyebrow} title={content.title} limit={content.limit ?? HOME_BRAND_LIMIT} todayIso={todayIso} />;
         case "fullCatalog":
             return (
                 <ShopCatalogClient
@@ -168,17 +171,8 @@ export default async function StoreHomePage({
 
     const todayIso = businessTodayIso();
     const allCategories = [...new Set(products.map((p) => p.category))];
-    // A daily handful of each: the biggest few stay, the rest rotate by date,
-    // so the page feels fresh yet is one stable, cacheable page per day.
-    const toEntry = (t: BrowseTile): TileEntry => ({ name: t.name, count: t.count, fallbackImageUrl: t.imageUrl, href: t.href });
-    const categoryEntries = dailyPick(tiles.categories, HOME_TILE_LIMIT, todayIso, "categories").map(toEntry);
-    const collectionEntries = dailyPick(tiles.collections, HOME_TILE_LIMIT, todayIso, "collections").map(toEntry);
-
     const data: PageData = {
-        categoryEntries,
-        collectionEntries,
-        moreCategories: tiles.categories.length > categoryEntries.length,
-        moreCollections: tiles.collections.length > collectionEntries.length,
+        tiles,
         featured: dailyPick(pickFeatured(products, 24), 8, todayIso, "featured", 2),
         deals: pickDeals(products),
         dealOfTheDay: pickDealOfTheDay(products),
