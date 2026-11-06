@@ -14,6 +14,10 @@ import { formatPeriod, type PayrollPreview } from "@/modules/hr/lib/payrollTypes
 // tab itself, not a confirmation step, so it is read as often as the dates are
 // touched. With no dates it answers the question the screen opens on: what is
 // owed from the day after the last payroll up to today.
+//
+// &basis=auto — the same period as if every day were paid on the till's answer
+// (Auto), manual marks ignored where the till measured the day. Read only: the
+// Generate tab shows it beside the real figures; generating never uses it.
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -53,7 +57,8 @@ export async function GET(req: Request) {
         }
 
         const clash = await overlappingRun(prisma, periodFrom, periodTo);
-        const candidates = await buildPayrollCandidates(prisma, periodFrom, periodTo);
+        const clockOnly = searchParams.get("basis") === "auto";
+        const candidates = await buildPayrollCandidates(prisma, periodFrom, periodTo, { clockOnly });
         const totals = candidateTotals(candidates);
 
         const payload: PayrollPreview = {

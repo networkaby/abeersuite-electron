@@ -29,7 +29,7 @@
 import { Fragment, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { AlertTriangle, CalendarRange, ChevronDown, ChevronRight, Search } from "lucide-react";
+import { AlertTriangle, Bot, CalendarRange, ChevronDown, ChevronRight, Eye, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -71,6 +71,17 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
         `/api/hr/payroll/preview${qs ? `?${qs}` : ""}`,
         { topics: ["settings", "ledger"] },
     );
+
+    // "See on Auto" — the same period as if every day were paid on the till's
+    // answer. Read only, fetched only while shown (AGENTS §7), and Generate is
+    // locked while it is on so the comparison can never be mistaken for the run.
+    const [showAuto, setShowAuto] = useState(false);
+    const auto = useApiResource<PayrollPreview>(
+        showAuto && data ? `/api/hr/payroll/preview?from=${data.periodFrom}&to=${data.periodTo}&basis=auto` : null,
+        { topics: ["settings", "ledger"] },
+    );
+    const autoBy = useMemo(() => new Map((auto.data?.lines ?? []).map((l) => [l.userId, l])), [auto.data]);
+    const cols = showAuto ? 10 : 8;
 
     // The server's answer is the truth about the period until the user edits it.
     const periodFrom = from ?? data?.periodFrom ?? "";
@@ -198,12 +209,24 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
                 <Button type="button" variant="outline" size="sm" className="w-24" onClick={reload} disabled={refreshing}>
                     {refreshing ? "Reading…" : "Refresh"}
                 </Button>
+                <Button
+                    type="button"
+                    variant={showAuto ? "secondary" : "outline"}
+                    size="sm"
+                    className="h-9"
+                    disabled={!data}
+                    onClick={() => setShowAuto((v) => !v)}
+                    title="Read only — what each person would get if every day were paid on the till's answer"
+                >
+                    {showAuto ? <><Eye size={14} /> Hide Auto</> : <><Bot size={14} /> See on Auto</>}
+                </Button>
                 {canRun && (
                     <Button
                         type="button"
                         className="ml-auto w-44"
                         onClick={generate}
-                        disabled={saving || loading || blocked || !data?.headcount}
+                        disabled={saving || loading || blocked || !data?.headcount || showAuto}
+                        title={showAuto ? "Hide Auto first — the run always pays on the current marks" : undefined}
                     >
                         {saving ? "Generating…" : "Generate this run"}
                     </Button>
@@ -224,6 +247,17 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
                 </span>
             </p>
 
+            {showAuto && (
+                <p className="flex items-start gap-2 rounded-md border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-sm">
+                    <Bot size={15} className="mt-0.5 shrink-0 text-sky-600" />
+                    <span>
+                        <strong>Read only.</strong> &quot;On Auto&quot; is what each person would get if every day were paid on the till&apos;s answer
+                        instead of the manual marks. Days the till did not record keep their mark. Nothing is saved, and
+                        Generate is locked until you press <strong>Hide Auto</strong> — the run always pays on the current marks.
+                    </span>
+                </p>
+            )}
+
             {blocked && (
                 <p className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
                     <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-600" />
@@ -241,6 +275,17 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
                 <Stat label="Deductions" value={money(data?.deductionsPaise)} />
                 <Stat label="Net payable" value={money(data?.netPaise)} strong />
                 <Stat label="Not included" value={data ? String(data.skippedCount) : "—"} />
+                {showAuto && (
+                    <div className="ml-auto rounded-md border border-sky-500/40 bg-sky-500/5 px-3 py-1.5">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">On Auto (read only)</p>
+                        <p className="text-sm tabular-nums">
+                            {auto.data && data ? <>
+                                <span className="font-semibold">{money(auto.data.netPaise)}</span>{" "}
+                                <Diff paise={auto.data.netPaise - data.netPaise} />
+                            </> : auto.error ? "Could not read" : "Reading…"}
+                        </p>
+                    </div>
+                )}
             </div>
 
             <div className="relative">
@@ -275,18 +320,20 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
                                     <TableHead className="text-right">Gross</TableHead>
                                     <TableHead className="text-right">Deductions</TableHead>
                                     <TableHead className="text-right">Net for this period</TableHead>
+                                    {showAuto && <TableHead className="text-right text-sky-700 dark:text-sky-400">On Auto</TableHead>}
+                                    {showAuto && <TableHead className="text-right text-sky-700 dark:text-sky-400">Difference</TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {!data && (
                                     <TableRow>
-                                        <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
+                                        <TableCell colSpan={cols} className="py-10 text-center text-sm text-muted-foreground">
                                             Reading…
                                         </TableCell>
                                     </TableRow>
                                 )}
                                 {data && !rows.length && (
-                                    <TableEmptyRow colSpan={8} message="Nobody was on the staff in this period." />
+                                    <TableEmptyRow colSpan={cols} message="Nobody was on the staff in this period." />
                                 )}
                                 {rows.map((l) => (
                                     <Fragment key={l.id}>
@@ -317,8 +364,15 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
                                                 {l.deductionsPaise ? formatRupeesFromPaise(l.deductionsPaise) : "—"}
                                             </TableCell>
                                             <TableCell className="text-right font-medium tabular-nums">{formatRupeesFromPaise(l.netPaise)}</TableCell>
+                                            {showAuto && (() => {
+                                                const a = autoBy.get(l.userId);
+                                                return <>
+                                                    <TableCell className="text-right tabular-nums text-sky-800 dark:text-sky-300">{a ? formatRupeesFromPaise(a.netPaise) : "…"}</TableCell>
+                                                    <TableCell className="text-right tabular-nums">{a ? <Diff paise={a.netPaise - l.netPaise} /> : "…"}</TableCell>
+                                                </>;
+                                            })()}
                                         </TableRow>
-                                        {open.has(l.id) && <Breakup line={l} />}
+                                        {open.has(l.id) && <Breakup line={l} auto={showAuto ? autoBy.get(l.userId) : undefined} span={cols - 1} />}
                                     </Fragment>
                                 ))}
                     </TableBody>
@@ -329,13 +383,14 @@ export default function PayrollGenerateTab({ canRun, onGenerated }: {
 }
 
 /** The pay heads behind one person's figure, already proportioned. */
-function Breakup({ line }: { line: PayrollLineDto }) {
+function Breakup({ line, auto, span }: { line: PayrollLineDto; auto?: PayrollLineDto; span: number }) {
     const earnings = line.lines.filter((l) => l.kind === "EARNING");
     const deductions = line.lines.filter((l) => l.kind === "DEDUCTION");
     return (
         <TableRow className="bg-muted/30 hover:bg-muted/30">
             <TableCell />
-            <TableCell colSpan={7} className="py-3">
+            <TableCell colSpan={span} className="py-3">
+              <div className="flex flex-wrap gap-10">
                 {!line.lines.length ? (
                     <p className="text-sm text-muted-foreground">
                         {line.skipReason ?? "Nothing to break up for this period."}
@@ -369,6 +424,8 @@ function Breakup({ line }: { line: PayrollLineDto }) {
                         )}
                     </div>
                 )}
+                {auto && <AutoHeads line={auto} manualNet={line.netPaise} />}
+              </div>
             </TableCell>
         </TableRow>
     );
@@ -388,6 +445,35 @@ function Stat({ label, value, strong }: { label: string; value: string; strong?:
         <div>
             <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
             <p className={strong ? "text-xl font-semibold tabular-nums" : "text-sm tabular-nums"}>{value}</p>
+        </div>
+    );
+}
+
+/** "+₹350" green / "−₹1,200" red / "—" — Auto against what is being paid. */
+function Diff({ paise }: { paise: number }) {
+    if (!paise) return <span className="text-muted-foreground">—</span>;
+    return (
+        <span className={paise > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}>
+            {paise > 0 ? "+" : "−"}{formatRupeesFromPaise(Math.abs(paise))}
+        </span>
+    );
+}
+
+/** The same person's heads on Auto, beside the real ones. Read only. */
+function AutoHeads({ line, manualNet }: { line: PayrollLineDto; manualNet: number }) {
+    return (
+        <div className="w-72 space-y-1.5 rounded-md border border-sky-500/40 bg-sky-500/5 p-3">
+            <p className="flex items-center gap-1 text-xs uppercase tracking-wide text-sky-700 dark:text-sky-400">
+                <Bot size={12} /> On Auto · read only
+            </p>
+            <p className="text-xs text-muted-foreground">{formatDayBasisLong(line.paidDays, line.periodDays, line.payDays)}</p>
+            {line.lines.filter((h) => h.kind === "EARNING").map((h) => <HeadRow key={`ae-${h.name}`} name={h.name} paise={h.amountPaise} />)}
+            {line.lines.filter((h) => h.kind === "DEDUCTION").map((h) => <HeadRow key={`ad-${h.name}`} name={h.name} paise={-h.amountPaise} muted />)}
+            <div className="flex justify-between border-t border-border pt-1.5 text-sm font-medium">
+                <span>Net on Auto</span>
+                <span className="tabular-nums">{formatRupeesFromPaise(line.netPaise)}</span>
+            </div>
+            <p className="text-right text-xs">vs paying now: <Diff paise={line.netPaise - manualNet} /></p>
         </div>
     );
 }
