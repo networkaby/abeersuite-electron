@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ChevronDown, ChevronLeft, Heart, MapPin, Search, Share2, ShoppingCart, Truck } from "lucide-react";
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import AppProductRail from "@/modules/external/shopApp/AppProductRail";
+import type { BridgeRow } from "@/shared/lib/shop/productRelations";
 import { useCartCount } from "@/modules/external/shopApp/CustomerAppShell";
 import { APP } from "@/modules/external/shopApp/appPaths";
 import { noteViewed, savePincode, useSavedPincode } from "@/modules/external/shopApp/appDevicePrefs";
@@ -25,7 +26,15 @@ const roundButton = "flex size-10 items-center justify-center rounded-full bg-ba
  * sections, similar products — and a bar fixed at the bottom with Add to cart
  * and Buy now that never scrolls away.
  */
-export default function AppProductView({ product: p, similar }: { product: ShopProductPublic; similar: ShopProductPublic[] }) {
+export default function AppProductView({
+    product: p,
+    similar,
+    bridges = [],
+}: {
+    product: ShopProductPublic;
+    similar: ShopProductPublic[];
+    bridges?: BridgeRow[];
+}) {
     const router = useRouter();
     const add = useShopCartStore((s) => s.add);
     const inCart = useShopCartStore((s) => s.lines.some((l) => l.productId === p.id));
@@ -172,6 +181,12 @@ export default function AppProductView({ product: p, similar }: { product: ShopP
                     <AppProductRail title="Similar products" products={similar} />
                 </div>
             )}
+
+            {bridges.map((row) => (
+                <div key={row.collection} className="py-5">
+                    <AppProductRail title={`Goes with this · ${row.collection}`} products={row.items} />
+                </div>
+            ))}
 
             {/* Room for the fixed bar, so it never covers the last line. */}
             <div className="h-[calc(4.5rem+env(safe-area-inset-bottom))]" aria-hidden />

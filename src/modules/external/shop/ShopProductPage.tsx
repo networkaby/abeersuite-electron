@@ -6,6 +6,8 @@ import ProductRail from "@/modules/external/shop/ProductRail";
 import AdUnit from "@/modules/external/shop/ads/AdUnit";
 import { loadSimilarProducts, SIMILAR_PRODUCTS_LIMIT } from "@/shared/lib/shop/similarProducts";
 import { loadShopAdContext } from "@/shared/lib/shop/adContext";
+import { loadStorefrontProductsCached } from "@/shared/lib/shop/storefrontProducts";
+import { buildBridgeRows } from "@/shared/lib/shop/productRelations";
 import { groupHref, loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
 import { AdPicker } from "@/shared/lib/shop/ads";
 import { ChevronRight } from "lucide-react";
@@ -61,12 +63,19 @@ export default async function ShopProductPage({
     // A few rows past the rail's limit are loaded on purpose: they are what a
     // product ad on this page may pick from, since everything in the rail is
     // already on the page and an ad never repeats a visible product.
-    const [similarPool, adContext, groupIndex] = await Promise.all([
-        loadSimilarProducts({ id: product.id, groupId: product.groupId }, SIMILAR_PRODUCTS_LIMIT + 4),
+    const [similarPool, adContext, groupIndex, catalogue] = await Promise.all([
+        loadSimilarProducts(
+            { id: product.id, groupId: product.groupId, collections: product.collections },
+            SIMILAR_PRODUCTS_LIMIT + 4
+        ),
         loadShopAdContext(searchParams),
         loadShopGroupIndex(),
+        loadStorefrontProductsCached(),
     ]);
     const similar = similarPool.slice(0, SIMILAR_PRODUCTS_LIMIT);
+    // Collections bridge to OTHER groups: one row per collection the product
+    // sits in (productRelations.ts). Built from the cached catalogue.
+    const bridges = buildBridgeRows(product, catalogue, similar.map((p) => p.id));
     const pageAd = new AdPicker(adContext.ads, {
         todayIso: adContext.todayIso,
         products: similarPool,
@@ -130,6 +139,19 @@ export default async function ShopProductPage({
                 seeAllHref={categoryHref}
                 seeAllLabel={`See all ${product.category}`}
             />
+
+            {bridges.map((row) => (
+                <ProductRail
+                    key={row.collection}
+                    className="mt-16"
+                    bordered={false}
+                    eyebrow={row.collection}
+                    title={`Goes with this in ${row.collection}`}
+                    subtitle={`From ${row.groups} other ${row.groups === 1 ? "category" : "categories"}`}
+                    products={row.items}
+                    seeAllHref={null}
+                />
+            ))}
         </main>
     );
 }

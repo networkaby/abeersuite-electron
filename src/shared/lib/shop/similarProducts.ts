@@ -4,6 +4,7 @@ import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopGroupIndex } from "@/shared/lib/shop/groupCategory";
 import { loadShopStockPolicy } from "@/shared/lib/shop/stockPolicy";
 import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
+import { sharedCollections } from "@/shared/lib/shop/productRelations";
 
 /**
  * "Similar products" — substitutes for the item being viewed.
@@ -17,6 +18,11 @@ import { resolveAvailability } from "@/modules/ecommerce/lib/shopStock";
  * time, until the row is full: exact group → parent's whole subtree → its
  * parent's, and so on. So a group holding two items still fills its row, but
  * with its nearest neighbours rather than a department-wide dump.
+ *
+ * Within each rung, items sharing more **collections** with the product come
+ * first — a gaming keyboard shows gaming keyboards before plain ones, without
+ * a separate subgroup. Collections as a bridge to OTHER groups (cross-sell)
+ * live in productRelations.ts.
  *
  * This is NOT cross-sell. A printer's ink is a *different* group and can never
  * be reached from here — that is the separate, hand-curated "related products"
@@ -63,7 +69,7 @@ async function loadSubtree(rootId: number): Promise<number[]> {
 }
 
 export async function loadSimilarProducts(
-    product: { id: number; groupId: number | null },
+    product: { id: number; groupId: number | null; collections?: string[] },
     limit = SIMILAR_PRODUCTS_LIMIT
 ): Promise<ShopProductPublic[]> {
     if (product.groupId == null) return [];
@@ -93,18 +99,26 @@ export async function loadSimilarProducts(
                 id: { notIn: [...takenIds] },
             },
             include: SHOP_PUBLIC_INCLUDE,
-            // Over-fetch: some rows are dropped by the availability gate below,
-            // and a hard `take` of exactly `limit` could return a short row.
-            take: limit * 3,
+            // Over-fetch: rows are dropped by the availability gate below and
+            // re-ranked by shared collections, so the rung is read wider than
+            // the row (a leaf group holds tens, not thousands).
+            take: Math.max(limit * 3, 120),
             orderBy: { id: "asc" },
         });
 
+        const mine = new Set(product.collections ?? []);
+        const rung = [];
         for (const p of rows) {
-            if (picked.length >= limit) break;
             const avail = resolveAvailability(p.stock, p.allowBackorder, policy, p.reserved);
             if (!avail.visible) continue;
+            rung.push(invProductToPublic(p, { bands, avail, groupIndex }));
+        }
+        // Stable: equal scores keep the id order the rail always had.
+        if (mine.size > 0) rung.sort((a, b) => sharedCollections(b, mine) - sharedCollections(a, mine));
+        for (const p of rung) {
+            if (picked.length >= limit) break;
             takenIds.add(p.id);
-            picked.push(invProductToPublic(p, { bands, avail, groupIndex }));
+            picked.push(p);
         }
     }
 
