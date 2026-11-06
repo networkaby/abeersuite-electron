@@ -156,6 +156,9 @@ export async function buildPayrollCandidates(
     db: Prisma.TransactionClient,
     fromIso: string,
     toIso: string,
+    /** Read-only comparison: pay every day on the till's answer (Auto). Never
+     *  used to generate a run — the Generate route does not pass it. */
+    opts: { clockOnly?: boolean } = {},
 ): Promise<PayrollCandidate[]> {
     const users = await db.user.findMany({
         orderBy: { name: "asc" },
@@ -218,11 +221,11 @@ export async function buildPayrollCandidates(
         let ruleLines: ReturnType<typeof payRuleLines> = [];
         let attendance: PayslipAttendanceData | null = null;
         if (revisions.length) {
-            dayFactors = await nonPayableDays(u.id, fromIso, toIso);
+            dayFactors = await nonPayableDays(u.id, fromIso, toIso, opts);
             // The same read the activity screen makes: the days, and the netting
             // (`attendanceEffectFor`) run on them. One source for the card, the
             // pay heads and the slip's working, so the three cannot disagree.
-            const hours = await loadHoursBreakup(u.id, fromIso, toIso);
+            const hours = await loadHoursBreakup(u.id, fromIso, toIso, opts);
             const effect = hours?.effect ?? { ...EMPTY_ATTENDANCE_EFFECT };
             attendance = hours ? freezeAttendanceForPayslip(hours.days, ctx.rules, effect) : null;
             const latest = p!.salaries[p!.salaries.length - 1];

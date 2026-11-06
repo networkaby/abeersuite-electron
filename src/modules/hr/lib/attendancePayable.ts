@@ -35,7 +35,12 @@ import { unpaidLeaveDaysFor } from "./leaveBalance";
  * The minutes are the CORRECTED ones where a person fixed the activity card,
  * and a day switched to manual is paid on its mark. `attendanceSource.ts`.
  */
-export async function nonPayableDays(userId: number, fromIso: string, toIso: string): Promise<Map<string, 0 | 0.5>> {
+export async function nonPayableDays(
+    userId: number, fromIso: string, toIso: string,
+    /** Read-only "what would Auto pay": every day the till measured is graded on
+     *  its minutes, manual mark or not. A manual W / H keeps its off day. */
+    opts: { clockOnly?: boolean } = {},
+): Promise<Map<string, 0 | 0.5>> {
     const from = new Date(`${fromIso}T00:00:00.000Z`);
     const to = new Date(`${toIso}T00:00:00.000Z`);
     const [seasonal, rules, profile, rows, unpaid] = await Promise.all([
@@ -69,7 +74,9 @@ export async function nonPayableDays(userId: number, fromIso: string, toIso: str
     const out = new Map<string, 0 | 0.5>();
     for (const r of rows) {
         const iso = r.date.toISOString().slice(0, 10);
-        const status = autoCounts(r) ? gradeDay(workedOf(r), dutyOnDay(iso), rules) : r.status;
+        const offMark = r.status === "WEEKLY_OFF" || r.status === "HOLIDAY";
+        const graded = opts.clockOnly ? workedOf(r) > 0 && !offMark : autoCounts(r);
+        const status = graded ? gradeDay(workedOf(r), dutyOnDay(iso), rules) : r.status;
         if (status === "ABSENT") out.set(iso, 0);
         else if (status === "HALF_DAY") out.set(iso, 0.5);
         else if (status === "LEAVE" && unpaid.has(iso)) out.set(iso, 0);
