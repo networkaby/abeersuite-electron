@@ -1601,7 +1601,6 @@ CREATE TABLE IF NOT EXISTS "VoucherGlLine" (
     "type" "EntryType" NOT NULL,
     "amount" DECIMAL(14,2) NOT NULL,
     "description" TEXT,
-    "branchId" TEXT,
     "role" "VoucherGlRole",
     "seq" INTEGER,
     "method" "PaymentMethod",
@@ -1617,8 +1616,6 @@ ALTER TABLE "VoucherGlLine" ADD COLUMN IF NOT EXISTS "type" "EntryType" NOT NULL
 ALTER TABLE "VoucherGlLine" ADD COLUMN IF NOT EXISTS "amount" DECIMAL(14,2) NOT NULL;
 ALTER TABLE "VoucherGlLine" ADD COLUMN IF NOT EXISTS "description" TEXT;
 ALTER TABLE "VoucherGlLine" ALTER COLUMN "description" DROP NOT NULL;
-ALTER TABLE "VoucherGlLine" ADD COLUMN IF NOT EXISTS "branchId" TEXT;
-ALTER TABLE "VoucherGlLine" ALTER COLUMN "branchId" DROP NOT NULL;
 ALTER TABLE "VoucherGlLine" ADD COLUMN IF NOT EXISTS "role" "VoucherGlRole";
 ALTER TABLE "VoucherGlLine" ALTER COLUMN "role" DROP NOT NULL;
 ALTER TABLE "VoucherGlLine" ADD COLUMN IF NOT EXISTS "seq" INTEGER;
@@ -5833,9 +5830,6 @@ CREATE INDEX IF NOT EXISTS "VoucherGlLine_universalVoucherId_idx" ON "VoucherGlL
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "VoucherGlLine_accountId_universalVoucherId_idx" ON "VoucherGlLine"("accountId", "universalVoucherId");
-
--- CreateIndex
-CREATE INDEX IF NOT EXISTS "VoucherGlLine_branchId_accountId_idx" ON "VoucherGlLine"("branchId", "accountId");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "VoucherLink_kind_targetId_idx" ON "VoucherLink"("kind", "targetId");

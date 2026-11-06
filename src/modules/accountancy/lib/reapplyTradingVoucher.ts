@@ -70,7 +70,7 @@ export async function reapplyTradingVoucherInPlace(
         await tx.voucherGlLine.deleteMany({ where: { universalVoucherId: journalEntryId } });
         // `glLineRow` — the SAME mapper the posting engine writes through. This
         // used to be a hand-written copy of five fields, which meant an edit threw
-        // away `role`, `method`, `reference` and `branchId` every single time. A
+        // away `role`, `method` and `reference` every single time. A
         // dropped `role=TENDER` cannot be rebuilt from anything (a tag has no
         // ledger leg behind it), so one edit permanently convinced the counter
         // that a paid-in-cash bill was still owed. Rebuild through the mapper and
@@ -78,7 +78,7 @@ export async function reapplyTradingVoucherInPlace(
         await tx.voucherGlLine.createMany({
             data: spec.glLines.map((l, idx) => ({
                 universalVoucherId: journalEntryId,
-                ...glLineRow(l, idx, branchId),
+                ...glLineRow(l, idx),
             })),
         });
         // The lines were just re-minted: carry each bank tick to its twin.

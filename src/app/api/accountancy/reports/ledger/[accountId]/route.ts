@@ -71,13 +71,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
             orderBy: [{ universalVoucher: { date: "asc" } }, { id: "asc" }],
             include: {
                 universalVoucher: {
-                    select: { id: true, date: true, voucherNo: true, description: true, type: true },   // 5D-7: UVNo = id
+                    select: { id: true, date: true, voucherNo: true, description: true, type: true, branchId: true },   // 5D-7: UVNo = id
                 },
             },
         });
 
-        // Branch names by id — VoucherGlLine carries a scalar branchId (no relation).
-        const branchIds = [...new Set(lines.map((l) => l.branchId).filter((x): x is string => x != null))];
+        // Branch names by id — read off the voucher, as the Day Book does.
+        const branchIds = [...new Set(lines.map((l) => l.universalVoucher.branchId).filter((x): x is string => x != null))];
         const branchRows = branchIds.length
             ? await prisma.branch.findMany({ where: { id: { in: branchIds } }, select: { id: true, name: true } })
             : [];
@@ -107,8 +107,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ accountI
                 reference: l.universalVoucher.voucherNo ?? formatUvNo(l.universalVoucher.id),
                 description: l.universalVoucher.description ?? "",
                 lineDescription: l.description,
-                branchId: l.branchId ?? null,
-                branchName: l.branchId ? (branchNameById.get(l.branchId) ?? null) : null,
+                branchId: l.universalVoucher.branchId ?? null,
+                branchName: l.universalVoucher.branchId ? (branchNameById.get(l.universalVoucher.branchId) ?? null) : null,
                 debit: l.type === "DEBIT" ? toNumber(l.amount) : null,
                 credit: l.type === "CREDIT" ? toNumber(l.amount) : null,
                 balance: runningBalance,

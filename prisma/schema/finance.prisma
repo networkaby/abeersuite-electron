@@ -207,7 +207,9 @@ model VoucherGlLine {
   type               EntryType
   amount             Decimal          @db.Decimal(14, 2)
   description        String?
-  branchId           String?
+  // No per-line branchId: a line belongs to its voucher's branch (UniversalVoucher.branchId).
+  // The copy was dropped 2026-11-06 — some save paths left it blank, so the ledger
+  // showed no branch where the Day Book did.
 
   // Phase 4 G4: self-describing line — `role` = which section of the voucher
   // form this leg belongs to (BODY/TAX/TENDER/CHARGE/…), `seq` = its ordinal
@@ -238,7 +240,6 @@ model VoucherGlLine {
   @@index([accountId])
   @@index([universalVoucherId])
   @@index([accountId, universalVoucherId])
-  @@index([branchId, accountId])
 }
 
 // ── Cross-module connections (Phase 5 G…/5A) ─────────────────────────────

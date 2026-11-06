@@ -69,13 +69,12 @@ export interface EngineGlLine {
  * Keeping one mapper is what stops that happening again: a field added here
  * reaches every writer, and no writer can quietly omit one.
  */
-export function glLineRow(l: EngineGlLine, idx: number, branchId: string | null) {
+export function glLineRow(l: EngineGlLine, idx: number) {
     return {
         accountId:   l.accountId,
         type:        l.type,
         amount:      round2(toNumber(l.amount)),
         description: l.description ?? null,
-        branchId,
         role:        l.role ?? null,        // form-section tag
         seq:         l.seq ?? idx,          // ordinal (form order)
         method:      l.method ?? null,      // tender channel
@@ -189,7 +188,7 @@ export async function engineGlArm(
 
     // ── The single GL writer (Phase 4 G5 — legacy JournalEntry/JournalLine dropped) ─
     // The universal-voucher spine + VoucherGlLine children ARE the GL now.
-    const glLineBase = lines.map((l, idx) => glLineRow(l, idx, branchId));
+    const glLineBase = lines.map((l, idx) => glLineRow(l, idx));
 
     // Phase 5 5.0 — ATTACH mode: the draft spine already exists (created at
     // voucher-save by engineCreateSpine). Fill its GL lines + flip DRAFT→POSTED.
