@@ -5,7 +5,7 @@
 // P → ½ → A → L → clear, and a cleared cell reads off the calendar again
 // (weekly off, holiday, approved leave, or unmarked).
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { GatedLink } from "@/shared/components/GatedLink";
 import axios from "axios";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ import { CalendarCheck, ChevronLeft, ChevronRight, ListChecks } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import UserAvatar from "@/shared/components/UserAvatar";
+import { HelpButton } from "@/shared/components/HelpButton";
 import { DataPageHeader } from "@/shared/components/DataPageHeader";
 import { QueryStateBlock } from "@/shared/components/QueryStateBlock";
 import { useApiResource, useRealtimeTopics } from "@/shared/hooks";
@@ -113,6 +114,9 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                     icon={<CalendarCheck size={20} />}
                     actions={
                         <div className="flex items-center gap-1">
+                            <HelpButton title="Reading the attendance register">
+                                <RegisterHelp canEdit={canEdit} />
+                            </HelpButton>
                             {canEdit && from <= today && (
                                 <Button type="button" variant="outline" size="sm" className="mr-2" disabled={!data} onClick={() => setBulkDay("")}>
                                     <ListChecks size={14} /> Bulk mark
@@ -132,6 +136,20 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                             {ATTENDANCE_STATUS_META[s].label}
                         </span>
                     ))}
+                    <span className="inline-flex items-center gap-1 border-l border-border pl-3">
+                        <span className={`inline-flex h-4 w-5 items-center justify-center rounded text-[10px] font-semibold ring-1 ring-emerald-400/60 ${CELL.PRESENT}`}>P</span>
+                        Auto (till)
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                        <span className={`inline-flex h-4 w-5 items-center justify-center rounded text-[10px] font-semibold ${CELL.PRESENT}`}>P</span>
+                        Manual (office)
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                        <span className={`relative inline-flex h-4 w-5 items-center justify-center rounded text-[10px] font-semibold ${CELL.PRESENT}`}>
+                            P<span aria-hidden className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                        </span>
+                        Late
+                    </span>
                     {canEdit && <span className="ml-auto">Click a day to mark it: P → ½ → A → L → clear. Click a date at the top, or Bulk mark, to mark many at once. The till marks sign-ins itself.</span>}
                 </p>
 
@@ -256,5 +274,67 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                 )}
             </div>
         </ScrollArea>
+    );
+}
+
+/** A sample cell for the help box. */
+function Box({ children, ring, late }: { children: ReactNode; ring?: boolean; late?: boolean }) {
+    return (
+        <span className={`relative inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[11px] font-semibold ${CELL.PRESENT} ${ring ? "ring-1 ring-emerald-400/60" : ""}`}>
+            {children}
+            {late && <span aria-hidden className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full bg-amber-500" />}
+        </span>
+    );
+}
+
+/** The "Help" box on the register — what every mark on the grid means. */
+function RegisterHelp({ canEdit }: { canEdit: boolean }) {
+    return (
+        <>
+            <section className="space-y-2">
+                <h3 className="font-semibold">Letters in a box</h3>
+                <ul className="grid grid-cols-2 gap-1.5">
+                    {(Object.keys(ATTENDANCE_STATUS_META) as AttendanceStatus[]).map((s) => (
+                        <li key={s} className="flex items-center gap-2">
+                            <span className={`inline-flex h-6 w-6 items-center justify-center rounded text-[11px] font-semibold ${CELL[s]}`}>{ATTENDANCE_STATUS_META[s].short}</span>
+                            {ATTENDANCE_STATUS_META[s].label}
+                        </li>
+                    ))}
+                    <li className="flex items-center gap-2">
+                        <span className="inline-flex h-6 w-6 rounded border border-dashed border-border" /> Not marked yet
+                    </li>
+                </ul>
+            </section>
+
+            <section className="space-y-2">
+                <h3 className="font-semibold">Auto or manual — where the mark came from</h3>
+                <p className="flex items-center gap-3"><Box ring>P</Box><span><b>Thin green ring = Auto.</b> The till saw the person sign in and counted the hours. The app chose P / ½ / A from those hours by itself.</span></p>
+                <p className="flex items-center gap-3"><Box>P</Box><span><b>No ring = Manual.</b> Someone in the office marked this day. A manual mark wins over the till.</span></p>
+                <p className="text-muted-foreground">Not sure? Hold the mouse on a box. It shows the in / out time (auto) or &quot;marked by office&quot; (manual).</p>
+            </section>
+
+            <section className="space-y-2">
+                <h3 className="font-semibold">The orange dot</h3>
+                <p className="flex items-center gap-3"><Box ring late>P</Box><span><b>Orange dot = came late.</b> It is not a different status — a full day worked late is still P. Hold the mouse on the box to see by how much.</span></p>
+            </section>
+
+            <section className="space-y-2">
+                <h3 className="font-semibold">Totals on the right</h3>
+                <p><b>P</b> present days (a half day counts ½) · <b>A</b> absent · <b>ID</b> incomplete duty — came, but worked too few hours · <b>L</b> leave.</p>
+            </section>
+
+            {canEdit && (
+                <section className="space-y-2">
+                    <h3 className="font-semibold">Marking</h3>
+                    <ul className="list-disc space-y-1 pl-5">
+                        <li><b>One box:</b> click it. Each click goes P → ½ → A → L → clear. Clearing a till day hands it back to Auto.</li>
+                        <li><b>Many boxes:</b> click <b>Bulk mark</b>, or click a date at the top to mark that day for everyone.</li>
+                        <li>Bulk mark never changes an Auto (till) day. To override one, click that box on its own.</li>
+                        <li>Future days cannot be marked.</li>
+                        <li>Click a name to see that person&apos;s hours day by day (Employee Activity).</li>
+                    </ul>
+                </section>
+            )}
+        </>
     );
 }
