@@ -37,6 +37,8 @@ interface Props {
 const monthLabel = (iso: string) =>
     new Date(`${iso}T00:00:00`).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
 
+const lastLedgerKey = (loanId: number) => `chargeInterest:ledger:${loanId}`;
+
 export function ChargeInterestDialog({ open, onOpenChange, loan, outstanding, onSaved }: Props) {
     const { accounts } = useGlAccounts();
     // Parent mounts this only while open, so state starts fresh each time.
@@ -46,12 +48,16 @@ export function ChargeInterestDialog({ open, onOpenChange, loan, outstanding, on
     const [narration, setNarration] = useState(() => loan ? `Interest for ${monthLabel(toIsoDate(new Date()))} – ${loan.name}` : "");
     const [saving, setSaving] = useState(false);
 
-    // Default ledger: an expense ledger with "interest" in its name.
-    const defaultInterest = useMemo(
-        () => accounts.find((a) => /interest/i.test(a.name) && a.group?.type === "EXPENSE")
-            ?? accounts.find((a) => /interest/i.test(a.name) && a.id !== loan?.id),
-        [accounts, loan?.id],
-    );
+    // Default ledger: the one last used for THIS loan (remembered on this
+    // computer), else a ledger named exactly "Interest on Loan", else blank.
+    // Never a fuzzy "interest" match — that picked another loan's ledger
+    // (e.g. "Bandhan Bank Interest" for Wife Loan).
+    const defaultInterest = useMemo(() => {
+        if (!loan) return undefined;
+        const saved = Number(typeof window !== "undefined" ? localStorage.getItem(lastLedgerKey(loan.id)) : 0);
+        return accounts.find((a) => a.id === saved && a.id !== loan.id)
+            ?? accounts.find((a) => a.name.trim().toLowerCase() === "interest on loan");
+    }, [accounts, loan]);
     const interestId = pickedId ?? defaultInterest?.id ?? null;
 
     // Suggestion only — never fills the box (staff decide the figure).
@@ -78,6 +84,7 @@ export function ChargeInterestDialog({ open, onOpenChange, loan, outstanding, on
                     ],
                 },
             );
+            localStorage.setItem(lastLedgerKey(loan.id), String(interestId));
             toast.success(`Interest ${fmt(value)} charged (${res.data.reference ?? `UV-${res.data.voucherId}`})`);
             onSaved();
             onOpenChange(false);
@@ -147,7 +154,7 @@ export function ChargeInterestDialog({ open, onOpenChange, loan, outstanding, on
                         />
                         {!defaultInterest && (
                             <p className="text-xs text-muted-foreground">
-                                No interest ledger yet — type “Interest on Loan” and create it under Indirect Expenses.
+                                Pick this loan’s interest ledger (it is remembered next time), or type “Interest on Loan” and create it under Indirect Expenses.
                             </p>
                         )}
                     </div>
