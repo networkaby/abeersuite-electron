@@ -24,6 +24,7 @@ export default function LoanLedgersPage() {
             // shows up automatically, no need to list Secured/Unsecured/Bank OD here.
             groupNames={BOOK_GROUPS}
             emptyMessage="No loan accounts. Add ledgers under Loans (Liability) / Secured Loans / Unsecured Loans / Bank OD A/c / Credit Card / BNPL A/c."
+            chargeInterest
             book={{
                 groupName: BOOK_GROUPS,
                 subtitle: "All loan, credit-card and BNPL ledgers with period totals — pick one to see its register.",
