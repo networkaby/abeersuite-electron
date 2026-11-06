@@ -165,10 +165,9 @@ export function VoucherRegisterTable({
     const fetchLines = (r: VoucherRegisterRow) => {
         if (lineCache.has(r.id)) return;
         setLineCache((c) => new Map(c).set(r.id, "loading"));
-        const url =
-            r.source === "inv" ? `/api/inventory/vouchers/${r.rawId}` :
-            r.source === "gl"  ? `/api/accountancy/vouchers/${r.rawId}` :
-                                  `/api/accountancy/journal-entries/${r.rawId}`;
+        const url = r.source === "inv"
+            ? `/api/inventory/vouchers/${r.rawId}`
+            : `/api/accountancy/vouchers/${r.rawId}`;   // gl and je are both spines
         axios.get<{ lines: Line[] }>(url)
             .then((res) => setLineCache((c) => new Map(c).set(r.id, res.data.lines ?? [])))
             .catch(() => setLineCache((c) => new Map(c).set(r.id, "error")));

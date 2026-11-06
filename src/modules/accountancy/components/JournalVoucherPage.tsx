@@ -57,9 +57,11 @@ type LoadedJeLine = {
 
 type LoadedJe = {
     id:          number;
-    reference:   string;
-    date:        string;
-    description: string | null;
+    voucherNo:      string | null;
+    date:           string;
+    narration:      string | null;
+    description:    string | null;
+    partyAccountId: number | null;
     status:      "DRAFT" | "POSTED" | "CANCELLED";
     cancelledAt: string | null;
     lines:       LoadedJeLine[];
@@ -245,13 +247,13 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
     useEffect(() => {
         if (!isEditing || voucherId == null) return;
         let cancelled = false;
-        axios.get<LoadedJe>(`/api/accountancy/journal-entries/${voucherId}`)
+        axios.get<LoadedJe>(`/api/accountancy/vouchers/${voucherId}`)
             .then((r) => {
                 if (cancelled) return;
                 const v = r.data;
                 setLoadedJe(v);
                 setDate(v.date.slice(0, 10));
-                setNarration(v.description ?? "");
+                setNarration(v.narration ?? v.description ?? "");
 
                 // Map lines — stock-item reconstruction from descriptions is
                 // out of scope (v1); editing a stock-tagged JE strips the
@@ -270,7 +272,7 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
 
                 originalSnapshotRef.current = {
                     date:      v.date.slice(0, 10),
-                    narration: (v.description ?? "").trim(),
+                    narration: (v.narration ?? v.description ?? "").trim(),
                     lines:     normalizeLines(v.lines.map((l) => ({
                         accountId:   l.accountId,
                         type:        l.type,
@@ -409,19 +411,21 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
 
             setSaving(true);
             try {
-                // JE PATCH endpoint doesn't accept stockItems — strip them.
+                // The voucher PATCH does not take stockItems — strip them.
                 const apiLines = payloadLines.map((l) => ({
                     accountId:   l.accountId,
                     type:        l.type,
                     amount:      l.amount,
                     description: l.description,
                 }));
-                await axios.patch(`/api/accountancy/journal-entries/${voucherId}`, {
+                await axios.patch(`/api/accountancy/vouchers/${voucherId}`, {
                     date,
-                    description: narration.trim() || undefined,
-                    lines:       apiLines,
+                    narration:      narration.trim() || undefined,
+                    // Keep the party the journal already settles with; omitted = cleared.
+                    partyAccountId: loadedJe?.partyAccountId ?? undefined,
+                    lines:          apiLines,
                 });
-                toast.success(`Journal voucher ${loadedJe?.reference ?? ""} updated`);
+                toast.success(`Journal voucher ${loadedJe?.voucherNo ?? ""} updated`);
                 if (print) openReceipt(voucherId);
                 closeForm();
             } catch (err: unknown) {
@@ -483,7 +487,7 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
                             <label className="text-muted-foreground uppercase tracking-wide">No.</label>
                             <span className="font-mono tabular-nums px-2 py-1 rounded bg-muted/40 border border-border min-w-[140px] text-center">
                                 {isEditing
-                                    ? (loadedJe?.reference ?? (loading ? "Loading…" : "—"))
+                                    ? (loadedJe?.voucherNo ?? (loadedJe ? `UV-${loadedJe.id}` : null) ?? (loading ? "Loading…" : "—"))
                                     : (nextRef || "Generating…")}
                             </span>
                         </div>
@@ -705,7 +709,7 @@ export function JournalVoucherPage({ voucherId, onClose }: { voucherId?: number;
                     <div className="mr-auto flex items-center gap-3">
                         <LifecycleActions
                             voucher={loadedJe}
-                            apiBasePath={`/api/accountancy/journal-entries/${voucherId}`}
+                            apiBasePath={`/api/accountancy/vouchers/${voucherId}`}
                             listPath={listPath}
                             label="Journal Voucher"
                             canCancel={canCancel}
