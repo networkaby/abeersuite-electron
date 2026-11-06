@@ -61,9 +61,16 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
         setYear(d.getUTCFullYear()); setMonth(d.getUTCMonth() + 1); setOverrides({});
     };
 
-    const mark = async (userId: number, iso: string, current: AttendanceStatus | null) => {
+    /**
+     * `shut` is the day's own off status (holiday / weekly off) for this person.
+     * On such a day the cycle starts with it — a manual W / H says "it was an
+     * off day, the till's minutes were not work" (testing on the off day, owner
+     * 2026-11-06), so payroll pays no extra duty on it.
+     */
+    const mark = async (userId: number, iso: string, current: AttendanceStatus | null, shut: "HOLIDAY" | "WEEKLY_OFF" | null) => {
         if (!canEdit || iso > today) return;
-        const next = CYCLE[(CYCLE.indexOf(current) + 1) % CYCLE.length];
+        const cycle = shut ? [shut, ...CYCLE] : CYCLE;
+        const next = cycle[(cycle.indexOf(current) + 1) % cycle.length];
         const key = `${userId}|${iso}`;
         const before = overrides[key];
         // An office mark carries no worked minutes of its own — it is HR overruling
@@ -156,7 +163,7 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                         </span>
                         Late
                     </span>
-                    {canEdit && <span className="ml-auto">Click a day to mark it: P → ½ → A → L → Auto. Click a date at the top, or Bulk mark, to mark many at once. The till marks sign-ins itself.</span>}
+                    {canEdit && <span className="ml-auto">Click a day to mark it: P → ½ → A → L → Auto (W / H first on off days). Click a date at the top, or Bulk mark, to mark many at once. The till marks sign-ins itself.</span>}
                 </p>
 
                 <QueryStateBlock loading={loading} error={error} hasData={!!data} onRetry={reload} />
@@ -215,6 +222,7 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                                                 const status = r.kind === "marked" ? r.status : null;
                                                 const stored = r.kind === "marked" && r.stored;
                                                 const m = p.marks[iso];
+                                                const shut = mine.has(iso) ? "HOLIDAY" as const : p.weeklyOff.includes(weekdayOf(iso)) ? "WEEKLY_OFF" as const : null;
                                                 // The hours belong in the tooltip: a bare "½" that nobody can
                                                 // question is worse than no grade at all, and this is the number
                                                 // the grade was worked out from.
@@ -239,9 +247,10 @@ export default function AttendanceRegister({ canEdit }: { canEdit: boolean; self
                                                             title={tip}
                                                             aria-label={`${p.name}, ${iso}: ${tip}`}
                                                             disabled={!canEdit || iso > today}
-                                                            // An Auto (till) day starts the cycle at P, so a manual P is always
-                                                            // one click away: Auto → P → ½ → A → L → Auto.
-                                                            onClick={() => void mark(p.id, iso, stored && m?.source !== "COUNTER" ? status : null)}
+                                                            // Auto (till) day: the cycle starts at its top — W / H on an off
+                                                            // day, else P. A plain calendar W / H starts after it (it already
+                                                            // reads W / H). Manual: steps on from its own mark.
+                                                            onClick={() => void mark(p.id, iso, m?.source === "COUNTER" ? null : stored ? status : shut, shut)}
                                                             className={`relative inline-flex h-6 w-6 items-center justify-center rounded text-[11px] font-semibold ${status ? CELL[status] : "border border-dashed border-border text-muted-foreground/60"} ${stored && m?.source === "COUNTER" ? "ring-1 ring-emerald-400/60" : ""} ${canEdit && iso <= today ? "cursor-pointer hover:ring-2 hover:ring-primary/40" : "cursor-default"}`}
                                                         >
                                                             {status ? ATTENDANCE_STATUS_META[status].short : ""}
@@ -335,7 +344,7 @@ function RegisterHelp({ canEdit }: { canEdit: boolean }) {
                 <section className="space-y-2">
                     <h3 className="font-semibold">Marking</h3>
                     <ul className="list-disc space-y-1 pl-5">
-                        <li><b>One box:</b> click it. Each click goes P → ½ → A → L → <b>Auto</b>. On an Auto (green ring) box the first click is always manual P. Auto removes the office mark: if the till recorded that day, the till&apos;s own answer comes back with the green ring; if not, the box shows the calendar again (weekly off, holiday, leave or empty).</li>
+                        <li><b>One box:</b> click it. Each click goes P → ½ → A → L → <b>Auto</b>. On an Auto (green ring) box the first click is always manual P. On a weekly off or holiday the cycle starts with a manual <b>W</b> / <b>H</b>: use it when the till shows activity on an off day that was not real work (testing, a quick check) — it removes the green ring and no extra duty is paid. Auto removes the office mark: if the till recorded that day, the till&apos;s own answer comes back with the green ring; if not, the box shows the calendar again (weekly off, holiday, leave or empty).</li>
                         <li><b>Many boxes:</b> click <b>Bulk mark</b>, or click a date at the top to mark that day for everyone.</li>
                         <li>Bulk mark never overrides an Auto (till) day — click that box on its own. Its <b>Auto</b> option sets many manual days back to Auto at once.</li>
                         <li>Future days cannot be marked.</li>
