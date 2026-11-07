@@ -1,4 +1,5 @@
 import type { InvProduct } from "@/generated/prisma/client";
+import type { ShopStatus } from "@/generated/prisma/enums";
 import { invProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 import { readPhotoChecklist, type PhotoChecklist } from "@/modules/ecommerce/lib/photoChecklist";
@@ -9,7 +10,14 @@ export type ShopProductAdmin = ShopProductPublic & {
     stock: number | null;
     lowStockThreshold: number;
     isActive: boolean;
+    /** Live in the shop right now (PUBLISHED and the publish rules met). */
     isListedInShop: boolean;
+    /** Staff's stage: UNPUBLISHED → DRAFT → PUBLISHED ("Pending" = PUBLISHED, not live). */
+    shopStatus: ShopStatus;
+    /** When Claude's draft arrived, waiting for staff (null = none). */
+    copyDraftAt: string | null;
+    /** The draft itself (a ProductCopy) — only GET /api/ecommerce/products/[id] sends it. */
+    copyDraft?: unknown;
     /** Per-product override: accept orders even at zero stock (backorder). */
     allowBackorder: boolean;
     unitId: number;
@@ -42,7 +50,7 @@ export type ShopProductAdmin = ShopProductPublic & {
 };
 
 export function invProductToAdmin(
-    p: InvProduct & {
+    p: Omit<InvProduct, "copyDraftJson"> & {
         category?: { name: string } | null;
         brand?: { name: string } | null;
         group?: { name: string } | null;
@@ -69,6 +77,8 @@ export function invProductToAdmin(
         lowStockThreshold: p.lowStockThreshold,
         isActive: p.isActive,
         isListedInShop: p.isListedInShop,
+        shopStatus: p.shopStatus,
+        copyDraftAt: p.copyDraftAt?.toISOString() ?? null,
         allowBackorder: p.allowBackorder,
         unitId: p.unitId,
         categoryId: p.categoryId,

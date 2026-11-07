@@ -4,7 +4,7 @@ import { syncMainCollections } from "@/modules/inventory/lib/productCollections"
 import { NextResponse } from "next/server";
 import { requireAuth, requireModuleAccess } from "@/shared/lib/auth/permissions";
 import { invProductToAdmin } from "@/modules/ecommerce/lib/productAdmin";
-import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
+import { nextShopStatus, resolveShopListing, SHOP_STATUSES } from "@/modules/ecommerce/lib/shopListing";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { prismaUniqueError } from "@/shared/lib/api";
@@ -41,6 +41,7 @@ const createSchema = z.object({
     breadthCm: z.coerce.number().int().min(0).max(1000).optional().nullable(),
     heightCm: z.coerce.number().int().min(0).max(1000).optional().nullable(),
     isListedInShop: z.boolean().optional(),
+    shopStatus: z.enum(SHOP_STATUSES).optional(),
     allowBackorder: z.boolean().optional(),
     isActive: z.boolean().optional(),
 });
@@ -73,6 +74,8 @@ export async function GET(req: Request) {
                 ...(shopCategory && shopCategory !== "all" ? { shopCategory } : {}),
             },
             include: productInclude,
+            // Claude's draft is read on the product's own page only; the list needs copyDraftAt.
+            omit: { copyDraftJson: true },
             orderBy: [{ shopCategory: "asc" }, { id: "desc" }],
         });
         return NextResponse.json(products.map((p) => invProductToAdmin(p, bands)));
@@ -99,6 +102,8 @@ export async function POST(req: Request) {
         // Auto-qualify / auto-slug. A new product has no saved sale price yet, so
         // the qualification price falls back to the effective price (pricePaise).
         const [bands, rules] = await Promise.all([loadBarcodeBands(), loadShopPublishRules()]);
+        // Made on the shop's product form = someone is working on it: Draft.
+        const shopStatus = nextShopStatus("UNPUBLISHED", { status: b.shopStatus, listed: b.isListedInShop });
         const listing = resolveShopListing(
             {
                 name: b.name,
@@ -117,14 +122,8 @@ export async function POST(req: Request) {
                 effectiveSalePricePaise: b.pricePaise ?? null,
                 slug: b.slug?.trim() || null,
             },
-            { explicitListed: b.isListedInShop, bands, rules }
+            { status: shopStatus, bands, rules }
         );
-        if (!listing.ok) {
-            return NextResponse.json(
-                { error: `Cannot list in shop — missing: ${listing.missing.join(", ")}` },
-                { status: 422 }
-            );
-        }
 
         if (listing.slug) {
             const clash = await shopSlugClash(listing.slug, { kind: "product" });
@@ -157,6 +156,7 @@ export async function POST(req: Request) {
                 breadthCm: b.breadthCm ?? null,
                 heightCm: b.heightCm ?? null,
                 isListedInShop: listing.isListedInShop,
+                shopStatus,
                 allowBackorder: b.allowBackorder ?? false,
                 isActive: b.isActive ?? true,
             },

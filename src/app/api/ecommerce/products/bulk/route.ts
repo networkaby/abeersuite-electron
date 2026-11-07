@@ -8,11 +8,11 @@ import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
 
-// Bulk publish / unpublish for the ecommerce Products list.
-// - unpublish: clears isListedInShop for every id (no gate).
-// - publish: only lists ids that meet the org's publish rules; the rest are
-//   reported as `skipped`. Auto-fills a slug when a newly-listed product lacks
-//   one (mirrors the single-product publish path).
+// Bulk Publish / Unpublish for the E-Commerce Products list (owner, 2026-11-07).
+// - publish: every id becomes PUBLISHED. Those meeting the publish rules go live;
+//   the rest are Pending and go live by themselves once fixed. A live product
+//   with no slug gets one (same as the single-product save).
+// - unpublish: back to DRAFT and off the shop — someone is fixing it.
 
 const schema = z.object({
     ids: z.array(z.coerce.number().int().positive()).min(1).max(5000),
@@ -30,12 +30,11 @@ export async function POST(req: Request) {
         if (action === "unpublish") {
             const res = await prisma.invProduct.updateMany({
                 where: { id: { in: ids } },
-                data: { isListedInShop: false },
+                data: { shopStatus: "DRAFT", isListedInShop: false },
             });
-            return NextResponse.json({ published: 0, skipped: 0, unpublished: res.count });
+            return NextResponse.json({ published: 0, pending: 0, unpublished: res.count });
         }
 
-        // publish — gate each product by the current rules
         const [bands, rules] = await Promise.all([loadBarcodeBands(), loadShopPublishRules()]);
         const products = await prisma.invProduct.findMany({
             where: { id: { in: ids } },
@@ -47,9 +46,9 @@ export async function POST(req: Request) {
             },
         });
 
-        const readyWithSlug: number[] = [];
-        const readyNeedSlug: { id: number; slug: string | null }[] = [];
-        let skipped = 0;
+        const liveWithSlug: number[] = [];
+        const liveNeedSlug: { id: number; slug: string | null }[] = [];
+        const pending: number[] = [];
 
         for (const p of products) {
             const gallery = Array.isArray(p.galleryJson)
@@ -65,40 +64,42 @@ export async function POST(req: Request) {
                     savedSalePricePaise: p.savedSalePricePaise, mrpPaise: p.mrpPaise,
                     effectiveSalePricePaise: p.effectiveSalePricePaise, slug: p.slug,
                 },
-                { explicitListed: true, bands, rules }
+                { status: "PUBLISHED", bands, rules }
             );
-            if (!listing.ok) { skipped++; continue; }
-            if (p.slug) readyWithSlug.push(p.id);
-            else readyNeedSlug.push({ id: p.id, slug: listing.slug });
+            if (!listing.isListedInShop) pending.push(p.id);
+            else if (p.slug) liveWithSlug.push(p.id);
+            else liveNeedSlug.push({ id: p.id, slug: listing.slug });
         }
 
+        if (pending.length) {
+            await prisma.invProduct.updateMany({
+                where: { id: { in: pending } },
+                data: { shopStatus: "PUBLISHED", isListedInShop: false },
+            });
+        }
         let published = 0;
-        if (readyWithSlug.length) {
+        if (liveWithSlug.length) {
             const r = await prisma.invProduct.updateMany({
-                where: { id: { in: readyWithSlug } },
-                data: { isListedInShop: true },
+                where: { id: { in: liveWithSlug } },
+                data: { shopStatus: "PUBLISHED", isListedInShop: true },
             });
             published += r.count;
         }
-        // Slug-less rows need per-row updates (unique slug). Tolerate the rare
-        // slug collision by skipping that one product.
-        for (const it of readyNeedSlug) {
-            try {
-                if (it.slug && (await shopSlugClash(it.slug, { kind: "product", id: it.id }))) {
-                    skipped++;
-                    continue;
-                }
-                await prisma.invProduct.update({
-                    where: { id: it.id },
-                    data: { isListedInShop: true, ...(it.slug ? { slug: it.slug } : {}) },
-                });
-                published++;
-            } catch {
-                skipped++;
-            }
+        // Slug-less rows need per-row updates (unique slug). A rare slug clash
+        // leaves that one Pending — published, waiting for a slug.
+        for (const it of liveNeedSlug) {
+            const clash = it.slug ? await shopSlugClash(it.slug, { kind: "product", id: it.id }) : null;
+            await prisma.invProduct.update({
+                where: { id: it.id },
+                data: clash || !it.slug
+                    ? { shopStatus: "PUBLISHED", isListedInShop: false }
+                    : { shopStatus: "PUBLISHED", isListedInShop: true, slug: it.slug },
+            });
+            if (clash || !it.slug) pending.push(it.id);
+            else published++;
         }
 
-        return NextResponse.json({ published, skipped, unpublished: 0 });
+        return NextResponse.json({ published, pending: pending.length, unpublished: 0 });
     } catch (e) {
         return handleApiError(e, "Bulk update failed");
     }

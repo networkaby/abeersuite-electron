@@ -60,7 +60,10 @@ const STICKY_HEAD =
 const COL_COUNT = 11;
 const PAGE_SIZE = 25;
 
-type TabKey = "all" | "published" | "pending";
+/** Shop stages (owner, 2026-11-07): Unpublished → Draft → Published (live) / Pending. */
+type TabKey = "all" | ProductStatus["kind"];
+const TAB_KEYS: TabKey[] = ["all", "unpublished", "draft", "live", "pending"];
+const TAB_LABEL: Record<TabKey, string> = { all: "All", unpublished: "Unpublished", draft: "Draft", live: "Published", pending: "Pending" };
 // Persist the list view (page / filters / scroll) per browser tab so leaving for
 // a product's Edit page and coming back (Esc → router.back) returns to the same
 // place instead of resetting to page 1.
@@ -81,25 +84,30 @@ function loadSavedView(): Partial<SavedView> {
     }
 }
 
-function StatusBadge({ status }: { status: ProductStatus }) {
-    if (status.kind === "live") {
-        return (
-            <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-700">
-                <CheckCircle2 className="size-3" /> Live
-            </Badge>
-        );
-    }
-    if (status.kind === "ready") {
-        return (
-            <Badge variant="outline" className="gap-1 border-amber-200 bg-amber-50 text-amber-700">
-                <CircleDashed className="size-3" /> Ready
-            </Badge>
-        );
-    }
-    return (
-        <Badge variant="outline" className="gap-1 border-border bg-muted/40 text-muted-foreground">
-            <AlertCircle className="size-3" /> Needs info
+function StatusBadge({ status, claudeDraft }: { status: ProductStatus; claudeDraft?: boolean }) {
+    const badge = status.kind === "live" ? (
+        <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-700">
+            <CheckCircle2 className="size-3" /> Published
         </Badge>
+    ) : status.kind === "pending" ? (
+        <Badge variant="outline" className="gap-1 border-amber-200 bg-amber-50 text-amber-700" title={`Needs ${status.missing.join(", ").toLowerCase()}`}>
+            <AlertCircle className="size-3" /> Pending
+        </Badge>
+    ) : status.kind === "draft" ? (
+        <Badge variant="outline" className="gap-1 border-sky-200 bg-sky-50 text-sky-700">
+            <CircleDashed className="size-3" /> Draft
+        </Badge>
+    ) : (
+        <Badge variant="outline" className="gap-1 border-border bg-muted/40 text-muted-foreground">
+            Unpublished
+        </Badge>
+    );
+    if (!claudeDraft) return badge;
+    return (
+        <span className="inline-flex items-center gap-1" title="AI draft waiting for review">
+            {badge}
+            <Sparkles className="size-3.5 text-violet-600" />
+        </span>
     );
 }
 
@@ -158,7 +166,7 @@ export default function EcommerceProductsPage() {
         viewRestored.current = true;
         const saved = loadSavedView();
         // eslint-disable-next-line react-hooks/set-state-in-effect -- restores the saved list view from sessionStorage once after mount; reading it during render would desync from the server HTML
-        if (saved.tab) setTab(saved.tab);
+        if (saved.tab && TAB_KEYS.includes(saved.tab)) setTab(saved.tab);
         if (saved.page) setPage(saved.page);
         if (saved.pageSize) setPageSize(saved.pageSize);
         if (saved.filters) setFilters({ ...EMPTY_PRODUCT_FILTERS, ...saved.filters });
@@ -167,19 +175,17 @@ export default function EcommerceProductsPage() {
 
     const filterOptions = useMemo(() => productFilterOptions(products), [products]);
 
+    // One status per product, shared by the tab counts, the tab filter and the rows.
+    const statusOf = useMemo(() => new Map(products.map((p) => [p.id, productStatus(p, rules)])), [products, rules]);
     const counts = useMemo(() => {
-        let published = 0;
-        for (const p of products) if (p.isListedInShop) published++;
-        return { all: products.length, published, pending: products.length - published };
-    }, [products]);
+        const c: Record<TabKey, number> = { all: products.length, unpublished: 0, draft: 0, live: 0, pending: 0 };
+        for (const st of statusOf.values()) c[st.kind]++;
+        return c;
+    }, [products, statusOf]);
 
     const filtered = useMemo(
-        () => products.filter((p) => {
-            if (tab === "published" && !p.isListedInShop) return false;
-            if (tab === "pending" && p.isListedInShop) return false;
-            return matchesProductFilters(p, filters, rules);
-        }),
-        [products, tab, filters, rules]
+        () => products.filter((p) => (tab === "all" || statusOf.get(p.id)?.kind === tab) && matchesProductFilters(p, filters, rules)),
+        [products, tab, filters, rules, statusOf]
     );
 
     // Reset to page 1 when the filter actually changes — but NOT on the initial
@@ -270,17 +276,17 @@ export default function EcommerceProductsPage() {
         if (ids.length === 0) return;
         setBulkBusy(true);
         try {
-            const { data } = await axios.post<{ published: number; skipped: number; unpublished: number }>(
+            const { data } = await axios.post<{ published: number; pending: number; unpublished: number }>(
                 "/api/ecommerce/products/bulk",
                 { ids, action }
             );
             if (action === "publish") {
                 toast.success(
                     `Published ${data.published}` +
-                    (data.skipped ? ` · ${data.skipped} skipped (didn’t meet publish rules)` : "")
+                    (data.pending ? ` · ${data.pending} pending (live by themselves once their publish rules are met)` : "")
                 );
             } else {
-                toast.success(`Removed ${data.unpublished} from shop`);
+                toast.success(`${data.unpublished} back to Draft — off the shop`);
             }
             clearSelection();
             load();
@@ -296,12 +302,13 @@ export default function EcommerceProductsPage() {
     const togglePublish = async (p: ShopProductAdmin, next: boolean) => {
         setPublishing((s) => new Set(s).add(p.id));
         try {
+            // Unpublish = back to Draft: someone takes it off to fix it.
             const { data } = await axios.patch<ShopProductAdmin>(`/api/ecommerce/products/${p.id}`, {
-                isListedInShop: next,
+                shopStatus: next ? "PUBLISHED" : "DRAFT",
             });
             setProducts((prev) => prev.map((x) => (x.id === p.id ? data : x)));
             patchCachedAdminProduct(data);
-            toast.success(next ? "Published to shop" : "Removed from shop");
+            toast.success(!next ? "Back to Draft — off the shop" : data.isListedInShop ? "Published — live in the shop" : "Published — pending until its publish rules are met");
         } catch (e: unknown) {
             const msg =
                 axios.isAxiosError(e) && e.response?.data && typeof e.response.data === "object"
@@ -325,11 +332,7 @@ export default function EcommerceProductsPage() {
             return next;
         });
 
-    const tabs: { key: TabKey; label: string; count: number }[] = [
-        { key: "all", label: "All", count: counts.all },
-        { key: "published", label: "Published", count: counts.published },
-        { key: "pending", label: "Pending", count: counts.pending },
-    ];
+    const tabs = TAB_KEYS.map((key) => ({ key, label: TAB_LABEL[key], count: counts[key] }));
 
     return (
         <div className="flex h-full flex-col gap-4">
@@ -337,7 +340,7 @@ export default function EcommerceProductsPage() {
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">Products</h1>
                     <p className="text-muted-foreground text-sm">
-                        One catalogue across shop, POS and Sale vouchers. Publish a product once it’s shop-ready.
+                        One catalogue across shop, POS and Sale vouchers. Unpublished → Draft (being worked on) → Published; a published product missing a publish rule waits as Pending.
                     </p>
                 </div>
                 <Button asChild variant="outline" size="sm">
@@ -454,7 +457,7 @@ export default function EcommerceProductsPage() {
                     </TableHeader>
                     <TableBody>
                         {pageRows.map((p) => {
-                            const status = productStatus(p, rules);
+                            const status = statusOf.get(p.id) ?? productStatus(p, rules);
                             const shopPricePaise = p.barcodePricePaise ?? p.pricePaise;
                             const img = p.galleryUrls[0] ?? p.imageUrl;
                             const isOpen = expanded.has(p.id);
@@ -498,7 +501,7 @@ export default function EcommerceProductsPage() {
                                             {p.groupName ?? "—"}
                                         </TableCell>
                                         <TableCell>
-                                            <StatusBadge status={status} />
+                                            <StatusBadge status={status} claudeDraft={!!p.copyDraftAt} />
                                         </TableCell>
                                         <TableCell className="text-right tabular-nums">
                                             {shopPricePaise ? formatRupeesFromPaise(shopPricePaise) : "—"}
@@ -511,7 +514,7 @@ export default function EcommerceProductsPage() {
                                         </TableCell>
                                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-end gap-1.5">
-                                                {status.kind === "ready" ? (
+                                                {status.kind === "draft" ? (
                                                     <Button
                                                         size="sm"
                                                         disabled={publishing.has(p.id)}
@@ -519,7 +522,7 @@ export default function EcommerceProductsPage() {
                                                     >
                                                         {publishing.has(p.id) ? "…" : "Publish"}
                                                     </Button>
-                                                ) : status.kind === "live" ? (
+                                                ) : status.kind === "live" || status.kind === "pending" ? (
                                                     <Button
                                                         size="sm"
                                                         variant="outline"
@@ -569,10 +572,12 @@ export default function EcommerceProductsPage() {
                                                         label="Shop status"
                                                         value={
                                                             status.kind === "live"
-                                                                ? "Live on storefront"
-                                                                : status.kind === "ready"
-                                                                    ? "Ready — click Publish to list it in the shop"
-                                                                    : `Needs ${status.missing.join(", ").toLowerCase()} — add it, or relax Publish rules`
+                                                                ? "Published — live on the storefront"
+                                                                : status.kind === "pending"
+                                                                    ? `Pending — needs ${status.missing.join(", ").toLowerCase()}; goes live by itself once added`
+                                                                    : status.kind === "draft"
+                                                                        ? `Draft — being worked on${status.missing.length ? `; still needs ${status.missing.join(", ").toLowerCase()}` : ""}. Publish when done.`
+                                                                        : "Unpublished — not worked on yet. Any shop save moves it to Draft."
                                                         }
                                                     />
                                                     <div className="sm:col-span-2 lg:col-span-4">
@@ -626,11 +631,9 @@ export default function EcommerceProductsPage() {
                     <p className="text-muted-foreground p-8 text-center text-sm">
                         {query.trim() || activeFilterCount(filters) > 0
                             ? "No products match your filters."
-                            : tab === "published"
-                                ? "No products are published to the shop yet."
-                                : tab === "pending"
-                                    ? "Nothing pending — every product is published."
-                                    : "No products."}
+                            : tab === "all"
+                                ? "No products."
+                                : `No ${TAB_LABEL[tab].toLowerCase()} products.`}
                     </p>
                 ) : null}
             </div>

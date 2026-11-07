@@ -77,11 +77,6 @@ const checkSchema = z.object({
 });
 type Check = z.infer<typeof checkSchema>;
 
-const writeSchema = copySchema.extend({
-    pages: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.object({ page: z.preprocess(text, z.string()), accepted: z.boolean().default(false), why: z.preprocess(text, z.string()).default("") }))).default([]),
-    specSources: factMap.default({}),
-    dataFlags: textList(8).default([]),
-});
 
 /** 365 → "1 Year", 180 → "6 Month", 15 → "15 Day". */
 function warrantyText(days: number): string {
@@ -319,6 +314,102 @@ export async function generatePhotoAdvice(p: VerifiedCopyInput): Promise<Pick<Pr
     };
 }
 
+/** Step 3's answer: the listing plus each page's verdict, each spec's source and the data flags. */
+export const writtenCopySchema = copySchema.extend({
+    pages: z.preprocess((v) => (Array.isArray(v) ? v : []), z.array(z.object({ page: z.preprocess(text, z.string()), accepted: z.boolean().default(false), why: z.preprocess(text, z.string()).default("") }))).default([]),
+    specSources: factMap.default({}),
+    dataFlags: textList(8).default([]),
+});
+export type WrittenCopy = z.infer<typeof writtenCopySchema>;
+
+/**
+ * Step 4, the server check — shared by our own Verified run and Claude's
+ * (Cowork) draft. A code-matched page is accepted whatever the writer said;
+ * every spec must really be on the source it names (a seller number with no
+ * code match needs a second source); a warranty or highlight number nobody
+ * printed is dropped; anything unproven goes to "unsure". Pages are lettered
+ * A, B, C… in `found.pages` order, as the write prompt shows them.
+ */
+export function checkWrittenCopy(
+    name: string,
+    label: { labelFacts: Record<string, string>; seen: Record<string, string> },
+    found: { pages: PageRead[]; dropped: string[]; searchNote?: string },
+    w: WrittenCopy,
+): { copy: Omit<ProductCopy, "photoChecklist" | "photoArrange" | "photoSuggestions">; trusted: PageRead[] } {
+    const accepted = new Map<string, PageRead>();
+    found.pages.forEach((pg, i) => {
+        const verdict = w.pages.find((x) => x.page.trim().toUpperCase() === letter(i));
+        if (pg.codeMatch || verdict?.accepted) accepted.set(letter(i), pg);
+    });
+    // The product name is our typed data — a fact found only there is shown as "Product name", not "Label".
+    const printedNorm = normForCheck([...Object.entries(label.labelFacts).flat(), ...Object.entries(label.seen).flat()].join(" "));
+    const labelNorm = normForCheck(name) + printedNorm;
+    const trusted = [...accepted.values()];
+    const unsure = [...w.unsure];
+    const specSources: Record<string, string> = {};
+
+    /** The value as its source shows it, or null. Seller numbers without a code match need a second source. */
+    const confirm = (lbl: string, value: string, source: string): string | null => {
+        const src = source.trim().toUpperCase();
+        if (src === "LABEL") return checkFact(labelNorm, lbl, value);
+        const pg = accepted.get(src);
+        const kept = pg ? checkFact(pg.norm, lbl, value) : null;
+        if (!pg || !kept) return null;
+        if (pg.codeMatch || pg.maker || numbersIn(kept).length === 0) return kept;
+        const second = [labelNorm, ...trusted.filter((x) => x !== pg).map((x) => x.norm)].some((n) => checkFact(n, lbl, kept));
+        return second ? kept : null;
+    };
+    const anySource = (lbl: string, value: string) =>
+        [labelNorm, ...trusted.map((x) => x.norm)].map((n) => checkFact(n, lbl, value)).find((v) => v) ?? null;
+
+    const specs: Record<string, string> = {};
+    for (const [lbl, value] of Object.entries(w.specs)) {
+        // A count only seen in a photo is a minimum, never a spec.
+        if (/\bat least\b/i.test(value)) continue;
+        const source = w.specSources[lbl] ?? "";
+        const kept = confirm(lbl, value, source);
+        if (kept) {
+            specs[lbl] = kept;
+            specSources[lbl] = source.trim().toUpperCase() !== "LABEL" ? accepted.get(source.trim().toUpperCase())?.site ?? source
+                : checkFact(printedNorm, lbl, kept) ? "Label" : "Product name";
+        } else unsure.push(`${lbl}: ${value} (not confirmed by the label or an accepted page)`);
+    }
+    const compatibility = w.compatibility
+        .map((g) => ({ ...g, models: g.models.filter((m) => anySource(`Compatible ${g.type}`, m)) }))
+        .filter((g) => g.models.length);
+    const onSource = (n: string) => [labelNorm, ...trusted.map((x) => x.norm)].some((t) => t.includes(n));
+    const warranty = w.warranty && numbersIn(w.warranty).every(onSource) ? w.warranty : "";
+    if (w.warranty && !warranty) unsure.push("Manufacturer warranty (could not be confirmed)");
+    // A highlight with a number nobody printed is dropped; words-only highlights stay.
+    const highlights = w.highlights.filter((h) => numbersIn(h).every(onSource));
+
+    const final = {
+        title: w.title, summary: w.summary, description: w.description, howToUse: w.howToUse,
+        highlights: highlights.length ? highlights : [w.title], warranty, compatibility,
+        specs: cleanSpecs(specs), unsure: [...new Set(unsure)],
+    };
+    const rejected = found.pages.flatMap((pg, i) => (accepted.has(letter(i))
+        ? []
+        : [`${pg.site}: ${w.pages.find((x) => x.page.trim().toUpperCase() === letter(i))?.why || "rejected"}`]));
+    const used = trusted.map((pg) => `${pg.site}${pg.codeMatch ? " (barcode matched)" : ""}`);
+    const note = [
+        used.length ? `Verified: label + ${used.join(", ")}.` : `Verified: from the label only${found.searchNote ? ` (${found.searchNote})` : ""}.`,
+        rejected.length || found.dropped.length ? `Not used: ${[...found.dropped, ...rejected].join("; ")}.` : "",
+    ].filter(Boolean).join(" ");
+    return {
+        trusted,
+        copy: {
+            ...final,
+            flow: "verified",
+            sources: trusted.map((pg) => ({ title: pg.site, url: pg.url })),
+            flags: w.dataFlags,
+            note,
+            specSources,
+            shopDescription: assembleDescription(final),
+        },
+    };
+}
+
 export async function generateVerifiedCopy(p: VerifiedCopyInput): Promise<ProductCopy> {
     const premium = !!p.premium;
     const photos = photoParts(p.imageUrls);
@@ -331,84 +422,21 @@ export async function generateVerifiedCopy(p: VerifiedCopyInput): Promise<Produc
     const [{ value: w, key: writeKey }, photos5] = await Promise.all([
         callParsed(
             () => callStep(writeUse, writeStep, [{ type: "text", text: writePrompt(p, check, found.pages) }], { wait: p.bulk, premium }),
-            (raw) => writeSchema.parse(raw),
+            (raw) => writtenCopySchema.parse(raw),
         ),
         // Bulk writes descriptions only — no one is there to pick photos.
         p.bulk ? Promise.resolve(null) : photoAdvice(p, photos, web, premium),
     ]);
 
-    // ── 4. Server check: a code match is final whatever the AI said; every fact must be on its source.
-    const accepted = new Map<string, PageRead>();
-    found.pages.forEach((pg, i) => {
-        const verdict = w.pages.find((x) => x.page.trim().toUpperCase() === letter(i));
-        if (pg.codeMatch || verdict?.accepted) accepted.set(letter(i), pg);
-    });
-    // The product name is our typed data — a fact found only there is shown as "Product name", not "Label".
-    const printedNorm = normForCheck([...Object.entries(check.labelFacts).flat(), ...Object.entries(check.seen).flat()].join(" "));
-    const labelNorm = normForCheck(p.name) + printedNorm;
-    const trusted = [...accepted.values()];
-    const unsure = [...w.unsure];
-    const specSources: Record<string, string> = {};
-
-    /** The value as its source shows it, or null. Seller numbers without a code match need a second source. */
-    const confirm = (label: string, value: string, source: string): string | null => {
-        const src = source.trim().toUpperCase();
-        if (src === "LABEL") return checkFact(labelNorm, label, value);
-        const pg = accepted.get(src);
-        const kept = pg ? checkFact(pg.norm, label, value) : null;
-        if (!pg || !kept) return null;
-        if (pg.codeMatch || pg.maker || numbersIn(kept).length === 0) return kept;
-        const second = [labelNorm, ...trusted.filter((x) => x !== pg).map((x) => x.norm)].some((n) => checkFact(n, label, kept));
-        return second ? kept : null;
-    };
-    const anySource = (label: string, value: string) =>
-        [labelNorm, ...trusted.map((x) => x.norm)].map((n) => checkFact(n, label, value)).find((v) => v) ?? null;
-
-    const specs: Record<string, string> = {};
-    for (const [label, value] of Object.entries(w.specs)) {
-        // A count only seen in a photo is a minimum, never a spec.
-        if (/\bat least\b/i.test(value)) continue;
-        const source = w.specSources[label] ?? "";
-        const kept = confirm(label, value, source);
-        if (kept) {
-            specs[label] = kept;
-            specSources[label] = source.trim().toUpperCase() !== "LABEL" ? accepted.get(source.trim().toUpperCase())?.site ?? source
-                : checkFact(printedNorm, label, kept) ? "Label" : "Product name";
-        } else unsure.push(`${label}: ${value} (not confirmed by the label or an accepted page)`);
-    }
-    const compatibility = w.compatibility
-        .map((g) => ({ ...g, models: g.models.filter((m) => anySource(`Compatible ${g.type}`, m)) }))
-        .filter((g) => g.models.length);
-    const warranty = w.warranty && numbersIn(w.warranty).every((n) => [labelNorm, ...trusted.map((x) => x.norm)].some((t) => t.includes(n))) ? w.warranty : "";
-    if (w.warranty && !warranty) unsure.push("Manufacturer warranty (could not be confirmed)");
-    // A highlight with a number nobody printed is dropped; words-only highlights stay.
-    const highlights = w.highlights.filter((h) => numbersIn(h).every((n) => [labelNorm, ...trusted.map((x) => x.norm)].some((t) => t.includes(n))));
-
-    const final = {
-        title: w.title, summary: w.summary, description: w.description, howToUse: w.howToUse,
-        highlights: highlights.length ? highlights : [w.title], warranty, compatibility,
-        specs: cleanSpecs(specs), unsure: [...new Set(unsure)],
-    };
-    const rejected = found.pages.flatMap((pg, i) => (accepted.has(letter(i))
-        ? []
-        : [`${pg.site}: ${w.pages.find((x) => x.page.trim().toUpperCase() === letter(i))?.why || "rejected"}`]));
+    // ── 4. Server check
+    const checked = checkWrittenCopy(p.name, check, found, w);
+    const trusted = checked.trusted;
     // Saved for Photos only — the photos of the pages this copy kept, as the suggestions below are.
     if (p.productId) await saveResearch(p.productId, { name: p.name, web: web.filter((x) => trusted.some((pg) => pg.site === x.site)) });
-    const used = trusted.map((pg) => `${pg.site}${pg.codeMatch ? " (barcode matched)" : ""}`);
-    const note = [
-        used.length ? `Verified: label + ${used.join(", ")}.` : `Verified: from the label only${found.searchNote ? ` (${found.searchNote})` : ""}.`,
-        rejected.length || found.dropped.length ? `Not used: ${[...found.dropped, ...rejected].join("; ")}.` : "",
-    ].filter(Boolean).join(" ");
 
-    console.info(`[aiVerifiedCopy] done in ${Date.now() - started} ms · check ${checkKey} · write ${writeKey} · pages ${found.pages.length} read, ${trusted.length} used · specs ${Object.keys(final.specs).length} kept`);
+    console.info(`[aiVerifiedCopy] done in ${Date.now() - started} ms · check ${checkKey} · write ${writeKey} · pages ${found.pages.length} read, ${trusted.length} used · specs ${Object.keys(checked.copy.specs).length} kept`);
     return {
-        ...final,
-        flow: "verified",
-        sources: trusted.map((pg) => ({ title: pg.site, url: pg.url })),
-        flags: w.dataFlags,
-        note,
-        specSources,
-        shopDescription: assembleDescription(final),
+        ...checked.copy,
         // Only photos from pages the copy kept: a rejected page may be another version.
         // A run without step 5 leaves the saved checklist alone (no photoChecklist sent).
         ...(photos5 && { photoChecklist: photos5.checklist }),

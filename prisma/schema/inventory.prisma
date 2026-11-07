@@ -240,6 +240,13 @@ model InvNamingConfig {
   updatedAt DateTime @updatedAt
 }
 
+/// Online-shop stage of a product — see InvProduct.shopStatus.
+enum ShopStatus {
+  UNPUBLISHED
+  DRAFT
+  PUBLISHED
+}
+
 model InvProduct {
   id   Int    @id @default(autoincrement())
   sku  String @unique
@@ -316,7 +323,18 @@ model InvProduct {
   /// Note this is a PURCHASE-side floor; lowStockThreshold is a stock-alert
   /// floor. Different jobs — do not merge them.
   minOrderQty             Int?
+  /// Live in the shop right now = shopStatus PUBLISHED and the publish rules met
+  /// (shopListing.ts). Computed on every shop save — never set on its own.
   isListedInShop          Boolean @default(false)
+  /// Staff's stage for the online shop (owner, 2026-11-07): UNPUBLISHED (new,
+  /// made at a counter, untouched) → DRAFT (anyone, AI or staff, working on it)
+  /// → PUBLISHED. "Pending" is PUBLISHED with a publish rule unmet — not stored.
+  shopStatus              ShopStatus @default(UNPUBLISHED)
+  /// Claude's (Cowork) Verified draft waiting for staff, server-checked — a
+  /// ProductCopy (aiProductCopy.ts). Cleared when staff save or discard it.
+  copyDraftJson           Json?
+  /// When copyDraftJson was sent — lists read this, never the JSON (null = no draft).
+  copyDraftAt             DateTime?
   /// Per-product override of the org out-of-stock policy: when true the shop
   /// accepts orders for this product even at zero stock (backorder / procure later).
   allowBackorder          Boolean @default(false)
@@ -445,6 +463,7 @@ model InvProduct {
   @@index([warrantyTermId])
   @@index([gstRateId])
   @@index([isListedInShop])
+  @@index([shopStatus])
   @@index([openingBranchId])
   // Catalogue delta sync: the POS asks "which products changed since <ts>?" on
   // every till open. `stock` lives on this row and is rewritten after every

@@ -299,6 +299,13 @@ END $$;
 
 -- CreateEnum
 DO $$ BEGIN
+    CREATE TYPE "ShopStatus" AS ENUM ('UNPUBLISHED', 'DRAFT', 'PUBLISHED');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+-- CreateEnum
+DO $$ BEGIN
     CREATE TYPE "LoyaltyReason" AS ENUM ('EARN_SALE', 'REDEEM_SALE', 'REVERSAL_RETURN', 'ADMIN_ADJUST', 'MILESTONE_BONUS');
 EXCEPTION
     WHEN duplicate_object THEN NULL;
@@ -2815,6 +2822,9 @@ CREATE TABLE IF NOT EXISTS "InvProduct" (
     "orderPackQty" INTEGER,
     "minOrderQty" INTEGER,
     "isListedInShop" BOOLEAN NOT NULL DEFAULT false,
+    "shopStatus" "ShopStatus" NOT NULL DEFAULT 'UNPUBLISHED',
+    "copyDraftJson" JSONB,
+    "copyDraftAt" TIMESTAMP(3),
     "allowBackorder" BOOLEAN NOT NULL DEFAULT false,
     "weightGrams" INTEGER,
     "lengthCm" INTEGER,
@@ -2897,6 +2907,11 @@ ALTER TABLE "InvProduct" ALTER COLUMN "orderPackQty" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "minOrderQty" INTEGER;
 ALTER TABLE "InvProduct" ALTER COLUMN "minOrderQty" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "isListedInShop" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "shopStatus" "ShopStatus" NOT NULL DEFAULT 'UNPUBLISHED';
+ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "copyDraftJson" JSONB;
+ALTER TABLE "InvProduct" ALTER COLUMN "copyDraftJson" DROP NOT NULL;
+ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "copyDraftAt" TIMESTAMP(3);
+ALTER TABLE "InvProduct" ALTER COLUMN "copyDraftAt" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "allowBackorder" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "weightGrams" INTEGER;
 ALTER TABLE "InvProduct" ALTER COLUMN "weightGrams" DROP NOT NULL;
@@ -6058,6 +6073,9 @@ CREATE INDEX IF NOT EXISTS "InvProduct_gstRateId_idx" ON "InvProduct"("gstRateId
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "InvProduct_isListedInShop_idx" ON "InvProduct"("isListedInShop");
+
+-- CreateIndex
+CREATE INDEX IF NOT EXISTS "InvProduct_shopStatus_idx" ON "InvProduct"("shopStatus");
 
 -- CreateIndex
 CREATE INDEX IF NOT EXISTS "InvProduct_openingBranchId_idx" ON "InvProduct"("openingBranchId");

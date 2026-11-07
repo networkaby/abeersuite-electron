@@ -14,6 +14,7 @@ import type { ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
 import { productShopUrl, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import ProductGalleryUploader from "@/modules/ecommerce/components/ProductGalleryUploader";
 import AiCopyPanel from "@/modules/ecommerce/components/AiCopyPanel";
+import type { ProductCopy } from "@/modules/ecommerce/lib/aiCopyClient";
 import { PhotoChecklistRows } from "@/modules/ecommerce/components/AiPhotoPicker";
 import { isEnough, type PhotoChecklist, type PhotoKind } from "@/modules/ecommerce/lib/photoChecklist";
 import ProductCard from "@/modules/external/shop/ProductCard";
@@ -189,7 +190,6 @@ export default function ProductForm({
     const [lengthCm, setLengthCm] = useState<string>(dimStr(initial?.lengthCm));
     const [breadthCm, setBreadthCm] = useState<string>(dimStr(initial?.breadthCm));
     const [heightCm, setHeightCm] = useState<string>(dimStr(initial?.heightCm));
-    const [isListedInShop, setIsListedInShop] = useState(initial?.isListedInShop ?? true);
     const [allowBackorder, setAllowBackorder] = useState(initial?.allowBackorder ?? false);
     const [isActive, setIsActive] = useState(initial?.isActive ?? true);
     const [busy, setBusy] = useState(false);
@@ -314,7 +314,6 @@ export default function ProductForm({
         setLengthCm(dimStr(initial.lengthCm));
         setBreadthCm(dimStr(initial.breadthCm));
         setHeightCm(dimStr(initial.heightCm));
-        setIsListedInShop(initial.isListedInShop ?? true);
         setAllowBackorder(initial.allowBackorder ?? false);
         setIsActive(initial.isActive ?? true);
     }
@@ -401,8 +400,9 @@ export default function ProductForm({
         rules
     );
     const qualified = qualification.qualified;
-    // A non-qualified product can never be listed; the switch is forced off.
-    const listedEffective = qualified && isListedInShop;
+    // Shop stage (owner, 2026-11-07): a new product starts as Draft once saved here.
+    const shopStatus = initial?.shopStatus ?? "UNPUBLISHED";
+    const claudeDraft = (initial?.copyDraft ?? null) as ProductCopy | null;
 
     // The live card always renders galleryUrls[0], so put the photo the user has
     // selected in the gallery first — preview only, the saved order is untouched.
@@ -434,7 +434,9 @@ export default function ProductForm({
         specs: Object.fromEntries(specPairs.filter((x) => x.k.trim()).map((x) => [x.k.trim(), x.v.trim()])),
         stock: stockValue,
         lowStockThreshold: lowStockThresholdValue,
-        isListedInShop: listedEffective,
+        isListedInShop: shopStatus === "PUBLISHED" && qualified,
+        shopStatus,
+        copyDraftAt: initial?.copyDraftAt ?? null,
         allowBackorder,
         isActive,
         unitId: initial?.unitId ?? 0,
@@ -461,7 +463,8 @@ export default function ProductForm({
         orderable: true,
     };
 
-    const submit = async () => {
+    /** Save; Publish / Unpublish also move the stage (Unpublish = back to Draft). */
+    const submit = async (stage?: "PUBLISHED" | "DRAFT") => {
         if (!name.trim()) { toast.error("Name is required"); return; }
         if (!sku.trim() && !initial?.id) { toast.error("SKU is required"); return; }
         const specs = Object.fromEntries(specPairs.filter((x) => x.k.trim()).map((x) => [x.k.trim(), x.v.trim()]));
@@ -491,8 +494,10 @@ export default function ProductForm({
             lengthCm: lengthCm.trim() === "" ? null : parseInt(lengthCm, 10),
             breadthCm: breadthCm.trim() === "" ? null : parseInt(breadthCm, 10),
             heightCm: heightCm.trim() === "" ? null : parseInt(heightCm, 10),
-            // Never send "listed" for a product that isn't shop-ready (server 422s).
-            isListedInShop: listedEffective,
+            // Left out, the server moves an Unpublished product to Draft on any save.
+            ...(stage ? { shopStatus: stage } : {}),
+            // Saving after Claude's draft was shown = staff reviewed it.
+            ...(claudeDraft ? { clearCopyDraft: true } : {}),
             allowBackorder,
             isActive,
         };
@@ -505,7 +510,12 @@ export default function ProductForm({
             } else {
                 res = await axios.post<ShopProductAdmin>(`/api/ecommerce/products`, payload);
             }
-            toast.success("Saved");
+            const saved = res.data;
+            toast.success(
+                stage === "PUBLISHED"
+                    ? saved.isListedInShop ? "Published — live in the shop" : "Published — pending until Shop readiness is met"
+                    : stage === "DRAFT" ? "Back to Draft — off the shop" : "Saved",
+            );
             onSaved?.(res.data);
         } catch (e: unknown) {
             toast.error(extractApiError(e, "Save failed"));
@@ -665,6 +675,13 @@ export default function ProductForm({
                     }}
                 />
                 <AiCopyPanel
+                    savedDraft={claudeDraft}
+                    onDiscardSaved={() => {
+                        if (!initial?.id) return;
+                        axios.patch<ShopProductAdmin>(`/api/ecommerce/products/${initial.id}`, { clearCopyDraft: true })
+                            .then((r) => { toast.success("AI draft discarded"); onSaved?.(r.data); })
+                            .catch((e: unknown) => toast.error(extractApiError(e, "Couldn't discard the draft")));
+                    }}
                     productId={initial?.id}
                     name={name}
                     imageUrls={galleryUrls}
@@ -794,17 +811,6 @@ export default function ProductForm({
                     })()}
                 </div>
                 <div className="flex items-center gap-2">
-                    <Switch
-                        id="listed"
-                        checked={listedEffective}
-                        disabled={!qualified}
-                        onCheckedChange={setIsListedInShop}
-                    />
-                    <Label htmlFor="listed" className={!qualified ? "text-muted-foreground" : ""}>
-                        Listed in shop {!qualified ? "(see Shop readiness below to enable)" : ""}
-                    </Label>
-                </div>
-                <div className="flex items-center gap-2">
                     <Switch id="backorder" checked={allowBackorder} onCheckedChange={setAllowBackorder} />
                     <Label htmlFor="backorder">
                         Allow orders when out of stock
@@ -858,9 +864,32 @@ export default function ProductForm({
                     </Button>
                 </div>
 
-                <Button type="button" onClick={() => void submit()} disabled={busy}>
-                    {busy ? "Saving…" : submitLabel}
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                    <Button type="button" onClick={() => void submit()} disabled={busy}>
+                        {busy ? "Saving…" : submitLabel}
+                    </Button>
+                    {initial?.id && shopStatus === "DRAFT" ? (
+                        <Button type="button" variant="outline" onClick={() => void submit("PUBLISHED")} disabled={busy}
+                            title={qualified ? "Save and go live in the shop" : "Save and publish — waits as Pending until Shop readiness is met"}>
+                            Publish
+                        </Button>
+                    ) : null}
+                    {initial?.id && shopStatus === "PUBLISHED" ? (
+                        <Button type="button" variant="outline" onClick={() => void submit("DRAFT")} disabled={busy}
+                            title="Save and take it off the shop — back to Draft to fix">
+                            Unpublish
+                        </Button>
+                    ) : null}
+                    <span className="text-muted-foreground text-xs">
+                        {shopStatus === "UNPUBLISHED"
+                            ? "Unpublished — saving moves it to Draft."
+                            : shopStatus === "DRAFT"
+                                ? "Draft — being worked on."
+                                : qualified
+                                    ? "Published — live in the shop."
+                                    : `Pending — needs ${qualification.missing.join(", ").toLowerCase()}.`}
+                    </span>
+                </div>
             </div>
 
             <div className="space-y-2">

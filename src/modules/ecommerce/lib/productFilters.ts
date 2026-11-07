@@ -7,7 +7,8 @@ import { shopQualification, type ShopPublishRules } from "@/modules/ecommerce/li
 
 export type StockFilter = "all" | "in" | "out" | "untracked";
 export type ActiveFilter = "all" | "active" | "inactive";
-export type StatusFilter = "all" | "live" | "ready" | "needs";
+/** Shop stage (owner, 2026-11-07); "pending" = published but a publish rule unmet. */
+export type StatusFilter = "all" | "unpublished" | "draft" | "live" | "pending";
 export type PhotoFilter = "all" | "none" | "one" | "has" | "2" | "3" | "5"; // "has" = 1 or more (kept for saved filters)
 export type DescriptionFilter = "all" | "has" | "missing";
 
@@ -35,9 +36,14 @@ export const EMPTY_PRODUCT_FILTERS: ProductFilters = {
     description: "all",
 };
 
-export type ProductStatus = { kind: "live" | "ready" | "draft"; missing: string[] };
+export type ProductStatus = { kind: Exclude<StatusFilter, "all">; missing: string[] };
 
-/** Per-row shop status, reusing the same qualification gate the server enforces. */
+/**
+ * Per-row shop stage: UNPUBLISHED / DRAFT as staff left it; PUBLISHED is Live
+ * when the publish rules are met, else Pending (with what is missing). Reuses
+ * the server's gate, so a rule unmet since the last save (stock, price) shows
+ * as Pending here at once.
+ */
 export function productStatus(p: ShopProductAdmin, rules: ShopPublishRules): ProductStatus {
     const q = shopQualification(
         {
@@ -55,9 +61,12 @@ export function productStatus(p: ShopProductAdmin, rules: ShopPublishRules): Pro
         },
         rules
     );
-    if (p.isListedInShop && q.qualified) return { kind: "live", missing: [] };
-    return { kind: q.qualified ? "ready" : "draft", missing: q.missing };
+    if (p.shopStatus === "UNPUBLISHED") return { kind: "unpublished", missing: q.missing };
+    if (p.shopStatus === "DRAFT") return { kind: "draft", missing: q.missing };
+    return p.isListedInShop && q.qualified ? { kind: "live", missing: [] } : { kind: "pending", missing: q.missing };
 }
+
+const STAGES: string[] = ["unpublished", "draft", "live", "pending"] satisfies ProductStatus["kind"][];
 
 /** Gallery photos, or 1 when only the main image is set — the same rule the shop-ready check uses. */
 export const productPhotoCount = (p: ShopProductAdmin) => p.galleryUrls.length || (p.imageUrl ? 1 : 0);
@@ -84,9 +93,9 @@ export function matchesProductFilters(p: ShopProductAdmin, f: ProductFilters, ru
     }
     if (f.description === "has" && !hasDescription(p)) return false;
     if (f.description === "missing" && hasDescription(p)) return false;
-    if (f.status !== "all") {
-        const k = productStatus(p, rules).kind;
-        if (f.status === "needs" ? k !== "draft" : k !== f.status) return false;
+    // A view saved before the stages ("ready" / "needs") filters nothing.
+    if (f.status !== "all" && STAGES.includes(f.status)) {
+        if (productStatus(p, rules).kind !== f.status) return false;
     }
     const q = f.query.trim().toLowerCase();
     if (q && !`${p.name} ${p.sku} ${p.category} ${p.brandName ?? ""} ${p.groupName ?? ""} ${(p.codes ?? []).map((c) => c.value).join(" ")}`.toLowerCase().includes(q))

@@ -18,7 +18,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         const bands = await loadBarcodeBands();
         const p = await prisma.invProduct.findUnique({ where: { id: pid }, include: productInclude });
         if (!p) return NextResponse.json({ error: "Not found" }, { status: 404 });
-        return NextResponse.json(invProductToAdmin(p, bands));
+        // Claude's draft rides only here — the product's own page shows it for review.
+        return NextResponse.json({ ...invProductToAdmin(p, bands), copyDraft: p.copyDraftJson ?? null });
     } catch (e) {
         return handleApiError(e, "Failed to load product");
     }

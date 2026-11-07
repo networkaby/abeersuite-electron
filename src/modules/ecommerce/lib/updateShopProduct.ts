@@ -7,7 +7,7 @@ import { handleApiError, prismaUniqueError } from "@/shared/lib/api";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { invProductToAdmin, type ShopProductAdmin } from "@/modules/ecommerce/lib/productAdmin";
-import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
+import { nextShopStatus, resolveShopListing, SHOP_STATUSES } from "@/modules/ecommerce/lib/shopListing";
 import { PHOTO_KIND_KEYS } from "@/modules/ecommerce/lib/photoChecklist";
 import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { mergeGallery } from "@/modules/ecommerce/lib/mergeGallery";
@@ -52,7 +52,12 @@ export const shopProductPatchSchema = z.object({
     lengthCm: z.coerce.number().int().min(0).max(1000).optional().nullable(),
     breadthCm: z.coerce.number().int().min(0).max(1000).optional().nullable(),
     heightCm: z.coerce.number().int().min(0).max(1000).optional().nullable(),
+    /** Old switch (a tab opened before shopStatus) — on = publish, off = back to Draft. */
     isListedInShop: z.boolean().optional(),
+    /** Publish / Unpublish buttons. Left out, a save of an UNPUBLISHED product makes it DRAFT. */
+    shopStatus: z.enum(SHOP_STATUSES).optional(),
+    /** Staff used or discarded Claude's draft — clear it. */
+    clearCopyDraft: z.boolean().optional(),
     allowBackorder: z.boolean().optional(),
     isActive: z.boolean().optional(),
 });
@@ -71,10 +76,11 @@ export const shopProductInclude = {
  * (`/api/mobile/photos/product/[id]`) both save through here, so the listing and
  * slug rules can never differ between them.
  *
- * Merges the request over the saved row, re-decides `isListedInShop` + `slug`
- * (`resolveShopListing`: a field the caller leaves out keeps its saved value, and
- * leaving `isListedInShop` out auto-qualifies), and writes. Returns the admin row,
- * or the response to send instead (404, 422 not shop-ready, 409 duplicate).
+ * Merges the request over the saved row, moves the shop stage (`nextShopStatus`:
+ * any save of an UNPUBLISHED product makes it DRAFT), re-decides `isListedInShop`
+ * + `slug` (`resolveShopListing`: live = PUBLISHED and the rules met, else
+ * Pending), and writes. Returns the admin row, or the response to send instead
+ * (404, 409 duplicate).
  */
 export async function updateShopProduct(
     pid: number,
@@ -87,7 +93,7 @@ export async function updateShopProduct(
                 name: true, sku: true, imageUrl: true, galleryJson: true,
                 shopDescription: true, shopCategory: true, stock: true, savedSalePricePaise: true, barcodeManualPaise: true,
                 mrpPaise: true, effectiveSalePricePaise: true, slug: true,
-                groupId: true, brandId: true, allowBackorder: true, weightGrams: true,
+                groupId: true, brandId: true, allowBackorder: true, weightGrams: true, shopStatus: true,
             },
         });
         if (!existing) return { response: NextResponse.json({ error: "Not found" }, { status: 404 }) };
@@ -139,6 +145,9 @@ export async function updateShopProduct(
         if (b.heightCm !== undefined) data.heightCm = b.heightCm;
         if (b.allowBackorder !== undefined) data.allowBackorder = b.allowBackorder;
         if (b.isActive !== undefined) data.isActive = b.isActive;
+        if (b.clearCopyDraft) data.copyDraftJson = Prisma.DbNull;
+        const shopStatus = nextShopStatus(existing.shopStatus, { status: b.shopStatus, listed: b.isListedInShop });
+        data.shopStatus = shopStatus;
 
         // Resolve listing + slug from the merged (request ∪ existing) state.
         const existingGallery = Array.isArray(existing.galleryJson)
@@ -170,16 +179,8 @@ export async function updateShopProduct(
                     b.pricePaise !== undefined ? b.pricePaise ?? null : existing.effectiveSalePricePaise,
                 slug: b.slug !== undefined ? b.slug?.trim() || null : existing.slug,
             },
-            { explicitListed: b.isListedInShop, bands, rules }
+            { status: shopStatus, bands, rules }
         );
-        if (!listing.ok) {
-            return {
-                response: NextResponse.json(
-                    { error: `Cannot list in shop — missing: ${listing.missing.join(", ")}` },
-                    { status: 422 }
-                ),
-            };
-        }
         data.isListedInShop = listing.isListedInShop;
         data.slug = listing.slug;
         if (listing.slug) {

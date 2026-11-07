@@ -1,3 +1,4 @@
+import type { ShopStatus } from "@/generated/prisma/enums";
 import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 import {
     shopQualification,
@@ -26,27 +27,42 @@ export type ShopListingInput = {
     slug: string | null;
 };
 
-export type ShopListingDecision =
-    | { ok: true; isListedInShop: boolean; slug: string | null }
-    | { ok: false; missing: string[] };
+/** Every stage, for zod (`z.enum(SHOP_STATUSES)`). */
+export const SHOP_STATUSES = ["UNPUBLISHED", "DRAFT", "PUBLISHED"] as const satisfies readonly ShopStatus[];
+
+export type ShopListingDecision = {
+    /** Live in the shop right now: PUBLISHED and the publish rules met. */
+    isListedInShop: boolean;
+    slug: string | null;
+    /** Publish rules still unmet — a PUBLISHED product with any is "Pending". */
+    missing: string[];
+};
 
 /**
- * Decide whether a product is listed in the shop and what its slug is.
+ * The product's next stage (owner, 2026-11-07). Staff's choice wins; with none,
+ * any shop save of an UNPUBLISHED product means someone is working on it → DRAFT.
+ * `listed` is the old switch (an open tab from before): on = publish, off takes a
+ * published product back to Draft.
+ */
+export function nextShopStatus(current: ShopStatus, o: { status?: ShopStatus; listed?: boolean }): ShopStatus {
+    if (o.status) return o.status;
+    if (o.listed === true) return "PUBLISHED";
+    if (o.listed === false && current === "PUBLISHED") return "DRAFT";
+    return current === "UNPUBLISHED" ? "DRAFT" : current;
+}
+
+/**
+ * Whether a product is live in the shop and what its slug is. Never refuses:
+ * PUBLISHED with a rule unmet is "Pending" (hidden, with the missing list) and
+ * goes live by itself on the save that meets the rules. Only PUBLISHED can be live.
  *
- * - `explicitListed === undefined` (caller didn't touch the switch): **auto-qualify**
- *   — list iff the product meets the shop-readiness bar.
- * - `explicitListed === true`: caller wants it live — allowed only when qualified,
- *   otherwise returns the missing requirements (caller should 422).
- * - `explicitListed === false`: always unlist (manual override).
- *
- * When the result is listed and no slug is set, one is auto-generated from the
- * name + SKU. The shop price used for the qualification gate is the barcode tag
- * (saved price + MRP) with an effective-price fallback — matching what the
- * storefront actually charges.
+ * When the result is live and no slug is set, one is generated from the name +
+ * SKU. The shop price used for the gate is the barcode tag (saved price + MRP)
+ * with an effective-price fallback — what the storefront actually charges.
  */
 export function resolveShopListing(
     m: ShopListingInput,
-    opts: { explicitListed?: boolean; bands: BarcodeBand[]; rules?: ShopPublishRules }
+    opts: { status: ShopStatus; bands: BarcodeBand[]; rules?: ShopPublishRules }
 ): ShopListingDecision {
     const shopPrice =
         barcodeTagPaise(m.savedSalePricePaise, m.mrpPaise, opts.bands, m.barcodeManualPaise) ??
@@ -68,16 +84,7 @@ export function resolveShopListing(
         },
         opts.rules ?? DEFAULT_SHOP_PUBLISH_RULES
     );
-
-    let isListedInShop: boolean;
-    if (opts.explicitListed === undefined) {
-        isListedInShop = q.qualified;
-    } else if (opts.explicitListed && !q.qualified) {
-        return { ok: false, missing: q.missing };
-    } else {
-        isListedInShop = opts.explicitListed;
-    }
-
+    const isListedInShop = opts.status === "PUBLISHED" && q.qualified;
     const slug = m.slug?.trim() || (isListedInShop ? slugifyProduct(m.name, m.sku) : null);
-    return { ok: true, isListedInShop, slug };
+    return { isListedInShop, slug, missing: q.missing };
 }

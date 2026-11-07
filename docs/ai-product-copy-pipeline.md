@@ -254,6 +254,32 @@ Specifications → Warranty.
       with sources, flags and unsure items, and save through the normal edit
       API.
 
+### A8. Running the Verified steps with Claude instead of API keys
+
+The same steps can be done by Claude in a chat or Cowork app, with no AI key
+cost on the server:
+
+| Step | Who does it |
+|---|---|
+| 1 Check, 2 Pages, 3 Write, 5 Photo advice | Claude itself (it reads the photos, searches and reads the pages) |
+| 4 Fact check | **The server.** It downloads Claude's pages again and checks every fact. The checker is the same code used for our own AI. |
+
+- **What makes this safe:** Claude sends page **URLs**, not page text. The server reads each page itself, keeps only the maker's site and known sellers, drops a page that shows a different barcode, and then runs the fact check. Claude can't get a fact through that isn't really on the page.
+- **Where the result goes:** a draft stored on the product. The product moves Unpublished → Draft. Staff review it and Publish. The agent never publishes.
+- **Three endpoints:**
+  - a backlog list (paged in the DB)
+  - one product's Step-1 input, plus the house-style rules, so Claude writes in the same style as our AI
+  - submit the draft
+- **One skill file** tells Claude the steps and rules.
+
+### A9. Shop stages
+
+Unpublished (new, made offline, untouched) → Draft (anyone, AI or staff, working on it) → Published.
+
+- "Pending" means Published but a publish rule is unmet. It isn't stored; it's worked out each time. The product goes live by itself once the rule is met.
+- Unpublish sends a product back to Draft.
+- The shop reads one "live now" flag: Published and the rules met.
+
 ---
 
 ## Part B — where it lives in AbeerSuite
@@ -272,6 +298,9 @@ Specifications → Warranty.
 | Saved research (R2) | `src/modules/ecommerce/lib/aiResearchStore.ts` |
 | Photo kinds and checklist | `src/modules/ecommerce/lib/photoChecklist.ts` |
 | Settings screen | Settings → AI Setup |
+| Claude route (Cowork key) | `src/app/api/agent/products/route.ts` (+ `[id]/route.ts`, `[id]/copy/route.ts`), `src/modules/ecommerce/lib/agentProductCopy.ts` |
+| Claude's steps (skill) | `.claude/skills/product-copy/SKILL.md` |
+| Shop stage rule | `src/modules/ecommerce/lib/shopListing.ts` (`nextShopStatus`, `resolveShopListing`) |
 
 Chain names: Direct = `product_copy` / `draft`. Verified = `product_copy_verified`
 with steps `check`, `write`, `photos` (an empty step borrows `product_copy/draft`,

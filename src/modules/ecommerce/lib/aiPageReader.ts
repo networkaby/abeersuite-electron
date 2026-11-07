@@ -171,10 +171,35 @@ export async function findProductPages(o: { query: string; brand: string; labelS
         .sort((a, b) => a.rank - b.rank || Number(b.india) - Number(a.india))
         .slice(0, AI_VERIFIED_LIMITS.pages);
     if (!picked.length) return { pages: [], dropped: [], searchNote: "Search found no maker or seller page" };
+    return readPicked(picked, { brand: o.brand, codes: o.codes, hints: [o.query.split(/\s+/).pop() ?? ""] });
+}
 
+/**
+ * Pages someone else found — Claude's sources on the Cowork route
+ * (/api/agent/products/[id]/copy). Read by us exactly as our own search's
+ * pages: only the maker's site or a known seller counts, and a page showing a
+ * different barcode of ours is dropped. So Step 4 checks facts against what
+ * the page really says, not what the caller says it says.
+ */
+export async function readGivenPages(o: { urls: string[]; brand: string; labelSite: string; codes: string[] }): Promise<PageSearch> {
+    const labelSite = o.labelSite.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+    const dropped: string[] = [];
+    const picked = [...new Set(o.urls)]
+        .filter((u) => (isPublicHttps(u) ? true : (dropped.push(`${u}: not a public https page`), false)))
+        .map((u) => ({ u, host: hostOf(u) }))
+        .map((x) => ({ ...x, rank: isMakerSite(x.host, o.brand, labelSite) ? 0 : isSeller(x.host) ? 1 : 2 }))
+        .filter((x) => (x.rank < 2 ? true : (dropped.push(`${x.host}: not the maker's site or a known seller`), false)))
+        .slice(0, AI_VERIFIED_LIMITS.pages);
+    if (!picked.length) return { pages: [], dropped, searchNote: "No maker or seller page was given" };
+    const read = await readPicked(picked, { brand: o.brand, codes: o.codes, hints: [] });
+    return { ...read, dropped: [...dropped, ...read.dropped] };
+}
+
+/** Download each picked page and match our codes (shared by both callers above). */
+async function readPicked(picked: { u: string; host: string; rank: number }[], o: { brand: string; codes: string[]; hints: string[] }): Promise<PageSearch> {
     const ours = o.codes.map(codeKey).filter((c) => c.length >= 6);
     const ourBarcodes = o.codes.filter(isBarcode).map(codeKey);
-    const hints = [o.query.split(/\s+/).pop() ?? "", ...o.codes].filter((h) => h.length >= 3);
+    const hints = [...o.hints, ...o.codes].filter((h) => h.length >= 3);
     const dropped: string[] = [];
 
     const reads = await Promise.all(picked.map(async ({ u, host, rank }): Promise<PageRead | null> => {

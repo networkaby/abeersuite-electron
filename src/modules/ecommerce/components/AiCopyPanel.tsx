@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useValueChange } from "@/shared/hooks/useValueChange";
 import axios from "axios";
 import { toast } from "sonner";
 import { ExternalLink, Images, Sparkles } from "lucide-react";
@@ -63,6 +64,8 @@ export function mergeAiSpecs(rows: SpecRow[], specs: Record<string, string>): Sp
 // empty Description / Online name / spec labels are filled straight away;
 // anything already typed gets a preview with a Use button instead.
 export default function AiCopyPanel({
+    savedDraft,
+    onDiscardSaved,
     productId,
     name,
     imageUrls,
@@ -77,6 +80,9 @@ export default function AiCopyPanel({
     onAddPhotos,
     onGallery,
 }: {
+    /** Claude's (Cowork) draft saved on the product, waiting for review — shown as if just generated. */
+    savedDraft?: ProductCopy | null;
+    onDiscardSaved?: () => void;
     productId?: number;
     name: string;
     /** Whole gallery, skip marks included — the server leaves the skipped ones out. */
@@ -99,7 +105,14 @@ export default function AiCopyPanel({
     const [premium, setPremium] = usePremiumAi();
     const [photoAi, setPhotoAi] = usePhotoAi();
     const [busy, setBusy] = useState(false);
-    const [draft, setDraft] = useState<ProductCopy | null>(null);
+    const [draft, setDraft] = useState<ProductCopy | null>(savedDraft ?? null);
+    // Showing Claude's saved draft (not one generated here). A draft arriving with a
+    // later load shows the same way; one cleared by Save / Discard goes away.
+    const [fromSaved, setFromSaved] = useState(!!savedDraft);
+    if (useValueChange(savedDraft ?? null)) {
+        if (savedDraft) { setDraft(savedDraft); setFromSaved(true); }
+        else if (fromSaved) { setDraft(null); setFromSaved(false); }
+    }
     // Verified stopped at the photo check: our own data disagrees with itself.
     const [checkFlags, setCheckFlags] = useState<string[] | null>(null);
     // "Photos only" answer — newer than the draft's own photo advice.
@@ -113,6 +126,7 @@ export default function AiCopyPanel({
         try {
             const copy = await fetchAiCopy({ productId, name: name.trim(), imageUrls, flow, premium, photoAi }, { fresh });
             setDraft(copy);
+            setFromSaved(false);
             setPhotoRun(null);
             // A cached draft carries the advice of its own run — the saved ticks since then win.
             if (copy.photoChecklist && !copy.fromCache) onPhotoChecklist(copy.photoChecklist);
@@ -191,6 +205,15 @@ export default function AiCopyPanel({
             )}
             {draft && (
                 <div className="space-y-2 text-sm">
+                    {fromSaved && (
+                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-violet-50 px-2 py-1.5 text-xs text-violet-800 dark:bg-violet-950/40 dark:text-violet-200">
+                            <span>AI draft waiting for review (sent by Claude, checked by the server). Use what you like, then Save.</span>
+                            {onDiscardSaved && (
+                                <Button type="button" size="sm" variant="ghost" onClick={onDiscardSaved}>Discard draft</Button>
+                            )}
+                        </div>
+                    )}
+                    {fromSaved && <DraftRow label="Specs" text={Object.entries(draft.specs).map(([k, v]) => `${k}: ${v}`).join("\n")} onUse={() => onSpecs(mergeAiSpecs(specPairs, draft.specs))} />}
                     <AiDraftNotes draft={draft} />
                     {titleDiffers && (
                         <DraftRow label="Online name" text={draft.title} onUse={() => onSubheading(draft.title)} />

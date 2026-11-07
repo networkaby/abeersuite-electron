@@ -24,7 +24,7 @@ export type IncomingDef = {
 export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
     COWORK: {
         label: "Google Business API",
-        about: "Reads Google reviews and writes the shop's reply, and makes social posts (text per channel, photos, time). Replies and posts follow the settings below; 1–2 star reviews are always saved as Draft for staff to check.",
+        about: "Reads Google reviews and writes the shop's reply, makes social posts (text per channel, photos, time), and writes Verified product copy for the shop (saved as a Draft for staff — the server re-checks every fact). Replies and posts follow the settings below; 1–2 star reviews are always saved as Draft for staff to check.",
         howSent: "Header  x-api-key: <key>",
         envVar: null,
         closedWhenUnset: true,
@@ -38,6 +38,9 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
             "DELETE /api/agent/posts/{id}",
             "POST /api/agent/posts/{id}/photos",
             "POST /api/agent/posts/{id}/photos/fit",
+            "GET /api/agent/products",
+            "GET /api/agent/products/{id}",
+            "POST /api/agent/products/{id}/copy",
         ],
     },
     CRON: {
