@@ -25,16 +25,35 @@ Never print the key or write it into a file.
 
 ## 0. Pick products
 
+Turn what the owner says into the filters below and read the list:
+
 ```bash
-curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$ABEERSUITE_URL/api/agent/products?stage=unpublished&need=copy&limit=10"
+curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$ABEERSUITE_URL/api/agent/products?<filters>"
 ```
 
-Answer: `{ products: [{ id, sku, name, brand, group, shopStatus, hasDescription, photos, draftWaitingSince }], nextBefore }`.
+| Owner says | Filters |
+|---|---|
+| nothing particular ("do product copy") | *(none)* = newest Unpublished, no description, no draft open |
+| "SKU 107102" / "these: 107102, 107233" | `sku=107102,107233` — exactly these, in that order |
+| "the Portronics hub" / a barcode | `q=portronics hub` — name, SKU or barcode |
+| "with at least 5 photos" | `minPhotos=5` |
+| "only what is in stock" | `inStock=1` |
+| "Portronics brand" / "USB HUB group" | `brand=portronics` / `group=usb hub` |
+| "ready ones" / "published ones" / "open drafts" | `stage=ready` / `published` / `draft` (`all` = any) |
+| "even if it has a description" | `need=all` |
+| "10 of them" | `limit=10` (max 50) |
 
-- `stage` = `unpublished` (default) · `ready` · `published` · `draft` (a draft copy is open, any stage) · `all`. `need=all` includes products that already have a description.
+Filters combine: "5 Portronics products in stock with 5+ photos" → `brand=portronics&inStock=1&minPhotos=5&limit=5`.
+
+Answer: `{ products: [{ id, sku, name, brand, group, shopStatus, hasDescription, photos, stock, draftWaitingSince }], notFound?, nextBefore }`.
+
+- With `sku` or `q`, stage and description are not filtered unless you send them — a Published product can be redone; the work goes into its draft and the live product is untouched until staff Save as ready.
+- `notFound` → those SKUs are wrong, inactive or filtered out; tell the owner.
+- A `q` search that matches several products: show the list and ask which before starting.
 - Next page: add `&before=<nextBefore>`.
 - `401` → wrong key or "Claude — Product copy" is off on Settings → Incoming API. Stop and tell the owner.
 - Skip products with `photos: 0` unless the owner says otherwise — with no photo there is no label to trust.
+- `draftWaitingSince` set → a draft is already open; say so and ask before adding to it.
 - Tell the owner which products you will do before you start. Do them **one at a time**, steps 1–5 each.
 
 ## 1. Check (look at the photos)

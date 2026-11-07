@@ -3,7 +3,7 @@ import { handleApiError } from "@/shared/lib/api";
 import { requireIncomingKey } from "@/modules/incoming/lib/incomingApi";
 import { backlogQuery, productBacklog } from "@/modules/ecommerce/lib/agentProductCopy";
 
-// GET /api/agent/products?stage=unpublished|ready|published|draft|all&need=copy|all&limit=20&before=<id>
+// GET /api/agent/products?sku=a,b&q=words&minPhotos=5&inStock=1&brand=x&group=y&stage=unpublished|ready|published|draft|all&need=copy|all&limit=20&before=<id>
 // — the Cowork agent's backlog for Verified product copy (x-api-key = the "Claude — Product copy" key on
 // Settings → Incoming API). Default: active Unpublished products with no description and
 // no draft waiting. Newest first; pass nextBefore back as `before` for the next page.

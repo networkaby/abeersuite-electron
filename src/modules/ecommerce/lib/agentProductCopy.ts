@@ -26,42 +26,104 @@ const galleryOf = (p: { galleryJson: Prisma.JsonValue; imageUrl: string | null }
 
 // ── Backlog ───────────────────────────────────────────────────────────────────
 
+const csv = z.string().trim().transform((v) => v.split(/[,\s]+/).map((x) => x.trim().toUpperCase()).filter(Boolean)).pipe(z.array(z.string()).max(50));
+const yes = z.enum(["1", "true", "yes"]).transform(() => true);
+
 export const backlogQuery = z.object({
-    /** Which shop stage (draft = a draft copy is open, any stage); default the untouched ones. */
-    stage: z.enum(["unpublished", "draft", "ready", "published", "all"]).default("unpublished"),
-    /** copy = no description and no draft open yet; all = every product in the stage. */
-    need: z.enum(["copy", "all"]).default("copy"),
+    /** SKUs, comma separated — exactly these, in this order (stage / need ignored unless sent). */
+    sku: csv.optional(),
+    /** Words to find in the name, SKU or a barcode — like the Products search. */
+    q: z.string().trim().min(2).max(100).optional(),
+    /** Which shop stage (draft = a draft copy is open, any stage). Default: unpublished, or all when sku / q is sent. */
+    stage: z.enum(["unpublished", "draft", "ready", "published", "all"]).optional(),
+    /** copy = no description and no draft open yet; all = every product. Default: copy, or all when sku / q is sent. */
+    need: z.enum(["copy", "all"]).optional(),
+    /** At least this many photos usable by AI ("Skip for AI" ones not counted). */
+    minPhotos: z.coerce.number().int().min(0).max(30).optional(),
+    /** Only products with stock on hand (stock above 0). */
+    inStock: yes.optional(),
+    /** Brand / group name contains this. */
+    brand: z.string().trim().min(1).max(100).optional(),
+    group: z.string().trim().min(1).max(100).optional(),
     limit: z.coerce.number().int().min(1).max(50).default(20),
     /** Paging: the last id of the previous page (newest first). */
     before: z.coerce.number().int().positive().optional(),
 });
 
+/** Rows read per round while a photo count filters in memory (photos live in a JSON column). */
+const SCAN_BATCH = 200;
+const SCAN_MAX = 5000;
+
 export async function productBacklog(q: z.infer<typeof backlogQuery>) {
+    const named = !!(q.sku?.length || q.q);
+    // A SKU list comes back whole, whatever limit says.
+    const limit = q.sku?.length ? Math.max(q.limit, q.sku.length) : q.limit;
+    const stage = q.stage ?? (named ? "all" : "unpublished");
+    const need = q.need ?? (named ? "all" : "copy");
     const where: Prisma.InvProductWhereInput = {
         isActive: true,
-        ...(q.stage === "draft" && { shopDraftAt: { not: null } }),
-        ...(q.stage !== "all" && q.stage !== "draft" && { shopStatus: q.stage.toUpperCase() as ShopStatus }),
-        ...(q.need === "copy" && { ...(q.stage !== "draft" && { shopDraftAt: null }), OR: [{ shopDescription: null }, { shopDescription: "" }] }),
-        ...(q.before && { id: { lt: q.before } }),
+        ...(q.sku?.length && { sku: { in: q.sku } }),
+        ...(q.q && {
+            AND: q.q.split(/\s+/).map((w) => ({
+                OR: [
+                    { name: { contains: w, mode: "insensitive" as const } },
+                    { sku: { contains: w, mode: "insensitive" as const } },
+                    { codes: { some: { value: { contains: w, mode: "insensitive" as const } } } },
+                ],
+            })),
+        }),
+        ...(stage === "draft" && { shopDraftAt: { not: null } }),
+        ...(stage !== "all" && stage !== "draft" && { shopStatus: stage.toUpperCase() as ShopStatus }),
+        ...(need === "copy" && { ...(stage !== "draft" && { shopDraftAt: null }), OR: [{ shopDescription: null }, { shopDescription: "" }] }),
+        ...(q.inStock && { stock: { gt: 0 } }),
+        ...(q.brand && { brand: { name: { contains: q.brand, mode: "insensitive" } } }),
+        ...(q.group && { group: { name: { contains: q.group, mode: "insensitive" } } }),
     };
-    const rows = await prisma.invProduct.findMany({
-        where,
-        orderBy: { id: "desc" },
-        take: q.limit,
-        select: {
-            id: true, sku: true, name: true, shopStatus: true, shopDescription: true, shopDraftAt: true,
-            imageUrl: true, galleryJson: true,
-            brand: { select: { name: true } }, group: { select: { name: true } },
-        },
-    });
+    const select = {
+        id: true, sku: true, name: true, shopStatus: true, shopDescription: true, shopDraftAt: true, stock: true,
+        imageUrl: true, galleryJson: true,
+        brand: { select: { name: true } }, group: { select: { name: true } },
+    } as const;
+    type Row = Prisma.InvProductGetPayload<{ select: typeof select }>;
+    const photoCount = (p: Row) => photosForAi(galleryOf(p)).length;
+
+    // Newest first, a page at a time. The photo count is in JSON, so with
+    // minPhotos rows are read in batches and filtered here until the page fills.
+    const rows: Row[] = [];
+    let before = q.before;
+    let scanned = 0;
+    let more = true;
+    while (rows.length < limit && more && scanned < SCAN_MAX) {
+        const take = q.minPhotos ? SCAN_BATCH : limit - rows.length;
+        const batch = await prisma.invProduct.findMany({
+            where: { ...where, ...(before && { id: { lt: before } }) },
+            orderBy: { id: "desc" },
+            take,
+            select,
+        });
+        scanned += batch.length;
+        more = batch.length === take;
+        for (const p of batch) {
+            before = p.id;
+            if (q.minPhotos && photoCount(p) < q.minPhotos) continue;
+            rows.push(p);
+            if (rows.length === limit) break;
+        }
+    }
+    // SKUs come back in the order they were asked for.
+    if (q.sku?.length) rows.sort((a, b) => q.sku!.indexOf(a.sku.toUpperCase()) - q.sku!.indexOf(b.sku.toUpperCase()));
+    const missing = q.sku?.filter((s) => !rows.some((p) => p.sku.toUpperCase() === s)) ?? [];
+
     return {
         products: rows.map((p) => ({
             id: p.id, sku: p.sku, name: p.name, brand: p.brand?.name ?? null, group: p.group?.name ?? null,
             shopStatus: p.shopStatus, hasDescription: !!p.shopDescription?.trim(),
-            photos: photosForAi(galleryOf(p)).length,
+            photos: photoCount(p), stock: p.stock,
             draftWaitingSince: p.shopDraftAt?.toISOString() ?? null,
         })),
-        nextBefore: rows.length === q.limit ? rows[rows.length - 1].id : null,
+        /** Asked-for SKUs not found (wrong SKU, inactive, or filtered out). */
+        ...(missing.length && { notFound: missing }),
+        nextBefore: rows.length === limit && more ? before ?? null : null,
     };
 }
 
