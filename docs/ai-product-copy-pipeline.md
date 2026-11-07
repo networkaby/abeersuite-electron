@@ -168,6 +168,8 @@ A step with no keys of its own **borrows the Direct flow's keys**.
   - **A fact is "on" a source when** every number in the value appears in the
     source text **as a whole number followed by its unit's first letters**
     ("5 Year" matches "5-year" or "5 years", but not a stray "5" or "1999").
+    Only a real unit word counts as the unit (Hz, GB, mAh, year, W…), so in
+    "30 Hz HDMI" the unit is "Hz", and in "USB 3.0 Port" the number stands alone.
     Digits alone prove nothing, because a long page always has them somewhere.
     A unit spelled differently ("5 yrs") fails and goes to unsure, which is
     the safe side. A value with no numbers needs at least 75% of its words (3+

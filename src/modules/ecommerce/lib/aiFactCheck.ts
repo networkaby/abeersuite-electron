@@ -22,11 +22,17 @@ export const normForCheck = (s: string) => s.toLowerCase().replace(/&nbsp;|&#160
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
- * Every number in `value`, with the unit that follows it ("999gbps", "5year",
- * "8" for a bare one). Read from normForCheck text, so "10,000 mAh" → 10000 mah.
+ * A word right after a number counts as its unit only when it is a real unit —
+ * otherwise "30 Hz HDMI" (spaces gone in the page text) read as unit "hzhdmi",
+ * and "USB 3.0 and" as unit "and" (owner's test, 2026-11-07, dropped a true
+ * "4K @ 30 Hz" highlight). Whole word, plural allowed ("years").
  */
+const UNIT = /^(k|p|x|w|v|a|kw|mah|wh|hz|khz|mhz|ghz|b|kb|mb|gb|tb|kbps|mbps|gbps|bit|mm|cm|m|km|in|inch|ft|g|kg|ml|l|ppm|dpi|nm|db|rpm|lm|year|yr|month|mo|day|hr|hour|min|sec|watt|volt|amp)s?$/;
+
+/** Every number in `value`, with its unit when one follows ("999 Gbps" → 999 gbps; "8" bare). */
 function numberTokens(value: string): { num: string; unit: string }[] {
-    return [...normForCheck(value).matchAll(/(\d+(?:\.\d+)?)-?([a-z]*)/g)].map((m) => ({ num: m[1], unit: m[2] }));
+    const v = value.toLowerCase().replace(/&nbsp;|&#160;/g, " ").replace(/,/g, "");
+    return [...v.matchAll(/(\d+(?:\.\d+)?)[\s-]?([a-z]*)/g)].map((m) => ({ num: m[1], unit: UNIT.test(m[2]) ? m[2] : "" }));
 }
 
 /**
