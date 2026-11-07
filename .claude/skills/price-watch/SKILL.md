@@ -46,7 +46,10 @@ For each product search, India first: brand + exact model / part code (`modelNo`
 - The **maker's own India store** (hp.com/in-en, portronics.com, …) only to check the **MRP** — not for the gap.
 - **Same product only**: same model / part code, same capacity / size / colour / pack size. A sister model, a different pack (2-pack vs 1), refurbished or used → not the same; skip it.
 - Note for each: **price** (what a buyer pays now, delivered price if shown), **seller** (Amazon itself / a seller name), **in stock or not**, **link**, and the date.
-- A marketplace page shows many prices (other products in "similar" rows): use only the price of **this** listing — the one under its title, or the page's own product data. Unclear → "could not check", never guess.
+- **Getting the listing's price** — marketplace pages are full of other prices (ads marked "AD", "similar items", bank / combo offers):
+  1. Ask the shop's server: `POST $ABEERSUITE_URL/api/agent/read-page` with `{ "productId": <id>, "url": "<listing>" }` (the product-copy key). Its `price` / `inStock` come from the page's own product data — use them when not `null`.
+  2. `price: null` (Flipkart always — it fills the price in the browser): open the listing in a real browser and take the price **under the product title** only.
+  3. Still unclear → "could not check". **Never** take a price from page text or search snippets — the first "₹" on a Flipkart page is usually an ad for another product.
 - Blocked or unclear page → say "could not check", never guess.
 
 ## 3. Compare and flag

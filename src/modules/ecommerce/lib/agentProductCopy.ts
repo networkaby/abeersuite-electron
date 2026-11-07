@@ -446,6 +446,10 @@ export async function readPageForAgent(b: z.infer<typeof readPageSchema>) {
         text: pg.text,
         /** Product photos the page names — send the right ones back as photoPicks. */
         photos: pg.photos,
+        /** This listing's own price (₹) from the page's product data; null = not found — never take one from the text. */
+        price: pg.price,
+        /** In stock per the page's product data; null = not said. */
+        inStock: pg.inStock,
     };
 }
 

@@ -13,7 +13,8 @@ import { runChain, type AiKeyConfig } from "@/shared/lib/ai/aiKeys";
  * provider's status the same way they do for a model.
  */
 
-export type WebPage = { title: string; url: string; text: string };
+/** html: the page as served — only from a reader that can give it (Scrape.do, Firecrawl) and only when asked. */
+export type WebPage = { title: string; url: string; text: string; html?: string };
 
 async function post(url: string, body: unknown, headers: Record<string, string>, signal: AbortSignal) {
     return send(url, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body), signal }, body);
@@ -58,7 +59,7 @@ export async function searchOn(key: AiKeyConfig, apiKey: string, query: string, 
 }
 
 /** One page read on this key, as plain text / markdown. */
-export async function readOn(key: AiKeyConfig, apiKey: string, url: string, signal: AbortSignal): Promise<WebPage> {
+export async function readOn(key: AiKeyConfig, apiKey: string, url: string, signal: AbortSignal, html = false): Promise<WebPage> {
     const bearer = { Authorization: `Bearer ${apiKey}` };
     const cut = (text: string) => text.slice(0, AI_WEB_LIMITS.pageChars);
     switch (key.provider) {
@@ -73,11 +74,17 @@ export async function readOn(key: AiKeyConfig, apiKey: string, url: string, sign
             return { title: "", url, text: cut(str(x.raw_content)) };
         }
         case "firecrawl": {
-            const r = json(await post("https://api.firecrawl.dev/v2/scrape", { url, formats: ["markdown"] }, bearer, signal));
+            const r = json(await post("https://api.firecrawl.dev/v2/scrape", { url, formats: html ? ["markdown", "rawHtml"] : ["markdown"] }, bearer, signal));
             const x = (r.data as Row) ?? {};
-            return { title: str((x.metadata as Row | undefined)?.title), url, text: cut(str(x.markdown)) };
+            return { title: str((x.metadata as Row | undefined)?.title), url, text: cut(str(x.markdown)), ...(html && x.rawHtml ? { html: str(x.rawHtml) } : {}) };
         }
         case "scrapedo": {
+            // html: the page as served (Scrape.do's default) — the reader then sees the
+            // page's own product data: price, barcode, photos.
+            if (html) {
+                const page = await send(`https://api.scrape.do/?${new URLSearchParams({ token: apiKey, url })}`, { signal });
+                return { title: "", url, text: "", html: page };
+            }
             const q = new URLSearchParams({ token: apiKey, url, output: "markdown" });
             return { title: "", url, text: cut(await send(`https://api.scrape.do/?${q}`, { signal })) };
         }
@@ -93,8 +100,8 @@ export async function webSearch(query: string): Promise<WebPage[]> {
 }
 
 /** Read one page on the "web" chain. */
-export async function readPage(url: string): Promise<WebPage> {
-    return (await runChain({ use: "web", step: "read", premium: true }, (k, apiKey, signal) => readOn(k, apiKey, url, signal))).result;
+export async function readPage(url: string, opts: { html?: boolean } = {}): Promise<WebPage> {
+    return (await runChain({ use: "web", step: "read", premium: true }, (k, apiKey, signal) => readOn(k, apiKey, url, signal, opts.html))).result;
 }
 
 /** Search results as a prompt block: each page's URL and what it says. */

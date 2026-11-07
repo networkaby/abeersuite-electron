@@ -26,6 +26,10 @@ export type PageRead = {
     norm: string;
     /** Product photos the page names in its share preview and built-in data (none when read through a key). */
     photos: string[];
+    /** This listing's own price (₹) from the page's product data — not the "similar items" rows. null = not found. */
+    price: number | null;
+    /** In stock per the page's product data; null = the page does not say. */
+    inStock: boolean | null;
 };
 
 export type PageSearch = {
@@ -51,14 +55,66 @@ const codeKey = (c: string) => {
 const isBarcode = (c: string) => /^\d{8,14}$/.test(c.replace(/[\s-]/g, ""));
 
 /** Visible text and the codes in its built-in data (JSON-LD, shop JSON). */
-function readHtml(html: string, pageUrl: string): { visible: string; codes: string[]; photos: string[] } {
+type HtmlRead = { visible: string; codes: string[]; photos: string[]; price: number | null; inStock: boolean | null };
+
+/**
+ * This listing's own price and stock, from the page's product data — never from
+ * its text, where marketplace pages show many prices ("similar items", bank
+ * offers). Order: JSON-LD Product offers (Flipkart, most shops), the price meta
+ * tag, then Amazon's buy-box data. null when none is there (owner, 2026-11-08:
+ * a Flipkart page showed eight prices, only one of them this product's).
+ */
+function offerIn(html: string): { price: number | null; inStock: boolean | null } {
+    const num = (v: unknown) => {
+        const n = Number(String(v ?? "").replace(/[^\d.]/g, ""));
+        return Number.isFinite(n) && n > 0 && n < 10_000_000 ? n : null;
+    };
+    // JSON-LD: the first Product's offers (an object, an array, or an AggregateOffer).
+    for (const m of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
+        let data: unknown;
+        try { data = JSON.parse(m[1].trim()); } catch { continue; }
+        const stack: unknown[] = [data];
+        for (let i = 0; i < stack.length && i < 200; i++) {
+            const x = stack[i];
+            if (Array.isArray(x)) { stack.push(...x); continue; }
+            if (!x || typeof x !== "object") continue;
+            const o = x as Record<string, unknown>;
+            if (o["@graph"]) stack.push(o["@graph"]);
+            const type = String(o["@type"] ?? "");
+            if (!/product/i.test(type) || !o.offers) continue;
+            const offers = (Array.isArray(o.offers) ? o.offers : [o.offers]) as Record<string, unknown>[];
+            for (const offer of offers) {
+                const price = num(offer.price ?? offer.lowPrice);
+                if (price == null) continue;
+                const av = String(offer.availability ?? "");
+                return { price, inStock: av ? /instock|limitedavailability|preorder/i.test(av) : null };
+            }
+        }
+    }
+    const meta = /<meta[^>]+(?:property|name)=["'](?:product:price:amount|og:price:amount)["'][^>]*content=["']([^"']+)["']/i.exec(html);
+    if (meta && num(meta[1]) != null) return { price: num(meta[1]), inStock: null };
+    // Amazon: the buy box's data, else its first displayed price block.
+    const amazon = /"priceAmount"\s*:\s*([\d.]+)/.exec(html) ?? /id="corePrice[^"]*"[\s\S]{0,2000}?class="a-price-whole">\s*([\d,]+)/.exec(html);
+    if (amazon && num(amazon[1]) != null) {
+        const gone = /id="availability"[\s\S]{0,400}?(currently unavailable|out of stock)/i.test(html);
+        return { price: num(amazon[1]), inStock: gone ? false : null };
+    }
+    // No guessing from the page text. Flipkart, for one, sends a plain reader no
+    // product data — its first "₹" blocks are ADS for other products (checked
+    // 2026-11-08: "AD · EVM 32 GB Pen Drive … ₹669"); the listing's own price is
+    // filled in by the browser. null → the caller reads it in a browser or says
+    // "could not check".
+    return { price: null, inStock: null };
+}
+
+function readHtml(html: string, pageUrl: string): HtmlRead {
     const codes = [...html.matchAll(/"(?:barcode|gtin(?:8|12|13|14)?|ean|upc|mpn|sku)"\s*:\s*"([^"]{4,40})"/gi)].map((m) => m[1].trim());
     const visible = html
         .replace(/<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi, " ")
         .replace(/<[^>]+>/g, "\n")
         .replace(/&nbsp;|&#160;/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, "\"").replace(/&#39;/g, "'")
         .split("\n").map((l) => l.trim()).filter(Boolean).join(" | ");
-    return { visible, codes: [...new Set(codes)], photos: photosIn(html, pageUrl) };
+    return { visible, codes: [...new Set(codes)], photos: photosIn(html, pageUrl), ...offerIn(html) };
 }
 
 /** Logos, icons and placeholders are not product photos. */
@@ -100,7 +156,7 @@ function photosIn(html: string, pageUrl: string): string[] {
 }
 
 /** Our own download; null when the page is blocked, empty or not public. */
-async function download(url: string): Promise<{ visible: string; codes: string[]; photos: string[] } | null> {
+async function download(url: string): Promise<HtmlRead | null> {
     try {
         const res = await fetch(url, {
             headers: { "user-agent": UA, "accept-language": "en-IN,en" },
@@ -116,10 +172,16 @@ async function download(url: string): Promise<{ visible: string; codes: string[]
 }
 
 /** Through the Read page keys (renders JavaScript, passes bot checks); null when none is set or all fail. */
-async function readThroughKey(url: string): Promise<{ visible: string; codes: string[]; photos: string[] } | null> {
+async function readThroughKey(url: string): Promise<HtmlRead | null> {
     try {
-        const p = await readPage(url);
-        return p.text.length >= MIN_PAGE_CHARS ? { visible: p.text, codes: [], photos: [] } : null;
+        // The page as served when the reader can give it (Scrape.do, Firecrawl):
+        // then a blocked page still yields its barcode, photos and own price.
+        const p = await readPage(url, { html: true });
+        if (p.html) {
+            const page = readHtml(p.html.slice(0, MAX_PAGE_BYTES), url);
+            if (page.visible.length >= MIN_PAGE_CHARS) return page;
+        }
+        return p.text.length >= MIN_PAGE_CHARS ? { visible: p.text, codes: [], photos: [], price: null, inStock: null } : null;
     } catch {
         return null;
     }
@@ -239,7 +301,7 @@ async function readPicked(picked: { u: string; host: string; rank: number }[], o
         }
         const codeLine = page.codes.length ? `Codes in the page data: ${page.codes.join(", ")}\n` : "";
         const textPart = productPart(page.visible, hints);
-        return { url: u, site: host, maker: rank === 0, codeMatch, text: codeLine + textPart, norm: normForCheck(codeLine + page.visible), photos: page.photos };
+        return { url: u, site: host, maker: rank === 0, codeMatch, text: codeLine + textPart, norm: normForCheck(codeLine + page.visible), photos: page.photos, price: page.price, inStock: page.inStock };
     }));
     const pages = reads.filter((p): p is PageRead => p !== null);
     return { pages, dropped, ...(pages.length ? {} : { searchNote: "No page could be read" }) };
