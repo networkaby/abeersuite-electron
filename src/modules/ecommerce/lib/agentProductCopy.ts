@@ -249,6 +249,7 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
         where: { id },
         select: {
             name: true, modelNo: true, shopStatus: true, imageUrl: true, galleryJson: true, shopDraftJson: true,
+            shopSubheading: true, shopDescription: true, specsJson: true,
             brandId: true, brand: { select: { name: true } },
             collections: { select: { categoryId: true }, orderBy: { sortOrder: "asc" } },
             codes: { where: { kind: { in: ["EAN", "UPC"] } }, select: { value: true } },
@@ -340,7 +341,20 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
     };
     // Into the product's draft copy (shopDraft.ts), beside any edits staff have
     // open there. The stage is not touched: the shop keeps the finished version.
-    const next: ShopDraft = { patch: { ...open?.patch, ...masterPatch }, aiCopy: draft };
+    // The copy goes into the draft's fields too, so the product page opens with it
+    // filled in. Never over staff (owner's rule: auto-fill fills blanks only):
+    // a field staff typed — on the product or already in this draft — stays, and
+    // the AI version waits beside it with a Use button.
+    const was = { ...{ shopSubheading: p.shopSubheading, shopDescription: p.shopDescription, specs: specsOf(p.specsJson) }, ...open?.patch };
+    const copyPatch: ShopDraft["patch"] = {};
+    if (!was.shopDescription?.trim()) copyPatch.shopDescription = draft.shopDescription;
+    const sub = was.shopSubheading?.trim();
+    if (!sub || sub === p.name.trim()) copyPatch.shopSubheading = draft.title;
+    const have = was.specs ?? {};
+    const lower = new Set(Object.keys(have).map((k) => k.trim().toLowerCase()));
+    const added = Object.entries(draft.specs).filter(([k, v]) => v.trim() && !lower.has(k.trim().toLowerCase()));
+    if (added.length) copyPatch.specs = { ...have, ...Object.fromEntries(added) };
+    const next: ShopDraft = { patch: { ...open?.patch, ...masterPatch, ...copyPatch }, aiCopy: draft };
     await prisma.invProduct.update({
         where: { id },
         data: { shopDraftJson: next as unknown as Prisma.InputJsonValue, shopDraftAt: new Date() },
@@ -392,4 +406,10 @@ export async function readPageForAgent(b: z.infer<typeof readPageSchema>) {
         /** Product photos the page names — send the right ones back as photoPicks. */
         photos: pg.photos,
     };
+}
+
+/** InvProduct.specsJson as label → text (null when empty or not an object). */
+function specsOf(raw: unknown): Record<string, string> | null {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, String(v)]));
 }
