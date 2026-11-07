@@ -281,7 +281,7 @@ cost on the server:
 Unpublished (new, made offline, untouched) → Draft (anyone, AI or staff, working on it) → Published.
 
 - "Pending" means Published but a publish rule is unmet. It isn't stored; it's worked out each time. The product goes live by itself once the rule is met.
-- Unpublish sends a product back to Draft.
+- Unpublish sends a product back to **Unpublished**, never to Draft. Draft holds only work someone (AI or staff) did that needs review, so the Draft tab is the review list.
 - The shop reads one "live now" flag: Published and the rules met.
 
 ---

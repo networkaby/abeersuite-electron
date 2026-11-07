@@ -463,8 +463,8 @@ export default function ProductForm({
         orderable: true,
     };
 
-    /** Save; Publish / Unpublish also move the stage (Unpublish = back to Draft). */
-    const submit = async (stage?: "PUBLISHED" | "DRAFT") => {
+    /** Save; Publish / Unpublish also move the stage (Unpublish = back to Unpublished). */
+    const submit = async (stage?: "PUBLISHED" | "UNPUBLISHED") => {
         if (!name.trim()) { toast.error("Name is required"); return; }
         if (!sku.trim() && !initial?.id) { toast.error("SKU is required"); return; }
         const specs = Object.fromEntries(specPairs.filter((x) => x.k.trim()).map((x) => [x.k.trim(), x.v.trim()]));
@@ -514,7 +514,7 @@ export default function ProductForm({
             toast.success(
                 stage === "PUBLISHED"
                     ? saved.isListedInShop ? "Published — live in the shop" : "Published — pending until Shop readiness is met"
-                    : stage === "DRAFT" ? "Back to Draft — off the shop" : "Saved",
+                    : stage === "UNPUBLISHED" ? "Unpublished — off the shop" : "Saved",
             );
             onSaved?.(res.data);
         } catch (e: unknown) {
@@ -875,8 +875,8 @@ export default function ProductForm({
                         </Button>
                     ) : null}
                     {initial?.id && shopStatus === "PUBLISHED" ? (
-                        <Button type="button" variant="outline" onClick={() => void submit("DRAFT")} disabled={busy}
-                            title="Save and take it off the shop — back to Draft to fix">
+                        <Button type="button" variant="outline" onClick={() => void submit("UNPUBLISHED")} disabled={busy}
+                            title="Save and take it off the shop — back to Unpublished">
                             Unpublish
                         </Button>
                     ) : null}

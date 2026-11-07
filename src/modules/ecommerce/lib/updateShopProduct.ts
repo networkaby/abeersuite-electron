@@ -52,7 +52,7 @@ export const shopProductPatchSchema = z.object({
     lengthCm: z.coerce.number().int().min(0).max(1000).optional().nullable(),
     breadthCm: z.coerce.number().int().min(0).max(1000).optional().nullable(),
     heightCm: z.coerce.number().int().min(0).max(1000).optional().nullable(),
-    /** Old switch (a tab opened before shopStatus) — on = publish, off = back to Draft. */
+    /** Old switch (a tab opened before shopStatus) — on = publish, off = back to Unpublished. */
     isListedInShop: z.boolean().optional(),
     /** Publish / Unpublish buttons. Left out, a save of an UNPUBLISHED product makes it DRAFT. */
     shopStatus: z.enum(SHOP_STATUSES).optional(),

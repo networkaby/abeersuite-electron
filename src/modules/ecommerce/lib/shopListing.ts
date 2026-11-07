@@ -42,12 +42,13 @@ export type ShopListingDecision = {
  * The product's next stage (owner, 2026-11-07). Staff's choice wins; with none,
  * any shop save of an UNPUBLISHED product means someone is working on it → DRAFT.
  * `listed` is the old switch (an open tab from before): on = publish, off takes a
- * published product back to Draft.
+ * published product back to Unpublished. Unpublish never makes a Draft: Draft
+ * is only work someone (AI or staff) did that needs review.
  */
 export function nextShopStatus(current: ShopStatus, o: { status?: ShopStatus; listed?: boolean }): ShopStatus {
     if (o.status) return o.status;
     if (o.listed === true) return "PUBLISHED";
-    if (o.listed === false && current === "PUBLISHED") return "DRAFT";
+    if (o.listed === false && current === "PUBLISHED") return "UNPUBLISHED";
     return current === "UNPUBLISHED" ? "DRAFT" : current;
 }
 

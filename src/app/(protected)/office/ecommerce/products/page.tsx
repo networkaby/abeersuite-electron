@@ -286,7 +286,7 @@ export default function EcommerceProductsPage() {
                     (data.pending ? ` · ${data.pending} pending (live by themselves once their publish rules are met)` : "")
                 );
             } else {
-                toast.success(`${data.unpublished} back to Draft — off the shop`);
+                toast.success(`${data.unpublished} unpublished — off the shop`);
             }
             clearSelection();
             load();
@@ -302,13 +302,12 @@ export default function EcommerceProductsPage() {
     const togglePublish = async (p: ShopProductAdmin, next: boolean) => {
         setPublishing((s) => new Set(s).add(p.id));
         try {
-            // Unpublish = back to Draft: someone takes it off to fix it.
             const { data } = await axios.patch<ShopProductAdmin>(`/api/ecommerce/products/${p.id}`, {
-                shopStatus: next ? "PUBLISHED" : "DRAFT",
+                shopStatus: next ? "PUBLISHED" : "UNPUBLISHED",
             });
             setProducts((prev) => prev.map((x) => (x.id === p.id ? data : x)));
             patchCachedAdminProduct(data);
-            toast.success(!next ? "Back to Draft — off the shop" : data.isListedInShop ? "Published — live in the shop" : "Published — pending until its publish rules are met");
+            toast.success(!next ? "Unpublished — off the shop" : data.isListedInShop ? "Published — live in the shop" : "Published — pending until its publish rules are met");
         } catch (e: unknown) {
             const msg =
                 axios.isAxiosError(e) && e.response?.data && typeof e.response.data === "object"
