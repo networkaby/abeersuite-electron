@@ -7,7 +7,7 @@
 **Started:** 2026-04-17.
 **Last updated:** 2026-10-28.
 
-This file is the **only doc that carries status**. Architecture lives in [ARCHITECTURE.md](ARCHITECTURE.md). Setup/runbook lives in [README.md](README.md). Contributor rules live in [AGENTS.md](AGENTS.md). POS keyboard conventions live in [docs/pos-conventions.md](docs/pos-conventions.md). For the authoritative history, read `git log`.
+This file is the **only doc that carries status**. Architecture lives in [ARCHITECTURE.md](ARCHITECTURE.md). Setup/runbook lives in [README.md](README.md). Contributor rules live in [AGENTS.md](AGENTS.md). POS keyboard conventions live in [docs/pos-conventions.md](docs/pos-conventions.md). The AI product copy pipeline (key chain, Direct / Verified steps, reusable in other projects) lives in [docs/ai-product-copy-pipeline.md](docs/ai-product-copy-pipeline.md). For the authoritative history, read `git log`.
 
 ---
 
