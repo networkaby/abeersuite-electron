@@ -137,7 +137,11 @@ function productPart(visible: string, hints: string[]): string {
 function isMakerSite(host: string, brand: string, labelSite: string): boolean {
     if (labelSite && (host === labelSite || host.endsWith(`.${labelSite}`))) return true;
     const b = brand.toLowerCase().replace(/[^a-z0-9]/g, "");
-    return b.length >= 3 && host.replace(/[^a-z0-9]/g, "").includes(b);
+    if (b.length >= 3) return host.replace(/[^a-z0-9]/g, "").includes(b);
+    // A two-letter brand (HP, LG) would match half the web as a substring — count
+    // it only when the site's own name IS the brand: hp.com, www.lg.com, store.hp.com.
+    const name = host.split(".").slice(-2)[0];
+    return b.length === 2 && name === b;
 }
 
 const isSeller = (host: string) => AI_SELLER_SITES.some((s) => host === s || host.endsWith(`.${s}`));

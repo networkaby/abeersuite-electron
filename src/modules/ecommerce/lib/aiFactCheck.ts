@@ -55,7 +55,11 @@ export function numbersOnPage(pageNorm: string, value: string): boolean {
 function pageHas(text: string, value: string): boolean {
     if (numberTokens(value).length) return numbersOnPage(text, value);
     const words = value.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3);
-    if (!words.length) return false;
+    // Only short words ("HP", "LG"): each one must be there — "Brand: HP" never passed before.
+    if (!words.length) {
+        const short = value.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length === 2);
+        return short.length > 0 && short.every((w) => text.includes(w));
+    }
     return words.filter((w) => text.includes(w)).length / words.length >= 0.75;
 }
 
