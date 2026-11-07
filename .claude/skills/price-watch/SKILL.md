@@ -1,13 +1,13 @@
 ---
 name: price-watch
-description: Compare AbeerSuite shop prices with Amazon.in, Flipkart and the maker's MRP for chosen products and report which prices need attention — read only, never changes a price. Use when the owner says "price watch", "check our prices", "are we too costly", "compare prices with Amazon / Flipkart", "which prices need attention", or runs /price-watch (by hand or on a schedule).
+description: Compare AbeerSuite shop prices with Amazon.in and Flipkart (and the maker's MRP) for chosen products and report which prices need attention — read only, never changes a price. Use when the owner says "price watch", "check our prices", "are we too costly", "compare prices with Amazon / Flipkart", "which prices need attention", or runs /price-watch (by hand or on a schedule).
 ---
 
 # Price watch (read only)
 
 You read our shop price, MRP and stock from AbeerSuite, find the **same product**
-on Amazon.in, Flipkart and the maker's site, and write a report of the prices that
-need attention. **You never change a price** — staff decide in Pricing Strategy.
+on **Amazon.in and Flipkart** — the only market prices that count (owner,
+2026-11-08) — and write a report of the prices that need attention. **You never change a price** — staff decide in Pricing Strategy.
 The report is your own output; nothing is saved in the app.
 
 ## Setup (ask once if missing)
@@ -42,23 +42,25 @@ Tell the owner how many products you will check before starting a long run.
 
 For each product search, India first: brand + exact model / part code (`modelNo`, or the code in the name), or the barcode.
 
-- **Amazon.in**, **Flipkart**, and the **maker's own India store** (hp.com/in-en, portronics.com, …). Others only if those have nothing.
+- **Amazon.in** and **Flipkart** only for the price. Other shops and the maker's store never count as the market price — if neither marketplace has it, the product is ⚪ Not found.
+- The **maker's own India store** (hp.com/in-en, portronics.com, …) only to check the **MRP** — not for the gap.
 - **Same product only**: same model / part code, same capacity / size / colour / pack size. A sister model, a different pack (2-pack vs 1), refurbished or used → not the same; skip it.
 - Note for each: **price** (what a buyer pays now, delivered price if shown), **seller** (Amazon itself / a seller name), **in stock or not**, **link**, and the date.
+- A marketplace page shows many prices (other products in "similar" rows): use only the price of **this** listing — the one under its title, or the page's own product data. Unclear → "could not check", never guess.
 - Blocked or unclear page → say "could not check", never guess.
 
 ## 3. Compare and flag
 
-Use the **lowest in-stock same-product price** found (`market`).
+Use the **lowest in-stock same-product price on Amazon.in or Flipkart** (`market`).
 
 | Flag | When |
 |---|---|
 | 🔴 **We are higher** | `ourPrice` is more than the higher limit (10%) above `market` — losing sales |
 | 🟠 **We are much lower** | `ourPrice` is more than the lower limit (20%) below `market` — leaving money on the table |
-| 🟠 **Above MRP** | `ourPrice` > `mrp`, or the market shows a different MRP than ours |
+| 🟠 **Above MRP** / **MRP differs** | `ourPrice` > `mrp`, or Amazon / Flipkart / the maker show a different MRP than ours |
 | 🔴 **Below cost** / 🟠 **Thin margin** | only with `withCost`: `ourPrice` < `lastCost`, or margin under 10% |
 | ✅ **OK** | within the limits |
-| ⚪ **Not found** | no same-product price anywhere |
+| ⚪ **Not found** | no same-product price on Amazon.in or Flipkart |
 
 Never suggest a price below cost; never call a sister model a match.
 
@@ -70,7 +72,7 @@ Then a table, **needs attention first** (biggest gap first):
 
 | Product (SKU) | Ours | MRP | Market lowest (where) | Gap | Flag | Links |
 |---|---|---|---|---|---|---|
-| HP X4E75AA Black Printhead (123299) | ₹1,490 | ₹1,499 | ₹1,250 (mdcomputers… / Amazon) | +19% | 🔴 We are higher | [Amazon](…) · [Flipkart](…) |
+| HP X4E75AA Black Printhead (123299) | ₹1,490 | ₹1,499 | ₹1,350 (Amazon, seller X) | +10.4% | 🔴 We are higher | [Amazon](…) · [Flipkart](…) |
 
 Then the OK and not-found ones in a short list. End with:
 
