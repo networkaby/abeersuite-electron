@@ -1,3 +1,4 @@
+import { compatibleModels } from "@/shared/lib/shop/compatibility";
 import { productMatchesSearch } from "@/shared/lib/inventory/productSearch";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import type { ShopProductPublic } from "@/shared/lib/shop/productPublic";
@@ -20,10 +21,16 @@ function norm(s: string) {
  * SKU, barcodes and internal attributes. `ShopProductPublic` carries none of
  * those (see productPublic.ts), and this keeps it that way on purpose.
  */
-type Searchable = Pick<ShopProductPublic, "displayName" | "description" | "category">;
+type Searchable = Pick<ShopProductPublic, "displayName" | "description" | "category"> & {
+    /** The product's compatible models — "Smart Tank 580 head" finds the head (compatibility.ts). */
+    specs?: ShopProductPublic["specs"];
+    /** The same, already joined — the slim search-box index sends this instead of specs. */
+    fits?: string | null;
+};
 
 function shopSearchText(p: Searchable) {
-    return norm(`${p.displayName} ${p.description ?? ""} ${p.category}`);
+    const fits = p.fits ?? (p.specs ? compatibleModels({ specs: p.specs }).join(" ") : "");
+    return norm(`${p.displayName} ${p.description ?? ""} ${p.category} ${fits}`);
 }
 
 /**

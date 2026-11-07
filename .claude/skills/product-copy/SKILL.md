@@ -33,6 +33,7 @@ card is switched off — stop and tell the owner.
 |---|---|
 | "do product copy", "prepare 5 products", "SKU 107102" | **Prepare** — steps 0–9 |
 | "review product 722", "review the drafts / ready ones", "check for mistakes" | **Review** — notes only, step R |
+| "do compatibility for all ink, toner and printheads", "blades for razors" | **Compatibility** — the compatible list only, step C |
 
 ---
 
@@ -186,6 +187,24 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 - The draft fills the product page: description (if empty), online name (if empty or the stock name), missing specs, brand, collections, shipping. Anything staff typed stays; the AI version waits beside it with **Use**.
 
 ---
+
+## C. Compatibility mode (the compatible list only)
+
+The shop uses each product's **Compatible Models** list for its "Made for this one", "For the same machine" and "Works with these" rows and for search ("Smart Tank 580 head" finds the head). This mode fills or refreshes only that list — nothing else changes.
+
+1. Pick the products: `group=ink`, `group=toner`, `group=printhead`, `q=blade`, `q=charger`… with `need=all&stage=all`.
+2. For each, find **its own** maker's page (the accessory's maker, not the machine's): the part code's page on hp.com, canon.in, epson.co.in, gillette.co.in, or a third-party blade / ink maker's page. Use `read-page` when blocked.
+3. Copy the models **exactly as the page lists them** ("HP Smart Tank 580", "Gillette Mach3"). Other brands are fine when the accessory's maker says so — a BIC blade that fits Gillette Mach3 lists "Gillette Mach3".
+4. Send:
+
+```bash
+curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json"   "$ABEERSUITE_URL/api/agent/products/<id>/compatibility"   -d '{ "pages": [ { "url": "<maker page>", "accepted": true, "why": "maker, part code on page" } ], "models": ["HP Smart Tank 580", "HP Smart Tank 515"] }'
+```
+
+Answer: `{ kept, dropped, sources }`. The server keeps only models really on an accepted page and **replaces** the old list in the draft (the maker's current list is the truth). Report kept / dropped per product.
+
+- No maker list anywhere → skip, and note it ("no compatible list found").
+- A full Prepare run (steps 1–9) also saves the checked `compatibility` as this list.
 
 ## R. Review mode (notes only)
 

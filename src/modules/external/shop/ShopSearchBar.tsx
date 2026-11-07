@@ -19,6 +19,8 @@ type IndexProduct = {
     displayName: string;
     category: string;
     description: string | null;
+    /** Compatible models, joined (compatibility.ts). */
+    fits?: string | null;
     pricePaise: number;
     mrpPaise: number | null;
     imageUrl: string | null;

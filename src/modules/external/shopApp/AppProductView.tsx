@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ChevronDown, ChevronLeft, Heart, MapPin, Search, Share2, ShoppingCart, Truck } from "lucide-react";
 import ShopRemoteImage from "@/modules/external/shop/ShopRemoteImage";
 import AppProductRail from "@/modules/external/shopApp/AppProductRail";
+import type { CompatRows } from "@/shared/lib/shop/compatibility";
 import type { BridgeRow } from "@/shared/lib/shop/productRelations";
 import { useCartCount } from "@/modules/external/shopApp/CustomerAppShell";
 import { APP } from "@/modules/external/shopApp/appPaths";
@@ -30,10 +31,13 @@ export default function AppProductView({
     product: p,
     similar,
     bridges = [],
+    compat,
 }: {
     product: ShopProductPublic;
     similar: ShopProductPublic[];
     bridges?: BridgeRow[];
+    /** printer ↔ ink, razor ↔ blade (compatibility.ts). */
+    compat?: CompatRows;
 }) {
     const router = useRouter();
     const add = useShopCartStore((s) => s.add);
@@ -176,6 +180,15 @@ export default function AppProductView({
                 )}
             </div>
 
+            {[
+                { title: "Made for this one", items: compat?.forThis ?? [] },
+                { title: "For the same machine", items: compat?.sameFamily ?? [] },
+                { title: "Works with these", items: compat?.fits ?? [] },
+            ].filter((r) => r.items.length > 0).map((r) => (
+                <div key={r.title} className="mt-6">
+                    <AppProductRail title={r.title} products={r.items} />
+                </div>
+            ))}
             {similar.length > 0 && (
                 <div className="py-5">
                     <AppProductRail title="Similar products" products={similar} />

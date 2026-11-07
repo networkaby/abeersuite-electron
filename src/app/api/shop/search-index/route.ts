@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { handleApiError } from "@/shared/lib/api";
 import { loadStorefrontProductsCached } from "@/shared/lib/shop/storefrontProducts";
 import { loadBrowseTiles } from "@/shared/lib/shop/browseTiles";
+import { compatibleModels } from "@/shared/lib/shop/compatibility";
 
 /**
  * What the website search box suggests from, fetched once when the shopper
@@ -20,6 +21,8 @@ export async function GET() {
                 displayName: p.displayName,
                 category: p.category,
                 description: p.description ? p.description.slice(0, 200) : null,
+                // Compatible models, so "Smart Tank 580 head" suggests the head (compatibility.ts).
+                fits: compatibleModels(p).join(" ") || null,
                 pricePaise: p.pricePaise,
                 mrpPaise: p.mrpPaise,
                 imageUrl: p.galleryUrls[0] ?? p.imageUrl ?? null,

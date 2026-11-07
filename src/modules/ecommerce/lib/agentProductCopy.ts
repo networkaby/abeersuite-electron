@@ -11,6 +11,7 @@ import { readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAd
 import { checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { readGivenPages } from "@/modules/ecommerce/lib/aiPageReader";
 import { checkFact, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
+import { COMPATIBLE_SPEC } from "@/shared/lib/shop/compatibility";
 import { PHOTO_KINDS, PHOTO_REMOVE_REASONS, checklistFrom, isPhotoKind, type PhotoKind, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 
 /**
@@ -366,7 +367,10 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
     if (!sub || sub === p.name.trim()) copyPatch.shopSubheading = draft.title;
     const have = was.specs ?? {};
     const lower = new Set(Object.keys(have).map((k) => k.trim().toLowerCase()));
-    const added = Object.entries(draft.specs).filter(([k, v]) => v.trim() && !lower.has(k.trim().toLowerCase()));
+    // The checked compatible list also as its own spec — the shop's "Works with" rows and search read it.
+    const compatList = draft.compatibility.flatMap((g) => g.models);
+    const withCompat: Record<string, string> = { ...draft.specs, ...(compatList.length && { [COMPATIBLE_SPEC]: compatList.join(", ") }) };
+    const added = Object.entries(withCompat).filter(([k, v]) => v.trim() && !lower.has(k.trim().toLowerCase()));
     if (added.length) copyPatch.specs = { ...have, ...Object.fromEntries(added) };
 
     // Shipping weight / parcel size — blanks only, and only what the source really prints.
@@ -491,4 +495,53 @@ export async function addReviewNotes(id: number, b: z.infer<typeof notesSchema>)
     const next: ShopDraft = { patch: open?.patch ?? {}, ...(open?.aiCopy && { aiCopy: open.aiCopy }), notes };
     await prisma.invProduct.update({ where: { id }, data: { shopDraftJson: next as unknown as Prisma.InputJsonValue, shopDraftAt: new Date() } });
     return { notes: notes.length };
+}
+
+// ── Compatibility only ────────────────────────────────────────────────────────
+
+export const compatSchema = z.object({
+    /** The maker's (or seller's) pages with the list — read again by the server. */
+    pages: z.array(z.object({ url: z.string().url(), accepted: z.boolean(), why: z.string().trim().max(300).default("") })).min(1).max(8),
+    labelWebsite: z.string().trim().max(200).default(""),
+    /** Exact model names as the page lists them ("HP Smart Tank 580"). */
+    models: z.array(z.string().trim().min(2).max(120)).min(1).max(200),
+});
+
+/**
+ * "Do compatibility for all ink, toner and printheads": only the product's
+ * compatible list, refreshed from the maker's page — replaced, not added to
+ * (owner's call: the maker's current list is the truth; it is only a draft).
+ * Every model must be on an accepted page (the server reads it); the kept list
+ * goes into the draft as the "Compatible Models" spec. Nothing else changes.
+ */
+export async function saveCompatibility(id: number, b: z.infer<typeof compatSchema>) {
+    const p = await prisma.invProduct.findUnique({
+        where: { id },
+        select: { name: true, modelNo: true, specsJson: true, shopDraftJson: true, brand: { select: { name: true } }, codes: { where: { kind: { in: ["EAN", "UPC"] } }, select: { value: true } } },
+    });
+    if (!p) throw new AgentCopyError("Product not found");
+    const found = await readGivenPages({
+        urls: b.pages.map((x) => x.url),
+        brand: p.brand?.name ?? p.name.split(/\s+/)[0] ?? "",
+        labelSite: b.labelWebsite,
+        codes: [...p.codes.map((c) => c.value), ...(p.modelNo ? [p.modelNo] : [])],
+    });
+    const accepted = found.pages.filter((pg) => pg.codeMatch || b.pages.find((x) => x.url === pg.url)?.accepted);
+    if (!accepted.length) throw new AgentCopyError(`No accepted page could be read (${[...found.dropped, found.searchNote].filter(Boolean).join("; ") || "none"}) — nothing saved.`);
+    const kept = [...new Set(b.models.filter((m) => accepted.some((pg) => checkFact(pg.norm, "Compatible", m))))];
+    const dropped = b.models.filter((m) => !kept.includes(m));
+    if (!kept.length) throw new AgentCopyError("None of the models is on the accepted pages — nothing saved.");
+
+    const open = readShopDraft(p.shopDraftJson);
+    const base = open?.patch.specs ?? specsOf(p.specsJson) ?? {};
+    const specs = Object.fromEntries(Object.entries(base).filter(([k]) => !/^compatib/i.test(k.trim())));
+    specs[COMPATIBLE_SPEC] = kept.join(", ");
+    const note = `Compatible models refreshed from ${accepted.map((pg) => pg.site).join(", ")}: ${kept.length} kept${dropped.length ? `, ${dropped.length} dropped (not on the page): ${dropped.slice(0, 10).join(", ")}${dropped.length > 10 ? "…" : ""}` : ""}.`;
+    const next: ShopDraft = {
+        patch: { ...open?.patch, specs },
+        ...(open?.aiCopy && { aiCopy: open.aiCopy }),
+        notes: [...(open?.notes ?? []).filter((n) => !n.startsWith("Compatible models refreshed")), note],
+    };
+    await prisma.invProduct.update({ where: { id }, data: { shopDraftJson: next as unknown as Prisma.InputJsonValue, shopDraftAt: new Date() } });
+    return { kept, dropped, sources: accepted.map((pg) => ({ site: pg.site, url: pg.url, codeMatch: pg.codeMatch })) };
 }

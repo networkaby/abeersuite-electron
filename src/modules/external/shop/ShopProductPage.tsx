@@ -9,6 +9,7 @@ import { loadSimilarProducts, SIMILAR_PRODUCTS_LIMIT } from "@/shared/lib/shop/s
 import { loadShopAdContext } from "@/shared/lib/shop/adContext";
 import { loadStorefrontProductsCached } from "@/shared/lib/shop/storefrontProducts";
 import { buildBridgeRows } from "@/shared/lib/shop/productRelations";
+import { buildCompatRows } from "@/shared/lib/shop/compatibility";
 import { loadBoughtTogether } from "@/shared/lib/shop/salesSignals";
 import { dailyPick } from "@/shared/lib/shop/browseTiles";
 import { businessTodayIso } from "@/shared/lib/format/formatDate";
@@ -82,8 +83,13 @@ export default async function ShopProductPage({
     const bridges = buildBridgeRows(product, catalogue, similar.map((p) => p.id));
     // Real bills first: what customers actually bought with this (cached daily).
     const together = await loadBoughtTogether(product.id, catalogue);
+    // What fits what, from the products' "Compatible Models" (compatibility.ts) — printer ↔ ink, razor ↔ blade.
+    const compat = buildCompatRows(product, catalogue);
     // "Recommended": same department, other categories, not already on the page.
-    const onPage = new Set([product.id, ...similar.map((p) => p.id), ...together.map((p) => p.id), ...bridges.flatMap((r) => r.items.map((p) => p.id))]);
+    const onPage = new Set([
+        product.id, ...similar.map((p) => p.id), ...together.map((p) => p.id), ...bridges.flatMap((r) => r.items.map((p) => p.id)),
+        ...compat.forThis.map((p) => p.id), ...compat.sameFamily.map((p) => p.id), ...compat.fits.map((p) => p.id),
+    ]);
     const department = product.categoryPath[0] ?? null;
     const recommended = dailyPick(
         catalogue.filter((p) => !onPage.has(p.id) && p.groupId !== product.groupId && (department == null || p.categoryPath[0] === department)),
@@ -145,6 +151,42 @@ export default async function ShopProductPage({
             <NoteViewed productId={product.id} />
 
             {pageAd ? <AdUnit ad={pageAd} className="mt-12" /> : null}
+
+            {compat.forThis.length > 0 ? (
+                <ProductRail
+                    className="mt-16"
+                    bordered={false}
+                    eyebrow="Fits this"
+                    title="Made for this one"
+                    subtitle="Inks, parts and accessories that list this model"
+                    products={compat.forThis}
+                    seeAllHref={null}
+                />
+            ) : null}
+
+            {compat.sameFamily.length > 0 ? (
+                <ProductRail
+                    className="mt-16"
+                    bordered={false}
+                    eyebrow="Goes with this"
+                    title="For the same machine"
+                    subtitle="Other colours and parts that fit the same models"
+                    products={compat.sameFamily}
+                    seeAllHref={null}
+                />
+            ) : null}
+
+            {compat.fits.length > 0 ? (
+                <ProductRail
+                    className="mt-16"
+                    bordered={false}
+                    eyebrow="Works with"
+                    title="Works with these"
+                    subtitle="Models from this product's compatible list"
+                    products={compat.fits}
+                    seeAllHref={null}
+                />
+            ) : null}
 
             {together.length > 0 ? (
                 <ProductRail

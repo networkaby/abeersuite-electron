@@ -54,6 +54,7 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
             "GET /api/agent/products/{id}",
             "POST /api/agent/products/{id}/copy",
             "POST /api/agent/products/{id}/notes",
+            "POST /api/agent/products/{id}/compatibility",
             "POST /api/agent/read-page",
         ],
     },
