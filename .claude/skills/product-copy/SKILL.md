@@ -54,7 +54,7 @@ Answer: `{ products: [{ id, sku, name, brand, group, shopStatus, hasDescription,
 - `401` → wrong key or "Claude — Product copy" is off on Settings → Incoming API. Stop and tell the owner.
 - Skip products with `photos: 0` unless the owner says otherwise — with no photo there is no label to trust.
 - `draftWaitingSince` set → a draft is already open; say so and ask before adding to it.
-- Tell the owner which products you will do before you start. Do them **one at a time**, steps 1–5 each.
+- Tell the owner which products you will do before you start. Do them **one at a time**, steps 1–6 each.
 
 ## 1. Check (look at the photos)
 
@@ -62,7 +62,7 @@ Answer: `{ products: [{ id, sku, name, brand, group, shopStatus, hasDescription,
 curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$ABEERSUITE_URL/api/agent/products/<id>"
 ```
 
-Answer: `{ name, brand, category, modelNo, barcodes, typedSpecs, shopSupportDays, currentDescription, photos: [url…], writing: [rules…], photoKinds, photoRemoveReasons }`.
+Answer: `{ name, brand, category, modelNo, barcodes, typedSpecs, shopSupportDays, currentDescription, photos: [url…], writing: [rules…], photoKinds, photoRemoveReasons, currentCollections, masters: { brands: [{ id, name }], collections: [{ id, path }] } }`.
 
 Open **every** photo URL and look at it. Never use your own memory of this product.
 
@@ -117,6 +117,9 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
       "specSources": { "Model Number": "label" },
       "unsure": [], "dataFlags": []
     },
+    "brandId": 12,
+    "collectionIds": [34],
+    "notes": ["Spelling in the name: \"HUB-C\" → \"USB-C\""],
     "photos": { "have": ["front"], "must": ["ports"], "nice": ["in_use"], "remove": [] }
   }'
 ```
@@ -126,7 +129,22 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 - `422` with a message → fix the JSON as the message says and send again.
 - Tell the owner per product: what was kept, what went to `unsure` and why (the `note` names pages not used).
 
-## 5. Photo advice (in the same POST, optional)
+## 5. Brand, collections and notes (in the same POST)
+
+- **`brandId`** — the product's brand from `masters.brands`, only when `brand` is empty. Already set and different from the photo? That is a clash (step 1) — stop.
+- **`collectionIds`** — from `masters.collections`, the ones this product belongs in (by `path`). They are **added**; the ones in `currentCollections` stay and the main one is not changed. Pick only what clearly fits; none is fine.
+- **Never invent an id.** Use only ids from `masters`.
+- **`notes`** — every problem staff should fix, in simple words, one per line. For example:
+  - `Brand "Portronics" is not in masters — create it, then set it`
+  - `Create a collection "USB-C Hubs" under "Computer › Accessories"`
+  - `Spelling in the name: "8-in1 HUB-C Hub" → "8-in-1 USB-C Hub"`
+  - `Group "USB HUB" looks wrong for a docking station — check (GST)`
+  - `Model number POR-2149 is not in the Model No field`
+- The group (category, which sets GST) is never changed by you — only a note.
+
+All of this goes into the draft; staff see the brand and collections on the product page and accept them with Save as ready (it needs the product-masters permission).
+
+## 6. Photo advice (in the same POST, optional)
 
 `photos` uses the keys in `photoKinds`:
 - `have` — kinds our gallery already shows.
@@ -138,4 +156,4 @@ Never list a kind that makes no sense for the product. Leave `photos` out if you
 
 ## After
 
-Report a short table: product · result (draft / stopped on clash) · specs kept · unsure count · flags. Remind the owner the drafts wait on **E-Commerce → Products → Draft**: open the product, use what is right from the AI copy, **Save as ready**, and Publish when the time is right.
+Report a short table: product · result (draft / stopped on clash) · specs kept · unsure count · flags · notes (brand / collections set or to create). Remind the owner the drafts wait on **E-Commerce → Products → Draft**: open the product, use what is right from the AI copy, **Save as ready**, and Publish when the time is right.

@@ -38,9 +38,14 @@ async function adminRow(pid: number): Promise<ShopProductAdmin> {
     return withShopDraft(p, bands);
 }
 
+/** Draft fields that change inventory masters — need the product-masters tick to apply. */
+const MASTER_KEYS = ["groupId", "brandId", "collectionIds"] as const;
+
 export async function runDraftAction(
     pid: number,
     b: ShopProductPatch & { draft: "save" | "ready" | "discard" },
+    /** The product-masters check — asked only when the draft being applied changes a master. */
+    mastersGate: () => Promise<NextResponse | null>,
 ): Promise<{ product: ShopProductAdmin; response?: undefined } | { response: NextResponse }> {
     try {
         const row = await prisma.invProduct.findUnique({ where: { id: pid }, select: { shopStatus: true, shopDraftJson: true } });
@@ -66,7 +71,11 @@ export async function runDraftAction(
             return { product: await adminRow(pid) };
         }
 
-        // ready
+        // ready — a brand / group / collection from the draft (Claude's, say) needs the same tick as picking it by hand.
+        if (MASTER_KEYS.some((k) => patch[k] !== undefined)) {
+            const denied = await mastersGate();
+            if (denied) return { response: NextResponse.json({ error: "This draft changes brand / group / collections — needs the product-masters permission. Discard it, or ask someone who has it." }, { status: 403 }) };
+        }
         const saved = await updateShopProduct(pid, {
             ...patch,
             shopStatus: row.shopStatus === "PUBLISHED" ? undefined : "READY",

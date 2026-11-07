@@ -88,6 +88,8 @@ export type ProductCopy = Copy & {
     note: string;
     /** Our own data looks wrong (typed name / specs vs photo or a matched page) — staff fix by hand. */
     flags: string[];
+    /** Claude's notes for staff: a brand / collection to create, a spelling mistake, a wrong group… */
+    notes?: string[];
     /** Verified only: where each spec came from ("Label" or a site name). */
     specSources?: Record<string, string>;
     /** Verified only: what kinds of photo the gallery has / misses (photoChecklist.ts). */

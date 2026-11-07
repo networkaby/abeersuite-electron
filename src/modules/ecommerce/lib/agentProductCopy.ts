@@ -129,6 +129,32 @@ export async function productBacklog(q: z.infer<typeof backlogQuery>) {
 
 // ── One product: everything Step 1 needs ─────────────────────────────────────
 
+// ── Brand / collection masters Claude may pick from (never creates) ────────────
+
+const MASTERS_CACHE_MS = 5 * 60_000;
+let mastersCache: { at: number; brands: { id: number; name: string }[]; collections: { id: number; path: string }[] } | null = null;
+
+/** Active brands and every collection with its full path ("Computer › Accessories › USB Hub"), cached 5 min. */
+async function pickableMasters() {
+    if (mastersCache && Date.now() - mastersCache.at < MASTERS_CACHE_MS) return mastersCache;
+    const [brands, cats] = await Promise.all([
+        prisma.invBrand.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+        prisma.invCategory.findMany({ select: { id: true, name: true, parentId: true } }),
+    ]);
+    const byId = new Map(cats.map((c) => [c.id, c]));
+    const path = (id: number) => {
+        const parts: string[] = [];
+        for (let c = byId.get(id), n = 0; c && n < 10; c = c.parentId ? byId.get(c.parentId) : undefined, n++) parts.unshift(c.name);
+        return parts.join(" › ");
+    };
+    mastersCache = {
+        at: Date.now(),
+        brands,
+        collections: cats.map((c) => ({ id: c.id, path: path(c.id) })).sort((a, b) => a.path.localeCompare(b.path)),
+    };
+    return mastersCache;
+}
+
 export async function productForAgent(id: number) {
     const p = await prisma.invProduct.findUnique({
         where: { id },
@@ -138,9 +164,11 @@ export async function productForAgent(id: number) {
             codes: { where: { kind: { in: ["EAN", "UPC"] } }, select: { value: true } },
             brand: { select: { name: true } }, category: { select: { name: true } }, group: { select: { name: true } },
             warrantyTerm: { select: { durationDays: true } },
+            collections: { select: { categoryId: true }, orderBy: { sortOrder: "asc" } },
         },
     });
     if (!p) return null;
+    const masters = await pickableMasters();
     return {
         id: p.id,
         sku: p.sku,
@@ -164,6 +192,10 @@ export async function productForAgent(id: number) {
         /** Photo kinds for Step 5 (key → label). */
         photoKinds: Object.fromEntries(Object.entries(PHOTO_KINDS).map(([k, v]) => [k, v.label])),
         photoRemoveReasons: Object.keys(PHOTO_REMOVE_REASONS),
+        /** Collections set now, main first — Claude only adds to these. */
+        currentCollections: p.collections.map((c) => ({ id: c.categoryId, path: masters.collections.find((x) => x.id === c.categoryId)?.path ?? String(c.categoryId) })),
+        /** The masters to pick brandId / collectionIds from. Missing one? Say so in notes — never invent an id. */
+        masters: { brands: masters.brands, collections: masters.collections },
     };
 }
 
@@ -189,6 +221,12 @@ export const agentCopySchema = z.object({
      * (spec label → "label" or the page url it came from) and dataFlags.
      */
     copy: z.record(z.string(), z.unknown()),
+    /** Brand from masters.brands — used only when the product has no brand yet. */
+    brandId: z.number().int().positive().optional(),
+    /** Collections from masters.collections to ADD; the ones set now are kept, the main one stays. */
+    collectionIds: z.array(z.number().int().positive()).max(10).optional(),
+    /** Anything staff should fix: a brand / collection to create, a spelling mistake in our data, a wrong group… */
+    notes: z.array(z.string().trim().min(1).max(300)).max(20).default([]),
     /** Step 5 (optional): photo kinds as photoKinds keys, and our photos to remove. */
     photos: z.object({
         have: z.array(z.string()).default([]),
@@ -205,8 +243,9 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
         where: { id },
         select: {
             name: true, modelNo: true, shopStatus: true, imageUrl: true, galleryJson: true, shopDraftJson: true,
+            brandId: true, brand: { select: { name: true } },
+            collections: { select: { categoryId: true }, orderBy: { sortOrder: "asc" } },
             codes: { where: { kind: { in: ["EAN", "UPC"] } }, select: { value: true } },
-            brand: { select: { name: true } },
         },
     });
     if (!p) throw new AgentCopyError("Product not found");
@@ -239,9 +278,35 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
     const checked = checkWrittenCopy(p.name, body, found, written.data);
     const gallery = galleryOf(p);
     const kinds = (xs: string[]) => xs.filter(isPhotoKind) as PhotoKind[];
+    // Brand / collections: only ids that exist; brand fills a blank one only; collections are added.
+    const masters = await pickableMasters();
+    const notes = [...body.notes];
+    const open = readShopDraft(p.shopDraftJson);
+    const masterPatch: ShopDraft["patch"] = {};
+    if (body.brandId) {
+        const b = masters.brands.find((x) => x.id === body.brandId);
+        if (!b) notes.push(`Brand id ${body.brandId} is not an active brand — not set.`);
+        else if (p.brandId && p.brandId !== b.id) notes.push(`Brand left as "${p.brand?.name}" — Claude suggests "${b.name}". Check which is right.`);
+        else if (!p.brandId) {
+            masterPatch.brandId = b.id;
+            notes.push(`Brand "${b.name}" set in the draft — after Save as ready, rebuild the name with ⟳ / Deep edit if needed.`);
+        }
+    }
+    if (body.collectionIds?.length) {
+        const now = open?.patch.collectionIds ?? p.collections.map((c) => c.categoryId);
+        const unknown = body.collectionIds.filter((id) => !masters.collections.some((c) => c.id === id));
+        if (unknown.length) notes.push(`Collection id ${unknown.join(", ")} does not exist — not added.`);
+        const added = body.collectionIds.filter((id) => !unknown.includes(id) && !now.includes(id));
+        if (added.length) {
+            masterPatch.collectionIds = [...now, ...added];
+            notes.push(`Collections added in the draft: ${added.map((id) => masters.collections.find((c) => c.id === id)?.path).join("; ")}.`);
+        }
+    }
+
     const draft: ProductCopy = {
         ...checked.copy,
         note: `Written by Claude; ${checked.copy.note}`,
+        ...(notes.length && { notes }),
         ...(body.photos && {
             photoChecklist: checklistFrom(
                 kinds(body.photos.have), kinds(body.photos.must), kinds(body.photos.nice),
@@ -258,8 +323,7 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
     };
     // Into the product's draft copy (shopDraft.ts), beside any edits staff have
     // open there. The stage is not touched: the shop keeps the finished version.
-    const open = readShopDraft(p.shopDraftJson);
-    const next: ShopDraft = { patch: open?.patch ?? {}, aiCopy: draft };
+    const next: ShopDraft = { patch: { ...open?.patch, ...masterPatch }, aiCopy: draft };
     await prisma.invProduct.update({
         where: { id },
         data: { shopDraftJson: next as unknown as Prisma.InputJsonValue, shopDraftAt: new Date() },

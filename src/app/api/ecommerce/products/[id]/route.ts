@@ -43,7 +43,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     // Save as draft / Save as ready / Discard — the draft copy (shopDraft.ts).
     const { draft } = data;
     const saved = draft
-        ? await runDraftAction(pid, { ...data, draft })
+        ? await runDraftAction(pid, { ...data, draft }, async () => (await requirePermission(PERMISSIONS.ECOMMERCE_PRODUCT_MASTERS)).response ?? null)
         // Shared with the phone app's Photos screen — see updateShopProduct.ts.
         : await updateShopProduct(pid, data);
     return saved.response ?? NextResponse.json(saved.product);

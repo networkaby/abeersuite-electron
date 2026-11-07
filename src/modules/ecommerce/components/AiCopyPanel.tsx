@@ -21,6 +21,14 @@ export function AiDraftNotes({ draft }: { draft: ProductCopy }) {
         <>
             <p className="text-muted-foreground text-xs">{draft.note}</p>
             {draft.flags.length > 0 && <DataFlags flags={draft.flags} />}
+            {(draft.notes?.length ?? 0) > 0 && (
+                <div className="text-xs text-sky-800 dark:text-sky-300">
+                    <p className="font-medium">Notes for you:</p>
+                    <ul className="ml-4 list-disc">
+                        {draft.notes!.map((n) => <li key={n}>{n}</li>)}
+                    </ul>
+                </div>
+            )}
             {sourced.length > 0 && (
                 <p className="text-muted-foreground text-xs">
                     Spec sources: {sourced.map(([k, v]) => `${k} — ${v}`).join(" · ")}

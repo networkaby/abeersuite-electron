@@ -276,6 +276,8 @@ cost on the server:
   - a backlog list (paged in the DB)
   - one product's Step-1 input, plus the house-style rules, so Claude writes in the same style as our AI
   - submit the draft
+- **Brand and collections:** the product endpoint also sends the brand and collection masters (cached). Claude may set a brand only on a product with **no brand**, and may **add** collections (existing ones stay, the main one is unchanged), using existing ids only. Both go into the draft. Applying them with Save as ready needs the product-masters permission, the same as picking them by hand.
+- **Notes:** anything staff should fix (a brand or collection to create, a spelling mistake, a wrong group, an empty Model No) comes back as notes, shown under "Notes for you" on the product page. Claude never creates masters and never changes the group (GST).
 - **One skill file** tells Claude the steps and rules.
 
 ### A9. Shop stages and the draft copy
