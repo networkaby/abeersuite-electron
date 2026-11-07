@@ -893,6 +893,15 @@ export default function ProductForm({
                     </Button>
                 </div>
 
+                {(initial?.shopDraft?.notes?.length ?? 0) > 0 && (
+                    <div className="rounded-md border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200">
+                        <p className="font-medium">Review notes for you (Claude):</p>
+                        <ul className="ml-4 mt-1 list-disc space-y-0.5">
+                            {initial!.shopDraft!.notes!.map((n) => <li key={n}>{n}</li>)}
+                        </ul>
+                        <p className="mt-1 text-sky-800/80 dark:text-sky-300/80">Fix what applies, then Save as ready — or Discard draft to drop them.</p>
+                    </div>
+                )}
                 <div className="flex flex-wrap items-center gap-2">
                     {!initial?.id ? (
                         <Button type="button" onClick={() => void submit()} disabled={busy}>

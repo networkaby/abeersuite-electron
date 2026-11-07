@@ -1,16 +1,19 @@
 ---
 name: product-copy
-description: Write Verified online-shop copy (title, highlights, description, specs, warranty, photo advice) for AbeerSuite products as Claude, through the Cowork agent API — photo check, maker/seller page search, write from proven facts only, server fact check, saved as a Draft for staff. Use when the owner says "write product descriptions", "do product copy", "verified copy for the shop", "fill the unpublished products", or runs /product-copy.
+description: Prepare AbeerSuite shop products as Claude through the agent API — check photos against our data, find the maker / seller pages, write Verified copy (name, description, highlights, specs, compatibility, warranty), set brand and collections, fill shipping weight and parcel size, pick photos from the maker's page, advise on the gallery, and note every mistake in our data — all saved as a draft for staff (never published, never "ready"). Also reviews finished products and leaves notes only. Use when the owner says "do product copy", "write product descriptions", "prepare products for the shop", "review the drafts", "check product 722", or runs /product-copy.
 ---
 
 # Product copy (Verified, by Claude)
 
-You do the Verified steps yourself — look at the photos, search the web, read
-the pages, write — and send the result to AbeerSuite. The server then reads
-your pages **itself** and drops any fact it cannot find on them (Step 4). The
-copy goes into the product's **draft copy**; the shop keeps showing the last
-finished version. Staff review it on the product page, press **Save as ready**,
-and publish when the time is right. You never publish.
+You prepare products for the online shop and send everything to AbeerSuite.
+The server reads your pages **itself** and drops any fact it cannot find on them.
+Everything goes into the product's **draft copy**; the shop keeps showing the last
+finished version.
+
+**You only ever save to the draft.** You never press Save as ready, never publish,
+never create brands / collections, never change the group (GST). Staff review the
+draft, fix what your notes say, press **Save as ready**, and publish when the time
+is right.
 
 The rule above all: **no information is better than false information.**
 
@@ -19,13 +22,21 @@ Full design: `docs/ai-product-copy-pipeline.md`.
 ## Setup (ask once if missing)
 
 - `ABEERSUITE_URL` — the office site, e.g. `https://office.example.com` (no trailing `/`).
-- `PRODUCT_COPY_API_KEY` — the **Claude — Product copy** key from Settings → Incoming API (its own key, not the reviews / posts one).
+- `PRODUCT_COPY_API_KEY` — the **Claude — Product copy** key from Settings → Incoming API.
 
-Never print the key or write it into a file.
+Never print the key or write it into a file. `401` on any call → wrong key, or the
+card is switched off — stop and tell the owner.
+
+## Two modes
+
+| Owner says | Mode |
+|---|---|
+| "do product copy", "prepare 5 products", "SKU 107102" | **Prepare** — steps 0–9 |
+| "review product 722", "review the drafts / ready ones", "check for mistakes" | **Review** — notes only, step R |
+
+---
 
 ## 0. Pick products
-
-Turn what the owner says into the filters below and read the list:
 
 ```bash
 curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$ABEERSUITE_URL/api/agent/products?<filters>"
@@ -33,9 +44,9 @@ curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$ABEERSUITE_URL/api/agent/produc
 
 | Owner says | Filters |
 |---|---|
-| nothing particular ("do product copy") | *(none)* = newest Unpublished, no description, no draft open |
+| nothing particular | *(none)* = newest Unpublished, no description, no draft open |
 | "SKU 107102" / "these: 107102, 107233" | `sku=107102,107233` — exactly these, in that order |
-| "the Portronics hub" / a barcode | `q=portronics hub` — name, SKU or barcode |
+| "the Portronics hub" / a barcode | `q=portronics hub` |
 | "with at least 5 photos" | `minPhotos=5` |
 | "only what is in stock" | `inStock=1` |
 | "Portronics brand" / "USB HUB group" | `brand=portronics` / `group=usb hub` |
@@ -43,138 +54,165 @@ curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$ABEERSUITE_URL/api/agent/produc
 | "even if it has a description" | `need=all` |
 | "10 of them" | `limit=10` (max 50) |
 
-Filters combine: "5 Portronics products in stock with 5+ photos" → `brand=portronics&inStock=1&minPhotos=5&limit=5`.
+Filters combine: `brand=portronics&inStock=1&minPhotos=5&limit=5`.
 
 Answer: `{ products: [{ id, sku, name, brand, group, shopStatus, hasDescription, photos, stock, draftWaitingSince }], notFound?, nextBefore }`.
 
-- With `sku` or `q`, stage and description are not filtered unless you send them — a Published product can be redone; the work goes into its draft and the live product is untouched until staff Save as ready.
-- `notFound` → those SKUs are wrong, inactive or filtered out; tell the owner.
-- A `q` search that matches several products: show the list and ask which before starting.
-- Next page: add `&before=<nextBefore>`.
-- `401` → wrong key or "Claude — Product copy" is off on Settings → Incoming API. Stop and tell the owner.
-- Skip products with `photos: 0` unless the owner says otherwise — with no photo there is no label to trust.
-- `draftWaitingSince` set → a draft is already open; say so and ask before adding to it.
-- Tell the owner which products you will do before you start. Do them **one at a time**, steps 1–7 each.
+- With `sku` or `q`, stage and description are not filtered — a Published product can be redone; it goes into its draft.
+- `notFound` → tell the owner. Several `q` matches → show the list and ask.
+- Skip `photos: 0` unless told otherwise. `draftWaitingSince` set → a draft is open; say so and ask before adding to it.
+- **Tell the owner the list before starting.** Then do them **one at a time**, steps 1–9 each.
 
-## 1. Check (look at the photos)
+## 1. Read the product
 
 ```bash
 curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$ABEERSUITE_URL/api/agent/products/<id>"
 ```
 
-Answer: `{ name, brand, category, modelNo, barcodes, typedSpecs, shopSupportDays, currentDescription, photos: [url…], writing: [rules…], photoKinds, photoRemoveReasons, currentCollections, masters: { brands: [{ id, name }], collections: [{ id, path }] } }`.
+Answer: `{ name, brand, category, modelNo, barcodes, typedSpecs, shopSupportDays, currentDescription, photos, writing, photoKinds, photoRemoveReasons, currentCollections, masters: { brands, collections } }`.
 
-Open **every** photo URL and look at it. Never use your own memory of this product.
+## 2. Check the photos (open every one)
 
-1. **Clashes** — a real disagreement between our typed data (name, modelNo, barcodes, typedSpecs) and the photo: a different brand or model, a different printed number (capacity, wattage, length, count printed on the box), or a photo of a different product.
-   - Not a clash: missing data, the same thing spelled differently ("2 Yrs" = "2 Years"), a count you can only *see* (not printed).
-   - Warranty: our `shopSupportDays` being **shorter** than the printed warranty is normal. Only **longer** is a clash.
-   - **Any clash → stop this product.** Do not send anything. Tell the owner: `field: typed "X", photo shows "Y"`. Go to the next product.
-2. **labelFacts** — facts PRINTED on the product / box / label, copied as printed (`{"Capacity": "10000 mAh"}`).
-3. **seen** — things only visible in the photo, counts worded "at least N" (`{"USB-A ports": "at least 2"}`).
-4. **identity** — which facts tell this product from its sister models (capacity, size, wattage, yield, socket count).
-5. **Codes and website** — model / part codes and barcodes printed on the label; a website printed on the box (`labelWebsite`).
+Never use your own memory of the product.
 
-## 2. Pages (search the web)
+1. **Clash** = our typed data (name, modelNo, barcodes, typedSpecs) disagrees with what is **printed**: another brand or model, another printed number (capacity, wattage, size, count). Not a clash: missing data, the same thing spelled differently, a count only *seen*, our support period shorter than the printed warranty.
+   **Any clash → stop this product, send nothing.** Report `field: typed "X", photo shows "Y"` (e.g. `capacity: typed "128GB", label shows "256G"`).
+2. **labelFacts** — printed on product / box / label, copied as printed.
+3. **seen** — only visible, counts as "at least N".
+4. **identity** — what tells it from sister models (capacity, size, wattage, yield…).
+5. Codes, barcodes and any website printed on the box (`labelWebsite`).
+6. While looking, note **photo problems** for step 8.
 
-Search for brand + exact model / part code (or brand + type + main printed spec when there is no code). India first.
+## 3. Find the pages
 
-- **Maker's site first** (a host with the brand's name, or the website on the box), its Indian page when there is one. Then big Indian sellers (Amazon.in, Flipkart, …). Nothing else — blogs, price sites and other shops are dropped by the server anyway.
-- At most **8 pages**.
-- A page showing **our barcode** is the same product: accept it.
-- A page showing a **different barcode** is a different version: reject it.
-- Any other page: accept only if nothing on it disagrees with a label fact or identity fact. One real disagreement rejects the whole page (it may be a sister model). A page that simply does not mention a fact is not a disagreement. "At least" counts are minimums.
-- Never use a fact from a rejected page. English text only.
+Search brand + exact model / part code (India first). **Maker's site first**, then big Indian sellers (Amazon.in, Flipkart, Reliance Digital, Croma). At most 8 pages. Blogs and other shops are refused by the server.
 
-Keep every page you read, accepted or rejected, with a short `why`.
-
-**A page blocks you** (too many requests, bot check, empty page)? Ask the shop's server to read it — maker's site or a known seller only:
-
-```bash
-curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json"   "$ABEERSUITE_URL/api/agent/read-page" -d '{ "productId": <id>, "url": "<page url>", "labelWebsite": "<website on the box, or empty>" }'
-```
-
-Answer: `{ read: true, site, maker, codeMatch, text, photos }` or `{ read: false, why }`. `codeMatch: true` = our barcode / model code is on the page — the same product. Use it like a page you read yourself. Never use it for blogs or other shops — they are refused.
-
-## 3. Write
-
-Follow the `writing` lines from step 1 exactly — they are the shop's house style and the exact keys (`title`, `summary`, `highlights`, `description`, `compatibility`, `howToUse`, `warranty`, `specs`, `unsure`). Write from the label facts and accepted pages **only**.
-
-Also add:
-- `specSources` — for every key in `specs`: `"label"` or the **url** of the accepted page it came from.
-- `dataFlags` — where our typed data disagrees with the label or an accepted page, in simple words (e.g. "Page with your barcode says 8 sockets; your name says 4"). Empty or shorter typed data is not a flag; a shorter shop support period is not a flag.
-
-Warranty: only the **maker's** warranty, from the label or an accepted page. Our `shopSupportDays` is never written.
-
-## 4. Send (the server checks)
+**A page blocks you** (too many requests, bot check, empty)? Ask the server:
 
 ```bash
 curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json" \
-  "$ABEERSUITE_URL/api/agent/products/<id>/copy" -d '{
-    "labelFacts": { "Model": "POR-2149", "Ports": "8-in-1" },
-    "seen": { "USB-A ports": "at least 2" },
-    "labelWebsite": "www.portronics.com",
-    "pages": [
-      { "url": "https://www.portronics.com/products/mport-8", "accepted": true, "why": "maker, our EAN on page" },
-      { "url": "https://www.amazon.in/dp/XXXX", "accepted": false, "why": "shows 7-in-1 — sister model" }
-    ],
-    "copy": {
-      "title": "…", "summary": "…", "highlights": ["…"], "description": "…",
-      "compatibility": [], "howToUse": [], "warranty": "…",
-      "specs": { "Model Number": "POR-2149" },
-      "specSources": { "Model Number": "label" },
-      "unsure": [], "dataFlags": []
-    },
-    "brandId": 12,
-    "collectionIds": [34],
-    "notes": ["Spelling in the name: \"HUB-C\" → \"USB-C\""],
-    "photos": { "have": ["front"], "must": ["ports"], "nice": ["in_use"], "remove": [] }
-  }'
+  "$ABEERSUITE_URL/api/agent/read-page" -d '{ "productId": <id>, "url": "<page>", "labelWebsite": "" }'
 ```
 
-- The server downloads your pages again, checks every spec, highlight number and warranty against them, and moves anything unproven to `unsure`.
-- Answer: `{ result: "draft", shopStatus, kept: { specs, highlights, warranty }, unsure, flags, note, sources }`.
-- `422` with a message → fix the JSON as the message says and send again.
-- Tell the owner per product: what was kept, what went to `unsure` and why (the `note` names pages not used).
+Answer: `{ read: true, site, maker, codeMatch, text, photos }` or `{ read: false, why }`.
 
-## 5. Brand, collections and notes (in the same POST)
+- **Our code / barcode on the page** (`codeMatch`) → same product: accept.
+- **A different barcode** → another version: reject.
+- Other pages: accept only if nothing disagrees with a label or identity fact. One real disagreement rejects the whole page (sister model). Not mentioning a fact is not a disagreement.
+- Never use a fact from a rejected page. English only. Keep every page with a short `why`.
 
-- **`brandId`** — the product's brand from `masters.brands`, only when `brand` is empty. Already set and different from the photo? That is a clash (step 1) — stop.
-- **`collectionIds`** — from `masters.collections`, the ones this product belongs in (by `path`). They are **added**; the ones in `currentCollections` stay and the main one is not changed. Pick only what clearly fits; none is fine.
-- **Never invent an id.** Use only ids from `masters`.
-- **`notes`** — every problem staff should fix, in simple words, one per line. For example:
-  - `Brand "Portronics" is not in masters — create it, then set it`
-  - `Create a collection "USB-C Hubs" under "Computer › Accessories"`
-  - `Spelling in the name: "8-in1 HUB-C Hub" → "8-in-1 USB-C Hub"`
-  - `Group "USB HUB" looks wrong for a docking station — check (GST)`
-  - `Model number POR-2149 is not in the Model No field`
-- The group (category, which sets GST) is never changed by you — only a note.
+## 4. Write
 
-All of this goes into the draft; staff see the brand and collections on the product page and accept them with Save as ready (it needs the product-masters permission).
+Follow the `writing` lines exactly (house style and keys: `title`, `summary`, `highlights`, `description`, `compatibility`, `howToUse`, `warranty`, `specs`, `unsure`). Label facts and accepted pages **only**.
 
-## 6. Photos from the maker / seller pages (in the same POST)
+- `specSources` — for every spec: `"label"` or the accepted page's **url**.
+- `dataFlags` — our typed data disagrees with the label or an accepted page.
+- **Compatibility** (ink, toner, printheads, RAM, chargers, cables): copy the exact models from the maker's list.
+- **Warranty**: only the maker's, from the label or an accepted page — never our support period. Not found → `""` and "Manufacturer warranty" in `unsure`.
 
-Products with few photos: pick the right photos from the **accepted** pages (the `photos` a page shows, or the ones `read-page` returned) and send them as `photoPicks`, best first, each with the kind it fills (`photoKinds`):
+## 5. Brand and collections
+
+- `brandId` from `masters.brands`, only when `brand` is empty.
+- `collectionIds` from `masters.collections` — **added** to `currentCollections`; nothing is removed, the main one stays. Only what clearly fits.
+- **Never invent an id.** Missing brand / collection → a note.
+
+## 6. Shipping weight and parcel size
+
+For the courier rate. Prefer the **package** weight and size (what is shipped); else the product's own. Quote them **exactly as the source prints them**:
+
+```json
+"shipping": { "weight": "~0.05 kg", "dimensions": "116.26 x 36.46 x 100.94 mm", "source": "<accepted page url or \"label\">" }
+```
+
+The server finds the text on that source, converts it itself (grams; whole cm, rounded up), and fills the draft only where the product has no weight / size. Not on any source → leave `shipping` out and add a note ("Shipping weight / size unknown — weigh the box").
+
+## 7. Photos from the maker / seller pages
+
+Products with few photos: pick from the **accepted** pages' `photos` and send `photoPicks`, best first, each with the kind it fills:
 
 ```json
 "photoPicks": [ { "url": "https://www.portronics.com/cdn/shop/files/M8_-_1.png", "kind": "front" } ]
 ```
 
-- Only this exact product, model and colour; no watermark, no other brand's logo, sharp.
-- Prefer the **maker's** photos; a seller's photo is marked "check before use" for staff.
-- The server keeps a pick only if an accepted page really shows it, and offers it to staff — nothing is added to the gallery by itself.
-- Fill the `must` kinds first (step 7).
+Only this exact model and colour; no watermark, no other brand's logo, sharp. Prefer the maker's. Fill the `must` kinds first. The server keeps a pick only if an accepted page shows it; staff add them — nothing goes into the gallery by itself.
 
-## 7. Photo advice (in the same POST, optional)
+## 8. Mistake check → `notes`
 
-`photos` uses the keys in `photoKinds`:
-- `have` — kinds our gallery already shows.
-- `must` — kinds missing that a buyer needs to judge THIS product, most important first (usually front, then size).
-- `nice` — kinds missing that add feel, most useful first.
-- `remove` — our photos that should go: `{ url, why: one of photoRemoveReasons, note }` (duplicate: list only the weaker; a box shot and a product shot are never duplicates).
+Go through this list for every product and write each problem as one short line in `notes`:
 
-Never list a kind that makes no sense for the product. Leave `photos` out if you did not look properly.
+- **Name**: spelling ("8-in1 HUB-C" → "8-in-1 USB-C"), wrong order, missing model code, a better shop name.
+- **Model No / barcode** fields empty while the box prints them.
+- **Brand / collections**: missing from masters (say what to create), or the set one looks wrong.
+- **Group** looks wrong for the product (GST!) — say which fits; never change it yourself.
+- **Photos**: another model or old box version, someone else's watermark, blurry / dark, duplicates, no plain product front, no size photo, the main photo is not the best.
+- **Description already there**: a wrong spec, missing compatibility, our support period written as the maker's warranty.
+- **Shipping**: weight or size missing and not found anywhere.
+- **Price / stock**: only if something is plainly off (MRP below price) — say it, never guess a price.
 
-## After
+## 9. Send (the server checks)
 
-Report a short table: product · result (draft / stopped on clash) · specs kept · unsure count · flags · notes (brand / collections set or to create). Remind the owner the drafts wait on **E-Commerce → Products → Draft**: open the product, use what is right from the AI copy, **Save as ready**, and Publish when the time is right.
+```bash
+curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json" \
+  "$ABEERSUITE_URL/api/agent/products/<id>/copy" -d @copy.json
+```
+
+`copy.json`:
+
+```json
+{
+  "labelFacts": { "Part code": "X4E75AA" },
+  "seen": {},
+  "labelWebsite": "",
+  "pages": [ { "url": "https://www.hp.com/in-en/shop/...", "accepted": true, "why": "maker, part code on page" } ],
+  "copy": {
+    "title": "…", "summary": "…", "highlights": ["…"], "description": "…",
+    "compatibility": [ { "type": "Printer", "models": ["HP Smart Tank 500"] } ],
+    "howToUse": [], "warranty": "",
+    "specs": { "Model Number": "X4E75AA" },
+    "specSources": { "Model Number": "label" },
+    "unsure": ["Manufacturer warranty"], "dataFlags": []
+  },
+  "brandId": 12,
+  "collectionIds": [34],
+  "shipping": { "weight": "~0.05 kg", "dimensions": "116.26 x 36.46 x 100.94 mm", "source": "https://www.hp.com/in-en/shop/..." },
+  "photoPicks": [],
+  "notes": ["Product name could read better: \"HP Head X4E75AA Black\" → \"HP X4E75AA Black Printhead\""],
+  "photos": { "have": ["box_front"], "must": ["front", "size"], "nice": ["in_use"], "remove": [] }
+}
+```
+
+- `photos` = gallery advice with `photoKinds` keys: what we **have**, what we **must** add (most important first), **nice** to add, and our photos to **remove** (`{ url, why: one of photoRemoveReasons, note }`; duplicates: list only the weaker).
+- Answer: `{ result: "draft", shopStatus, kept, unsure, flags, note, sources }`. `422` → fix as the message says and resend.
+- The draft fills the product page: description (if empty), online name (if empty or the stock name), missing specs, brand, collections, shipping. Anything staff typed stays; the AI version waits beside it with **Use**.
+
+---
+
+## R. Review mode (notes only)
+
+For finished products — staff's copy or an earlier draft. **Change nothing**; only notes.
+
+1. Read the product (step 1) and its photos (step 2) — look for clashes and photo problems.
+2. Read the maker's page (step 3, `read-page` if blocked) and compare the current description, specs and compatibility with it.
+3. Go through the **mistake check** (step 8).
+4. Send the notes:
+
+```bash
+curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json" \
+  "$ABEERSUITE_URL/api/agent/products/<id>/notes" -d '{ "notes": ["…", "…"], "replace": false }'
+```
+
+`replace: true` for a fresh review (drops the old review notes). Nothing wrong → send nothing and say "no problems found".
+
+---
+
+## Report (always, at the end)
+
+A short table, one row per product:
+
+| Product | Result | Kept | Unsure | Notes |
+|---|---|---|---|---|
+| SKU · name | draft / stopped: clash / reviewed | specs n · compatible n · photos picked n · shipping ✓ | n | the 1–3 most important |
+
+Then: **stopped products** with the exact clash (staff must fix the data or the photos), and the next step for the owner:
+
+> Open **E-Commerce → Products → Draft**, read "Notes for you", add the suggested photos, fix what the notes say, then **Save as ready**. Publish when the time is right.

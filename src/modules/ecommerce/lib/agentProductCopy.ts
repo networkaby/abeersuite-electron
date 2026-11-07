@@ -10,6 +10,7 @@ import { OUTPUT_KEYS, type ProductCopy } from "@/modules/ecommerce/lib/aiProduct
 import { readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import { checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { readGivenPages } from "@/modules/ecommerce/lib/aiPageReader";
+import { checkFact, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
 import { PHOTO_KINDS, PHOTO_REMOVE_REASONS, checklistFrom, isPhotoKind, type PhotoKind, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 
 /**
@@ -233,6 +234,18 @@ export const agentCopySchema = z.object({
      * read of it); offered to staff to add — never put in the gallery by itself.
      */
     photoPicks: z.array(z.object({ url: z.string().url(), kind: z.string().optional() })).max(15).default([]),
+    /**
+     * For the courier quote: the PACKAGE weight and size (else the product's own),
+     * quoted exactly as the source prints them ("~0.05 kg", "116.26 x 36.46 x 100.94 mm"),
+     * with the source ("label" or the page url). The server finds the text on the
+     * source, converts it itself (grams, whole cm rounded up), and fills the draft
+     * only where the product has none.
+     */
+    shipping: z.object({
+        weight: z.string().trim().max(60).optional(),
+        dimensions: z.string().trim().max(80).optional(),
+        source: z.string().trim().max(500),
+    }).optional(),
     /** Step 5 (optional): photo kinds as photoKinds keys, and our photos to remove. */
     photos: z.object({
         have: z.array(z.string()).default([]),
@@ -250,6 +263,7 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
         select: {
             name: true, modelNo: true, shopStatus: true, imageUrl: true, galleryJson: true, shopDraftJson: true,
             shopSubheading: true, shopDescription: true, specsJson: true,
+            weightGrams: true, lengthCm: true, breadthCm: true, heightCm: true,
             brandId: true, brand: { select: { name: true } },
             collections: { select: { categoryId: true }, orderBy: { sortOrder: "asc" } },
             codes: { where: { kind: { in: ["EAN", "UPC"] } }, select: { value: true } },
@@ -354,7 +368,30 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
     const lower = new Set(Object.keys(have).map((k) => k.trim().toLowerCase()));
     const added = Object.entries(draft.specs).filter(([k, v]) => v.trim() && !lower.has(k.trim().toLowerCase()));
     if (added.length) copyPatch.specs = { ...have, ...Object.fromEntries(added) };
-    const next: ShopDraft = { patch: { ...open?.patch, ...masterPatch, ...copyPatch }, aiCopy: draft };
+
+    // Shipping weight / parcel size — blanks only, and only what the source really prints.
+    if (body.shipping) {
+        const src = body.shipping.source.trim();
+        const srcNorm = src.toLowerCase() === "label"
+            ? normForCheck([...Object.entries(body.labelFacts).flat(), ...Object.entries(body.seen).flat()].join(" "))
+            : found.pages.find((pg) => pg.url === src && checked.trusted.includes(pg))?.norm;
+        const blank = (k: "weightGrams" | "lengthCm" | "breadthCm" | "heightCm") => (open?.patch[k] ?? p[k]) == null;
+        if (!srcNorm) notes.push(`Shipping size not used: "${src}" is not the label or an accepted page.`);
+        else {
+            const w = body.shipping.weight && checkFact(srcNorm, "Weight", body.shipping.weight) ? gramsOf(body.shipping.weight) : null;
+            if (body.shipping.weight && w == null) notes.push(`Shipping weight "${body.shipping.weight}" not confirmed on the source — not filled.`);
+            if (w && blank("weightGrams")) copyPatch.weightGrams = w;
+            const d = body.shipping.dimensions && checkFact(srcNorm, "Dimensions", body.shipping.dimensions) ? cmOf(body.shipping.dimensions) : null;
+            if (body.shipping.dimensions && !d) notes.push(`Parcel size "${body.shipping.dimensions}" not confirmed on the source — not filled.`);
+            if (d && blank("lengthCm") && blank("breadthCm") && blank("heightCm")) {
+                [copyPatch.lengthCm, copyPatch.breadthCm, copyPatch.heightCm] = d;
+            }
+            if (copyPatch.weightGrams || copyPatch.lengthCm) {
+                notes.push(`Shipping filled in the draft: ${copyPatch.weightGrams ? `${copyPatch.weightGrams} g` : ""}${copyPatch.weightGrams && copyPatch.lengthCm ? ", " : ""}${copyPatch.lengthCm ? `${copyPatch.lengthCm} × ${copyPatch.breadthCm} × ${copyPatch.heightCm} cm` : ""} (from ${src.toLowerCase() === "label" ? "the label" : new URL(src).hostname}).`);
+            }
+        }
+    }
+    const next: ShopDraft = { patch: { ...open?.patch, ...masterPatch, ...copyPatch }, aiCopy: draft, ...(open?.notes && { notes: open.notes }) };
     await prisma.invProduct.update({
         where: { id },
         data: { shopDraftJson: next as unknown as Prisma.InputJsonValue, shopDraftAt: new Date() },
@@ -412,4 +449,46 @@ export async function readPageForAgent(b: z.infer<typeof readPageSchema>) {
 function specsOf(raw: unknown): Record<string, string> | null {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
     return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, String(v)]));
+}
+
+/** "~0.05 kg" / "50 g" / "1.2kg" → whole grams (rounded up); null when no weight is in the text. */
+function gramsOf(text: string): number | null {
+    const m = /(\d+(?:\.\d+)?)\s*(kg|kgs|g|gm|gms|grams?)\b/i.exec(text.replace(/,/g, ""));
+    if (!m) return null;
+    const g = Number(m[1]) * (m[2].toLowerCase().startsWith("k") ? 1000 : 1);
+    return g > 0 && g <= 1_000_000 ? Math.ceil(g) : null;
+}
+
+/** "116.26 x 36.46 x 100.94 mm" → [12, 4, 11] whole cm (rounded up); null when not three sizes. */
+function cmOf(text: string): [number, number, number] | null {
+    const m = /(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)\s*(mm|cm|in|inch|inches)?/i.exec(text.replace(/,/g, ""));
+    if (!m) return null;
+    const unit = (m[4] ?? "cm").toLowerCase();
+    const f = unit === "mm" ? 0.1 : unit.startsWith("in") ? 2.54 : 1;
+    const out = [m[1], m[2], m[3]].map((x) => Math.ceil(Number(x) * f)) as [number, number, number];
+    return out.every((x) => x > 0 && x <= 1000) ? out : null;
+}
+
+// ── Review mode: notes only ───────────────────────────────────────────────────
+
+export const notesSchema = z.object({
+    notes: z.array(z.string().trim().min(1).max(300)).min(1).max(30),
+    /** true = replace the review notes already there (a fresh review); default adds to them. */
+    replace: z.boolean().default(false),
+});
+
+/**
+ * Claude reviewed a product (finished copy, staff's or its own) and only leaves
+ * notes — nothing on the product changes. They go into the product's draft copy,
+ * so the product shows in the Draft tab with "Notes for you" until staff fix
+ * them and Save as ready, or Discard.
+ */
+export async function addReviewNotes(id: number, b: z.infer<typeof notesSchema>) {
+    const p = await prisma.invProduct.findUnique({ where: { id }, select: { shopDraftJson: true } });
+    if (!p) throw new AgentCopyError("Product not found");
+    const open = readShopDraft(p.shopDraftJson);
+    const notes = [...new Set([...(b.replace ? [] : open?.notes ?? []), ...b.notes])].slice(-50);
+    const next: ShopDraft = { patch: open?.patch ?? {}, ...(open?.aiCopy && { aiCopy: open.aiCopy }), notes };
+    await prisma.invProduct.update({ where: { id }, data: { shopDraftJson: next as unknown as Prisma.InputJsonValue, shopDraftAt: new Date() } });
+    return { notes: notes.length };
 }

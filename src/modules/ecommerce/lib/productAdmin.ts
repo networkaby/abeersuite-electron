@@ -10,13 +10,20 @@ import type { ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
 export type ShopDraft = {
     patch: Partial<Omit<ShopProductPatch, "draft" | "shopStatus" | "isListedInShop">>;
     aiCopy?: ProductCopy;
+    /** Review notes (Claude's review mode, /api/agent/products/[id]/notes) — things for staff to fix. */
+    notes?: string[];
 };
 
 export function readShopDraft(raw: unknown): ShopDraft | null {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-    const r = raw as { patch?: unknown; aiCopy?: unknown };
+    const r = raw as { patch?: unknown; aiCopy?: unknown; notes?: unknown };
     const patch = r.patch && typeof r.patch === "object" && !Array.isArray(r.patch) ? (r.patch as ShopDraft["patch"]) : {};
-    return { patch, ...(r.aiCopy && typeof r.aiCopy === "object" ? { aiCopy: r.aiCopy as ProductCopy } : {}) };
+    const notes = Array.isArray(r.notes) ? r.notes.filter((x): x is string => typeof x === "string") : [];
+    return {
+        patch,
+        ...(r.aiCopy && typeof r.aiCopy === "object" ? { aiCopy: r.aiCopy as ProductCopy } : {}),
+        ...(notes.length ? { notes } : {}),
+    };
 }
 import { invProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";

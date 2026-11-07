@@ -280,7 +280,10 @@ cost on the server:
 - **Notes:** anything staff should fix (a brand or collection to create, a spelling mistake, a wrong group, an empty Model No) comes back as notes, shown under "Notes for you" on the product page. Claude never creates masters and never changes the group (GST).
 - **A site blocks Claude?** `POST /api/agent/read-page` reads it through the server's own path: plain download, then the "Read page" keys on AI Setup (Scrape.do…), free keys first, within their limits. Maker or known sellers only, never a private address, so it is not an open scraper. Search keys (Tavily, Exa) are not lent to Claude; its own search is enough.
 - **Photos:** Claude sends `photoPicks` (photo link + kind) from the accepted pages. The server keeps a pick only if an accepted page really shows that photo, puts the maker's first, flags seller photos "check before use", and offers them on the product page. Nothing is added to the gallery by itself.
-- **One skill file** tells Claude the steps and rules.
+- **Shipping:** Claude quotes the package weight and size exactly as the source prints them; the server finds the text on the label or an accepted page, converts it itself (grams, whole cm rounded up) and fills the draft only where the product has none.
+- **Review mode:** `POST /api/agent/products/{id}/notes` adds notes only (nothing on the product changes). They show as "Review notes for you" on the product page until staff Save as ready or Discard.
+- **Claude only saves drafts** (owner, 2026-11-08): it never presses Save as ready and never publishes.
+- **One skill file** tells Claude the steps and rules, including a mistake checklist (name, codes, brand, collections, group, photos, description, shipping).
 
 ### A9. Shop stages and the draft copy
 
