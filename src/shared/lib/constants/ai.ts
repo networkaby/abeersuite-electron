@@ -26,7 +26,7 @@ export const AI_DEFAULT_COPY_FLOW: AiCopyFlow = "verified";
 export const AI_VERIFIED_LIMITS = { pages: 4, pageChars: 9000, fetchMs: 15_000 } as const;
 /** Verified photo suggestions: per page read, and in all (each one goes to the AI). `maxPx`: our
  *  Cloudinary photos go to the AI capped at this size — a full phone shot made the call time out. */
-export const AI_PHOTO_LIMITS = { perPage: 4, total: 8, maxPx: 1600 } as const;
+export const AI_PHOTO_LIMITS = { perPage: 12, total: 8, maxPx: 1600 } as const;
 /** Verified research (check + page search) kept in R2 so Photo AI can run on its own later
  *  (aiResearchStore.ts). One file per product, overwritten by each run — only the latest is kept.
  *  Temporary: older than maxAgeDays counts as missing; an R2 lifecycle rule on the prefix may delete it any time. */

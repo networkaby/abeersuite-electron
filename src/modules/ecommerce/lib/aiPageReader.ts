@@ -51,14 +51,14 @@ const codeKey = (c: string) => {
 const isBarcode = (c: string) => /^\d{8,14}$/.test(c.replace(/[\s-]/g, ""));
 
 /** Visible text and the codes in its built-in data (JSON-LD, shop JSON). */
-function readHtml(html: string): { visible: string; codes: string[]; photos: string[] } {
+function readHtml(html: string, pageUrl: string): { visible: string; codes: string[]; photos: string[] } {
     const codes = [...html.matchAll(/"(?:barcode|gtin(?:8|12|13|14)?|ean|upc|mpn|sku)"\s*:\s*"([^"]{4,40})"/gi)].map((m) => m[1].trim());
     const visible = html
         .replace(/<(script|style|noscript)[^>]*>[\s\S]*?<\/\1>/gi, " ")
         .replace(/<[^>]+>/g, "\n")
         .replace(/&nbsp;|&#160;/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, "\"").replace(/&#39;/g, "'")
         .split("\n").map((l) => l.trim()).filter(Boolean).join(" | ");
-    return { visible, codes: [...new Set(codes)], photos: photosIn(html) };
+    return { visible, codes: [...new Set(codes)], photos: photosIn(html, pageUrl) };
 }
 
 /** Logos, icons and placeholders are not product photos. */
@@ -69,15 +69,34 @@ const NOT_A_PHOTO = /logo|icon|sprite|placeholder|favicon|banner-?ad|blank\.|\.s
  * product data's "image" (JSON-LD, shop JSON). Costs nothing — the HTML is
  * already downloaded for the text.
  */
-function photosIn(html: string): string[] {
+/** Image hosts big shops serve product photos from (a different host from the page). */
+const PHOTO_CDNS = ["cdn.shopify.com", "m.media-amazon.com", "images-na.ssl-images-amazon.com", "rukminim1.flixcart.com", "rukminim2.flixcart.com", "res.cloudinary.com"];
+/** The site part of a host: "www.portronics.com" → "portronics.com", "shop.in.canon" → "in.canon". */
+const siteOf = (host: string) => host.toLowerCase().split(".").slice(-2).join(".");
+
+function photosIn(html: string, pageUrl: string): string[] {
+    const site = siteOf(new URL(pageUrl).hostname);
     const og = [...html.matchAll(/<meta[^>]+(?:property|name)=["']og:image(?::secure_url|:url)?["'][^>]*>/gi)]
         .map((m) => /content=["']([^"']+)["']/i.exec(m[0])?.[1] ?? "");
-    const data = [...html.matchAll(/"image"\s*:\s*(\[[^\]]{0,4000}\]|"[^"]{8,1000}")/gi)]
-        .flatMap((m) => m[1].match(/https?:\\?\/\\?\/[^"\s,\]\\]+(?:\\\/[^"\s,\]\\]+)*/g) ?? []);
-    const urls = [...og, ...data]
-        .map((u) => u.replace(/\\\//g, "/").replace(/&amp;/g, "&").trim())
-        .filter((u) => isPublicHttps(u) && !NOT_A_PHOTO.test(u));
-    return [...new Set(urls)].slice(0, AI_PHOTO_LIMITS.perPage);
+    // The product data's photo lists too: JSON-LD "image", and a shop's own product
+    // JSON (Shopify: "images" / "featured_image" / "media" → "src", often "//cdn…"
+    // with no https:) — the owner's #989 maker page gave 1 photo of its gallery.
+    const data = [...html.matchAll(/"(?:image|images|featured_image|src|original_src|contentUrl)"\s*:\s*(\[[^\]]{0,8000}\]|"[^"]{8,1000}")/gi)]
+        .flatMap((m) => m[1].match(/(?:https?:)?\\?\/\\?\/[^"\s,\]\\]+(?:\\\/[^"\s,\]\\]+)*/g) ?? []);
+    const clean = (u: string) => u.replace(/\\\//g, "/").replace(/&amp;/g, "&").trim().replace(/^\/\//, "https://");
+    const urls = [
+        ...og.map(clean),
+        // A "src" can be a script or a font — from the data, image files only.
+        ...data.map(clean).filter((u) => /\.(jpe?g|png|webp|avif)(\?|$)/i.test(u)),
+    ].filter((u) => {
+        const h = isPublicHttps(u)?.hostname.toLowerCase();
+        // The page's own site or a shop CDN — not a widget's button; not a collection banner (another model).
+        return !!h && (siteOf(h) === site || PHOTO_CDNS.includes(h)) && !NOT_A_PHOTO.test(u) && !/\/collections?\//i.test(new URL(u).pathname);
+    });
+    // One photo once, whatever size or version the link asks for (Shopify "_800x", "?v=", "width=").
+    const sameKey = (u: string) => u.split("?")[0].replace(/_(\d+x\d*|\d*x\d+|pico|icon|thumb|small|compact|medium|large|grande|master)(?=\.\w+$)/i, "");
+    const seen = new Set<string>();
+    return urls.filter((u) => !seen.has(sameKey(u)) && seen.add(sameKey(u))).slice(0, AI_PHOTO_LIMITS.perPage);
 }
 
 /** Our own download; null when the page is blocked, empty or not public. */
@@ -89,7 +108,7 @@ async function download(url: string): Promise<{ visible: string; codes: string[]
             signal: AbortSignal.timeout(AI_VERIFIED_LIMITS.fetchMs),
         });
         if (res.status !== 200 || !isPublicHttps(res.url)) return null;
-        const page = readHtml((await res.text()).slice(0, MAX_PAGE_BYTES));
+        const page = readHtml((await res.text()).slice(0, MAX_PAGE_BYTES), res.url);
         return page.visible.length >= MIN_PAGE_CHARS ? page : null;
     } catch {
         return null;
