@@ -278,6 +278,8 @@ cost on the server:
   - submit the draft
 - **Brand and collections:** the product endpoint also sends the brand and collection masters (cached). Claude may set a brand only on a product with **no brand**, and may **add** collections (existing ones stay, the main one is unchanged), using existing ids only. Both go into the draft. Applying them with Save as ready needs the product-masters permission, the same as picking them by hand.
 - **Notes:** anything staff should fix (a brand or collection to create, a spelling mistake, a wrong group, an empty Model No) comes back as notes, shown under "Notes for you" on the product page. Claude never creates masters and never changes the group (GST).
+- **A site blocks Claude?** `POST /api/agent/read-page` reads it through the server's own path: plain download, then the "Read page" keys on AI Setup (Scrape.do…), free keys first, within their limits. Maker or known sellers only, never a private address, so it is not an open scraper. Search keys (Tavily, Exa) are not lent to Claude; its own search is enough.
+- **Photos:** Claude sends `photoPicks` (photo link + kind) from the accepted pages. The server keeps a pick only if an accepted page really shows that photo, puts the maker's first, flags seller photos "check before use", and offers them on the product page. Nothing is added to the gallery by itself.
 - **One skill file** tells Claude the steps and rules.
 
 ### A9. Shop stages and the draft copy

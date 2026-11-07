@@ -10,7 +10,7 @@ import { OUTPUT_KEYS, type ProductCopy } from "@/modules/ecommerce/lib/aiProduct
 import { readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import { checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { readGivenPages } from "@/modules/ecommerce/lib/aiPageReader";
-import { PHOTO_KINDS, PHOTO_REMOVE_REASONS, checklistFrom, isPhotoKind, type PhotoKind, type PhotoRemoveReason } from "@/modules/ecommerce/lib/photoChecklist";
+import { PHOTO_KINDS, PHOTO_REMOVE_REASONS, checklistFrom, isPhotoKind, type PhotoKind, type PhotoRemoveReason, type PhotoSuggestion } from "@/modules/ecommerce/lib/photoChecklist";
 
 /**
  * Claude (Cowork / chat) runs the Verified steps itself — photo check, page
@@ -227,6 +227,12 @@ export const agentCopySchema = z.object({
     collectionIds: z.array(z.number().int().positive()).max(10).optional(),
     /** Anything staff should fix: a brand / collection to create, a spelling mistake in our data, a wrong group… */
     notes: z.array(z.string().trim().min(1).max(300)).max(20).default([]),
+    /**
+     * Photos Claude picked from the accepted pages, best first, with the kind each
+     * fills. Kept only when the photo really is on an accepted page (the server's
+     * read of it); offered to staff to add — never put in the gallery by itself.
+     */
+    photoPicks: z.array(z.object({ url: z.string().url(), kind: z.string().optional() })).max(15).default([]),
     /** Step 5 (optional): photo kinds as photoKinds keys, and our photos to remove. */
     photos: z.object({
         have: z.array(z.string()).default([]),
@@ -303,6 +309,17 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
         }
     }
 
+    // A pick counts only when an accepted page really shows it (maker's photos are the safest).
+    const onPage = new Map(checked.trusted.flatMap((pg) => pg.photos.map((u) => [u, pg] as const)));
+    const picked: PhotoSuggestion[] = [];
+    for (const x of body.photoPicks) {
+        const pg = onPage.get(x.url);
+        if (!pg) { notes.push(`Photo not found on an accepted page — not suggested: ${x.url}`); continue; }
+        picked.push({ url: x.url, site: pg.site, kind: isPhotoKind(x.kind) ? x.kind : null });
+    }
+    picked.sort((a, b) => Number(onPage.get(b.url)?.maker) - Number(onPage.get(a.url)?.maker));
+    if (picked.some((x) => !onPage.get(x.url)?.maker)) notes.push("Some suggested photos are from a seller's page, not the maker's — check they are the maker's own before adding.");
+
     const draft: ProductCopy = {
         ...checked.copy,
         note: `Written by Claude; ${checked.copy.note}`,
@@ -316,8 +333,8 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
             ),
         }),
         // Photos on the pages the copy kept — free; staff pick on the product page.
-        photoSuggestions: checked.trusted
-            .flatMap((pg) => pg.photos.map((url) => ({ url, site: pg.site, kind: null })))
+        // Claude's picks first (with their kind), then the rest the kept pages name.
+        photoSuggestions: [...picked, ...checked.trusted.flatMap((pg) => pg.photos.map((url) => ({ url, site: pg.site, kind: null })))]
             .filter((x, i, all) => !gallery.includes(x.url) && all.findIndex((y) => y.url === x.url) === i)
             .slice(0, AI_PHOTO_LIMITS.total),
     };
@@ -331,3 +348,48 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
     return { draft, shopStatus: p.shopStatus };
 }
 
+
+// ── Read one page for Claude when a site blocks it ────────────────────────────
+
+export const readPageSchema = z.object({
+    /** The product being worked on — its brand decides which site is the maker's. */
+    productId: z.number().int().positive(),
+    url: z.string().url(),
+    /** Website printed on the box, if any — counts as the maker's. */
+    labelWebsite: z.string().trim().max(200).default(""),
+});
+
+/**
+ * Claude was blocked by a site (rate limit, bot check, a page built in the
+ * browser): the server reads it through the same path as its own check —
+ * a plain download, then the "Read page" keys on AI Setup (Scrape.do …), free
+ * keys first, within their limits. Only the maker's site or a known seller,
+ * never a private address: not an open scraper. Same answer as Step 4 sees.
+ */
+export async function readPageForAgent(b: z.infer<typeof readPageSchema>) {
+    const p = await prisma.invProduct.findUnique({
+        where: { id: b.productId },
+        select: { name: true, modelNo: true, brand: { select: { name: true } }, codes: { where: { kind: { in: ["EAN", "UPC"] } }, select: { value: true } } },
+    });
+    if (!p) throw new AgentCopyError("Product not found");
+    const found = await readGivenPages({
+        urls: [b.url],
+        brand: p.brand?.name ?? p.name.split(/\s+/)[0] ?? "",
+        labelSite: b.labelWebsite,
+        codes: [...p.codes.map((c) => c.value), ...(p.modelNo ? [p.modelNo] : [])],
+    });
+    const pg = found.pages[0];
+    if (!pg) return { read: false as const, why: found.dropped[0] ?? found.searchNote ?? "Could not read the page" };
+    return {
+        read: true as const,
+        site: pg.site,
+        /** The maker's own site (or the one on the box), not a seller. */
+        maker: pg.maker,
+        /** Our barcode / model code is on the page — the same product. */
+        codeMatch: pg.codeMatch,
+        /** The product part of the page text (menus cut). */
+        text: pg.text,
+        /** Product photos the page names — send the right ones back as photoPicks. */
+        photos: pg.photos,
+    };
+}

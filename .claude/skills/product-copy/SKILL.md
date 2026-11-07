@@ -54,7 +54,7 @@ Answer: `{ products: [{ id, sku, name, brand, group, shopStatus, hasDescription,
 - `401` → wrong key or "Claude — Product copy" is off on Settings → Incoming API. Stop and tell the owner.
 - Skip products with `photos: 0` unless the owner says otherwise — with no photo there is no label to trust.
 - `draftWaitingSince` set → a draft is already open; say so and ask before adding to it.
-- Tell the owner which products you will do before you start. Do them **one at a time**, steps 1–6 each.
+- Tell the owner which products you will do before you start. Do them **one at a time**, steps 1–7 each.
 
 ## 1. Check (look at the photos)
 
@@ -87,6 +87,14 @@ Search for brand + exact model / part code (or brand + type + main printed spec 
 - Never use a fact from a rejected page. English text only.
 
 Keep every page you read, accepted or rejected, with a short `why`.
+
+**A page blocks you** (too many requests, bot check, empty page)? Ask the shop's server to read it — maker's site or a known seller only:
+
+```bash
+curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json"   "$ABEERSUITE_URL/api/agent/read-page" -d '{ "productId": <id>, "url": "<page url>", "labelWebsite": "<website on the box, or empty>" }'
+```
+
+Answer: `{ read: true, site, maker, codeMatch, text, photos }` or `{ read: false, why }`. `codeMatch: true` = our barcode / model code is on the page — the same product. Use it like a page you read yourself. Never use it for blogs or other shops — they are refused.
 
 ## 3. Write
 
@@ -144,7 +152,20 @@ curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: applica
 
 All of this goes into the draft; staff see the brand and collections on the product page and accept them with Save as ready (it needs the product-masters permission).
 
-## 6. Photo advice (in the same POST, optional)
+## 6. Photos from the maker / seller pages (in the same POST)
+
+Products with few photos: pick the right photos from the **accepted** pages (the `photos` a page shows, or the ones `read-page` returned) and send them as `photoPicks`, best first, each with the kind it fills (`photoKinds`):
+
+```json
+"photoPicks": [ { "url": "https://www.portronics.com/cdn/shop/files/M8_-_1.png", "kind": "front" } ]
+```
+
+- Only this exact product, model and colour; no watermark, no other brand's logo, sharp.
+- Prefer the **maker's** photos; a seller's photo is marked "check before use" for staff.
+- The server keeps a pick only if an accepted page really shows it, and offers it to staff — nothing is added to the gallery by itself.
+- Fill the `must` kinds first (step 7).
+
+## 7. Photo advice (in the same POST, optional)
 
 `photos` uses the keys in `photoKinds`:
 - `have` — kinds our gallery already shows.
