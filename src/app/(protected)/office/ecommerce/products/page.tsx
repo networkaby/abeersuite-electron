@@ -5,6 +5,7 @@ import axios from "axios";
 import Image from "next/image";
 import { imageLoaderFor, isCloudinaryUrl } from "@/shared/lib/cloudinaryImage";
 import Link from "next/link";
+import { LinkContextMenu, useLinkContextMenu } from "@/shared/components/LinkContextMenu";
 import { useCanOpenPage } from "@/shared/hooks/useCanOpenPage";
 import { formatRupeesFromPaise } from "@/shared/lib/format/moneyInr";
 import { toast } from "sonner";
@@ -122,6 +123,9 @@ export default function EcommerceProductsPage() {
     // below, after mount.
     // Last loaded list (shared with the AI screen) paints at once; load() refreshes it.
     const canOpen = useCanOpenPage();
+    // Right-click on any link in the list (Edit, Edit product, Preview, the name…) →
+    // "Open in new window" — the app's own menu, as on the sidebar and registers.
+    const { menu: linkMenu, close: closeLinkMenu, onContainerContextMenu } = useLinkContextMenu();
     const [products, setProducts] = useState<ShopProductAdmin[]>(() => cachedAdminProducts() ?? []);
     const [open, setOpen] = useState(false);
     const [tab, setTab] = useState<TabKey>("all");
@@ -450,7 +454,8 @@ export default function EcommerceProductsPage() {
             ) : null}
 
             {/* Scrollable table — fills remaining height, header pinned */}
-            <div ref={scrollRef} onScroll={persistScroll} className={SCROLL_FRAME}>
+            <div ref={scrollRef} onScroll={persistScroll} className={SCROLL_FRAME} onContextMenu={onContainerContextMenu}>
+                <LinkContextMenu menu={linkMenu} onClose={closeLinkMenu} />
                 <Table>
                     <TableHeader className={STICKY_HEAD}>
                         <TableRow>
@@ -506,7 +511,14 @@ export default function EcommerceProductsPage() {
                                             </div>
                                         </TableCell>
                                         <TableCell className="max-w-0">
-                                            <div className="truncate font-medium">{p.name}</div>
+                                            {/* A real link, so right-click / Ctrl+click opens the edit page; a plain click still expands the row. */}
+                                            <Link
+                                                href={`/office/ecommerce/products/${p.id}`}
+                                                onClick={(e) => { if (!e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) e.preventDefault(); }}
+                                                className="block truncate font-medium hover:underline"
+                                            >
+                                                {p.name}
+                                            </Link>
                                             <div className="text-muted-foreground truncate text-xs">
                                                 <span className="font-mono">{p.sku}</span>
                                                 {!p.isActive ? " · inactive" : ""}
