@@ -19,28 +19,28 @@ Full design: `docs/ai-product-copy-pipeline.md`.
 ## Setup (ask once if missing)
 
 - `ABEERSUITE_URL` — the office site, e.g. `https://office.example.com` (no trailing `/`).
-- `COWORK_API_KEY` — the **Cowork** key from Settings → Incoming API.
+- `PRODUCT_COPY_API_KEY` — the **Claude — Product copy** key from Settings → Incoming API (its own key, not the reviews / posts one).
 
 Never print the key or write it into a file.
 
 ## 0. Pick products
 
 ```bash
-curl -sS -H "x-api-key: $COWORK_API_KEY" "$ABEERSUITE_URL/api/agent/products?stage=unpublished&need=copy&limit=10"
+curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$ABEERSUITE_URL/api/agent/products?stage=unpublished&need=copy&limit=10"
 ```
 
 Answer: `{ products: [{ id, sku, name, brand, group, shopStatus, hasDescription, photos, draftWaitingSince }], nextBefore }`.
 
 - `stage` = `unpublished` (default) · `ready` · `published` · `draft` (a draft copy is open, any stage) · `all`. `need=all` includes products that already have a description.
 - Next page: add `&before=<nextBefore>`.
-- `401` → wrong key or Cowork is off on Settings → Incoming API. Stop and tell the owner.
+- `401` → wrong key or "Claude — Product copy" is off on Settings → Incoming API. Stop and tell the owner.
 - Skip products with `photos: 0` unless the owner says otherwise — with no photo there is no label to trust.
 - Tell the owner which products you will do before you start. Do them **one at a time**, steps 1–5 each.
 
 ## 1. Check (look at the photos)
 
 ```bash
-curl -sS -H "x-api-key: $COWORK_API_KEY" "$ABEERSUITE_URL/api/agent/products/<id>"
+curl -sS -H "x-api-key: $PRODUCT_COPY_API_KEY" "$ABEERSUITE_URL/api/agent/products/<id>"
 ```
 
 Answer: `{ name, brand, category, modelNo, barcodes, typedSpecs, shopSupportDays, currentDescription, photos: [url…], writing: [rules…], photoKinds, photoRemoveReasons }`.
@@ -82,7 +82,7 @@ Warranty: only the **maker's** warranty, from the label or an accepted page. Our
 ## 4. Send (the server checks)
 
 ```bash
-curl -sS -X POST -H "x-api-key: $COWORK_API_KEY" -H "content-type: application/json" \
+curl -sS -X POST -H "x-api-key: $PRODUCT_COPY_API_KEY" -H "content-type: application/json" \
   "$ABEERSUITE_URL/api/agent/products/<id>/copy" -d '{
     "labelFacts": { "Model": "POR-2149", "Ports": "8-in-1" },
     "seen": { "USB-A ports": "at least 2" },

@@ -3,7 +3,7 @@
  * Plain data, shared by the server check (incomingApi.ts) and the page.
  */
 
-export type IncomingId = "COWORK" | "CRON" | "CALLS" | "SHIPROCKET" | "META_WA_VERIFY" | "META_WA_APP";
+export type IncomingId = "COWORK" | "PRODUCT_COPY" | "CRON" | "CALLS" | "SHIPROCKET" | "META_WA_VERIFY" | "META_WA_APP";
 
 export type IncomingDef = {
     label: string;
@@ -24,7 +24,7 @@ export type IncomingDef = {
 export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
     COWORK: {
         label: "Google Business API",
-        about: "Reads Google reviews and writes the shop's reply, makes social posts (text per channel, photos, time), and writes Verified product copy for the shop (saved as a Draft for staff — the server re-checks every fact). Replies and posts follow the settings below; 1–2 star reviews are always saved as Draft for staff to check.",
+        about: "Reads Google reviews and writes the shop's reply, makes social posts (text per channel, photos, time). Replies and posts follow the settings below; 1–2 star reviews are always saved as Draft for staff to check.",
         howSent: "Header  x-api-key: <key>",
         envVar: null,
         closedWhenUnset: true,
@@ -38,6 +38,18 @@ export const INCOMING_APIS: Record<IncomingId, IncomingDef> = {
             "DELETE /api/agent/posts/{id}",
             "POST /api/agent/posts/{id}/photos",
             "POST /api/agent/posts/{id}/photos/fit",
+        ],
+    },
+    // Its own key (owner, 2026-11-07: "dont mix all"): a product-copy key can
+    // neither reply to reviews nor post, and is switched off on its own.
+    PRODUCT_COPY: {
+        label: "Claude — Product copy",
+        about: "Claude (Cowork / chat, the /product-copy skill) reads products waiting for shop copy and sends Verified copy. The server re-reads Claude's pages and checks every fact; the copy goes into the product's draft for staff — it never changes the live product or publishes.",
+        howSent: "Header  x-api-key: <key>",
+        envVar: null,
+        closedWhenUnset: true,
+        canGenerate: true,
+        paths: [
             "GET /api/agent/products",
             "GET /api/agent/products/{id}",
             "POST /api/agent/products/{id}/copy",

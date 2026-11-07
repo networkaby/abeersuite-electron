@@ -328,7 +328,7 @@ cost on the server:
 | Saved research (R2) | `src/modules/ecommerce/lib/aiResearchStore.ts` |
 | Photo kinds and checklist | `src/modules/ecommerce/lib/photoChecklist.ts` |
 | Settings screen | Settings → AI Setup |
-| Claude route (Cowork key) | `src/app/api/agent/products/route.ts` (+ `[id]/route.ts`, `[id]/copy/route.ts`), `src/modules/ecommerce/lib/agentProductCopy.ts` |
+| Claude route (its own "Claude — Product copy" key on Settings → Incoming API) | `src/app/api/agent/products/route.ts` (+ `[id]/route.ts`, `[id]/copy/route.ts`), `src/modules/ecommerce/lib/agentProductCopy.ts` |
 | Claude's steps (skill) | `.claude/skills/product-copy/SKILL.md` |
 | Shop stage rule | `src/modules/ecommerce/lib/shopListing.ts` (`nextShopStatus`, `resolveShopListing`) |
 
