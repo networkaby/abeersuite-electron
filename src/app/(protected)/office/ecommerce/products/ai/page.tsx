@@ -106,12 +106,12 @@ export default function AiBulkCopyPage() {
         }
         const f = { ...filters, query };
         return products
-            .filter((p) => (pick ? pick.has(p.id) && !work[p.id]?.saved : !hasDescription(p)))
+            .filter((p) => (pick ? pick.has(p.id) && !work[p.id]?.saved : !hasDescription(p) && !p.shopDraftAt))
             .filter((p) => matchesProductFilters(p, f, DEFAULT_SHOP_PUBLISH_RULES))
             .sort(priority);
     }, [products, pick, filters, query, work, batch]);
-    const backlog = useMemo(() => products.filter((p) => p.isActive && !hasDescription(p)).length, [products]);
-    const withPhoto = useMemo(() => products.filter((p) => p.isActive && !hasDescription(p) && p.galleryUrls.length > 0).length, [products]);
+    const backlog = useMemo(() => products.filter((p) => p.isActive && !hasDescription(p) && !p.shopDraftAt).length, [products]);
+    const withPhoto = useMemo(() => products.filter((p) => p.isActive && !hasDescription(p) && !p.shopDraftAt && p.galleryUrls.length > 0).length, [products]);
 
     // A new filter / search / pick starts from the first batch again (while rendering).
     if ([useValueChange(filters), useValueChange(query), useValueChange(pick)].some(Boolean)) setShown(SHOW_STEP);
@@ -178,7 +178,7 @@ export default function AiBulkCopyPage() {
         setBatch(null);
     }
     useEffect(() => {
-        if (batchDone) toast.success(`Done: ${batchDone.saved} saved, ${batchDone.dropped} not saved`);
+        if (batchDone) toast.success(`Done: ${batchDone.saved} saved to draft, ${batchDone.dropped} not saved`);
     }, [batchDone]);
 
     const save = async (r: ShopProductAdmin): Promise<boolean> => {
@@ -190,7 +190,10 @@ export default function AiBulkCopyPage() {
                 .map((x) => [x.k, x.v]),
         );
         try {
+            // Into the product's draft copy (shopDraft.ts) — staff finish it with
+            // Save as ready on the product page; the shop is untouched until then.
             const { data } = await axios.patch<ShopProductAdmin>(`/api/ecommerce/products/${r.id}`, {
+                draft: "save",
                 shopDescription: draft.shopDescription,
                 // Staff-typed online name wins; the AI's SEO title fills a blank
                 // one, or one that is only a copy of the stock name.
@@ -212,7 +215,7 @@ export default function AiBulkCopyPage() {
         const ready = rows.filter((r) => work[r.id]?.draft && !resolved(work[r.id]));
         let ok = 0;
         await runPool(ready, SAVE_POOL, async (r) => { if (await save(r)) ok++; });
-        if (ok) toast.success(`Saved ${ok} product${ok === 1 ? "" : "s"}`);
+        if (ok) toast.success(`Saved ${ok} product${ok === 1 ? "" : "s"} to draft — finish each with Save as ready`);
         if (ok < ready.length) toast.error(`${ready.length - ok} could not be saved — see the row`);
     };
 
@@ -382,7 +385,7 @@ export default function AiBulkCopyPage() {
                                     </div>
                                 )}
                                 {w.error && w.draft && !resolved(w) && <p className="text-destructive text-xs">{w.error}</p>}
-                                {w.saved && <p className="text-xs text-green-600">Saved</p>}
+                                {w.saved && <p className="text-xs text-green-600">Saved to draft</p>}
                                 {w.discarded && <p className="text-muted-foreground text-xs">Not saved</p>}
                                 {w.draft && !resolved(w) && (
                                     <p className="text-xs font-medium text-blue-700 dark:text-blue-300">{changeNote(r, w.draft)}</p>

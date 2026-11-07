@@ -2823,8 +2823,8 @@ CREATE TABLE IF NOT EXISTS "InvProduct" (
     "minOrderQty" INTEGER,
     "isListedInShop" BOOLEAN NOT NULL DEFAULT false,
     "shopStatus" "ShopStatus" NOT NULL DEFAULT 'UNPUBLISHED',
-    "copyDraftJson" JSONB,
-    "copyDraftAt" TIMESTAMP(3),
+    "shopDraftJson" JSONB,
+    "shopDraftAt" TIMESTAMP(3),
     "allowBackorder" BOOLEAN NOT NULL DEFAULT false,
     "weightGrams" INTEGER,
     "lengthCm" INTEGER,
@@ -2908,10 +2908,10 @@ ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "minOrderQty" INTEGER;
 ALTER TABLE "InvProduct" ALTER COLUMN "minOrderQty" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "isListedInShop" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "shopStatus" "ShopStatus" NOT NULL DEFAULT 'UNPUBLISHED';
-ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "copyDraftJson" JSONB;
-ALTER TABLE "InvProduct" ALTER COLUMN "copyDraftJson" DROP NOT NULL;
-ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "copyDraftAt" TIMESTAMP(3);
-ALTER TABLE "InvProduct" ALTER COLUMN "copyDraftAt" DROP NOT NULL;
+ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "shopDraftJson" JSONB;
+ALTER TABLE "InvProduct" ALTER COLUMN "shopDraftJson" DROP NOT NULL;
+ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "shopDraftAt" TIMESTAMP(3);
+ALTER TABLE "InvProduct" ALTER COLUMN "shopDraftAt" DROP NOT NULL;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "allowBackorder" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "InvProduct" ADD COLUMN IF NOT EXISTS "weightGrams" INTEGER;
 ALTER TABLE "InvProduct" ALTER COLUMN "weightGrams" DROP NOT NULL;

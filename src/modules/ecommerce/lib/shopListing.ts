@@ -27,8 +27,8 @@ export type ShopListingInput = {
     slug: string | null;
 };
 
-/** Every stage, for zod (`z.enum(SHOP_STATUSES)`). */
-export const SHOP_STATUSES = ["UNPUBLISHED", "DRAFT", "READY", "PUBLISHED"] as const satisfies readonly ShopStatus[];
+/** Stages staff can choose, for zod. DRAFT is retired — a draft is a copy (shopDraft.ts). */
+export const SHOP_STATUSES = ["UNPUBLISHED", "READY", "PUBLISHED"] as const satisfies readonly ShopStatus[];
 
 export type ShopListingDecision = {
     /** Live in the shop right now: PUBLISHED and the publish rules met. */
@@ -39,17 +39,17 @@ export type ShopListingDecision = {
 };
 
 /**
- * The product's next stage (owner, 2026-11-07). Staff's choice wins; with none,
- * any shop save of an UNPUBLISHED product means someone is working on it → DRAFT.
- * `listed` is the old switch (an open tab from before): on = publish, off takes a
- * published product back to Unpublished. Unpublish never makes a Draft: Draft
- * is only work someone (AI or staff) did that needs review.
+ * The product's next stage (owner, 2026-11-07): Unpublished → Ready → Published
+ * (Pending = published, a rule unmet). Staff's choice wins; a plain save keeps
+ * the stage — work in progress is a draft copy, not a stage (shopDraft.ts).
+ * `listed` is the old switch (a tab opened before stages): on = publish, off =
+ * Unpublish, which goes to READY — the work on it is finished.
  */
 export function nextShopStatus(current: ShopStatus, o: { status?: ShopStatus; listed?: boolean }): ShopStatus {
-    if (o.status) return o.status;
+    if (o.status && o.status !== "DRAFT") return o.status;
     if (o.listed === true) return "PUBLISHED";
-    if (o.listed === false && current === "PUBLISHED") return "UNPUBLISHED";
-    return current === "UNPUBLISHED" ? "DRAFT" : current;
+    if (o.listed === false && current === "PUBLISHED") return "READY";
+    return current === "DRAFT" ? "UNPUBLISHED" : current;
 }
 
 /**

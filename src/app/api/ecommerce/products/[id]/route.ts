@@ -2,7 +2,8 @@ import { prisma } from "@/shared/lib/prisma/prismaClient";
 import { NextResponse } from "next/server";
 import { requireAuth, requireModuleAccess, requirePermission } from "@/shared/lib/auth/permissions";
 import { PERMISSIONS } from "@/shared/lib/constants/permissions";
-import { invProductToAdmin } from "@/modules/ecommerce/lib/productAdmin";
+import { invProductToAdmin, withShopDraft } from "@/modules/ecommerce/lib/productAdmin";
+import { runDraftAction } from "@/modules/ecommerce/lib/shopDraft";
 import { shopProductInclude as productInclude, shopProductPatchSchema, updateShopProduct } from "@/modules/ecommerce/lib/updateShopProduct";
 import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { validateRequest } from "@/shared/lib/api";
@@ -18,8 +19,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         const bands = await loadBarcodeBands();
         const p = await prisma.invProduct.findUnique({ where: { id: pid }, include: productInclude });
         if (!p) return NextResponse.json({ error: "Not found" }, { status: 404 });
-        // Claude's draft rides only here — the product's own page shows it for review.
-        return NextResponse.json({ ...invProductToAdmin(p, bands), copyDraft: p.copyDraftJson ?? null });
+        // The draft copy rides only here — the product's own page edits it.
+        return NextResponse.json(withShopDraft(p, bands));
     } catch (e) {
         return handleApiError(e, "Failed to load product");
     }
@@ -39,8 +40,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         const gate = await requirePermission(PERMISSIONS.ECOMMERCE_PRODUCT_MASTERS);
         if (gate.response) return gate.response;
     }
-    // Shared with the phone app's Photos screen — see updateShopProduct.ts.
-    const saved = await updateShopProduct(pid, data);
+    // Save as draft / Save as ready / Discard — the draft copy (shopDraft.ts).
+    const { draft } = data;
+    const saved = draft
+        ? await runDraftAction(pid, { ...data, draft })
+        // Shared with the phone app's Photos screen — see updateShopProduct.ts.
+        : await updateShopProduct(pid, data);
     return saved.response ?? NextResponse.json(saved.product);
 }
 

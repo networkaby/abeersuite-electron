@@ -1,5 +1,23 @@
 import type { InvProduct } from "@/generated/prisma/client";
 import type { ShopStatus } from "@/generated/prisma/enums";
+import type { ShopProductPatch } from "@/modules/ecommerce/lib/updateShopProduct";
+import type { ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
+
+/**
+ * A product's draft copy (InvProduct.shopDraftJson, shopDraft.ts): the shop
+ * fields being edited, and Claude's Verified copy when it sent one.
+ */
+export type ShopDraft = {
+    patch: Partial<Omit<ShopProductPatch, "draft" | "shopStatus" | "isListedInShop">>;
+    aiCopy?: ProductCopy;
+};
+
+export function readShopDraft(raw: unknown): ShopDraft | null {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const r = raw as { patch?: unknown; aiCopy?: unknown };
+    const patch = r.patch && typeof r.patch === "object" && !Array.isArray(r.patch) ? (r.patch as ShopDraft["patch"]) : {};
+    return { patch, ...(r.aiCopy && typeof r.aiCopy === "object" ? { aiCopy: r.aiCopy as ProductCopy } : {}) };
+}
 import { invProductToPublic, type ShopProductPublic } from "@/shared/lib/shop/productPublic";
 import { barcodeTagPaise, type BarcodeBand } from "@/shared/lib/pricing/barcodePrice";
 import { readPhotoChecklist, type PhotoChecklist } from "@/modules/ecommerce/lib/photoChecklist";
@@ -12,12 +30,12 @@ export type ShopProductAdmin = ShopProductPublic & {
     isActive: boolean;
     /** Live in the shop right now (PUBLISHED and the publish rules met). */
     isListedInShop: boolean;
-    /** Staff's stage: UNPUBLISHED → DRAFT → PUBLISHED ("Pending" = PUBLISHED, not live). */
+    /** Stage: UNPUBLISHED → READY → PUBLISHED ("Pending" = PUBLISHED, not live). */
     shopStatus: ShopStatus;
-    /** When Claude's draft arrived, waiting for staff (null = none). */
-    copyDraftAt: string | null;
-    /** The draft itself (a ProductCopy) — only GET /api/ecommerce/products/[id] sends it. */
-    copyDraft?: unknown;
+    /** When the open draft copy was last saved (null = no draft open). */
+    shopDraftAt: string | null;
+    /** The draft copy itself — only the product's own page gets it (withShopDraft). */
+    shopDraft?: ShopDraft | null;
     /** Per-product override: accept orders even at zero stock (backorder). */
     allowBackorder: boolean;
     unitId: number;
@@ -50,7 +68,7 @@ export type ShopProductAdmin = ShopProductPublic & {
 };
 
 export function invProductToAdmin(
-    p: Omit<InvProduct, "copyDraftJson"> & {
+    p: Omit<InvProduct, "shopDraftJson"> & {
         category?: { name: string } | null;
         brand?: { name: string } | null;
         group?: { name: string } | null;
@@ -78,7 +96,7 @@ export function invProductToAdmin(
         isActive: p.isActive,
         isListedInShop: p.isListedInShop,
         shopStatus: p.shopStatus,
-        copyDraftAt: p.copyDraftAt?.toISOString() ?? null,
+        shopDraftAt: p.shopDraftAt?.toISOString() ?? null,
         allowBackorder: p.allowBackorder,
         unitId: p.unitId,
         categoryId: p.categoryId,
@@ -99,5 +117,42 @@ export function invProductToAdmin(
         barcodePricePaise: bands ? barcodeTagPaise(p.savedSalePricePaise, p.mrpPaise, bands, p.barcodeManualPaise) : null,
         codes: p.codes ?? [],
         photoChecklist: readPhotoChecklist(p.photoChecklistJson),
+    };
+}
+
+/** The admin row plus its draft copy — for the product's own page only (lists skip the JSON). */
+export function withShopDraft(
+    p: InvProduct & Parameters<typeof invProductToAdmin>[0],
+    bands?: BarcodeBand[],
+): ShopProductAdmin {
+    return { ...invProductToAdmin(p, bands), shopDraft: readShopDraft(p.shopDraftJson) };
+}
+
+/**
+ * The product as it is being edited: the saved row with its open draft copy's
+ * fields on top. The product page seeds its form from this; the shop never sees it.
+ */
+export function withDraftOverlay<T extends Partial<ShopProductAdmin>>(p: T | null | undefined): T | null | undefined {
+    const d = p?.shopDraft?.patch;
+    if (!p || !d) return p;
+    const has = (k: keyof ShopDraft["patch"]) => d[k] !== undefined;
+    return {
+        ...p,
+        ...(has("name") && { name: d.name }),
+        ...(has("slug") && { slug: d.slug ?? null }),
+        ...(has("shopSubheading") && { subheading: d.shopSubheading ?? null }),
+        ...(has("shopDescription") && { description: d.shopDescription ?? null }),
+        ...(has("shopBadge") && { badge: d.shopBadge ?? null }),
+        ...(has("galleryUrls") && { galleryUrls: d.galleryUrls }),
+        ...(has("specs") && { specs: d.specs }),
+        ...(has("groupId") && { groupId: d.groupId ?? null }),
+        ...(has("brandId") && { brandId: d.brandId ?? null }),
+        ...(has("collectionIds") && { collectionIds: d.collectionIds }),
+        ...(has("weightGrams") && { weightGrams: d.weightGrams ?? null }),
+        ...(has("lengthCm") && { lengthCm: d.lengthCm ?? null }),
+        ...(has("breadthCm") && { breadthCm: d.breadthCm ?? null }),
+        ...(has("heightCm") && { heightCm: d.heightCm ?? null }),
+        ...(has("allowBackorder") && { allowBackorder: d.allowBackorder }),
+        ...(has("isActive") && { isActive: d.isActive }),
     };
 }

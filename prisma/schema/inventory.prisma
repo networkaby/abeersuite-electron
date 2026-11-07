@@ -243,6 +243,7 @@ model InvNamingConfig {
 /// Online-shop stage of a product — see InvProduct.shopStatus.
 enum ShopStatus {
   UNPUBLISHED
+  /// Retired 2026-11-07 — a draft is now a copy (InvProduct.shopDraftJson), not a stage.
   DRAFT
   READY
   PUBLISHED
@@ -327,16 +328,19 @@ model InvProduct {
   /// Live in the shop right now = shopStatus PUBLISHED and the publish rules met
   /// (shopListing.ts). Computed on every shop save — never set on its own.
   isListedInShop          Boolean @default(false)
-  /// Staff's stage for the online shop (owner, 2026-11-07): UNPUBLISHED (new,
-  /// made at a counter, untouched) → DRAFT (anyone, AI or staff, working on it,
-  /// not complete) → READY (complete, waiting for a good time) → PUBLISHED.
-  /// "Pending" is PUBLISHED with a publish rule unmet — not stored.
+  /// Online-shop stage (owner, 2026-11-07): UNPUBLISHED (new, made at a
+  /// counter, untouched) → READY (work complete, waiting for a good time) →
+  /// PUBLISHED. "Pending" = PUBLISHED with a publish rule unmet — not stored.
+  /// Unpublish goes back to READY. DRAFT is retired (never written): work in
+  /// progress is the separate draft copy below, on a product of any stage.
   shopStatus              ShopStatus @default(UNPUBLISHED)
-  /// Claude's (Cowork) Verified draft waiting for staff, server-checked — a
-  /// ProductCopy (aiProductCopy.ts). Cleared when staff save or discard it.
-  copyDraftJson           Json?
-  /// When copyDraftJson was sent — lists read this, never the JSON (null = no draft).
-  copyDraftAt             DateTime?
+  /// Work in progress, kept apart from the live product (owner, 2026-11-07):
+  /// { patch: shop fields being edited, aiCopy?: Claude's Verified copy }.
+  /// "Save as ready" puts the patch on the product; Discard drops it. The shop
+  /// keeps showing the last finished version meanwhile (shopDraft.ts).
+  shopDraftJson           Json?
+  /// When the draft was last saved — lists read this, never the JSON (null = no draft open).
+  shopDraftAt             DateTime?
   /// Per-product override of the org out-of-stock policy: when true the shop
   /// accepts orders for this product even at zero stock (backorder / procure later).
   allowBackorder          Boolean @default(false)

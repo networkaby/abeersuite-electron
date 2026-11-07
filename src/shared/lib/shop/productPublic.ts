@@ -124,7 +124,7 @@ export const SHOP_PUBLIC_INCLUDE = {
 } as const;
 
 export function invProductToPublic(
-    p: Omit<InvProduct, "copyDraftJson"> & {
+    p: Omit<InvProduct, "shopDraftJson"> & {
         category?: { name: string } | null;
         collections?: { category: { name: string } }[];
     },

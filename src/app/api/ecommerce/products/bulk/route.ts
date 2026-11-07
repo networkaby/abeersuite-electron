@@ -8,13 +8,13 @@ import { loadBarcodeBands } from "@/shared/lib/shop/barcodeBands";
 import { loadShopPublishRules } from "@/shared/lib/shop/publishRules";
 import { resolveShopListing } from "@/modules/ecommerce/lib/shopListing";
 
-// Bulk Publish / Unpublish for the E-Commerce Products list (owner, 2026-11-07).
+// Bulk Mark ready / Publish / Unpublish for the E-Commerce Products list (owner, 2026-11-07).
+// - ready: Unpublished → READY (complete, waiting for a good time; not live).
 // - publish: every id becomes PUBLISHED. Those meeting the publish rules go live;
 //   the rest are Pending and go live by themselves once fixed. A live product
 //   with no slug gets one (same as the single-product save).
-// - ready: Draft work complete — READY, waiting for a good time (not live).
-// - unpublish: back to UNPUBLISHED and off the shop. Draft is only for work
-//   someone (AI or staff) did that needs review (owner, 2026-11-07).
+// - unpublish: Published / Pending → READY, off the shop (the work is finished).
+// A product with a draft copy open is skipped and named — finish or discard it first.
 
 const schema = z.object({
     ids: z.array(z.coerce.number().int().positive()).min(1).max(5000),
@@ -26,23 +26,31 @@ export async function POST(req: Request) {
     if (response) return response;
     const { data, error } = await validateRequest(req, schema);
     if (error) return error;
-    const { ids, action } = data;
+    let { ids } = data;
+    const { action } = data;
 
     try {
-        // Mark ready: the work is complete, waiting to be published. Never live.
+        const inDraft = await prisma.invProduct.findMany({
+            where: { id: { in: ids }, shopDraftAt: { not: null } },
+            select: { id: true, name: true },
+        });
+        const skipped = { inDraft: inDraft.length, names: inDraft.slice(0, 5).map((p) => p.name) };
+        const draftIds = new Set(inDraft.map((p) => p.id));
+        ids = ids.filter((id) => !draftIds.has(id));
+
         if (action === "ready") {
             const res = await prisma.invProduct.updateMany({
-                where: { id: { in: ids } },
+                where: { id: { in: ids }, shopStatus: "UNPUBLISHED" },
                 data: { shopStatus: "READY", isListedInShop: false },
             });
-            return NextResponse.json({ published: 0, pending: 0, unpublished: 0, ready: res.count });
+            return NextResponse.json({ published: 0, pending: 0, unpublished: 0, ready: res.count, skipped });
         }
         if (action === "unpublish") {
             const res = await prisma.invProduct.updateMany({
-                where: { id: { in: ids } },
-                data: { shopStatus: "UNPUBLISHED", isListedInShop: false },
+                where: { id: { in: ids }, shopStatus: "PUBLISHED" },
+                data: { shopStatus: "READY", isListedInShop: false },
             });
-            return NextResponse.json({ published: 0, pending: 0, unpublished: res.count });
+            return NextResponse.json({ published: 0, pending: 0, unpublished: res.count, skipped });
         }
 
         const [bands, rules] = await Promise.all([loadBarcodeBands(), loadShopPublishRules()]);
@@ -109,7 +117,7 @@ export async function POST(req: Request) {
             else published++;
         }
 
-        return NextResponse.json({ published, pending: pending.length, unpublished: 0 });
+        return NextResponse.json({ published, pending: pending.length, unpublished: 0, skipped });
     } catch (e) {
         return handleApiError(e, "Bulk update failed");
     }

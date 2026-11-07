@@ -52,12 +52,16 @@ export const shopProductPatchSchema = z.object({
     lengthCm: z.coerce.number().int().min(0).max(1000).optional().nullable(),
     breadthCm: z.coerce.number().int().min(0).max(1000).optional().nullable(),
     heightCm: z.coerce.number().int().min(0).max(1000).optional().nullable(),
-    /** Old switch (a tab opened before shopStatus) — on = publish, off = back to Unpublished. */
+    /** Old switch (a tab opened before stages) — on = publish, off = Unpublish (→ Ready). */
     isListedInShop: z.boolean().optional(),
-    /** Publish / Unpublish buttons. Left out, a save of an UNPUBLISHED product makes it DRAFT. */
+    /** Mark ready / Publish / Unpublish (Unpublish sends READY). Left out, the stage stays. */
     shopStatus: z.enum(SHOP_STATUSES).optional(),
-    /** Staff used or discarded Claude's draft — clear it. */
-    clearCopyDraft: z.boolean().optional(),
+    /**
+     * The draft copy (shopDraft.ts): "save" keeps these fields in the draft, the
+     * product untouched; "ready" puts draft + these fields on the product and
+     * closes it; "discard" drops it. Left out, the fields go on the product now.
+     */
+    draft: z.enum(["save", "ready", "discard"]).optional(),
     allowBackorder: z.boolean().optional(),
     isActive: z.boolean().optional(),
 });
@@ -145,7 +149,8 @@ export async function updateShopProduct(
         if (b.heightCm !== undefined) data.heightCm = b.heightCm;
         if (b.allowBackorder !== undefined) data.allowBackorder = b.allowBackorder;
         if (b.isActive !== undefined) data.isActive = b.isActive;
-        if (b.clearCopyDraft) data.copyDraftJson = Prisma.DbNull;
+        // Applying a draft closes it (shopDraft.ts passes this through).
+        if (b.draft === "ready") { data.shopDraftJson = Prisma.DbNull; data.shopDraftAt = null; }
         const shopStatus = nextShopStatus(existing.shopStatus, { status: b.shopStatus, listed: b.isListedInShop });
         data.shopStatus = shopStatus;
 

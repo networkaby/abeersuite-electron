@@ -74,8 +74,8 @@ export async function GET(req: Request) {
                 ...(shopCategory && shopCategory !== "all" ? { shopCategory } : {}),
             },
             include: productInclude,
-            // Claude's draft is read on the product's own page only; the list needs copyDraftAt.
-            omit: { copyDraftJson: true },
+            // The draft copy is read on the product's own page only; the list needs shopDraftAt.
+            omit: { shopDraftJson: true },
             orderBy: [{ shopCategory: "asc" }, { id: "desc" }],
         });
         return NextResponse.json(products.map((p) => invProductToAdmin(p, bands)));

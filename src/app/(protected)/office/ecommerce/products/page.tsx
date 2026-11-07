@@ -60,8 +60,8 @@ const STICKY_HEAD =
 const COL_COUNT = 11;
 const PAGE_SIZE = 25;
 
-/** Shop stages (owner, 2026-11-07): Unpublished → Draft → Ready → Published (live) / Pending. */
-type TabKey = "all" | ProductStatus["kind"];
+/** Stages (owner, 2026-11-07): Unpublished → Ready → Published (live) / Pending; Draft = a draft copy is open, any stage. */
+type TabKey = "all" | "draft" | ProductStatus["kind"];
 const TAB_KEYS: TabKey[] = ["all", "unpublished", "draft", "ready", "live", "pending"];
 const TAB_LABEL: Record<TabKey, string> = { all: "All", unpublished: "Unpublished", draft: "Draft", ready: "Ready", live: "Published", pending: "Pending" };
 // Persist the list view (page / filters / scroll) per browser tab so leaving for
@@ -84,7 +84,7 @@ function loadSavedView(): Partial<SavedView> {
     }
 }
 
-function StatusBadge({ status, claudeDraft }: { status: ProductStatus; claudeDraft?: boolean }) {
+function StatusBadge({ status, draftOpen, aiDraft }: { status: ProductStatus; draftOpen?: boolean; aiDraft?: boolean }) {
     const badge = status.kind === "live" ? (
         <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50 text-emerald-700">
             <CheckCircle2 className="size-3" /> Published
@@ -97,20 +97,19 @@ function StatusBadge({ status, claudeDraft }: { status: ProductStatus; claudeDra
         <Badge variant="outline" className="gap-1 border-violet-200 bg-violet-50 text-violet-700" title="Complete — waiting to be published">
             <CheckCircle2 className="size-3" /> Ready
         </Badge>
-    ) : status.kind === "draft" ? (
-        <Badge variant="outline" className="gap-1 border-sky-200 bg-sky-50 text-sky-700">
-            <CircleDashed className="size-3" /> Draft
-        </Badge>
     ) : (
         <Badge variant="outline" className="gap-1 border-border bg-muted/40 text-muted-foreground">
             Unpublished
         </Badge>
     );
-    if (!claudeDraft) return badge;
+    if (!draftOpen) return badge;
     return (
-        <span className="inline-flex items-center gap-1" title="AI draft waiting for review">
+        <span className="inline-flex items-center gap-1">
             {badge}
-            <Sparkles className="size-3.5 text-violet-600" />
+            <Badge variant="outline" className="gap-1 border-sky-200 bg-sky-50 text-sky-700" title="A draft is open — the shop shows the last finished version">
+                <CircleDashed className="size-3" /> Draft
+            </Badge>
+            {aiDraft ? <Sparkles className="size-3.5 text-violet-600" aria-label="AI copy in the draft" /> : null}
         </span>
     );
 }
@@ -184,11 +183,14 @@ export default function EcommerceProductsPage() {
     const counts = useMemo(() => {
         const c: Record<TabKey, number> = { all: products.length, unpublished: 0, draft: 0, ready: 0, live: 0, pending: 0 };
         for (const st of statusOf.values()) c[st.kind]++;
+        c.draft = products.filter((p) => p.shopDraftAt).length;
         return c;
     }, [products, statusOf]);
 
     const filtered = useMemo(
-        () => products.filter((p) => (tab === "all" || statusOf.get(p.id)?.kind === tab) && matchesProductFilters(p, filters, rules)),
+        () => products.filter((p) =>
+            (tab === "all" || (tab === "draft" ? !!p.shopDraftAt : statusOf.get(p.id)?.kind === tab))
+            && matchesProductFilters(p, filters, rules)),
         [products, tab, filters, rules, statusOf]
     );
 
@@ -280,7 +282,7 @@ export default function EcommerceProductsPage() {
         if (ids.length === 0) return;
         setBulkBusy(true);
         try {
-            const { data } = await axios.post<{ published: number; pending: number; unpublished: number; ready?: number }>(
+            const { data } = await axios.post<{ published: number; pending: number; unpublished: number; ready?: number; skipped?: { inDraft: number; names: string[] } }>(
                 "/api/ecommerce/products/bulk",
                 { ids, action }
             );
@@ -292,7 +294,10 @@ export default function EcommerceProductsPage() {
                     (data.pending ? ` · ${data.pending} pending (live by themselves once their publish rules are met)` : "")
                 );
             } else {
-                toast.success(`${data.unpublished} unpublished — off the shop`);
+                toast.success(`${data.unpublished} unpublished — off the shop, kept as Ready`);
+            }
+            if (data.skipped?.inDraft) {
+                toast.info(`${data.skipped.inDraft} skipped — a draft is open (${data.skipped.names.join(", ")}${data.skipped.inDraft > data.skipped.names.length ? ", …" : ""}). Finish or discard it first.`);
             }
             clearSelection();
             load();
@@ -305,7 +310,8 @@ export default function EcommerceProductsPage() {
 
     // One-click publish / unpublish straight from the row.
     const [publishing, setPublishing] = useState<Set<number>>(new Set());
-    const moveStage = async (p: ShopProductAdmin, shopStatus: "PUBLISHED" | "UNPUBLISHED" | "READY") => {
+    // Unpublish sends READY too — the work on it is finished (owner, 2026-11-07).
+    const moveStage = async (p: ShopProductAdmin, shopStatus: "PUBLISHED" | "READY", unpublish = false) => {
         setPublishing((s) => new Set(s).add(p.id));
         try {
             const { data } = await axios.patch<ShopProductAdmin>(`/api/ecommerce/products/${p.id}`, {
@@ -314,7 +320,7 @@ export default function EcommerceProductsPage() {
             setProducts((prev) => prev.map((x) => (x.id === p.id ? data : x)));
             patchCachedAdminProduct(data);
             toast.success(
-                shopStatus === "UNPUBLISHED" ? "Unpublished — off the shop"
+                unpublish ? "Unpublished — off the shop, kept as Ready"
                     : shopStatus === "READY" ? "Marked ready — publish when the time is right"
                         : data.isListedInShop ? "Published — live in the shop" : "Published — pending until its publish rules are met",
             );
@@ -349,7 +355,7 @@ export default function EcommerceProductsPage() {
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">Products</h1>
                     <p className="text-muted-foreground text-sm">
-                        One catalogue across shop, POS and Sale vouchers. Unpublished → Draft (being worked on) → Ready (complete, waiting) → Published; a published product missing a publish rule waits as Pending.
+                        One catalogue across shop, POS and Sale vouchers. Unpublished → Ready (complete, waiting) → Published; a published product missing a publish rule waits as Pending. Draft = edits in progress, kept apart until Save as ready.
                     </p>
                 </div>
                 <Button asChild variant="outline" size="sm">
@@ -513,7 +519,7 @@ export default function EcommerceProductsPage() {
                                             {p.groupName ?? "—"}
                                         </TableCell>
                                         <TableCell>
-                                            <StatusBadge status={status} claudeDraft={!!p.copyDraftAt} />
+                                            <StatusBadge status={status} draftOpen={!!p.shopDraftAt} />
                                         </TableCell>
                                         <TableCell className="text-right tabular-nums">
                                             {shopPricePaise ? formatRupeesFromPaise(shopPricePaise) : "—"}
@@ -526,7 +532,11 @@ export default function EcommerceProductsPage() {
                                         </TableCell>
                                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-end gap-1.5">
-                                                {status.kind === "draft" ? (
+                                                {p.shopDraftAt ? (
+                                                    <Button size="sm" variant="outline" asChild>
+                                                        <Link href={`/office/ecommerce/products/${p.id}`}>Open draft</Link>
+                                                    </Button>
+                                                ) : status.kind === "unpublished" ? (
                                                     <Button
                                                         size="sm"
                                                         variant="outline"
@@ -548,7 +558,7 @@ export default function EcommerceProductsPage() {
                                                         size="sm"
                                                         variant="outline"
                                                         disabled={publishing.has(p.id)}
-                                                        onClick={() => void moveStage(p, "UNPUBLISHED")}
+                                                        onClick={() => void moveStage(p, "READY", true)}
                                                     >
                                                         {publishing.has(p.id) ? "…" : "Unpublish"}
                                                     </Button>
@@ -596,11 +606,9 @@ export default function EcommerceProductsPage() {
                                                                 ? "Published — live on the storefront"
                                                                 : status.kind === "pending"
                                                                     ? `Pending — needs ${status.missing.join(", ").toLowerCase()}; goes live by itself once added`
-                                                                    : status.kind === "draft"
-                                                                        ? `Draft — being worked on${status.missing.length ? `; still needs ${status.missing.join(", ").toLowerCase()}` : ""}. Mark ready when complete.`
-                                                                        : status.kind === "ready"
+                                                                    : status.kind === "ready"
                                                                             ? `Ready — complete, waiting to be published${status.missing.length ? `; publishing now would wait as Pending (needs ${status.missing.join(", ").toLowerCase()})` : ""}.`
-                                                                        : "Unpublished — not worked on yet. Any shop save moves it to Draft."
+                                                                        : "Unpublished — not worked on yet. Mark ready when it is complete."
                                                         }
                                                     />
                                                     <div className="sm:col-span-2 lg:col-span-4">

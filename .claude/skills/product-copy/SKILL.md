@@ -8,8 +8,9 @@ description: Write Verified online-shop copy (title, highlights, description, sp
 You do the Verified steps yourself — look at the photos, search the web, read
 the pages, write — and send the result to AbeerSuite. The server then reads
 your pages **itself** and drops any fact it cannot find on them (Step 4). The
-copy is saved as a **Draft** on the product; staff review it on the product
-page and press Publish. You never publish.
+copy goes into the product's **draft copy**; the shop keeps showing the last
+finished version. Staff review it on the product page, press **Save as ready**,
+and publish when the time is right. You never publish.
 
 The rule above all: **no information is better than false information.**
 
@@ -30,7 +31,7 @@ curl -sS -H "x-api-key: $COWORK_API_KEY" "$ABEERSUITE_URL/api/agent/products?sta
 
 Answer: `{ products: [{ id, sku, name, brand, group, shopStatus, hasDescription, photos, draftWaitingSince }], nextBefore }`.
 
-- `stage` = `unpublished` (default) · `draft` · `published` · `all`. `need=all` includes products that already have a description.
+- `stage` = `unpublished` (default) · `ready` · `published` · `draft` (a draft copy is open, any stage) · `all`. `need=all` includes products that already have a description.
 - Next page: add `&before=<nextBefore>`.
 - `401` → wrong key or Cowork is off on Settings → Incoming API. Stop and tell the owner.
 - Skip products with `photos: 0` unless the owner says otherwise — with no photo there is no label to trust.
@@ -118,4 +119,4 @@ Never list a kind that makes no sense for the product. Leave `photos` out if you
 
 ## After
 
-Report a short table: product · result (draft / stopped on clash) · specs kept · unsure count · flags. Remind the owner the drafts wait on **E-Commerce → Products → Draft** (a ✨ mark on the row): open, review, Save, then **Mark ready** — and Publish when the time is right.
+Report a short table: product · result (draft / stopped on clash) · specs kept · unsure count · flags. Remind the owner the drafts wait on **E-Commerce → Products → Draft**: open the product, use what is right from the AI copy, **Save as ready**, and Publish when the time is right.

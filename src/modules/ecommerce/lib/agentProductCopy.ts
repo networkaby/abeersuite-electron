@@ -7,6 +7,7 @@ import { productGalleryUrls } from "@/shared/lib/shop/productPublic";
 import { photosForAi } from "@/shared/lib/shop/photoMark";
 import { AI_PHOTO_LIMITS } from "@/shared/lib/constants/ai";
 import { OUTPUT_KEYS, type ProductCopy } from "@/modules/ecommerce/lib/aiProductCopy";
+import { readShopDraft, type ShopDraft } from "@/modules/ecommerce/lib/productAdmin";
 import { checkWrittenCopy, writtenCopySchema } from "@/modules/ecommerce/lib/aiVerifiedCopy";
 import { readGivenPages } from "@/modules/ecommerce/lib/aiPageReader";
 import { PHOTO_KINDS, PHOTO_REMOVE_REASONS, checklistFrom, isPhotoKind, type PhotoKind, type PhotoRemoveReason } from "@/modules/ecommerce/lib/photoChecklist";
@@ -16,9 +17,9 @@ import { PHOTO_KINDS, PHOTO_REMOVE_REASONS, checklistFrom, isPhotoKind, type Pho
  * search, writing, photo advice — through /api/agent/products (owner,
  * 2026-11-07). The server keeps Step 4: it downloads Claude's pages itself and
  * checks every fact against them (checkWrittenCopy), exactly as for our own
- * AI. The result is saved as a draft on the product (copyDraftJson) and the
- * product moves to DRAFT; staff review it on the product page. Nothing here
- * publishes. The skill is .claude/skills/product-copy/SKILL.md.
+ * AI. The result goes into the product's draft copy (shopDraftJson.aiCopy,
+ * shopDraft.ts); staff review it on the product page, then Save as ready.
+ * The stage is never changed and nothing here publishes. The skill is .claude/skills/product-copy/SKILL.md.
  */
 
 const galleryOf = (p: { galleryJson: Prisma.JsonValue; imageUrl: string | null }) => productGalleryUrls(p.galleryJson, p.imageUrl);
@@ -26,9 +27,9 @@ const galleryOf = (p: { galleryJson: Prisma.JsonValue; imageUrl: string | null }
 // ── Backlog ───────────────────────────────────────────────────────────────────
 
 export const backlogQuery = z.object({
-    /** Which shop stage; default the untouched ones. */
-    stage: z.enum(["unpublished", "draft", "published", "all"]).default("unpublished"),
-    /** copy = no description and no draft waiting yet; all = every product in the stage. */
+    /** Which shop stage (draft = a draft copy is open, any stage); default the untouched ones. */
+    stage: z.enum(["unpublished", "draft", "ready", "published", "all"]).default("unpublished"),
+    /** copy = no description and no draft open yet; all = every product in the stage. */
     need: z.enum(["copy", "all"]).default("copy"),
     limit: z.coerce.number().int().min(1).max(50).default(20),
     /** Paging: the last id of the previous page (newest first). */
@@ -38,8 +39,9 @@ export const backlogQuery = z.object({
 export async function productBacklog(q: z.infer<typeof backlogQuery>) {
     const where: Prisma.InvProductWhereInput = {
         isActive: true,
-        ...(q.stage !== "all" && { shopStatus: q.stage.toUpperCase() as ShopStatus }),
-        ...(q.need === "copy" && { copyDraftAt: null, OR: [{ shopDescription: null }, { shopDescription: "" }] }),
+        ...(q.stage === "draft" && { shopDraftAt: { not: null } }),
+        ...(q.stage !== "all" && q.stage !== "draft" && { shopStatus: q.stage.toUpperCase() as ShopStatus }),
+        ...(q.need === "copy" && { ...(q.stage !== "draft" && { shopDraftAt: null }), OR: [{ shopDescription: null }, { shopDescription: "" }] }),
         ...(q.before && { id: { lt: q.before } }),
     };
     const rows = await prisma.invProduct.findMany({
@@ -47,7 +49,7 @@ export async function productBacklog(q: z.infer<typeof backlogQuery>) {
         orderBy: { id: "desc" },
         take: q.limit,
         select: {
-            id: true, sku: true, name: true, shopStatus: true, shopDescription: true, copyDraftAt: true,
+            id: true, sku: true, name: true, shopStatus: true, shopDescription: true, shopDraftAt: true,
             imageUrl: true, galleryJson: true,
             brand: { select: { name: true } }, group: { select: { name: true } },
         },
@@ -57,7 +59,7 @@ export async function productBacklog(q: z.infer<typeof backlogQuery>) {
             id: p.id, sku: p.sku, name: p.name, brand: p.brand?.name ?? null, group: p.group?.name ?? null,
             shopStatus: p.shopStatus, hasDescription: !!p.shopDescription?.trim(),
             photos: photosForAi(galleryOf(p)).length,
-            draftWaitingSince: p.copyDraftAt?.toISOString() ?? null,
+            draftWaitingSince: p.shopDraftAt?.toISOString() ?? null,
         })),
         nextBefore: rows.length === q.limit ? rows[rows.length - 1].id : null,
     };
@@ -70,7 +72,7 @@ export async function productForAgent(id: number) {
         where: { id },
         select: {
             id: true, sku: true, name: true, modelNo: true, shopStatus: true, shopDescription: true, specsJson: true,
-            imageUrl: true, galleryJson: true, shopCategory: true, copyDraftAt: true,
+            imageUrl: true, galleryJson: true, shopCategory: true, shopDraftAt: true,
             codes: { where: { kind: { in: ["EAN", "UPC"] } }, select: { value: true } },
             brand: { select: { name: true } }, category: { select: { name: true } }, group: { select: { name: true } },
             warrantyTerm: { select: { durationDays: true } },
@@ -92,7 +94,7 @@ export async function productForAgent(id: number) {
         shopSupportDays: p.warrantyTerm?.durationDays ?? null,
         shopStatus: p.shopStatus,
         currentDescription: p.shopDescription,
-        draftWaitingSince: p.copyDraftAt?.toISOString() ?? null,
+        draftWaitingSince: p.shopDraftAt?.toISOString() ?? null,
         /** Our gallery in order, "Skip for AI" photos left out. Look at every one. */
         photos: photosForAi(galleryOf(p)),
         /** The shop's house style and the exact keys of the written copy — same as our own AI's. */
@@ -140,7 +142,7 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
     const p = await prisma.invProduct.findUnique({
         where: { id },
         select: {
-            name: true, modelNo: true, shopStatus: true, imageUrl: true, galleryJson: true,
+            name: true, modelNo: true, shopStatus: true, imageUrl: true, galleryJson: true, shopDraftJson: true,
             codes: { where: { kind: { in: ["EAN", "UPC"] } }, select: { value: true } },
             brand: { select: { name: true } },
         },
@@ -192,13 +194,14 @@ export async function saveAgentCopy(id: number, body: z.infer<typeof agentCopySc
             .filter((x, i, all) => !gallery.includes(x.url) && all.findIndex((y) => y.url === x.url) === i)
             .slice(0, AI_PHOTO_LIMITS.total),
     };
-    // Someone is working on it now: an untouched product becomes a Draft. A published
-    // one stays published (staff decide), with the draft waiting beside it.
-    const shopStatus: ShopStatus = p.shopStatus === "UNPUBLISHED" ? "DRAFT" : p.shopStatus;
+    // Into the product's draft copy (shopDraft.ts), beside any edits staff have
+    // open there. The stage is not touched: the shop keeps the finished version.
+    const open = readShopDraft(p.shopDraftJson);
+    const next: ShopDraft = { patch: open?.patch ?? {}, aiCopy: draft };
     await prisma.invProduct.update({
         where: { id },
-        data: { copyDraftJson: draft as unknown as Prisma.InputJsonValue, copyDraftAt: new Date(), shopStatus },
+        data: { shopDraftJson: next as unknown as Prisma.InputJsonValue, shopDraftAt: new Date() },
     });
-    return { draft, shopStatus };
+    return { draft, shopStatus: p.shopStatus };
 }
 

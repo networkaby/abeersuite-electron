@@ -269,23 +269,46 @@ cost on the server:
 | 4 Fact check | **The server.** It downloads Claude's pages again and checks every fact. The checker is the same code used for our own AI. |
 
 - **What makes this safe:** Claude sends page **URLs**, not page text. The server reads each page itself, keeps only the maker's site and known sellers, drops a page that shows a different barcode, and then runs the fact check. Claude can't get a fact through that isn't really on the page.
-- **Where the result goes:** a draft stored on the product. The product moves Unpublished → Draft. Staff review it, mark it Ready, and Publish when the time is right. The agent never publishes.
+- **Where the result goes:** into the product's **draft copy**, beside any edits staff have open there. The stage doesn't change and the shop keeps showing the last finished version. Staff review it, press **Save as ready**, and Publish when the time is right. The agent never publishes.
 - **Three endpoints:**
   - a backlog list (paged in the DB)
   - one product's Step-1 input, plus the house-style rules, so Claude writes in the same style as our AI
   - submit the draft
 - **One skill file** tells Claude the steps and rules.
 
-### A9. Shop stages
+### A9. Shop stages and the draft copy
 
-Unpublished (new, made offline, untouched) → Draft (anyone, AI or staff, working on it, not complete) → Ready (complete and checked, waiting for a good time) → Published.
+**Stages:** Unpublished → Ready → Published, plus Pending.
 
-- A Ready product stays Ready when saved again: a small fix doesn't undo the review. "Back to Draft" is a button.
-- Mark ready is allowed even when a publish rule is unmet, with a warning. Publishing it would then show as Pending.
+| Stage | Work done? | Decided to sell? | In the shop? | Waits for |
+|---|---|---|---|---|
+| Unpublished | No | No | No | Someone to work on it |
+| Ready | Yes, checked | Not yet, on purpose | No | Your decision (stock arriving, a festival) |
+| Pending | Yes | Yes | No, held back | A publish rule to be met; then live by itself |
+| Published | Yes | Yes | Yes | Nothing |
 
-- "Pending" means Published but a publish rule is unmet. It isn't stored; it's worked out each time. The product goes live by itself once the rule is met.
-- Unpublish sends a product back to **Unpublished**, never to Draft. Draft holds only work someone (AI or staff) did that needs review, so the Draft tab is the review list.
+- Pending isn't stored; it's worked out each time from "Published" and the publish rules.
 - The shop reads one "live now" flag: Published and the rules met.
+
+**Draft is a copy, not a stage.** Any product, even a Published one, can have one open draft:
+
+- Any change on the product page unlocks **Save as draft**. The changes, photos included, wait in the draft copy (`InvProduct.shopDraftJson`), over as many steps and people (staff, AI, Claude) as it takes.
+- While a draft is open, **the shop keeps showing the last finished version**. Customers and Google never see half-done work, and the product never drops off the shop.
+- **Save as ready** puts the draft's changes on the product and closes the draft:
+  - It was Published (or Pending) → it stays Published, now with the new content. It was never taken off, so it doesn't drop back.
+  - Any other stage → **Ready**.
+- **Discard draft** throws the changes away. The product and its stage stay as they were.
+- While a draft is open, Mark ready / Publish / Unpublish are hidden, so a half-done product is never launched. Bulk actions skip products with an open draft and name them.
+
+**Buttons** when no draft is open:
+
+| Stage | Button |
+|---|---|
+| Unpublished | Mark ready |
+| Ready | Publish |
+| Published / Pending | Unpublish (→ **Ready**, since the work is finished) |
+
+**Products list tabs:** All · Unpublished · Draft (open drafts, any stage) · Ready · Published · Pending.
 
 ---
 
