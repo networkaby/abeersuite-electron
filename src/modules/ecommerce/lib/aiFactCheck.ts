@@ -19,11 +19,35 @@ export function isPublicHttps(raw: string): URL | null {
 /** Page text as the check compares it: lower case, no commas or spaces. */
 export const normForCheck = (s: string) => s.toLowerCase().replace(/&nbsp;|&#160;/g, " ").replace(/[, ]/g, "").replace(/\s+/g, " ");
 
-/** Every number in the value must be on the page; a value with no numbers needs most of its words. */
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Every number in `value`, with the unit that follows it ("999gbps", "5year",
+ * "8" for a bare one). Read from normForCheck text, so "10,000 mAh" → 10000 mah.
+ */
+function numberTokens(value: string): { num: string; unit: string }[] {
+    return [...normForCheck(value).matchAll(/(\d+(?:\.\d+)?)-?([a-z]*)/g)].map((m) => ({ num: m[1], unit: m[2] }));
+}
+
+/**
+ * Is every number of `value` on the page as a whole number, with its unit?
+ * A bare "999" or "5" is somewhere on nearly every long page (a price, a
+ * date), so digits alone proved nothing (owner, 2026-11-07: a made-up
+ * "999 Gbps" and "5 Year" passed). Now the number must stand alone — not part
+ * of a longer number — and, when the value gives a unit, be followed by that
+ * unit's first letters ("5 years" / "5-year" match "5 Year"; "5 yrs" does not,
+ * so it goes to "unsure" — the safe side). `pageNorm` is normForCheck text.
+ */
+export function numbersOnPage(pageNorm: string, value: string): boolean {
+    return numberTokens(value).every(({ num, unit }) => {
+        const tail = unit ? `-?${escape(unit.slice(0, 3))}` : "(?![\\d.]\\d)";
+        return new RegExp(`(?<![\\d.])${escape(num)}${tail}`).test(pageNorm);
+    });
+}
+
+/** Every number in the value must be on the page (numbersOnPage); a value with no numbers needs most of its words. */
 function pageHas(text: string, value: string): boolean {
-    const v = normForCheck(value);
-    const nums = v.match(/\d+(?:\.\d+)?/g) ?? [];
-    if (nums.length) return nums.every((n) => text.includes(n));
+    if (numberTokens(value).length) return numbersOnPage(text, value);
     const words = value.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3);
     if (!words.length) return false;
     return words.filter((w) => text.includes(w)).length / words.length >= 0.75;

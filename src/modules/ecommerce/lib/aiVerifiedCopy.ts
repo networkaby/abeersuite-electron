@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { loadAiSetup, stepHasKey } from "@/shared/lib/ai/aiKeys";
 import { AI_PHOTO_LIMITS, type AiStep } from "@/shared/lib/constants/ai";
-import { checkFact, normForCheck } from "@/modules/ecommerce/lib/aiFactCheck";
+import { checkFact, normForCheck, numbersOnPage } from "@/modules/ecommerce/lib/aiFactCheck";
 import { findProductPages, type PageRead } from "@/modules/ecommerce/lib/aiPageReader";
 import { loadResearch, saveResearch } from "@/modules/ecommerce/lib/aiResearchStore";
 import {
@@ -377,11 +377,12 @@ export function checkWrittenCopy(
     const compatibility = w.compatibility
         .map((g) => ({ ...g, models: g.models.filter((m) => anySource(`Compatible ${g.type}`, m)) }))
         .filter((g) => g.models.length);
-    const onSource = (n: string) => [labelNorm, ...trusted.map((x) => x.norm)].some((t) => t.includes(n));
-    const warranty = w.warranty && numbersIn(w.warranty).every(onSource) ? w.warranty : "";
+    // Every number of the line, with its unit, on one source (numbersOnPage) — digits alone prove nothing.
+    const onSource = (line: string) => [labelNorm, ...trusted.map((x) => x.norm)].some((t) => numbersOnPage(t, line));
+    const warranty = w.warranty && onSource(w.warranty) ? w.warranty : "";
     if (w.warranty && !warranty) unsure.push("Manufacturer warranty (could not be confirmed)");
     // A highlight with a number nobody printed is dropped; words-only highlights stay.
-    const highlights = w.highlights.filter((h) => numbersIn(h).every(onSource));
+    const highlights = w.highlights.filter((h) => numbersIn(h).length === 0 || onSource(h));
 
     const final = {
         title: w.title, summary: w.summary, description: w.description, howToUse: w.howToUse,

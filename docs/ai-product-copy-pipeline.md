@@ -166,7 +166,11 @@ A step with no keys of its own **borrows the Direct flow's keys**.
 - **How:**
   - Text is normalised: lower case, commas and spaces removed.
   - **A fact is "on" a source when** every number in the value appears in the
-    source text. A value with no numbers needs at least 75% of its words (3+
+    source text **as a whole number followed by its unit's first letters**
+    ("5 Year" matches "5-year" or "5 years", but not a stray "5" or "1999").
+    Digits alone prove nothing, because a long page always has them somewhere.
+    A unit spelled differently ("5 yrs") fails and goes to unsure, which is
+    the safe side. A value with no numbers needs at least 75% of its words (3+
     letters) to appear. Compatibility lists are checked model by model, and only
     the models found are kept.
   - Accepted pages are code-matched pages (always, whatever the AI said) plus
